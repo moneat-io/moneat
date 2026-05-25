@@ -339,9 +339,9 @@ class MonitorAlertService(
         organizationId: Int,
         alertKey: String
     ) {
-        if (!wasAlertTriggered(alertKey)) return
+        if (!wasAlertTriggered(alert, alertKey)) return
 
-        clearAlertState(alertKey)
+        clearAlertState(alert, alertKey)
 
         val metricLabel = getMetricLabel(alert.metric)
         val frontendUrl = config.property(EMAIL_FRONTEND_URL_CONFIG).getString()
@@ -440,20 +440,55 @@ class MonitorAlertService(
         sendAlertNotification(alert, hostName, organizationId, currentValue)
     }
 
-    private fun wasAlertTriggered(alertKey: String): Boolean =
+    private fun wasAlertTriggered(
+        alert: AlertData,
+        alertKey: String
+    ): Boolean =
+        alert.lastTriggeredAt != null || wasAlertTriggeredInRedis(alertKey)
+
+    private fun wasAlertTriggeredInRedis(alertKey: String): Boolean =
         suspendRunCatching {
             RedisConfig.isConnected() && RedisConfig.sync().get(alertKey) == "TRIGGERED"
         }.getOrElse {
             false
         }
 
-    private fun clearAlertState(alertKey: String) {
+    private fun clearAlertState(
+        alert: AlertData,
+        alertKey: String
+    ) {
         suspendRunCatching {
             if (RedisConfig.isConnected()) {
                 RedisConfig.sync().del(alertKey)
             }
         }.getOrElse { e ->
             logger.error(e) { "Failed to clear alert state in Redis" }
+        }
+        clearPersistedAlertState(alert)
+    }
+
+    private fun clearPersistedAlertState(alert: AlertData) {
+        if (alert.scope == MonitorService.ALERT_SCOPE_GLOBAL && alert.templateAlertId != null) {
+            clearTemplateAlertTriggeredAt(alert)
+            return
+        }
+
+        transaction {
+            HostAlerts.update({ HostAlerts.id eq alert.id }) {
+                it[last_triggered_at] = null
+            }
+        }
+    }
+
+    private fun clearTemplateAlertTriggeredAt(alert: AlertData) {
+        val templateAlertId = alert.templateAlertId ?: return
+        transaction {
+            HostAlertTemplateStates.update({
+                (HostAlertTemplateStates.template_alert_id eq templateAlertId) and
+                    (HostAlertTemplateStates.host_id eq alert.hostId)
+            }) {
+                it[last_triggered_at] = null
+            }
         }
     }
 

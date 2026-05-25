@@ -50,6 +50,7 @@ import io.mockk.runs
 import io.mockk.unmockkObject
 import io.mockk.verify
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
@@ -134,7 +135,6 @@ class WorkflowServiceTest {
                 """.trimIndent()
             )
             exec("CREATE UNIQUE INDEX idx_workflow_versions_version ON workflow_versions (workflow_id, version)")
-            exec("CREATE UNIQUE INDEX idx_workflow_versions_one_recent ON workflow_versions (workflow_id, most_recent)")
             exec(
                 """
                 CREATE TABLE workflow_runs (
@@ -160,7 +160,7 @@ class WorkflowServiceTest {
                 )
                 """.trimIndent()
             )
-            exec("CREATE UNIQUE INDEX idx_workflow_runs_idempotency_key ON workflow_runs (workflow_id, once_for)")
+            exec("CREATE INDEX idx_workflow_runs_idempotency_key ON workflow_runs (workflow_id, once_for)")
             exec("CREATE INDEX idx_workflow_runs_workflow_created ON workflow_runs (workflow_id, created_at DESC)")
         }
     }
@@ -169,7 +169,8 @@ class WorkflowServiceTest {
     fun `catalog exposes alert triggers resources steps and lookup helpers`() {
         val response = service.catalog()
 
-        assertEquals(6, response.resources.size)
+        assertEquals(7, response.resources.size)
+        assertTrue(response.resources.any { it.type == "Boolean" })
         assertTrue(response.resources.any { it.type == "AlertSeverity" })
         assertTrue(response.resources.any { it.type == "AlertStatus" })
         assertTrue(
@@ -187,6 +188,7 @@ class WorkflowServiceTest {
         )
         assertEquals("Email organization members", WorkflowCatalog.step("notification.email_org")?.label)
         assertEquals("AlertSeverity", WorkflowCatalog.scopeType("alert.triggered", "alert.severity"))
+        assertEquals("Boolean", WorkflowCatalog.scopeType("alert.triggered", "alert.channels.email"))
         assertNull(WorkflowCatalog.trigger("missing.trigger"))
         assertNull(WorkflowCatalog.step("notification.unknown"))
         assertNull(WorkflowCatalog.scopeType("missing.trigger", "alert.severity"))
@@ -255,6 +257,17 @@ class WorkflowServiceTest {
             )
         assertEquals(2, updated?.version)
         assertFalse(updated?.enabled ?: true)
+        val thirdVersion =
+            service.updateWorkflow(
+                orgId,
+                created.id,
+                UpdateWorkflowRequest(
+                    enabled = true,
+                    conditions = listOf(WorkflowConditionConfig("alert.channels.email", "eq", "true")),
+                    steps = listOf(slackStep())
+                )
+            )
+        assertEquals(3, thirdVersion?.version)
         assertEquals(emptyList(), service.listRuns(orgId, created.id))
         assertNull(service.getWorkflow(orgId + 1, created.id))
         assertNull(service.updateWorkflow(orgId, created.id + 1000, UpdateWorkflowRequest(name = "missing")))
@@ -375,6 +388,54 @@ class WorkflowServiceTest {
                     match { it.contains("HOST_ALERT") && it.contains("FIRING") },
                     true
                 )
+            }
+
+            service.publishAlertTriggered(alertEvent())
+            val runsAfterRepeat = service.listRuns(orgId, workflow.id)
+            assertEquals(2, runsAfterRepeat.size)
+            assertEquals(setOf("complete", "pending"), runsAfterRepeat.map { it.status }.toSet())
+            assertEquals(2L, service.getWorkflow(orgId, workflow.id)?.runCount)
+        }
+
+    @Test
+    fun `dashboard alert channel metadata skips disabled notification steps`() =
+        runBlocking {
+            val workflow =
+                service.createWorkflow(
+                    orgId,
+                    validRequest(
+                        name = "Dashboard channel workflow",
+                        steps = listOf(emailStep(), slackStep(), discordStep())
+                    )
+                )
+            val event =
+                alertEvent().copy(
+                    source = AlertSource.DASHBOARD_ALERT,
+                    metadata = mapOf(
+                        "alert.channels.email" to JsonPrimitive(false),
+                        "alert.channels.slack" to JsonPrimitive(true),
+                        "alert.channels.discord" to JsonPrimitive(false)
+                    )
+                )
+
+            service.publishAlertTriggered(event)
+            val queuedRun = service.listRuns(orgId, workflow.id).single()
+
+            service.executeRun(queuedRun.id)
+
+            val completedRun = service.listRuns(orgId, workflow.id).single()
+            assertEquals("complete", completedRun.status)
+            assertTrue(completedRun.progress.all { it.status == "complete" })
+            verify(exactly = 0) { emailService.sendEmail(any(), any(), any(), any(), any()) }
+            coVerify(exactly = 1) {
+                slackService.sendWorkflowMessage(
+                    orgId,
+                    match { it.contains("CPU saturation") },
+                    true
+                )
+            }
+            coVerify(exactly = 0) {
+                discordService.sendWorkflowMessage(any(), any(), any(), any())
             }
         }
 

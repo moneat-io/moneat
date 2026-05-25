@@ -56,6 +56,7 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.reflect.full.callSuspend
 import kotlin.reflect.full.declaredFunctions
 import kotlin.reflect.jvm.isAccessible
@@ -266,6 +267,14 @@ class MonitorAlertServiceCoverageTest {
 
             verify { redis.get(alertKey) }
             verify { redis.del(alertKey) }
+            val clearedLastTriggeredAt =
+                transaction {
+                    HostAlerts
+                        .selectAll()
+                        .where { HostAlerts.id eq fixture.alert.id }
+                        .first()[HostAlerts.last_triggered_at]
+                }
+            assertNull(clearedLastTriggeredAt)
             coVerify(exactly = 1) {
                 workflowService.publishAlertResolved(
                     fixture.orgId,
@@ -288,6 +297,43 @@ class MonitorAlertServiceCoverageTest {
                     false,
                 )
             }
+        }
+
+    @Test
+    fun `handleRecoveredAlert falls back to persisted trigger state when Redis is empty`() =
+        runBlocking {
+            val fixture = createHostAlertFixture()
+            val alertKey = "alert_state:${fixture.hostId}:id_${fixture.alert.id}"
+            val deduplicationKey = "moneat-host-alert-${fixture.hostId}-id_${fixture.alert.id}"
+            val triggeredAt = Clock.System.now() - 1.minutes
+            val triggeredAlert = fixture.alert.copy(lastTriggeredAt = triggeredAt)
+            transaction {
+                HostAlerts.update({ HostAlerts.id eq fixture.alert.id }) {
+                    it[last_triggered_at] = triggeredAt
+                }
+            }
+
+            callPrivateSuspend("handleRecoveredAlert", triggeredAlert, "host-alert-workflow", fixture.orgId, alertKey)
+
+            coVerify(exactly = 1) {
+                workflowService.publishAlertResolved(
+                    fixture.orgId,
+                    AlertSource.HOST_ALERT.name,
+                    deduplicationKey,
+                    any(),
+                    any(),
+                    any(),
+                    AlertSeverity.HIGH,
+                )
+            }
+            val clearedLastTriggeredAt =
+                transaction {
+                    HostAlerts
+                        .selectAll()
+                        .where { HostAlerts.id eq fixture.alert.id }
+                        .first()[HostAlerts.last_triggered_at]
+                }
+            assertNull(clearedLastTriggeredAt)
         }
 
     @Test

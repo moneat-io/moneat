@@ -65,6 +65,9 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
 private val logger = KotlinLogging.logger {}
+private const val ALERT_CHANNEL_EMAIL_REFERENCE = "alert.channels.email"
+private const val ALERT_CHANNEL_SLACK_REFERENCE = "alert.channels.slack"
+private const val ALERT_CHANNEL_DISCORD_REFERENCE = "alert.channels.discord"
 
 private enum class DashboardAlertLevel(val label: String) {
     WARNING("Warning"),
@@ -384,16 +387,20 @@ class DashboardAlertService(
         val description = "${alert.widgetTitle} on ${alert.dashboardTitle} recovered. " +
             "Current value: ${"%.2f".format(currentValue)}"
         val moneatUrl = "$baseUrl/dashboards/${alert.dashboardId}"
-        suspendRunCatching {
-            workflowService.publishAlertResolved(
-                organizationId = alert.orgId.toInt(),
-                source = AlertSource.DASHBOARD_ALERT.name,
-                deduplicationKey = "moneat-dashboard-alert-${alert.alertId}",
+        val event =
+            AlertLifecycleEvent(
                 title = title,
                 description = description,
-                moneatUrl = moneatUrl,
-                severity = workflowSeverity
+                severity = workflowSeverity,
+                status = AlertStatus.RESOLVED,
+                source = AlertSource.DASHBOARD_ALERT,
+                deduplicationKey = "moneat-dashboard-alert-${alert.alertId}",
+                organizationId = alert.orgId.toInt(),
+                metadata = alert.notificationChannels.workflowScopeMetadata(),
+                moneatUrl = moneatUrl
             )
+        suspendRunCatching {
+            workflowService.publishAlertTriggered(event)
         }.onFailure { e ->
             logger.error(e) { "Failed to publish recovered dashboard alert workflow ${alert.alertId}" }
         }
@@ -693,6 +700,7 @@ class DashboardAlertService(
                 source = AlertSource.DASHBOARD_ALERT,
                 deduplicationKey = "moneat-dashboard-alert-${alert.alertId}",
                 organizationId = orgId,
+                metadata = alert.notificationChannels.workflowScopeMetadata(),
                 moneatUrl = "$baseUrl/dashboards/${alert.dashboardId}"
             )
 
@@ -731,6 +739,13 @@ class DashboardAlertService(
             }
         }
     }
+
+    private fun NotificationChannels.workflowScopeMetadata(): Map<String, JsonElement> =
+        mapOf(
+            ALERT_CHANNEL_EMAIL_REFERENCE to JsonPrimitive(email),
+            ALERT_CHANNEL_SLACK_REFERENCE to JsonPrimitive(slack),
+            ALERT_CHANNEL_DISCORD_REFERENCE to JsonPrimitive(discord)
+        )
 
     private fun toResponse(row: ResultRow): DashboardAlertResponse {
         val channels: NotificationChannels = suspendRunCatching {

@@ -834,6 +834,7 @@ class DashboardAlertServiceTest {
                             condition = ">",
                             threshold = RECOVERY_THRESHOLD,
                             incidentSeverity = "HIGH",
+                            notificationChannels = NotificationChannels(email = false, slack = true, discord = false),
                         ),
                     ),
                 )
@@ -842,6 +843,16 @@ class DashboardAlertServiceTest {
 
             callPrivateSuspend("evaluateAlerts")
 
+            coVerify(exactly = 1) {
+                workflowService.publishAlertTriggered(
+                    match {
+                        it.status.name == "RESOLVED" &&
+                            it.metadata["alert.channels.email"]?.jsonPrimitive?.content == "false" &&
+                            it.metadata["alert.channels.slack"]?.jsonPrimitive?.content == "true" &&
+                            it.metadata["alert.channels.discord"]?.jsonPrimitive?.content == "false"
+                    }
+                )
+            }
             coVerify(exactly = 1) {
                 incidentService.autoResolveAlert(
                     organizationId = ORG_ID.toInt(),
@@ -952,6 +963,15 @@ class DashboardAlertServiceTest {
                             it.title == "Dashboard Error: High Error Rate"
                     },
                     publishWorkflow = false,
+                )
+            }
+            coVerify(exactly = 1) {
+                workflowService.publishAlertTriggered(
+                    match {
+                        it.metadata["alert.channels.email"]?.jsonPrimitive?.content == "false" &&
+                            it.metadata["alert.channels.slack"]?.jsonPrimitive?.content == "false" &&
+                            it.metadata["alert.channels.discord"]?.jsonPrimitive?.content == "false"
+                    }
                 )
             }
         }

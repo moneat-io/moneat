@@ -23,6 +23,9 @@ private const val EQUALS_LABEL = "is equal to"
 private const val NOT_EQUALS_LABEL = "is not equal to"
 private const val ALERT_STATUS_REFERENCE = "alert.status"
 private const val ALERT_DEDUPLICATION_KEY_REFERENCE = "alert.deduplication_key"
+private const val ALERT_CHANNEL_EMAIL_REFERENCE = "alert.channels.email"
+private const val ALERT_CHANNEL_SLACK_REFERENCE = "alert.channels.slack"
+private const val ALERT_CHANNEL_DISCORD_REFERENCE = "alert.channels.discord"
 
 @Serializable
 data class WorkflowFieldConfig(
@@ -124,6 +127,15 @@ object WorkflowCatalog {
             )
         ),
         WorkflowResourceDefinition(
+            type = "Boolean",
+            label = "Boolean",
+            fieldConfig = WorkflowFieldConfig(type = "select", placeholder = "true, false"),
+            operations = listOf(
+                WorkflowOperationDefinition("eq", EQUALS_LABEL, "Boolean"),
+                WorkflowOperationDefinition("neq", NOT_EQUALS_LABEL, "Boolean")
+            )
+        ),
+        WorkflowResourceDefinition(
             type = "AlertSeverity",
             label = "Severity",
             fieldConfig = WorkflowFieldConfig(type = "select", placeholder = "CRITICAL, HIGH, MEDIUM, LOW"),
@@ -164,6 +176,9 @@ object WorkflowCatalog {
         WorkflowScopeReferenceDefinition("alert.source", "Source", "AlertSource"),
         WorkflowScopeReferenceDefinition(ALERT_DEDUPLICATION_KEY_REFERENCE, "Deduplication key", "String"),
         WorkflowScopeReferenceDefinition("alert.url", "Moneat URL", "String"),
+        WorkflowScopeReferenceDefinition(ALERT_CHANNEL_EMAIL_REFERENCE, "Email channel", "Boolean"),
+        WorkflowScopeReferenceDefinition(ALERT_CHANNEL_SLACK_REFERENCE, "Slack channel", "Boolean"),
+        WorkflowScopeReferenceDefinition(ALERT_CHANNEL_DISCORD_REFERENCE, "Discord channel", "Boolean"),
         WorkflowScopeReferenceDefinition("organization.id", "Organization ID", "String")
     )
 

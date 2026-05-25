@@ -58,10 +58,6 @@ object WorkflowRuns : IntIdTable("workflow_runs") {
     val createdAt = timestamp("created_at")
     val completedAt = timestamp("completed_at").nullable()
     val failedAt = timestamp("failed_at").nullable()
-
-    init {
-        uniqueIndex(workflowId, onceFor)
-    }
 }
 
 @Serializable

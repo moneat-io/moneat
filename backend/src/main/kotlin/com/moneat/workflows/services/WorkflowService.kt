@@ -42,11 +42,16 @@ import com.moneat.workflows.models.WorkflowVersions
 import com.moneat.workflows.models.Workflows
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.Query
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
@@ -72,6 +77,9 @@ private const val ALERT_STATUS_REFERENCE = "alert.status"
 private const val ALERT_SOURCE_REFERENCE = "alert.source"
 private const val ALERT_DEDUPLICATION_KEY_REFERENCE = "alert.deduplication_key"
 private const val ALERT_URL_REFERENCE = "alert.url"
+private const val ALERT_CHANNEL_EMAIL_REFERENCE = "alert.channels.email"
+private const val ALERT_CHANNEL_SLACK_REFERENCE = "alert.channels.slack"
+private const val ALERT_CHANNEL_DISCORD_REFERENCE = "alert.channels.discord"
 private const val ORGANIZATION_ID_REFERENCE = "organization.id"
 private const val EMAIL_ORG_STEP = "notification.email_org"
 private const val SLACK_STEP = "notification.slack"
@@ -79,6 +87,9 @@ private const val DISCORD_STEP = "notification.discord"
 private const val SKIP_IF_UNCONFIGURED_PARAM = "skip_if_unconfigured"
 private const val ALERT_SOURCE_TEMPLATE_LINE = "Source: {{alert.source}}\n"
 private const val ALERT_URL_TEMPLATE = "{{alert.url}}"
+private val ACTIVE_WORKFLOW_RUN_STATUSES = listOf("pending", "running")
+private val ALERT_CHANNEL_REFERENCES =
+    setOf(ALERT_CHANNEL_EMAIL_REFERENCE, ALERT_CHANNEL_SLACK_REFERENCE, ALERT_CHANNEL_DISCORD_REFERENCE)
 
 class WorkflowService(
     private val emailService: EmailService = EmailService(),
@@ -398,6 +409,7 @@ class WorkflowService(
         onceFor: String
     ): Int? =
         transaction {
+            if (activeRunExists(candidate.workflowId, onceFor)) return@transaction null
             try {
                 WorkflowRuns.insertAndGetId {
                     it[workflowId] = candidate.workflowId
@@ -420,6 +432,18 @@ class WorkflowService(
             }
         }
 
+    private fun activeRunExists(
+        workflowId: Int,
+        onceFor: String
+    ): Boolean =
+        WorkflowRuns
+            .selectAll()
+            .where {
+                (WorkflowRuns.workflowId eq workflowId) and
+                    (WorkflowRuns.onceFor eq onceFor) and
+                    (WorkflowRuns.status inList ACTIVE_WORKFLOW_RUN_STATUSES)
+            }.count() > 0
+
     private suspend fun enqueueRun(runId: Int) {
         suspendRunCatching {
             RedisConfig.sync().lpush(WORKFLOW_QUEUE_KEY, json.encodeToString(WorkflowRunQueuedMessage(runId)))
@@ -434,6 +458,8 @@ class WorkflowService(
         step: WorkflowStepConfig,
         scope: Map<String, String>
     ) {
+        if (!notificationStepEnabled(step.name, scope)) return
+
         when (step.name) {
             EMAIL_ORG_STEP -> sendOrganizationEmail(organizationId, step.params, scope)
             SLACK_STEP -> {
@@ -454,6 +480,23 @@ class WorkflowService(
             else -> throw IllegalArgumentException("Unknown workflow step ${step.name}")
         }
     }
+
+    private fun notificationStepEnabled(
+        stepName: String,
+        scope: Map<String, String>
+    ): Boolean =
+        when (stepName) {
+            EMAIL_ORG_STEP -> channelEnabled(scope, ALERT_CHANNEL_EMAIL_REFERENCE)
+            SLACK_STEP -> channelEnabled(scope, ALERT_CHANNEL_SLACK_REFERENCE)
+            DISCORD_STEP -> channelEnabled(scope, ALERT_CHANNEL_DISCORD_REFERENCE)
+            else -> true
+        }
+
+    private fun channelEnabled(
+        scope: Map<String, String>,
+        reference: String
+    ): Boolean =
+        scope[reference]?.toBooleanStrictOrNull() ?: true
 
     private fun sendOrganizationEmail(
         organizationId: Int,
@@ -782,7 +825,19 @@ class WorkflowService(
             ALERT_DEDUPLICATION_KEY_REFERENCE to event.deduplicationKey,
             ALERT_URL_REFERENCE to event.moneatUrl,
             ORGANIZATION_ID_REFERENCE to event.organizationId.toString()
-        )
+        ) + alertMetadataScope(event.metadata)
+
+    private fun alertMetadataScope(metadata: Map<String, JsonElement>): Map<String, String> =
+        metadata
+            .mapNotNull { (reference, value) ->
+                if (reference !in ALERT_CHANNEL_REFERENCES) return@mapNotNull null
+                value.workflowScopeValue()?.let { reference to it }
+            }.toMap()
+
+    private fun JsonElement.workflowScopeValue(): String? {
+        val primitive = this as? JsonPrimitive ?: return null
+        return primitive.booleanOrNull?.toString() ?: primitive.contentOrNull
+    }
 
     companion object {
         const val QUEUE_KEY = WORKFLOW_QUEUE_KEY
