@@ -73,6 +73,12 @@ class MonitorService(
         const val INFRA_LOOKBACK_DAYS = 7
         const val MONITOR_HISTORY_CACHE_TTL_SECONDS = 30L
 
+        private const val LATEST_METRICS_LOOKBACK_HOURS = 6
+        private const val LATEST_METRIC_NAMES_SQL =
+            "'system.cpu.percent','system.mem.total','system.mem.used','system.mem.available'," +
+                "'system.disk.total','system.disk.used','system.net.recv_bytes','system.net.sent_bytes'," +
+                "'system.load.1','system.temp.max','system.gpu.percent','system.battery.percent'"
+
         // Time-range thresholds for historical downsampling (in seconds)
         private const val ONE_HOUR_SECONDS = 3600L
         private const val SIX_HOURS_SECONDS = 21600L
@@ -232,7 +238,6 @@ class MonitorService(
      */
     suspend fun getLatestMetrics(hostId: Int): LatestMetrics? {
         val host = getHostById(hostId) ?: return null
-        val retentionDays = retentionPolicyService.getRetentionDaysForHost(hostId) ?: PricingTier.FREE.retentionDays
         val query =
             """
             SELECT
@@ -251,7 +256,8 @@ class MonitorService(
             FROM `$clickhouseDb`.metrics
             WHERE organization_id = ${host.organizationId}
               AND tags['host_id'] = '$hostId'
-              AND timestamp >= now64(3) - INTERVAL $retentionDays DAY
+              AND metric_name IN ($LATEST_METRIC_NAMES_SQL)
+              AND timestamp >= now64(3) - INTERVAL $LATEST_METRICS_LOOKBACK_HOURS HOUR
             FORMAT JSONCompact
             """.trimIndent()
 
@@ -341,7 +347,6 @@ class MonitorService(
      */
     suspend fun getLatestMetricsForHosts(hostIds: List<Int>, organizationId: Int): Map<Int, LatestMetrics?> {
         if (hostIds.isEmpty()) return emptyMap()
-        val retentionDays = retentionPolicyService.getRetentionDaysForOrganization(organizationId)
         val hostIdList = hostIds.joinToString(",")
         val query =
             """
@@ -362,7 +367,8 @@ class MonitorService(
             FROM `$clickhouseDb`.metrics
             WHERE organization_id = $organizationId
               AND toInt32OrZero(tags['host_id']) IN ($hostIdList)
-              AND timestamp >= now64(3) - INTERVAL $retentionDays DAY
+              AND metric_name IN ($LATEST_METRIC_NAMES_SQL)
+              AND timestamp >= now64(3) - INTERVAL $LATEST_METRICS_LOOKBACK_HOURS HOUR
             GROUP BY host_id
             FORMAT JSONCompact
             """.trimIndent()

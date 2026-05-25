@@ -32,6 +32,8 @@ import io.sentry.ISpan
 import io.sentry.Sentry
 import kotlinx.coroutines.CancellationException
 
+private val CLICKHOUSE_ERROR_CODE = Regex("""^Code:\s*(\d+)""")
+
 object ClickHouseClient {
     private const val MIGRATION_TIMEOUT_MS = 600_000L
     private const val HTTP_MAX_CONNECTIONS = 100
@@ -42,6 +44,7 @@ object ClickHouseClient {
     private const val QUERY_LOG_MAX_LEN = 200
     private const val ERROR_BODY_MAX_LEN = 500
     private const val NANOS_PER_SECOND = 1_000_000_000.0
+    private const val READ_QUERY_MAX_EXECUTION_SECONDS = 10
 
     @Volatile
     private var httpClient: HttpClient? = null
@@ -121,6 +124,11 @@ object ClickHouseClient {
         try {
             val response = client.post(baseUrl) {
                 parameter("database", database)
+                if (operation == "execute" && isReadQuery(query)) {
+                    parameter("max_execution_time", READ_QUERY_MAX_EXECUTION_SECONDS)
+                    parameter("timeout_overflow_mode", "throw")
+                    parameter("timeout_before_checking_execution_speed", "0")
+                }
                 header("X-ClickHouse-User", user)
                 header("X-ClickHouse-Key", password)
                 contentType(ContentType.Text.Plain)
@@ -143,15 +151,34 @@ object ClickHouseClient {
     private fun elapsedSeconds(startedAt: Long): Double =
         (System.nanoTime() - startedAt) / NANOS_PER_SECOND
 
+    private fun isReadQuery(query: String): Boolean {
+        val normalized = query.trimStart().uppercase()
+        return normalized.startsWith("SELECT") ||
+            normalized.startsWith("WITH") ||
+            normalized.startsWith("SHOW") ||
+            normalized.startsWith("DESCRIBE") ||
+            normalized.startsWith("DESC") ||
+            normalized.startsWith("EXISTS") ||
+            normalized.startsWith("EXPLAIN")
+    }
+
     suspend fun executeWithFormat(
         query: String,
         format: String,
         span: ISpan? = null
     ): String {
-        val queryWithFormat = if (query.trimEnd().uppercase().contains("FORMAT")) query else "$query FORMAT $format"
+        val queryWithFormat = if (query.trimEnd().uppercase().contains("FORMAT")) {
+            query
+        } else {
+            "$query FORMAT $format"
+        }
         val response = execute(queryWithFormat, span)
         val body = response.bodyAsText()
-        check(!response.isClickHouseError(body)) {
+        val isError = response.isClickHouseError(body)
+        if (isError) {
+            OperationalMetrics.recordClickHouseQueryError("execute", clickHouseErrorCode(body))
+        }
+        check(!isError) {
             "ClickHouse query failed (${response.status.value}): ${body.take(ERROR_BODY_MAX_LEN)}"
         }
         return body
@@ -186,6 +213,9 @@ object ClickHouseClient {
         migrationClient = null
     }
 }
+
+private fun clickHouseErrorCode(body: String): String =
+    CLICKHOUSE_ERROR_CODE.find(body.trimStart())?.groupValues?.get(1) ?: "unknown"
 
 /** Returns true if the response body represents a ClickHouse error (e.g. "Code: 60, DB::Exception..."). */
 fun String.isClickHouseError(): Boolean = trimStart().startsWith("Code:")

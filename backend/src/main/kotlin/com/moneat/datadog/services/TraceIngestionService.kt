@@ -57,10 +57,9 @@ import org.msgpack.core.MessageUnpacker
 
 private val logger = KotlinLogging.logger {}
 
-/** Public trace id: prefer hex when stored, else numeric string. */
-private const val CANONICAL_TRACE_ID_SQL =
-    "if(trace_id_hex != '', trace_id_hex, toString(trace_id))"
-
+private const val APM_TRACE_SUMMARIES_TABLE = "apm_trace_summaries"
+private const val APM_ERROR_GROUPS_TABLE = "apm_error_groups_hourly"
+private const val APM_RESOURCE_STATS_TABLE = "apm_resource_stats_hourly"
 private const val MAX_META_VALUE_LENGTH = 5000
 private const val DEFAULT_QUERY_LIMIT = 50
 private const val MAX_QUERY_LIMIT = 200
@@ -70,6 +69,24 @@ private const val PROTO_FIELD_9 = 9
 private const val PROTO_FIELD_10 = 10
 private const val PROTO_FIELD_11 = 11
 private const val PROTO_FIELD_12 = 12
+
+val defaultApmQueryTimeRange = DdApmQueryTimeRange(24, DdApmQueryTimeUnit.HOUR)
+
+enum class DdApmQueryTimeUnit(val sql: String) {
+    HOUR("HOUR"),
+    DAY("DAY")
+}
+
+data class DdApmQueryTimeRange(
+    val amount: Int,
+    val unit: DdApmQueryTimeUnit
+) {
+    fun startClause(column: String = "start"): String =
+        "$column >= now() - INTERVAL $amount ${unit.sql}"
+
+    fun bucketStartClause(column: String = "bucket_start"): String =
+        "$column >= toStartOfHour(now() - INTERVAL $amount ${unit.sql})"
+}
 
 object TraceIngestionService {
     private val clickhouseDb by lazy { ClickHouseClient.getDatabase() }
@@ -265,9 +282,11 @@ object TraceIngestionService {
         env: String?,
         limit: Int,
         offset: Int,
+        timeRange: DdApmQueryTimeRange = defaultApmQueryTimeRange,
     ): DdTraceListResponse {
         val filters = mutableListOf(
-            ClickHouseQueryUtils.orgIdClause(organizationId.toLong())
+            ClickHouseQueryUtils.orgIdClause(organizationId.toLong()),
+            timeRange.bucketStartClause()
         )
         service?.let {
             filters.add("service = '${escapeSql(it)}'")
@@ -278,9 +297,13 @@ object TraceIngestionService {
         val whereClause = filters.joinToString(" AND ")
 
         val countQuery = """
-            SELECT count(DISTINCT $CANONICAL_TRACE_ID_SQL)
-            FROM `$clickhouseDb`.apm_spans
-            WHERE $whereClause
+            SELECT count()
+            FROM (
+                SELECT 1
+                FROM `$clickhouseDb`.$APM_TRACE_SUMMARIES_TABLE
+                WHERE $whereClause
+                GROUP BY trace_id_canonical
+            )
         """.trimIndent()
         val countResult = ClickHouseClient.executeWithFormat(
             countQuery,
@@ -290,16 +313,20 @@ object TraceIngestionService {
 
         val query = """
             SELECT
-                $CANONICAL_TRACE_ID_SQL as trace_id_canonical,
-                argMin(service, if(parent_id = 0, 0, 1)) as root_service,
-                argMin(resource, if(parent_id = 0, 0, 1)) as root_resource,
-                argMin(name, if(parent_id = 0, 0, 1)) as root_name,
-                count() as span_count,
-                max(duration) as duration_ns,
-                toInt64(toUnixTimestamp64Nano(min(start))) as start_ns,
-                max(error) as has_error,
-                argMin(source, if(parent_id = 0, 0, 1)) as source
-            FROM `$clickhouseDb`.apm_spans
+                trace_id_canonical,
+                argMinMerge(root_service_state) as root_service,
+                argMinMerge(root_resource_state) as root_resource,
+                argMinMerge(root_name_state) as root_name,
+                toUInt32(sumMerge(span_count_state)) as span_count,
+                toUInt64(greatest(
+                    0,
+                    toUnixTimestamp64Nano(maxMerge(trace_end_state)) -
+                        toUnixTimestamp64Nano(minMerge(trace_start_state))
+                )) as duration_ns,
+                toInt64(toUnixTimestamp64Nano(minMerge(trace_start_state))) as start_ns,
+                toUInt8(sumMerge(error_count_state) > 0) as has_error,
+                argMinMerge(source_state) as source
+            FROM `$clickhouseDb`.$APM_TRACE_SUMMARIES_TABLE
             WHERE $whereClause
             GROUP BY trace_id_canonical
             ORDER BY start_ns DESC
@@ -506,11 +533,12 @@ object TraceIngestionService {
         service: String?,
         limit: Int,
         offset: Int,
+        timeRange: DdApmQueryTimeRange = defaultApmQueryTimeRange,
     ): DdApmErrorsResponse {
         val effectiveLimit = limit.coerceAtMost(MAX_QUERY_LIMIT)
         val filters = mutableListOf(
             ClickHouseQueryUtils.orgIdClause(organizationId.toLong()),
-            "error = 1"
+            timeRange.bucketStartClause()
         )
         service?.let {
             filters.add("service = '${escapeSql(it)}'")
@@ -518,10 +546,13 @@ object TraceIngestionService {
         val whereClause = filters.joinToString(" AND ")
 
         val countQuery = """
-            SELECT count(DISTINCT
-                concat(service, resource, meta['error.msg']))
-            FROM `$clickhouseDb`.apm_spans
-            WHERE $whereClause
+            SELECT count()
+            FROM (
+                SELECT 1
+                FROM `$clickhouseDb`.$APM_ERROR_GROUPS_TABLE
+                WHERE $whereClause
+                GROUP BY service, resource, error_message, error_type
+            )
         """.trimIndent()
         val countResult = ClickHouseClient.executeWithFormat(
             countQuery,
@@ -533,15 +564,14 @@ object TraceIngestionService {
             SELECT
                 service,
                 resource,
-                meta['error.msg'] as error_msg,
-                meta['error.type'] as error_type,
-                count() as error_count,
-                max(start) as last_seen,
-                any($CANONICAL_TRACE_ID_SQL) as sample_trace_id
-            FROM `$clickhouseDb`.apm_spans
+                error_message as error_msg,
+                error_type,
+                sumMerge(error_count_state) as error_count,
+                toString(maxMerge(last_seen_state)) as last_seen,
+                argMaxMerge(sample_trace_id_state) as sample_trace_id
+            FROM `$clickhouseDb`.$APM_ERROR_GROUPS_TABLE
             WHERE $whereClause
-            GROUP BY service, resource,
-                meta['error.msg'], meta['error.type']
+            GROUP BY service, resource, error_message, error_type
             ORDER BY error_count DESC
             LIMIT $effectiveLimit OFFSET $offset
             FORMAT JSONEachRow
@@ -589,18 +619,24 @@ object TraceIngestionService {
         service: String?,
         limit: Int,
         offset: Int,
+        timeRange: DdApmQueryTimeRange = defaultApmQueryTimeRange,
     ): DdResourceStatsResponse {
         val effectiveLimit = limit.coerceAtMost(MAX_QUERY_LIMIT)
         val filters = mutableListOf(
-            ClickHouseQueryUtils.orgIdClause(organizationId.toLong())
+            ClickHouseQueryUtils.orgIdClause(organizationId.toLong()),
+            timeRange.bucketStartClause()
         )
         service?.let { filters.add("service = '${escapeSql(it)}'") }
         val whereClause = filters.joinToString(" AND ")
 
         val countQuery = """
-            SELECT count(DISTINCT (service, resource, name, type))
-            FROM `$clickhouseDb`.trace_stats
-            WHERE $whereClause
+            SELECT count()
+            FROM (
+                SELECT 1
+                FROM `$clickhouseDb`.$APM_RESOURCE_STATS_TABLE
+                WHERE $whereClause
+                GROUP BY service, resource, name, type
+            )
         """.trimIndent()
         val countResult = ClickHouseClient.executeWithFormat(
             countQuery,
@@ -614,11 +650,11 @@ object TraceIngestionService {
                 resource,
                 name,
                 type,
-                SUM(hits) as total_hits,
-                SUM(errors) as total_errors,
+                SUM(total_hits) as total_hits,
+                SUM(total_errors) as total_errors,
                 SUM(ok_summary_sum) as ok_sum,
                 SUM(ok_summary_count) as ok_count
-            FROM `$clickhouseDb`.trace_stats
+            FROM `$clickhouseDb`.$APM_RESOURCE_STATS_TABLE
             WHERE $whereClause
             GROUP BY service, resource, name, type
             ORDER BY total_hits DESC

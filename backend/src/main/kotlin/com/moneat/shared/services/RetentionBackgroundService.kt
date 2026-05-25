@@ -216,7 +216,10 @@ class RetentionBackgroundService(
         if (orgIds.isEmpty()) return 0
         val tables = listOf(
             "apm_spans" to "start",
-            "trace_stats" to "start"
+            "trace_stats" to "start",
+            "apm_trace_summaries" to "bucket_start",
+            "apm_error_groups_hourly" to "bucket_start",
+            "apm_resource_stats_hourly" to "bucket_start"
         )
         return submitOrgScopedDeletes(orgIds, tables, apmTraceRetentionDays, "apm-traces")
     }

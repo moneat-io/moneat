@@ -187,6 +187,17 @@ object OperationalMetrics {
         }
     }
 
+    fun recordClickHouseQueryError(operation: String, code: String) {
+        counter(
+            CLICKHOUSE_QUERY_ERRORS,
+            "ClickHouse query responses that returned a ClickHouse error body.",
+            tags(
+                "operation" to operation.normalizedLabelValue(),
+                "code" to code.normalizedLabelValue()
+            )
+        ).increment()
+    }
+
     fun recordDependencyHealth(
         dependency: String,
         healthy: Boolean,
@@ -486,6 +497,7 @@ object OperationalMetrics {
     private const val CLICKHOUSE_REQUESTS = "moneat_clickhouse_requests"
     private const val CLICKHOUSE_REQUEST_TIMEOUTS = "moneat_clickhouse_request_timeouts"
     private const val CLICKHOUSE_REQUEST_DURATION = "moneat_clickhouse_request_duration"
+    private const val CLICKHOUSE_QUERY_ERRORS = "moneat_clickhouse_query_errors"
     private const val DEPENDENCY_HEALTH = "moneat_dependency_health"
     private const val DEPENDENCY_LAST_SUCCESS_TIMESTAMP_SECONDS = "moneat_dependency_last_success_timestamp_seconds"
     private const val DEPENDENCY_HEALTH_CHECKS = "moneat_dependency_health_checks"

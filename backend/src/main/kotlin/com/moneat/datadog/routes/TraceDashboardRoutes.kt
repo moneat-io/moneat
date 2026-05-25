@@ -16,6 +16,8 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.datadog.services.DdApmQueryTimeRange
+import com.moneat.datadog.services.DdApmQueryTimeUnit
 import com.moneat.datadog.services.TraceIngestionService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
@@ -28,6 +30,16 @@ import io.ktor.server.routing.route
 
 private const val DEFAULT_LIMIT = 50
 private const val MAX_LIMIT = 200
+private const val DEFAULT_APM_TIME_RANGE = "24h"
+
+private val apmTimeRanges = mapOf(
+    "1h" to DdApmQueryTimeRange(1, DdApmQueryTimeUnit.HOUR),
+    "6h" to DdApmQueryTimeRange(6, DdApmQueryTimeUnit.HOUR),
+    "24h" to DdApmQueryTimeRange(24, DdApmQueryTimeUnit.HOUR),
+    "7d" to DdApmQueryTimeRange(7, DdApmQueryTimeUnit.DAY),
+    "30d" to DdApmQueryTimeRange(30, DdApmQueryTimeUnit.DAY),
+    "90d" to DdApmQueryTimeRange(90, DdApmQueryTimeUnit.DAY),
+)
 
 fun Route.traceDashboardRoutes() {
     authenticate("auth-jwt") {
@@ -49,12 +61,18 @@ fun Route.traceDashboardRoutes() {
                     .coerceAtMost(MAX_LIMIT)
                 val offset = call.parameters["offset"]
                     ?.toIntOrNull() ?: 0
+                val timeRange = call.apmTimeRange()
+                    ?: return@get call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to "Invalid timeRange")
+                    )
 
                 val result = TraceIngestionService.listResourceStats(
                     orgId,
                     service,
                     limit,
-                    offset
+                    offset,
+                    timeRange
                 )
                 call.respond(result)
             }
@@ -77,13 +95,19 @@ fun Route.traceDashboardRoutes() {
                     .coerceAtMost(MAX_LIMIT)
                 val offset = call.parameters["offset"]
                     ?.toIntOrNull() ?: 0
+                val timeRange = call.apmTimeRange()
+                    ?: return@get call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to "Invalid timeRange")
+                    )
 
                 val result = TraceIngestionService.listTraces(
                     orgId,
                     service,
                     env,
                     limit,
-                    offset
+                    offset,
+                    timeRange
                 )
                 call.respond(result)
             }
@@ -153,14 +177,25 @@ fun Route.traceDashboardRoutes() {
                 ).coerceAtMost(MAX_LIMIT)
             val offset = call.parameters["offset"]
                 ?.toIntOrNull() ?: 0
+            val timeRange = call.apmTimeRange()
+                ?: return@get call.respond(
+                    HttpStatusCode.BadRequest,
+                    mapOf("error" to "Invalid timeRange")
+                )
 
             val result = TraceIngestionService.getApmErrors(
                 orgId,
                 service,
                 limit,
                 offset,
+                timeRange
             )
             call.respond(result)
         }
     }
+}
+
+private fun io.ktor.server.application.ApplicationCall.apmTimeRange(): DdApmQueryTimeRange? {
+    val rawValue = parameters["timeRange"] ?: parameters["range"] ?: DEFAULT_APM_TIME_RANGE
+    return apmTimeRanges[rawValue]
 }

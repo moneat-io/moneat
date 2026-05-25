@@ -200,6 +200,13 @@ describe('Issues Index - data coverage', () => {
     fireEvent.click(apmTab)
 
     expect(await screen.findByText('No APM errors found')).toBeInTheDocument()
+    expect(mockApi.getApmErrors).toHaveBeenCalledTimes(1)
+    expect(mockApi.getApmErrors).toHaveBeenCalledWith({
+      service: undefined,
+      limit: 50,
+      offset: 0,
+      timeRange: '24h',
+    })
   })
 
   it('renders APM errors tab with data', async () => {

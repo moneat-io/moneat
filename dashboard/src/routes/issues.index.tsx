@@ -18,7 +18,7 @@ import {createFileRoute, Link} from '@tanstack/react-router'
 
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
-import type {ApmErrorGroup} from '@/lib/api'
+import type {ApmErrorGroup, ApmTimeRange} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
 import {useProject} from '@/contexts/ProjectContext'
 import {formatRelativeTime, cn} from '@/lib/utils'
@@ -752,38 +752,32 @@ function DashboardPage() {
 }
 
 const APM_ERRORS_PAGE_SIZE = 50
+const APM_TIME_RANGE_OPTIONS: Array<{value: ApmTimeRange; label: string}> = [
+  {value: '1h', label: '1h'},
+  {value: '6h', label: '6h'},
+  {value: '24h', label: '24h'},
+  {value: '7d', label: '7d'},
+  {value: '30d', label: '30d'},
+  {value: '90d', label: '90d'},
+]
 
 function ApmErrorsTab({ isActive }: { isActive: boolean }) {
   const [selectedService, setSelectedService] = useState<string>('all')
+  const [timeRange, setTimeRange] = useState<ApmTimeRange>('24h')
   const [offset, setOffset] = useState(0)
 
-  // Fetch all errors (no filter) to derive the service list
-  const { data: allErrorsData } = useQuery({
-    queryKey: ['apm-errors-all'],
-    queryFn: () => api.getApmErrors({ limit: 500 }),
-    enabled: isActive && api.isAuthenticated(),
-    refetchInterval: 30000,
-  })
-
-  const services = useMemo(() => {
-    const countByService = new Map<string, number>()
-    for (const err of allErrorsData?.errors ?? []) {
-      countByService.set(err.service, (countByService.get(err.service) ?? 0) + err.count)
-    }
-    return Array.from(countByService.entries())
-      .map(([service, count]) => ({ service, count }))
-      .sort((a, b) => b.count - a.count)
-  }, [allErrorsData])
-
   const { data, isLoading } = useQuery({
-    queryKey: ['apm-errors', selectedService, offset],
+    queryKey: ['apm-errors', selectedService, timeRange, offset],
     queryFn: () => api.getApmErrors({
       service: selectedService === 'all' ? undefined : selectedService,
       limit: APM_ERRORS_PAGE_SIZE,
       offset,
+      timeRange,
     }),
     enabled: isActive && api.isAuthenticated(),
-    refetchInterval: 15000,
+    retry: false,
+    staleTime: 30000,
+    refetchOnWindowFocus: false,
   })
 
   const errors = data?.errors ?? []
@@ -791,8 +785,23 @@ function ApmErrorsTab({ isActive }: { isActive: boolean }) {
   const canPrev = offset > 0
   const canNext = offset + errors.length < totalCount
 
+  const services = useMemo(() => {
+    const countByService = new Map<string, number>()
+    for (const err of data?.errors ?? []) {
+      countByService.set(err.service, (countByService.get(err.service) ?? 0) + err.count)
+    }
+    return Array.from(countByService.entries())
+      .map(([service, count]) => ({ service, count }))
+      .sort((a, b) => b.count - a.count)
+  }, [data])
+
   function handleServiceChange(service: string) {
     setSelectedService(service)
+    setOffset(0)
+  }
+
+  function handleTimeRangeChange(value: string) {
+    setTimeRange(value as ApmTimeRange)
     setOffset(0)
   }
 
@@ -803,14 +812,28 @@ function ApmErrorsTab({ isActive }: { isActive: boolean }) {
 
   return (
     <div className="px-6 py-4">
-      <div className="mb-4">
-        <h2 className="text-2xl font-bold tracking-tight">APM Errors</h2>
-        <p className="text-sm text-muted-foreground">
-          Application performance errors from traces
-        </p>
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">APM Errors</h2>
+          <p className="text-sm text-muted-foreground">
+            Application performance errors from traces
+          </p>
+        </div>
+        <Select value={timeRange} onValueChange={handleTimeRangeChange}>
+          <SelectTrigger className="h-9 w-[110px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {APM_TIME_RANGE_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      {services.length > 0 && (
+      {(services.length > 0 || selectedService !== 'all') && (
         <div className="flex items-end gap-0 mb-4 border-b border-border/60">
           <button
             onClick={() => handleServiceChange('all')}

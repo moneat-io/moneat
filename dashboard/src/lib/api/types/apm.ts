@@ -26,6 +26,8 @@ export interface ApmTraceListItem {
   source: string
 }
 
+export type ApmTimeRange = '1h' | '6h' | '24h' | '7d' | '30d' | '90d'
+
 export interface ApmTraceListResponse {
   traces: ApmTraceListItem[]
   totalCount: number

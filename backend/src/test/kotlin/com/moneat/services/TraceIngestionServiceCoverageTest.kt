@@ -22,6 +22,8 @@ import com.moneat.datadog.models.DdSpan
 import com.moneat.datadog.models.DdStatsBucket
 import com.moneat.datadog.models.DdStatsEntry
 import com.moneat.datadog.models.DdStatsPayload
+import com.moneat.datadog.services.DdApmQueryTimeRange
+import com.moneat.datadog.services.DdApmQueryTimeUnit
 import com.moneat.datadog.services.TraceIngestionService
 import io.mockk.coEvery
 import io.mockk.every
@@ -595,6 +597,57 @@ class TraceIngestionServiceCoverageTest {
         assertEquals(10L, res.totalErrors)
         assertEquals(0.1, res.errorRate)
         assertEquals(1000000000L, res.avgDurationNs)
+    }
+
+    @Test
+    fun `APM dashboard list queries use requested time range filters`() = runBlocking {
+        val capturedQueries = mutableListOf<String>()
+        val timeRange = DdApmQueryTimeRange(90, DdApmQueryTimeUnit.DAY)
+        coEvery { ClickHouseClient.executeWithFormat(any(), any()) } coAnswers {
+            capturedQueries.add(firstArg())
+            if (secondArg<String>() == "TabSeparated") {
+                "0"
+            } else {
+                ""
+            }
+        }
+
+        TraceIngestionService.listTraces(
+            organizationId = 1,
+            service = null,
+            env = null,
+            limit = 10,
+            offset = 0,
+            timeRange = timeRange
+        )
+        TraceIngestionService.getApmErrors(
+            organizationId = 1,
+            service = null,
+            limit = 10,
+            offset = 0,
+            timeRange = timeRange
+        )
+        TraceIngestionService.listResourceStats(
+            organizationId = 1,
+            service = null,
+            limit = 10,
+            offset = 0,
+            timeRange = timeRange
+        )
+
+        val traceQueries = capturedQueries.filter { it.contains("apm_trace_summaries") }
+        val errorQueries = capturedQueries.filter { it.contains("apm_error_groups_hourly") }
+        val resourceQueries = capturedQueries.filter { it.contains("apm_resource_stats_hourly") }
+        assertEquals(2, traceQueries.size)
+        assertEquals(2, errorQueries.size)
+        assertEquals(2, resourceQueries.size)
+        assertTrue(capturedQueries.all { it.contains("bucket_start >= toStartOfHour(now() - INTERVAL 90 DAY)") })
+        assertTrue(capturedQueries.none { it.contains("FROM `test_db`.apm_spans") })
+        assertTrue(capturedQueries.none { it.contains("FROM `test_db`.trace_stats") })
+
+        val apmErrorsDataQuery = errorQueries.first { it.contains("sumMerge(error_count_state)") }
+        assertTrue(apmErrorsDataQuery.contains("GROUP BY service, resource, error_message, error_type"))
+        assertFalse(capturedQueries.any { it.contains("concat(") })
     }
 
     // ===================== Helper: MessagePack trace packing =====================

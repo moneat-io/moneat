@@ -156,12 +156,19 @@ class MonitorAlertServiceCoverageTest {
         runBlocking {
             val body = """{"data":[["42.25"]]}"""
             val http = mockk<HttpResponse>()
+            val queries = mutableListOf<String>()
             every { http.status } returns HttpStatusCode.OK
             coEvery { http.bodyAsText(any()) } returns body
-            coEvery { ClickHouseClient.execute(any()) } returns http
+            coEvery { ClickHouseClient.execute(any()) } coAnswers {
+                queries.add(firstArg())
+                http
+            }
 
             val v = callPrivateSuspend("getCurrentMetricValue", 1, 99, "cpu_percent") as Double?
             assertEquals(42.25, v!!, 0.001)
+            assertTrue(
+                queries.single().contains("timestamp >= now64(3) - INTERVAL 10 MINUTE")
+            )
         }
 
     @Test

@@ -67,6 +67,8 @@ import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
+private const val CURRENT_METRIC_LOOKBACK_MINUTES = 10
+
 private fun String.escapeHtml(): String =
     replace("&", "&amp;")
         .replace("<", "&lt;")
@@ -480,6 +482,7 @@ class MonitorAlertService(
             WHERE organization_id = $organizationId
               AND tags['host_id'] = '$hostId'
               AND $metricFilter
+              AND timestamp >= now64(3) - INTERVAL $CURRENT_METRIC_LOOKBACK_MINUTES MINUTE
             FORMAT JSONCompact
             """.trimIndent()
 

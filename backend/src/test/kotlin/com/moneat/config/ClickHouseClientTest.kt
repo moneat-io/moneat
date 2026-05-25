@@ -1,0 +1,131 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+package com.moneat.config
+
+import com.moneat.monitoring.OperationalMetrics
+import com.moneat.testsupport.respond
+import com.moneat.testsupport.withClickHouseMockServer
+import io.ktor.client.statement.bodyAsText
+import kotlinx.coroutines.runBlocking
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
+import kotlin.test.AfterTest
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+
+private const val READ_QUERY_MAX_EXECUTION_SECONDS = "10"
+
+class ClickHouseClientTest {
+
+    @AfterTest
+    fun teardown() {
+        ClickHouseClient.close()
+        OperationalMetrics.resetForTest()
+    }
+
+    @Test
+    fun `execute adds server-side timeout settings to read queries`() = runBlocking {
+        val requestQueries = mutableListOf<String?>()
+        withClickHouseMockServer({ exchange ->
+            requestQueries.add(exchange.requestURI.rawQuery)
+            exchange.respond(200, "1\n", "text/plain")
+        }) {
+            val response = ClickHouseClient.execute("SELECT 1")
+            assertEquals(200, response.status.value)
+            assertEquals("1\n", response.bodyAsText())
+        }
+
+        val params = parseQueryParams(requestQueries.single())
+        assertEquals("test", params["database"])
+        assertEquals(READ_QUERY_MAX_EXECUTION_SECONDS, params["max_execution_time"])
+        assertEquals("throw", params["timeout_overflow_mode"])
+        assertEquals("0", params["timeout_before_checking_execution_speed"])
+    }
+
+    @Test
+    fun `execute does not add read query timeout settings to inserts`() = runBlocking {
+        val requestQueries = mutableListOf<String?>()
+        withClickHouseMockServer({ exchange ->
+            requestQueries.add(exchange.requestURI.rawQuery)
+            exchange.respond(200, "", "text/plain")
+        }) {
+            val response = ClickHouseClient.execute("INSERT INTO events VALUES (1)")
+            assertEquals(200, response.status.value)
+            response.bodyAsText()
+        }
+
+        val params = parseQueryParams(requestQueries.single())
+        assertEquals("test", params["database"])
+        assertFalse(params.containsKey("max_execution_time"))
+        assertFalse(params.containsKey("timeout_overflow_mode"))
+        assertFalse(params.containsKey("timeout_before_checking_execution_speed"))
+    }
+
+    @Test
+    fun `executeMigration does not add regular read query timeout settings`() = runBlocking {
+        val requestQueries = mutableListOf<String?>()
+        withClickHouseMockServer({ exchange ->
+            requestQueries.add(exchange.requestURI.rawQuery)
+            exchange.respond(200, "", "text/plain")
+        }) {
+            val response = ClickHouseClient.executeMigration("SELECT 1")
+            assertEquals(200, response.status.value)
+            response.bodyAsText()
+        }
+
+        val params = parseQueryParams(requestQueries.single())
+        assertEquals("test", params["database"])
+        assertFalse(params.containsKey("max_execution_time"))
+        assertFalse(params.containsKey("timeout_overflow_mode"))
+        assertFalse(params.containsKey("timeout_before_checking_execution_speed"))
+    }
+
+    @Test
+    fun `executeWithFormat records ClickHouse error body codes`() = runBlocking {
+        OperationalMetrics.resetForTest()
+        withClickHouseMockServer({ exchange ->
+            exchange.respond(
+                200,
+                "Code: 159. DB::Exception: Timeout exceeded",
+                "text/plain"
+            )
+        }) {
+            assertFailsWith<IllegalStateException> {
+                ClickHouseClient.executeWithFormat("SELECT 1", "TabSeparated")
+            }
+        }
+
+        val rendered = OperationalMetrics.scrape()
+        assertContains(rendered, "moneat_clickhouse_query_errors_total")
+        assertContains(rendered, "operation=\"execute\"")
+        assertContains(rendered, "code=\"159\"")
+    }
+
+    private fun parseQueryParams(rawQuery: String?): Map<String, String> {
+        if (rawQuery.isNullOrBlank()) return emptyMap()
+        return rawQuery.split("&").associate { part ->
+            val tokens = part.split("=", limit = 2)
+            decode(tokens[0]) to decode(tokens.getOrElse(1) { "" })
+        }
+    }
+
+    private fun decode(value: String): String =
+        URLDecoder.decode(value, StandardCharsets.UTF_8)
+}
