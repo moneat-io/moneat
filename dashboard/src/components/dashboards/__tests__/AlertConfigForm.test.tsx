@@ -14,12 +14,13 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {describe, it, expect, beforeEach} from 'vitest'
+import {describe, it, expect, beforeEach, vi} from 'vitest'
 import {screen, waitFor} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {http, HttpResponse} from 'msw'
 import {server} from '@/test/mocks/server'
 import {AlertConfigForm} from '../AlertConfigForm'
+import type {AlertThresholdPreview} from '../alertThresholds'
 import type {QueryDsl, DashboardWidgetAlert} from '@/lib/api'
 import {renderWithQueryClient, clearAuthStorage} from '@/test/utils'
 
@@ -41,12 +42,14 @@ const makeAlert = (overrides: Partial<DashboardWidgetAlert> = {}): DashboardWidg
   name: 'High error rate',
   condition: '>',
   threshold: 100,
+  warning_threshold: null,
   metric_index: 0,
   duration_seconds: 0,
   incident_severity: null,
   enabled: true,
   notification_channels: {email: true, slack: true, discord: true},
   last_triggered_at: null,
+  last_triggered_level: null,
   last_value: null,
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
@@ -61,12 +64,14 @@ function renderAlertForm(props: {
   dashboardId?: number
   widgetId?: number
   queryConfigs?: QueryDsl[]
+  onPreviewChange?: (preview: AlertThresholdPreview | null) => void
 } = {}) {
   return renderWithQueryClient(
     <AlertConfigForm
       dashboardId={props.dashboardId ?? 5}
       widgetId={props.widgetId ?? 10}
       queryConfigs={props.queryConfigs ?? [baseQuery]}
+      onPreviewChange={props.onPreviewChange}
     />
   )
 }
@@ -210,12 +215,50 @@ describe('AlertConfigForm', () => {
       const user = userEvent.setup()
       renderAlertForm()
       await user.click(await screen.findByText('Add alert'))
-      // Threshold and duration both start at 0; threshold has no placeholder
-      const zeroInputs = screen.getAllByDisplayValue('0')
-      const thresholdInput = zeroInputs.find(el => !el.getAttribute('placeholder'))!
+      const thresholdInput = screen.getByLabelText('Error threshold')
       await user.clear(thresholdInput)
       await user.type(thresholdInput, '500')
       expect(thresholdInput).toHaveValue(500)
+    })
+
+    it('can change warning threshold input', async () => {
+      const user = userEvent.setup()
+      renderAlertForm()
+      await user.click(await screen.findByText('Add alert'))
+      const warningInput = screen.getByLabelText('Warning threshold')
+      await user.type(warningInput, '250')
+      expect(warningInput).toHaveValue(250)
+    })
+
+    it('disables create when warning threshold is invalid for the condition', async () => {
+      const user = userEvent.setup()
+      renderAlertForm()
+      await user.click(await screen.findByText('Add alert'))
+      await user.type(screen.getByPlaceholderText('Alert name'), 'Invalid alert')
+      await user.clear(screen.getByLabelText('Error threshold'))
+      await user.type(screen.getByLabelText('Error threshold'), '100')
+      await user.type(screen.getByLabelText('Warning threshold'), '120')
+
+      expect(screen.getByText('Create Alert').closest('button')).toBeDisabled()
+      expect(screen.getByText('Warning threshold must be below the error threshold.')).toBeInTheDocument()
+    })
+
+    it('publishes alert threshold values to the preview callback', async () => {
+      const user = userEvent.setup()
+      const onPreviewChange = vi.fn()
+      renderAlertForm({onPreviewChange})
+      await user.click(await screen.findByText('Add alert'))
+      await user.clear(screen.getByLabelText('Error threshold'))
+      await user.type(screen.getByLabelText('Error threshold'), '100')
+      await user.type(screen.getByLabelText('Warning threshold'), '75')
+
+      await waitFor(() => {
+        expect(onPreviewChange).toHaveBeenLastCalledWith({
+          condition: '>',
+          warningThreshold: 75,
+          errorThreshold: 100,
+        })
+      })
     })
 
     it('can change duration_seconds input', async () => {
@@ -247,14 +290,20 @@ describe('AlertConfigForm', () => {
         http.get(`${API_BASE}/v1/dashboards/:id/alerts`, () =>
           HttpResponse.json([])
         ),
-        http.post(`${API_BASE}/v1/dashboards/:id/alerts`, () =>
-          HttpResponse.json(makeAlert({id: 2, name: 'New alert'}))
-        )
+        http.post(`${API_BASE}/v1/dashboards/:id/alerts`, async ({request}) => {
+          const body = (await request.json()) as Record<string, unknown>
+          expect(body.threshold).toBe(100)
+          expect(body.warning_threshold).toBe(75)
+          return HttpResponse.json(makeAlert({id: 2, name: 'New alert'}))
+        })
       )
       const user = userEvent.setup()
       renderAlertForm()
       await user.click(await screen.findByText('Add alert'))
       await user.type(await screen.findByPlaceholderText('Alert name'), 'New alert')
+      await user.clear(screen.getByLabelText('Error threshold'))
+      await user.type(screen.getByLabelText('Error threshold'), '100')
+      await user.type(screen.getByLabelText('Warning threshold'), '75')
       await user.click(screen.getByText('Create Alert'))
 
       // After success, form should be hidden

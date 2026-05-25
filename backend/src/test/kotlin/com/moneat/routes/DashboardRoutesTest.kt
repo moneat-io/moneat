@@ -810,6 +810,21 @@ class DashboardRoutesTest {
         }
 
     @Test
+    fun `PUT dashboard alert returns 400 for malformed JSON`() =
+        testApplication {
+            val (userId, _) = seedUserAndOrg()
+            application { installRoutes(this) }
+
+            val r =
+                client.put("/v1/dashboards/1/alerts/1") {
+                    withAuth(token(userId))
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"enabled":""")
+                }
+            assertEquals(HttpStatusCode.BadRequest, r.status)
+        }
+
+    @Test
     fun `PUT dashboard alert returns 404 when missing`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()

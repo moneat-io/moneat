@@ -34,6 +34,7 @@ import com.moneat.dashboards.services.DataSourceCredentials
 import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.dashboards.services.DashboardQueryEngine
 import com.moneat.incident.models.AlertSource
+import com.moneat.incident.models.IncidentSeverity
 import com.moneat.incident.services.IncidentService
 import com.moneat.notifications.services.AlertNotificationPreferencesService
 import com.moneat.notifications.services.DiscordService
@@ -48,6 +49,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
+import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
@@ -187,12 +189,14 @@ class DashboardAlertServiceTest {
                     name VARCHAR(255) NOT NULL,
                     condition VARCHAR(5) NOT NULL,
                     threshold DOUBLE PRECISION NOT NULL,
+                    warning_threshold DOUBLE PRECISION,
                     metric_index INT DEFAULT 0 NOT NULL,
                     duration_seconds INT DEFAULT 0 NOT NULL,
                     incident_severity VARCHAR(20),
                     enabled BOOLEAN DEFAULT TRUE NOT NULL,
                     notification_channels TEXT NOT NULL, -- H2: JSONB unsupported; production uses JSONB
                     last_triggered_at TIMESTAMP,
+                    last_triggered_level VARCHAR(20),
                     last_value DOUBLE PRECISION,
                     created_by BIGINT NOT NULL,
                     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -272,6 +276,7 @@ class DashboardAlertServiceTest {
         val name: String = "High Error Rate",
         val condition: String = ">",
         val threshold: Double = 100.0,
+        val warningThreshold: Double? = null,
         val metricIndex: Int = 0,
         val durationSeconds: Int = 0,
         val incidentSeverity: String? = null,
@@ -287,6 +292,7 @@ class DashboardAlertServiceTest {
         name = overrides.name,
         condition = overrides.condition,
         threshold = overrides.threshold,
+        warningThreshold = overrides.warningThreshold,
         metricIndex = overrides.metricIndex,
         durationSeconds = overrides.durationSeconds,
         incidentSeverity = overrides.incidentSeverity,
@@ -331,6 +337,7 @@ class DashboardAlertServiceTest {
         assertEquals("High Error Rate", response.name)
         assertEquals(">", response.condition)
         assertEquals(100.0, response.threshold)
+        assertNull(response.warningThreshold)
         assertEquals(widgetId, response.widgetId)
         assertEquals(dashboardId, response.dashboardId)
         assertTrue(response.enabled)
@@ -338,9 +345,26 @@ class DashboardAlertServiceTest {
         assertEquals(0, response.durationSeconds)
         assertNull(response.incidentSeverity)
         assertNull(response.lastTriggeredAt)
+        assertNull(response.lastTriggeredLevel)
         assertNull(response.lastValue)
         assertNotNull(response.createdAt)
         assertNotNull(response.updatedAt)
+    }
+
+    @Test
+    fun `createAlert persists warning threshold`() {
+        val dashboardId = seedDashboard()
+        val widgetId = seedWidget(dashboardId)
+
+        val response = service.createAlert(
+            dashboardId = dashboardId,
+            orgId = ORG_ID,
+            createdBy = CREATED_BY,
+            request = buildCreateRequest(widgetId, AlertRequestOverrides(threshold = 100.0, warningThreshold = 80.0)),
+        )
+
+        assertEquals(100.0, response.threshold)
+        assertEquals(80.0, response.warningThreshold)
     }
 
     @Test
@@ -394,6 +418,78 @@ class DashboardAlertServiceTest {
                 request = buildCreateRequest(widgetId, AlertRequestOverrides(condition = "INVALID")),
             )
         }
+    }
+
+    @Test
+    fun `createAlert rejects warning threshold above upper-bound error threshold`() {
+        val dashboardId = seedDashboard()
+        val widgetId = seedWidget(dashboardId)
+
+        assertFailsWith<IllegalArgumentException> {
+            service.createAlert(
+                dashboardId = dashboardId,
+                orgId = ORG_ID,
+                createdBy = CREATED_BY,
+                request = buildCreateRequest(
+                    widgetId,
+                    AlertRequestOverrides(condition = ">", threshold = 100.0, warningThreshold = 120.0),
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `createAlert rejects warning threshold below lower-bound error threshold`() {
+        val dashboardId = seedDashboard()
+        val widgetId = seedWidget(dashboardId)
+
+        assertFailsWith<IllegalArgumentException> {
+            service.createAlert(
+                dashboardId = dashboardId,
+                orgId = ORG_ID,
+                createdBy = CREATED_BY,
+                request = buildCreateRequest(
+                    widgetId,
+                    AlertRequestOverrides(condition = "<", threshold = 10.0, warningThreshold = 5.0),
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `createAlert rejects equality warning threshold that does not match error threshold`() {
+        val dashboardId = seedDashboard()
+        val widgetId = seedWidget(dashboardId)
+
+        assertFailsWith<IllegalArgumentException> {
+            service.createAlert(
+                dashboardId = dashboardId,
+                orgId = ORG_ID,
+                createdBy = CREATED_BY,
+                request = buildCreateRequest(
+                    widgetId,
+                    AlertRequestOverrides(condition = "==", threshold = 100.0, warningThreshold = 90.0),
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `createAlert accepts equality warning threshold that matches error threshold`() {
+        val dashboardId = seedDashboard()
+        val widgetId = seedWidget(dashboardId)
+
+        val response = service.createAlert(
+            dashboardId = dashboardId,
+            orgId = ORG_ID,
+            createdBy = CREATED_BY,
+            request = buildCreateRequest(
+                widgetId,
+                AlertRequestOverrides(condition = "==", threshold = 100.0, warningThreshold = 100.0),
+            ),
+        )
+
+        assertEquals(100.0, response.warningThreshold)
     }
 
     @Test
@@ -488,7 +584,7 @@ class DashboardAlertServiceTest {
     }
 
     @Test
-    fun `updateAlert can change threshold and condition`() {
+    fun `updateAlert can change thresholds and condition`() {
         val dashboardId = seedDashboard()
         val widgetId = seedWidget(dashboardId)
 
@@ -503,12 +599,58 @@ class DashboardAlertServiceTest {
             alertId = created.id,
             dashboardId = dashboardId,
             orgId = ORG_ID,
-            request = UpdateDashboardAlertRequest(condition = "<", threshold = 50.0),
+            request = UpdateDashboardAlertRequest(condition = "<", threshold = 50.0, warningThreshold = 75.0),
         )
 
         assertNotNull(updated)
         assertEquals("<", updated.condition)
         assertEquals(50.0, updated.threshold)
+        assertEquals(75.0, updated.warningThreshold)
+    }
+
+    @Test
+    fun `updateAlert validates warning threshold against existing condition`() {
+        val dashboardId = seedDashboard()
+        val widgetId = seedWidget(dashboardId)
+
+        val created = service.createAlert(
+            dashboardId,
+            ORG_ID,
+            CREATED_BY,
+            buildCreateRequest(widgetId, AlertRequestOverrides(condition = ">", threshold = 100.0)),
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            service.updateAlert(
+                alertId = created.id,
+                dashboardId = dashboardId,
+                orgId = ORG_ID,
+                request = UpdateDashboardAlertRequest(warningThreshold = 120.0),
+            )
+        }
+    }
+
+    @Test
+    fun `updateAlert clears warning threshold when request explicitly provides null`() {
+        val dashboardId = seedDashboard()
+        val widgetId = seedWidget(dashboardId)
+
+        val created = service.createAlert(
+            dashboardId,
+            ORG_ID,
+            CREATED_BY,
+            buildCreateRequest(widgetId, AlertRequestOverrides(threshold = 100.0, warningThreshold = 80.0)),
+        )
+
+        val updated = service.updateAlert(
+            alertId = created.id,
+            dashboardId = dashboardId,
+            orgId = ORG_ID,
+            request = UpdateDashboardAlertRequest(warningThreshold = null, warningThresholdProvided = true),
+        )
+
+        assertNotNull(updated)
+        assertNull(updated.warningThreshold)
     }
 
     @Test
@@ -703,6 +845,9 @@ class DashboardAlertServiceTest {
                 )
             every { redis.get("dashboard_alert_state:${created.id}") } returns "TRIGGERED"
             every { redis.del(any<String>()) } returns REDIS_DELETE_COUNT
+            every {
+                prefsService.getUsersWithChannelEnabled(ORG_ID.toInt(), "DASHBOARD_ALERT", "email")
+            } returns listOf(1 to "alerts@example.com")
 
             callPrivateSuspend("evaluateAlerts")
 
@@ -713,6 +858,334 @@ class DashboardAlertServiceTest {
                     deduplicationKey = "moneat-dashboard-alert-${created.id}"
                 )
             }
+            verify(exactly = 1) {
+                emailService.sendEmail(
+                    "alerts@example.com",
+                    match { it.contains("Dashboard Alert Resolved") },
+                    any(),
+                    any(),
+                    "dashboard_alert_recovery"
+                )
+            }
+        }
+
+    @Test
+    fun `evaluateAlerts sends warning threshold notifications with low incident severity`() =
+        runBlocking {
+            mockkObject(RedisConfig)
+            redisConfigMocked = true
+            every { RedisConfig.isConnected() } returns false
+            every {
+                prefsService.getUsersWithChannelEnabled(ORG_ID.toInt(), "DASHBOARD_ALERT", "email")
+            } returns listOf(1 to "alerts@example.com")
+            every {
+                prefsService.getUsersWithChannelEnabled(ORG_ID.toInt(), "DASHBOARD_ALERT", "slack")
+            } returns listOf(1 to "alerts@example.com")
+            every {
+                prefsService.getUsersWithChannelEnabled(ORG_ID.toInt(), "DASHBOARD_ALERT", "discord")
+            } returns listOf(1 to "alerts@example.com")
+            coEvery {
+                retentionPolicyService.getRetentionDaysForProject(any())
+            } returns RECOVERY_RETENTION_DAYS
+            coEvery {
+                queryEngine.executeQuery(any(), any(), any(), any())
+            } returns listOf(mapOf("total" to JsonPrimitive(90.0)))
+
+            val dashboardId = seedDashboard()
+            val widgetId =
+                seedWidget(
+                    dashboardId,
+                    queryConfigs = """[{"dataSource":"events"}]"""
+                )
+            val created =
+                service.createAlert(
+                    dashboardId,
+                    ORG_ID,
+                    CREATED_BY,
+                    buildCreateRequest(
+                        widgetId,
+                        AlertRequestOverrides(
+                            threshold = 100.0,
+                            warningThreshold = 80.0,
+                            incidentSeverity = "CRITICAL",
+                        ),
+                    ),
+                )
+
+            callPrivateSuspend("evaluateAlerts")
+
+            val fired = service.listAlerts(dashboardId, ORG_ID).single { it.id == created.id }
+            assertEquals("WARNING", fired.lastTriggeredLevel)
+            assertEquals(90.0, fired.lastValue)
+            coVerify(exactly = 1) {
+                incidentService.fireAlert(
+                    match {
+                        it.severity == IncidentSeverity.LOW &&
+                            it.title == "Dashboard Warning: High Error Rate"
+                    }
+                )
+            }
+            verify(exactly = 1) {
+                emailService.sendEmail(
+                    "alerts@example.com",
+                    match { it.contains("Dashboard Warning") },
+                    match { it.contains("Dashboard Warning") },
+                    match { it.contains("Dashboard Warning") },
+                    "dashboard_alert"
+                )
+            }
+            coVerify(exactly = 1) {
+                slackService.sendDashboardAlert(
+                    organizationId = ORG_ID.toInt(),
+                    alertName = "Warning: High Error Rate",
+                    dashboardTitle = "Test Dashboard",
+                    widgetTitle = "Test Widget",
+                    condition = ">",
+                    threshold = "80.00",
+                    currentValue = "90.00",
+                    severity = "LOW",
+                    dashboardId = dashboardId,
+                    baseUrl = any(),
+                )
+            }
+            coVerify(exactly = 1) {
+                discordService.sendDashboardAlert(
+                    organizationId = ORG_ID.toInt(),
+                    alertName = "Warning: High Error Rate",
+                    dashboardTitle = "Test Dashboard",
+                    widgetTitle = "Test Widget",
+                    condition = ">",
+                    threshold = "80.00",
+                    currentValue = "90.00",
+                    severity = "LOW",
+                    dashboardId = dashboardId,
+                    baseUrl = any(),
+                )
+            }
+        }
+
+    @Test
+    fun `evaluateAlerts fires configured severity incident for error threshold`() =
+        runBlocking {
+            mockkObject(RedisConfig)
+            redisConfigMocked = true
+            every { RedisConfig.isConnected() } returns false
+            coEvery {
+                retentionPolicyService.getRetentionDaysForProject(any())
+            } returns RECOVERY_RETENTION_DAYS
+            coEvery {
+                queryEngine.executeQuery(any(), any(), any(), any())
+            } returns listOf(mapOf("total" to JsonPrimitive(125.0)))
+
+            val dashboardId = seedDashboard()
+            val widgetId =
+                seedWidget(
+                    dashboardId,
+                    queryConfigs = """[{"dataSource":"events"}]"""
+                )
+            val created =
+                service.createAlert(
+                    dashboardId,
+                    ORG_ID,
+                    CREATED_BY,
+                    buildCreateRequest(
+                        widgetId,
+                        AlertRequestOverrides(
+                            threshold = 100.0,
+                            warningThreshold = 80.0,
+                            incidentSeverity = "HIGH",
+                            notificationChannels = NotificationChannels(email = false, slack = false, discord = false),
+                        ),
+                    ),
+                )
+
+            callPrivateSuspend("evaluateAlerts")
+
+            val fired = service.listAlerts(dashboardId, ORG_ID).single { it.id == created.id }
+            assertEquals("ERROR", fired.lastTriggeredLevel)
+            assertEquals(125.0, fired.lastValue)
+            coVerify(exactly = 1) {
+                incidentService.fireAlert(
+                    match {
+                        it.severity == IncidentSeverity.HIGH &&
+                            it.title == "Dashboard Error: High Error Rate"
+                    }
+                )
+            }
+        }
+
+    @Test
+    fun `evaluateAlerts waits for configured duration before firing`() =
+        runBlocking {
+            mockkObject(RedisConfig)
+            redisConfigMocked = true
+            every { RedisConfig.isConnected() } returns false
+            coEvery {
+                retentionPolicyService.getRetentionDaysForProject(any())
+            } returns RECOVERY_RETENTION_DAYS
+            coEvery {
+                queryEngine.executeQuery(any(), any(), any(), any())
+            } returns listOf(mapOf("total" to JsonPrimitive(90.0)))
+
+            val dashboardId = seedDashboard()
+            val widgetId =
+                seedWidget(
+                    dashboardId,
+                    queryConfigs = """[{"dataSource":"events"}]"""
+                )
+            val created =
+                service.createAlert(
+                    dashboardId,
+                    ORG_ID,
+                    CREATED_BY,
+                    buildCreateRequest(
+                        widgetId,
+                        AlertRequestOverrides(
+                            threshold = 100.0,
+                            warningThreshold = 80.0,
+                            durationSeconds = 300,
+                        ),
+                    ),
+                )
+
+            callPrivateSuspend("evaluateAlerts")
+
+            val pending = service.listAlerts(dashboardId, ORG_ID).single { it.id == created.id }
+            assertNull(pending.lastTriggeredLevel)
+            assertEquals(90.0, pending.lastValue)
+            coVerify(exactly = 0) { incidentService.fireAlert(any()) }
+        }
+
+    @Test
+    fun `evaluateAlerts throttles repeated notifications at same threshold level`() =
+        runBlocking {
+            mockkObject(RedisConfig)
+            redisConfigMocked = true
+            every { RedisConfig.isConnected() } returns false
+            coEvery {
+                retentionPolicyService.getRetentionDaysForProject(any())
+            } returns RECOVERY_RETENTION_DAYS
+            coEvery {
+                queryEngine.executeQuery(any(), any(), any(), any())
+            } returns listOf(mapOf("total" to JsonPrimitive(90.0)))
+
+            val dashboardId = seedDashboard()
+            val widgetId =
+                seedWidget(
+                    dashboardId,
+                    queryConfigs = """[{"dataSource":"events"}]"""
+                )
+            service.createAlert(
+                dashboardId,
+                ORG_ID,
+                CREATED_BY,
+                buildCreateRequest(
+                    widgetId,
+                    AlertRequestOverrides(
+                        threshold = 100.0,
+                        warningThreshold = 80.0,
+                        notificationChannels = NotificationChannels(email = false, slack = false, discord = false),
+                    ),
+                ),
+            )
+
+            callPrivateSuspend("evaluateAlerts")
+            callPrivateSuspend("evaluateAlerts")
+
+            coVerify(exactly = 1) { incidentService.fireAlert(any()) }
+        }
+
+    @Test
+    fun `evaluateAlerts leaves alert inactive when value is below warning range`() =
+        runBlocking {
+            mockkObject(RedisConfig)
+            redisConfigMocked = true
+            every { RedisConfig.isConnected() } returns false
+            coEvery {
+                retentionPolicyService.getRetentionDaysForProject(any())
+            } returns RECOVERY_RETENTION_DAYS
+            coEvery {
+                queryEngine.executeQuery(any(), any(), any(), any())
+            } returns listOf(mapOf("total" to JsonPrimitive(70.0)))
+
+            val dashboardId = seedDashboard()
+            val widgetId =
+                seedWidget(
+                    dashboardId,
+                    queryConfigs = """[{"dataSource":"events"}]"""
+                )
+            val created =
+                service.createAlert(
+                    dashboardId,
+                    ORG_ID,
+                    CREATED_BY,
+                    buildCreateRequest(
+                        widgetId,
+                        AlertRequestOverrides(threshold = 100.0, warningThreshold = 80.0),
+                    ),
+                )
+
+            callPrivateSuspend("evaluateAlerts")
+
+            val inactive = service.listAlerts(dashboardId, ORG_ID).single { it.id == created.id }
+            assertNull(inactive.lastTriggeredLevel)
+            assertEquals(70.0, inactive.lastValue)
+            coVerify(exactly = 0) { incidentService.fireAlert(any()) }
+        }
+
+    @Test
+    fun `evaluateAlerts ignores invalid widget query config`() =
+        runBlocking {
+            mockkObject(RedisConfig)
+            redisConfigMocked = true
+            every { RedisConfig.isConnected() } returns false
+
+            val dashboardId = seedDashboard()
+            val widgetId = seedWidget(dashboardId, queryConfigs = "not-json")
+            service.createAlert(
+                dashboardId,
+                ORG_ID,
+                CREATED_BY,
+                buildCreateRequest(widgetId, AlertRequestOverrides(threshold = 100.0)),
+            )
+
+            callPrivateSuspend("evaluateAlerts")
+
+            coVerify(exactly = 0) { queryEngine.executeQuery(any(), any(), any(), any()) }
+        }
+
+    @Test
+    fun `evaluateAlerts ignores query execution failures`() =
+        runBlocking {
+            mockkObject(RedisConfig)
+            redisConfigMocked = true
+            every { RedisConfig.isConnected() } returns false
+            coEvery {
+                retentionPolicyService.getRetentionDaysForProject(any())
+            } returns RECOVERY_RETENTION_DAYS
+            coEvery {
+                queryEngine.executeQuery(any(), any(), any(), any())
+            } throws RuntimeException("query failed")
+
+            val dashboardId = seedDashboard()
+            val widgetId =
+                seedWidget(
+                    dashboardId,
+                    queryConfigs = """[{"dataSource":"events"}]"""
+                )
+            val created =
+                service.createAlert(
+                    dashboardId,
+                    ORG_ID,
+                    CREATED_BY,
+                    buildCreateRequest(widgetId, AlertRequestOverrides(threshold = 100.0)),
+                )
+
+            callPrivateSuspend("evaluateAlerts")
+
+            val unchanged = service.listAlerts(dashboardId, ORG_ID).single { it.id == created.id }
+            assertNull(unchanged.lastValue)
+            coVerify(exactly = 0) { incidentService.fireAlert(any()) }
         }
 
     @Test

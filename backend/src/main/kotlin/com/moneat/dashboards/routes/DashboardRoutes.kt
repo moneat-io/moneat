@@ -50,11 +50,14 @@ import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Projects
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.utils.ErrorResponse
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
+import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.request.receive
+import io.ktor.server.request.receiveText
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
@@ -64,13 +67,13 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -675,13 +678,24 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateAlert(
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
     val alertId = call.parameters["alertId"]?.toLongOrNull()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
-    val request = call.receive<UpdateDashboardAlertRequest>()
+    val request = receiveUpdateAlertRequest()
     try {
         val updated = dashboardAlertService.updateAlert(alertId, id, orgId, request)
             ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
         call.respond(updated)
     } catch (e: IllegalArgumentException) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message ?: "Invalid request"))
+    }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.receiveUpdateAlertRequest(): UpdateDashboardAlertRequest {
+    val body = call.receiveText()
+    return suspendRunCatching {
+        val request = json.decodeFromString<UpdateDashboardAlertRequest>(body)
+        val hasWarningThreshold = json.parseToJsonElement(body).jsonObject.containsKey("warning_threshold")
+        request.copy(warningThresholdProvided = hasWarningThreshold)
+    }.getOrElse { e ->
+        throw BadRequestException("Invalid alert update payload", e)
     }
 }
 
