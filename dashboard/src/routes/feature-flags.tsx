@@ -52,8 +52,10 @@ import {
   Plus,
   RefreshCcw,
   Save,
+  Search,
   Shield,
   Trash2,
+  X,
 } from 'lucide-react'
 
 export const Route = createFileRoute('/feature-flags')({
@@ -72,6 +74,11 @@ const defaultVariants = JSON.stringify([
   {key: 'on', name: 'On', value: true},
 ], null, 2)
 const defaultSegmentConditions = JSON.stringify({all: []}, null, 2)
+const tabTriggerClass = [
+  'border border-transparent',
+  'data-[state=active]:border-foreground data-[state=active]:bg-background',
+  'data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-foreground/20',
+].join(' ')
 const tooltipText = {
   environment: 'Choose which environment you are editing and evaluating flags for.',
   refresh: 'Reload flags, analytics, SDK keys, segments, and audit data for this environment.',
@@ -92,16 +99,11 @@ const tooltipText = {
   addEnvironment: 'Create a new environment and switch the page to it.',
   saveConfig: 'Save targeting, enabled state, default variant, and off variant for this environment.',
   archive: 'Archive this flag so SDKs can no longer evaluate it.',
-  variantsTab: 'Review and edit the values this flag can return.',
-  targetingTab: 'Control whether the flag is on and which variant each audience receives.',
-  segmentsTab: 'Create reusable audience definitions for targeting rules.',
-  analyticsTab: 'See recent evaluation counts by variant for this flag.',
-  auditTab: 'Review recent changes to this flag and feature flag settings.',
-  setupTab: 'Create SDK keys and copy the OpenFeature provider setup example.',
   enabled: 'Turns this flag on for the selected environment. Off returns the off variant.',
   defaultVariant: 'Fallback variant returned when no targeting rule matches.',
   offVariant: 'Variant returned while the flag is disabled.',
   rulesJson: 'JSON targeting rules. Rules can reference segments and rollout percentages.',
+  analyticsSummary: 'Recent evaluation counts by variant for this flag.',
   segmentList: 'Saved audience groups that can be reused by targeting rules.',
   segmentKey: 'Stable segment identifier used from targeting rules.',
   segmentName: 'Human-readable segment name shown in this dashboard.',
@@ -155,6 +157,21 @@ function formatValue(value: FeatureFlagJsonValue): string {
 
 function selectedConfig(flag: FeatureFlag | null, environment: string): FeatureFlagConfig | null {
   return flag?.configs.find((config) => config.environmentKey === environment) ?? flag?.configs[0] ?? null
+}
+
+function flagMatchesSearch(flag: FeatureFlag, config: FeatureFlagConfig | null, search: string): boolean {
+  if (!search) return true
+  const status = config?.enabled ? 'on enabled active' : 'off disabled inactive'
+  const visibility = flag.clientVisible ? 'client client-visible' : 'server server-only'
+  const searchable = [
+    flag.name,
+    flag.key,
+    flag.valueType,
+    status,
+    visibility,
+    ...flag.tags,
+  ].join(' ').toLowerCase()
+  return searchable.includes(search)
 }
 
 function variantsDraftFromFlag(flag: FeatureFlag | null): string {
@@ -243,6 +260,7 @@ function FeatureFlagsPage() {
   const queryClient = useQueryClient()
   const [environment, setEnvironment] = useState('production')
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const [flagSearch, setFlagSearch] = useState('')
   const [newFlag, setNewFlag] = useState({
     key: '',
     name: '',
@@ -289,9 +307,16 @@ function FeatureFlagsPage() {
 
   const environments = flagsQuery.data?.environments ?? []
   const flags = flagsQuery.data?.flags ?? []
+  const normalizedFlagSearch = flagSearch.trim().toLowerCase()
+  const filteredFlags = useMemo(() => {
+    return flags.filter((flag) => flagMatchesSearch(flag, selectedConfig(flag, environment), normalizedFlagSearch))
+  }, [environment, flags, normalizedFlagSearch])
   const selectedFlag = useMemo(() => {
-    return flags.find((flag) => flag.key === selectedKey) ?? flags[0] ?? null
-  }, [flags, selectedKey])
+    const selected = flags.find((flag) => flag.key === selectedKey) ?? null
+    if (!normalizedFlagSearch) return selected ?? flags[0] ?? null
+    const selectedIsVisible = selected && filteredFlags.some((flag) => flag.key === selected.key)
+    return selectedIsVisible ? selected : filteredFlags[0] ?? null
+  }, [filteredFlags, flags, normalizedFlagSearch, selectedKey])
   const config = selectedConfig(selectedFlag, environment)
   const analytics = analyticsQuery.data
   const configDraftKey = `${selectedFlag?.key ?? 'none'}:${environment}:${config?.version ?? 0}`
@@ -525,13 +550,41 @@ val enabled = client.getBooleanValue("checkout.enabled", false, evaluationContex
 
         <div className="grid gap-3 lg:grid-cols-[minmax(260px,320px)_1fr]">
         <Card>
-          <CardHeader className="p-3 pb-2">
-            <CardTitle className="text-base">Flags</CardTitle>
+          <CardHeader className="space-y-2 p-3 pb-2">
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-base">Flags</CardTitle>
+              <div className="text-xs tabular-nums text-muted-foreground">
+                {normalizedFlagSearch ? `${filteredFlags.length} / ${flags.length}` : flags.length}
+              </div>
+            </div>
+            <div className="relative">
+              <Label htmlFor="flag-search" className="sr-only">Search flags</Label>
+              <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                id="flag-search"
+                value={flagSearch}
+                onChange={(event) => setFlagSearch(event.target.value)}
+                placeholder="Search flags..."
+                className="h-9 pl-8 pr-9"
+              />
+              {flagSearch && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Clear flag search"
+                  className="absolute right-1 top-1 h-7 w-7"
+                  onClick={() => setFlagSearch('')}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="space-y-3 p-3 pt-0">
-            <div className="space-y-2">
+            <div className="max-h-[34rem] space-y-2 overflow-y-auto pr-1">
               {flagsQuery.isLoading && <div className="text-sm text-muted-foreground">Loading...</div>}
-              {flags.map((flag) => {
+              {filteredFlags.map((flag) => {
                 const flagConfig = selectedConfig(flag, environment)
                 return (
                   <button
@@ -557,6 +610,11 @@ val enabled = client.getBooleanValue("checkout.enabled", false, evaluationContex
                   </button>
                 )
               })}
+              {!flagsQuery.isLoading && filteredFlags.length === 0 && (
+                <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
+                  No flags match this search.
+                </div>
+              )}
             </div>
 
             <details className="group border-t pt-2">
@@ -727,7 +785,7 @@ val enabled = client.getBooleanValue("checkout.enabled", false, evaluationContex
           ) : (
             <Card>
               <CardContent className="py-12 text-center text-sm text-muted-foreground">
-                No feature flags in this environment.
+                {normalizedFlagSearch ? 'No feature flags match this search.' : 'No feature flags in this environment.'}
               </CardContent>
             </Card>
           )}
@@ -764,22 +822,6 @@ function CompactMetric({
         <span className="text-xs text-muted-foreground">{label}</span>
         <span className="font-semibold tabular-nums">{value}</span>
       </button>
-    </TooltipWrap>
-  )
-}
-
-function TooltipTabTrigger({
-  value,
-  children,
-  tooltip,
-}: {
-  value: string
-  children: ReactNode
-  tooltip: string
-}) {
-  return (
-    <TooltipWrap content={tooltip}>
-      <TabsTrigger value={value}>{children}</TabsTrigger>
     </TooltipWrap>
   )
 }
@@ -840,12 +882,12 @@ function FlagDetail(props: {
       </div>
 
       <TabsList className="flex h-auto flex-wrap justify-start">
-        <TooltipTabTrigger value="variants" tooltip={tooltipText.variantsTab}>Variants</TooltipTabTrigger>
-        <TooltipTabTrigger value="targeting" tooltip={tooltipText.targetingTab}>Targeting</TooltipTabTrigger>
-        <TooltipTabTrigger value="segments" tooltip={tooltipText.segmentsTab}>Segments</TooltipTabTrigger>
-        <TooltipTabTrigger value="analytics" tooltip={tooltipText.analyticsTab}>Analytics</TooltipTabTrigger>
-        <TooltipTabTrigger value="audit" tooltip={tooltipText.auditTab}>Audit</TooltipTabTrigger>
-        <TooltipTabTrigger value="setup" tooltip={tooltipText.setupTab}>SDK Setup</TooltipTabTrigger>
+        <TabsTrigger value="variants" className={tabTriggerClass}>Variants</TabsTrigger>
+        <TabsTrigger value="targeting" className={tabTriggerClass}>Targeting</TabsTrigger>
+        <TabsTrigger value="segments" className={tabTriggerClass}>Segments</TabsTrigger>
+        <TabsTrigger value="analytics" className={tabTriggerClass}>Analytics</TabsTrigger>
+        <TabsTrigger value="audit" className={tabTriggerClass}>Audit</TabsTrigger>
+        <TabsTrigger value="setup" className={tabTriggerClass}>SDK Setup</TabsTrigger>
       </TabsList>
 
       <TabsContent value="variants">
@@ -1027,7 +1069,7 @@ function FlagDetail(props: {
             <CardTitle className="flex items-center gap-2 text-base">
               <BarChart3 className="h-4 w-4" />
               Recent Evaluations
-              <HelpIcon content={tooltipText.analyticsTab} />
+              <HelpIcon content={tooltipText.analyticsSummary} />
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
