@@ -150,7 +150,7 @@ internal fun quotaTierFromEnum(tierName: String): PricingTierConfigResponse {
         logRetentionDays = tier.retentionDays,
         replayRetentionDays = tier.retentionDays,
         llmRetentionDays = tier.retentionDays,
-        apmTraceRetentionDays = tier.retentionDays,
+        apmTraceRetentionDays = tier.apmTraceRetentionDays,
         statusPagesEnabled = true,
         statusPageCustomDomainEnabled = true,
         sessionReplayEnabled = true,

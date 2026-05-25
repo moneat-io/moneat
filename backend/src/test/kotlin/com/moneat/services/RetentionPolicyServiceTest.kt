@@ -17,11 +17,15 @@
 package com.moneat.services
 
 import com.moneat.billing.models.PricingTierConfigs
+import com.moneat.billing.models.PricingTier
+import com.moneat.billing.services.PricingTierService
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.testsupport.TestDatabaseHelper
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -262,5 +266,18 @@ class RetentionPolicyServiceTest {
             assertEquals(2, map.size)
             assertEquals(3, map[org1])
             assertEquals(45, map[org2])
+        }
+
+    @Test
+    fun `getApmTraceRetentionDaysByOrganization falls back to free APM trace retention on lookup failure`() =
+        runBlocking {
+            val orgId = seedOrg("Fallback Org")
+            val pricingTierService = mockk<PricingTierService>()
+            every { pricingTierService.getEffectiveTierForOrganization(orgId) } throws IllegalStateException("boom")
+            val fallbackService = RetentionPolicyService(pricingTierService)
+
+            val map = fallbackService.getApmTraceRetentionDaysByOrganization()
+
+            assertEquals(PricingTier.FREE.apmTraceRetentionDays, map[orgId])
         }
 }

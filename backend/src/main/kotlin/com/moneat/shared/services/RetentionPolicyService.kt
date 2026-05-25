@@ -167,7 +167,7 @@ class RetentionPolicyService(
         for (orgId in orgIds) {
             apmTraceRetentionByOrg[orgId] =
                 suspendRunCatching { getApmTraceRetentionDaysForOrganization(orgId) }
-                    .getOrDefault(PricingTier.FREE.retentionDays)
+                    .getOrDefault(PricingTier.FREE.apmTraceRetentionDays)
         }
         return apmTraceRetentionByOrg
     }
