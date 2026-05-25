@@ -63,6 +63,10 @@ jobs:
         working-directory: dashboard
         run: npm run lint
 
+      - name: Run TypeScript typecheck
+        working-directory: dashboard
+        run: npm run typecheck
+
       - name: Run frontend tests
         working-directory: dashboard
         run: npm run test
