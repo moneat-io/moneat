@@ -46,6 +46,7 @@ import { Route as InfrastructureMonitoringRouteImport } from './routes/infrastru
 import { Route as ImpersonateCallbackRouteImport } from './routes/impersonate-callback'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as FeedbackRouteImport } from './routes/feedback'
+import { Route as FeatureFlagsRouteImport } from './routes/feature-flags'
 import { Route as ErrorTrackingRouteImport } from './routes/error-tracking'
 import { Route as DocsRouteImport } from './routes/docs'
 import { Route as DemoRouteImport } from './routes/demo'
@@ -323,6 +324,11 @@ const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
 const FeedbackRoute = FeedbackRouteImport.update({
   id: '/feedback',
   path: '/feedback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FeatureFlagsRoute = FeatureFlagsRouteImport.update({
+  id: '/feature-flags',
+  path: '/feature-flags',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ErrorTrackingRoute = ErrorTrackingRouteImport.update({
@@ -813,6 +819,7 @@ export interface FileRoutesByFullPath {
   '/demo': typeof DemoRoute
   '/docs': typeof DocsRouteWithChildren
   '/error-tracking': typeof ErrorTrackingRoute
+  '/feature-flags': typeof FeatureFlagsRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/impersonate-callback': typeof ImpersonateCallbackRoute
@@ -938,6 +945,7 @@ export interface FileRoutesByTo {
   '/custom-dashboards': typeof CustomDashboardsRoute
   '/demo': typeof DemoRoute
   '/error-tracking': typeof ErrorTrackingRoute
+  '/feature-flags': typeof FeatureFlagsRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/impersonate-callback': typeof ImpersonateCallbackRoute
@@ -1061,6 +1069,7 @@ export interface FileRoutesById {
   '/demo': typeof DemoRoute
   '/docs': typeof DocsRouteWithChildren
   '/error-tracking': typeof ErrorTrackingRoute
+  '/feature-flags': typeof FeatureFlagsRoute
   '/feedback': typeof FeedbackRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/impersonate-callback': typeof ImpersonateCallbackRoute
@@ -1194,6 +1203,7 @@ export interface FileRouteTypes {
     | '/demo'
     | '/docs'
     | '/error-tracking'
+    | '/feature-flags'
     | '/feedback'
     | '/forgot-password'
     | '/impersonate-callback'
@@ -1319,6 +1329,7 @@ export interface FileRouteTypes {
     | '/custom-dashboards'
     | '/demo'
     | '/error-tracking'
+    | '/feature-flags'
     | '/feedback'
     | '/forgot-password'
     | '/impersonate-callback'
@@ -1441,6 +1452,7 @@ export interface FileRouteTypes {
     | '/demo'
     | '/docs'
     | '/error-tracking'
+    | '/feature-flags'
     | '/feedback'
     | '/forgot-password'
     | '/impersonate-callback'
@@ -1573,6 +1585,7 @@ export interface RootRouteChildren {
   DemoRoute: typeof DemoRoute
   DocsRoute: typeof DocsRouteWithChildren
   ErrorTrackingRoute: typeof ErrorTrackingRoute
+  FeatureFlagsRoute: typeof FeatureFlagsRoute
   FeedbackRoute: typeof FeedbackRouteWithChildren
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   ImpersonateCallbackRoute: typeof ImpersonateCallbackRoute
@@ -1884,6 +1897,13 @@ declare module '@tanstack/react-router' {
       path: '/feedback'
       fullPath: '/feedback'
       preLoaderRoute: typeof FeedbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/feature-flags': {
+      id: '/feature-flags'
+      path: '/feature-flags'
+      fullPath: '/feature-flags'
+      preLoaderRoute: typeof FeatureFlagsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/error-tracking': {
@@ -2911,6 +2931,7 @@ const rootRouteChildren: RootRouteChildren = {
   DemoRoute: DemoRoute,
   DocsRoute: DocsRouteWithChildren,
   ErrorTrackingRoute: ErrorTrackingRoute,
+  FeatureFlagsRoute: FeatureFlagsRoute,
   FeedbackRoute: FeedbackRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,
   ImpersonateCallbackRoute: ImpersonateCallbackRoute,

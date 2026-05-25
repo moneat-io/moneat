@@ -1,0 +1,100 @@
+---
+title: Feature Flags
+description: Use Moneat as an OFREP-compatible OpenFeature backend.
+---
+
+# Feature Flags
+
+Moneat includes a feature flag control plane with OpenFeature-compatible remote evaluation through OFREP.
+Flags are scoped to an organization and environment, support server and client SDK keys, and record evaluation plus track events in ClickHouse.
+
+## OpenFeature And OFREP
+
+OpenFeature SDKs use providers. For Moneat, use an OFREP provider and point it at your Moneat instance:
+
+```text
+https://your-moneat-host/ofrep/v1
+```
+
+Runtime endpoints:
+
+```text
+POST /ofrep/v1/evaluate/flags/{key}
+POST /ofrep/v1/evaluate/flags
+POST /ofrep/v1/track
+```
+
+Authenticate with a feature flag SDK key:
+
+```http
+Authorization: Bearer mffsk_...
+```
+
+Server keys can evaluate every flag in the environment. Client keys can evaluate only flags marked client-visible.
+
+## Kotlin/JVM
+
+Kotlin/JVM applications can use the OpenFeature Java SDK with an OFREP provider:
+
+```kotlin
+val provider = OfrepProvider.builder()
+  .endpoint("https://your-moneat-host/ofrep/v1")
+  .apiKey("mffsk_...")
+  .build()
+
+OpenFeatureAPI.getInstance().setProvider(provider)
+val client = OpenFeatureAPI.getInstance().getClient()
+
+val context = ImmutableContext.builder()
+  .targetingKey("user-123")
+  .add("email", Value("dev@example.com"))
+  .build()
+
+val enabled = client.getBooleanValue("checkout.enabled", false, context)
+```
+
+## Java
+
+```java
+Provider provider = OfrepProvider.builder()
+    .endpoint("https://your-moneat-host/ofrep/v1")
+    .apiKey("mffsk_...")
+    .build();
+
+OpenFeatureAPI.getInstance().setProvider(provider);
+Client client = OpenFeatureAPI.getInstance().getClient();
+
+EvaluationContext context = ImmutableContext.builder()
+    .targetingKey("user-123")
+    .add("plan", new Value("team"))
+    .build();
+
+boolean enabled = client.getBooleanValue("checkout.enabled", false, context);
+```
+
+## Tracking
+
+Moneat adds a tracking endpoint for experiment and conversion events:
+
+```http
+POST /ofrep/v1/track
+Authorization: Bearer mffsk_...
+Content-Type: application/json
+
+{
+  "eventName": "checkout.completed",
+  "flagKey": "checkout.enabled",
+  "variant": "on",
+  "value": 199.0,
+  "context": {
+    "targetingKey": "user-123"
+  },
+  "properties": {
+    "plan": "team"
+  }
+}
+```
+
+## Kotlin Multiplatform
+
+Moneat v1 does not ship a custom Kotlin Multiplatform provider. Kotlin/JVM is supported through the OpenFeature Java SDK path. Mobile or KMP support depends on an OFREP provider for the OpenFeature Kotlin client SDK.

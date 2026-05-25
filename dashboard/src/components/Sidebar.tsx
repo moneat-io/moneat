@@ -38,6 +38,7 @@ import {
     ChevronDown,
     ChevronLeft,
     ChevronRight,
+    Flag,
     Flame,
     FlaskConical,
     Globe,
@@ -270,9 +271,24 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
     // Infrastructure & Uptime
     { key: 'monitoring', icon: Server, label: 'Monitoring', href: '/monitoring', requiresProject: false, group: 'infrastructure' },
     { key: 'uptime', icon: Activity, label: 'Uptime', href: '/uptime', requiresProject: false, group: 'infrastructure' },
-    { key: 'status-pages', icon: Globe, label: 'Status Pages', href: '/status-pages', requiresProject: false, group: 'infrastructure' },
+    {
+      key: 'status-pages',
+      icon: Globe,
+      label: 'Status Pages',
+      href: '/status-pages',
+      requiresProject: false,
+      group: 'infrastructure',
+    },
     // Insights & Tools
     { key: 'dashboards', icon: LayoutDashboard, label: 'Dashboards', href: '/dashboards', requiresProject: false, group: 'insights' },
+    {
+      key: 'feature-flags',
+      icon: Flag,
+      label: 'Feature Flags',
+      href: '/feature-flags',
+      requiresProject: false,
+      group: 'insights',
+    },
     { key: 'replays', icon: Play, label: 'Replays', href: '/replays', requiresProject: false, group: 'insights' },
     { key: 'feedback', icon: MessageSquare, label: 'Feedback', href: '/feedback', requiresProject: false, group: 'insights' },
     { key: 'releases', icon: Package, label: 'Releases', href: '/releases', requiresProject: false, group: 'insights' },

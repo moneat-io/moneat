@@ -51,6 +51,7 @@ import {
   BarChart3,
   Cpu,
   Flame,
+  Flag,
   Box,
   Terminal,
   Network,
@@ -77,6 +78,7 @@ const PAGE_ITEMS: Array<{
   {label: 'Profiles', description: 'Continuous profiling and flamegraphs', href: '/profiles', icon: Flame, keywords: ['profiling', 'flamegraph', 'cpu', 'memory']},
   {label: 'Logs', description: 'Search and explore log events', href: '/logs', icon: ScrollText, keywords: ['logging']},
   {label: 'Dashboards', description: 'Custom metrics and visualizations', href: '/dashboards', icon: LayoutDashboard, keywords: ['widgets']},
+  {label: 'Feature Flags', description: 'OpenFeature flags and experiments', href: '/feature-flags', icon: Flag, keywords: ['flags', 'openfeature', 'ofrep', 'experiments']},
   {label: 'Monitoring', description: 'Infrastructure and system health', href: '/monitoring', icon: Server, keywords: ['infrastructure', 'systems', 'servers']},
   {label: 'Monitoring – Hosts', description: 'Host metrics and system resources', href: '/monitoring/hosts', icon: Server, keywords: ['infrastructure', 'servers', 'cpu', 'memory', 'disk']},
   {label: 'Monitoring – Containers', description: 'Docker and Kubernetes container metrics', href: '/monitoring/containers', icon: Box, keywords: ['docker', 'kubernetes', 'k8s', 'pods']},
@@ -434,4 +436,3 @@ export function CommandPalette() {
     </Dialog>
   )
 }
-
