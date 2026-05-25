@@ -308,6 +308,41 @@ class TransactionServiceTest {
         }
     }
 
+    @Test
+    fun `getTraceForEvent returns empty trace response when event has no trace id`() = runBlocking {
+        withClickHouseMockServer({ exchange ->
+            exchange.respond(
+                200,
+                """{"event_id":"$TXN_UUID","event_type":"error","project_id":1,"trace_id":""}""",
+                CONTENT_TYPE_TEXT_PLAIN
+            )
+        }) {
+            val trace = service.getTraceForEvent(TXN_UUID)
+
+            assertNotNull(trace)
+            assertEquals(TXN_UUID, trace.eventId)
+            assertEquals("error", trace.eventType)
+            assertEquals("", trace.traceId)
+            assertTrue(trace.spans.isEmpty())
+        }
+    }
+
+    @Test
+    fun `getTraceForTraceId returns empty response when trace is missing`() = runBlocking {
+        withClickHouseMockServer({ exchange ->
+            exchange.respond(200, "", CONTENT_TYPE_TEXT_PLAIN)
+        }) {
+            val trace = service.getTraceForTraceId(projectId = 1, traceId = "missing-trace")
+
+            assertNotNull(trace)
+            assertNull(trace.eventId)
+            assertNull(trace.eventType)
+            assertEquals(1, trace.projectId)
+            assertEquals("missing-trace", trace.traceId)
+            assertTrue(trace.spans.isEmpty())
+        }
+    }
+
     // ──── getSpanDetails Tests ────
     @Test
     fun `getSpanDetails returns span with transaction`() = runBlocking {
