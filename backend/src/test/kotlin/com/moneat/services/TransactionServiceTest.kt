@@ -309,6 +309,56 @@ class TransactionServiceTest {
     }
 
     @Test
+    fun `getTraceForEvent returns transaction spans for transaction event`() = runBlocking {
+        withClickHouseMockServer({ exchange ->
+            val query = exchange.requestBodyText()
+            when {
+                query.contains("event_type,") -> {
+                    exchange.respond(
+                        200,
+                        """{"event_id":"$TXN_UUID","event_type":"transaction","project_id":1,"trace_id":"$TRACE_1"}""",
+                        CONTENT_TYPE_TEXT_PLAIN
+                    )
+                }
+
+                query.contains("transaction_name as name") -> {
+                    exchange.respond(
+                        200,
+                        """{"event_id":"$TXN_UUID","name":"GET /api","op":"http.server",""" +
+                            """"start_ts_ms":1000,"duration":250.0,"trace_id":"$TRACE_1",""" +
+                            """"timestamp":"2026-01-01T00:00:00.000Z","environment":"prod",""" +
+                            """"release":"1.0","status":"ok","tags":{},"contexts":{},""" +
+                            """"breadcrumbs":[],"request":{}}""",
+                        CONTENT_TYPE_TEXT_PLAIN
+                    )
+                }
+
+                query.contains("toInt64(project_id) as project_id") -> {
+                    exchange.respond(200, """{"project_id":1}""", CONTENT_TYPE_TEXT_PLAIN)
+                }
+
+                query.contains("meta['sentry.transaction_id']") -> {
+                    exchange.respond(200, apmSpanRow(), CONTENT_TYPE_TEXT_PLAIN)
+                }
+
+                query.contains("trace_id_hex = '$TRACE_1'") -> {
+                    exchange.respond(200, apmSpanRow(), CONTENT_TYPE_TEXT_PLAIN)
+                }
+
+                else -> exchange.respond(200, "", CONTENT_TYPE_TEXT_PLAIN)
+            }
+        }) {
+            val trace = service.getTraceForEvent(TXN_UUID)
+
+            assertNotNull(trace)
+            assertEquals("transaction", trace.eventType)
+            assertNotNull(trace.transaction)
+            assertEquals(1, trace.spans.size)
+            assertEquals("TrimFrameWorker", trace.spans.first().description)
+        }
+    }
+
+    @Test
     fun `getTraceForEvent returns empty trace response when event has no trace id`() = runBlocking {
         withClickHouseMockServer({ exchange ->
             exchange.respond(
@@ -424,4 +474,10 @@ class TransactionServiceTest {
         val result = service.getRelatedErrorsForTransaction("not-a-uuid")
         assertTrue(result.isEmpty())
     }
+
+    private fun apmSpanRow(): String =
+        """{"span_id":"s1","parent_span_id":"","trace_id":"$TRACE_1",""" +
+            """"meta":{"sentry.project_id":"1","sentry.transaction_id":"$TXN_UUID"},""" +
+            """"op":"worker","description":"TrimFrameWorker","start_ns":"1000000000",""" +
+            """"duration_ns":"500000000","error":1}"""
 }

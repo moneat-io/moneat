@@ -100,6 +100,14 @@ class McpToolValidationTest {
     }
 
     @Test
+    fun `getTrace tool reports not found for invalid event id`() = runBlocking {
+        val result = GetTraceTool().execute(obj("event_id" to "not-a-uuid"), context)
+
+        assertTrue(result.isError)
+        assertTrue(result.content.first().text.orEmpty().contains("Trace not found"))
+    }
+
+    @Test
     fun `getTrace tool returns trace by event id`() = runBlocking {
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
