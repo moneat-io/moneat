@@ -269,6 +269,45 @@ class TransactionServiceTest {
         }
     }
 
+    @Test
+    fun `getTraceForEvent returns spans for error event trace context`() = runBlocking {
+        withClickHouseMockServer({ exchange ->
+            val query = exchange.requestBodyText()
+            when {
+                query.contains("Event trace lookup") || query.contains("event_type,") -> {
+                    exchange.respond(
+                        200,
+                        """
+                    {"event_id":"$TXN_UUID","event_type":"error","project_id":1,"trace_id":"$TRACE_1"}
+                        """.trimIndent(),
+                        CONTENT_TYPE_TEXT_PLAIN
+                    )
+                }
+
+                query.contains("FROM `test`.apm_spans") && query.contains("trace_id_hex = '$TRACE_1'") -> {
+                    exchange.respond(
+                        200,
+                        """{"span_id":"s1","parent_span_id":"","trace_id":"$TRACE_1",""" +
+                            """"meta":{"sentry.project_id":"1"},"op":"worker",""" +
+                            """"description":"TrimFrameWorker","start_ns":"1000000000",""" +
+                            """"duration_ns":"500000000","error":1}""",
+                        CONTENT_TYPE_TEXT_PLAIN
+                    )
+                }
+
+                else -> exchange.respond(200, "", CONTENT_TYPE_TEXT_PLAIN)
+            }
+        }) {
+            val trace = service.getTraceForEvent(TXN_UUID)
+
+            assertNotNull(trace)
+            assertEquals("error", trace.eventType)
+            assertEquals(TRACE_1, trace.traceId)
+            assertEquals(1, trace.spans.size)
+            assertEquals("TrimFrameWorker", trace.spans.first().description)
+        }
+    }
+
     // ──── getSpanDetails Tests ────
     @Test
     fun `getSpanDetails returns span with transaction`() = runBlocking {

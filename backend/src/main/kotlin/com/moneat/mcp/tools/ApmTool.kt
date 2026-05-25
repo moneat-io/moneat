@@ -22,8 +22,10 @@ import com.moneat.mcp.protocol.McpTool
 import com.moneat.mcp.protocol.ToolCallResult
 import com.moneat.events.services.DashboardService
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
+import kotlinx.serialization.json.longOrNull
 
 private val dashboardService = DashboardService.create()
 
@@ -68,24 +70,39 @@ class ListTransactionsTool : McpTool {
 class GetTraceTool : McpTool {
     override val name = "get_trace"
     override val description =
-        "Get a full transaction/trace by event ID with all spans"
+        "Get a full trace by transaction event ID, error event ID, or trace ID"
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "event_id" to schemaString("Transaction event ID")
+                "event_id" to schemaString("Transaction or error event ID"),
+                "trace_id" to schemaString("Trace ID"),
+                "project_id" to schemaNumber("Project ID for trace_id lookups")
             )
-        ),
-        required = listOf("event_id")
+        )
     )
 
     override suspend fun execute(
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val eventId = args["event_id"]?.jsonPrimitive?.content
-            ?: return errorResult("event_id is required")
-        val txn = dashboardService.getTransaction(eventId)
-            ?: return errorResult("Transaction not found: $eventId")
-        return jsonResult(txn)
+        val eventId = args["event_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+        val traceId = args["trace_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+        val projectId = args["project_id"]?.jsonPrimitive?.longOrNull
+
+        if (eventId == null && traceId == null) {
+            return errorResult("event_id or trace_id is required")
+        }
+        if (eventId == null && projectId == null) {
+            return errorResult("project_id is required when trace_id is used without event_id")
+        }
+
+        val trace = if (eventId != null) {
+            dashboardService.getTraceForEvent(eventId)
+        } else {
+            val requiredProjectId = projectId ?: return errorResult("project_id is required")
+            dashboardService.getTraceForTraceId(requiredProjectId, traceId.orEmpty())
+        } ?: return errorResult("Trace not found")
+
+        return jsonResult(trace)
     }
 }

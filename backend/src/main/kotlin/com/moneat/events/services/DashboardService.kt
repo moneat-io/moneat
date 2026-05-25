@@ -17,6 +17,7 @@
 package com.moneat.events.services
 
 import com.moneat.events.models.EventResponse
+import com.moneat.events.models.EventTraceResponse
 import com.moneat.events.models.FeedbackDetailResponse
 import com.moneat.events.models.FeedbackListItem
 import com.moneat.events.models.IssueDetailResponse
@@ -182,6 +183,12 @@ class DashboardService(
 
     suspend fun getTransactionSpans(eventId: String): TransactionWithSpansResponse? =
         transactionService.getTransactionSpans(eventId)
+
+    suspend fun getTraceForEvent(eventId: String): EventTraceResponse? =
+        transactionService.getTraceForEvent(eventId)
+
+    suspend fun getTraceForTraceId(projectId: Long, traceId: String): EventTraceResponse? =
+        transactionService.getTraceForTraceId(projectId, traceId)
 
     suspend fun getTraceDetails(
         projectId: Long,

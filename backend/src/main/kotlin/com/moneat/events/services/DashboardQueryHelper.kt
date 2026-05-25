@@ -90,6 +90,15 @@ class DashboardQueryHelper(
             else -> json.encodeToString(JsonElement.serializer(), el)
         }
 
+    fun jsonFieldAsJsonElementOrNull(obj: JsonObject, key: String): JsonElement? =
+        when (val el = obj[key]) {
+            null -> null
+            is JsonPrimitive -> el.contentOrNull?.let { raw ->
+                runCatching { json.parseToJsonElement(raw) }.getOrDefault(el)
+            }
+            else -> el
+        }
+
     /**
      * Reads the response body and returns it when ClickHouse returned a successful
      * result. Returns `null` (and logs) when the HTTP status is outside the 2xx
@@ -216,7 +225,10 @@ class DashboardQueryHelper(
             tags = HashMap(tagsMap),
             contexts = jsonFieldAsStoredString(obj, "contexts", "{}"),
             exception = obj["exception"]?.jsonPrimitive?.contentOrNull,
-            breadcrumbs = jsonFieldAsStoredStringOrNull(obj, "breadcrumbs")
+            breadcrumbs = jsonFieldAsStoredStringOrNull(obj, "breadcrumbs"),
+            stackTrace = obj["stack_trace"]?.jsonPrimitive?.contentOrNull,
+            contextsJson = jsonFieldAsJsonElementOrNull(obj, "contexts"),
+            breadcrumbsJson = jsonFieldAsJsonElementOrNull(obj, "breadcrumbs")
         )
     }
 
