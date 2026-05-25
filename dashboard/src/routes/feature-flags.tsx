@@ -77,7 +77,6 @@ const defaultVariants = JSON.stringify([
 ], null, 2)
 const defaultSegmentConditions = JSON.stringify({all: []}, null, 2)
 const tabTriggerClass = [
-  'cursor-pointer',
   'border border-transparent',
   'data-[state=active]:border-foreground data-[state=active]:bg-background',
   'data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-foreground/20',
@@ -595,7 +594,7 @@ val enabled = client.getBooleanValue("checkout.enabled", false, evaluationContex
                     type="button"
                     onClick={() => setSelectedKey(flag.key)}
                     className={cn(
-                      'w-full rounded-md border p-2.5 text-left transition-colors hover:bg-muted/50',
+                      'w-full cursor-pointer rounded-md border p-2.5 text-left transition-colors hover:bg-muted/50',
                       selectedFlag?.key === flag.key && 'border-primary bg-muted/60'
                     )}
                   >
