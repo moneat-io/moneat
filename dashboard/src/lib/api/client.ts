@@ -218,7 +218,7 @@ export function createApiClientCore(): ApiClientCore {
     }
 
     if (response.status === 401) {
-      return handle401Retry(endpoint, options, authRetryCount, request)
+      return handle401Retry<T>(endpoint, options, authRetryCount, request)
     }
 
     if (!response.ok) {
@@ -231,7 +231,7 @@ export function createApiClientCore(): ApiClientCore {
       throw buildErrorFromResponse(response, errorData)
     }
     if (response.status === 204) return undefined as T
-    return response.json()
+    return (await response.json()) as T
   }
 
   async function fetchWithAuth(

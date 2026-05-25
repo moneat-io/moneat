@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import React from 'react'
 import {describe, it, expect, beforeEach} from 'vitest'
 import {screen, waitFor} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'

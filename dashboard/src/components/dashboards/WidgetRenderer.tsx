@@ -285,14 +285,25 @@ function formatTooltipLabel(v?: string | number) {
 }
 
 type TooltipValue = number | string | readonly (number | string)[] | undefined
-type TooltipFormatterFn = (value: TooltipValue, name?: number | string) => ReactNode
+type TooltipFormatterResult = ReactNode | [ReactNode, string]
+type TooltipFormatterFn = (value: TooltipValue, name?: string | number) => TooltipFormatterResult
 
 function formatTooltipValue(value?: TooltipValue): string {
   if (value === undefined) return ''
-  if (typeof value === 'string') return value
-  if (Array.isArray(value)) return value.map((item) => formatTooltipValue(item)).join(' - ')
+  if (Array.isArray(value)) return value.map(formatTooltipValue).join(' - ')
+  if (typeof value !== 'number') return String(value)
   if (Number.isInteger(value)) return value.toLocaleString()
   return value.toLocaleString(undefined, {maximumFractionDigits: 2})
+}
+
+function formatUnitTooltipValue(value: TooltipValue, unit?: string, decimals?: string): string {
+  if (Array.isArray(value)) {
+    return value.map((v) => formatUnitTooltipValue(v, unit, decimals)).join(' - ')
+  }
+  if (typeof value === 'number' && unit && unit !== 'none') {
+    return formatValue(value, unit, decimals)
+  }
+  return formatTooltipValue(value)
 }
 
 type DisplayConfig = Record<string, string>
@@ -530,9 +541,7 @@ const TimeseriesChart = memo(function TimeseriesChart({data, timeRange, displayC
   const tickFormatter = unit && unit !== 'none'
     ? (v: number) => formatValue(v, unit, decimals)
     : undefined
-  const tooltipFormatter: TooltipFormatterFn = unit && unit !== 'none'
-    ? (v) => (v !== undefined && typeof v === 'number' ? formatValue(v, unit, decimals) : formatTooltipValue(v))
-    : formatTooltipValue
+  const tooltipFormatter: TooltipFormatterFn = (value) => formatUnitTooltipValue(value, unit, decimals)
 
   const useArea = fillOpacity > 0 || stackMode !== 'none'
 
@@ -647,9 +656,7 @@ const BarChartWidget = memo(function BarChartWidget({data, timeRange, displayCon
   const tickFormatter = unit && unit !== 'none'
     ? (v: number) => formatValue(v, unit, decimals)
     : undefined
-  const tooltipFormatter: TooltipFormatterFn = unit && unit !== 'none'
-    ? (v) => (v !== undefined && typeof v === 'number' ? formatValue(v, unit, decimals) : formatTooltipValue(v))
-    : formatTooltipValue
+  const tooltipFormatter: TooltipFormatterFn = (value) => formatUnitTooltipValue(value, unit, decimals)
 
   if (hasTime && labelKeys.length > 0 && valueKeys.length > 0) {
     const {pivoted: rawPivoted, series} = pivotData(data, timeKey!, labelKeys, valueKeys)

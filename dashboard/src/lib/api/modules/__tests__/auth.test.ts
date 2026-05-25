@@ -25,6 +25,12 @@ const API_BASE = 'http://localhost:8080'
 const TEST_PASSWORD = 'pass123'
 const TEST_PASSWORD_BOB = 'pass456'
 const TEST_PASSWORD_RESET = 'newPass123'
+const legalConsent = {
+  acceptTerms: true,
+  acceptPrivacy: true,
+  termsVersion: '1.0',
+  privacyVersion: '1.0',
+}
 
 describe('authMethods', () => {
   beforeEach(() => {
@@ -46,17 +52,13 @@ describe('authMethods', () => {
             email: 'a@b.com',
             password: TEST_PASSWORD,
             name: 'Alice',
-            termsAccepted: true,
-            privacyAccepted: true,
+            ...legalConsent,
           })
           return HttpResponse.json(authResponse)
         })
       )
 
-      const result = await api.signup('a@b.com', TEST_PASSWORD, 'Alice', {
-        termsAccepted: true,
-        privacyAccepted: true,
-      })
+      const result = await api.signup('a@b.com', TEST_PASSWORD, 'Alice', legalConsent)
       expect(result).toEqual(authResponse)
       expect(globalThis.sessionStorage?.getItem('authenticated')).toBe('true')
     })
@@ -67,14 +69,18 @@ describe('authMethods', () => {
         http.post(`${API_BASE}/auth/signup`, async ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('inviteToken')).toBe('inv-123')
+          const body = await request.json()
+          expect(body).toEqual({
+            email: 'b@c.com',
+            password: TEST_PASSWORD_BOB,
+            name: 'Bob',
+            ...legalConsent,
+          })
           return HttpResponse.json(authResponse)
         })
       )
 
-      const result = await api.signup('b@c.com', TEST_PASSWORD_BOB, 'Bob', {
-        termsAccepted: true,
-        privacyAccepted: true,
-      }, 'inv-123')
+      const result = await api.signup('b@c.com', TEST_PASSWORD_BOB, 'Bob', legalConsent, 'inv-123')
       expect(result).toEqual(authResponse)
       expect(globalThis.sessionStorage?.getItem('authenticated')).toBe('true')
     })

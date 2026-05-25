@@ -38,12 +38,13 @@ describe('Performance API', () => {
           expect(url.searchParams.get('period')).toBe('7d')
           return HttpResponse.json([
             {
-              transaction: '/api/users',
+              name: '/api/users',
+              op: 'http.server',
               count: 100,
-              avgDuration: 250,
               p50: 200,
+              p75: 350,
               p95: 500,
-              p99: 900,
+              tpm: 12,
               latestEventId: 'evt-1',
               failureRate: 0.05,
             },
@@ -53,7 +54,7 @@ describe('Performance API', () => {
 
       const result = await api.getTransactions(1)
       expect(result).toHaveLength(1)
-      expect(result[0].transaction).toBe('/api/users')
+      expect(result[0].name).toBe('/api/users')
       expect(result[0].latestEventId).toBe('evt-1')
       expect(result[0].failureRate).toBe(0.05)
     })
@@ -82,8 +83,13 @@ describe('Performance API', () => {
         http.get(`${API_BASE}/v1/projects/3/transactions`, () => {
           return HttpResponse.json([
             {
-              transaction: '/api/health',
+              name: '/api/health',
+              op: 'http.server',
               count: 50,
+              p50: 100,
+              p75: 150,
+              p95: 200,
+              tpm: 4,
               latest_event_id: 'evt-snake',
               failure_rate: 0.1,
             },
@@ -101,8 +107,13 @@ describe('Performance API', () => {
         http.get(`${API_BASE}/v1/projects/4/transactions`, () => {
           return HttpResponse.json([
             {
-              transaction: '/api/data',
+              name: '/api/data',
+              op: 'http.server',
               count: 10,
+              p50: 100,
+              p75: 150,
+              p95: 200,
+              tpm: 1,
             },
           ])
         })
@@ -168,17 +179,22 @@ describe('Performance API', () => {
         http.get(`${API_BASE}/v1/transactions/evt-123`, () => {
           return HttpResponse.json({
             eventId: 'evt-123',
-            transaction: '/api/users',
+            name: '/api/users',
+            op: 'http.server',
+            startTimestamp: 1704067200000,
             duration: 350,
-            status: 'ok',
+            traceId: 'trace-123',
             timestamp: '2024-01-01T00:00:00Z',
+            status: 'ok',
+            tags: {},
+            contexts: '{}',
           })
         })
       )
 
       const result = await api.getTransaction('evt-123')
       expect(result.eventId).toBe('evt-123')
-      expect(result.transaction).toBe('/api/users')
+      expect(result.name).toBe('/api/users')
       expect(result.duration).toBe(350)
     })
 
@@ -187,7 +203,14 @@ describe('Performance API', () => {
         http.get(`${API_BASE}/v1/transactions/:eventId`, ({ params }) => {
           return HttpResponse.json({
             eventId: params.eventId,
-            transaction: '/test',
+            name: '/test',
+            op: 'http.server',
+            startTimestamp: 1704067200000,
+            duration: 10,
+            traceId: 'trace-special',
+            timestamp: '2024-01-01T00:00:00Z',
+            tags: {},
+            contexts: '{}',
           })
         })
       )
@@ -204,20 +227,35 @@ describe('Performance API', () => {
       server.use(
         http.get(`${API_BASE}/v1/transactions/evt-456/spans`, () => {
           return HttpResponse.json({
-            eventId: 'evt-456',
-            transaction: '/api/orders',
+            transaction: {
+              eventId: 'evt-456',
+              name: '/api/orders',
+              op: 'http.server',
+              startTimestamp: 1704067200000,
+              duration: 250,
+              traceId: 'trace-456',
+              timestamp: '2024-01-01T00:00:00Z',
+              tags: {},
+              contexts: '{}',
+            },
             spans: [
               {
                 spanId: 'span-1',
                 op: 'db.query',
                 description: 'SELECT * FROM orders',
+                startTimestamp: 1704067200000,
+                endTimestamp: 1704067200050,
                 duration: 50,
+                tags: {},
               },
               {
                 spanId: 'span-2',
                 op: 'http.client',
                 description: 'GET /external-api',
+                startTimestamp: 1704067200050,
+                endTimestamp: 1704067200250,
                 duration: 200,
+                tags: {},
               },
             ],
           })
@@ -225,7 +263,7 @@ describe('Performance API', () => {
       )
 
       const result = await api.getTransactionSpans('evt-456')
-      expect(result.eventId).toBe('evt-456')
+      expect(result.transaction.eventId).toBe('evt-456')
       expect(result.spans).toHaveLength(2)
       expect(result.spans[0].spanId).toBe('span-1')
       expect(result.spans[1].op).toBe('http.client')
@@ -240,17 +278,18 @@ describe('Performance API', () => {
         http.get(`${API_BASE}/v1/projects/1/traces/trace-abc`, () => {
           return HttpResponse.json({
             traceId: 'trace-abc',
-            rootTransaction: '/api/checkout',
-            spans: 15,
+            projectId: 1,
+            spans: [],
+            startTimestamp: 1704067200000,
+            endTimestamp: 1704067201200,
             duration: 1200,
-            services: ['api', 'payment'],
           })
         })
       )
 
       const result = await api.getTraceDetails(1, 'trace-abc')
       expect(result.traceId).toBe('trace-abc')
-      expect(result.rootTransaction).toBe('/api/checkout')
+      expect(result.duration).toBe(1200)
     })
   })
 
@@ -261,19 +300,25 @@ describe('Performance API', () => {
       server.use(
         http.get(`${API_BASE}/v1/projects/2/spans/span-xyz`, () => {
           return HttpResponse.json({
-            spanId: 'span-xyz',
-            op: 'http.server',
-            description: 'POST /api/login',
-            duration: 100,
-            status: 'ok',
+            span: {
+              spanId: 'span-xyz',
+              op: 'http.server',
+              description: 'POST /api/login',
+              startTimestamp: 1704067200000,
+              endTimestamp: 1704067200100,
+              duration: 100,
+              status: 'ok',
+              tags: {},
+            },
+            transaction: null,
           })
         })
       )
 
       const result = await api.getSpanDetails(2, 'span-xyz')
-      expect(result.spanId).toBe('span-xyz')
-      expect(result.op).toBe('http.server')
-      expect(result.duration).toBe(100)
+      expect(result.span.spanId).toBe('span-xyz')
+      expect(result.span.op).toBe('http.server')
+      expect(result.span.duration).toBe(100)
     })
   })
 

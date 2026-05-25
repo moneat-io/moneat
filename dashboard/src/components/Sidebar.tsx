@@ -235,15 +235,37 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
     group: NavGroupId
   }
 
+  const datadogCoreNavItems: NavItem[] = hasEnterpriseModule(features, 'datadog')
+    ? [{key: 'profiles', icon: Flame, label: 'Profiles', href: '/profiles', requiresProject: false, group: 'core'}]
+    : []
+  const datadogOperationsNavItems: NavItem[] = hasEnterpriseModule(features, 'datadog')
+    ? [
+      {key: 'security', icon: ShieldAlert, label: 'Security', href: '/security', requiresProject: false, group: 'operations'},
+      {key: 'synthetics', icon: FlaskConical, label: 'Synthetics', href: '/synthetics', requiresProject: false, group: 'operations'},
+    ]
+    : []
+  const onCallNavItems: NavItem[] = hasEnterpriseModule(features, 'oncall')
+    ? [{
+      key: 'on-call',
+      icon: Bell,
+      label: 'On-Call',
+      href: '/on-call',
+      requiresProject: false,
+      group: 'operations',
+      ...(features?.selfHost ? {badge: 'Enterprise'} : {}),
+    }]
+    : []
+  const adminNavItems: NavItem[] = user?.isAdmin
+    ? [{key: 'admin', icon: Shield, label: 'Admin', href: '/admin', requiresProject: false, group: 'management'}]
+    : []
+
   const baseNavItems: NavItem[] = [
     // Core Observability
     { key: 'overview', icon: Home, label: 'Overview', href: '/', requiresProject: false, group: 'core' },
     { key: 'issues', icon: AlertCircle, label: 'Issues', href: '/issues', requiresProject: false, group: 'core' },
     { key: 'performance', icon: Timer, label: 'Performance', href: '/performance', requiresProject: false, group: 'core' },
     { key: 'logs', icon: ScrollText, label: 'Logs', href: '/logs', requiresProject: false, group: 'core' },
-    ...(hasEnterpriseModule(features, 'datadog') ? [
-      { key: 'profiles', icon: Flame, label: 'Profiles', href: '/profiles', requiresProject: false, group: 'core' },
-    ] : []),
+    ...datadogCoreNavItems,
     // Infrastructure & Uptime
     { key: 'monitoring', icon: Server, label: 'Monitoring', href: '/monitoring', requiresProject: false, group: 'infrastructure' },
     { key: 'uptime', icon: Activity, label: 'Uptime', href: '/uptime', requiresProject: false, group: 'infrastructure' },
@@ -255,14 +277,11 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
     { key: 'releases', icon: Package, label: 'Releases', href: '/releases', requiresProject: false, group: 'insights' },
     { key: 'ai', icon: Brain, label: 'AI', href: '/ai', requiresProject: false, group: 'insights' },
     // Operations (enterprise)
-    ...(hasEnterpriseModule(features, 'datadog') ? [
-      { key: 'security', icon: ShieldAlert, label: 'Security', href: '/security', requiresProject: false, group: 'operations' },
-      { key: 'synthetics', icon: FlaskConical, label: 'Synthetics', href: '/synthetics', requiresProject: false, group: 'operations' },
-    ] : []),
-    ...(hasEnterpriseModule(features, 'oncall') ? [{ key: 'on-call', icon: Bell, label: 'On-Call', href: '/on-call', requiresProject: false, group: 'operations', ...(features?.selfHost && { badge: 'Enterprise' }) }] : []),
+    ...datadogOperationsNavItems,
+    ...onCallNavItems,
     { key: 'analytics', icon: BarChart3, label: 'Analytics', href: '/analytics', requiresProject: false, group: 'analytics' },
     // Management
-    ...(user?.isAdmin ? [{ key: 'admin', icon: Shield, label: 'Admin', href: '/admin', requiresProject: false, group: 'management' }] : []),
+    ...adminNavItems,
   ]
 
   const navItems = baseNavItems.filter(item => {

@@ -33,8 +33,8 @@ describe('Integrations API', () => {
   describe('getIntegrations', () => {
     it('fetches all integrations', async () => {
       const mockIntegrations = [
-        { id: 1, type: 'slack', enabled: true },
-        { id: 2, type: 'discord', enabled: false },
+        { id: 1, integrationType: 'slack', teamName: null, channelId: null, channelName: null, enabled: true, isConfigured: true },
+        { id: 2, integrationType: 'discord', teamName: null, channelId: null, channelName: null, enabled: false, isConfigured: false },
       ]
 
       server.use(
@@ -45,7 +45,7 @@ describe('Integrations API', () => {
 
       const result = await api.getIntegrations()
       expect(result).toHaveLength(2)
-      expect(result[0].type).toBe('slack')
+      expect(result[0].integrationType).toBe('slack')
     })
   })
 
@@ -55,12 +55,12 @@ describe('Integrations API', () => {
     it('initiates Slack OAuth flow', async () => {
       server.use(
         http.get(`${API_BASE}/v1/integrations/slack/oauth/start`, () => {
-          return HttpResponse.json({ url: 'https://slack.com/oauth/authorize?...' })
+          return HttpResponse.json({ authUrl: 'https://slack.com/oauth/authorize?...' })
         })
       )
 
       const result = await api.startSlackOAuth()
-      expect(result.url).toContain('slack.com')
+      expect(result.authUrl).toContain('slack.com')
     })
   })
 
@@ -190,12 +190,12 @@ describe('Integrations API', () => {
     it('initiates Discord OAuth flow', async () => {
       server.use(
         http.get(`${API_BASE}/v1/integrations/discord/oauth/start`, () => {
-          return HttpResponse.json({ url: 'https://discord.com/oauth2/authorize?...' })
+          return HttpResponse.json({ authUrl: 'https://discord.com/oauth2/authorize?...' })
         })
       )
 
       const result = await api.startDiscordOAuth()
-      expect(result.url).toContain('discord.com')
+      expect(result.authUrl).toContain('discord.com')
     })
   })
 
@@ -350,7 +350,7 @@ describe('Integrations API', () => {
   describe('getIncidentProviderRules', () => {
     it('fetches routing rules for a provider', async () => {
       const mockRules = [
-        { id: 1, condition: 'severity == critical', action: 'alert' },
+        { id: 1, alertSource: 'severity == critical', incidentSeverity: 'critical' },
       ]
 
       server.use(
@@ -361,7 +361,7 @@ describe('Integrations API', () => {
 
       const result = await api.getIncidentProviderRules(1)
       expect(result).toHaveLength(1)
-      expect(result[0].condition).toBe('severity == critical')
+      expect(result[0].alertSource).toBe('severity == critical')
     })
   })
 
@@ -387,9 +387,9 @@ describe('Integrations API', () => {
   describe('getIncidentProviders with apiBase fallback', () => {
     it('uses fallback when base has no path after /v1', async () => {
       const { integrationsMethods } = await import('../integrations')
-      const mockRequest = async (endpoint: string) => {
+      const mockRequest = async <T,>(endpoint: string): Promise<T> => {
         if (endpoint.includes('https://api.moneat.io/api/incident-providers')) {
-          return [{ id: 1, name: 'PagerDuty', type: 'pagerduty' }]
+          return [{ id: 1, name: 'PagerDuty', type: 'pagerduty' }] as T
         }
         throw new Error(`Unexpected endpoint: ${endpoint}`)
       }

@@ -260,12 +260,12 @@ export function SsoTab({
                       className="h-8"
                       value={formData.oidcIssuerUrl}
                       onChange={(e) => setFormData({ ...formData, oidcIssuerUrl: e.target.value })}
-                      placeholder="https://your-domain.okta.com"
+                      placeholder="https://auth.example.com/application/o/app-slug/"
                       required={providerType === 'oidc'}
                       disabled={readOnly}
                     />
                     <p className="text-xs text-muted-foreground">
-                      The base URL of your OIDC provider
+                      The issuer URL from your provider's openid-configuration document
                     </p>
                   </div>
 
