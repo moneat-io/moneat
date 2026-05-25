@@ -18,6 +18,7 @@ package com.moneat.workflows.routes
 
 import com.moneat.shared.models.Memberships
 import com.moneat.utils.ErrorResponse
+import com.moneat.utils.suspendRunCatching
 import com.moneat.workflows.models.CreateWorkflowRequest
 import com.moneat.workflows.models.UpdateWorkflowRequest
 import com.moneat.workflows.services.WorkflowService
@@ -63,7 +64,7 @@ fun Route.workflowRoutes() {
             post {
                 val organizationId = currentOrganizationId() ?: return@post call.respond(HttpStatusCode.Forbidden)
                 val request = call.receive<CreateWorkflowRequest>()
-                runCatching {
+                suspendRunCatching {
                     workflowService.createWorkflow(organizationId, request)
                 }.fold(
                     onSuccess = { workflow -> call.respond(HttpStatusCode.Created, workflow) },
@@ -89,7 +90,7 @@ fun Route.workflowRoutes() {
                     ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
                 )
                 val request = call.receive<UpdateWorkflowRequest>()
-                runCatching {
+                suspendRunCatching {
                     workflowService.updateWorkflow(organizationId, workflowId, request)
                 }.fold(
                     onSuccess = { workflow ->

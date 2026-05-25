@@ -1,0 +1,528 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+package com.moneat.workflows
+
+import com.moneat.alerts.models.AlertLifecycleEvent
+import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertSource
+import com.moneat.alerts.models.AlertStatus
+import com.moneat.notifications.services.DiscordService
+import com.moneat.notifications.services.EmailService
+import com.moneat.notifications.services.SlackService
+import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Users
+import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.workflows.engine.WorkflowCatalog
+import com.moneat.workflows.models.CreateWorkflowRequest
+import com.moneat.workflows.models.UpdateWorkflowRequest
+import com.moneat.workflows.models.WorkflowConditionConfig
+import com.moneat.workflows.models.WorkflowRuns
+import com.moneat.workflows.models.WorkflowStepConfig
+import com.moneat.workflows.models.WorkflowVersions
+import com.moneat.workflows.models.Workflows
+import com.moneat.workflows.services.WorkflowService
+import io.mockk.clearMocks
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.just
+import io.mockk.mockk
+import io.mockk.runs
+import io.mockk.verify
+import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+class WorkflowServiceTest {
+    companion object {
+        private var db: Database? = null
+    }
+
+    private val emailService = mockk<EmailService>(relaxed = true)
+    private val slackService = mockk<SlackService>()
+    private val discordService = mockk<DiscordService>()
+    private lateinit var service: WorkflowService
+    private var orgId: Int = 0
+
+    @BeforeTest
+    fun setup() {
+        if (db == null) {
+            db = Database.connect(
+                url = "jdbc:h2:mem:moneat_workflows;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                driver = "org.h2.Driver"
+            )
+        }
+        TransactionManager.defaultDatabase = db
+        resetWorkflowSchema()
+        clearMocks(emailService, slackService, discordService)
+        every { emailService.sendEmail(any(), any(), any(), any(), any()) } just runs
+        coEvery { slackService.sendWorkflowMessage(any(), any(), any()) } returns true
+        coEvery { discordService.sendWorkflowMessage(any(), any(), any(), any()) } returns true
+        service = WorkflowService(emailService, slackService, discordService)
+        orgId = seedOrganizationWithMembers()
+    }
+
+    private fun resetWorkflowSchema() {
+        TestDatabaseHelper.dropAndPatchJsonb(
+            Users,
+            Organizations,
+            Memberships,
+            Workflows,
+            WorkflowVersions,
+            WorkflowRuns
+        )
+        transaction {
+            SchemaUtils.create(Users, Organizations, Memberships, Workflows)
+            exec(
+                """
+                CREATE TABLE workflow_versions (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    workflow_id INT NOT NULL,
+                    version INT NOT NULL,
+                    conditions TEXT NOT NULL DEFAULT '[]',
+                    steps TEXT NOT NULL DEFAULT '[]',
+                    once_for_template TEXT NOT NULL DEFAULT '[]',
+                    engine_config TEXT NOT NULL DEFAULT '{}',
+                    most_recent BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMP NOT NULL,
+                    CONSTRAINT fk_workflow_versions_workflow_id
+                        FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
+                )
+                """.trimIndent()
+            )
+            exec("CREATE UNIQUE INDEX idx_workflow_versions_version ON workflow_versions (workflow_id, version)")
+            exec("CREATE UNIQUE INDEX idx_workflow_versions_one_recent ON workflow_versions (workflow_id, most_recent)")
+            exec(
+                """
+                CREATE TABLE workflow_runs (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    workflow_id INT NOT NULL,
+                    workflow_version_id INT NOT NULL,
+                    organization_id INT NOT NULL,
+                    trigger_name VARCHAR(120) NOT NULL,
+                    once_for VARCHAR(512) NOT NULL,
+                    scope TEXT NOT NULL DEFAULT '{}',
+                    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+                    progress TEXT NOT NULL DEFAULT '[]',
+                    error_message TEXT,
+                    created_at TIMESTAMP NOT NULL,
+                    completed_at TIMESTAMP,
+                    failed_at TIMESTAMP,
+                    CONSTRAINT fk_workflow_runs_workflow_id
+                        FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE,
+                    CONSTRAINT fk_workflow_runs_workflow_version_id
+                        FOREIGN KEY (workflow_version_id) REFERENCES workflow_versions(id),
+                    CONSTRAINT fk_workflow_runs_organization_id
+                        FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
+                )
+                """.trimIndent()
+            )
+            exec("CREATE UNIQUE INDEX idx_workflow_runs_idempotency_key ON workflow_runs (workflow_id, once_for)")
+            exec("CREATE INDEX idx_workflow_runs_workflow_created ON workflow_runs (workflow_id, created_at DESC)")
+        }
+    }
+
+    @Test
+    fun `catalog exposes alert triggers resources steps and lookup helpers`() {
+        val response = service.catalog()
+
+        assertEquals(6, response.resources.size)
+        assertTrue(response.resources.any { it.type == "AlertSeverity" })
+        assertTrue(response.resources.any { it.type == "AlertStatus" })
+        assertTrue(
+            response.resources
+                .first { it.type == "String" }
+                .operations
+                .any { it.name == "contains" && it.valueType == "String" }
+        )
+        assertEquals("alert.triggered", response.triggers.first().name)
+        assertEquals(listOf("alert.deduplication_key"), response.triggers.first().defaultOnceForTemplate)
+        assertEquals("alert.resolved", response.triggers.last().name)
+        assertEquals(
+            listOf("alert.deduplication_key", "alert.status"),
+            response.triggers.last().defaultOnceForTemplate
+        )
+        assertEquals("Email organization members", WorkflowCatalog.step("notification.email_org")?.label)
+        assertEquals("AlertSeverity", WorkflowCatalog.scopeType("alert.triggered", "alert.severity"))
+        assertNull(WorkflowCatalog.trigger("missing.trigger"))
+        assertNull(WorkflowCatalog.step("notification.unknown"))
+        assertNull(WorkflowCatalog.scopeType("missing.trigger", "alert.severity"))
+    }
+
+    @Test
+    fun `default workflows are seeded once for each organization`() {
+        val secondOrgId = seedOrganization("Second Org")
+
+        service.ensureDefaultWorkflowsForAllOrganizations()
+        service.ensureDefaultWorkflowsForOrganization(orgId)
+
+        val firstOrgWorkflows = service.listWorkflows(orgId)
+        val secondOrgWorkflows = service.listWorkflows(secondOrgId)
+        assertEquals(2, firstOrgWorkflows.size)
+        assertEquals(2, secondOrgWorkflows.size)
+        assertEquals(
+            setOf("Send alert notifications", "Send recovery notifications"),
+            firstOrgWorkflows.map { it.name }.toSet()
+        )
+        assertTrue(firstOrgWorkflows.all { it.enabled && it.version == 1 })
+        assertTrue(firstOrgWorkflows.any { it.triggerName == "alert.triggered" })
+        assertTrue(firstOrgWorkflows.any { it.triggerName == "alert.resolved" })
+        assertEquals(3, firstOrgWorkflows.first { it.triggerName == "alert.triggered" }.steps.size)
+        assertEquals(2L, transaction { Workflows.selectAll().where { Workflows.organizationId eq orgId }.count() })
+    }
+
+    @Test
+    fun `create update list get and delete workflow validates the catalog contract`() {
+        val created =
+            service.createWorkflow(
+                orgId,
+                CreateWorkflowRequest(
+                    name = "  Critical alert workflow  ",
+                    triggerName = "alert.triggered",
+                    conditions = listOf(
+                        WorkflowConditionConfig("alert.title", "is_set"),
+                        WorkflowConditionConfig("alert.description", "contains", "cpu"),
+                        WorkflowConditionConfig("alert.source", "neq", "ERROR_ALERT"),
+                        WorkflowConditionConfig("alert.severity", "at_least", "HIGH")
+                    ),
+                    steps = listOf(slackStep(), discordStep()),
+                    onceForTemplate = listOf("alert.deduplication_key", "alert.status")
+                )
+            )
+
+        assertEquals("Critical alert workflow", created.name)
+        assertEquals(1, created.version)
+        assertEquals(created.id, service.getWorkflow(orgId, created.id)?.id)
+        assertEquals(listOf(created.id), service.listWorkflows(orgId).map { it.id })
+
+        val renamed = service.updateWorkflow(orgId, created.id, UpdateWorkflowRequest(name = "  Renamed  "))
+        assertEquals("Renamed", renamed?.name)
+        assertEquals(1, renamed?.version)
+
+        val updated =
+            service.updateWorkflow(
+                orgId,
+                created.id,
+                UpdateWorkflowRequest(
+                    enabled = false,
+                    conditions = listOf(WorkflowConditionConfig("alert.status", "eq", "FIRING")),
+                    steps = listOf(emailStep()),
+                    onceForTemplate = listOf("alert.deduplication_key")
+                )
+            )
+        assertEquals(2, updated?.version)
+        assertFalse(updated?.enabled ?: true)
+        assertEquals(emptyList(), service.listRuns(orgId, created.id))
+        assertNull(service.getWorkflow(orgId + 1, created.id))
+        assertNull(service.updateWorkflow(orgId, created.id + 1000, UpdateWorkflowRequest(name = "missing")))
+        assertFalse(service.deleteWorkflow(orgId, created.id + 1000))
+        assertTrue(service.deleteWorkflow(orgId, created.id))
+        assertNull(service.getWorkflow(orgId, created.id))
+
+        assertFailsWith<IllegalArgumentException> {
+            service.createWorkflow(orgId, validRequest(name = " "))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.createWorkflow(orgId, validRequest(triggerName = "alert.unknown"))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.createWorkflow(
+                orgId,
+                validRequest(conditions = listOf(WorkflowConditionConfig("alert.missing", "eq", "value")))
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.createWorkflow(
+                orgId,
+                validRequest(conditions = listOf(WorkflowConditionConfig("alert.title", "gt", "1")))
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.createWorkflow(orgId, validRequest(onceForTemplate = listOf("alert.missing")))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.createWorkflow(orgId, validRequest(steps = listOf(WorkflowStepConfig("notification.unknown"))))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.createWorkflow(
+                orgId,
+                validRequest(steps = listOf(WorkflowStepConfig("notification.email_org", mapOf("subject" to "x"))))
+            )
+        }
+    }
+
+    @Test
+    fun `publishing and executing alert workflows records successful runs`() =
+        runBlocking {
+            val workflow =
+                service.createWorkflow(
+                    orgId,
+                    CreateWorkflowRequest(
+                        name = "Notify critical alerts",
+                        triggerName = "alert.triggered",
+                        conditions = listOf(
+                            WorkflowConditionConfig("alert.title", "is_set"),
+                            WorkflowConditionConfig("alert.description", "contains", "cpu"),
+                            WorkflowConditionConfig("alert.source", "eq", "HOST_ALERT"),
+                            WorkflowConditionConfig("alert.status", "neq", "RESOLVED"),
+                            WorkflowConditionConfig("alert.severity", "at_least", "HIGH"),
+                            WorkflowConditionConfig("alert.url", "not_contains", "localhost")
+                        ),
+                        steps = listOf(emailStep(), slackStep(), discordStep()),
+                        onceForTemplate = listOf("alert.deduplication_key")
+                    )
+                )
+
+            service.publishAlertTriggered(alertEvent())
+            service.publishAlertTriggered(alertEvent())
+            service.publishTrigger(
+                com.moneat.workflows.models.WorkflowTriggerEvent(
+                    triggerName = "missing.trigger",
+                    organizationId = orgId,
+                    scope = emptyMap()
+                )
+            )
+
+            val queuedRun = service.listRuns(orgId, workflow.id).single()
+            assertEquals("pending", queuedRun.status)
+            assertEquals("alert.deduplication_key=host-1", queuedRun.onceFor)
+
+            service.executeRun(queuedRun.id)
+            service.executeRun(queuedRun.id)
+            service.executeRun(999_999)
+
+            val completedRun = service.listRuns(orgId, workflow.id).single()
+            assertEquals("complete", completedRun.status)
+            assertEquals(3, completedRun.progress.size)
+            assertTrue(completedRun.progress.all { it.status == "complete" })
+            assertNotNull(service.getWorkflow(orgId, workflow.id)?.lastRunAt)
+            assertEquals(1L, service.getWorkflow(orgId, workflow.id)?.runCount)
+            verify(exactly = 1) {
+                emailService.sendEmail(
+                    "verified@moneat.io",
+                    "Workflow CPU saturation",
+                    match { it.contains("&lt;danger&gt;") },
+                    match { it.contains("CPU is above 90%") },
+                    "workflow"
+                )
+            }
+            verify(exactly = 0) {
+                emailService.sendEmail("unverified@moneat.io", any(), any(), any(), any())
+            }
+            coVerify(exactly = 1) {
+                slackService.sendWorkflowMessage(
+                    orgId,
+                    match { it.contains("CPU saturation") && it.contains("https://moneat.io/hosts/1") },
+                    true
+                )
+            }
+            coVerify(exactly = 1) {
+                discordService.sendWorkflowMessage(
+                    orgId,
+                    "CPU saturation",
+                    match { it.contains("HOST_ALERT") && it.contains("FIRING") },
+                    true
+                )
+            }
+        }
+
+    @Test
+    fun `resolved workflows use resolved scope and can fail a step`() =
+        runBlocking {
+            coEvery { slackService.sendWorkflowMessage(any(), any(), any()) } returns false
+            val workflow =
+                service.createWorkflow(
+                    orgId,
+                    CreateWorkflowRequest(
+                        name = "Resolved Slack",
+                        triggerName = "alert.resolved",
+                        conditions = listOf(
+                            WorkflowConditionConfig("alert.url", "is_not_set"),
+                            WorkflowConditionConfig("alert.status", "eq", "RESOLVED"),
+                            WorkflowConditionConfig("alert.source", "eq", "UPTIME_MONITOR")
+                        ),
+                        steps = listOf(
+                            WorkflowStepConfig(
+                                name = "notification.slack",
+                                params = mapOf(
+                                    "message" to "Resolved {{alert.deduplication_key}}",
+                                    "skip_if_unconfigured" to "false"
+                                )
+                            )
+                        )
+                    )
+                )
+
+            service.publishAlertResolved(
+                organizationId = orgId,
+                source = AlertSource.UPTIME_MONITOR.name,
+                deduplicationKey = "uptime-1"
+            )
+
+            val queuedRun = service.listRuns(orgId, workflow.id).single()
+            assertEquals("alert.deduplication_key=uptime-1|alert.status=RESOLVED", queuedRun.onceFor)
+
+            service.executeRun(queuedRun.id)
+
+            val failedRun = service.listRuns(orgId, workflow.id).single()
+            assertEquals("failed", failedRun.status)
+            assertEquals("Slack workflow message was not sent", failedRun.errorMessage)
+            assertEquals("failed", failedRun.progress.single().status)
+            assertEquals("Slack workflow message was not sent", failedRun.progress.single().errorMessage)
+            coVerify(exactly = 1) {
+                slackService.sendWorkflowMessage(orgId, "Resolved uptime-1", false)
+            }
+        }
+
+    @Test
+    fun `non matching and disabled workflows do not create runs`() =
+        runBlocking {
+            val disabled =
+                service.createWorkflow(
+                    orgId,
+                    validRequest(
+                        name = "Disabled",
+                        enabled = false,
+                        conditions = listOf(WorkflowConditionConfig("alert.status", "eq", "FIRING"))
+                    )
+                )
+            val nonMatching =
+                service.createWorkflow(
+                    orgId,
+                    validRequest(
+                        name = "Non matching",
+                        conditions = listOf(WorkflowConditionConfig("alert.description", "not_contains", "cpu"))
+                    )
+                )
+
+            service.publishAlertTriggered(alertEvent())
+
+            assertEquals(emptyList(), service.listRuns(orgId, disabled.id))
+            assertEquals(emptyList(), service.listRuns(orgId, nonMatching.id))
+        }
+
+    private fun seedOrganizationWithMembers(): Int {
+        val organizationId = seedOrganization("Workflow Org")
+        val verifiedUserId = seedUser("verified@moneat.io", verified = true)
+        val unverifiedUserId = seedUser("unverified@moneat.io", verified = false)
+        transaction {
+            Memberships.insert {
+                it[user_id] = verifiedUserId
+                it[organization_id] = organizationId
+                it[role] = "owner"
+            }
+            Memberships.insert {
+                it[user_id] = unverifiedUserId
+                it[organization_id] = organizationId
+                it[role] = "member"
+            }
+        }
+        return organizationId
+    }
+
+    private fun seedOrganization(name: String): Int =
+        transaction {
+            Organizations.insert {
+                it[Organizations.name] = name
+                it[slug] = name.lowercase().replace(" ", "-")
+            } get Organizations.id
+        }
+
+    private fun seedUser(
+        email: String,
+        verified: Boolean
+    ): Int =
+        transaction {
+            Users.insert {
+                it[Users.email] = email
+                it[password_hash] = "hash"
+                it[name] = email.substringBefore("@")
+                it[email_verified] = verified
+            } get Users.id
+        }
+
+    private fun validRequest(
+        name: String = "Workflow",
+        triggerName: String = "alert.triggered",
+        enabled: Boolean = true,
+        conditions: List<WorkflowConditionConfig> = emptyList(),
+        steps: List<WorkflowStepConfig> = listOf(emailStep()),
+        onceForTemplate: List<String> = listOf("alert.deduplication_key")
+    ): CreateWorkflowRequest =
+        CreateWorkflowRequest(
+            name = name,
+            triggerName = triggerName,
+            enabled = enabled,
+            conditions = conditions,
+            steps = steps,
+            onceForTemplate = onceForTemplate
+        )
+
+    private fun emailStep(): WorkflowStepConfig =
+        WorkflowStepConfig(
+            name = "notification.email_org",
+            params = mapOf(
+                "subject" to "Workflow {{alert.title}}",
+                "body" to "{{alert.description}}\n{{alert.source}}\n{{alert.status}}\n<danger>"
+            )
+        )
+
+    private fun slackStep(): WorkflowStepConfig =
+        WorkflowStepConfig(
+            name = "notification.slack",
+            params = mapOf(
+                "message" to "Slack {{alert.title}} {{alert.url}}",
+                "skip_if_unconfigured" to "true"
+            )
+        )
+
+    private fun discordStep(): WorkflowStepConfig =
+        WorkflowStepConfig(
+            name = "notification.discord",
+            params = mapOf(
+                "title" to "{{alert.title}}",
+                "message" to "Discord {{alert.source}} {{alert.status}}",
+                "skip_if_unconfigured" to "true"
+            )
+        )
+
+    private fun alertEvent(): AlertLifecycleEvent =
+        AlertLifecycleEvent(
+            title = "CPU saturation",
+            description = "CPU is above 90%",
+            severity = AlertSeverity.CRITICAL,
+            status = AlertStatus.FIRING,
+            source = AlertSource.HOST_ALERT,
+            deduplicationKey = "host-1",
+            organizationId = orgId,
+            moneatUrl = "https://moneat.io/hosts/1"
+        )
+}
