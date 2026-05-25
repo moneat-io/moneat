@@ -167,6 +167,47 @@ class PricingTierServiceTest {
     }
 
     @Test
+    fun `createTierVersion treats JavaScript safe unlimited sentinel as unlimited`() {
+        seedTier("FREE", version = 1)
+
+        val safeUnlimitedLimit = 9_007_199_254_740_000L
+        val created =
+            service.createTierVersion(
+                "FREE",
+                CreateTierVersionRequest(
+                    monthlyUnitLimit = safeUnlimitedLimit,
+                    monthlyErrorLimit = safeUnlimitedLimit,
+                    monthlyTransactionLimit = safeUnlimitedLimit,
+                    monthlyReplayLimit = safeUnlimitedLimit,
+                    monthlyFeedbackLimit = safeUnlimitedLimit,
+                    monthlyLlmEventLimit = safeUnlimitedLimit,
+                    monthlyGbLimit = 1_073_741_824,
+                    retentionDays = 30,
+                    logRetentionDays = 30,
+                    replayRetentionDays = 30,
+                    llmRetentionDays = 30,
+                    maxProjects = 1,
+                    maxSystems = 3,
+                    monitorIntervalSeconds = 60,
+                    monthlyPriceCents = 0,
+                    yearlyPriceCents = 0,
+                    trialDays = 0,
+                    paygEnabled = false,
+                    paygRateMicrosPerUnit = 0,
+                    monthlyAnalyticsPageviewLimit = safeUnlimitedLimit
+                )
+            )
+
+        assertEquals(Long.MAX_VALUE, created.monthlyUnitLimit)
+        assertEquals(Long.MAX_VALUE, created.monthlyErrorLimit)
+        assertEquals(Long.MAX_VALUE, created.monthlyTransactionLimit)
+        assertEquals(Long.MAX_VALUE, created.monthlyReplayLimit)
+        assertEquals(Long.MAX_VALUE, created.monthlyFeedbackLimit)
+        assertEquals(Long.MAX_VALUE, created.monthlyLlmEventLimit)
+        assertEquals(Long.MAX_VALUE, created.monthlyAnalyticsPageviewLimit)
+    }
+
+    @Test
     fun `createTierVersion preserves infrastructure metric billing from current tier`() {
         seedTier(
             "PRO",
