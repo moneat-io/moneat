@@ -262,6 +262,33 @@ class SsoServiceTest {
     }
 
     @Test
+    fun `initSso reports helpful error when OIDC discovery is not JSON`() {
+        MockOidcDiscoveryServer("<!DOCTYPE html><html lang=\"en\"></html>").use { server ->
+            withSelfHosted {
+                val (orgId, ownerId) = seedOrgReadyForSsoConfigure()
+                service.configureSso(
+                    orgId,
+                    ownerId,
+                    SsoConfigRequest(
+                        providerType = "oidc",
+                        isEnabled = true,
+                        oidcIssuerUrl = server.baseUrl,
+                        oidcClientId = "client-id",
+                        oidcClientSecret = "client-secret",
+                        emailDomain = "html.example",
+                    ),
+                )
+
+                val ex = assertFailsWith<IllegalArgumentException> {
+                    initSso("alice@html.example", null)
+                }
+                assertTrue(ex.message!!.contains("OIDC discovery failed"))
+                assertTrue(ex.message!!.contains("Authentik"))
+            }
+        }
+    }
+
+    @Test
     fun `initSso returns OIDC redirect when resolving by organization slug`() = withOidcDiscoveryServer { issuerUrl ->
         val (orgId, ownerId) = seedOrgReadyForSsoConfigure()
         service.configureSso(
