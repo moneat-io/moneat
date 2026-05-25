@@ -26,6 +26,7 @@ import com.moneat.events.models.SentryFeedback
 import com.moneat.events.models.SentryReplayEvent
 import com.moneat.events.models.SentrySpan
 import com.moneat.events.models.SentryTransaction
+import com.moneat.events.models.isFeedbackEventPayload
 import com.moneat.events.repositories.EventRepository
 import com.moneat.events.repositories.models.ErrorEventInsertData
 import com.moneat.events.repositories.models.FeedbackInsertData
@@ -42,6 +43,7 @@ import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseSqlUtils.doubleMapToSqlMap
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import com.moneat.utils.ClickHouseSqlUtils.mapToSqlMap
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -63,7 +65,6 @@ import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -150,13 +151,7 @@ class EventService(
         for (item in envelope.items) {
             logger.debug { "Processing envelope item type: ${item.type}" }
             when (item.type) {
-                "event" -> {
-                    logger.debug { "Event payload: ${item.payload.take(LOG_PAYLOAD_PREVIEW_CHARS)}" }
-                    val event = json.decodeFromString<SentryEvent>(item.payload)
-                    if (storeEvent(projectId, event)) {
-                        recordUsage(projectId, "error", item)
-                    }
-                }
+                "event" -> handleEventItem(projectId, item)
 
                 "transaction" -> {
                     logger.debug { "Transaction payload: ${item.payload.take(LOG_PAYLOAD_PREVIEW_CHARS)}" }
@@ -208,6 +203,19 @@ class EventService(
                     logger.debug { "Unknown item type: ${item.type}" }
                 }
             }
+        }
+    }
+
+    private suspend fun handleEventItem(projectId: Long, item: EnvelopeItem) {
+        logger.debug { "Event payload: ${item.payload.take(LOG_PAYLOAD_PREVIEW_CHARS)}" }
+        if (item.isFeedbackEventPayload()) {
+            handleFeedbackItem(projectId, item)
+            return
+        }
+
+        val event = json.decodeFromString<SentryEvent>(item.payload)
+        if (storeEvent(projectId, event)) {
+            recordUsage(projectId, "error", item)
         }
     }
 
@@ -265,6 +273,15 @@ class EventService(
         projectId: Long,
         body: String
     ) {
+        if (EnvelopeItem("event", body).isFeedbackEventPayload()) {
+            val feedback = json.decodeFromString<SentryFeedback>(body)
+            val byteSize = body.toByteArray(StandardCharsets.UTF_8).size
+            if (storeFeedback(projectId, feedback, "event")) {
+                usageTracker.recordUsage(projectId, "feedback", byteSize)
+            }
+            return
+        }
+
         val event = json.decodeFromString<SentryEvent>(body)
         if (storeEvent(projectId, event)) {
             usageTracker.recordUsage(projectId, "error", body.toByteArray(StandardCharsets.UTF_8).size)

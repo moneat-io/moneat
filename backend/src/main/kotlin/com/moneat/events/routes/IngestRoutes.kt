@@ -20,13 +20,16 @@ import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.QuotaReservationResult
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.decompression.DecompressionService
+import com.moneat.events.models.EnvelopeItem
 import com.moneat.events.models.SentryEnvelope
+import com.moneat.events.models.isFeedbackEventPayload
 import com.moneat.events.services.EventService
 import com.moneat.events.services.IngestionWorker
 import com.moneat.logs.models.LogIngestEntry
 import com.moneat.logs.services.LogService
 import com.moneat.utils.DetailedErrorResponse
 import com.moneat.utils.ErrorResponse
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.header
@@ -40,7 +43,6 @@ import io.ktor.server.routing.route
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import org.koin.core.context.GlobalContext
-import com.moneat.utils.suspendRunCatching
 import java.security.MessageDigest
 
 private val logger = KotlinLogging.logger {}
@@ -121,13 +123,13 @@ fun Route.ingestRoutes(
                     }
                     val groupedReservations =
                         envelope.items
-                            .groupingBy { mapEnvelopeItemTypeToQuotaType(it.type) }
+                            .groupingBy { mapEnvelopeItemToQuotaType(it) }
                             .eachCount()
 
                     // Calculate bytes per type for GB quota tracking
                     val groupedBytes =
                         envelope.items
-                            .groupBy { mapEnvelopeItemTypeToQuotaType(it.type) }
+                            .groupBy { mapEnvelopeItemToQuotaType(it) }
                             .mapValues { (_, items) ->
                                 items.sumOf { item ->
                                     (item.payloadBytes?.size ?: item.payload.toByteArray(Charsets.UTF_8).size).toLong()
@@ -269,7 +271,8 @@ fun Route.ingestRoutes(
                         return@post
                     }
                     val bodyBytes = body.toByteArray(Charsets.UTF_8).size.toLong()
-                    val reservation = reserveSingleQuota(orgId, 1, "error", bodyBytes)
+                    val quotaType = mapEnvelopeItemToQuotaType(EnvelopeItem("event", body))
+                    val reservation = reserveSingleQuota(orgId, 1, quotaType, bodyBytes)
                     if (!reservation.allowed) {
                         call.respond(
                             HttpStatusCode.TooManyRequests,
@@ -327,4 +330,9 @@ internal fun mapEnvelopeItemTypeToQuotaType(itemType: String): String {
         "llm_generation" -> "llm"
         else -> "error"
     }
+}
+
+internal fun mapEnvelopeItemToQuotaType(item: EnvelopeItem): String {
+    if (item.isFeedbackEventPayload()) return "feedback"
+    return mapEnvelopeItemTypeToQuotaType(item.type)
 }

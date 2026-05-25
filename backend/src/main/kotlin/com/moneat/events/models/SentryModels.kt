@@ -248,9 +248,20 @@ data class EnvelopeItem(
     val headers: JsonObject? = null
 )
 
+internal fun EnvelopeItem.isFeedbackEventPayload(): Boolean {
+    if (type != "event") return false
+    return payloadEventType() == "feedback"
+}
+
+private fun EnvelopeItem.payloadEventType(): String? =
+    runCatching {
+        Json.parseToJsonElement(payload).jsonObject["type"]?.jsonPrimitive?.contentOrNull
+    }.getOrNull()
+
 @Serializable
 data class SentryEvent(
     @SerialName("event_id") val eventId: String? = null,
+    val type: String? = null,
     @Serializable(with = FlexibleTimestampSerializer::class)
     val timestamp: Double? = null,
     val level: String? = null,
@@ -494,6 +505,7 @@ data class SentryFeedback(
     val level: String? = null,
     val environment: String? = null,
     val release: String? = null,
+    @Serializable(with = SentryMessageSerializer::class)
     val message: String? = null,
     val comments: String? = null,
     @SerialName("contact_email") val contactEmail: String? = null,
