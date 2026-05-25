@@ -267,7 +267,13 @@ class RetentionBackgroundServiceTest {
         mockAllRetention(orgId)
 
         withSweep { queries ->
-            listOf("apm_spans", "trace_stats").forEach {
+            listOf(
+                "apm_spans",
+                "trace_stats",
+                "apm_trace_summaries",
+                "apm_error_groups_hourly",
+                "apm_resource_stats_hourly"
+            ).forEach {
                 assertOrgScopedDeleteWithRetention(queries, it, orgId, APM_TRACE_RETENTION)
             }
         }
@@ -353,9 +359,9 @@ class RetentionBackgroundServiceTest {
                     it.contains("organization_id")
                 }
                 assertEquals(
-                    4,
+                    7,
                     orgQ.size,
-                    "Org-scoped queries for metrics + containers + APM traces"
+                    "Org-scoped queries for metrics + containers + APM trace tables"
                 )
             }
         }
