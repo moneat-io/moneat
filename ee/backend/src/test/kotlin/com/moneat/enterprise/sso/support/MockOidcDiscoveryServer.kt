@@ -11,7 +11,9 @@ import java.nio.charset.StandardCharsets
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
-class MockOidcDiscoveryServer : AutoCloseable {
+class MockOidcDiscoveryServer(
+    private val discoveryBody: String? = null,
+) : AutoCloseable {
     private val executor: ExecutorService = Executors.newCachedThreadPool()
     private val server: HttpServer =
         HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
@@ -29,13 +31,13 @@ class MockOidcDiscoveryServer : AutoCloseable {
 
     private fun respondWithDiscovery(exchange: HttpExchange) {
         val requestBaseUrl = "http://127.0.0.1:${exchange.localAddress.port}"
-        val body =
-            """
-            {
-              "authorization_endpoint": "$requestBaseUrl/protocol/openid-connect/auth",
-              "token_endpoint": "$requestBaseUrl/protocol/openid-connect/token"
-            }
-            """.trimIndent()
+        val body = discoveryBody
+            ?: """
+                {
+                  "authorization_endpoint": "$requestBaseUrl/protocol/openid-connect/auth",
+                  "token_endpoint": "$requestBaseUrl/protocol/openid-connect/token"
+                }
+                """.trimIndent()
         val bytes = body.toByteArray(StandardCharsets.UTF_8)
         exchange.responseHeaders.add("Content-Type", "application/json")
         exchange.sendResponseHeaders(200, bytes.size.toLong())
