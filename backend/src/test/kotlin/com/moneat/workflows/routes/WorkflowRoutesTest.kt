@@ -121,7 +121,7 @@ class WorkflowRoutesTest {
         }
 
     @Test
-    fun `list route returns forbidden without organization membership`() =
+    fun `list route returns forbidden without active organization claim`() =
         testApplication {
             setupApp()
 

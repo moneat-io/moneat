@@ -260,7 +260,7 @@ class UptimeSchedulerTest {
                     deduplicationKey = "moneat-uptime-${monitor.id}",
                     title = "Uptime Monitor Recovered: Test Monitor",
                     description = "Monitor 'Test Monitor' (http) is back up.",
-                    moneatUrl = "http://localhost:5173/uptime/${monitor.id}",
+                    moneatUrl = "https://moneat.io/uptime/${monitor.id}",
                 )
             }
         }

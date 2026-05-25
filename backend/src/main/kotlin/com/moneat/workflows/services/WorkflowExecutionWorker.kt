@@ -46,10 +46,12 @@ class WorkflowExecutionWorker(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val processingQueueKey = "$queueKey:processing"
     private var jobs: List<Job> = emptyList()
 
     fun start() {
         workflowWorkerLogger.info { "Starting WorkflowExecutionWorker with $workerCount workers, queue=$queueKey" }
+        reclaimProcessingQueue()
         jobs = (1..workerCount).map { workerId ->
             scope.launch { runWorker(workerId) }
         }
@@ -67,9 +69,11 @@ class WorkflowExecutionWorker(
             val redis = conn.sync()
             while (scope.isActive) {
                 try {
-                    val result = redis.brpop(WORKFLOW_BRPOP_TIMEOUT_SECONDS, queueKey)
-                    val payload = result?.value ?: continue
+                    val payload =
+                        redis.brpoplpush(WORKFLOW_BRPOP_TIMEOUT_SECONDS, queueKey, processingQueueKey)
+                            ?: continue
                     processMessage(workerId, payload)
+                    redis.lrem(processingQueueKey, 1, payload)
                 } catch (_: CancellationException) {
                     break
                 } catch (e: RedisException) {
@@ -90,6 +94,34 @@ class WorkflowExecutionWorker(
                     )
                 }
             }
+        } finally {
+            RedisConfig.closeBlockingConnection(conn)
+        }
+    }
+
+    private fun reclaimProcessingQueue() {
+        val conn =
+            runCatching { RedisConfig.newBlockingConnection() }
+                .getOrElse { error ->
+                    workflowWorkerLogger.error(error) { "Failed to connect while reclaiming workflow processing queue" }
+                    return
+                }
+        try {
+            val redis = conn.sync()
+            var reclaimed = 0
+            while (true) {
+                redis.rpoplpush(processingQueueKey, queueKey) ?: break
+                reclaimed += 1
+            }
+            if (reclaimed > 0) {
+                workflowWorkerLogger.warn {
+                    "Reclaimed $reclaimed workflow messages from $processingQueueKey"
+                }
+            }
+        } catch (e: RedisException) {
+            workflowWorkerLogger.error(e) { "Failed to reclaim workflow processing queue" }
+        } catch (e: IOException) {
+            workflowWorkerLogger.error(e) { "Failed to reclaim workflow processing queue" }
         } finally {
             RedisConfig.closeBlockingConnection(conn)
         }

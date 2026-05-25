@@ -71,18 +71,26 @@ class IncidentService(
         event: AlertLifecycleEvent,
         publishWorkflow: Boolean = true
     ) {
-        suspendRunCatching {
-            // Check if native on-call is enabled
-            val onCallEnabled = EnvConfig.get("ONCALL_ENABLED", "false").toBoolean()
+        // Check if native on-call is enabled
+        val onCallEnabled = EnvConfig.get("ONCALL_ENABLED", "false").toBoolean()
 
-            if (onCallEnabled) {
+        if (onCallEnabled) {
+            suspendRunCatching {
                 triggerNativeEscalation(event)
+            }.getOrElse { e ->
+                logger.error("Error triggering native escalation", e)
             }
+        }
 
-            if (publishWorkflow) {
+        if (publishWorkflow) {
+            suspendRunCatching {
                 workflowService.publishAlertTriggered(event)
+            }.getOrElse { e ->
+                logger.error("Error publishing alert workflow", e)
             }
+        }
 
+        suspendRunCatching {
             val configs = getEnabledProviderConfigs(event.organizationId)
             if (configs.isEmpty()) {
                 logger.debug("No enabled incident providers for org ${event.organizationId}")
@@ -141,8 +149,8 @@ class IncidentService(
         moneatUrl: String = "",
         publishWorkflow: Boolean = true
     ) {
-        suspendRunCatching {
-            if (publishWorkflow) {
+        if (publishWorkflow) {
+            suspendRunCatching {
                 workflowService.publishAlertResolved(
                     organizationId = organizationId,
                     source = source.name,
@@ -151,8 +159,12 @@ class IncidentService(
                     description = description,
                     moneatUrl = moneatUrl
                 )
+            }.getOrElse { e ->
+                logger.error("Error publishing resolved alert workflow", e)
             }
+        }
 
+        suspendRunCatching {
             val configs = getEnabledProviderConfigs(organizationId)
             if (configs.isEmpty()) {
                 return

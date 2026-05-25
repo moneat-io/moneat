@@ -20,6 +20,7 @@ import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.alerts.models.AlertSeverity
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertStatus
+import com.moneat.config.RedisConfig
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.SlackService
@@ -36,13 +37,17 @@ import com.moneat.workflows.models.WorkflowStepConfig
 import com.moneat.workflows.models.WorkflowVersions
 import com.moneat.workflows.models.Workflows
 import com.moneat.workflows.services.WorkflowService
+import io.lettuce.core.RedisException
+import io.lettuce.core.api.sync.RedisCommands
 import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.mockkObject
 import io.mockk.runs
+import io.mockk.unmockkObject
 import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.core.eq
@@ -52,6 +57,7 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -69,6 +75,7 @@ class WorkflowServiceTest {
     private val emailService = mockk<EmailService>(relaxed = true)
     private val slackService = mockk<SlackService>()
     private val discordService = mockk<DiscordService>()
+    private val redis = mockk<RedisCommands<String, String>>(relaxed = true)
     private lateinit var service: WorkflowService
     private var orgId: Int = 0
 
@@ -82,12 +89,20 @@ class WorkflowServiceTest {
         }
         TransactionManager.defaultDatabase = db
         resetWorkflowSchema()
-        clearMocks(emailService, slackService, discordService)
+        clearMocks(emailService, slackService, discordService, redis)
+        mockkObject(RedisConfig)
+        every { RedisConfig.sync() } returns redis
+        every { redis.lpush(any(), any<String>()) } returns 1L
         every { emailService.sendEmail(any(), any(), any(), any(), any()) } just runs
         coEvery { slackService.sendWorkflowMessage(any(), any(), any()) } returns true
         coEvery { discordService.sendWorkflowMessage(any(), any(), any(), any()) } returns true
         service = WorkflowService(emailService, slackService, discordService)
         orgId = seedOrganizationWithMembers()
+    }
+
+    @AfterTest
+    fun teardown() {
+        unmockkObject(RedisConfig)
     }
 
     private fun resetWorkflowSchema() {
@@ -128,7 +143,7 @@ class WorkflowServiceTest {
                     workflow_version_id INT NOT NULL,
                     organization_id INT NOT NULL,
                     trigger_name VARCHAR(120) NOT NULL,
-                    once_for VARCHAR(512) NOT NULL,
+                    once_for TEXT NOT NULL,
                     scope TEXT NOT NULL DEFAULT '{}',
                     status VARCHAR(32) NOT NULL DEFAULT 'pending',
                     progress TEXT NOT NULL DEFAULT '[]',
@@ -243,6 +258,9 @@ class WorkflowServiceTest {
         assertEquals(emptyList(), service.listRuns(orgId, created.id))
         assertNull(service.getWorkflow(orgId + 1, created.id))
         assertNull(service.updateWorkflow(orgId, created.id + 1000, UpdateWorkflowRequest(name = "missing")))
+        assertFailsWith<IllegalArgumentException> {
+            service.updateWorkflow(orgId, created.id, UpdateWorkflowRequest(name = " "))
+        }
         assertFalse(service.deleteWorkflow(orgId, created.id + 1000))
         assertTrue(service.deleteWorkflow(orgId, created.id))
         assertNull(service.getWorkflow(orgId, created.id))
@@ -263,6 +281,12 @@ class WorkflowServiceTest {
             service.createWorkflow(
                 orgId,
                 validRequest(conditions = listOf(WorkflowConditionConfig("alert.title", "gt", "1")))
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.createWorkflow(
+                orgId,
+                validRequest(conditions = listOf(WorkflowConditionConfig("alert.title", "contains")))
             )
         }
         assertFailsWith<IllegalArgumentException> {
@@ -427,6 +451,23 @@ class WorkflowServiceTest {
 
             assertEquals(emptyList(), service.listRuns(orgId, disabled.id))
             assertEquals(emptyList(), service.listRuns(orgId, nonMatching.id))
+        }
+
+    @Test
+    fun `publish marks run failed when enqueue fails`() =
+        runBlocking {
+            every { redis.lpush(any(), any<String>()) } throws RedisException("redis unavailable")
+            val workflow =
+                service.createWorkflow(
+                    orgId,
+                    validRequest(name = "Redis unavailable workflow")
+                )
+
+            service.publishAlertTriggered(alertEvent())
+
+            val run = service.listRuns(orgId, workflow.id).single()
+            assertEquals("failed", run.status)
+            assertTrue(run.errorMessage?.contains("redis unavailable") == true)
         }
 
     private fun seedOrganizationWithMembers(): Int {

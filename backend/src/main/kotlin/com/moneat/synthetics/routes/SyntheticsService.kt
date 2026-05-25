@@ -384,7 +384,7 @@ class SyntheticsService(
                 description = message,
                 severity = AlertSeverity.HIGH,
                 status = AlertStatus.FIRING,
-                source = AlertSource.UPTIME_MONITOR,
+                source = AlertSource.SYNTHETIC_TEST,
                 deduplicationKey = "moneat-synthetic-${test.id}",
                 organizationId = test.organizationId,
                 moneatUrl = "$frontendUrl/synthetics/${test.id}"

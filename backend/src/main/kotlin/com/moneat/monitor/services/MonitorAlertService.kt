@@ -308,135 +308,205 @@ class MonitorAlertService(
         organizationId: Int
     ) {
         val alertKey = hostAlertRedisKey(alert)
-
-        // Get recent metrics for the host
         val currentValue = getCurrentMetricValue(alert.hostId, alert.organizationId, alert.metric) ?: return
-
-        // Check if alert condition is met
         val triggered = isThresholdTriggered(alert.condition, currentValue, alert.threshold)
 
-        // Handle Recovery
         if (!triggered) {
-            // Check if it was previously triggered
-            val wasTriggered =
-                suspendRunCatching {
-                    if (RedisConfig.isConnected()) {
-                        RedisConfig.sync().get(alertKey) == "TRIGGERED"
-                    } else {
-                        false // Fallback if Redis is down
-                    }
-                }.getOrElse { _ ->
-                    false
-                }
-
-            if (wasTriggered) {
-                // Clear state
-                suspendRunCatching {
-                    if (RedisConfig.isConnected()) {
-                        RedisConfig.sync().del(alertKey)
-                    }
-                }.getOrElse { e ->
-                    logger.error(e) { "Failed to clear alert state in Redis" }
-                }
-
-                val metricLabel = getMetricLabel(alert.metric)
-                val frontendUrl = config.property(EMAIL_FRONTEND_URL_CONFIG).getString()
-                val dashboardUrl = "$frontendUrl/monitoring/hosts/${alert.hostId}"
-                suspendRunCatching {
-                    incidentService.autoResolveAlert(
-                        organizationId = organizationId,
-                        source = AlertSource.HOST_ALERT,
-                        deduplicationKey = hostAlertDedupKey(alert),
-                        title = "$hostName - $metricLabel recovered",
-                        description = "The alert for $metricLabel is no longer active.",
-                        moneatUrl = dashboardUrl
-                    )
-                }.getOrElse { e ->
-                    logger.error(e) { "Failed to resolve incident for recovered alert ${alert.id}" }
-                }
-                logger.info { "Alert ${alert.id} recovered for host ${alert.hostId}" }
-            }
+            handleRecoveredAlert(alert, hostName, organizationId, alertKey)
             return
         }
 
-        // If triggered, check duration if specified
-        if (alert.durationSeconds > 0) {
-            val isSustained = checkSustainedCondition(alert)
-            if (!isSustained) {
-                return // Condition not sustained for required duration
-            }
+        if (alert.durationSeconds > 0 && !checkSustainedCondition(alert)) {
+            return
         }
 
-        // Check throttling
         val now = Clock.System.now()
         if (isThrottledByInterval(alert.lastTriggeredAt, now)) {
-            // Update Redis state even if throttled to ensure consistency
-            suspendRunCatching {
-                if (RedisConfig.isConnected()) {
-                    RedisConfig.sync().set(alertKey, "TRIGGERED")
-                }
-            }.getOrElse { e ->
-                logger.debug(e) { "Failed to update throttled alert state in Redis" }
-            }
-            return // Don't spam alerts
+            setAlertTriggeredState(alertKey, isThrottled = true)
+            return
         }
 
-        // Check if alerts are silenced for this organization
         if (isAnySilenceActive(organizationId)) {
             return
         }
 
-        // Trigger the alert
+        triggerAlert(alert, hostName, organizationId, currentValue, alertKey, now)
+    }
+
+    private suspend fun handleRecoveredAlert(
+        alert: AlertData,
+        hostName: String,
+        organizationId: Int,
+        alertKey: String
+    ) {
+        if (!wasAlertTriggered(alertKey)) return
+
+        clearAlertState(alertKey)
+
+        val metricLabel = getMetricLabel(alert.metric)
+        val frontendUrl = config.property(EMAIL_FRONTEND_URL_CONFIG).getString()
+        val dashboardUrl = "$frontendUrl/monitoring/hosts/${alert.hostId}"
+        val incidentSeverity = hostAlertIncidentSeverity(alert)
+        val title = "$hostName - $metricLabel recovered"
+        val description = "The alert for $metricLabel is no longer active."
+        val deduplicationKey = hostAlertDedupKey(alert)
+
+        publishRecoveredHostAlertWorkflow(
+            alert = alert,
+            organizationId = organizationId,
+            deduplicationKey = deduplicationKey,
+            title = title,
+            description = description,
+            dashboardUrl = dashboardUrl,
+            severity = incidentSeverity ?: AlertSeverity.HIGH
+        )
+        autoResolveRecoveredHostIncident(
+            alert = alert,
+            organizationId = organizationId,
+            deduplicationKey = deduplicationKey,
+            title = title,
+            description = description,
+            dashboardUrl = dashboardUrl,
+            incidentSeverity = incidentSeverity
+        )
+        logger.info { "Alert ${alert.id} recovered for host ${alert.hostId}" }
+    }
+
+    private suspend fun publishRecoveredHostAlertWorkflow(
+        alert: AlertData,
+        organizationId: Int,
+        deduplicationKey: String,
+        title: String,
+        description: String,
+        dashboardUrl: String,
+        severity: AlertSeverity
+    ) {
+        suspendRunCatching {
+            workflowService.publishAlertResolved(
+                organizationId = organizationId,
+                source = AlertSource.HOST_ALERT.name,
+                deduplicationKey = deduplicationKey,
+                title = title,
+                description = description,
+                moneatUrl = dashboardUrl,
+                severity = severity
+            )
+        }.getOrElse { e ->
+            logger.error(e) { "Failed to publish recovered host alert workflow ${alert.id}" }
+        }
+    }
+
+    private suspend fun autoResolveRecoveredHostIncident(
+        alert: AlertData,
+        organizationId: Int,
+        deduplicationKey: String,
+        title: String,
+        description: String,
+        dashboardUrl: String,
+        incidentSeverity: AlertSeverity?
+    ) {
+        if (incidentSeverity == null) return
+
+        suspendRunCatching {
+            incidentService.autoResolveAlert(
+                organizationId = organizationId,
+                source = AlertSource.HOST_ALERT,
+                deduplicationKey = deduplicationKey,
+                title = title,
+                description = description,
+                moneatUrl = dashboardUrl,
+                publishWorkflow = false
+            )
+        }.getOrElse { e ->
+            logger.error(e) { "Failed to resolve incident for recovered alert ${alert.id}" }
+        }
+    }
+
+    private suspend fun triggerAlert(
+        alert: AlertData,
+        hostName: String,
+        organizationId: Int,
+        currentValue: Double,
+        alertKey: String,
+        now: Instant
+    ) {
         logger.info {
             "Alert ${alert.id} triggered for host ${alert.hostId}: " +
                 "${alert.metric} ${alert.condition} ${alert.threshold} (current: $currentValue)"
         }
 
-        // Update Redis state
+        setAlertTriggeredState(alertKey)
+        updateLastTriggeredAt(alert, now)
+        sendAlertNotification(alert, hostName, organizationId, currentValue)
+    }
+
+    private fun wasAlertTriggered(alertKey: String): Boolean =
+        suspendRunCatching {
+            RedisConfig.isConnected() && RedisConfig.sync().get(alertKey) == "TRIGGERED"
+        }.getOrElse {
+            false
+        }
+
+    private fun clearAlertState(alertKey: String) {
+        suspendRunCatching {
+            if (RedisConfig.isConnected()) {
+                RedisConfig.sync().del(alertKey)
+            }
+        }.getOrElse { e ->
+            logger.error(e) { "Failed to clear alert state in Redis" }
+        }
+    }
+
+    private fun setAlertTriggeredState(
+        alertKey: String,
+        isThrottled: Boolean = false
+    ) {
         suspendRunCatching {
             if (RedisConfig.isConnected()) {
                 RedisConfig.sync().set(alertKey, "TRIGGERED")
             }
         }.getOrElse { e ->
-            logger.error(e) { "Failed to set alert state in Redis" }
+            if (isThrottled) {
+                logger.debug(e) { "Failed to update throttled alert state in Redis" }
+            } else {
+                logger.error(e) { "Failed to set alert state in Redis" }
+            }
+        }
+    }
+
+    private fun updateLastTriggeredAt(alert: AlertData, now: Instant) {
+        if (alert.scope == MonitorService.ALERT_SCOPE_GLOBAL && alert.templateAlertId != null) {
+            upsertTemplateAlertTriggeredAt(alert, now)
+            return
         }
 
-        // Update last triggered timestamp
-        if (alert.scope == MonitorService.ALERT_SCOPE_GLOBAL && alert.templateAlertId != null) {
-            transaction {
-                val existing =
-                    HostAlertTemplateStates
-                        .selectAll()
-                        .where {
-                            (HostAlertTemplateStates.template_alert_id eq alert.templateAlertId) and
-                                (HostAlertTemplateStates.host_id eq alert.hostId)
-                        }.firstOrNull()
-
-                if (existing != null) {
-                    HostAlertTemplateStates.update({
-                        (HostAlertTemplateStates.template_alert_id eq alert.templateAlertId) and
-                            (HostAlertTemplateStates.host_id eq alert.hostId)
-                    }) {
-                        it[last_triggered_at] = now
-                    }
-                } else {
-                    HostAlertTemplateStates.insert {
-                        it[HostAlertTemplateStates.template_alert_id] = alert.templateAlertId
-                        it[HostAlertTemplateStates.host_id] = alert.hostId
-                        it[HostAlertTemplateStates.last_triggered_at] = now
-                    }
-                }
+        transaction {
+            HostAlerts.update({ HostAlerts.id eq alert.id }) {
+                it[last_triggered_at] = now
             }
-        } else {
-            transaction {
-                HostAlerts.update({ HostAlerts.id eq alert.id }) {
+        }
+    }
+
+    private fun upsertTemplateAlertTriggeredAt(alert: AlertData, now: Instant) {
+        val templateAlertId = alert.templateAlertId ?: return
+        transaction {
+            val query =
+                (HostAlertTemplateStates.template_alert_id eq templateAlertId) and
+                    (HostAlertTemplateStates.host_id eq alert.hostId)
+            val existing = HostAlertTemplateStates.selectAll().where { query }.firstOrNull()
+
+            if (existing != null) {
+                HostAlertTemplateStates.update({ query }) {
                     it[last_triggered_at] = now
                 }
+            } else {
+                HostAlertTemplateStates.insert {
+                    it[HostAlertTemplateStates.template_alert_id] = templateAlertId
+                    it[HostAlertTemplateStates.host_id] = alert.hostId
+                    it[HostAlertTemplateStates.last_triggered_at] = now
+                }
             }
         }
-
-        // Send notification
-        sendAlertNotification(alert, hostName, organizationId, currentValue)
     }
 
     /**
@@ -626,62 +696,63 @@ class MonitorAlertService(
         val formattedThreshold = formatMetricValue(alert.metric, alert.threshold)
         val frontendUrl = config.property(EMAIL_FRONTEND_URL_CONFIG).getString()
 
+        val alertSeverity = hostAlertIncidentSeverity(alert)
+        val incidentEvent =
+            AlertLifecycleEvent(
+                title = "$hostName - $metricLabel ${alert.condition} ${alert.threshold}",
+                description =
+                "Metric: $metricLabel\nCondition: ${alert.condition} $formattedThreshold" +
+                    "\nCurrent Value: $formattedValue",
+                severity = alertSeverity ?: AlertSeverity.HIGH,
+                status = AlertStatus.FIRING,
+                source = AlertSource.HOST_ALERT,
+                deduplicationKey = hostAlertDedupKey(alert),
+                organizationId = organizationId,
+                metadata =
+                mapOf(
+                    "host_id" to JsonPrimitive(alert.hostId.toString()),
+                    "host_name" to JsonPrimitive(hostName),
+                    "metric" to JsonPrimitive(alert.metric),
+                    "current_value" to JsonPrimitive(formattedValue),
+                    "threshold" to JsonPrimitive(formattedThreshold)
+                ),
+                moneatUrl = "$frontendUrl/monitoring/hosts/${alert.hostId}"
+            )
+
         suspendRunCatching {
-            val alertSeverity =
-                if (alert.scope == MonitorService.ALERT_SCOPE_GLOBAL && alert.templateAlertId != null) {
-                    transaction {
-                        OrganizationAlertTemplates
-                            .selectAll()
-                            .where { OrganizationAlertTemplates.id eq alert.templateAlertId }
-                            .firstOrNull()
-                            ?.get(OrganizationAlertTemplates.incident_severity)
-                            ?.let {
-                                AlertSeverity.fromString(it)
-                            }
-                    }
-                } else {
-                    transaction {
-                        HostAlerts
-                            .selectAll()
-                            .where { HostAlerts.id eq alert.id }
-                            .firstOrNull()
-                            ?.get(HostAlerts.incident_severity)
-                            ?.let {
-                                AlertSeverity.fromString(it)
-                            }
-                    }
-                }
-
-            val incidentEvent =
-                AlertLifecycleEvent(
-                    title = "$hostName - $metricLabel ${alert.condition} ${alert.threshold}",
-                    description =
-                    "Metric: $metricLabel\nCondition: ${alert.condition} $formattedThreshold" +
-                        "\nCurrent Value: $formattedValue",
-                    severity = alertSeverity ?: AlertSeverity.HIGH,
-                    status = AlertStatus.FIRING,
-                    source = AlertSource.HOST_ALERT,
-                    deduplicationKey = hostAlertDedupKey(alert),
-                    organizationId = organizationId,
-                    metadata =
-                    mapOf(
-                        "host_id" to JsonPrimitive(alert.hostId.toString()),
-                        "host_name" to JsonPrimitive(hostName),
-                        "metric" to JsonPrimitive(alert.metric),
-                        "current_value" to JsonPrimitive(formattedValue),
-                        "threshold" to JsonPrimitive(formattedThreshold)
-                    ),
-                    moneatUrl = "$frontendUrl/monitoring/hosts/${alert.hostId}"
-                )
-
             workflowService.publishAlertTriggered(incidentEvent)
-            if (alertSeverity != null) {
-                incidentService.fireAlert(incidentEvent, publishWorkflow = false)
-            }
         }.getOrElse { e ->
             logger.error(e) { "Failed to publish host alert workflow" }
         }
+        if (alertSeverity != null) {
+            suspendRunCatching {
+                incidentService.fireAlert(incidentEvent, publishWorkflow = false)
+            }.getOrElse { e ->
+                logger.error(e) { "Failed to fire host alert incident" }
+            }
+        }
     }
+
+    private fun hostAlertIncidentSeverity(alert: AlertData): AlertSeverity? =
+        if (alert.scope == MonitorService.ALERT_SCOPE_GLOBAL && alert.templateAlertId != null) {
+            transaction {
+                OrganizationAlertTemplates
+                    .selectAll()
+                    .where { OrganizationAlertTemplates.id eq alert.templateAlertId }
+                    .firstOrNull()
+                    ?.get(OrganizationAlertTemplates.incident_severity)
+                    ?.let { AlertSeverity.fromString(it) }
+            }
+        } else {
+            transaction {
+                HostAlerts
+                    .selectAll()
+                    .where { HostAlerts.id eq alert.id }
+                    .firstOrNull()
+                    ?.get(HostAlerts.incident_severity)
+                    ?.let { AlertSeverity.fromString(it) }
+            }
+        }
 
     /**
      * Check host statuses and send down/up notifications.

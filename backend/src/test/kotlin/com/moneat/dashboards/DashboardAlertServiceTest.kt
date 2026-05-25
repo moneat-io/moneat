@@ -830,7 +830,11 @@ class DashboardAlertServiceTest {
                     CREATED_BY,
                     buildCreateRequest(
                         widgetId,
-                        AlertRequestOverrides(condition = ">", threshold = RECOVERY_THRESHOLD),
+                        AlertRequestOverrides(
+                            condition = ">",
+                            threshold = RECOVERY_THRESHOLD,
+                            incidentSeverity = "HIGH",
+                        ),
                     ),
                 )
             every { redis.get("dashboard_alert_state:${created.id}") } returns "TRIGGERED"
@@ -845,7 +849,8 @@ class DashboardAlertServiceTest {
                     deduplicationKey = "moneat-dashboard-alert-${created.id}",
                     title = "Dashboard Alert Resolved: High Error Rate",
                     description = "Test Widget on Test Dashboard recovered. Current value: 50.00",
-                    moneatUrl = "http://localhost:5173/dashboards/$dashboardId",
+                    moneatUrl = "https://moneat.io/dashboards/$dashboardId",
+                    publishWorkflow = false,
                 )
             }
         }

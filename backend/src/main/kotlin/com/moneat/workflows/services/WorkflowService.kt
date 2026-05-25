@@ -18,6 +18,7 @@ package com.moneat.workflows.services
 
 import com.moneat.config.RedisConfig
 import com.moneat.alerts.models.AlertLifecycleEvent
+import com.moneat.alerts.models.AlertSeverity
 import com.moneat.alerts.models.AlertStatus
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
@@ -197,6 +198,10 @@ class WorkflowService(
         workflowId: Int,
         request: UpdateWorkflowRequest
     ): WorkflowResponse? {
+        val trimmedName = request.name?.trim()
+        require(request.name == null || !trimmedName.isNullOrBlank()) {
+            "Workflow name is required"
+        }
         val now = Clock.System.now()
         transaction {
             val workflowRow =
@@ -212,7 +217,7 @@ class WorkflowService(
 
             validateWorkflowConfig(triggerName, conditions, steps, onceForTemplate)
             Workflows.update({ (Workflows.id eq workflowId) and (Workflows.organizationId eq organizationId) }) {
-                request.name?.let { value -> it[name] = value.trim() }
+                trimmedName?.let { value -> it[name] = value }
                 request.enabled?.let { value -> it[enabled] = value }
                 it[updatedAt] = now
             }
@@ -291,7 +296,8 @@ class WorkflowService(
         deduplicationKey: String,
         title: String = "Alert resolved",
         description: String = "Moneat resolved alert $deduplicationKey",
-        moneatUrl: String = ""
+        moneatUrl: String = "",
+        severity: AlertSeverity? = null
     ) {
         publishTrigger(
             WorkflowTriggerEvent(
@@ -300,7 +306,7 @@ class WorkflowService(
                 scope = mapOf(
                     ALERT_TITLE_REFERENCE to title,
                     ALERT_DESCRIPTION_REFERENCE to description,
-                    ALERT_SEVERITY_REFERENCE to "",
+                    ALERT_SEVERITY_REFERENCE to severity?.name.orEmpty(),
                     ALERT_STATUS_REFERENCE to AlertStatus.RESOLVED.name,
                     ALERT_SOURCE_REFERENCE to source,
                     ALERT_DEDUPLICATION_KEY_REFERENCE to deduplicationKey,
@@ -398,7 +404,7 @@ class WorkflowService(
                     it[workflowVersionId] = candidate.version.id
                     it[organizationId] = event.organizationId
                     it[triggerName] = event.triggerName
-                    it[WorkflowRuns.onceFor] = onceFor.take(MAX_ONCE_FOR_LENGTH)
+                    it[WorkflowRuns.onceFor] = onceFor
                     it[scope] = json.encodeToString(event.scope)
                     it[status] = "pending"
                     it[progress] = "[]"
@@ -418,6 +424,7 @@ class WorkflowService(
         suspendRunCatching {
             RedisConfig.sync().lpush(WORKFLOW_QUEUE_KEY, json.encodeToString(WorkflowRunQueuedMessage(runId)))
         }.getOrElse { e ->
+            markRunFailed(runId, emptyList(), "Failed to enqueue workflow run: ${e.message ?: "unknown error"}")
             logger.error(e) { "Failed to enqueue workflow run $runId" }
         }
     }
@@ -523,6 +530,11 @@ class WorkflowService(
             require(resource.operations.any { it.name == condition.operation }) {
                 "Unsupported operation ${condition.operation} for ${condition.reference}"
             }
+            if (condition.operation.requiresConditionValue()) {
+                require(!condition.value.isNullOrBlank()) {
+                    "Missing value for ${condition.reference} ${condition.operation}"
+                }
+            }
         }
         onceForTemplate.forEach { reference ->
             require(reference in scopeReferences) { "Unknown once-for reference $reference" }
@@ -600,6 +612,9 @@ class WorkflowService(
             "LOW" -> SEVERITY_LOW_RANK
             else -> SEVERITY_UNKNOWN_RANK
         }
+
+    private fun String.requiresConditionValue(): Boolean =
+        this !in setOf("is_set", "is_not_set")
 
     private fun buildOnceFor(
         onceForTemplate: List<String>,
@@ -774,7 +789,6 @@ class WorkflowService(
         const val DLQ_KEY = WORKFLOW_DLQ_KEY
         private const val ALERT_TRIGGERED_TRIGGER = "alert.triggered"
         private const val ALERT_RESOLVED_TRIGGER = "alert.resolved"
-        private const val MAX_ONCE_FOR_LENGTH = 512
         private val DEFAULT_WORKFLOWS =
             listOf(
                 DefaultWorkflowDefinition(

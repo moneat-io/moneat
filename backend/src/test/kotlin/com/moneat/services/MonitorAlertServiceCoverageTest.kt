@@ -18,6 +18,7 @@ package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
+import com.moneat.alerts.models.AlertSeverity
 import com.moneat.alerts.models.AlertSource
 import com.moneat.incident.services.IncidentService
 import com.moneat.monitor.models.AlertData
@@ -46,6 +47,8 @@ import io.mockk.mockkObject
 import io.mockk.mockkStatic
 import io.mockk.unmockkObject
 import io.mockk.unmockkStatic
+import io.mockk.verify
+import io.lettuce.core.api.sync.RedisCommands
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -60,6 +63,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
@@ -75,6 +79,12 @@ class MonitorAlertServiceCoverageTest {
     private lateinit var incidentService: IncidentService
     private lateinit var workflowService: WorkflowService
     private lateinit var service: MonitorAlertService
+
+    private data class HostAlertFixture(
+        val orgId: Int,
+        val hostId: Int,
+        val alert: AlertData
+    )
 
     @BeforeTest
     fun setup() {
@@ -137,6 +147,58 @@ class MonitorAlertServiceCoverageTest {
         return fn.call(service, *args)
     }
 
+    private fun createHostAlertFixture(incidentSeverity: String? = "HIGH"): HostAlertFixture {
+        val now = Clock.System.now()
+        return transaction {
+            val orgId =
+                Organizations.insert {
+                    it[name] = "Host Alert Workflow Org"
+                    it[slug] = "host-alert-workflow-org"
+                } get Organizations.id
+            val hostId =
+                Hosts.insert {
+                    it[hostname] = "host-alert-workflow"
+                    it[organization_id] = orgId
+                    it[status] = "up"
+                    it[first_seen_at] = now
+                    it[last_seen_at] = now
+                } get Hosts.id
+            val alertId =
+                HostAlerts.insert {
+                    it[host_id] = hostId
+                    it[organization_id] = orgId
+                    it[metric] = "cpu_percent"
+                    it[condition] = ">"
+                    it[threshold] = 80.0
+                    it[duration_seconds] = 0
+                    it[enabled] = true
+                    it[last_triggered_at] = null
+                    it[incident_severity] = incidentSeverity
+                    it[created_at] = now
+                } get HostAlerts.id
+
+            HostAlertFixture(
+                orgId = orgId,
+                hostId = hostId,
+                alert =
+                AlertData(
+                    id = alertId,
+                    hostId = hostId,
+                    organizationId = orgId,
+                    metric = "cpu_percent",
+                    condition = ">",
+                    threshold = 80.0,
+                    durationSeconds = 0,
+                    enabled = true,
+                    lastTriggeredAt = null,
+                    createdAt = now,
+                    scope = MonitorService.ALERT_SCOPE_HOST,
+                    templateAlertId = null,
+                )
+            )
+        }
+    }
+
     @Test
     fun `evaluateAlerts completes with no alerts in database`() =
         runBlocking {
@@ -185,6 +247,90 @@ class MonitorAlertServiceCoverageTest {
 
             coVerify(exactly = 1) {
                 workflowService.publishAlertTriggered(any())
+            }
+        }
+
+    @Test
+    fun `handleRecoveredAlert publishes workflow and resolves configured incident`() =
+        runBlocking {
+            val fixture = createHostAlertFixture()
+            val alertKey = "alert_state:${fixture.hostId}:id_${fixture.alert.id}"
+            val deduplicationKey = "moneat-host-alert-${fixture.hostId}-id_${fixture.alert.id}"
+            val redis = mockk<RedisCommands<String, String>>()
+            every { RedisConfig.isConnected() } returns true
+            every { RedisConfig.sync() } returns redis
+            every { redis.get(alertKey) } returns "TRIGGERED"
+            every { redis.del(alertKey) } returns 1L
+
+            callPrivateSuspend("handleRecoveredAlert", fixture.alert, "host-alert-workflow", fixture.orgId, alertKey)
+
+            verify { redis.get(alertKey) }
+            verify { redis.del(alertKey) }
+            coVerify(exactly = 1) {
+                workflowService.publishAlertResolved(
+                    fixture.orgId,
+                    AlertSource.HOST_ALERT.name,
+                    deduplicationKey,
+                    any(),
+                    any(),
+                    any(),
+                    AlertSeverity.HIGH,
+                )
+            }
+            coVerify(exactly = 1) {
+                incidentService.autoResolveAlert(
+                    fixture.orgId,
+                    AlertSource.HOST_ALERT,
+                    deduplicationKey,
+                    any(),
+                    any(),
+                    any(),
+                    false,
+                )
+            }
+        }
+
+    @Test
+    fun `triggerAlert records state timestamp and publishes workflow`() =
+        runBlocking {
+            val fixture = createHostAlertFixture()
+            val alertKey = "alert_state:${fixture.hostId}:id_${fixture.alert.id}"
+            val deduplicationKey = "moneat-host-alert-${fixture.hostId}-id_${fixture.alert.id}"
+            val redis = mockk<RedisCommands<String, String>>()
+            every { RedisConfig.isConnected() } returns true
+            every { RedisConfig.sync() } returns redis
+            every { redis.set(alertKey, "TRIGGERED") } returns "OK"
+
+            callPrivateSuspend(
+                "triggerAlert",
+                fixture.alert,
+                "host-alert-workflow",
+                fixture.orgId,
+                91.0,
+                alertKey,
+                Clock.System.now(),
+            )
+
+            verify { redis.set(alertKey, "TRIGGERED") }
+            val lastTriggeredAt =
+                transaction {
+                    HostAlerts
+                        .selectAll()
+                        .where { HostAlerts.id eq fixture.alert.id }
+                        .first()[HostAlerts.last_triggered_at]
+                }
+            assertNotNull(lastTriggeredAt)
+            coVerify(exactly = 1) {
+                workflowService.publishAlertTriggered(
+                    match {
+                        it.source == AlertSource.HOST_ALERT &&
+                            it.deduplicationKey == deduplicationKey &&
+                            it.organizationId == fixture.orgId
+                    }
+                )
+            }
+            coVerify(exactly = 1) {
+                incidentService.fireAlert(any(), false)
             }
         }
 

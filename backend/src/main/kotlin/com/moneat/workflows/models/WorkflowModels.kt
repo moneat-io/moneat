@@ -50,7 +50,7 @@ object WorkflowRuns : IntIdTable("workflow_runs") {
     val workflowVersionId = integer("workflow_version_id").references(WorkflowVersions.id)
     val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
     val triggerName = varchar("trigger_name", 120)
-    val onceFor = varchar("once_for", 512)
+    val onceFor = text("once_for")
     val scope = jsonb("scope").default("{}")
     val status = varchar("status", 32).default("pending")
     val progress = jsonb("progress").default("[]")

@@ -136,7 +136,10 @@ object WorkflowCatalog {
         WorkflowResourceDefinition(
             type = "AlertSource",
             label = "Alert Source",
-            fieldConfig = WorkflowFieldConfig(type = "select", placeholder = "HOST_ALERT, UPTIME_MONITOR"),
+            fieldConfig = WorkflowFieldConfig(
+                type = "select",
+                placeholder = "HOST_ALERT, UPTIME_MONITOR, SYNTHETIC_TEST"
+            ),
             operations = listOf(
                 WorkflowOperationDefinition("eq", EQUALS_LABEL, "AlertSource"),
                 WorkflowOperationDefinition("neq", NOT_EQUALS_LABEL, "AlertSource")

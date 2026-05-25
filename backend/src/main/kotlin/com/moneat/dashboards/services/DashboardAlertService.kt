@@ -370,18 +370,47 @@ class DashboardAlertService(
         }
 
         val baseUrl = config.property("email.frontendUrl").getString()
+        val incidentSeverity =
+            if (previousLevel == DashboardAlertLevel.ERROR) {
+                alert.incidentSeverity?.let { AlertSeverity.fromString(it) }
+            } else {
+                null
+            }
+        val workflowSeverity = incidentSeverity ?: when (previousLevel) {
+            DashboardAlertLevel.WARNING -> AlertSeverity.LOW
+            DashboardAlertLevel.ERROR -> AlertSeverity.HIGH
+        }
+        val title = "Dashboard Alert Resolved: ${alert.name}"
+        val description = "${alert.widgetTitle} on ${alert.dashboardTitle} recovered. " +
+            "Current value: ${"%.2f".format(currentValue)}"
+        val moneatUrl = "$baseUrl/dashboards/${alert.dashboardId}"
         suspendRunCatching {
-            incidentService.autoResolveAlert(
+            workflowService.publishAlertResolved(
                 organizationId = alert.orgId.toInt(),
-                source = AlertSource.DASHBOARD_ALERT,
+                source = AlertSource.DASHBOARD_ALERT.name,
                 deduplicationKey = "moneat-dashboard-alert-${alert.alertId}",
-                title = "Dashboard Alert Resolved: ${alert.name}",
-                description = "${alert.widgetTitle} on ${alert.dashboardTitle} recovered. " +
-                    "Current value: ${"%.2f".format(currentValue)}",
-                moneatUrl = "$baseUrl/dashboards/${alert.dashboardId}"
+                title = title,
+                description = description,
+                moneatUrl = moneatUrl,
+                severity = workflowSeverity
             )
         }.onFailure { e ->
-            logger.error(e) { "Failed to resolve incident for recovered dashboard alert ${alert.alertId}" }
+            logger.error(e) { "Failed to publish recovered dashboard alert workflow ${alert.alertId}" }
+        }
+        if (incidentSeverity != null) {
+            suspendRunCatching {
+                incidentService.autoResolveAlert(
+                    organizationId = alert.orgId.toInt(),
+                    source = AlertSource.DASHBOARD_ALERT,
+                    deduplicationKey = "moneat-dashboard-alert-${alert.alertId}",
+                    title = title,
+                    description = description,
+                    moneatUrl = moneatUrl,
+                    publishWorkflow = false
+                )
+            }.onFailure { e ->
+                logger.error(e) { "Failed to resolve incident for recovered dashboard alert ${alert.alertId}" }
+            }
         }
         logger.info { "Dashboard alert ${alert.alertId} recovered" }
     }
@@ -669,11 +698,15 @@ class DashboardAlertService(
 
         suspendRunCatching {
             workflowService.publishAlertTriggered(event)
-            if (alertSeverity != null) {
-                incidentService.fireAlert(event.copy(severity = alertSeverity), publishWorkflow = false)
-            }
         }.onFailure { e ->
             logger.error(e) { "Failed to publish dashboard alert workflow" }
+        }
+        if (alertSeverity != null) {
+            suspendRunCatching {
+                incidentService.fireAlert(event.copy(severity = alertSeverity), publishWorkflow = false)
+            }.onFailure { e ->
+                logger.error(e) { "Failed to fire dashboard alert incident" }
+            }
         }
     }
 

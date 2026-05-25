@@ -40,7 +40,7 @@ CREATE TABLE workflow_runs (
     workflow_version_id INTEGER NOT NULL REFERENCES workflow_versions(id) ON DELETE RESTRICT,
     organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     trigger_name VARCHAR(120) NOT NULL,
-    once_for VARCHAR(512) NOT NULL,
+    once_for TEXT NOT NULL,
     scope JSONB NOT NULL DEFAULT '{}'::JSONB,
     status VARCHAR(32) NOT NULL DEFAULT 'pending',
     progress JSONB NOT NULL DEFAULT '[]'::JSONB,

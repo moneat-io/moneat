@@ -41,6 +41,7 @@ enum class AlertSource {
     HOST_ALERT,
     HOST_DOWN,
     UPTIME_MONITOR,
+    SYNTHETIC_TEST,
     ERROR_ALERT,
     DASHBOARD_ALERT
 }

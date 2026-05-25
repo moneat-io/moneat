@@ -777,7 +777,10 @@ function TriggerNode({
       tabIndex={0}
       onClick={onSelect}
       onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') onSelect()
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onSelect()
+        }
       }}
       className={cn(
         'w-full rounded-lg border bg-background p-4 text-left shadow-sm transition-colors hover:bg-muted/30',
@@ -953,7 +956,10 @@ function ConditionNode({
       tabIndex={0}
       onClick={onSelect}
       onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') onSelect()
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onSelect()
+        }
       }}
       className={cn(
         'overflow-hidden rounded-lg border bg-background text-left shadow-sm transition-colors hover:bg-muted/30',
@@ -1142,7 +1148,10 @@ function StepNode({
       tabIndex={0}
       onClick={onSelect}
       onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') onSelect()
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onSelect()
+        }
       }}
       className={cn(
         'overflow-hidden rounded-lg border bg-background text-left shadow-sm transition-colors hover:bg-muted/30',
