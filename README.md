@@ -6,7 +6,7 @@
 
 <p align="center">
   Open-source, self-hostable observability.<br>
-  Errors, replays, performance, logs, metrics, uptime, and incidents in one place.
+  Errors, replays, performance, logs, metrics, uptime, feature flags, and incidents in one place.
 </p>
 
 <p align="center">
@@ -95,6 +95,7 @@ Moneat is Sentry SDK, Datadog Agent, and OpenTelemetry (OTLP) compatible. Point 
 | Synthetics | API, multi-step, SSL, DNS, TCP, and UDP synthetic tests | [Docs](https://moneat.io/docs) |
 | Custom Dashboards | Drag-and-drop widgets, Grafana dashboard import | [Docs](https://moneat.io/docs) |
 | Product Analytics | Funnels, retention cohorts, event-based tracking | [Docs](https://moneat.io/docs) |
+| Feature Flags | OpenFeature-compatible flags with environment configs and remote evaluation | [Docs](https://moneat.io/docs/feature-flags) |
 | Releases | Crash-free rates, regression detection, source map upload | [Docs](https://moneat.io/docs) |
 | AI Observability | Trace and debug LLM calls | [Docs](https://moneat.io/docs) |
 | MCP Server | Model Context Protocol endpoint for AI coding assistants | [Docs](https://moneat.io/docs) |
