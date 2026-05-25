@@ -50,6 +50,8 @@ class DashboardCrudToolTest {
         sessionId = "dashboard-crud-tool-test"
     )
 
+    // ──── Setup ────
+
     @BeforeEach
     fun setupDatabase() {
         if (db == null) {
@@ -129,6 +131,8 @@ class DashboardCrudToolTest {
             )
         }
     }
+
+    // ──── Tests ────
 
     @Test
     fun `create dashboard alert accepts MCP condition and severity aliases`() = runBlocking {
@@ -212,6 +216,59 @@ class DashboardCrudToolTest {
         assertTrue("CRITICAL" in updateSeverityEnum)
     }
 
+    @Test
+    fun `create dashboard alert rejects unknown condition aliases`() = runBlocking {
+        val dashboardId = seedDashboard()
+        val widgetId = seedWidget(dashboardId)
+
+        val result = CreateDashboardAlertTool().execute(
+            JsonObject(
+                mapOf(
+                    "dashboard_id" to JsonPrimitive(dashboardId),
+                    "widget_id" to JsonPrimitive(widgetId),
+                    "name" to JsonPrimitive("CPU high"),
+                    "condition" to JsonPrimitive("above"),
+                    "threshold" to JsonPrimitive(0.85)
+                )
+            ),
+            context
+        )
+
+        assertTrue(result.isError)
+        assertEquals(
+            "Unknown dashboard alert condition: above",
+            result.content.first().text,
+        )
+    }
+
+    @Test
+    fun `create dashboard alert rejects unknown severity aliases`() = runBlocking {
+        val dashboardId = seedDashboard()
+        val widgetId = seedWidget(dashboardId)
+
+        val result = CreateDashboardAlertTool().execute(
+            JsonObject(
+                mapOf(
+                    "dashboard_id" to JsonPrimitive(dashboardId),
+                    "widget_id" to JsonPrimitive(widgetId),
+                    "name" to JsonPrimitive("CPU high"),
+                    "condition" to JsonPrimitive("gt"),
+                    "threshold" to JsonPrimitive(0.85),
+                    "incident_severity" to JsonPrimitive("SEV0")
+                )
+            ),
+            context
+        )
+
+        assertTrue(result.isError)
+        assertEquals(
+            "Unknown dashboard alert severity: SEV0",
+            result.content.first().text,
+        )
+    }
+
+    // ──── Helpers ────
+
     private fun seedDashboard(): Long = transaction {
         exec(
             """
@@ -269,6 +326,8 @@ class DashboardCrudToolTest {
             }
         }
     }
+
+    // ──── Companion ────
 
     companion object {
         private var db: Database? = null

@@ -222,6 +222,15 @@ class DashboardAlertServiceTest {
         return fn.callSuspend(service, *args)
     }
 
+    private fun callPrivate(name: String, vararg args: Any?): Any? {
+        val fn =
+            DashboardAlertService::class.declaredFunctions.single { f ->
+                f.name == name && f.parameters.drop(1).size == args.size
+            }
+        fn.isAccessible = true
+        return fn.call(service, *args)
+    }
+
     private fun seedDashboard(
         title: String = "Test Dashboard",
         projectId: Long? = DEFAULT_PROJECT_ID
@@ -287,6 +296,7 @@ class DashboardAlertServiceTest {
         id: Long = 10,
         sourceType: String = CustomDataSourceType.PROMETHEUS.name.lowercase(),
         enabled: Boolean = true,
+        hasCredentials: Boolean = false,
     ): CustomDataSourceResponse = CustomDataSourceResponse(
         id = id,
         orgId = ORG_ID,
@@ -299,7 +309,7 @@ class DashboardAlertServiceTest {
         createdBy = CREATED_BY,
         createdAt = Clock.System.now().toString(),
         updatedAt = Clock.System.now().toString(),
-        hasCredentials = false,
+        hasCredentials = hasCredentials,
     )
 
     // ──── createAlert tests ────
@@ -782,6 +792,130 @@ class DashboardAlertServiceTest {
                 queryEngine.executeQuery(any(), any(), any(), any())
             }
         }
+
+    @Test
+    fun `executeQueryForAlert rejects prometheus alias without enabled source`() =
+        runBlocking {
+            every { dataSourceService.listDataSources(ORG_ID) } returns emptyList()
+
+            assertFailsWith<IllegalStateException> {
+                service.executeQueryForAlert(
+                    orgId = ORG_ID,
+                    projectId = null,
+                    queryDsl = QueryDsl(
+                        dataSource = "__prometheus",
+                        rawQuery = "up",
+                    ),
+                )
+            }
+        }
+
+    @Test
+    fun `executeQueryForAlert rejects invalid custom datasource references`() =
+        runBlocking {
+            assertFailsWith<IllegalArgumentException> {
+                service.executeQueryForAlert(
+                    orgId = ORG_ID,
+                    projectId = null,
+                    queryDsl = QueryDsl(
+                        dataSource = "custom:not-a-number",
+                        rawQuery = "up",
+                    ),
+                )
+            }
+        }
+
+    @Test
+    fun `executeQueryForAlert rejects disabled custom datasource`() =
+        runBlocking {
+            every { dataSourceService.getDataSource(10, ORG_ID) } returns customDataSource(
+                id = 10,
+                enabled = false,
+            )
+
+            assertFailsWith<IllegalStateException> {
+                service.executeQueryForAlert(
+                    orgId = ORG_ID,
+                    projectId = null,
+                    queryDsl = QueryDsl(
+                        dataSource = "custom:10",
+                        rawQuery = "up",
+                    ),
+                )
+            }
+        }
+
+    @Test
+    fun `executeQueryForAlert rejects custom datasource query without raw query`() =
+        runBlocking {
+            every { dataSourceService.getDataSource(10, ORG_ID) } returns customDataSource(id = 10)
+
+            assertFailsWith<IllegalArgumentException> {
+                service.executeQueryForAlert(
+                    orgId = ORG_ID,
+                    projectId = null,
+                    queryDsl = QueryDsl(dataSource = "custom:10"),
+                )
+            }
+        }
+
+    @Test
+    fun `executeQueryForAlert rejects unsupported custom datasource type`() =
+        runBlocking {
+            every { dataSourceService.getDataSource(10, ORG_ID) } returns customDataSource(
+                id = 10,
+                sourceType = "unsupported",
+            )
+
+            assertFailsWith<IllegalStateException> {
+                service.executeQueryForAlert(
+                    orgId = ORG_ID,
+                    projectId = null,
+                    queryDsl = QueryDsl(
+                        dataSource = "custom:10",
+                        rawQuery = "up",
+                    ),
+                )
+            }
+        }
+
+    @Test
+    fun `executeQueryForAlert rejects missing credentials for credentialed datasource`() =
+        runBlocking {
+            every { dataSourceService.getDataSource(10, ORG_ID) } returns customDataSource(
+                id = 10,
+                hasCredentials = true,
+            )
+            every { dataSourceService.getDecryptedCredentials(10, ORG_ID) } returns null
+
+            assertFailsWith<IllegalStateException> {
+                service.executeQueryForAlert(
+                    orgId = ORG_ID,
+                    projectId = null,
+                    queryDsl = QueryDsl(
+                        dataSource = "custom:10",
+                        rawQuery = "up",
+                    ),
+                )
+            }
+        }
+
+    @Test
+    fun `extractMetricValue scans fallback row fields for numeric values`() {
+        val result = callPrivate(
+            "extractMetricValue",
+            listOf(
+                mapOf(
+                    "worker" to JsonPrimitive("primary"),
+                    "value" to JsonPrimitive(0.25),
+                )
+            ),
+            QueryDsl(dataSource = "custom:10"),
+            0,
+        )
+
+        assertEquals(0.25, result)
+    }
 
     // ──── CRUD round-trip ────
 

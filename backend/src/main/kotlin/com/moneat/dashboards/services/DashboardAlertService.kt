@@ -407,22 +407,23 @@ class DashboardAlertService(
         dataSource: String
     ): CustomDataSourceResponse? {
         if (dataSource == "__prometheus") {
-            return dataSourceService.listDataSources(orgId)
-                .firstOrNull { source ->
-                    source.enabled &&
-                        CustomDataSourceType.fromString(source.sourceType) == CustomDataSourceType.PROMETHEUS
-                }
-                ?: throw IllegalArgumentException("No enabled Prometheus data source configured")
+            return checkNotNull(
+                dataSourceService.listDataSources(orgId)
+                    .firstOrNull { source ->
+                        source.enabled &&
+                            CustomDataSourceType.fromString(source.sourceType) == CustomDataSourceType.PROMETHEUS
+                    }
+            ) { "No enabled Prometheus data source configured" }
         }
         if (!dataSource.startsWith("custom:")) return null
 
-        val sourceId = dataSource.removePrefix("custom:").toLongOrNull()
-            ?: throw IllegalArgumentException("Invalid custom data source reference: $dataSource")
-        val source = dataSourceService.getDataSource(sourceId, orgId)
-            ?: throw IllegalArgumentException("Custom data source not found: $sourceId")
-        if (!source.enabled) {
-            throw IllegalArgumentException("Custom data source is disabled: $sourceId")
+        val sourceId = requireNotNull(dataSource.removePrefix("custom:").toLongOrNull()) {
+            "Invalid custom data source reference: $dataSource"
         }
+        val source = checkNotNull(dataSourceService.getDataSource(sourceId, orgId)) {
+            "Custom data source not found: $sourceId"
+        }
+        check(source.enabled) { "Custom data source is disabled: $sourceId" }
         return source
     }
 
@@ -431,18 +432,17 @@ class DashboardAlertService(
         dataSource: CustomDataSourceResponse,
         queryDsl: QueryDsl
     ): List<Map<String, JsonElement>> {
-        val sourceType = CustomDataSourceType.fromString(dataSource.sourceType)
-            ?: throw IllegalArgumentException("Unsupported data source type: ${dataSource.sourceType}")
-        val rawQuery = queryDsl.rawQuery?.takeIf { it.isNotBlank() }
-            ?: throw IllegalArgumentException("Custom data source dashboard alerts require rawQuery")
-        val credentials = dataSourceService.getDecryptedCredentials(dataSource.id, orgId)
-            ?: if (dataSource.hasCredentials) {
-                throw IllegalArgumentException(
-                    "Failed to resolve credentials for custom data source: ${dataSource.id}"
-                )
-            } else {
-                DataSourceCredentials()
-            }
+        val sourceType = checkNotNull(CustomDataSourceType.fromString(dataSource.sourceType)) {
+            "Unsupported data source type: ${dataSource.sourceType}"
+        }
+        val rawQuery = requireNotNull(queryDsl.rawQuery?.takeIf { it.isNotBlank() }) {
+            "Custom data source dashboard alerts require rawQuery"
+        }
+        val resolvedCredentials = dataSourceService.getDecryptedCredentials(dataSource.id, orgId)
+        check(resolvedCredentials != null || !dataSource.hasCredentials) {
+            "Failed to resolve credentials for custom data source: ${dataSource.id}"
+        }
+        val credentials = resolvedCredentials ?: DataSourceCredentials()
 
         return dataSourceExecutor.executeQuery(
             sourceId = dataSource.id,
@@ -478,21 +478,20 @@ class DashboardAlertService(
         val targetAlias = metricAliases.getOrNull(metricIndexInQuery)
 
         return results.asReversed().firstNotNullOfOrNull { row ->
-            val targetByAlias = targetAlias?.let { row[it] }
-            if (targetByAlias is JsonPrimitive) {
-                return@firstNotNullOfOrNull targetByAlias.doubleOrNull ?: targetByAlias.content.toDoubleOrNull()
-            }
+            primitiveDouble(targetAlias?.let { row[it] })?.let { return@firstNotNullOfOrNull it }
 
             val metricValues = row.entries
                 .filter { (key, _) -> key !in setOf("time_bucket", "timestamp", "time", "day") }
                 .map { it.value }
 
-            val target = metricValues.getOrNull(metricIndexInQuery) ?: metricValues.firstOrNull()
-            when (target) {
-                is JsonPrimitive -> target.doubleOrNull ?: target.content.toDoubleOrNull()
-                else -> null
-            }
+            primitiveDouble(metricValues.getOrNull(metricIndexInQuery))
+                ?: metricValues.firstNotNullOfOrNull(::primitiveDouble)
         }
+    }
+
+    private fun primitiveDouble(value: JsonElement?): Double? = when (value) {
+        is JsonPrimitive -> value.doubleOrNull ?: value.content.toDoubleOrNull()
+        else -> null
     }
 
     private fun metricAliases(queryDsl: QueryDsl): List<String> {

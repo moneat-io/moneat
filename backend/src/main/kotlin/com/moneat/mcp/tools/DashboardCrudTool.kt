@@ -53,15 +53,19 @@ private fun dashboardAlertCondition(input: String): String = when (input) {
     "eq" -> "=="
     "gte" -> ">="
     "lte" -> "<="
-    else -> input
+    ">", "<", "==", ">=", "<=" -> input
+    else -> throw IllegalArgumentException("Unknown dashboard alert condition: $input")
 }
 
-private fun dashboardAlertSeverity(input: String?): String? = when (input?.uppercase()) {
-    "P0", "CRITICAL" -> "CRITICAL"
-    "P1", "HIGH" -> "HIGH"
-    "P2", "MEDIUM" -> "MEDIUM"
-    "P3", "P4", "P5", "LOW" -> "LOW"
-    else -> input
+private fun dashboardAlertSeverity(input: String?): String? {
+    if (input == null) return null
+    return when (input.uppercase()) {
+        "P0", "CRITICAL" -> "CRITICAL"
+        "P1", "HIGH" -> "HIGH"
+        "P2", "MEDIUM" -> "MEDIUM"
+        "P3", "P4", "P5", "LOW" -> "LOW"
+        else -> throw IllegalArgumentException("Unknown dashboard alert severity: $input")
+    }
 }
 
 class UpdateDashboardTool : McpTool {
@@ -198,15 +202,23 @@ class CreateDashboardAlertTool : McpTool {
         } else {
             0
         }
+        val normalizedCondition = try {
+            dashboardAlertCondition(condition)
+        } catch (e: IllegalArgumentException) {
+            return errorResult(e.message ?: "Invalid dashboard alert condition")
+        }
+        val normalizedSeverity = try {
+            dashboardAlertSeverity(args["incident_severity"]?.jsonPrimitive?.content)
+        } catch (e: IllegalArgumentException) {
+            return errorResult(e.message ?: "Invalid dashboard alert severity")
+        }
         val request = CreateDashboardAlertRequest(
             widgetId = widgetId,
             name = name,
-            condition = dashboardAlertCondition(condition),
+            condition = normalizedCondition,
             threshold = threshold,
             durationSeconds = durationSeconds,
-            incidentSeverity = dashboardAlertSeverity(
-                args["incident_severity"]?.jsonPrimitive?.content
-            )
+            incidentSeverity = normalizedSeverity
         )
         val alert = dashAlertService.createAlert(
             dashboardId = dashId,
@@ -273,9 +285,16 @@ class UpdateDashboardAlertTool : McpTool {
         } else {
             null
         }
-        val incidentSeverity = dashboardAlertSeverity(
-            args["incident_severity"]?.jsonPrimitive?.content
-        )
+        val normalizedCondition = try {
+            condition?.let(::dashboardAlertCondition)
+        } catch (e: IllegalArgumentException) {
+            return errorResult(e.message ?: "Invalid dashboard alert condition")
+        }
+        val incidentSeverity = try {
+            dashboardAlertSeverity(args["incident_severity"]?.jsonPrimitive?.content)
+        } catch (e: IllegalArgumentException) {
+            return errorResult(e.message ?: "Invalid dashboard alert severity")
+        }
         val enabled = if (args.containsKey("enabled")) {
             args["enabled"]?.jsonPrimitive?.content
                 ?.toBooleanStrictOrNull()
@@ -299,7 +318,7 @@ class UpdateDashboardAlertTool : McpTool {
         }
         val request = UpdateDashboardAlertRequest(
             name = name,
-            condition = condition?.let(::dashboardAlertCondition),
+            condition = normalizedCondition,
             threshold = threshold,
             durationSeconds = durationSeconds,
             incidentSeverity = incidentSeverity,
