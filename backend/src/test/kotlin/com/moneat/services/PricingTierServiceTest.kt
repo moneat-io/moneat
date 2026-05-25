@@ -208,6 +208,49 @@ class PricingTierServiceTest {
     }
 
     @Test
+    fun `createTierVersion normalizes fallback and optional unlimited limits`() {
+        seedTier("PRO", version = 1)
+
+        val safeUnlimitedLimit = 9_007_199_254_740_000L
+        val created =
+            service.createTierVersion(
+                "PRO",
+                CreateTierVersionRequest(
+                    monthlyUnitLimit = safeUnlimitedLimit,
+                    monthlyErrorLimit = 0,
+                    monthlyTransactionLimit = 100,
+                    monthlyReplayLimit = -1,
+                    monthlyFeedbackLimit = 200,
+                    monthlyLlmEventLimit = 300,
+                    monthlyGbLimit = 1_073_741_824,
+                    retentionDays = 7,
+                    logRetentionDays = 7,
+                    maxProjects = 5,
+                    maxSystems = 5,
+                    monitorIntervalSeconds = 60,
+                    monthlyPriceCents = 2900,
+                    yearlyPriceCents = 24900,
+                    trialDays = 14,
+                    paygEnabled = false,
+                    paygRateMicrosPerUnit = 0,
+                    monthlyApmSpanLimit = safeUnlimitedLimit,
+                    monthlyCustomMetricLimit = safeUnlimitedLimit,
+                    monthlyInfraMetricSeriesHourLimit = safeUnlimitedLimit
+                )
+            )
+
+        assertEquals(Long.MAX_VALUE, created.monthlyUnitLimit)
+        assertEquals(Long.MAX_VALUE, created.monthlyErrorLimit)
+        assertEquals(100, created.monthlyTransactionLimit)
+        assertEquals(-1, created.monthlyReplayLimit)
+        assertEquals(200, created.monthlyFeedbackLimit)
+        assertEquals(300, created.monthlyLlmEventLimit)
+        assertEquals(Long.MAX_VALUE, created.monthlyApmSpanLimit)
+        assertEquals(Long.MAX_VALUE, created.monthlyCustomMetricLimit)
+        assertEquals(Long.MAX_VALUE, created.monthlyInfraMetricSeriesHourLimit)
+    }
+
+    @Test
     fun `createTierVersion preserves infrastructure metric billing from current tier`() {
         seedTier(
             "PRO",
