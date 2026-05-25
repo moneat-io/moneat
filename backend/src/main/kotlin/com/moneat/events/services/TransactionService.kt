@@ -406,14 +406,14 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
     }
 
     suspend fun getTraceForTraceId(projectId: Long, traceId: String): EventTraceResponse? {
-        val trace = getTraceDetails(projectId, traceId)
+        val trace = getTraceDetails(projectId, traceId) ?: return null
         return EventTraceResponse(
             eventId = null,
             eventType = null,
             projectId = projectId,
             traceId = traceId,
             transaction = null,
-            spans = trace?.spans.orEmpty()
+            spans = trace.spans
         )
     }
 

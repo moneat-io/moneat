@@ -378,18 +378,13 @@ class TransactionServiceTest {
     }
 
     @Test
-    fun `getTraceForTraceId returns empty response when trace is missing`() = runBlocking {
+    fun `getTraceForTraceId returns null when trace is missing`() = runBlocking {
         withClickHouseMockServer({ exchange ->
             exchange.respond(200, "", CONTENT_TYPE_TEXT_PLAIN)
         }) {
             val trace = service.getTraceForTraceId(projectId = 1, traceId = "missing-trace")
 
-            assertNotNull(trace)
-            assertNull(trace.eventId)
-            assertNull(trace.eventType)
-            assertEquals(1, trace.projectId)
-            assertEquals("missing-trace", trace.traceId)
-            assertTrue(trace.spans.isEmpty())
+            assertNull(trace)
         }
     }
 
