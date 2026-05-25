@@ -412,6 +412,35 @@ class McpToolValidationTest {
                 obj("alert_source" to "host_alert", "email_enabled" to "yes"),
                 "email_enabled must be a boolean",
             ),
+            case("create_feature_flag_key", CreateFeatureFlagTool(), obj(), "key is required"),
+            case(
+                "create_feature_flag_value_type",
+                CreateFeatureFlagTool(),
+                obj("key" to "checkout.enabled", "name" to "Checkout Enabled"),
+                "value_type must be one of",
+            ),
+            case(
+                "create_feature_flag_variants",
+                CreateFeatureFlagTool(),
+                obj(
+                    "key" to "checkout.enabled",
+                    "name" to "Checkout Enabled",
+                    "value_type" to "BOOLEAN",
+                ),
+                "variants is required",
+            ),
+            case(
+                "create_feature_flag_variants_format",
+                CreateFeatureFlagTool(),
+                obj(
+                    "key" to "checkout.enabled",
+                    "name" to "Checkout Enabled",
+                    "value_type" to "BOOLEAN",
+                    "variants" to "bad",
+                    "client_visible" to "yes",
+                ),
+                "variants must be an array",
+            ),
         )
     }
 
