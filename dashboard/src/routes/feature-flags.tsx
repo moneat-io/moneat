@@ -44,6 +44,7 @@ import {useToast} from '@/hooks/useToast'
 import {cn} from '@/lib/utils'
 import {
   BarChart3,
+  BookOpen,
   Check,
   ChevronDown,
   Flag,
@@ -517,6 +518,12 @@ val enabled = client.getBooleanValue("checkout.enabled", false, evaluationContex
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button asChild variant="outline" size="sm" className="h-9 gap-2">
+              <a href="/docs/feature-flags">
+                <BookOpen className="h-4 w-4" />
+                Docs
+              </a>
+            </Button>
             <TooltipWrap content={tooltipText.environment}>
               <div>
                 <Select value={environment} onValueChange={setEnvironment}>
