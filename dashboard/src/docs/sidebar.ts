@@ -61,7 +61,7 @@ export const docsSidebar: SidebarCategory[] = [
   {
     label: 'Reliability',
     collapsed: false,
-    items: ['on-call', 'uptime-monitoring', 'status-pages'],
+    items: ['on-call', 'workflows', 'uptime-monitoring', 'status-pages'],
   },
   {
     label: 'Configuration',

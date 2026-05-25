@@ -34,6 +34,7 @@ import com.moneat.shared.repositories.MembershipRepository
 import com.moneat.shared.repositories.OrganizationRepository
 import com.moneat.shared.services.SidebarPreferenceService
 import com.moneat.utils.SentryUtils
+import com.moneat.workflows.services.WorkflowService
 import io.ktor.server.config.ApplicationConfig
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
@@ -76,6 +77,7 @@ class AuthService(
     private val organizationRepository: OrganizationRepository,
     private val emailService: EmailService = EmailService(),
     private val refreshTokenService: RefreshTokenService = RefreshTokenService(),
+    private val workflowService: WorkflowService = WorkflowService(),
 ) {
     companion object {
         private const val VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000L
@@ -318,6 +320,7 @@ class AuthService(
                     it[name] = "${request.name ?: request.email}'s Organization"
                     it[slug] = "org-${UUID.randomUUID().toString().take(ORG_SLUG_RANDOM_SUFFIX_LENGTH)}"
                 }[Organizations.id]
+            workflowService.ensureDefaultWorkflowsForOrganization(orgId)
             Memberships.insert {
                 it[user_id] = userId
                 it[organization_id] = orgId

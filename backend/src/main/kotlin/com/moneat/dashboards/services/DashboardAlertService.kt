@@ -32,13 +32,10 @@ import com.moneat.incident.models.IncidentEvent
 import com.moneat.incident.models.IncidentSeverity
 import com.moneat.incident.models.IncidentStatus
 import com.moneat.incident.services.IncidentService
-import com.moneat.notifications.services.AlertNotificationPreferencesService
-import com.moneat.notifications.services.DiscordService
-import com.moneat.notifications.services.EmailService
-import com.moneat.notifications.services.SlackService
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.shared.services.TaskLock
 import com.moneat.utils.suspendRunCatching
+import com.moneat.workflows.services.WorkflowService
 import io.ktor.server.config.ApplicationConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -80,11 +77,8 @@ private data class AlertThresholdHit(
 )
 
 class DashboardAlertService(
-    private val emailService: EmailService = EmailService(),
-    private val slackService: SlackService = SlackService(),
-    private val discordService: DiscordService = DiscordService(),
     private val incidentService: IncidentService = IncidentService(),
-    private val prefsService: AlertNotificationPreferencesService = AlertNotificationPreferencesService(),
+    private val workflowService: WorkflowService = WorkflowService(),
     private val queryEngine: DashboardQueryEngine = DashboardQueryEngine(),
     private val retentionPolicyService: RetentionPolicyService = RetentionPolicyService(),
     private val dataSourceService: CustomDataSourceService = CustomDataSourceService(),
@@ -374,12 +368,17 @@ class DashboardAlertService(
                 it[lastValue] = currentValue
             }
         }
-        sendRecoveryNotification(alert, currentValue)
+
+        val baseUrl = config.property("email.frontendUrl").getString()
         suspendRunCatching {
             incidentService.autoResolveAlert(
                 organizationId = alert.orgId.toInt(),
                 source = AlertSource.DASHBOARD_ALERT,
-                deduplicationKey = "moneat-dashboard-alert-${alert.alertId}"
+                deduplicationKey = "moneat-dashboard-alert-${alert.alertId}",
+                title = "Dashboard Alert Resolved: ${alert.name}",
+                description = "${alert.widgetTitle} on ${alert.dashboardTitle} recovered. " +
+                    "Current value: ${"%.2f".format(currentValue)}",
+                moneatUrl = "$baseUrl/dashboards/${alert.dashboardId}"
             )
         }.onFailure { e ->
             logger.error(e) { "Failed to resolve incident for recovered dashboard alert ${alert.alertId}" }
@@ -641,178 +640,40 @@ class DashboardAlertService(
         trigger: AlertThresholdHit
     ) {
         val orgId = alert.orgId.toInt()
-        val channels = alert.notificationChannels
         val baseUrl = config.property("email.frontendUrl").getString()
         val formattedValue = "%.2f".format(currentValue)
         val formattedThreshold = "%.2f".format(trigger.threshold)
-        val conditionText = getConditionText(alert.condition)
-        val alertName = "${trigger.level.label}: ${alert.name}"
-        val severity = when (trigger.level) {
+
+        val incidentSeverity =
+            if (trigger.level == DashboardAlertLevel.ERROR) {
+                alert.incidentSeverity?.let { IncidentSeverity.fromString(it) }
+            } else {
+                null
+            }
+        val workflowSeverity = incidentSeverity ?: when (trigger.level) {
             DashboardAlertLevel.WARNING -> IncidentSeverity.LOW
-            DashboardAlertLevel.ERROR -> IncidentSeverity.fromString(alert.incidentSeverity)
+            DashboardAlertLevel.ERROR -> IncidentSeverity.HIGH
         }
-        val severityName = severity?.name ?: alert.incidentSeverity
+        val event =
+            IncidentEvent(
+                title = "Dashboard ${trigger.level.label}: ${alert.name}",
+                description = "${alert.widgetTitle} on ${alert.dashboardTitle}:" +
+                    " value $formattedValue ${alert.condition} $formattedThreshold",
+                severity = workflowSeverity,
+                status = IncidentStatus.FIRING,
+                source = AlertSource.DASHBOARD_ALERT,
+                deduplicationKey = "moneat-dashboard-alert-${alert.alertId}",
+                organizationId = orgId,
+                moneatUrl = "$baseUrl/dashboards/${alert.dashboardId}"
+            )
 
-        if (channels.email) {
-            val recipients = prefsService.getUsersWithChannelEnabled(orgId, "DASHBOARD_ALERT", "email")
-            val subject = "📊 Dashboard ${trigger.level.label}: ${alert.name} - $conditionText $formattedThreshold"
-            for ((_, email) in recipients) {
-                suspendRunCatching {
-                    val htmlBody = buildAlertEmailHtml(alert, formattedValue, formattedThreshold, baseUrl, trigger)
-                    val textBody = buildAlertEmailText(alert, formattedValue, formattedThreshold, baseUrl, trigger)
-                    emailService.sendEmail(email, subject, htmlBody, textBody, "dashboard_alert")
-                }.onFailure { e ->
-                    logger.error(e) { "Failed to send dashboard alert email to $email" }
-                }
+        suspendRunCatching {
+            workflowService.publishAlertTriggered(event)
+            if (incidentSeverity != null) {
+                incidentService.fireAlert(event.copy(severity = incidentSeverity), publishWorkflow = false)
             }
-        }
-
-        if (channels.slack) {
-            val slackEnabled = prefsService.getUsersWithChannelEnabled(orgId, "DASHBOARD_ALERT", "slack").isNotEmpty()
-            if (slackEnabled) {
-                suspendRunCatching {
-                    slackService.sendDashboardAlert(
-                        organizationId = orgId, alertName = alertName,
-                        dashboardTitle = alert.dashboardTitle, widgetTitle = alert.widgetTitle,
-                        condition = alert.condition, threshold = formattedThreshold,
-                        currentValue = formattedValue, severity = severityName,
-                        dashboardId = alert.dashboardId, baseUrl = baseUrl
-                    )
-                }.onFailure { e ->
-                    logger.error(e) { "Failed to send Slack notification for dashboard alert" }
-                }
-            }
-        }
-
-        if (channels.discord) {
-            val discordEnabled = prefsService.getUsersWithChannelEnabled(
-                orgId,
-                "DASHBOARD_ALERT",
-                "discord"
-            ).isNotEmpty()
-            if (discordEnabled) {
-                suspendRunCatching {
-                    discordService.sendDashboardAlert(
-                        organizationId = orgId, alertName = alertName,
-                        dashboardTitle = alert.dashboardTitle, widgetTitle = alert.widgetTitle,
-                        condition = alert.condition, threshold = formattedThreshold,
-                        currentValue = formattedValue, severity = severityName,
-                        dashboardId = alert.dashboardId, baseUrl = baseUrl
-                    )
-                }.onFailure { e ->
-                    logger.error(e) { "Failed to send Discord notification for dashboard alert" }
-                }
-            }
-        }
-
-        if (severity != null) {
-            suspendRunCatching {
-                incidentService.fireAlert(
-                    IncidentEvent(
-                        title = "Dashboard ${trigger.level.label}: ${alert.name}",
-                        description = "${alert.widgetTitle} on ${alert.dashboardTitle}:" +
-                            " value $formattedValue ${alert.condition} $formattedThreshold",
-                        severity = severity,
-                        status = IncidentStatus.FIRING,
-                        source = AlertSource.DASHBOARD_ALERT,
-                        deduplicationKey = "moneat-dashboard-alert-${alert.alertId}",
-                        organizationId = orgId,
-                        moneatUrl = "$baseUrl/dashboards/${alert.dashboardId}"
-                    )
-                )
-            }.onFailure { e ->
-                logger.error(e) { "Failed to trigger incident for dashboard alert" }
-            }
-        }
-    }
-
-    private fun sendRecoveryNotification(alert: AlertContext, currentValue: Double) {
-        val orgId = alert.orgId.toInt()
-        val channels = alert.notificationChannels
-        val baseUrl = config.property("email.frontendUrl").getString()
-        val formattedValue = "%.2f".format(currentValue)
-
-        if (channels.email) {
-            val recipients = prefsService.getUsersWithChannelEnabled(orgId, "DASHBOARD_ALERT", "email")
-            val subject = "✅ Dashboard Alert Resolved: ${alert.name}"
-            for ((_, email) in recipients) {
-                suspendRunCatching {
-                    val htmlBody = """
-                        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto;">
-                            <div style="background: #059669; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
-                                <h2 style="margin: 0;">✅ Dashboard Alert Resolved: ${alert.name}</h2>
-                            </div>
-                            <div style="background: white; padding: 20px; border: 1px solid #e5e7eb; border-top: none;">
-                                <p><strong>Dashboard:</strong> ${alert.dashboardTitle}</p>
-                                <p><strong>Widget:</strong> ${alert.widgetTitle}</p>
-                                <p>Current Value: <strong>$formattedValue</strong></p>
-                                <a href="$baseUrl/dashboards/${alert.dashboardId}" style="display: inline-block; background: #059669; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none;">View Dashboard</a>
-                            </div>
-                        </div>
-                    """.trimIndent()
-                    val textBody = "✅ Dashboard Alert Resolved: ${alert.name}\n" +
-                        "Dashboard: ${alert.dashboardTitle}\nWidget: ${alert.widgetTitle}\n" +
-                        "Current Value: $formattedValue\nView: $baseUrl/dashboards/${alert.dashboardId}"
-                    emailService.sendEmail(email, subject, htmlBody, textBody, "dashboard_alert_recovery")
-                }.onFailure { e ->
-                    logger.error(e) { "Failed to send dashboard alert recovery email to $email" }
-                }
-            }
-        }
-    }
-
-    private fun buildAlertEmailHtml(
-        alert: AlertContext,
-        value: String,
-        threshold: String,
-        baseUrl: String,
-        trigger: AlertThresholdHit
-    ): String {
-        return """
-            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto;">
-                <div style="background: #7c3aed; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
-                    <h2 style="margin: 0;">📊 Dashboard ${trigger.level.label}: ${alert.name}</h2>
-                </div>
-                <div style="background: white; padding: 20px; border: 1px solid #e5e7eb; border-top: none;">
-                    <p><strong>Dashboard:</strong> ${alert.dashboardTitle}</p>
-                    <p><strong>Widget:</strong> ${alert.widgetTitle}</p>
-                    <div style="background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 8px; padding: 16px; text-align: center; margin: 16px 0;">
-                        <p style="font-size: 32px; font-weight: bold; color: #7c3aed; margin: 0;">$value</p>
-                        <p style="color: #6b7280; margin: 4px 0 0 0;">Threshold: ${alert.condition} $threshold</p>
-                    </div>
-                    <a href="$baseUrl/dashboards/${alert.dashboardId}" style="display: inline-block; background: #7c3aed; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none;">View Dashboard</a>
-                </div>
-            </div>
-        """.trimIndent()
-    }
-
-    private fun buildAlertEmailText(
-        alert: AlertContext,
-        value: String,
-        threshold: String,
-        baseUrl: String,
-        trigger: AlertThresholdHit
-    ): String {
-        return """
-            📊 Dashboard ${trigger.level.label}: ${alert.name}
-            
-            Dashboard: ${alert.dashboardTitle}
-            Widget: ${alert.widgetTitle}
-            Current Value: $value
-            Threshold: ${alert.condition} $threshold
-            
-            View Dashboard: $baseUrl/dashboards/${alert.dashboardId}
-        """.trimIndent()
-    }
-
-    private fun getConditionText(condition: String): String {
-        return when (condition) {
-            ">" -> "exceeded"
-            "<" -> "dropped below"
-            ">=" -> "reached or exceeded"
-            "<=" -> "reached or dropped below"
-            "==" -> "is exactly"
-            else -> condition
+        }.onFailure { e ->
+            logger.error(e) { "Failed to publish dashboard alert workflow" }
         }
     }
 

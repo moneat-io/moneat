@@ -45,6 +45,7 @@ import net.javacrumbs.shedlock.provider.exposed.ExposedLockProvider
 import org.koin.core.context.GlobalContext
 import kotlin.time.Duration.Companion.hours
 import com.moneat.utils.suspendRunCatching
+import com.moneat.workflows.services.WorkflowExecutionWorker
 
 private val logger = KotlinLogging.logger {}
 private const val DEFAULT_WORKER_THREADS = 4
@@ -126,6 +127,7 @@ fun Application.configureBackgroundJobs() {
         otlpMetricsDlqKey,
         otlpMetricsWorkerCount
     )
+    val workflowExecutionWorker = WorkflowExecutionWorker(workflowService = koin.get())
 
     // Create a coroutine scope for background jobs
     val jobScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -144,6 +146,7 @@ fun Application.configureBackgroundJobs() {
     llmIngestionWorker.start()
     otlpTraceIngestionWorker.start()
     otlpMetricsIngestionWorker.start()
+    workflowExecutionWorker.start()
 
     // Start enterprise background jobs (SSO, On-Call, etc.) if modules are present
     FeatureRegistry.startBackgroundJobs(this)
@@ -187,6 +190,7 @@ fun Application.configureBackgroundJobs() {
             otlpTraceIngestionWorker.stop()
             otlpMetricsIngestionWorker.stop()
         }
+        workflowExecutionWorker.stop()
         pulseService?.stop()
         FeatureRegistry.stopBackgroundJobs()
 

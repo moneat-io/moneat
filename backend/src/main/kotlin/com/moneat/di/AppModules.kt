@@ -99,6 +99,7 @@ import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import com.moneat.uptime.services.UptimeCheckExecutor
 import com.moneat.uptime.services.UptimeScheduler
 import com.moneat.uptime.services.UptimeService
+import com.moneat.workflows.services.WorkflowService
 import org.koin.dsl.module
 
 /** Shared cross-domain singletons: notification channels, pricing, retention, shared repositories. */
@@ -110,7 +111,8 @@ val sharedModule = module {
     single { SlackService() }
     single { DiscordService() }
     single { AlertNotificationPreferencesService() }
-    single { IncidentService() }
+    single { WorkflowService(get(), get(), get()) }
+    single { IncidentService(get()) }
 
     single { PricingTierService() }
     single { BillingQuotaService(get()) }
@@ -136,6 +138,7 @@ val authModule = module {
             organizationRepository = get(),
             emailService = get(),
             refreshTokenService = get(),
+            workflowService = get(),
         )
     }
     single { AccountDeletionService(get(), get()) }
@@ -185,7 +188,7 @@ val eventsModule = module {
     }
 
     single { ReleaseService() }
-    single { NotificationService(get(), get(), get()) }
+    single { NotificationService(get(), get()) }
     single { EventService(get(), get(), get()) }
     single { DashboardService(get(), get(), get()) }
 }
@@ -196,9 +199,9 @@ val monitorModule = module {
     single<HostAlertRepository> { HostAlertRepositoryImpl() }
 
     single { MonitorService(get(), get(), get(), get()) }
-    single { MonitorAlertService(get(), get(), get(), get()) }
+    single { MonitorAlertService(get(), get()) }
     single { AgentApiKeyService() }
-    single { SyntheticsService(get(), get(), get(), get(), get()) }
+    single { SyntheticsService(get(), get()) }
 }
 
 /** Log ingestion and querying. */
@@ -216,7 +219,7 @@ val uptimeModule = module {
 
     single { UptimeService(get(), get()) }
     single { UptimeCheckExecutor() }
-    single { UptimeScheduler(get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { UptimeScheduler(get(), get(), get(), get()) }
     single { StatusPageService(get()) }
 }
 
@@ -229,11 +232,8 @@ val dashboardsModule = module {
     single { DashboardQueryEngine() }
     single {
         DashboardAlertService(
-            emailService = get(),
-            slackService = get(),
-            discordService = get(),
             incidentService = get(),
-            prefsService = get(),
+            workflowService = get(),
             queryEngine = get(),
             retentionPolicyService = get(),
             dataSourceService = get(),

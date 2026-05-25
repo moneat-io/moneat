@@ -19,10 +19,6 @@ package com.moneat.uptime.services
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.incident.models.AlertSource
 import com.moneat.incident.services.IncidentService
-import com.moneat.notifications.services.AlertNotificationPreferencesService
-import com.moneat.notifications.services.DiscordService
-import com.moneat.notifications.services.EmailService
-import com.moneat.notifications.services.SlackService
 import com.moneat.shared.services.TaskLock
 import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import com.moneat.utils.suspendRunCatching
@@ -54,11 +50,7 @@ private val logger = KotlinLogging.logger {}
 class UptimeScheduler(
     private val uptimeService: UptimeService = UptimeService(BillingQuotaService(), UptimeMonitorRepositoryImpl()),
     private val checkExecutor: UptimeCheckExecutor = UptimeCheckExecutor(),
-    private val slackService: SlackService = SlackService(),
-    private val discordService: DiscordService = DiscordService(),
     private val incidentService: IncidentService = IncidentService(),
-    private val emailService: EmailService = EmailService(),
-    private val prefsService: AlertNotificationPreferencesService = AlertNotificationPreferencesService(),
     private val billingQuotaService: BillingQuotaService = BillingQuotaService(),
 ) {
     companion object {
@@ -298,93 +290,6 @@ class UptimeScheduler(
             io.ktor.server.config
                 .ApplicationConfig("application.conf")
         val baseUrl = config.property("email.frontendUrl").getString()
-        val monitorUrl = "$baseUrl/uptime/${monitor.id}"
-        // Send email notifications
-        suspendRunCatching {
-            val emailRecipients =
-                prefsService.getUsersWithChannelEnabled(
-                    organizationId = monitor.organizationId,
-                    alertSource = "UPTIME_MONITOR",
-                    channel = "email"
-                )
-
-            emailRecipients.forEach { (_, email) ->
-                scope.launch {
-                    suspendRunCatching {
-                        emailService.sendUptimeAlertEmail(
-                            to = email,
-                            monitorName = monitor.name,
-                            status = newStatus,
-                            message = result.message,
-                            monitorUrl = monitorUrl
-                        )
-                    }.onFailure { e ->
-                        logger.error(e) { "Failed to send uptime alert email to $email" }
-                    }
-                }
-            }
-        }.onFailure { e ->
-            logger.error(e) { "Failed to send uptime alert emails" }
-        }
-
-        // Send Slack notification
-        val slackEnabled =
-            suspendRunCatching {
-                prefsService
-                    .getUsersWithChannelEnabled(
-                        organizationId = monitor.organizationId,
-                        alertSource = "UPTIME_MONITOR",
-                        channel = "slack"
-                    ).isNotEmpty()
-            }.getOrElse { e ->
-                logger.error(e) { "Failed to evaluate Slack notification preferences for uptime monitor" }
-                false
-            }
-        if (slackEnabled) {
-            suspendRunCatching {
-                slackService.sendUptimeAlert(
-                    organizationId = monitor.organizationId,
-                    monitorName = monitor.name,
-                    oldStatus = oldStatus,
-                    newStatus = newStatus,
-                    message = result.message,
-                    monitorId = monitor.id,
-                    baseUrl = baseUrl
-                )
-            }.onFailure { e ->
-                logger.error(e) { "Failed to send Slack notification for uptime monitor status change" }
-            }
-        }
-
-        // Send Discord notification
-        val discordEnabled =
-            suspendRunCatching {
-                prefsService
-                    .getUsersWithChannelEnabled(
-                        organizationId = monitor.organizationId,
-                        alertSource = "UPTIME_MONITOR",
-                        channel = "discord"
-                    ).isNotEmpty()
-            }.getOrElse { e ->
-                logger.error(e) { "Failed to evaluate Discord notification preferences for uptime monitor" }
-                false
-            }
-        if (discordEnabled) {
-            suspendRunCatching {
-                discordService.sendUptimeAlert(
-                    organizationId = monitor.organizationId,
-                    monitorUrl = monitor.url ?: "N/A",
-                    isDown = newStatus == "down",
-                    statusCode = result.statusCode,
-                    responseTime = result.responseTimeMs.toLong(),
-                    errorMessage = if (result.message.isNotBlank()) result.message else null,
-                    monitorId = monitor.id,
-                    baseUrl = baseUrl
-                )
-            }.onFailure { e ->
-                logger.error(e) { "Failed to send Discord notification for uptime monitor status change" }
-            }
-        }
 
         // Fire or resolve incident alert
         suspendRunCatching {
@@ -426,7 +331,10 @@ class UptimeScheduler(
                 incidentService.autoResolveAlert(
                     organizationId = monitor.organizationId,
                     source = AlertSource.UPTIME_MONITOR,
-                    deduplicationKey = "moneat-uptime-${monitor.id}"
+                    deduplicationKey = "moneat-uptime-${monitor.id}",
+                    title = "Uptime Monitor Recovered: ${monitor.name}",
+                    description = "Monitor '${monitor.name}' (${monitor.type}) is back up.",
+                    moneatUrl = "$baseUrl/uptime/${monitor.id}"
                 )
             }
         }.onFailure { e ->

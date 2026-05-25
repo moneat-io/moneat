@@ -19,13 +19,14 @@ package com.moneat.synthetics.routes
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
-import com.moneat.notifications.services.AlertNotificationPreferencesService
-import com.moneat.notifications.services.DiscordService
-import com.moneat.notifications.services.EmailService
-import com.moneat.notifications.services.SlackService
+import com.moneat.incident.models.AlertSource
+import com.moneat.incident.models.IncidentEvent
+import com.moneat.incident.models.IncidentSeverity
+import com.moneat.incident.models.IncidentStatus
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import com.moneat.workflows.services.WorkflowService
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -54,11 +55,8 @@ import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 /** Manages synthetic HTTP checks, variables, execution, and ClickHouse result storage. */
 class SyntheticsService(
-    private val emailService: EmailService = EmailService(),
-    private val slackService: SlackService = SlackService(),
-    private val discordService: DiscordService = DiscordService(),
-    private val prefsService: AlertNotificationPreferencesService = AlertNotificationPreferencesService(),
     private val billingQuotaService: BillingQuotaService = BillingQuotaService(),
+    private val workflowService: WorkflowService = WorkflowService(),
 ) {
     companion object {
         private val logger = KotlinLogging.logger {}
@@ -364,7 +362,7 @@ class SyntheticsService(
         return lastResult!!
     }
 
-    private fun sendFailureAlert(
+    private suspend fun sendFailureAlert(
         test: SyntheticTestData,
         result: SyntheticCheckResult
     ) {
@@ -380,59 +378,18 @@ class SyntheticsService(
             "https://moneat.io"
         )
 
-        val emailRecipients = prefsService.getUsersWithChannelEnabled(
-            organizationId = test.organizationId,
-            alertSource = "UPTIME_MONITOR",
-            channel = "email"
-        )
-        emailRecipients.forEach { (_, email) ->
-            emailService.sendUptimeAlertEmail(
-                to = email,
-                monitorName = test.name,
-                status = "down",
-                message = message,
-                monitorUrl = "$frontendUrl/synthetics/${test.id}"
+        workflowService.publishAlertTriggered(
+            IncidentEvent(
+                title = subject,
+                description = message,
+                severity = IncidentSeverity.HIGH,
+                status = IncidentStatus.FIRING,
+                source = AlertSource.UPTIME_MONITOR,
+                deduplicationKey = "moneat-synthetic-${test.id}",
+                organizationId = test.organizationId,
+                moneatUrl = "$frontendUrl/synthetics/${test.id}"
             )
-        }
-
-        val slackEnabled = prefsService.getUsersWithChannelEnabled(
-            organizationId = test.organizationId,
-            alertSource = "UPTIME_MONITOR",
-            channel = "slack"
-        ).isNotEmpty()
-        if (slackEnabled) {
-            runScope.launch {
-                slackService.sendUptimeAlert(
-                    organizationId = test.organizationId,
-                    monitorName = test.name,
-                    oldStatus = "passing",
-                    newStatus = "failing",
-                    message = message,
-                    monitorId = test.id,
-                    baseUrl = frontendUrl
-                )
-            }
-        }
-
-        val discordEnabled = prefsService.getUsersWithChannelEnabled(
-            organizationId = test.organizationId,
-            alertSource = "UPTIME_MONITOR",
-            channel = "discord"
-        ).isNotEmpty()
-        if (discordEnabled) {
-            runScope.launch {
-                discordService.sendUptimeAlert(
-                    organizationId = test.organizationId,
-                    monitorUrl = test.url ?: test.name,
-                    isDown = true,
-                    statusCode = null,
-                    responseTime = result.durationMs,
-                    errorMessage = result.errorMessage,
-                    monitorId = test.id,
-                    baseUrl = frontendUrl
-                )
-            }
-        }
+        )
     }
 
     private suspend fun recordResult(test: SyntheticTestData, result: SyntheticCheckResult) {

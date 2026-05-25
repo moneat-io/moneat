@@ -1,0 +1,217 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+package com.moneat.workflows.engine
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class WorkflowFieldConfig(
+    val type: String,
+    val placeholder: String? = null,
+    val multiline: Boolean = false
+)
+
+@Serializable
+data class WorkflowOperationDefinition(
+    val name: String,
+    val label: String,
+    @SerialName("value_type") val valueType: String? = null
+)
+
+@Serializable
+data class WorkflowResourceDefinition(
+    val type: String,
+    val label: String,
+    @SerialName("field_config") val fieldConfig: WorkflowFieldConfig,
+    val operations: List<WorkflowOperationDefinition>
+)
+
+@Serializable
+data class WorkflowScopeReferenceDefinition(
+    val name: String,
+    val label: String,
+    val type: String,
+    val description: String? = null
+)
+
+@Serializable
+data class WorkflowTriggerDefinition(
+    val name: String,
+    val label: String,
+    val description: String,
+    val scope: List<WorkflowScopeReferenceDefinition>,
+    @SerialName("default_once_for_template") val defaultOnceForTemplate: List<String>
+)
+
+@Serializable
+data class WorkflowStepParamDefinition(
+    val name: String,
+    val label: String,
+    val type: String,
+    val description: String? = null,
+    val required: Boolean = true
+)
+
+@Serializable
+data class WorkflowStepDefinition(
+    val name: String,
+    val label: String,
+    val description: String,
+    val params: List<WorkflowStepParamDefinition>
+)
+
+@Serializable
+data class WorkflowCatalogResponse(
+    val resources: List<WorkflowResourceDefinition>,
+    val triggers: List<WorkflowTriggerDefinition>,
+    val steps: List<WorkflowStepDefinition>
+)
+
+object WorkflowCatalog {
+    private val stringOperations = listOf(
+        WorkflowOperationDefinition("is_set", "is set"),
+        WorkflowOperationDefinition("is_not_set", "is not set"),
+        WorkflowOperationDefinition("eq", "is equal to", "String"),
+        WorkflowOperationDefinition("neq", "is not equal to", "String"),
+        WorkflowOperationDefinition("contains", "contains", "String"),
+        WorkflowOperationDefinition("not_contains", "does not contain", "String")
+    )
+
+    val resources = listOf(
+        WorkflowResourceDefinition(
+            type = "String",
+            label = "String",
+            fieldConfig = WorkflowFieldConfig(type = "text", placeholder = "Value"),
+            operations = stringOperations
+        ),
+        WorkflowResourceDefinition(
+            type = "Text",
+            label = "Text",
+            fieldConfig = WorkflowFieldConfig(type = "textarea", placeholder = "Message", multiline = true),
+            operations = stringOperations
+        ),
+        WorkflowResourceDefinition(
+            type = "Number",
+            label = "Number",
+            fieldConfig = WorkflowFieldConfig(type = "number", placeholder = "0"),
+            operations = listOf(
+                WorkflowOperationDefinition("eq", "is equal to", "Number"),
+                WorkflowOperationDefinition("neq", "is not equal to", "Number"),
+                WorkflowOperationDefinition("gt", "is greater than", "Number"),
+                WorkflowOperationDefinition("gte", "is greater than or equal to", "Number"),
+                WorkflowOperationDefinition("lt", "is less than", "Number"),
+                WorkflowOperationDefinition("lte", "is less than or equal to", "Number")
+            )
+        ),
+        WorkflowResourceDefinition(
+            type = "IncidentSeverity",
+            label = "Severity",
+            fieldConfig = WorkflowFieldConfig(type = "select", placeholder = "CRITICAL, HIGH, MEDIUM, LOW"),
+            operations = listOf(
+                WorkflowOperationDefinition("eq", "is equal to", "IncidentSeverity"),
+                WorkflowOperationDefinition("neq", "is not equal to", "IncidentSeverity"),
+                WorkflowOperationDefinition("at_least", "is at least", "IncidentSeverity")
+            )
+        ),
+        WorkflowResourceDefinition(
+            type = "AlertSource",
+            label = "Alert Source",
+            fieldConfig = WorkflowFieldConfig(type = "select", placeholder = "HOST_ALERT, UPTIME_MONITOR"),
+            operations = listOf(
+                WorkflowOperationDefinition("eq", "is equal to", "AlertSource"),
+                WorkflowOperationDefinition("neq", "is not equal to", "AlertSource")
+            )
+        ),
+        WorkflowResourceDefinition(
+            type = "IncidentStatus",
+            label = "Alert Status",
+            fieldConfig = WorkflowFieldConfig(type = "select", placeholder = "FIRING, RESOLVED"),
+            operations = listOf(
+                WorkflowOperationDefinition("eq", "is equal to", "IncidentStatus"),
+                WorkflowOperationDefinition("neq", "is not equal to", "IncidentStatus")
+            )
+        )
+    )
+
+    private val alertScope = listOf(
+        WorkflowScopeReferenceDefinition("alert.title", "Alert title", "String"),
+        WorkflowScopeReferenceDefinition("alert.description", "Alert description", "Text"),
+        WorkflowScopeReferenceDefinition("alert.severity", "Severity", "IncidentSeverity"),
+        WorkflowScopeReferenceDefinition("alert.status", "Status", "IncidentStatus"),
+        WorkflowScopeReferenceDefinition("alert.source", "Source", "AlertSource"),
+        WorkflowScopeReferenceDefinition("alert.deduplication_key", "Deduplication key", "String"),
+        WorkflowScopeReferenceDefinition("alert.url", "Moneat URL", "String"),
+        WorkflowScopeReferenceDefinition("organization.id", "Organization ID", "String")
+    )
+
+    val triggers = listOf(
+        WorkflowTriggerDefinition(
+            name = "alert.triggered",
+            label = "When an alert triggers",
+            description = "Runs when Moneat fires an alert lifecycle event.",
+            scope = alertScope,
+            defaultOnceForTemplate = listOf("alert.deduplication_key")
+        ),
+        WorkflowTriggerDefinition(
+            name = "alert.resolved",
+            label = "When an alert resolves",
+            description = "Runs when Moneat resolves an alert by deduplication key.",
+            scope = alertScope,
+            defaultOnceForTemplate = listOf("alert.deduplication_key", "alert.status")
+        )
+    )
+
+    val steps = listOf(
+        WorkflowStepDefinition(
+            name = "notification.email_org",
+            label = "Email organization members",
+            description = "Send a workflow email to verified members in the organization.",
+            params = listOf(
+                WorkflowStepParamDefinition("subject", "Subject", "String"),
+                WorkflowStepParamDefinition("body", "Body", "Text")
+            )
+        ),
+        WorkflowStepDefinition(
+            name = "notification.slack",
+            label = "Post to Slack",
+            description = "Post a message to the configured Slack alert channel.",
+            params = listOf(
+                WorkflowStepParamDefinition("message", "Message", "Text")
+            )
+        ),
+        WorkflowStepDefinition(
+            name = "notification.discord",
+            label = "Post to Discord",
+            description = "Post a message to the configured Discord alert channel.",
+            params = listOf(
+                WorkflowStepParamDefinition("title", "Title", "String", required = false),
+                WorkflowStepParamDefinition("message", "Message", "Text")
+            )
+        )
+    )
+
+    fun response(): WorkflowCatalogResponse =
+        WorkflowCatalogResponse(resources = resources, triggers = triggers, steps = steps)
+
+    fun trigger(name: String): WorkflowTriggerDefinition? = triggers.firstOrNull { it.name == name }
+
+    fun step(name: String): WorkflowStepDefinition? = steps.firstOrNull { it.name == name }
+
+    fun scopeType(triggerName: String, reference: String): String? =
+        trigger(triggerName)?.scope?.firstOrNull { it.name == reference }?.type
+}

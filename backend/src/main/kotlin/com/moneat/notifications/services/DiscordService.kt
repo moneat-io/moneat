@@ -165,6 +165,7 @@ class DiscordService(
         private const val DISCORD_COLOR_RED = 0xE01E5A
         private const val DISCORD_COLOR_GREEN = 0x2EB67D
         private const val DISCORD_COLOR_YELLOW = 0xECB22E
+        private const val DISCORD_COLOR_PURPLE = 0x6366F1
 
         /** Builds embed for host metric alerts. Exposed for unit testing. */
         internal fun buildHostAlertEmbed(p: DiscordService.HostAlertParams): DiscordEmbed =
@@ -531,6 +532,29 @@ class DiscordService(
                 channelId = config.channelId,
                 embed = embed,
                 fallbackText = "🐛 New Issue: $issueTitle in $projectName"
+        )
+        return success
+    }
+
+    suspend fun sendWorkflowMessage(
+        organizationId: Int,
+        title: String,
+        message: String,
+        skipIfUnconfigured: Boolean = false
+    ): Boolean {
+        val config = getDiscordConfig(organizationId) ?: return skipIfUnconfigured
+        val embed = DiscordEmbed(
+            title = title,
+            description = message,
+            color = DISCORD_COLOR_PURPLE,
+            footer = DiscordFooter("Moneat workflow"),
+            timestamp = Clock.System.now().toString()
+        )
+        val (success, _) =
+            sendMessage(
+                channelId = config.channelId,
+                embed = embed,
+                fallbackText = "$title: $message"
             )
         return success
     }

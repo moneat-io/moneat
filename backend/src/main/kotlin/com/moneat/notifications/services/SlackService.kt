@@ -322,6 +322,32 @@ class SlackService {
         return success
     }
 
+    suspend fun sendWorkflowMessage(
+        organizationId: Int,
+        message: String,
+        skipIfUnconfigured: Boolean = false
+    ): Boolean {
+        val config = getSlackConfig(organizationId) ?: return skipIfUnconfigured
+        val blocks = listOf(
+            SlackBlock(
+                type = "header",
+                text = SlackText(type = "plain_text", text = "Moneat workflow", emoji = true)
+            ),
+            SlackBlock(
+                type = "section",
+                text = SlackText(type = "mrkdwn", text = message)
+            )
+        )
+        val (success, _) =
+            sendMessage(
+                accessToken = config.accessToken,
+                channel = config.channelId,
+                blocks = blocks,
+                fallbackText = message
+            )
+        return success
+    }
+
     suspend fun sendHostDown(
         organizationId: Int,
         hostName: String,

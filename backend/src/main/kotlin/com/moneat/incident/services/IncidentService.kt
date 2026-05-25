@@ -28,6 +28,7 @@ import com.moneat.incident.models.IncidentStatus
 import com.moneat.incident.models.ProviderConfig
 import com.moneat.shared.models.EscalationPolicies
 import com.moneat.shared.models.EscalationPolicyAlertSources
+import com.moneat.workflows.services.WorkflowService
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
@@ -46,7 +47,9 @@ import com.moneat.utils.suspendRunCatching
  * Middleware service for dispatching incident alerts to configured providers.
  * Handles routing rule lookup, severity resolution, and event logging.
  */
-class IncidentService {
+class IncidentService(
+    private val workflowService: WorkflowService = WorkflowService()
+) {
     private val logger = LoggerFactory.getLogger(IncidentService::class.java)
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -64,13 +67,20 @@ class IncidentService {
      * Fire an alert to all enabled incident providers for the organization.
      * Severity is resolved in order: per-monitor override > routing rule default > skip
      */
-    suspend fun fireAlert(event: IncidentEvent) {
+    suspend fun fireAlert(
+        event: IncidentEvent,
+        publishWorkflow: Boolean = true
+    ) {
         suspendRunCatching {
             // Check if native on-call is enabled
             val onCallEnabled = EnvConfig.get("ONCALL_ENABLED", "false").toBoolean()
 
             if (onCallEnabled) {
                 triggerNativeEscalation(event)
+            }
+
+            if (publishWorkflow) {
+                workflowService.publishAlertTriggered(event)
             }
 
             val configs = getEnabledProviderConfigs(event.organizationId)
@@ -125,9 +135,24 @@ class IncidentService {
     suspend fun resolveAlert(
         organizationId: Int,
         source: AlertSource,
-        deduplicationKey: String
+        deduplicationKey: String,
+        title: String = "Alert resolved",
+        description: String = "Moneat resolved alert $deduplicationKey",
+        moneatUrl: String = "",
+        publishWorkflow: Boolean = true
     ) {
         suspendRunCatching {
+            if (publishWorkflow) {
+                workflowService.publishAlertResolved(
+                    organizationId = organizationId,
+                    source = source.name,
+                    deduplicationKey = deduplicationKey,
+                    title = title,
+                    description = description,
+                    moneatUrl = moneatUrl
+                )
+            }
+
             val configs = getEnabledProviderConfigs(organizationId)
             if (configs.isEmpty()) {
                 return
@@ -197,14 +222,18 @@ class IncidentService {
     suspend fun autoResolveAlert(
         organizationId: Int,
         source: AlertSource,
-        deduplicationKey: String
+        deduplicationKey: String,
+        title: String = "Alert resolved",
+        description: String = "Moneat resolved alert $deduplicationKey",
+        moneatUrl: String = "",
+        publishWorkflow: Boolean = true
     ) {
         if (!isAutoResolvableSource(source)) {
             logger.warn("Skipping auto-resolve for source without clear signal: $source")
             return
         }
 
-        resolveAlert(organizationId, source, deduplicationKey)
+        resolveAlert(organizationId, source, deduplicationKey, title, description, moneatUrl, publishWorkflow)
     }
 
     internal fun isAutoResolvableSource(source: AlertSource): Boolean {
