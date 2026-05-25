@@ -23,6 +23,7 @@ import com.moneat.mcp.models.McpContext
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
@@ -265,6 +266,96 @@ class DashboardCrudToolTest {
             "Unknown dashboard alert severity: SEV0",
             result.content.first().text,
         )
+    }
+
+    @Test
+    fun `create dashboard alert accepts remaining condition and severity aliases`() = runBlocking {
+        val dashboardId = seedDashboard()
+        val widgetId = seedWidget(dashboardId)
+        val conditionCases = listOf(
+            "lt" to "<",
+            "eq" to "==",
+            "lte" to "<=",
+            "<" to "<",
+            "==" to "==",
+            ">=" to ">=",
+        )
+        val severityCases = listOf(
+            "P2" to "MEDIUM",
+            "MEDIUM" to "MEDIUM",
+            "P3" to "LOW",
+            "P4" to "LOW",
+            "P5" to "LOW",
+            "LOW" to "LOW",
+            "HIGH" to "HIGH",
+            "CRITICAL" to "CRITICAL",
+        )
+
+        severityCases.forEachIndexed { index, severityCase ->
+            val conditionCase = conditionCases[index % conditionCases.size]
+            val result = CreateDashboardAlertTool().execute(
+                JsonObject(
+                    mapOf(
+                        "dashboard_id" to JsonPrimitive(dashboardId),
+                        "widget_id" to JsonPrimitive(widgetId),
+                        "name" to JsonPrimitive("Alias alert $index"),
+                        "condition" to JsonPrimitive(conditionCase.first),
+                        "threshold" to JsonPrimitive(index.toDouble()),
+                        "incident_severity" to JsonPrimitive(severityCase.first)
+                    )
+                ),
+                context
+            )
+
+            val response = decodeAlert(result.content.first().text!!)
+            assertFalse(result.isError)
+            assertEquals(conditionCase.second, response.condition)
+            assertEquals(severityCase.second, response.incidentSeverity)
+        }
+    }
+
+    @Test
+    fun `update dashboard alert rejects invalid validation inputs`() = runBlocking {
+        val dashboardId = seedDashboard()
+        val widgetId = seedWidget(dashboardId)
+        val created = decodeAlert(
+            CreateDashboardAlertTool().execute(
+                JsonObject(
+                    mapOf(
+                        "dashboard_id" to JsonPrimitive(dashboardId),
+                        "widget_id" to JsonPrimitive(widgetId),
+                        "name" to JsonPrimitive("Heap high"),
+                        "condition" to JsonPrimitive("gt"),
+                        "threshold" to JsonPrimitive(0.85)
+                    )
+                ),
+                context
+            ).content.first().text!!
+        )
+        val baseArgs: Map<String, JsonElement> = mapOf(
+            "dashboard_id" to JsonPrimitive(dashboardId),
+            "alert_id" to JsonPrimitive(created.id),
+        )
+        val cases: List<Pair<Map<String, JsonElement>, String>> = listOf(
+            mapOf("duration_seconds" to JsonPrimitive("soon")) to
+                "duration_seconds must be a valid integer",
+            mapOf("condition" to JsonPrimitive("above")) to
+                "Unknown dashboard alert condition: above",
+            mapOf("incident_severity" to JsonPrimitive("SEV0")) to
+                "Unknown dashboard alert severity: SEV0",
+            emptyMap<String, JsonElement>() to
+                "At least one field must be provided to update",
+        )
+
+        cases.forEach { (extraArgs, expectedMessage) ->
+            val result = UpdateDashboardAlertTool().execute(
+                JsonObject(baseArgs + extraArgs),
+                context
+            )
+
+            assertTrue(result.isError)
+            assertEquals(expectedMessage, result.content.first().text)
+        }
     }
 
     // ──── Helpers ────

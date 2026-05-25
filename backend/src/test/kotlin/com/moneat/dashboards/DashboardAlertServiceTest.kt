@@ -17,12 +17,14 @@
 package com.moneat.dashboards
 
 import com.moneat.config.RedisConfig
+import com.moneat.dashboards.models.AggFunction
 import com.moneat.dashboards.models.CreateDashboardAlertRequest
 import com.moneat.dashboards.models.CustomDataSourceResponse
 import com.moneat.dashboards.models.CustomDataSourceType
 import com.moneat.dashboards.models.DashboardWidgetAlerts
 import com.moneat.dashboards.models.DashboardWidgets
 import com.moneat.dashboards.models.Dashboards
+import com.moneat.dashboards.models.MetricDef
 import com.moneat.dashboards.models.NotificationChannels
 import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.UpdateDashboardAlertRequest
@@ -794,6 +796,27 @@ class DashboardAlertServiceTest {
         }
 
     @Test
+    fun `executeQueryForAlert executes built in datasource with default retention`() =
+        runBlocking {
+            val query = QueryDsl(dataSource = "events")
+            val rows = listOf(mapOf("total" to JsonPrimitive(7.0)))
+            coEvery {
+                retentionPolicyService.getRetentionDaysForProject(DEFAULT_PROJECT_ID)
+            } returns null
+            coEvery {
+                queryEngine.executeQuery(query, DEFAULT_PROJECT_ID, null, RECOVERY_RETENTION_DAYS)
+            } returns rows
+
+            val result = service.executeQueryForAlert(
+                orgId = ORG_ID,
+                projectId = DEFAULT_PROJECT_ID,
+                queryDsl = query,
+            )
+
+            assertEquals(rows, result)
+        }
+
+    @Test
     fun `executeQueryForAlert rejects prometheus alias without enabled source`() =
         runBlocking {
             every { dataSourceService.listDataSources(ORG_ID) } returns emptyList()
@@ -811,6 +834,44 @@ class DashboardAlertServiceTest {
         }
 
     @Test
+    fun `executeQueryForAlert selects first enabled prometheus datasource`() =
+        runBlocking {
+            val disabledPrometheus = customDataSource(id = 10, enabled = false)
+            val postgres = customDataSource(
+                id = 11,
+                sourceType = CustomDataSourceType.POSTGRESQL.name.lowercase(),
+            )
+            val prometheus = customDataSource(id = 12)
+            every { dataSourceService.listDataSources(ORG_ID) } returns listOf(
+                disabledPrometheus,
+                postgres,
+                prometheus,
+            )
+            every { dataSourceService.getDecryptedCredentials(12, ORG_ID) } returns null
+            coEvery {
+                dataSourceExecutor.executeQuery(
+                    sourceId = 12,
+                    sourceType = CustomDataSourceType.PROMETHEUS,
+                    host = prometheus.host,
+                    port = prometheus.port,
+                    databaseName = prometheus.databaseName,
+                    credentials = any(),
+                    query = "up",
+                    limit = any(),
+                    timeRange = any(),
+                )
+            } returns listOf(mapOf("value" to JsonPrimitive(1.0)))
+
+            val result = service.executeQueryForAlert(
+                orgId = ORG_ID,
+                projectId = null,
+                queryDsl = QueryDsl(dataSource = "__prometheus", rawQuery = "up"),
+            )
+
+            assertEquals(1.0, result.single()["value"]?.jsonPrimitive?.content?.toDouble())
+        }
+
+    @Test
     fun `executeQueryForAlert rejects invalid custom datasource references`() =
         runBlocking {
             assertFailsWith<IllegalArgumentException> {
@@ -819,6 +880,23 @@ class DashboardAlertServiceTest {
                     projectId = null,
                     queryDsl = QueryDsl(
                         dataSource = "custom:not-a-number",
+                        rawQuery = "up",
+                    ),
+                )
+            }
+        }
+
+    @Test
+    fun `executeQueryForAlert rejects missing custom datasource`() =
+        runBlocking {
+            every { dataSourceService.getDataSource(404, ORG_ID) } returns null
+
+            assertFailsWith<IllegalStateException> {
+                service.executeQueryForAlert(
+                    orgId = ORG_ID,
+                    projectId = null,
+                    queryDsl = QueryDsl(
+                        dataSource = "custom:404",
                         rawQuery = "up",
                     ),
                 )
@@ -855,6 +933,23 @@ class DashboardAlertServiceTest {
                     orgId = ORG_ID,
                     projectId = null,
                     queryDsl = QueryDsl(dataSource = "custom:10"),
+                )
+            }
+        }
+
+    @Test
+    fun `executeQueryForAlert rejects custom datasource query with blank raw query`() =
+        runBlocking {
+            every { dataSourceService.getDataSource(10, ORG_ID) } returns customDataSource(id = 10)
+
+            assertFailsWith<IllegalArgumentException> {
+                service.executeQueryForAlert(
+                    orgId = ORG_ID,
+                    projectId = null,
+                    queryDsl = QueryDsl(
+                        dataSource = "custom:10",
+                        rawQuery = "   ",
+                    ),
                 )
             }
         }
@@ -901,6 +996,39 @@ class DashboardAlertServiceTest {
         }
 
     @Test
+    fun `executeQueryForAlert uses resolved credentials for credentialed datasource`() =
+        runBlocking {
+            val source = customDataSource(id = 10, hasCredentials = true)
+            val credentials = DataSourceCredentials(apiKey = "secret")
+            every { dataSourceService.getDataSource(10, ORG_ID) } returns source
+            every { dataSourceService.getDecryptedCredentials(10, ORG_ID) } returns credentials
+            coEvery {
+                dataSourceExecutor.executeQuery(
+                    sourceId = 10,
+                    sourceType = CustomDataSourceType.PROMETHEUS,
+                    host = source.host,
+                    port = source.port,
+                    databaseName = source.databaseName,
+                    credentials = credentials,
+                    query = "up",
+                    limit = any(),
+                    timeRange = any(),
+                )
+            } returns listOf(mapOf("value" to JsonPrimitive(1.0)))
+
+            val result = service.executeQueryForAlert(
+                orgId = ORG_ID,
+                projectId = null,
+                queryDsl = QueryDsl(
+                    dataSource = "custom:10",
+                    rawQuery = "up",
+                ),
+            )
+
+            assertEquals(1.0, result.single()["value"]?.jsonPrimitive?.content?.toDouble())
+        }
+
+    @Test
     fun `extractMetricValue scans fallback row fields for numeric values`() {
         val result = callPrivate(
             "extractMetricValue",
@@ -915,6 +1043,39 @@ class DashboardAlertServiceTest {
         )
 
         assertEquals(0.25, result)
+    }
+
+    @Test
+    fun `extractMetricValue prefers metric alias when present`() {
+        val result = callPrivate(
+            "extractMetricValue",
+            listOf(mapOf("cpu_avg" to JsonPrimitive(0.5))),
+            QueryDsl(
+                dataSource = "custom:10",
+                metrics = listOf(MetricDef(AggFunction.AVG, field = "cpu", alias = "cpu_avg")),
+            ),
+            0,
+        )
+
+        assertEquals(0.5, result)
+    }
+
+    @Test
+    fun `extractMetricValue continues to older rows until a numeric value is found`() {
+        val result = callPrivate(
+            "extractMetricValue",
+            listOf(
+                mapOf("value" to JsonPrimitive(2.0)),
+                mapOf(
+                    "time" to JsonPrimitive("2026-05-25T00:00:00Z"),
+                    "host" to JsonPrimitive("api-1"),
+                ),
+            ),
+            QueryDsl(dataSource = "custom:10"),
+            0,
+        )
+
+        assertEquals(2.0, result)
     }
 
     // ──── CRUD round-trip ────
