@@ -525,6 +525,74 @@ class DataDogTranslatorTest {
         assertEquals("max connections", queries[1].metrics[0].alias)
     }
 
+    @Test
+    fun `parseDataDogQueries uses default query when requests have no query string`() {
+        val warnings = mutableListOf<String>()
+        val definition = buildJsonObject {
+            put("type", "timeseries")
+            put(
+                "requests",
+                buildJsonArray {
+                    add(buildJsonObject { put("display_type", "line") })
+                }
+            )
+        }
+
+        val queries = translator.parseDataDogQueries(definition, warnings, 12)
+
+        assertEquals(1, queries.size)
+        assertEquals("events", queries.single().dataSource)
+        assertEquals(AggFunction.COUNT, queries.single().metrics.single().function)
+        assertTrue(warnings.any { it.contains("no query string found") })
+    }
+
+    @Test
+    fun `parseDataDogQueryString preserves unparseable queries as raw queries`() {
+        val warnings = mutableListOf<String>()
+
+        val dsl = translator.parseDataDogQueryString("query1 / query2", warnings, 7, "ratio", "query3")
+
+        assertEquals("metrics", dsl.dataSource)
+        assertEquals(AggFunction.AVG, dsl.metrics.single().function)
+        assertEquals("value", dsl.metrics.single().field)
+        assertEquals("ratio", dsl.metrics.single().alias)
+        assertEquals(GroupByType.TIME, dsl.groupBy.single().type)
+        assertEquals("query1 / query2", dsl.rawQuery)
+        assertEquals("query3", dsl.refId)
+        assertTrue(warnings.any { it.contains("unable to parse Datadog query") })
+    }
+
+    @Test
+    fun `parseDataDogQueryString maps Datadog aggregation functions`() {
+        val cases = listOf(
+            "min:system.cpu.user{*}" to AggFunction.MIN,
+            "p50:system.cpu.user{*}" to AggFunction.P50,
+            "p75:system.cpu.user{*}" to AggFunction.P75,
+            "p90:system.cpu.user{*}" to AggFunction.P90,
+            "p99:system.cpu.user{*}" to AggFunction.P99,
+            "median:system.cpu.user{*}" to AggFunction.AVG
+        )
+
+        cases.forEach { (query, expectedFunction) ->
+            val dsl = translator.parseDataDogQueryString(query, mutableListOf(), 0)
+            assertEquals(expectedFunction, dsl.metrics.single().function)
+        }
+    }
+
+    @Test
+    fun `parseDataDogQueryString resolves logs and container metric fields`() {
+        val logs = translator.parseDataDogQueryString("count:logs.error{service:api}", mutableListOf(), 0)
+        val container = translator.parseDataDogQueryString("avg:container.cpu.usage{host:web01}", mutableListOf(), 0)
+
+        assertEquals("logs", logs.dataSource)
+        assertEquals(null, logs.metrics.single().field)
+        assertTrue(logs.filters.any { it.field == "service" && it.value == "api" })
+
+        assertEquals("containers", container.dataSource)
+        assertEquals("cpu_percent", container.metrics.single().field)
+        assertTrue(container.filters.any { it.field == "host" && it.value == "web01" })
+    }
+
     // ──── Export ────
 
     @Test
@@ -610,6 +678,23 @@ class DataDogTranslatorTest {
         )
         val query = translator.buildDdQueryString(dsl)
         assertEquals("count:events{*}", query)
+    }
+
+    @Test
+    fun `buildDdQueryString uses list filter values and wildcard fallbacks`() {
+        val dsl = QueryDsl(
+            dataSource = "metrics",
+            metrics = listOf(MetricDef(AggFunction.SUM, "value", "cpu")),
+            filters = listOf(
+                FilterDef("metric_name", FilterOp.EQ, "system.cpu.user"),
+                FilterDef("host", FilterOp.IN, values = listOf("web01")),
+                FilterDef("env", FilterOp.EQ)
+            )
+        )
+
+        val query = translator.buildDdQueryString(dsl)
+
+        assertEquals("sum:system.cpu.user{host:web01,env:*}", query)
     }
 
     @Test
