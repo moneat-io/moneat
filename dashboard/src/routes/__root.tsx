@@ -61,6 +61,11 @@ const STATIC_TITLES: Record<string, string> = {
   '/security-sbom': 'SBOM Security',
   '/pricing': 'Pricing',
   '/pricing-calculator': 'Pricing Calculator',
+  '/compare': 'Compare Moneat 2026',
+  '/datadog-alternative': 'Datadog Alternative 2026',
+  '/sentry-alternative': 'Sentry Alternative 2026',
+  '/better-stack-alternative': 'Better Stack Alternative 2026',
+  '/signoz-alternative': 'SigNoz Alternative 2026',
   '/docs': 'Documentation',
   '/blog': 'Blog',
   '/projects': 'Projects',
@@ -103,6 +108,11 @@ const FEATURE_ROUTES = [
   '/custom-dashboards',
   '/security-sbom',
   '/pricing',
+  '/compare',
+  '/datadog-alternative',
+  '/sentry-alternative',
+  '/better-stack-alternative',
+  '/signoz-alternative',
 ] as const
 
 // Public routes that don't require authentication or verification checks
