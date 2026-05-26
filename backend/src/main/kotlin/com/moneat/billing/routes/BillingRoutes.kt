@@ -28,6 +28,7 @@ import com.moneat.billing.services.BillingUsageInsightsService
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.PricingTierService
 import com.moneat.billing.services.StripeService
+import com.moneat.billing.services.getUsageInsightsSafely
 import com.moneat.config.EnvConfig
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.services.UsageTrackingService
@@ -172,7 +173,16 @@ fun Route.billingRoutes(
                     return@get
                 }
 
-            call.respond(insightsService.getUsageInsights(orgId))
+            val insights = insightsService.getUsageInsightsSafely(orgId)
+            if (insights == null) {
+                call.respond(
+                    HttpStatusCode.ServiceUnavailable,
+                    ErrorResponse("Usage insights are temporarily unavailable")
+                )
+                return@get
+            }
+
+            call.respond(insights)
         }
 
         get("/usage/apm-spans") {

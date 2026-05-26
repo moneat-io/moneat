@@ -36,11 +36,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.datetime.LocalDate
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -252,21 +254,10 @@ class BillingBackgroundService(
         notificationType: String,
         usage: BillingUsageResponse
     ) {
-        val inserted =
-            transaction {
-                QuotaNotificationsSent
-                    .insertIgnore {
-                        it[QuotaNotificationsSent.organization_id] = organizationId
-                        it[this.period_start] = kotlinx.datetime.LocalDate.parse(periodStart)
-                        it[this.notification_type] = notificationType
-                        it[sent_at] = Clock.System.now()
-                    }.insertedCount
-            }
-        if (inserted == 0) return
-
         val recipients =
             notificationRecipients(organizationId)
         if (recipients.isEmpty()) return
+        if (!reserveNotification(organizationId, periodStart, notificationType)) return
 
         val orgName = organizationName(organizationId)
 
@@ -285,6 +276,7 @@ class BillingBackgroundService(
             summary = thresholdSummary(notificationType, usage)
         )
 
+        var successfulSends = 0
         for (email in recipients) {
             suspendRunCatching {
                 emailService.sendBillingThresholdAlertEmail(
@@ -292,9 +284,14 @@ class BillingBackgroundService(
                     subject = subject,
                     data = emailData
                 )
-            }.getOrElse { e ->
+            }.onFailure { e ->
                 logger.error(e) { "Failed to send quota notification to $email" }
+            }.onSuccess {
+                successfulSends += 1
             }
+        }
+        if (successfulSends == 0) {
+            releaseNotificationReservation(organizationId, periodStart, notificationType)
         }
     }
 
@@ -304,20 +301,10 @@ class BillingBackgroundService(
         notificationType: String,
         usage: BillingUsageResponse
     ) {
-        val inserted =
-            transaction {
-                QuotaNotificationsSent
-                    .insertIgnore {
-                        it[QuotaNotificationsSent.organization_id] = organizationId
-                        it[this.period_start] = kotlinx.datetime.LocalDate.parse(periodStart)
-                        it[this.notification_type] = notificationType
-                        it[sent_at] = Clock.System.now()
-                    }.insertedCount
-            }
-        if (inserted == 0) return
-
         val recipients = notificationRecipients(organizationId)
         if (recipients.isEmpty()) return
+        if (!reserveNotification(organizationId, periodStart, notificationType)) return
+
         val orgName = organizationName(organizationId)
         val data = billingInsightEmailData(
             orgName = orgName,
@@ -326,11 +313,49 @@ class BillingBackgroundService(
             summary = "A weekly view of billable volume, current limits, and estimated overage for $orgName."
         )
 
+        var successfulSends = 0
         for (email in recipients) {
             suspendRunCatching {
                 emailService.sendBillingInsightsEmail(email, data)
-            }.getOrElse { e ->
+            }.onFailure { e ->
                 logger.error(e) { "Failed to send billing insights digest to $email" }
+            }.onSuccess {
+                successfulSends += 1
+            }
+        }
+        if (successfulSends == 0) {
+            releaseNotificationReservation(organizationId, periodStart, notificationType)
+        }
+    }
+
+    private fun reserveNotification(
+        organizationId: Int,
+        periodStart: String,
+        notificationType: String
+    ): Boolean {
+        val parsedPeriodStart = LocalDate.parse(periodStart)
+        return transaction {
+            QuotaNotificationsSent
+                .insertIgnore {
+                    it[QuotaNotificationsSent.organization_id] = organizationId
+                    it[this.period_start] = parsedPeriodStart
+                    it[this.notification_type] = notificationType
+                    it[sent_at] = Clock.System.now()
+                }.insertedCount > 0
+        }
+    }
+
+    private fun releaseNotificationReservation(
+        organizationId: Int,
+        periodStart: String,
+        notificationType: String
+    ) {
+        val parsedPeriodStart = LocalDate.parse(periodStart)
+        transaction {
+            QuotaNotificationsSent.deleteWhere {
+                (QuotaNotificationsSent.organization_id eq organizationId) and
+                    (QuotaNotificationsSent.period_start eq parsedPeriodStart) and
+                    (QuotaNotificationsSent.notification_type eq notificationType)
             }
         }
     }

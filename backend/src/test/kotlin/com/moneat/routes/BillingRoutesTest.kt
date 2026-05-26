@@ -520,6 +520,22 @@ class BillingRoutesTest {
         }
 
     @Test
+    fun `GET usage insights returns 503 when insights are unavailable`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
+            coEvery { mockInsightsService.getUsageInsights(orgId) } throws IllegalStateException("boom")
+            application { installRoutes(this) }
+
+            val r = client.get(BILLING_USAGE_INSIGHTS) {
+                withAuth(token(userId))
+            }
+
+            assertEquals(HttpStatusCode.ServiceUnavailable, r.status)
+            assertTrue(r.bodyAsText().contains("Usage insights are temporarily unavailable"))
+        }
+
+    @Test
     fun `GET usage insights returns 403 for self hosted deployments`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()

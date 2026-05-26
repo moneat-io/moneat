@@ -51,11 +51,15 @@ import kotlin.test.assertTrue
 import kotlin.time.Clock
 
 class BillingUsageInsightsServiceTest {
+    // ──── Companion ────
+
     companion object {
         private const val BYTES_PER_GB = 1_073_741_824L
         private const val APM_SPAN_LIMIT = 2_000_000L
         private var db: Database? = null
     }
+
+    // ──── Setup ────
 
     private lateinit var quotaService: BillingQuotaService
     private lateinit var usageTrackingService: UsageTrackingService
@@ -79,10 +83,14 @@ class BillingUsageInsightsServiceTest {
         every { EnvConfig.SelfHost.enabled } returns false
     }
 
+    // ──── Lifecycle ────
+
     @AfterTest
     fun tearDown() {
         unmockkObject(EnvConfig.SelfHost)
     }
+
+    // ──── Tests ────
 
     @Test
     fun `getUsageInsights builds forecasts contributors and debug data`() = runBlocking {
@@ -172,6 +180,8 @@ class BillingUsageInsightsServiceTest {
 
         assertNull(service.getUsageInsightsSafely(1))
     }
+
+    // ──── Helpers ────
 
     private fun seedOrg(): Int = transaction {
         Organizations.insert {

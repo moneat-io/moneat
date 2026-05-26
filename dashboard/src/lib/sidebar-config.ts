@@ -5,14 +5,6 @@
  * and provides labels for the settings UI.
  */
 
-import { LucideIcon } from 'lucide-react';
-
-export interface SidebarItem {
-  key: string;
-  label: string;
-  icon?: LucideIcon;
-}
-
 import {
   Activity,
   AlertCircle,
@@ -29,7 +21,14 @@ import {
   ScrollText,
   Server,
   Timer,
+  type LucideIcon,
 } from 'lucide-react';
+
+export interface SidebarItem {
+  key: string;
+  label: string;
+  icon?: LucideIcon;
+}
 
 // Configurable sidebar items (can be hidden by user)
 // Note: 'dashboard', 'admin' and 'settings' are always visible and not included here
