@@ -17,7 +17,13 @@
 import {useMemo, useState} from 'react'
 import {createFileRoute} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
-import {type AdminBillingSubscription, api, type BillingPlan, type BillingTierConfig} from '@/lib/api'
+import {
+    api,
+    type AdminBillingSubscription,
+    type BillingPlan,
+    type BillingTierConfig,
+    type CreateTierVersionRequest,
+} from '@/lib/api'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
@@ -40,6 +46,15 @@ import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/compon
 import {useToast} from '@/hooks/useToast'
 import {AdminSkeleton, PlanBadge, SectionHeader} from '@/components/AdminComponents'
 import {type BillingInterval, buildPricingCardModel, type PricingCardTierInput} from '@/lib/pricing-display'
+import {
+    formatQuotaLimit,
+    formatTotalQuotaLimit,
+    normalizeQuotaForForm,
+    normalizeQuotaForRequest,
+    normalizeReplayQuotaForForm,
+    normalizeReplayQuotaForRequest,
+    totalQuotaForRequest,
+} from '@/lib/admin-billing-limits'
 import {AlertTriangle, Check, HelpCircle, Info} from 'lucide-react'
 import {useTimezone} from '@/hooks/useTimezone'
 import {formatDate} from '@/lib/date-format'
@@ -253,11 +268,11 @@ const DEFAULT_FORM: CreateFormState = {
 
 function buildCreateFormFromConfig(config: BillingTierConfig): CreateFormState {
   return {
-    monthlyErrorLimit: config.monthlyErrorLimit,
-    monthlyTransactionLimit: config.monthlyTransactionLimit,
-    monthlyReplayLimit: config.monthlyReplayLimit,
-    monthlyFeedbackLimit: config.monthlyFeedbackLimit,
-    monthlyLlmEventLimit: config.monthlyLlmEventLimit ?? 0,
+    monthlyErrorLimit: normalizeQuotaForForm(config.monthlyErrorLimit),
+    monthlyTransactionLimit: normalizeQuotaForForm(config.monthlyTransactionLimit),
+    monthlyReplayLimit: normalizeReplayQuotaForForm(config.monthlyReplayLimit),
+    monthlyFeedbackLimit: normalizeQuotaForForm(config.monthlyFeedbackLimit),
+    monthlyLlmEventLimit: normalizeQuotaForForm(config.monthlyLlmEventLimit ?? 0),
     retentionDays: config.retentionDays,
     logRetentionDays: config.logRetentionDays ?? config.retentionDays,
     replayRetentionDays: config.replayRetentionDays ?? config.retentionDays,
@@ -280,7 +295,7 @@ function buildCreateFormFromConfig(config: BillingTierConfig): CreateFormState {
     oncallPerUserYearlyCents: config.oncallPerUserYearlyCents ?? 5000,
     maxAnalyticsSites: config.maxAnalyticsSites != null ? String(config.maxAnalyticsSites) : '',
     analyticsRetentionDays: config.analyticsRetentionDays ?? 1095,
-    monthlyAnalyticsPageviewLimit: config.monthlyAnalyticsPageviewLimit ?? 0,
+    monthlyAnalyticsPageviewLimit: normalizeQuotaForForm(config.monthlyAnalyticsPageviewLimit ?? 0),
     analyticsPageviewOverageRateCentsPer100k: config.analyticsPageviewOverageRateCentsPer100k ?? 0,
     stripeBasePriceId: config.stripeBasePriceId ?? '',
     stripeOveragePriceId: config.stripeOveragePriceId ?? '',
@@ -288,6 +303,58 @@ function buildCreateFormFromConfig(config: BillingTierConfig): CreateFormState {
     stripeYearlyOveragePriceId: config.stripeYearlyOveragePriceId ?? '',
     stripeOncallPriceId: config.stripeOncallPriceId ?? '',
     stripeOncallYearlyPriceId: config.stripeOncallYearlyPriceId ?? '',
+  }
+}
+
+function buildCreateTierVersionRequest(form: CreateFormState): CreateTierVersionRequest {
+  const monthlyErrorLimit = normalizeQuotaForRequest(form.monthlyErrorLimit)
+  const monthlyTransactionLimit = normalizeQuotaForRequest(form.monthlyTransactionLimit)
+  const monthlyReplayLimit = normalizeReplayQuotaForRequest(form.monthlyReplayLimit)
+  const monthlyFeedbackLimit = normalizeQuotaForRequest(form.monthlyFeedbackLimit)
+  const totalLimits = [
+    monthlyErrorLimit,
+    monthlyTransactionLimit,
+    monthlyReplayLimit,
+    monthlyFeedbackLimit,
+  ]
+
+  return {
+    monthlyUnitLimit: totalQuotaForRequest(totalLimits),
+    monthlyErrorLimit,
+    monthlyTransactionLimit,
+    monthlyReplayLimit,
+    monthlyFeedbackLimit,
+    monthlyLlmEventLimit: normalizeQuotaForRequest(form.monthlyLlmEventLimit),
+    retentionDays: Number(form.retentionDays),
+    logRetentionDays: Number(form.logRetentionDays),
+    replayRetentionDays: Number(form.replayRetentionDays),
+    llmRetentionDays: Number(form.llmRetentionDays),
+    maxProjects: form.maxProjects.trim() ? Number(form.maxProjects) : null,
+    maxSystems: Number(form.maxSystems),
+    monitorIntervalSeconds: Number(form.monitorIntervalSeconds),
+    monthlyPriceCents: Number(form.monthlyPriceCents),
+    yearlyPriceCents: Number(form.yearlyPriceCents),
+    monthlyGbLimit: Math.max(0, Math.round(form.monthlyGbLimitGb * BYTES_PER_GB)),
+    trialDays: Number(form.trialDays),
+    paygEnabled: Boolean(form.paygEnabled),
+    paygRateMicrosPerUnit: Number(form.paygRateMicrosPerUnit),
+    overageRateCentsPerGb: Number(form.overageRateCentsPerGb),
+    errorOverageRateCentsPer1k: Number(form.errorOverageRateCentsPer1k),
+    replayOverageRateCentsPerGb: Number(form.replayOverageRateCentsPerGb),
+    llmOverageRateCentsPer1k: Number(form.llmOverageRateCentsPer1k),
+    oncallEnabled: Boolean(form.oncallEnabled),
+    oncallPerUserMonthlyCents: Number(form.oncallPerUserMonthlyCents),
+    oncallPerUserYearlyCents: Number(form.oncallPerUserYearlyCents),
+    maxAnalyticsSites: form.maxAnalyticsSites.trim() ? Number(form.maxAnalyticsSites) : null,
+    analyticsRetentionDays: Number(form.analyticsRetentionDays),
+    monthlyAnalyticsPageviewLimit: normalizeQuotaForRequest(form.monthlyAnalyticsPageviewLimit),
+    analyticsPageviewOverageRateCentsPer100k: Number(form.analyticsPageviewOverageRateCentsPer100k),
+    stripeBasePriceId: form.stripeBasePriceId.trim() || null,
+    stripeOveragePriceId: form.stripeOveragePriceId.trim() || null,
+    stripeYearlyBasePriceId: form.stripeYearlyBasePriceId.trim() || null,
+    stripeYearlyOveragePriceId: form.stripeYearlyOveragePriceId.trim() || null,
+    stripeOncallPriceId: form.stripeOncallPriceId.trim() || null,
+    stripeOncallYearlyPriceId: form.stripeOncallYearlyPriceId.trim() || null,
   }
 }
 
@@ -509,48 +576,7 @@ function AdminBillingPage() {
 
   const createVersionMutation = useMutation({
     mutationFn: () =>
-      api.createAdminBillingTierVersion(createTier, {
-        monthlyUnitLimit:
-          Number(createForm.monthlyErrorLimit) +
-          Number(createForm.monthlyTransactionLimit) +
-          Number(createForm.monthlyReplayLimit) +
-          Number(createForm.monthlyFeedbackLimit),
-        monthlyErrorLimit: Number(createForm.monthlyErrorLimit),
-        monthlyTransactionLimit: Number(createForm.monthlyTransactionLimit),
-        monthlyReplayLimit: Number(createForm.monthlyReplayLimit),
-        monthlyFeedbackLimit: Number(createForm.monthlyFeedbackLimit),
-        monthlyLlmEventLimit: Number(createForm.monthlyLlmEventLimit),
-        retentionDays: Number(createForm.retentionDays),
-        logRetentionDays: Number(createForm.logRetentionDays),
-        replayRetentionDays: Number(createForm.replayRetentionDays),
-        llmRetentionDays: Number(createForm.llmRetentionDays),
-        maxProjects: createForm.maxProjects.trim() ? Number(createForm.maxProjects) : null,
-        maxSystems: Number(createForm.maxSystems),
-        monitorIntervalSeconds: Number(createForm.monitorIntervalSeconds),
-        monthlyPriceCents: Number(createForm.monthlyPriceCents),
-        yearlyPriceCents: Number(createForm.yearlyPriceCents),
-        monthlyGbLimit: Math.max(0, Math.round(createForm.monthlyGbLimitGb * BYTES_PER_GB)),
-        trialDays: Number(createForm.trialDays),
-        paygEnabled: Boolean(createForm.paygEnabled),
-        paygRateMicrosPerUnit: Number(createForm.paygRateMicrosPerUnit),
-        overageRateCentsPerGb: Number(createForm.overageRateCentsPerGb),
-        errorOverageRateCentsPer1k: Number(createForm.errorOverageRateCentsPer1k),
-        replayOverageRateCentsPerGb: Number(createForm.replayOverageRateCentsPerGb),
-        llmOverageRateCentsPer1k: Number(createForm.llmOverageRateCentsPer1k),
-        oncallEnabled: Boolean(createForm.oncallEnabled),
-        oncallPerUserMonthlyCents: Number(createForm.oncallPerUserMonthlyCents),
-        oncallPerUserYearlyCents: Number(createForm.oncallPerUserYearlyCents),
-        maxAnalyticsSites: createForm.maxAnalyticsSites.trim() ? Number(createForm.maxAnalyticsSites) : null,
-        analyticsRetentionDays: Number(createForm.analyticsRetentionDays),
-        monthlyAnalyticsPageviewLimit: Number(createForm.monthlyAnalyticsPageviewLimit),
-        analyticsPageviewOverageRateCentsPer100k: Number(createForm.analyticsPageviewOverageRateCentsPer100k),
-        stripeBasePriceId: createForm.stripeBasePriceId.trim() || null,
-        stripeOveragePriceId: createForm.stripeOveragePriceId.trim() || null,
-        stripeYearlyBasePriceId: createForm.stripeYearlyBasePriceId.trim() || null,
-        stripeYearlyOveragePriceId: createForm.stripeYearlyOveragePriceId.trim() || null,
-        stripeOncallPriceId: createForm.stripeOncallPriceId.trim() || null,
-        stripeOncallYearlyPriceId: createForm.stripeOncallYearlyPriceId.trim() || null,
-      }),
+      api.createAdminBillingTierVersion(createTier, buildCreateTierVersionRequest(createForm)),
     onSuccess: (tier) => {
       queryClient.invalidateQueries({queryKey: ['admin-billing-current-plans']})
       queryClient.invalidateQueries({queryKey: ['admin-billing-tier-versions', createTier]})
@@ -673,12 +699,12 @@ function AdminBillingPage() {
                       </TableCell>
                       <TableCell>v{plan.tier.version}</TableCell>
                       <TableCell>${centsToDollars(plan.tier.monthlyPriceCents)}/mo</TableCell>
-                      <TableCell>{plan.tier.monthlyUnitLimit.toLocaleString()}</TableCell>
-                      <TableCell>{plan.tier.monthlyErrorLimit.toLocaleString()}</TableCell>
-                      <TableCell>{plan.tier.monthlyTransactionLimit.toLocaleString()}</TableCell>
-                      <TableCell>{plan.tier.monthlyReplayLimit.toLocaleString()}</TableCell>
-                      <TableCell>{plan.tier.monthlyFeedbackLimit.toLocaleString()}</TableCell>
-                      <TableCell>{(plan.tier.monthlyLlmEventLimit ?? 0).toLocaleString()}</TableCell>
+                      <TableCell>{formatQuotaLimit(plan.tier.monthlyUnitLimit)}</TableCell>
+                      <TableCell>{formatQuotaLimit(plan.tier.monthlyErrorLimit)}</TableCell>
+                      <TableCell>{formatQuotaLimit(plan.tier.monthlyTransactionLimit)}</TableCell>
+                      <TableCell>{formatQuotaLimit(plan.tier.monthlyReplayLimit)}</TableCell>
+                      <TableCell>{formatQuotaLimit(plan.tier.monthlyFeedbackLimit)}</TableCell>
+                      <TableCell>{formatQuotaLimit(plan.tier.monthlyLlmEventLimit ?? 0)}</TableCell>
                       <TableCell>{plan.tier.retentionDays}d</TableCell>
                       <TableCell>{plan.tier.maxSystems}</TableCell>
                       <TableCell>{formatInterval(plan.tier.monitorIntervalSeconds)}</TableCell>
@@ -859,7 +885,7 @@ function AdminBillingPage() {
                       }
                     />
                     <FieldHint>
-                      {createForm.monthlyLlmEventLimit.toLocaleString()} AI observability events/month
+                      {formatQuotaLimit(createForm.monthlyLlmEventLimit)} AI observability events/month
                     </FieldHint>
                     {validationErrors.monthlyLlmEventLimit && (
                       <p className="text-xs text-destructive">{validationErrors.monthlyLlmEventLimit}</p>
@@ -956,12 +982,12 @@ function AdminBillingPage() {
                     />
                     <FieldHint>
                       Total base limit:{' '}
-                      {(
-                        createForm.monthlyErrorLimit +
-                        createForm.monthlyTransactionLimit +
-                        createForm.monthlyReplayLimit +
-                        createForm.monthlyFeedbackLimit
-                      ).toLocaleString()}{' '}
+                      {formatTotalQuotaLimit([
+                        createForm.monthlyErrorLimit,
+                        createForm.monthlyTransactionLimit,
+                        createForm.monthlyReplayLimit,
+                        createForm.monthlyFeedbackLimit,
+                      ])}{' '}
                       units/month
                     </FieldHint>
                     {validationErrors.monthlyFeedbackLimit && (
@@ -1287,7 +1313,7 @@ function AdminBillingPage() {
                       setCreateForm((p) => ({...p, monthlyAnalyticsPageviewLimit: Number(e.target.value)}))
                     }
                   />
-                  <FieldHint>{createForm.monthlyAnalyticsPageviewLimit >= 1_000_000 ? `${(createForm.monthlyAnalyticsPageviewLimit / 1_000_000).toFixed(1)}M` : `${(createForm.monthlyAnalyticsPageviewLimit / 1_000).toFixed(0)}K`} pageviews/mo</FieldHint>
+                  <FieldHint>{formatQuotaLimit(createForm.monthlyAnalyticsPageviewLimit)} pageviews/mo</FieldHint>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="analyticsPageviewOverageRateCentsPer100k">
@@ -1535,17 +1561,17 @@ function AdminBillingPage() {
                 <p><strong>Yearly Price:</strong> ${centsToDollars(createForm.yearlyPriceCents)}/yr</p>
                 <p><strong>Monthly Data Limit:</strong> {createForm.monthlyGbLimitGb} GB</p>
                 <p><strong>Trial:</strong> {createForm.trialDays} day(s)</p>
-                <p><strong>Total Limit:</strong> {(
-                  createForm.monthlyErrorLimit +
-                  createForm.monthlyTransactionLimit +
-                  createForm.monthlyReplayLimit +
-                  createForm.monthlyFeedbackLimit
-                ).toLocaleString()}</p>
-                <p><strong>Errors:</strong> {createForm.monthlyErrorLimit.toLocaleString()}</p>
-                <p><strong>Transactions:</strong> {createForm.monthlyTransactionLimit.toLocaleString()}</p>
-                <p><strong>Replays:</strong> {createForm.monthlyReplayLimit.toLocaleString()}</p>
-                <p><strong>Feedback:</strong> {createForm.monthlyFeedbackLimit.toLocaleString()}</p>
-                <p><strong>LLM Events:</strong> {createForm.monthlyLlmEventLimit.toLocaleString()}</p>
+                <p><strong>Total Limit:</strong> {formatTotalQuotaLimit([
+                  createForm.monthlyErrorLimit,
+                  createForm.monthlyTransactionLimit,
+                  createForm.monthlyReplayLimit,
+                  createForm.monthlyFeedbackLimit,
+                ])}</p>
+                <p><strong>Errors:</strong> {formatQuotaLimit(createForm.monthlyErrorLimit)}</p>
+                <p><strong>Transactions:</strong> {formatQuotaLimit(createForm.monthlyTransactionLimit)}</p>
+                <p><strong>Replays:</strong> {formatQuotaLimit(createForm.monthlyReplayLimit)}</p>
+                <p><strong>Feedback:</strong> {formatQuotaLimit(createForm.monthlyFeedbackLimit)}</p>
+                <p><strong>LLM Events:</strong> {formatQuotaLimit(createForm.monthlyLlmEventLimit)}</p>
                 <p><strong>Retention:</strong> {createForm.retentionDays}d errors, {createForm.logRetentionDays}d logs, {createForm.replayRetentionDays}d replays, {createForm.llmRetentionDays}d LLM</p>
                 <p><strong>Max Projects:</strong> {createForm.maxProjects || 'Unlimited'}</p>
                 <p><strong>Max Systems:</strong> {createForm.maxSystems}</p>
@@ -1794,7 +1820,9 @@ function AdminBillingPage() {
                     <SelectContent>
                       {migrateTierVersions.map((v) => (
                         <SelectItem key={v.id} value={String(v.version)}>
-                          v{v.version} {v.isCurrent ? '(current)' : '(legacy)'} &mdash; ${centsToDollars(v.monthlyPriceCents)}/mo, {v.monthlyUnitLimit.toLocaleString()} total units
+                          v{v.version} {v.isCurrent ? '(current)' : '(legacy)'} &mdash;{' '}
+                          {'$' + centsToDollars(v.monthlyPriceCents) + '/mo, '}
+                          {formatQuotaLimit(v.monthlyUnitLimit)} total units
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1810,12 +1838,12 @@ function AdminBillingPage() {
               <div className="rounded border bg-muted/50 p-3 text-sm space-y-1">
                 <p className="font-medium mb-1">Target v{targetTierConfig.version} details:</p>
                 <p>Price: ${centsToDollars(targetTierConfig.monthlyPriceCents)}/mo</p>
-                <p>Total Limit: {targetTierConfig.monthlyUnitLimit.toLocaleString()}</p>
-                <p>Errors: {targetTierConfig.monthlyErrorLimit.toLocaleString()}</p>
-                <p>Transactions: {targetTierConfig.monthlyTransactionLimit.toLocaleString()}</p>
-                <p>Replays: {targetTierConfig.monthlyReplayLimit.toLocaleString()}</p>
-                <p>Feedback: {targetTierConfig.monthlyFeedbackLimit.toLocaleString()}</p>
-                <p>LLM Events: {(targetTierConfig.monthlyLlmEventLimit ?? 0).toLocaleString()}</p>
+                <p>Total Limit: {formatQuotaLimit(targetTierConfig.monthlyUnitLimit)}</p>
+                <p>Errors: {formatQuotaLimit(targetTierConfig.monthlyErrorLimit)}</p>
+                <p>Transactions: {formatQuotaLimit(targetTierConfig.monthlyTransactionLimit)}</p>
+                <p>Replays: {formatQuotaLimit(targetTierConfig.monthlyReplayLimit)}</p>
+                <p>Feedback: {formatQuotaLimit(targetTierConfig.monthlyFeedbackLimit)}</p>
+                <p>LLM Events: {formatQuotaLimit(targetTierConfig.monthlyLlmEventLimit ?? 0)}</p>
                 <p>Retention: {targetTierConfig.retentionDays}d errors, {targetTierConfig.replayRetentionDays ?? targetTierConfig.retentionDays}d replays, {targetTierConfig.llmRetentionDays ?? targetTierConfig.retentionDays}d LLM</p>
                 <p>Max Systems: {targetTierConfig.maxSystems}</p>
                 <p>PAYG: {targetTierConfig.paygEnabled ? 'Enabled' : 'Disabled'}</p>
@@ -2003,58 +2031,64 @@ function AdminBillingPage() {
 
 function ChangeSummary({current, form}: {current: BillingTierConfig; form: CreateFormState}) {
   const changes: Array<{field: string; from: string; to: string}> = []
-  const currentTotalLimit =
-    current.monthlyErrorLimit +
-    current.monthlyTransactionLimit +
-    current.monthlyReplayLimit +
-    current.monthlyFeedbackLimit
-  const formTotalLimit =
-    form.monthlyErrorLimit +
-    form.monthlyTransactionLimit +
-    form.monthlyReplayLimit +
-    form.monthlyFeedbackLimit
+  const currentErrorLimit = normalizeQuotaForForm(current.monthlyErrorLimit)
+  const currentTransactionLimit = normalizeQuotaForForm(current.monthlyTransactionLimit)
+  const currentReplayLimit = normalizeReplayQuotaForForm(current.monthlyReplayLimit)
+  const currentFeedbackLimit = normalizeQuotaForForm(current.monthlyFeedbackLimit)
+  const currentTotalLimit = formatTotalQuotaLimit([
+    currentErrorLimit,
+    currentTransactionLimit,
+    currentReplayLimit,
+    currentFeedbackLimit,
+  ])
+  const formTotalLimit = formatTotalQuotaLimit([
+    form.monthlyErrorLimit,
+    form.monthlyTransactionLimit,
+    form.monthlyReplayLimit,
+    form.monthlyFeedbackLimit,
+  ])
 
   if (currentTotalLimit !== formTotalLimit) {
     changes.push({
       field: 'Total Unit Limit',
-      from: currentTotalLimit.toLocaleString(),
-      to: Number(formTotalLimit).toLocaleString(),
+      from: currentTotalLimit,
+      to: formTotalLimit,
     })
   }
-  if (current.monthlyErrorLimit !== form.monthlyErrorLimit) {
+  if (currentErrorLimit !== form.monthlyErrorLimit) {
     changes.push({
       field: 'Error Limit',
-      from: current.monthlyErrorLimit.toLocaleString(),
-      to: form.monthlyErrorLimit.toLocaleString(),
+      from: formatQuotaLimit(currentErrorLimit),
+      to: formatQuotaLimit(form.monthlyErrorLimit),
     })
   }
-  if (current.monthlyTransactionLimit !== form.monthlyTransactionLimit) {
+  if (currentTransactionLimit !== form.monthlyTransactionLimit) {
     changes.push({
       field: 'Transaction Limit',
-      from: current.monthlyTransactionLimit.toLocaleString(),
-      to: form.monthlyTransactionLimit.toLocaleString(),
+      from: formatQuotaLimit(currentTransactionLimit),
+      to: formatQuotaLimit(form.monthlyTransactionLimit),
     })
   }
-  if (current.monthlyReplayLimit !== form.monthlyReplayLimit) {
+  if (currentReplayLimit !== form.monthlyReplayLimit) {
     changes.push({
       field: 'Replay Limit',
-      from: current.monthlyReplayLimit.toLocaleString(),
-      to: form.monthlyReplayLimit.toLocaleString(),
+      from: formatQuotaLimit(currentReplayLimit),
+      to: formatQuotaLimit(form.monthlyReplayLimit),
     })
   }
-  if (current.monthlyFeedbackLimit !== form.monthlyFeedbackLimit) {
+  if (currentFeedbackLimit !== form.monthlyFeedbackLimit) {
     changes.push({
       field: 'Feedback Limit',
-      from: current.monthlyFeedbackLimit.toLocaleString(),
-      to: form.monthlyFeedbackLimit.toLocaleString(),
+      from: formatQuotaLimit(currentFeedbackLimit),
+      to: formatQuotaLimit(form.monthlyFeedbackLimit),
     })
   }
-  const currentLlm = current.monthlyLlmEventLimit ?? 0
+  const currentLlm = normalizeQuotaForForm(current.monthlyLlmEventLimit ?? 0)
   if (currentLlm !== form.monthlyLlmEventLimit) {
     changes.push({
       field: 'LLM Event Limit',
-      from: currentLlm.toLocaleString(),
-      to: form.monthlyLlmEventLimit.toLocaleString(),
+      from: formatQuotaLimit(currentLlm),
+      to: formatQuotaLimit(form.monthlyLlmEventLimit),
     })
   }
   if (current.retentionDays !== form.retentionDays) {

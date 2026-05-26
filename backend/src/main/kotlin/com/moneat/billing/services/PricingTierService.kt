@@ -60,6 +60,7 @@ private const val MAX_RETENTION_DAYS = 90
 private const val MAX_TRIAL_DAYS = 60
 private const val MAX_ANALYTICS_RETENTION_DAYS = 3650
 private const val DEFAULT_TRIAL_DAYS_NON_FREE = 14
+private const val JS_SAFE_UNLIMITED_QUOTA_LIMIT = 9_007_199_254_740_000L
 
 class PricingTierService {
     private data class DefaultFeatureFlags(
@@ -205,12 +206,25 @@ class PricingTierService {
     ): PricingTierConfigResponse {
         val canonicalName = tierName.uppercase()
         validateCreateTierRequest(request)
+        val monthlyUnitLimitFallback = normalizeUnlimitedQuotaLimit(request.monthlyUnitLimit)
         val monthlyErrorLimit =
-            if (request.monthlyErrorLimit > 0) request.monthlyErrorLimit else request.monthlyUnitLimit
-        val monthlyTransactionLimit = request.monthlyTransactionLimit
-        val monthlyReplayLimit = request.monthlyReplayLimit
-        val monthlyFeedbackLimit = request.monthlyFeedbackLimit
-        val monthlyUnitLimit = monthlyErrorLimit + monthlyTransactionLimit + monthlyReplayLimit + monthlyFeedbackLimit
+            if (request.monthlyErrorLimit > 0) {
+                normalizeUnlimitedQuotaLimit(request.monthlyErrorLimit)
+            } else {
+                monthlyUnitLimitFallback
+            }
+        val monthlyTransactionLimit = normalizeUnlimitedQuotaLimit(request.monthlyTransactionLimit)
+        val monthlyReplayLimit =
+            if (request.monthlyReplayLimit < 0) {
+                request.monthlyReplayLimit
+            } else {
+                normalizeUnlimitedQuotaLimit(request.monthlyReplayLimit)
+            }
+        val monthlyFeedbackLimit = normalizeUnlimitedQuotaLimit(request.monthlyFeedbackLimit)
+        val monthlyLlmEventLimit = normalizeUnlimitedQuotaLimit(request.monthlyLlmEventLimit)
+        val monthlyUnitLimit = totalMonthlyUnitLimit(
+            listOf(monthlyErrorLimit, monthlyTransactionLimit, monthlyReplayLimit, monthlyFeedbackLimit)
+        )
         return transaction {
             val current =
                 PricingTierConfigs
@@ -252,22 +266,25 @@ class PricingTierService {
                     ?: currentConfig?.analyticsRetentionDays
                     ?: DEFAULT_ANALYTICS_RETENTION_DAYS
             val resolvedMonthlyAnalyticsPageviewLimit =
-                request.monthlyAnalyticsPageviewLimit ?: currentConfig?.monthlyAnalyticsPageviewLimit ?: 0
+                request.monthlyAnalyticsPageviewLimit?.let(::normalizeUnlimitedQuotaLimit)
+                    ?: currentConfig?.monthlyAnalyticsPageviewLimit ?: 0
             val resolvedAnalyticsPageviewOverageRateCentsPer100k =
                 request.analyticsPageviewOverageRateCentsPer100k
                     ?: currentConfig?.analyticsPageviewOverageRateCentsPer100k ?: 0
-            val resolvedMonthlyApmSpanLimit = request.monthlyApmSpanLimit
+            val resolvedMonthlyApmSpanLimit = request.monthlyApmSpanLimit?.let(::normalizeUnlimitedQuotaLimit)
                 ?: currentConfig?.monthlyApmSpanLimit ?: 0
             val resolvedApmSpanOverageRateCentsPer1m = request.apmSpanOverageRateCentsPer1m
                 ?: currentConfig?.apmSpanOverageRateCentsPer1m ?: 0
-            val resolvedMonthlyCustomMetricLimit = request.monthlyCustomMetricLimit
-                ?: currentConfig?.monthlyCustomMetricLimit ?: 0
+            val resolvedMonthlyCustomMetricLimit =
+                request.monthlyCustomMetricLimit?.let(::normalizeUnlimitedQuotaLimit)
+                    ?: currentConfig?.monthlyCustomMetricLimit ?: 0
             val resolvedCustomMetricOverageRateCentsPer100k =
                 request.customMetricOverageRateCentsPer100k
                     ?: currentConfig?.customMetricOverageRateCentsPer100k ?: 0
             val resolvedMonthlyInfraMetricSeriesHourLimit =
                 when {
-                    request.monthlyInfraMetricSeriesHourLimit != null -> request.monthlyInfraMetricSeriesHourLimit
+                    request.monthlyInfraMetricSeriesHourLimit != null ->
+                        normalizeUnlimitedQuotaLimit(request.monthlyInfraMetricSeriesHourLimit)
                     currentConfig != null -> currentConfig.monthlyInfraMetricSeriesHourLimit
                     else -> fallbackConfig.monthlyInfraMetricSeriesHourLimit
                 }
@@ -354,7 +371,7 @@ class PricingTierService {
                     it[monthly_transaction_limit] = monthlyTransactionLimit
                     it[monthly_replay_limit] = monthlyReplayLimit
                     it[monthly_feedback_limit] = monthlyFeedbackLimit
-                    it[monthly_llm_event_limit] = request.monthlyLlmEventLimit
+                    it[monthly_llm_event_limit] = monthlyLlmEventLimit
                     it[monthly_gb_limit] = resolvedMonthlyGbLimit
                     it[retention_days] = request.retentionDays
                     it[log_retention_days] = resolvedLogRetentionDays
@@ -417,6 +434,17 @@ class PricingTierService {
                 } get PricingTierConfigs.id
 
             rowToResponse(PricingTierConfigs.selectAll().where { PricingTierConfigs.id eq id }.first())
+        }
+    }
+
+    private fun normalizeUnlimitedQuotaLimit(limit: Long): Long {
+        return if (limit >= JS_SAFE_UNLIMITED_QUOTA_LIMIT) Long.MAX_VALUE else limit
+    }
+
+    private fun totalMonthlyUnitLimit(limits: List<Long>): Long {
+        if (limits.any { it < 0 || it == Long.MAX_VALUE }) return Long.MAX_VALUE
+        return limits.fold(0L) { total, limit ->
+            if (Long.MAX_VALUE - total < limit) Long.MAX_VALUE else total + limit
         }
     }
 
