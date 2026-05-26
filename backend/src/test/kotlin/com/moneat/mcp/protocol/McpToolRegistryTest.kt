@@ -31,7 +31,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-private const val EXPECTED_CORE_MCP_TOOL_COUNT = 81
+private const val EXPECTED_CORE_MCP_TOOL_COUNT = 83
 
 class McpToolRegistryTest {
 
@@ -315,6 +315,7 @@ class McpToolRegistryTest {
             "update_notification_preferences",
             "create_datasource",
             "execute_datasource_query",
+            "create_feature_flag",
             "create_project",
         )
 

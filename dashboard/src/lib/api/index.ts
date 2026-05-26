@@ -44,6 +44,7 @@ import { dashboardsMethods } from './modules/dashboards'
 import { syntheticsMethods } from './modules/synthetics'
 import { logIndexesMethods } from './modules/log-indexes'
 import { workflowsMethods } from './modules/workflows'
+import { featureFlagsMethods } from './modules/feature-flags'
 
 const core = createApiClientCore()
 
@@ -78,6 +79,7 @@ export const api = {
   ...syntheticsMethods(core),
   ...logIndexesMethods(core),
   ...workflowsMethods(core),
+  ...featureFlagsMethods(core),
 }
 
 export { formatErrorForLogging } from './utils'

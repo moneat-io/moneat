@@ -57,6 +57,9 @@ import com.moneat.events.services.DashboardQueryHelper
 import com.moneat.events.services.DashboardService
 import com.moneat.events.services.EventService
 import com.moneat.events.services.ReleaseService
+import com.moneat.featureflags.services.FeatureFlagEvaluator
+import com.moneat.featureflags.services.FeatureFlagEventService
+import com.moneat.featureflags.services.FeatureFlagService
 import com.moneat.incident.services.IncidentService
 import com.moneat.llm.services.LlmDashboardService
 import com.moneat.logs.repositories.LogRepository
@@ -270,6 +273,13 @@ val analyticsModule = module {
     single { GeoIpService() }
 }
 
+/** OpenFeature-compatible feature flags. */
+val featureFlagsModule = module {
+    single { FeatureFlagEvaluator() }
+    single { FeatureFlagService() }
+    single { FeatureFlagEventService() }
+}
+
 /** AI chat assistant. */
 val aiModule = module {
     single { AiChatService() }
@@ -289,5 +299,6 @@ val appModules = listOf(
     summaryModule,
     llmModule,
     analyticsModule,
+    featureFlagsModule,
     aiModule,
 )

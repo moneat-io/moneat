@@ -23,6 +23,7 @@ import com.moneat.mcp.tools.CreateAlertTool
 import com.moneat.mcp.tools.CreateDashboardAlertTool
 import com.moneat.mcp.tools.CreateDashboardTool
 import com.moneat.mcp.tools.CreateDataSourceTool
+import com.moneat.mcp.tools.CreateFeatureFlagTool
 import com.moneat.mcp.tools.CreateAgentKeyTool
 import com.moneat.mcp.tools.CreateProjectTool
 import com.moneat.mcp.tools.CreateSilencePeriodTool
@@ -75,6 +76,7 @@ import com.moneat.mcp.tools.ListContainersTool
 import com.moneat.mcp.tools.ListDashboardsTool
 import com.moneat.mcp.tools.ListDataSourcesTool
 import com.moneat.mcp.tools.ListFeedbackTool
+import com.moneat.mcp.tools.ListFeatureFlagsTool
 import com.moneat.mcp.tools.ListHostsTool
 import com.moneat.mcp.tools.ListIssuesTool
 import com.moneat.mcp.tools.ListProjectsTool
@@ -169,6 +171,10 @@ object McpToolRegistrar {
         toolRegistry.register(CreateProjectTool())
         toolRegistry.register(GetProjectTool())
         toolRegistry.register(GetProjectStatsTool())
+
+        // Feature flag tools
+        toolRegistry.register(ListFeatureFlagsTool())
+        toolRegistry.register(CreateFeatureFlagTool())
 
         // Dashboard alert tools (Phase 1)
         toolRegistry.register(CreateDashboardAlertTool())

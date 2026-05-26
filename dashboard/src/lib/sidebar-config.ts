@@ -19,6 +19,7 @@ import {
   BarChart3,
   Bell,
   Brain,
+  Flag,
   Globe,
   LayoutDashboard,
   MessageSquare,
@@ -45,6 +46,7 @@ export const CONFIGURABLE_SIDEBAR_ITEMS: SidebarItem[] = [
   { key: 'analytics', label: 'Analytics', icon: BarChart3 },
   { key: 'on-call', label: 'On-Call', icon: Bell },
   { key: 'dashboards', label: 'Dashboards', icon: LayoutDashboard },
+  { key: 'feature-flags', label: 'Feature Flags', icon: Flag },
 ];
 
 // Always visible items (not configurable)

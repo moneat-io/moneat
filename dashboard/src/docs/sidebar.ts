@@ -25,6 +25,7 @@ export const docsSidebar: SidebarCategory[] = [
       'releases',
       'ai-observability',
       'custom-dashboards',
+      'feature-flags',
       'user-feedback',
       'infrastructure-monitoring',
       {

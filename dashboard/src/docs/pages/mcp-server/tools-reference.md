@@ -67,6 +67,30 @@ Get error counts and event volume statistics.
 | `project_id` | number | Yes | Project ID |
 | `period` | string | No | `1h`, `6h`, `24h`, `7d`, `30d` (default `7d`) |
 
+## Feature Flag Tools
+
+### `list_feature_flags`
+List feature flags and environments for the organization.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `environment` | string | No | Environment key to prioritize in config results |
+
+### ✏️ `create_feature_flag`
+Create a feature flag with variants for OpenFeature evaluation.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `key` | string | Yes | Stable flag key, such as `checkout.enabled` |
+| `name` | string | Yes | Human-readable flag name |
+| `value_type` | string | Yes | `BOOLEAN`, `STRING`, `INTEGER`, `DOUBLE`, or `OBJECT` |
+| `variants` | array | Yes | Variant objects with `key`, optional `name`, and JSON `value` |
+| `description` | string | No | Internal description |
+| `client_visible` | boolean | No | Allow client SDK keys to evaluate this flag |
+| `tags` | array | No | Grouping tags |
+| `default_variant_key` | string | No | Variant returned when no targeting rule matches |
+| `off_variant_key` | string | No | Variant returned while the flag is disabled |
+
 ## Log Tools
 
 ### `query_logs`
