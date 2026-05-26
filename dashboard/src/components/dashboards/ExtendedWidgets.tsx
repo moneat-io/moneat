@@ -598,9 +598,11 @@ function extractIframeUrl(displayConfig: DisplayConfig): string | null {
   return MARKDOWN_LINK_URL_REGEX.exec(content)?.[1] ?? null
 }
 
-function isSafeHttpUrl(value: string): boolean {
+function isSafeIframeUrl(value: string): boolean {
+  const trimmed = value.trim()
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return true
   try {
-    const url = new URL(value)
+    const url = new URL(trimmed)
     return url.protocol === 'http:' || url.protocol === 'https:'
   } catch {
     return false
@@ -609,7 +611,7 @@ function isSafeHttpUrl(value: string): boolean {
 
 const IframeWidget = memo(function IframeWidget({widget}: {widget: DashboardWidget}) {
   const url = extractIframeUrl(widget.display_config || {})
-  if (!url || !isSafeHttpUrl(url)) return <ExtendedEmptyWidget widgetType="iframe" />
+  if (!url || !isSafeIframeUrl(url)) return <ExtendedEmptyWidget widgetType="iframe" />
 
   return (
     <ExtendedWidgetShell widgetType="iframe">

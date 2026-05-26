@@ -108,6 +108,7 @@ private val json = Json {
 
 private const val DEMO_ORG_ID = -1L
 private const val DEMO_USER_ID = -1L
+internal const val DEMO_DASHBOARD_SEED_COUNT = 5
 
 internal fun seedDemoDashboards() {
     runCatching {
@@ -128,6 +129,7 @@ internal fun seedDemoDashboards() {
             seedPerformanceDashboard()
             seedLlmMonitoringDashboard()
             seedWebAnalyticsDashboard()
+            seedWidgetGalleryDashboard()
         }
         logger.info { "Demo dashboards seeded successfully" }
     }.getOrElse { e ->
@@ -904,4 +906,356 @@ internal fun seedWebAnalyticsDashboard() {
         ),
         order = 10,
     )
+}
+
+// ── Widget Gallery Dashboard ──────────────────────────────────────────
+
+private data class DemoGalleryQuerySpec(
+    val dataSource: String,
+    val groupByFields: List<String>,
+    val metricAlias: String = "count",
+    val filters: List<FilterDef> = emptyList(),
+    val orderBy: OrderByDef? = null,
+    val limit: Int = 20,
+)
+
+private fun countByFieldsQuery(spec: DemoGalleryQuerySpec): QueryDsl =
+    QueryDsl(
+        dataSource = spec.dataSource,
+        metrics = listOf(MetricDef(AggFunction.COUNT, alias = spec.metricAlias)),
+        groupBy = spec.groupByFields.map { GroupByDef(it, GroupByType.FIELD) },
+        filters = spec.filters,
+        orderBy = spec.orderBy ?: OrderByDef(spec.metricAlias, "desc"),
+        timeRange = defaultTimeRange,
+        limit = spec.limit,
+    )
+
+private fun countByTimeAndFieldsQuery(spec: DemoGalleryQuerySpec): QueryDsl =
+    countByFieldsQuery(spec).copy(
+        groupBy = listOf(GroupByDef("timestamp", GroupByType.TIME, DEMO_DASHBOARD_TIME_BUCKET)) +
+            spec.groupByFields.map { GroupByDef(it, GroupByType.FIELD) },
+        orderBy = spec.orderBy ?: OrderByDef("time_bucket", "desc"),
+    )
+
+private fun insertWidgetGallerySection(dashboardId: Long, row: Int, order: Int): Int =
+    insertDemoDashboardSectionRow(dashboardId, "Generic widget previews", row, order)
+
+private fun insertWidgetGalleryTopRow(dashboardId: Long, row: Int) {
+    insertWidget(
+        DemoWidgetInsertSpec(
+            dashboardId = dashboardId,
+            presentation = DemoWidgetPresentation(
+                title = "Event Stream",
+                type = "stream",
+                grid = DemoWidgetGrid(0, row, 6, 4),
+            ),
+            queries = listOf(
+                countByTimeAndFieldsQuery(
+                    DemoGalleryQuerySpec(
+                        dataSource = "events",
+                        groupByFields = listOf("level", "environment", "message"),
+                        limit = 40,
+                    ),
+                ),
+            ),
+            order = 1,
+        ),
+    )
+    insertWidget(
+        DemoWidgetInsertSpec(
+            dashboardId = dashboardId,
+            presentation = DemoWidgetPresentation(
+                title = "Incident Timeline",
+                type = "timeline",
+                grid = DemoWidgetGrid(6, row, 6, 4),
+            ),
+            queries = listOf(
+                countByTimeAndFieldsQuery(
+                    DemoGalleryQuerySpec(
+                        dataSource = "events",
+                        groupByFields = listOf("message", "platform"),
+                        limit = 24,
+                    ),
+                ),
+            ),
+            order = 2,
+        ),
+    )
+}
+
+private fun insertWidgetGalleryMapRow(dashboardId: Long, row: Int) {
+    insertWidget(
+        DemoWidgetInsertSpec(
+            dashboardId = dashboardId,
+            presentation = DemoWidgetPresentation(
+                title = "Traffic Geography",
+                type = "geo_map",
+                grid = DemoWidgetGrid(0, row, 4, 4),
+            ),
+            queries = listOf(
+                countByFieldsQuery(
+                    DemoGalleryQuerySpec(
+                        dataSource = "analytics_events",
+                        groupByFields = listOf("country_code", "city"),
+                        orderBy = OrderByDef("views", "desc"),
+                        metricAlias = "views",
+                        limit = 50,
+                    ),
+                ),
+            ),
+            order = 3,
+        ),
+    )
+    insertWidget(
+        DemoWidgetInsertSpec(
+            dashboardId = dashboardId,
+            presentation = DemoWidgetPresentation(
+                title = "Host Load Map",
+                type = "host_map",
+                grid = DemoWidgetGrid(4, row, 4, 4),
+            ),
+            queries = listOf(
+                countByFieldsQuery(
+                    DemoGalleryQuerySpec(
+                        dataSource = "events",
+                        groupByFields = listOf("server_name", "environment"),
+                        limit = 80,
+                    ),
+                ),
+            ),
+            order = 4,
+        ),
+    )
+    insertWidget(
+        DemoWidgetInsertSpec(
+            dashboardId = dashboardId,
+            presentation = DemoWidgetPresentation(
+                title = "Service Topology",
+                type = "topology_map",
+                grid = DemoWidgetGrid(8, row, 4, 4),
+            ),
+            queries = listOf(
+                countByFieldsQuery(
+                    DemoGalleryQuerySpec(
+                        dataSource = "events",
+                        groupByFields = listOf("platform", "server_name"),
+                        limit = 18,
+                    ),
+                ),
+            ),
+            order = 5,
+        ),
+    )
+}
+
+private fun insertWidgetGalleryBreakdownRow(dashboardId: Long, row: Int) {
+    insertWidget(
+        DemoWidgetInsertSpec(
+            dashboardId = dashboardId,
+            presentation = DemoWidgetPresentation(
+                title = "Service to Host Flow",
+                type = "sankey",
+                grid = DemoWidgetGrid(0, row, 4, 4),
+            ),
+            queries = listOf(
+                countByFieldsQuery(
+                    DemoGalleryQuerySpec(
+                        dataSource = "events",
+                        groupByFields = listOf("platform", "server_name"),
+                        limit = 40,
+                    ),
+                ),
+            ),
+            order = 6,
+        ),
+    )
+    insertWidget(
+        DemoWidgetInsertSpec(
+            dashboardId = dashboardId,
+            presentation = DemoWidgetPresentation(
+                title = "Event Treemap",
+                type = "treemap",
+                grid = DemoWidgetGrid(4, row, 4, 4),
+            ),
+            queries = listOf(
+                countByFieldsQuery(
+                    DemoGalleryQuerySpec(
+                        dataSource = "events",
+                        groupByFields = listOf("platform", "environment"),
+                        limit = 40,
+                    ),
+                ),
+            ),
+            order = 7,
+        ),
+    )
+    insertWidget(
+        DemoWidgetInsertSpec(
+            dashboardId = dashboardId,
+            presentation = DemoWidgetPresentation(
+                title = "Endpoint Status",
+                type = "status",
+                grid = DemoWidgetGrid(8, row, 4, 4),
+            ),
+            queries = listOf(
+                countByFieldsQuery(
+                    DemoGalleryQuerySpec(
+                        dataSource = "events",
+                        groupByFields = listOf("transaction_name", "level", "environment"),
+                        limit = 36,
+                    ),
+                ),
+            ),
+            order = 8,
+        ),
+    )
+}
+
+private fun insertWidgetGalleryAnalysisRow(dashboardId: Long, row: Int) {
+    insertWidget(
+        DemoWidgetInsertSpec(
+            dashboardId = dashboardId,
+            presentation = DemoWidgetPresentation(
+                title = "Latency vs Volume",
+                type = "scatter",
+                grid = DemoWidgetGrid(0, row, 4, 4),
+            ),
+            queries = listOf(
+                QueryDsl(
+                    dataSource = "events",
+                    metrics = listOf(
+                        MetricDef(AggFunction.AVG, "duration_ms", "avg_ms"),
+                        MetricDef(AggFunction.COUNT, alias = "events"),
+                    ),
+                    groupBy = listOf(GroupByDef("transaction_name", GroupByType.FIELD)),
+                    filters = listOf(FilterDef("event_type", FilterOp.EQ, "transaction")),
+                    orderBy = OrderByDef("events", "desc"),
+                    timeRange = defaultTimeRange,
+                    limit = 40,
+                ),
+            ),
+            display = mapOf("unit" to "ms"),
+            order = 9,
+        ),
+    )
+    insertWidget(
+        DemoWidgetInsertSpec(
+            dashboardId = dashboardId,
+            presentation = DemoWidgetPresentation(
+                title = "Request Change",
+                type = "change",
+                grid = DemoWidgetGrid(4, row, 4, 4),
+            ),
+            queries = listOf(
+                QueryDsl(
+                    dataSource = "events",
+                    metrics = listOf(MetricDef(AggFunction.COUNT, alias = "requests")),
+                    groupBy = listOf(GroupByDef("timestamp", GroupByType.TIME, DEMO_DASHBOARD_TIME_BUCKET)),
+                    filters = listOf(FilterDef("event_type", FilterOp.EQ, "transaction")),
+                    timeRange = defaultTimeRange,
+                    limit = 1000,
+                ),
+            ),
+            display = mapOf("unit" to "short"),
+            order = 10,
+        ),
+    )
+    insertWidget(
+        DemoWidgetInsertSpec(
+            dashboardId = dashboardId,
+            presentation = DemoWidgetPresentation(
+                title = "Trace Flame Graph",
+                type = "flame_graph",
+                grid = DemoWidgetGrid(8, row, 4, 4),
+            ),
+            queries = listOf(
+                QueryDsl(
+                    dataSource = "events",
+                    metrics = listOf(MetricDef(AggFunction.P95, "duration_ms", "p95_ms")),
+                    groupBy = listOf(
+                        GroupByDef("transaction_name", GroupByType.FIELD),
+                        GroupByDef("transaction_op", GroupByType.FIELD),
+                    ),
+                    filters = listOf(FilterDef("event_type", FilterOp.EQ, "transaction")),
+                    orderBy = OrderByDef("p95_ms", "desc"),
+                    timeRange = defaultTimeRange,
+                    limit = 40,
+                ),
+            ),
+            order = 11,
+        ),
+    )
+}
+
+private fun insertWidgetGalleryContentRow(dashboardId: Long, row: Int) {
+    insertWidget(
+        DemoWidgetInsertSpec(
+            dashboardId = dashboardId,
+            presentation = DemoWidgetPresentation(
+                title = "Model Cost Summary",
+                type = "cost_summary",
+                grid = DemoWidgetGrid(0, row, 4, 4),
+            ),
+            queries = listOf(
+                QueryDsl(
+                    dataSource = "llm_generations",
+                    metrics = listOf(MetricDef(AggFunction.SUM, "cost_usd", "cost")),
+                    groupBy = listOf(
+                        GroupByDef("model", GroupByType.FIELD),
+                        GroupByDef("provider", GroupByType.FIELD),
+                    ),
+                    orderBy = OrderByDef("cost", "desc"),
+                    timeRange = defaultTimeRange,
+                    limit = 12,
+                ),
+            ),
+            display = mapOf("decimals" to "4"),
+            order = 12,
+        ),
+    )
+    insertWidget(
+        DemoWidgetInsertSpec(
+            dashboardId = dashboardId,
+            presentation = DemoWidgetPresentation(
+                title = "Import Notes",
+                type = "custom",
+                grid = DemoWidgetGrid(4, row, 4, 4),
+            ),
+            queries = emptyList(),
+            display = mapOf(
+                "content" to "### Widget gallery\n\nThis dashboard previews the generic widget shapes used by imports.",
+            ),
+            order = 13,
+        ),
+    )
+    insertWidget(
+        DemoWidgetInsertSpec(
+            dashboardId = dashboardId,
+            presentation = DemoWidgetPresentation(
+                title = "Embedded Runbook",
+                type = "iframe",
+                grid = DemoWidgetGrid(8, row, 4, 4),
+            ),
+            queries = emptyList(),
+            display = mapOf("iframe_url" to "/demo/widget-preview-embed.html"),
+            order = 14,
+        ),
+    )
+}
+
+internal fun seedWidgetGalleryDashboard() {
+    val id = insertDashboard(
+        "Widget Gallery",
+        "Preview of generic Moneat widget types using the demo telemetry dataset",
+    )
+    var row = insertWidgetGallerySection(id, row = 0, order = 0)
+    insertWidgetGalleryTopRow(id, row)
+    row += 4
+    insertWidgetGalleryMapRow(id, row)
+    row += 4
+    insertWidgetGalleryBreakdownRow(id, row)
+    row += 4
+    insertWidgetGalleryAnalysisRow(id, row)
+    row += 4
+    insertWidgetGalleryContentRow(id, row)
 }

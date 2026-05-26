@@ -93,7 +93,7 @@ private data class ReseedSnapshot(
                 freshDatadogCount > 0,
                 freshSecurityCount > 0,
                 freshSyntheticsCount > 0,
-                demoDashboardCount >= 4,
+                demoDashboardCount >= DEMO_DASHBOARD_SEED_COUNT,
             ).all { it }
         return coreDataFresh && hasFreshInfra
     }
@@ -275,7 +275,7 @@ private suspend fun maybeReseedSbom(freshSbomCount: Long) {
 }
 
 private suspend fun maybeReseedDashboards(demoDashboardCount: Long) {
-    if (demoDashboardCount >= 4) {
+    if (demoDashboardCount >= DEMO_DASHBOARD_SEED_COUNT) {
         logger.info { "Demo dashboards are present ($demoDashboardCount), skipping dashboard reseed" }
         return
     }

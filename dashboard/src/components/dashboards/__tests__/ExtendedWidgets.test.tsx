@@ -153,13 +153,19 @@ describe('extended widget rendering', () => {
     expect(screen.getByTitle('Widget iframe')).toHaveAttribute('src', 'https://status.example.com')
   })
 
-  it('extracts iframe URLs from markdown content and rejects unsafe iframe URLs', () => {
+  it('extracts iframe URLs from markdown content and accepts app-relative iframe URLs', () => {
     const markdown = renderWidget('iframe', {
       displayConfig: {iframe_url: '', content: '[status](https://status.example.com/embed)'},
     })
     expect(screen.getByTitle('Widget iframe')).toHaveAttribute('src', 'https://status.example.com/embed')
     markdown.unmount()
 
+    const localEmbed = renderWidget('iframe', {displayConfig: {iframe_url: '/demo/widget-preview-embed.html'}})
+    expect(screen.getByTitle('Widget iframe')).toHaveAttribute('src', '/demo/widget-preview-embed.html')
+    localEmbed.unmount()
+  })
+
+  it('rejects unsafe iframe URLs', () => {
     renderWidget('iframe', {displayConfig: {iframe_url: 'javascript:alert(1)'}})
     expect(screen.getByText('No data')).toBeInTheDocument()
   })
