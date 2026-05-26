@@ -33,7 +33,11 @@ import com.moneat.logs.services.LogIndexService
 import com.moneat.logs.services.LogService
 import com.moneat.otlp.OtlpAuth
 import com.moneat.otlp.models.CreateOtlpApiKeyRequest
+import com.moneat.otlp.models.CreateOtlpServiceMappingRequest
 import com.moneat.otlp.services.OtlpApiKeyService
+import com.moneat.otlp.services.OtlpServiceDescriptor
+import com.moneat.otlp.services.OtlpServiceRoutingService
+import com.moneat.otlp.services.OtlpSignalType
 import com.moneat.plugins.getDemoEpochMs
 import com.moneat.plugins.isDemoUser
 import com.moneat.utils.ErrorResponse
@@ -76,6 +80,7 @@ fun Route.logRoutes(
     logService: LogService = GlobalContext.get().get(),
     otlpApiKeyService: OtlpApiKeyService = GlobalContext.get().get(),
     logIndexService: LogIndexService = GlobalContext.get().get(),
+    otlpServiceRoutingService: OtlpServiceRoutingService = GlobalContext.get().get(),
 ) {
     route("/v1") {
         authenticate("auth-jwt") {
@@ -116,6 +121,45 @@ fun Route.logRoutes(
                 val deleted = otlpApiKeyService.deleteKey(organizationId = orgId, keyId = id)
                 if (!deleted) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Key not found"))
+                    return@delete
+                }
+                call.respond(HttpStatusCode.NoContent)
+            }
+
+            get("/otlp/services") {
+                val principal = call.principal<JWTPrincipal>()
+                val orgId = principal!!.payload.getClaim("orgId").asInt()
+                val services = otlpServiceRoutingService.listObservedServices(orgId)
+                call.respond(HttpStatusCode.OK, mapOf("services" to services))
+            }
+
+            post("/otlp/service-mappings") {
+                val principal = call.principal<JWTPrincipal>()
+                val orgId = principal!!.payload.getClaim("orgId").asInt()
+                val request = call.receive<CreateOtlpServiceMappingRequest>()
+                val response = otlpServiceRoutingService.upsertMapping(orgId, request)
+                if (response == null) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        ErrorResponse("Valid service name and organization project are required")
+                    )
+                    return@post
+                }
+                call.respond(HttpStatusCode.OK, response)
+            }
+
+            delete("/otlp/service-mappings/{id}") {
+                val principal = call.principal<JWTPrincipal>()
+                val orgId = principal!!.payload.getClaim("orgId").asInt()
+                val id = call.parameters["id"]?.toIntOrNull()
+                if (id == null) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid mapping ID"))
+                    return@delete
+                }
+
+                val deleted = otlpServiceRoutingService.deleteMapping(orgId, id)
+                if (!deleted) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Mapping not found"))
                     return@delete
                 }
                 call.respond(HttpStatusCode.NoContent)
@@ -600,15 +644,30 @@ fun Route.logIngestRoutes(
     quotaService: BillingQuotaService = GlobalContext.get().get(),
     otlpApiKeyService: OtlpApiKeyService = GlobalContext.get().get(),
     eventService: EventService = GlobalContext.get().get(),
+    otlpServiceRoutingService: OtlpServiceRoutingService = GlobalContext.get().get(),
 ) {
     route("/v1") {
         // Standard OTLP/HTTP path alias
         post("/logs") {
-            handleOtlpLogIngest(call, logService, quotaService, otlpApiKeyService, eventService)
+            handleOtlpLogIngest(
+                call,
+                logService,
+                quotaService,
+                otlpApiKeyService,
+                eventService,
+                otlpServiceRoutingService
+            )
         }
         // Moneat convention path
         post("/logs/otlp") {
-            handleOtlpLogIngest(call, logService, quotaService, otlpApiKeyService, eventService)
+            handleOtlpLogIngest(
+                call,
+                logService,
+                quotaService,
+                otlpApiKeyService,
+                eventService,
+                otlpServiceRoutingService
+            )
         }
 
         post("/logs/ingest") {
@@ -665,7 +724,8 @@ fun Route.logIngestRoutes(
                     .propertyOrNull("logs.queueKey")
                     ?.getString()
                     ?: "moneat:logs:queue"
-            val accepted = logService.enqueueSdkLogs(organizationId.toLong(), entries, queueKey)
+            val routedEntries = routeLogEntries(organizationId, entries, otlpServiceRoutingService)
+            val accepted = logService.enqueueSdkLogs(organizationId.toLong(), routedEntries, queueKey)
             call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted))
         }
     }
@@ -677,6 +737,7 @@ private suspend fun handleOtlpLogIngest(
     quotaService: BillingQuotaService,
     otlpApiKeyService: OtlpApiKeyService,
     eventService: EventService,
+    otlpServiceRoutingService: OtlpServiceRoutingService,
 ) {
     val contentType = call.request.header(HttpHeaders.ContentType) ?: ""
     val isJson = contentType.contains("application/json", ignoreCase = true)
@@ -741,6 +802,29 @@ private suspend fun handleOtlpLogIngest(
             .propertyOrNull("logs.queueKey")
             ?.getString()
             ?: "moneat:logs:queue"
-    val accepted = logService.enqueueSdkLogs(organizationId.toLong(), parsedEntries, queueKey)
+    val routedEntries = routeLogEntries(organizationId, parsedEntries, otlpServiceRoutingService)
+    val accepted = logService.enqueueSdkLogs(organizationId.toLong(), routedEntries, queueKey)
     call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted))
+}
+
+private fun routeLogEntries(
+    organizationId: Int,
+    entries: List<com.moneat.logs.models.LogIngestEntry>,
+    routingService: OtlpServiceRoutingService,
+): List<com.moneat.logs.models.LogIngestEntry> {
+    val descriptors = entries.map { entry ->
+        OtlpServiceDescriptor(
+            serviceNamespace = entry.serviceNamespace ?: entry.resourceAttributes?.get("service.namespace"),
+            serviceName = entry.service,
+            environment = entry.environment,
+        )
+    }
+    val projectIds = routingService.resolveProjectIds(organizationId, descriptors, OtlpSignalType.LOGS)
+    return entries.map { entry ->
+        val identity = routingService.normalizeIdentity(
+            entry.serviceNamespace ?: entry.resourceAttributes?.get("service.namespace"),
+            entry.service,
+        )
+        entry.copy(projectId = identity?.let { projectIds[it] })
+    }
 }

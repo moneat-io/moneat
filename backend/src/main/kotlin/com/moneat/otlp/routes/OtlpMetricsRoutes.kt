@@ -22,7 +22,11 @@ import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.otlp.METRIC_BILLABLE_OVERHEAD_BYTES
 import com.moneat.otlp.OtlpAuth
 import com.moneat.otlp.services.OtlpApiKeyService
+import com.moneat.otlp.services.OtlpMetricInsert
 import com.moneat.otlp.services.OtlpMetricsService
+import com.moneat.otlp.services.OtlpServiceDescriptor
+import com.moneat.otlp.services.OtlpServiceRoutingService
+import com.moneat.otlp.services.OtlpSignalType
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -43,13 +47,26 @@ fun Route.otlpMetricsRoutes(
     metricsService: OtlpMetricsService = OtlpMetricsService(),
     quotaService: BillingQuotaService = GlobalContext.get().get(),
     otlpApiKeyService: OtlpApiKeyService = GlobalContext.get().get(),
+    otlpServiceRoutingService: OtlpServiceRoutingService = GlobalContext.get().get(),
 ) {
     route("/v1") {
         post("/metrics") {
-            handleOtlpMetricsIngest(call, metricsService, quotaService, otlpApiKeyService)
+            handleOtlpMetricsIngest(
+                call,
+                metricsService,
+                quotaService,
+                otlpApiKeyService,
+                otlpServiceRoutingService
+            )
         }
         post("/metrics/otlp") {
-            handleOtlpMetricsIngest(call, metricsService, quotaService, otlpApiKeyService)
+            handleOtlpMetricsIngest(
+                call,
+                metricsService,
+                quotaService,
+                otlpApiKeyService,
+                otlpServiceRoutingService
+            )
         }
     }
 }
@@ -59,6 +76,7 @@ private suspend fun handleOtlpMetricsIngest(
     metricsService: OtlpMetricsService,
     quotaService: BillingQuotaService,
     otlpApiKeyService: OtlpApiKeyService,
+    otlpServiceRoutingService: OtlpServiceRoutingService,
 ) {
     val contentType = call.request.header(HttpHeaders.ContentType) ?: ""
     val isJson = contentType.contains("application/json", ignoreCase = true)
@@ -134,10 +152,30 @@ private suspend fun handleOtlpMetricsIngest(
         .propertyOrNull("otlp.metricsQueueKey")
         ?.getString()
         ?: DEFAULT_QUEUE_KEY
+    val routedMetrics = routeMetrics(organizationId, parsedMetrics, otlpServiceRoutingService)
     val accepted = metricsService.enqueueMetrics(
         organizationId.toLong(),
-        parsedMetrics,
+        routedMetrics,
         queueKey
     )
     call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted))
+}
+
+private fun routeMetrics(
+    organizationId: Int,
+    metrics: List<OtlpMetricInsert>,
+    routingService: OtlpServiceRoutingService,
+): List<OtlpMetricInsert> {
+    val descriptors = metrics.map { metric ->
+        OtlpServiceDescriptor(
+            serviceNamespace = metric.serviceNamespace,
+            serviceName = metric.service,
+            environment = metric.env,
+        )
+    }
+    val projectIds = routingService.resolveProjectIds(organizationId, descriptors, OtlpSignalType.METRICS)
+    return metrics.map { metric ->
+        val identity = routingService.normalizeIdentity(metric.serviceNamespace, metric.service)
+        metric.copy(projectId = identity?.let { projectIds[it] })
+    }
 }

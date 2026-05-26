@@ -223,6 +223,37 @@ object OtlpApiKeys : Table("otlp_api_keys") {
     override val primaryKey = PrimaryKey(id)
 }
 
+object OtelServiceProjectMappings : Table("otel_service_project_mappings") {
+    val id = integer("id").autoIncrement()
+    val organization_id = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
+    val service_namespace = varchar("service_namespace", 255).default("")
+    val service_name = varchar("service_name", 255)
+    val project_id = long("project_id").references(Projects.id, onDelete = ReferenceOption.CASCADE)
+    val created_at = timestamp("created_at")
+    val updated_at = timestamp("updated_at")
+    init {
+        uniqueIndex(organization_id, service_namespace, service_name)
+    }
+    override val primaryKey = PrimaryKey(id)
+}
+
+object OtelObservedServices : Table("otel_observed_services") {
+    val id = integer("id").autoIncrement()
+    val organization_id = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
+    val service_namespace = varchar("service_namespace", 255).default("")
+    val service_name = varchar("service_name", 255)
+    val first_seen_at = timestamp("first_seen_at")
+    val last_seen_at = timestamp("last_seen_at")
+    val seen_logs = bool("seen_logs").default(false)
+    val seen_traces = bool("seen_traces").default(false)
+    val seen_metrics = bool("seen_metrics").default(false)
+    val last_environment = varchar("last_environment", 255).nullable()
+    init {
+        uniqueIndex(organization_id, service_namespace, service_name)
+    }
+    override val primaryKey = PrimaryKey(id)
+}
+
 object LogIndexes : Table("log_indexes") {
     val id = integer("id").autoIncrement()
     val organizationId = integer("organization_id").references(Organizations.id)

@@ -101,6 +101,30 @@ export interface CreateOtlpApiKeyResponse {
   createdAt: string
 }
 
+export interface OtlpObservedService {
+  id: number
+  mappingId?: number | null
+  serviceNamespace: string
+  serviceName: string
+  projectId?: number | null
+  projectName?: string | null
+  seenLogs: boolean
+  seenTraces: boolean
+  seenMetrics: boolean
+  lastEnvironment?: string | null
+  firstSeenAt: string
+  lastSeenAt: string
+}
+
+export interface OtlpServiceMapping {
+  id: number
+  serviceNamespace: string
+  serviceName: string
+  projectId: number
+  projectName: string
+  updatedAt: string
+}
+
 /** @deprecated Use CreateOtlpApiKeyResponse instead */
 export type CreateLogApiKeyResponse = CreateOtlpApiKeyResponse
 

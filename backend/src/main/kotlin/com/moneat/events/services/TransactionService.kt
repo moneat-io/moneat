@@ -216,7 +216,11 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
 
         val throughputQuery = """
             SELECT
-                formatDateTime(toStartOfInterval(timestamp, INTERVAL ${config.intervalMinutes} MINUTE), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as time,
+                formatDateTime(
+                    toStartOfInterval(timestamp, INTERVAL ${config.intervalMinutes} MINUTE),
+                    '%Y-%m-%dT%H:%i:%S.000Z',
+                    'UTC'
+                ) as time,
                 count() as count
             FROM `$clickhouseDb`.events
             WHERE $projectIdClause
@@ -438,8 +442,10 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
             FROM `$clickhouseDb`.apm_spans
             WHERE organization_id = $orgId
               AND trace_id_hex = '$escapedTraceId'
-              AND meta['sentry.project_id'] = '$projectId'
-              AND source = 'sentry'
+              AND (
+                  project_id = $projectId OR
+                  (meta['sentry.project_id'] = '$projectId' AND source = 'sentry')
+              )
             ORDER BY start ASC
             FORMAT JSONEachRow
         """.trimIndent()
@@ -488,8 +494,10 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
             FROM `$clickhouseDb`.apm_spans
             WHERE organization_id = $orgId
               AND span_id_hex = '$escapedSpanId'
-              AND meta['sentry.project_id'] = '$projectId'
-              AND source = 'sentry'
+              AND (
+                  project_id = $projectId OR
+                  (meta['sentry.project_id'] = '$projectId' AND source = 'sentry')
+              )
             LIMIT 1
             FORMAT JSONEachRow
         """.trimIndent()
