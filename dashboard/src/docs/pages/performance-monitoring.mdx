@@ -61,3 +61,7 @@ Metrics are stored in ClickHouse and available for querying via custom dashboard
 The service map is built from APM spans (Datadog and OTLP). It shows services as nodes and inter-service calls as edges, with error rates and average durations per edge. The map uses automatic layout via Dagre.
 
 Available at **Performance > Service Map**.
+
+## Data Retention
+
+Stored APM traces and trace resource stats use the APM trace retention window configured for your plan.

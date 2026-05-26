@@ -182,7 +182,14 @@ data class DdApmErrorGroup(
 )
 
 @Serializable
+data class DdApmServiceFacet(
+    val service: String,
+    val count: Long,
+)
+
+@Serializable
 data class DdApmErrorsResponse(
     val errors: List<DdApmErrorGroup>,
     val totalCount: Long,
+    val serviceFacets: List<DdApmServiceFacet> = emptyList(),
 )

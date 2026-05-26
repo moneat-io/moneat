@@ -16,9 +16,12 @@
 
 package com.moneat.shared.services
 
-import com.moneat.utils.suspendRunCatching
 import com.moneat.config.ClickHouseClient
 import com.moneat.shared.models.Projects
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
+import com.moneat.utils.suspendRunCatching
 import io.ktor.server.config.ApplicationConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,9 +32,6 @@ import kotlinx.coroutines.launch
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
-import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
-import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 private val logger = KotlinLogging.logger {}
 
@@ -91,6 +91,7 @@ class RetentionBackgroundService(
         val logRetentionByOrg = retentionPolicyService.getLogRetentionDaysByOrganization()
         val replayRetentionByOrg = retentionPolicyService.getReplayRetentionDaysByOrganization()
         val llmRetentionByOrg = retentionPolicyService.getLlmRetentionDaysByOrganization()
+        val apmTraceRetentionByOrg = retentionPolicyService.getApmTraceRetentionDaysByOrganization()
         val analyticsRetentionByOrg = retentionPolicyService.getAnalyticsRetentionDaysByOrganization()
 
         if (retentionByOrg.isEmpty()) {
@@ -128,6 +129,12 @@ class RetentionBackgroundService(
         for ((llmRetentionDays, orgIds) in groupedLlmOrgIds) {
             val projectIds = orgIds.flatMap { projectsByOrg[it].orEmpty() }
             tableMutationCount += submitLlmDeletes(projectIds, llmRetentionDays)
+        }
+
+        // APM trace retention (per-surface, org-scoped)
+        val groupedApmTraceOrgIds = apmTraceRetentionByOrg.entries.groupBy({ it.value }, { it.key })
+        for ((apmTraceRetentionDays, orgIds) in groupedApmTraceOrgIds) {
+            tableMutationCount += submitApmTraceDeletes(orgIds, apmTraceRetentionDays)
         }
 
         // Analytics retention (per-surface)
@@ -202,6 +209,21 @@ class RetentionBackgroundService(
         return submitProjectScopedDeletes(projectIds, tables, analyticsRetentionDays)
     }
 
+    private suspend fun submitApmTraceDeletes(
+        orgIds: List<Int>,
+        apmTraceRetentionDays: Int
+    ): Int {
+        if (orgIds.isEmpty()) return 0
+        val tables = listOf(
+            "apm_spans" to "start",
+            "trace_stats" to "start",
+            "apm_trace_summaries" to "bucket_start",
+            "apm_error_groups_hourly" to "bucket_start",
+            "apm_resource_stats_hourly" to "bucket_start"
+        )
+        return submitOrgScopedDeletes(orgIds, tables, apmTraceRetentionDays, "apm-traces")
+    }
+
     private suspend fun submitProjectScopedDeletes(
         projectIds: List<Long>,
         tables: List<Pair<String, String>>,
@@ -229,13 +251,21 @@ class RetentionBackgroundService(
         orgIds: List<Int>,
         retentionDays: Int
     ): Int {
-        if (orgIds.isEmpty()) return 0
-
         val tables =
             listOf(
                 "metrics" to "timestamp",
                 "containers" to "timestamp"
             )
+        return submitOrgScopedDeletes(orgIds, tables, retentionDays, "org")
+    }
+
+    private suspend fun submitOrgScopedDeletes(
+        orgIds: List<Int>,
+        tables: List<Pair<String, String>>,
+        retentionDays: Int,
+        labelSuffix: String
+    ): Int {
+        if (orgIds.isEmpty()) return 0
 
         var mutations = 0
         for (chunk in orgIds.chunked(idChunkSize)) {
@@ -247,7 +277,7 @@ class RetentionBackgroundService(
                     DELETE WHERE organization_id IN ($orgList)
                         AND $timeColumn < now64(3) - INTERVAL $retentionDays DAY
                     """.trimIndent()
-                if (submitMutation(query, "$table(org)")) {
+                if (submitMutation(query, "$table($labelSuffix)")) {
                     mutations++
                 }
             }

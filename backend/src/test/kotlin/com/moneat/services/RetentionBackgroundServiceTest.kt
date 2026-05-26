@@ -56,6 +56,7 @@ class RetentionBackgroundServiceTest {
         private const val LOG_RETENTION = 7
         private const val REPLAY_RETENTION = 14
         private const val LLM_RETENTION = 21
+        private const val APM_TRACE_RETENTION = 45
         private const val ANALYTICS_RETENTION = 90
     }
 
@@ -101,6 +102,7 @@ class RetentionBackgroundServiceTest {
         log: Map<Int, Int> = emptyMap(),
         replay: Map<Int, Int> = emptyMap(),
         llm: Map<Int, Int> = emptyMap(),
+        apmTrace: Map<Int, Int> = emptyMap(),
         analytics: Map<Int, Int> = emptyMap()
     ) {
         coEvery {
@@ -115,6 +117,9 @@ class RetentionBackgroundServiceTest {
         coEvery {
             retentionPolicyService.getLlmRetentionDaysByOrganization()
         } returns llm
+        coEvery {
+            retentionPolicyService.getApmTraceRetentionDaysByOrganization()
+        } returns apmTrace
         coEvery {
             retentionPolicyService.getAnalyticsRetentionDaysByOrganization()
         } returns analytics
@@ -256,6 +261,25 @@ class RetentionBackgroundServiceTest {
     }
 
     @Test
+    fun `runSweep submits APM trace deletes`() = runBlocking {
+        val orgId = seedOrg()
+        seedProject(orgId)
+        mockAllRetention(orgId)
+
+        withSweep { queries ->
+            listOf(
+                "apm_spans",
+                "trace_stats",
+                "apm_trace_summaries",
+                "apm_error_groups_hourly",
+                "apm_resource_stats_hourly"
+            ).forEach {
+                assertOrgScopedDeleteWithRetention(queries, it, orgId, APM_TRACE_RETENTION)
+            }
+        }
+    }
+
+    @Test
     fun `runSweep handles ClickHouse error without throwing`() =
         runBlocking {
             val orgId = seedOrg()
@@ -295,6 +319,10 @@ class RetentionBackgroundServiceTest {
                     org1 to LLM_RETENTION,
                     org2 to LLM_RETENTION
                 ),
+                apmTrace = mapOf(
+                    org1 to APM_TRACE_RETENTION,
+                    org2 to APM_TRACE_RETENTION
+                ),
                 analytics = mapOf(
                     org1 to ANALYTICS_RETENTION,
                     org2 to ANALYTICS_RETENTION
@@ -331,9 +359,9 @@ class RetentionBackgroundServiceTest {
                     it.contains("organization_id")
                 }
                 assertEquals(
-                    2,
+                    7,
                     orgQ.size,
-                    "Org-scoped queries for metrics + containers"
+                    "Org-scoped queries for metrics + containers + APM trace tables"
                 )
             }
         }
@@ -364,6 +392,7 @@ class RetentionBackgroundServiceTest {
             log = mapOf(orgId to LOG_RETENTION),
             replay = mapOf(orgId to REPLAY_RETENTION),
             llm = mapOf(orgId to LLM_RETENTION),
+            apmTrace = mapOf(orgId to APM_TRACE_RETENTION),
             analytics = mapOf(orgId to ANALYTICS_RETENTION)
         )
     }
@@ -394,6 +423,22 @@ class RetentionBackgroundServiceTest {
                 it.contains("`testdb`.`$table`") &&
                     it.contains("organization_id IN ($orgId)") &&
                     it.contains("now64(3)")
+            },
+            "Missing org-scoped DELETE for $table"
+        )
+    }
+
+    private fun assertOrgScopedDeleteWithRetention(
+        queries: List<String>,
+        table: String,
+        orgId: Int,
+        retentionDays: Int
+    ) {
+        assertTrue(
+            queries.any {
+                it.contains("`testdb`.`$table`") &&
+                    it.contains("organization_id IN ($orgId)") &&
+                    it.contains("INTERVAL $retentionDays DAY")
             },
             "Missing org-scoped DELETE for $table"
         )

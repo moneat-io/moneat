@@ -366,6 +366,7 @@ class IngestRoutesEnvelopeTest {
             periodStart = "2026-01-01",
             periodEnd = "2026-01-31",
             retentionDays = 30,
+            apmTraceRetentionDays = 30,
             usedUnits = 0,
             usedErrors = 0,
             errorLimit = 1000,

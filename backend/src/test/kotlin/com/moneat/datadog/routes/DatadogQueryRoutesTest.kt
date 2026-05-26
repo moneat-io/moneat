@@ -55,14 +55,14 @@ class DatadogQueryRoutesTest {
         every { DatadogHostService.listHosts(any<Int>()) } returns emptyList()
         every { DatadogHostService.getHost(any<Int>(), any<Int>()) } returns null
         every { DatadogHostService.deleteHost(any<Int>(), any<Int>()) } returns false
-        coEvery { TraceIngestionService.listResourceStats(any(), any(), any(), any()) } returns
+        coEvery { TraceIngestionService.listResourceStats(any(), any(), any(), any(), any()) } returns
             DdResourceStatsResponse(emptyList(), 0L)
-        coEvery { TraceIngestionService.listTraces(any(), any(), any(), any(), any()) } returns
+        coEvery { TraceIngestionService.listTraces(any(), any(), any(), any(), any(), any()) } returns
             DdTraceListResponse(emptyList(), 0L)
         coEvery { TraceIngestionService.getTraceDetail(any(), any()) } returns null
         coEvery { TraceIngestionService.getServiceMap(any()) } returns
             DdServiceMapResponse(emptyList())
-        coEvery { TraceIngestionService.getApmErrors(any(), any(), any(), any()) } returns
+        coEvery { TraceIngestionService.getApmErrors(any(), any(), any(), any(), any()) } returns
             DdApmErrorsResponse(emptyList(), 0L)
         coEvery { ProfileIngestionService.listProfiles(any(), any(), any(), any(), any(), any()) } returns
             DdProfileListResponse(emptyList(), 0L)

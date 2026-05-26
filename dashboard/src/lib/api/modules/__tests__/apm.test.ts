@@ -53,6 +53,7 @@ describe('APM API', () => {
         expect(url.searchParams.get('env')).toBe('production')
         expect(url.searchParams.get('limit')).toBe('20')
         expect(url.searchParams.get('offset')).toBe('10')
+        expect(url.searchParams.get('timeRange')).toBe('7d')
         return HttpResponse.json(mockResponse)
       })
     )
@@ -62,6 +63,7 @@ describe('APM API', () => {
       env: 'production',
       limit: 20,
       offset: 10,
+      timeRange: '7d',
     })
     expect(result).toEqual(mockResponse)
   })
@@ -99,7 +101,7 @@ describe('APM API', () => {
   // ──── getApmErrors ────
 
   it('fetches APM errors without params', async () => {
-    const mockResponse = { errors: [], total: 0 }
+    const mockResponse = { errors: [], totalCount: 0, serviceFacets: [] }
 
     server.use(
       http.get(`${API_BASE}/v1/apm-errors`, () => {
@@ -112,7 +114,11 @@ describe('APM API', () => {
   })
 
   it('fetches APM errors with filter params', async () => {
-    const mockResponse = { errors: [{ id: 'err-1' }], total: 1 }
+    const mockResponse = {
+      errors: [{ id: 'err-1' }],
+      totalCount: 1,
+      serviceFacets: [{ service: 'payment-svc', count: 1 }],
+    }
 
     server.use(
       http.get(`${API_BASE}/v1/apm-errors`, ({ request }) => {
@@ -120,6 +126,7 @@ describe('APM API', () => {
         expect(url.searchParams.get('service')).toBe('payment-svc')
         expect(url.searchParams.get('limit')).toBe('50')
         expect(url.searchParams.get('offset')).toBe('0')
+        expect(url.searchParams.get('timeRange')).toBe('90d')
         return HttpResponse.json(mockResponse)
       })
     )
@@ -128,6 +135,7 @@ describe('APM API', () => {
       service: 'payment-svc',
       limit: 50,
       offset: 0,
+      timeRange: '90d',
     })
     expect(result).toEqual(mockResponse)
   })
@@ -155,6 +163,7 @@ describe('APM API', () => {
         const url = new URL(request.url)
         expect(url.searchParams.get('service')).toBe('user-svc')
         expect(url.searchParams.get('limit')).toBe('10')
+        expect(url.searchParams.get('timeRange')).toBe('30d')
         return HttpResponse.json(mockResponse)
       })
     )
@@ -162,6 +171,7 @@ describe('APM API', () => {
     const result = await api.getApmResourceStats({
       service: 'user-svc',
       limit: 10,
+      timeRange: '30d',
     })
     expect(result).toEqual(mockResponse)
   })

@@ -28,6 +28,7 @@ export interface BillingTierConfig {
   retentionDays: number
   replayRetentionDays: number
   llmRetentionDays: number
+  apmTraceRetentionDays?: number
   statusPagesEnabled: boolean
   statusPageCustomDomainEnabled: boolean
   sessionReplayEnabled: boolean
@@ -96,6 +97,7 @@ export interface BillingUsage {
   logRetentionDays?: number
   replayRetentionDays?: number
   llmRetentionDays?: number
+  apmTraceRetentionDays?: number
   usedUnits: number
   usedErrors: number
   errorLimit: number
@@ -244,6 +246,7 @@ export interface CreateTierVersionRequest {
   logRetentionDays?: number | null
   replayRetentionDays?: number | null
   llmRetentionDays?: number | null
+  apmTraceRetentionDays?: number | null
   statusPagesEnabled?: boolean | null
   statusPageCustomDomainEnabled?: boolean | null
   sessionReplayEnabled?: boolean | null

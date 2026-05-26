@@ -41,6 +41,7 @@ class PricingTierServiceTest {
         retentionDays: Int = 3,
         isCurrent: Boolean = true,
         monthlyPriceCents: Int = 0,
+        apmTraceRetentionDays: Int = retentionDays,
         monthlyInfraMetricSeriesHourLimit: Long = 0,
         infraMetricOverageRateCentsPer100kSeriesHours: Int = 0
     ): Int =
@@ -56,6 +57,7 @@ class PricingTierServiceTest {
                 it[monthly_gb_limit] = 1_073_741_824
                 it[retention_days] = retentionDays
                 it[log_retention_days] = retentionDays
+                it[apm_trace_retention_days] = apmTraceRetentionDays
                 it[status_pages_enabled] = true
                 it[status_page_custom_domain_enabled] = false
                 it[session_replay_enabled] = false
@@ -81,6 +83,30 @@ class PricingTierServiceTest {
                 it[is_current] = isCurrent
             } get PricingTierConfigs.id
         }
+
+    private fun createRequest(
+        retentionDays: Int = 7,
+        apmTraceRetentionDays: Int? = null
+    ): CreateTierVersionRequest =
+        CreateTierVersionRequest(
+            monthlyUnitLimit = 50_000,
+            monthlyErrorLimit = 50_000,
+            monthlyTransactionLimit = 0,
+            monthlyReplayLimit = 0,
+            monthlyFeedbackLimit = 0,
+            monthlyGbLimit = 1_073_741_824,
+            retentionDays = retentionDays,
+            logRetentionDays = retentionDays,
+            apmTraceRetentionDays = apmTraceRetentionDays,
+            maxProjects = 5,
+            maxSystems = 5,
+            monitorIntervalSeconds = 60,
+            monthlyPriceCents = 2900,
+            yearlyPriceCents = 24_900,
+            trialDays = 14,
+            paygEnabled = false,
+            paygRateMicrosPerUnit = 0
+        )
 
     @Test
     fun `getCurrentPlans returns only current tiers`() {
@@ -164,6 +190,56 @@ class PricingTierServiceTest {
         assertEquals(2, created.version)
         assertEquals("PRO", created.tierName)
         assertEquals(50_000, created.monthlyUnitLimit)
+    }
+
+    @Test
+    fun `createTierVersion stores explicit APM trace retention`() {
+        seedTier("PRO", version = 1, retentionDays = 30)
+
+        val created =
+            service.createTierVersion(
+                "PRO",
+                createRequest(retentionDays = 30, apmTraceRetentionDays = 45)
+            )
+
+        assertEquals(45, created.apmTraceRetentionDays)
+    }
+
+    @Test
+    fun `createTierVersion preserves omitted APM trace retention from current tier`() {
+        seedTier("PRO", version = 1, retentionDays = 30, apmTraceRetentionDays = 45)
+
+        val created =
+            service.createTierVersion(
+                "PRO",
+                createRequest(retentionDays = 30)
+            )
+
+        assertEquals(45, created.apmTraceRetentionDays)
+    }
+
+    @Test
+    fun `createTierVersion defaults APM trace retention to retention days without current tier`() {
+        val created =
+            service.createTierVersion(
+                "TEAM",
+                createRequest(retentionDays = 21)
+            )
+
+        assertEquals(21, created.apmTraceRetentionDays)
+    }
+
+    @Test
+    fun `createTierVersion rejects invalid APM trace retention`() {
+        val error =
+            assertFailsWith<IllegalArgumentException> {
+                service.createTierVersion(
+                    "PRO",
+                    createRequest(retentionDays = 30, apmTraceRetentionDays = 0)
+                )
+            }
+
+        assertEquals("APM trace retention days must be between 1 and 90", error.message)
     }
 
     @Test

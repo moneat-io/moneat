@@ -886,7 +886,7 @@ function UsageTab() {
       icon: Activity,
       color: 'text-purple-500',
       bgColor: 'bg-purple-500',
-      retentionDays: usage.retentionDays,
+      retentionDays: usage.apmTraceRetentionDays ?? usage.retentionDays,
       overageCents: usage.apmSpanOverageCentsEstimate ?? 0,
       overageRate: usage.apmSpanOverageRateCentsPer1m
         ? `$${(usage.apmSpanOverageRateCentsPer1m / 100).toFixed(2)}/1M`
@@ -1085,6 +1085,7 @@ function UsageTab() {
                     expanded={isApmSpanSourceExpanded}
                     isLoading={isApmSpanDebugLoading}
                     onExpandedChange={setIsApmSpanSourceExpanded}
+                    retentionDays={row.retentionDays}
                     timezone={timezone}
                   />
                 )}

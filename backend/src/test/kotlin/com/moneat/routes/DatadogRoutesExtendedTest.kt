@@ -221,6 +221,7 @@ class DatadogRoutesExtendedTest {
             periodStart = "2026-05-01",
             periodEnd = "2026-05-31",
             retentionDays = 30,
+            apmTraceRetentionDays = 30,
             usedUnits = 0,
             usedErrors = 0,
             errorLimit = 0,
@@ -1456,7 +1457,7 @@ class DatadogRoutesExtendedTest {
     fun `GET v1 traces resources returns 200`() = testApplication {
         val (userId, orgId) = seedUserAndOrg()
         coEvery {
-            TraceIngestionService.listResourceStats(orgId, null, any(), any())
+            TraceIngestionService.listResourceStats(orgId, null, any(), any(), any())
         } returns DdResourceStatsResponse(emptyList(), 0L)
         application {
             installAuth()
@@ -1472,7 +1473,7 @@ class DatadogRoutesExtendedTest {
     fun `GET v1 traces returns 200`() = testApplication {
         val (userId, orgId) = seedUserAndOrg()
         coEvery {
-            TraceIngestionService.listTraces(orgId, null, null, any(), any())
+            TraceIngestionService.listTraces(orgId, null, null, any(), any(), any())
         } returns DdTraceListResponse(emptyList(), 0L)
         application {
             installAuth()
@@ -1535,7 +1536,7 @@ class DatadogRoutesExtendedTest {
     fun `GET v1 apm-errors returns 200`() = testApplication {
         val (userId, orgId) = seedUserAndOrg()
         coEvery {
-            TraceIngestionService.getApmErrors(orgId, null, any(), any())
+            TraceIngestionService.getApmErrors(orgId, null, any(), any(), any())
         } returns DdApmErrorsResponse(emptyList(), 0L)
         application {
             installAuth()
