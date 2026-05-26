@@ -807,6 +807,7 @@ function RevokeTokenDialog({ token, onClose, onConfirm, isRevoking }: RevokeToke
 
 function UsageTab() {
   const { timezone } = useTimezone()
+  const isSelfHosted = useIsSelfHosted()
   const [isApmSpanSourceExpanded, setIsApmSpanSourceExpanded] = useState(false)
   const { data: usage, isLoading } = useQuery({
     queryKey: ['billingUsage'],
@@ -981,15 +982,27 @@ function UsageTab() {
                 </CardDescription>
               </div>
             </div>
-            {totalOverageCents > 0 && (
-              <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
-                <TrendingUp className="h-4 w-4 text-amber-500" />
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground">Est. overage</p>
-                  <p className="text-sm font-bold text-amber-600">{formatCurrency(totalOverageCents)}</p>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {!isSelfHosted && (
+                <Button asChild variant="outline" size="sm">
+                  <Link to="/usage-insights">
+                    <TrendingUp data-icon="inline-start" />
+                    Usage Insights
+                  </Link>
+                </Button>
+              )}
+              {totalOverageCents > 0 && (
+                <div
+                  className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2"
+                >
+                  <TrendingUp className="h-4 w-4 text-amber-500" />
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">Est. overage</p>
+                    <p className="text-sm font-bold text-amber-600">{formatCurrency(totalOverageCents)}</p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-2">

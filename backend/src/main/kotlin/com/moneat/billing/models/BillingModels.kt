@@ -375,6 +375,69 @@ data class ApmSpanUsageDebugGroup(
 )
 
 @Serializable
+data class BillingUsageInsightsResponse(
+    val organizationId: Int,
+    val periodStart: String,
+    val periodEnd: String,
+    val generatedAt: String,
+    val billingMode: String,
+    val usage: BillingUsageResponse,
+    val dimensions: List<BillingInsightDimension>,
+    val apmSpanDebug: ApmSpanUsageDebugResponse? = null
+)
+
+@Serializable
+data class BillingInsightDimension(
+    val key: String,
+    val label: String,
+    val unit: String,
+    val used: Long,
+    val baseLimit: Long,
+    val effectiveLimit: Long?,
+    val percentOfBase: Double,
+    val percentOfEffective: Double?,
+    val overageCentsEstimate: Int,
+    val overageRateLabel: String?,
+    val forecast: BillingForecast,
+    val contributors: List<BillingContributor>,
+    val daily: List<BillingInsightDailyPoint>
+)
+
+@Serializable
+data class BillingForecast(
+    val window: String,
+    val confidence: String,
+    val dailyRate: Double,
+    val projectedPeriodEndUsage: Long,
+    val projectedBaseLimitHitDate: String?,
+    val projectedEffectiveLimitHitDate: String?,
+    val projectedOverageCents: Int,
+    val riskLevel: String,
+    val summary: String
+)
+
+@Serializable
+data class BillingContributor(
+    val key: String,
+    val label: String,
+    val kind: String,
+    val eventType: String? = null,
+    val projectId: Int? = null,
+    val projectName: String? = null,
+    val projectSlug: String? = null,
+    val units: Long,
+    val bytes: Long,
+    val percentage: Double
+)
+
+@Serializable
+data class BillingInsightDailyPoint(
+    val date: String,
+    val value: Long,
+    val bytes: Long
+)
+
+@Serializable
 data class CheckoutSessionRequest(
     val tierName: String,
     val billingInterval: String = "monthly", // "monthly" or "yearly"

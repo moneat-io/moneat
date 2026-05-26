@@ -61,6 +61,8 @@ private const val BADGE_NEGATIVE =
 private const val BADGE_NEUTRAL = "font-weight:500;background-color:#f5f5f5;" +
     "border:1px solid #e5e5e5;color:#737373;"
 private const val TOP_ISSUES_COUNT = 5
+private const val SETTINGS_URL_PLACEHOLDER = "{{ settingsUrl }}"
+private const val YEAR_PLACEHOLDER = "{{ year }}"
 
 /** Sends transactional and notification email via Jakarta Mail and HTML templates. */
 class EmailService {
@@ -500,6 +502,27 @@ class EmailService {
         val crashFree: String
     )
 
+    data class BillingInsightRow(
+        val label: String,
+        val used: String,
+        val limit: String,
+        val percent: String,
+        val status: String
+    )
+
+    data class BillingInsightEmailData(
+        val organizationName: String,
+        val plan: String,
+        val periodStart: String,
+        val periodEnd: String,
+        val headline: String,
+        val summary: String,
+        val dashboardUrl: String,
+        val settingsUrl: String,
+        val rows: List<BillingInsightRow>,
+        val totalOverage: String
+    )
+
     fun sendErrorAlertEmail(
         to: String,
         data: ErrorAlertData
@@ -554,6 +577,58 @@ class EmailService {
             """.trimIndent()
 
         sendEmail(to, subject, htmlBody, textBody, "weekly_summary")
+    }
+
+    fun sendBillingThresholdAlertEmail(
+        to: String,
+        subject: String,
+        data: BillingInsightEmailData
+    ) {
+        val htmlBody = loadBillingInsightTemplate("billing-threshold-alert.html", data)
+        val rows = data.rows.joinToString("\n") { "- ${it.label}: ${it.used} / ${it.limit} (${it.percent})" }
+        val textBody =
+            """
+            ${data.headline}
+
+            ${data.summary}
+
+            Plan: ${data.plan}
+            Billing period: ${data.periodStart} to ${data.periodEnd}
+            Estimated overage: ${data.totalOverage}
+
+            $rows
+
+            Open Usage Insights: ${data.dashboardUrl}
+            Billing settings: ${data.settingsUrl}
+            """.trimIndent()
+
+        sendEmail(to, subject, htmlBody, textBody, "billing_threshold_alert")
+    }
+
+    fun sendBillingInsightsEmail(
+        to: String,
+        data: BillingInsightEmailData
+    ) {
+        val subject = "[${data.organizationName}] Usage Insights digest"
+        val htmlBody = loadBillingInsightTemplate("billing-insights.html", data)
+        val rows = data.rows.joinToString("\n") { "- ${it.label}: ${it.used} / ${it.limit} (${it.percent})" }
+        val textBody =
+            """
+            ${data.headline}
+
+            ${data.summary}
+
+            Plan: ${data.plan}
+            Billing period: ${data.periodStart} to ${data.periodEnd}
+            Estimated overage: ${data.totalOverage}
+
+            $rows
+
+            Open Usage Insights: ${data.dashboardUrl}
+            Billing settings: ${data.settingsUrl}
+            """.trimIndent()
+
+        sendEmail(to, subject, htmlBody, textBody, "billing_insights_digest")
     }
 
     fun sendHostDownEmail(
@@ -729,9 +804,9 @@ class EmailService {
                 .replace("{{ environment }}", data.environment)
                 .replace("{{ timestamp }}", data.timestamp)
                 .replace("{{ stackTrace }}", data.stackTrace)
-                .replace("{{ settingsUrl }}", data.settingsUrl)
+                .replace(SETTINGS_URL_PLACEHOLDER, data.settingsUrl)
                 .replace("{{ unsubscribeUrl }}", data.unsubscribeUrl)
-                .replace("{{ year }}", year)
+                .replace(YEAR_PLACEHOLDER, year)
         } else {
             // Fallback HTML
             """
@@ -769,9 +844,9 @@ class EmailService {
                     .replace("{{ newIssues }}", data.newIssues)
                     .replace("{{ affectedUsers }}", data.affectedUsers)
                     .replace("{{ dashboardUrl }}", data.dashboardUrl)
-                    .replace("{{ settingsUrl }}", data.settingsUrl)
+                    .replace(SETTINGS_URL_PLACEHOLDER, data.settingsUrl)
                     .replace("{{ unsubscribeUrl }}", data.unsubscribeUrl)
-                    .replace("{{ year }}", year)
+                    .replace(YEAR_PLACEHOLDER, year)
 
             html = html.replace("EVENTS_TREND_PLACEHOLDER", trendBadgeHtml(data.eventsTrend, positiveIsGood = true))
             html = html.replace("ISSUES_TREND_PLACEHOLDER", trendBadgeHtml(data.issuesTrend, positiveIsGood = false))
@@ -855,6 +930,72 @@ class EmailService {
                 <p><a href="${data.dashboardUrl}">Open Dashboard</a></p>
             </body>
             </html>
+            """.trimIndent()
+        }
+    }
+
+    private fun loadBillingInsightTemplate(
+        templateName: String,
+        data: BillingInsightEmailData
+    ): String {
+        val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/$templateName")
+        val year = java.time.Year.now().value.toString()
+        return if (templateResource != null) {
+            var html =
+                templateResource
+                    .bufferedReader()
+                    .use { it.readText() }
+                    .replace("{{ organizationName }}", data.organizationName.escapeHtml())
+                    .replace("{{ plan }}", data.plan.escapeHtml())
+                    .replace("{{ periodStart }}", data.periodStart.escapeHtml())
+                    .replace("{{ periodEnd }}", data.periodEnd.escapeHtml())
+                    .replace("{{ headline }}", data.headline.escapeHtml())
+                    .replace("{{ summary }}", data.summary.escapeHtml())
+                    .replace("{{ dashboardUrl }}", data.dashboardUrl.escapeHtml())
+                    .replace(SETTINGS_URL_PLACEHOLDER, data.settingsUrl.escapeHtml())
+                    .replace("{{ totalOverage }}", data.totalOverage.escapeHtml())
+                    .replace(YEAR_PLACEHOLDER, year)
+
+            html = html.replace("BILLING_ROWS_PLACEHOLDER", billingInsightRowsHtml(data.rows))
+            html
+        } else {
+            """
+            <!DOCTYPE html>
+            <html>
+            <body style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <h2>${data.headline.escapeHtml()}</h2>
+                <p>${data.summary.escapeHtml()}</p>
+                <p><strong>Plan:</strong> ${data.plan.escapeHtml()}</p>
+                <p><strong>Period:</strong> ${data.periodStart.escapeHtml()} to ${data.periodEnd.escapeHtml()}</p>
+                ${billingInsightRowsHtml(data.rows)}
+                <p><a href="${data.dashboardUrl.escapeHtml()}">Open Usage Insights</a></p>
+            </body>
+            </html>
+            """.trimIndent()
+        }
+    }
+
+    private fun billingInsightRowsHtml(rows: List<BillingInsightRow>): String {
+        if (rows.isEmpty()) {
+            return """
+            <tr>
+              <td colspan="2" style="padding:1rem;color:#737373;text-align:center;">No billable usage yet.</td>
+            </tr>
+            """.trimIndent()
+        }
+        return rows.joinToString("\n") { row ->
+            """
+            <tr>
+              <td style="padding:0.75rem 1rem;border-bottom:1px solid #f5f5f5;">
+                <p style="margin:0;font-size:0.875rem;font-weight:600;color:#0a0a0a;">${row.label.escapeHtml()}</p>
+                <p style="margin:0.25rem 0 0;font-size:0.75rem;color:#737373;">
+                  ${row.used.escapeHtml()} / ${row.limit.escapeHtml()} &middot; ${row.status.escapeHtml()}
+                </p>
+              </td>
+              <td style="padding:0.75rem 1rem;border-bottom:1px solid #f5f5f5;text-align:right;">
+                <p style="margin:0;font-size:0.875rem;font-weight:700;color:#0a0a0a;">${row.percent.escapeHtml()}</p>
+              </td>
+            </tr>
             """.trimIndent()
         }
     }

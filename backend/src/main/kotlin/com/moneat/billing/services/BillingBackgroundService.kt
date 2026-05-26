@@ -19,6 +19,7 @@ package com.moneat.billing.services
 import com.moneat.billing.models.BillingUsageResponse
 import com.moneat.billing.models.QuotaNotificationsSent
 import com.moneat.billing.repositories.SubscriptionRepositoryImpl
+import com.moneat.config.EnvConfig
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.notifications.services.EmailService
 import com.moneat.shared.models.Memberships
@@ -35,14 +36,20 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.datetime.LocalDate
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import java.time.DayOfWeek
+import java.time.ZoneOffset
+import java.time.temporal.WeekFields
+import java.util.Locale
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -60,6 +67,8 @@ private const val BASE_WARNING_NOTIFICATION = "base_80"
 private const val BASE_CRITICAL_NOTIFICATION = "base_90"
 private const val BASE_EXCEEDED_NOTIFICATION = "base_100"
 private const val PAYG_WARNING_NOTIFICATION = "payg_80"
+private const val INSIGHTS_WEEKLY_NOTIFICATION_PREFIX = "insights_weekly_"
+
 class BillingBackgroundService(
     private val stripeService: StripeService = StripeService(
         SubscriptionRepositoryImpl(),
@@ -70,6 +79,7 @@ class BillingBackgroundService(
     private val pricingTierService: PricingTierService = PricingTierService()
 ) {
     private val config = ApplicationConfig("application.conf")
+    private val frontendUrl = config.property("email.frontendUrl").getString()
     private val billingEnabled =
         config.propertyOrNull("billing.backgroundJobsEnabled")?.getString()?.toBooleanStrictOrNull() ?: true
 
@@ -128,6 +138,7 @@ class BillingBackgroundService(
                     ) {
                         OperationalMetrics.recordTimedBackgroundJobRun("billing-quota-notifications") {
                             processQuotaThresholdNotifications()
+                            processWeeklyInsightDigests()
                         }
                     }
                     delay(BILLING_JOB_INTERVAL_MS)
@@ -143,11 +154,21 @@ class BillingBackgroundService(
     }
 
     private fun processQuotaThresholdNotifications() {
+        if (EnvConfig.SelfHost.enabled) return
         for (orgId in activeBillingOrganizationIds()) {
             val usage = quotaService.getUsageForOrganization(orgId)
             for (notificationType in quotaNotificationTypesFor(usage)) {
                 maybeSendNotification(orgId, usage.periodStart, notificationType, usage)
             }
+        }
+    }
+
+    private fun processWeeklyInsightDigests() {
+        if (EnvConfig.SelfHost.enabled) return
+        val notificationType = currentWeeklyInsightsNotificationType() ?: return
+        for (orgId in activeBillingOrganizationIds()) {
+            val usage = quotaService.getUsageForOrganization(orgId)
+            maybeSendWeeklyInsightsDigest(orgId, usage.periodStart, notificationType, usage)
         }
     }
 
@@ -233,94 +254,261 @@ class BillingBackgroundService(
         notificationType: String,
         usage: BillingUsageResponse
     ) {
-        val inserted =
-            transaction {
-                QuotaNotificationsSent
-                    .insertIgnore {
-                        it[QuotaNotificationsSent.organization_id] = organizationId
-                        it[this.period_start] = kotlinx.datetime.LocalDate.parse(periodStart)
-                        it[this.notification_type] = notificationType
-                        it[sent_at] = Clock.System.now()
-                    }.insertedCount
-            }
-        if (inserted == 0) return
-
         val recipients =
-            transaction {
-                val ownerIds =
-                    Memberships
-                        .selectAll()
-                        .where {
-                            (Memberships.organization_id eq organizationId) and (Memberships.role eq "owner")
-                        }.map { it[Memberships.user_id] }
-                val userIds =
-                    if (ownerIds.isNotEmpty()) {
-                        ownerIds
-                    } else {
-                        Memberships
-                            .selectAll()
-                            .where { Memberships.organization_id eq organizationId }
-                            .map { it[Memberships.user_id] }
-                    }
-                Users
-                    .selectAll()
-                    .where { Users.id inList userIds }
-                    .map { it[Users.email] }
-                    .distinct()
-            }
+            notificationRecipients(organizationId)
         if (recipients.isEmpty()) return
+        if (!reserveNotification(organizationId, periodStart, notificationType)) return
 
-        val orgName =
-            transaction {
-                Organizations
-                    .selectAll()
-                    .where { Organizations.id eq organizationId }
-                    .firstOrNull()
-                    ?.get(Organizations.name)
-            } ?: "Organization $organizationId"
+        val orgName = organizationName(organizationId)
 
         val subject =
             when (notificationType) {
                 BASE_WARNING_NOTIFICATION -> "[$orgName] 80% of monthly quota used"
                 BASE_CRITICAL_NOTIFICATION -> "[$orgName] 90% of monthly quota used"
-                BASE_EXCEEDED_NOTIFICATION -> "[$orgName] Monthly quota exceeded — ingestion may be blocked"
+                BASE_EXCEEDED_NOTIFICATION -> "[$orgName] Monthly quota exceeded - ingestion may be blocked"
                 PAYG_WARNING_NOTIFICATION -> "[$orgName] 80% of PAYG budget consumed"
                 else -> "[$orgName] Usage notification"
             }
-        val body =
-            buildString {
-                appendLine("Billing usage alert for $orgName")
-                appendLine()
-                appendLine("Plan: ${usage.plan}")
-                if (usage.baseLimitUnits in 1L until UNLIMITED_UNIT_SENTINEL) {
-                    appendLine("Usage: ${usage.usedUnits}/${usage.totalLimitUnits} units")
-                    appendLine("Base limit: ${usage.baseLimitUnits} units")
-                }
-                if (usage.bytesLimit > 0) {
-                    val eligible = gbEligibleBytes(usage)
-                    val usedGb = "%.2f".format(eligible / BYTES_PER_GB)
-                    val limitGb = "%.2f".format(usage.bytesLimit / BYTES_PER_GB)
-                    appendLine("Ingestion: $usedGb / $limitGb GB")
-                }
-                appendLine("PAYG budget: $${"%.2f".format(usage.paygBudgetCents / CENTS_PER_DOLLAR)}")
-                appendLine("PAYG used estimate: $${"%.2f".format(usage.paygUsedCentsEstimate / CENTS_PER_DOLLAR)}")
-                appendLine("Billing period: ${usage.periodStart} to ${usage.periodEnd}")
-            }
+        val emailData = billingInsightEmailData(
+            orgName = orgName,
+            usage = usage,
+            headline = thresholdHeadline(notificationType),
+            summary = thresholdSummary(notificationType, usage)
+        )
 
+        var successfulSends = 0
         for (email in recipients) {
             suspendRunCatching {
-                emailService.sendEmail(
+                emailService.sendBillingThresholdAlertEmail(
                     to = email,
                     subject = subject,
-                    htmlBody = "<pre>$body</pre>",
-                    textBody = body,
-                    emailType = "quota_notification"
+                    data = emailData
                 )
-            }.getOrElse { e ->
+            }.onFailure { e ->
                 logger.error(e) { "Failed to send quota notification to $email" }
+            }.onSuccess {
+                successfulSends += 1
+            }
+        }
+        if (successfulSends == 0) {
+            releaseNotificationReservation(organizationId, periodStart, notificationType)
+        }
+    }
+
+    private fun maybeSendWeeklyInsightsDigest(
+        organizationId: Int,
+        periodStart: String,
+        notificationType: String,
+        usage: BillingUsageResponse
+    ) {
+        val recipients = notificationRecipients(organizationId)
+        if (recipients.isEmpty()) return
+        if (!reserveNotification(organizationId, periodStart, notificationType)) return
+
+        val orgName = organizationName(organizationId)
+        val data = billingInsightEmailData(
+            orgName = orgName,
+            usage = usage,
+            headline = "Your Usage Insights digest",
+            summary = "A weekly view of billable volume, current limits, and estimated overage for $orgName."
+        )
+
+        var successfulSends = 0
+        for (email in recipients) {
+            suspendRunCatching {
+                emailService.sendBillingInsightsEmail(email, data)
+            }.onFailure { e ->
+                logger.error(e) { "Failed to send billing insights digest to $email" }
+            }.onSuccess {
+                successfulSends += 1
+            }
+        }
+        if (successfulSends == 0) {
+            releaseNotificationReservation(organizationId, periodStart, notificationType)
+        }
+    }
+
+    private fun reserveNotification(
+        organizationId: Int,
+        periodStart: String,
+        notificationType: String
+    ): Boolean {
+        val parsedPeriodStart = LocalDate.parse(periodStart)
+        return transaction {
+            QuotaNotificationsSent
+                .insertIgnore {
+                    it[QuotaNotificationsSent.organization_id] = organizationId
+                    it[this.period_start] = parsedPeriodStart
+                    it[this.notification_type] = notificationType
+                    it[sent_at] = Clock.System.now()
+                }.insertedCount > 0
+        }
+    }
+
+    private fun releaseNotificationReservation(
+        organizationId: Int,
+        periodStart: String,
+        notificationType: String
+    ) {
+        val parsedPeriodStart = LocalDate.parse(periodStart)
+        transaction {
+            QuotaNotificationsSent.deleteWhere {
+                (QuotaNotificationsSent.organization_id eq organizationId) and
+                    (QuotaNotificationsSent.period_start eq parsedPeriodStart) and
+                    (QuotaNotificationsSent.notification_type eq notificationType)
             }
         }
     }
+
+    private fun notificationRecipients(organizationId: Int): List<String> {
+        return transaction {
+            val ownerIds =
+                Memberships
+                    .selectAll()
+                    .where {
+                        (Memberships.organization_id eq organizationId) and (Memberships.role eq "owner")
+                    }.map { it[Memberships.user_id] }
+            val userIds =
+                if (ownerIds.isNotEmpty()) {
+                    ownerIds
+                } else {
+                    Memberships
+                        .selectAll()
+                        .where { Memberships.organization_id eq organizationId }
+                        .map { it[Memberships.user_id] }
+                }
+            Users
+                .selectAll()
+                .where { Users.id inList userIds }
+                .map { it[Users.email] }
+                .distinct()
+        }
+    }
+
+    private fun organizationName(organizationId: Int): String {
+        return transaction {
+            Organizations
+                .selectAll()
+                .where { Organizations.id eq organizationId }
+                .firstOrNull()
+                ?.get(Organizations.name)
+        } ?: "Organization $organizationId"
+    }
+
+    private fun currentWeeklyInsightsNotificationType(): String? {
+        val today = java.time.LocalDate.now(ZoneOffset.UTC)
+        if (today.dayOfWeek != DayOfWeek.MONDAY) return null
+        val weekFields = WeekFields.of(Locale.US)
+        val week = today[weekFields.weekOfWeekBasedYear()]
+        val year = today[weekFields.weekBasedYear()]
+        return "${INSIGHTS_WEEKLY_NOTIFICATION_PREFIX}${year}_$week"
+    }
+
+    private fun thresholdHeadline(notificationType: String): String {
+        return when (notificationType) {
+            BASE_WARNING_NOTIFICATION -> "80% of monthly quota used"
+            BASE_CRITICAL_NOTIFICATION -> "90% of monthly quota used"
+            BASE_EXCEEDED_NOTIFICATION -> "Monthly quota exceeded"
+            PAYG_WARNING_NOTIFICATION -> "80% of PAYG budget consumed"
+            else -> "Usage notification"
+        }
+    }
+
+    private fun thresholdSummary(notificationType: String, usage: BillingUsageResponse): String {
+        return when (notificationType) {
+            BASE_EXCEEDED_NOTIFICATION ->
+                "Ingestion may be blocked until capacity is added or the billing period resets."
+            PAYG_WARNING_NOTIFICATION ->
+                "Your pay-as-you-go budget is approaching its configured cap."
+            else ->
+                "Usage is approaching the included quota for the current billing period."
+        } + " Estimated overage is ${formatCurrency(usage.totalOverageCentsEstimate)}."
+    }
+
+    private fun billingInsightEmailData(
+        orgName: String,
+        usage: BillingUsageResponse,
+        headline: String,
+        summary: String
+    ): EmailService.BillingInsightEmailData {
+        return EmailService.BillingInsightEmailData(
+            organizationName = orgName,
+            plan = usage.plan.uppercase(),
+            periodStart = usage.periodStart,
+            periodEnd = usage.periodEnd,
+            headline = headline,
+            summary = summary,
+            dashboardUrl = "$frontendUrl/usage-insights",
+            settingsUrl = "$frontendUrl/settings?tab=billing",
+            rows = billingInsightRows(usage),
+            totalOverage = formatCurrency(usage.totalOverageCentsEstimate)
+        )
+    }
+
+    private fun billingInsightRows(usage: BillingUsageResponse): List<EmailService.BillingInsightRow> {
+        return listOf(
+            billingInsightRow("GB-billed ingestion", gbEligibleBytes(usage), usage.bytesLimit, ::formatGb),
+            billingInsightRow("APM spans", usage.usedApmSpans, usage.apmSpanLimit, ::formatCount),
+            billingInsightRow("Custom metrics", usage.usedCustomMetrics, usage.customMetricLimit, ::formatCount),
+            billingInsightRow(
+                "Infrastructure metrics",
+                usage.usedInfraMetricSeriesHours,
+                usage.infraMetricSeriesHourLimit,
+                ::formatCount
+            ),
+            billingInsightRow(
+                "Analytics pageviews",
+                usage.usedAnalyticsPageviews,
+                usage.analyticsPageviewLimit,
+                ::formatCount
+            )
+        ).filter { it.used != "0" || it.limit != "Unlimited" }
+    }
+
+    private fun billingInsightRow(
+        label: String,
+        used: Long,
+        limit: Long,
+        formatValue: (Long) -> String
+    ): EmailService.BillingInsightRow {
+        val percent = percentageOrZero(used, limit)
+        return EmailService.BillingInsightRow(
+            label = label,
+            used = formatValue(used),
+            limit = if (limit > 0 && limit < UNLIMITED_UNIT_SENTINEL) formatValue(limit) else "Unlimited",
+            percent = if (limit > 0 && limit < UNLIMITED_UNIT_SENTINEL) {
+                "${(percent * 100.0).formatOneDecimal()}%"
+            } else {
+                "Unlimited"
+            },
+            status = usageStatus(percent)
+        )
+    }
+
+    private fun usageStatus(percent: Double): String {
+        return when {
+            percent >= QUOTA_EXCEEDED_THRESHOLD -> "Over limit"
+            percent >= QUOTA_CRITICAL_THRESHOLD -> "Critical"
+            percent >= QUOTA_WARNING_THRESHOLD -> "Approaching"
+            else -> "On track"
+        }
+    }
+
+    private fun formatGb(bytes: Long): String {
+        return "${(bytes / BYTES_PER_GB).formatTwoDecimals()} GB"
+    }
+
+    private fun formatCount(value: Long): String {
+        return "%,d".format(Locale.US, value)
+    }
+
+    private fun formatCurrency(cents: Int): String {
+        return "$${"%.2f".format(Locale.US, cents / CENTS_PER_DOLLAR)}"
+    }
+
+    private fun Double.formatOneDecimal(): String = "%.1f".format(Locale.US, this)
+
+    private fun Double.formatTwoDecimals(): String = "%.2f".format(Locale.US, this)
 
     private data class QuotaUsagePercentages(
         val base: Double,
