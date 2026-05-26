@@ -111,6 +111,165 @@ describe('OTLP API Keys', () => {
     })
   })
 
+  // ──── service routing ────
+
+  describe('service routing', () => {
+    it('fetches observed OTLP services and maps snake_case fields', async () => {
+      server.use(
+        http.get(`${API_BASE}/v1/otlp/services`, () => {
+          return HttpResponse.json({
+            services: [
+              {
+                id: 10,
+                mapping_id: 20,
+                service_namespace: 'checkout',
+                service_name: 'api',
+                project_id: 30,
+                project_name: 'Web App',
+                seen_logs: true,
+                seen_traces: true,
+                seen_metrics: false,
+                last_environment: 'production',
+                first_seen_at: '2026-01-01T00:00:00Z',
+                last_seen_at: '2026-01-01T01:00:00Z',
+              },
+            ],
+          })
+        })
+      )
+
+      const result = await api.getOtlpObservedServices()
+
+      expect(result.services).toEqual([
+        {
+          id: 10,
+          mappingId: 20,
+          serviceNamespace: 'checkout',
+          serviceName: 'api',
+          projectId: 30,
+          projectName: 'Web App',
+          seenLogs: true,
+          seenTraces: true,
+          seenMetrics: false,
+          lastEnvironment: 'production',
+          firstSeenAt: '2026-01-01T00:00:00Z',
+          lastSeenAt: '2026-01-01T01:00:00Z',
+        },
+      ])
+    })
+
+    it('fetches observed OTLP services and maps camelCase fields with defaults', async () => {
+      server.use(
+        http.get(`${API_BASE}/v1/otlp/services`, () => {
+          return HttpResponse.json({
+            services: [
+              {
+                id: 11,
+                serviceName: 'worker',
+                firstSeenAt: '2026-01-02T00:00:00Z',
+                lastSeenAt: '2026-01-02T01:00:00Z',
+              },
+            ],
+          })
+        })
+      )
+
+      const result = await api.getOtlpObservedServices()
+
+      expect(result.services[0]).toMatchObject({
+        id: 11,
+        serviceNamespace: '',
+        serviceName: 'worker',
+        seenLogs: false,
+        seenTraces: false,
+        seenMetrics: false,
+        firstSeenAt: '2026-01-02T00:00:00Z',
+        lastSeenAt: '2026-01-02T01:00:00Z',
+      })
+    })
+
+    it('returns an empty observed services array when response has no services', async () => {
+      server.use(
+        http.get(`${API_BASE}/v1/otlp/services`, () => {
+          return HttpResponse.json({})
+        })
+      )
+
+      const result = await api.getOtlpObservedServices()
+      expect(result.services).toEqual([])
+    })
+
+    it('upserts a service mapping with the selected project and namespace', async () => {
+      let capturedBody: Record<string, unknown> = {}
+      server.use(
+        http.post(`${API_BASE}/v1/otlp/service-mappings`, async ({request}) => {
+          capturedBody = (await request.json()) as Record<string, unknown>
+          return HttpResponse.json({
+            id: 40,
+            service_namespace: 'checkout',
+            service_name: 'api',
+            project_id: 50,
+            project_name: 'Backend',
+            updated_at: '2026-01-03T00:00:00Z',
+          })
+        })
+      )
+
+      const result = await api.upsertOtlpServiceMapping('api', 50, 'checkout')
+
+      expect(capturedBody).toEqual({
+        service_name: 'api',
+        service_namespace: 'checkout',
+        project_id: 50,
+      })
+      expect(result).toEqual({
+        id: 40,
+        serviceNamespace: 'checkout',
+        serviceName: 'api',
+        projectId: 50,
+        projectName: 'Backend',
+        updatedAt: '2026-01-03T00:00:00Z',
+      })
+    })
+
+    it('upserts a service mapping without a namespace by default', async () => {
+      let capturedBody: Record<string, unknown> = {}
+      server.use(
+        http.post(`${API_BASE}/v1/otlp/service-mappings`, async ({request}) => {
+          capturedBody = (await request.json()) as Record<string, unknown>
+          return HttpResponse.json({
+            id: 41,
+            serviceNamespace: '',
+            serviceName: 'worker',
+            projectId: 51,
+            projectName: 'Jobs',
+            updatedAt: '2026-01-04T00:00:00Z',
+          })
+        })
+      )
+
+      const result = await api.upsertOtlpServiceMapping('worker', 51)
+
+      expect(capturedBody).toEqual({
+        service_name: 'worker',
+        service_namespace: '',
+        project_id: 51,
+      })
+      expect(result.serviceName).toBe('worker')
+      expect(result.projectId).toBe(51)
+    })
+
+    it('deletes a service mapping by id', async () => {
+      server.use(
+        http.delete(`${API_BASE}/v1/otlp/service-mappings/40`, () => {
+          return new HttpResponse(null, { status: 204 })
+        })
+      )
+
+      await expect(api.deleteOtlpServiceMapping(40)).resolves.toBeUndefined()
+    })
+  })
+
   // ──── backward-compatible aliases ────
 
   describe('backward-compatible aliases', () => {
