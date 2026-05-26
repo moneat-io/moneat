@@ -1,0 +1,159 @@
+{
+  "title": "Kubernetes Capacity Planning",
+  "description": "Synthetic fixture modeled after Datadog effective dashboard layouts.",
+  "layout_type": "ordered",
+  "reflow_type": "fixed",
+  "template_variables": [
+    {
+      "name": "env",
+      "prefix": "env",
+      "default": "*",
+      "available_values": ["production", "staging"]
+    },
+    {
+      "name": "kube_cluster_name",
+      "prefix": "kube_cluster_name",
+      "default": "*",
+      "available_values": []
+    },
+    {
+      "name": "kube_namespace",
+      "prefix": "kube_namespace",
+      "default": "*",
+      "available_values": []
+    }
+  ],
+  "widgets": [
+    {
+      "definition": {
+        "type": "note",
+        "content": "# Kubernetes Capacity Planning\n\nReview requests, limits, and actual use by cluster."
+      },
+      "layout": {
+        "x": 0,
+        "y": 0,
+        "width": 5,
+        "height": 3
+      }
+    },
+    {
+      "definition": {
+        "type": "image",
+        "url": "/static/images/integration_dashboard/kubernetes_hero_2.jpeg",
+        "sizing": "cover",
+        "has_background": true,
+        "has_border": true
+      },
+      "layout": {
+        "x": 5,
+        "y": 0,
+        "width": 7,
+        "height": 3
+      }
+    },
+    {
+      "definition": {
+        "type": "group",
+        "title": "CPU Utilization",
+        "layout_type": "ordered",
+        "widgets": [
+          {
+            "definition": {
+              "title": "CPU by host",
+              "type": "query_table",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "query": "sum:kubernetes.cpu.requests{$env,$kube_namespace,$kube_cluster_name} by {host}",
+                      "data_source": "metrics",
+                      "name": "query1",
+                      "aggregator": "avg"
+                    },
+                    {
+                      "query": "sum:kubernetes.cpu.usage.total{$env,$kube_namespace,$kube_cluster_name} by {host}",
+                      "data_source": "metrics",
+                      "name": "query2",
+                      "aggregator": "avg"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "query1",
+                      "alias": "requests"
+                    },
+                    {
+                      "formula": "query2",
+                      "alias": "usage"
+                    }
+                  ]
+                }
+              ],
+              "has_search_bar": "auto"
+            },
+            "layout": {
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 3
+            }
+          },
+          {
+            "definition": {
+              "title": "Overprovisioned deployments",
+              "type": "heatmap",
+              "requests": [
+                {
+                  "q": "sum:kubernetes.cpu.usage.total{kube_deployment:*,$env,$kube_namespace,$kube_cluster_name} by {host} / (sum:kubernetes.cpu.requests{kube_deployment:*,$env,$kube_namespace,$kube_cluster_name} by {host} * 1000000000) * 100",
+                  "style": {
+                    "palette": "dog_classic"
+                  }
+                }
+              ],
+              "yaxis": {
+                "min": "0",
+                "max": "200"
+              }
+            },
+            "layout": {
+              "x": 0,
+              "y": 3,
+              "width": 6,
+              "height": 4
+            }
+          },
+          {
+            "definition": {
+              "title": "CPU request scatter",
+              "type": "scatterplot",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "query": "avg:kubernetes.cpu.requests{$env,$kube_namespace,$kube_cluster_name} by {host}",
+                      "data_source": "metrics",
+                      "name": "query1"
+                    }
+                  ]
+                }
+              ]
+            },
+            "layout": {
+              "x": 6,
+              "y": 3,
+              "width": 6,
+              "height": 4
+            }
+          }
+        ]
+      },
+      "layout": {
+        "x": 0,
+        "y": 3,
+        "width": 12,
+        "height": 8
+      }
+    }
+  ]
+}

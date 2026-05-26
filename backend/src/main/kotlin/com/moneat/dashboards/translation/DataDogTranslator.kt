@@ -27,6 +27,7 @@ import com.moneat.dashboards.models.GroupByType
 import com.moneat.dashboards.models.MetricDef
 import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.WidgetResponse
+import com.moneat.utils.suspendRunCatching
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -38,12 +39,34 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
-import com.moneat.utils.suspendRunCatching
 
 private const val DD_DEFAULT_WIDGET_W = 6
 private const val DD_DEFAULT_WIDGET_H = 4
 private const val DD_MAX_GRID_COL = 11
 private const val DD_GRID_COLS = 12
+private const val DD_SECTION_HEIGHT = 1
+private const val DD_AUTO_WIDGETS_PER_ROW = 2
+private const val DD_DEFAULT_TABLE_LIMIT = 100
+private const val DD_GROUP_BY_MATCH_GROUP_INDEX = 4
+
+private val DD_METRIC_QUERY_REGEX = Regex(
+    """^\s*([A-Za-z_][A-Za-z0-9_]*):([A-Za-z0-9_.]+)\{([^}]*)}\s*(?:by\s+\{([^}]*)})?\s*$"""
+)
+private val DD_SIMPLE_FORMULA_REGEX = Regex("""^[A-Za-z_][A-Za-z0-9_]*$""")
+
+private data class DataDogLayout(
+    val x: Int,
+    val y: Int,
+    val width: Int,
+    val height: Int
+)
+
+private data class ParsedDataDogQuery(
+    val function: AggFunction,
+    val metricName: String,
+    val tagText: String?,
+    val groupByText: String?
+)
 
 class DataDogTranslator : DashboardTranslator {
 
@@ -52,32 +75,42 @@ class DataDogTranslator : DashboardTranslator {
         "toplist" to "toplist",
         "query_value" to "stat",
         "table" to "table",
+        "query_table" to "table",
         "heatmap" to "heatmap",
         "distribution" to "bar",
         "pie" to "donut",
+        "sunburst" to "donut",
         "note" to "text",
         "free_text" to "text",
-        "group" to "text"
+        "image" to "text",
+        "group" to "section"
     )
 
     private val reverseWidgetTypeMap = mapOf(
         "timeseries" to "timeseries",
         "toplist" to "toplist",
         "stat" to "query_value",
-        "table" to "table",
+        "table" to "query_table",
         "heatmap" to "heatmap",
         "bar" to "distribution",
         "donut" to "pie",
         "text" to "note"
     )
 
-    // Maps DD metric namespace prefixes to Moneat data sources
     private val metricNamespaceMap = mapOf(
         "system." to "metrics",
         "trace." to "spans",
         "logs." to "logs",
         "container." to "containers",
+        "docker." to "containers",
         "network." to "metrics"
+    )
+
+    private val filterFieldsBySource = mapOf(
+        "metrics" to setOf("metric_name", "host"),
+        "containers" to setOf("host", "name"),
+        "spans" to setOf("op", "status", "environment"),
+        "logs" to setOf("level", "message", "service", "environment", "host")
     )
 
     override fun import(json: JsonObject): DashboardImportResult {
@@ -85,17 +118,9 @@ class DataDogTranslator : DashboardTranslator {
 
         val title = json["title"]?.jsonPrimitive?.contentOrNull ?: "Imported DataDog Dashboard"
         val description = json["description"]?.jsonPrimitive?.contentOrNull
-
         val ddWidgets = json["widgets"]?.jsonArray ?: JsonArray(emptyList())
-
-        val widgets = ddWidgets.mapIndexedNotNull { index, element ->
-            suspendRunCatching {
-                importWidget(element.jsonObject, index, warnings)
-            }.getOrElse { e ->
-                warnings.add("Widget $index: failed to import - ${e.message}")
-                null
-            }
-        }
+        val widgets = importWidgets(ddWidgets, warnings)
+            .mapIndexed { index, widget -> widget.copy(sortOrder = index) }
 
         val dashboard = DashboardResponse(
             id = 0,
@@ -114,42 +139,145 @@ class DataDogTranslator : DashboardTranslator {
         return DashboardImportResult(dashboard, warnings, variables)
     }
 
+    private fun importWidgets(
+        ddWidgets: JsonArray,
+        warnings: MutableList<String>,
+        parentLayout: DataDogLayout? = null
+    ): List<WidgetResponse> {
+        var autoColumn = 0
+        var nextAutoY = 0
+        return ddWidgets.flatMapIndexed { index, element ->
+            val widgetJson = element.jsonObject
+            val explicitLayout = readLayout(widgetJson["layout"]?.jsonObject)
+            val layout = explicitLayout ?: autoLayout(autoColumn, nextAutoY).also {
+                autoColumn = (autoColumn + 1) % DD_AUTO_WIDGETS_PER_ROW
+                if (autoColumn == 0) nextAutoY += DD_DEFAULT_WIDGET_H
+            }
+            if (explicitLayout != null) {
+                nextAutoY = maxOf(nextAutoY, explicitLayout.y + explicitLayout.height)
+            }
+
+            suspendRunCatching {
+                importWidget(widgetJson, index, warnings, layout, parentLayout)
+            }.getOrElse { e ->
+                warnings.add("Widget $index: failed to import - ${e.message}")
+                emptyList()
+            }
+        }
+    }
+
     private fun importWidget(
         widgetJson: JsonObject,
         index: Int,
-        warnings: MutableList<String>
-    ): WidgetResponse {
+        warnings: MutableList<String>,
+        layout: DataDogLayout,
+        parentLayout: DataDogLayout? = null
+    ): List<WidgetResponse> {
         val definition = widgetJson["definition"]?.jsonObject ?: JsonObject(emptyMap())
-        val layout = widgetJson["layout"]?.jsonObject
-
         val ddType = definition["type"]?.jsonPrimitive?.contentOrNull ?: "timeseries"
         val moneatType = widgetTypeMap[ddType]
         if (moneatType == null) {
             warnings.add("Widget $index: unsupported type '$ddType', imported as 'text'")
         }
 
+        if (ddType == "group") {
+            return importGroupWidget(definition, index, warnings, layout, parentLayout)
+        }
+
+        val resolvedLayout = resolveLayout(layout, parentLayout)
         val widgetTitle = definition["title"]?.jsonPrimitive?.contentOrNull
+        val queryConfigs = parseDataDogQueries(definition, warnings, index)
+        val displayConfig = extractDisplayConfig(definition, ddType)
 
-        // Parse grid position from DD layout (DD uses 12-col grid)
-        val gridX = layout?.get("x")?.jsonPrimitive?.intOrNull ?: 0
-        val gridY = layout?.get("y")?.jsonPrimitive?.intOrNull ?: 0
-        val gridW = layout?.get("width")?.jsonPrimitive?.intOrNull ?: DD_DEFAULT_WIDGET_W
-        val gridH = layout?.get("height")?.jsonPrimitive?.intOrNull ?: DD_DEFAULT_WIDGET_H
+        return listOf(
+            WidgetResponse(
+                id = 0,
+                dashboardId = 0,
+                title = widgetTitle,
+                widgetType = moneatType ?: "text",
+                gridX = resolvedLayout.x.coerceIn(0, DD_MAX_GRID_COL),
+                gridY = resolvedLayout.y,
+                gridW = resolvedLayout.width.coerceIn(1, DD_GRID_COLS),
+                gridH = resolvedLayout.height.coerceIn(1, DD_GRID_COLS),
+                queryConfigs = queryConfigs,
+                displayConfig = displayConfig,
+                sortOrder = index
+            )
+        )
+    }
 
-        val queryConfig = parseDataDogQuery(definition, warnings, index)
-
-        return WidgetResponse(
+    private fun importGroupWidget(
+        definition: JsonObject,
+        index: Int,
+        warnings: MutableList<String>,
+        layout: DataDogLayout,
+        parentLayout: DataDogLayout? = null
+    ): List<WidgetResponse> {
+        val resolvedLayout = resolveLayout(layout, parentLayout)
+        val title = definition["title"]?.jsonPrimitive?.contentOrNull ?: "Section"
+        val children = definition["widgets"]?.jsonArray ?: JsonArray(emptyList())
+        val section = WidgetResponse(
             id = 0,
             dashboardId = 0,
-            title = widgetTitle,
-            widgetType = moneatType ?: "text",
-            gridX = gridX.coerceIn(0, DD_MAX_GRID_COL),
-            gridY = gridY,
-            gridW = gridW.coerceIn(1, DD_GRID_COLS),
-            gridH = gridH.coerceIn(1, DD_GRID_COLS),
-            queryConfigs = listOf(queryConfig),
+            title = title,
+            widgetType = "section",
+            gridX = resolvedLayout.x.coerceIn(0, DD_MAX_GRID_COL),
+            gridY = resolvedLayout.y,
+            gridW = resolvedLayout.width.coerceIn(1, DD_GRID_COLS),
+            gridH = DD_SECTION_HEIGHT,
+            queryConfigs = emptyList(),
+            displayConfig = mapOf(
+                "source_format" to "datadog",
+                "datadog_widget_type" to "group",
+                "collapsed" to "false"
+            ),
             sortOrder = index
         )
+        val childParentLayout = resolvedLayout.copy(y = resolvedLayout.y + DD_SECTION_HEIGHT)
+        return listOf(section) + importWidgets(children, warnings, childParentLayout)
+    }
+
+    private fun readLayout(layout: JsonObject?): DataDogLayout? {
+        if (layout == null) return null
+        return DataDogLayout(
+            x = layout["x"]?.jsonPrimitive?.intOrNull ?: 0,
+            y = layout["y"]?.jsonPrimitive?.intOrNull ?: 0,
+            width = layout["width"]?.jsonPrimitive?.intOrNull ?: DD_DEFAULT_WIDGET_W,
+            height = layout["height"]?.jsonPrimitive?.intOrNull ?: DD_DEFAULT_WIDGET_H
+        )
+    }
+
+    private fun autoLayout(column: Int, y: Int): DataDogLayout {
+        val x = column * DD_DEFAULT_WIDGET_W
+        return DataDogLayout(x, y, DD_DEFAULT_WIDGET_W, DD_DEFAULT_WIDGET_H)
+    }
+
+    private fun resolveLayout(layout: DataDogLayout, parentLayout: DataDogLayout?): DataDogLayout {
+        if (parentLayout == null) return layout
+        return DataDogLayout(
+            x = parentLayout.x + layout.x,
+            y = parentLayout.y + layout.y,
+            width = layout.width.coerceAtMost((DD_GRID_COLS - parentLayout.x).coerceAtLeast(1)),
+            height = layout.height
+        )
+    }
+
+    private fun extractDisplayConfig(definition: JsonObject, ddType: String): Map<String, String> {
+        val config = mutableMapOf(
+            "source_format" to "datadog",
+            "datadog_widget_type" to ddType
+        )
+        definition["content"]?.jsonPrimitive?.contentOrNull?.let { content ->
+            config["content"] = content
+        }
+        definition["url"]?.jsonPrimitive?.contentOrNull?.let { url ->
+            config["content"] = "![]($url)"
+            config["image_url"] = url
+        }
+        definition["legend_layout"]?.jsonPrimitive?.contentOrNull?.let { config["legendLayout"] = it }
+        definition["display_type"]?.jsonPrimitive?.contentOrNull?.let { config["displayType"] = it }
+        definition["background_color"]?.jsonPrimitive?.contentOrNull?.let { config["backgroundColor"] = it }
+        return config
     }
 
     internal fun parseDataDogQuery(
@@ -157,83 +285,175 @@ class DataDogTranslator : DashboardTranslator {
         warnings: MutableList<String>,
         widgetIndex: Int
     ): QueryDsl {
+        return parseDataDogQueries(definition, warnings, widgetIndex).first()
+    }
+
+    internal fun parseDataDogQueries(
+        definition: JsonObject,
+        warnings: MutableList<String>,
+        widgetIndex: Int
+    ): List<QueryDsl> {
         val requests = definition["requests"]?.jsonArray
 
         if (requests.isNullOrEmpty()) {
-            return QueryDsl(
-                dataSource = "events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count"))
+            return listOf(
+                QueryDsl(
+                    dataSource = "events",
+                    metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count"))
+                )
             )
         }
 
-        val firstRequest = requests.first().jsonObject
-        val queryStr = firstRequest["q"]?.jsonPrimitive?.contentOrNull
-            ?: firstRequest["queries"]?.jsonArray?.firstOrNull()
-                ?.jsonObject?.get("query")?.jsonPrimitive?.contentOrNull
+        val parsedQueries = requests.flatMap { requestElement ->
+            parseRequestQueries(requestElement.jsonObject, warnings, widgetIndex)
+        }
 
-        if (queryStr == null) {
+        if (parsedQueries.isEmpty()) {
             warnings.add("Widget $widgetIndex: no query string found, using default")
-            return QueryDsl(
-                dataSource = "events",
-                metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count"))
+            return listOf(
+                QueryDsl(
+                    dataSource = "events",
+                    metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count"))
+                )
             )
         }
 
-        return parseDataDogQueryString(queryStr, warnings, widgetIndex)
+        return parsedQueries
+    }
+
+    private fun parseRequestQueries(
+        request: JsonObject,
+        warnings: MutableList<String>,
+        widgetIndex: Int
+    ): List<QueryDsl> {
+        request["q"]?.jsonPrimitive?.contentOrNull?.let { queryStr ->
+            return listOf(parseDataDogQueryString(queryStr, warnings, widgetIndex))
+        }
+
+        val formulaAliases = extractFormulaAliases(request)
+        val queries = request["queries"]?.jsonArray ?: return emptyList()
+        return queries.mapNotNull { queryElement ->
+            val queryObj = queryElement.jsonObject
+            val queryStr = queryObj["query"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+            val queryName = queryObj["name"]?.jsonPrimitive?.contentOrNull
+            val alias = queryName?.let { formulaAliases[it] } ?: queryName
+            parseDataDogQueryString(queryStr, warnings, widgetIndex, alias, queryName)
+        }
+    }
+
+    private fun extractFormulaAliases(request: JsonObject): Map<String, String> {
+        val formulas = request["formulas"]?.jsonArray ?: return emptyMap()
+        return formulas.mapNotNull { formulaElement ->
+            val formula = formulaElement.jsonObject
+            val expression = formula["formula"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+            if (!DD_SIMPLE_FORMULA_REGEX.matches(expression)) return@mapNotNull null
+            val alias = formula["alias"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+            expression to alias
+        }.toMap()
     }
 
     internal fun parseDataDogQueryString(
         queryStr: String,
         warnings: MutableList<String>,
-        widgetIndex: Int
+        widgetIndex: Int,
+        alias: String? = null,
+        refId: String? = null
     ): QueryDsl {
-        // DD query format: "function:metric.name{tag:value,tag2:value2}.as_count()"
-        val functionMatch = Regex("""^(\w+):(.+)$""").find(queryStr)
-        val aggFunction: AggFunction
-        val metricPart: String
-
-        if (functionMatch != null) {
-            aggFunction = mapDdFunction(functionMatch.groupValues[1])
-            metricPart = functionMatch.groupValues[2]
-        } else {
-            aggFunction = AggFunction.AVG
-            metricPart = queryStr
+        val parsed = parseMetricQuery(queryStr)
+        if (parsed == null) {
+            warnings.add("Widget $widgetIndex: unable to parse Datadog query, preserving as raw query")
+            return rawQueryDsl(queryStr, alias, refId)
         }
 
-        // Extract metric name and tags: metric.name{tag:value}
-        val metricMatch = Regex("""^([^{]+)(?:\{([^}]*)\})?""").find(metricPart)
-        val metricName = metricMatch?.groupValues?.get(1)?.trim()?.removeSuffix(".as_count()") ?: "count"
-        val tagStr = metricMatch?.groupValues?.get(2)
-
-        val dataSource = resolveDataSource(metricName)
-        val field = mapMetricField(metricName, dataSource)
-
-        val filters = mutableListOf<FilterDef>()
-        if (!tagStr.isNullOrBlank() && tagStr != "*") {
-            tagStr.split(",").forEach { tag ->
-                val parts = tag.trim().split(":", limit = 2)
-                if (parts.size == 2) {
-                    filters.add(FilterDef(parts[0].trim(), FilterOp.EQ, parts[1].trim()))
-                }
-            }
-        }
-
-        if (field == null && metricName.isNotBlank()) {
-            warnings.add("Widget $widgetIndex: metric '$metricName' mapped as raw query")
-            return QueryDsl(
-                dataSource = dataSource,
-                metrics = listOf(MetricDef(aggFunction, alias = "value")),
-                filters = filters,
-                rawQuery = queryStr
-            )
-        }
+        val dataSource = resolveDataSource(parsed.metricName)
+        val field = mapMetricField(dataSource)
+        val filters = parseDataDogTags(parsed.tagText, dataSource, parsed.metricName)
+        val groupBy = parseDataDogGroupBy(parsed.groupByText, dataSource)
 
         return QueryDsl(
             dataSource = dataSource,
-            metrics = listOf(MetricDef(aggFunction, field, alias = "value")),
-            groupBy = listOf(GroupByDef("timestamp", GroupByType.TIME, "auto")),
-            filters = filters
+            metrics = listOf(MetricDef(parsed.function, field, alias ?: "value")),
+            groupBy = groupBy,
+            filters = filters,
+            limit = DD_DEFAULT_TABLE_LIMIT,
+            refId = refId
         )
+    }
+
+    private fun parseMetricQuery(queryStr: String): ParsedDataDogQuery? {
+        val match = DD_METRIC_QUERY_REGEX.matchEntire(queryStr) ?: return null
+        val groupByText = match.groupValues.getOrNull(DD_GROUP_BY_MATCH_GROUP_INDEX)?.takeIf { it.isNotBlank() }
+        return ParsedDataDogQuery(
+            function = mapDdFunction(match.groupValues[1]),
+            metricName = match.groupValues[2].trim(),
+            tagText = match.groupValues[3],
+            groupByText = groupByText
+        )
+    }
+
+    private fun rawQueryDsl(queryStr: String, alias: String?, refId: String?): QueryDsl {
+        return QueryDsl(
+            dataSource = "metrics",
+            metrics = listOf(MetricDef(AggFunction.AVG, "value", alias ?: "value")),
+            groupBy = listOf(GroupByDef("timestamp", GroupByType.TIME, "auto")),
+            rawQuery = queryStr,
+            refId = refId
+        )
+    }
+
+    private fun parseDataDogTags(
+        tagText: String?,
+        dataSource: String,
+        metricName: String
+    ): List<FilterDef> {
+        val filters = mutableListOf<FilterDef>()
+        if (dataSource == "metrics") {
+            filters.add(FilterDef("metric_name", FilterOp.EQ, metricName))
+        }
+        if (tagText.isNullOrBlank() || tagText == "*") return filters
+
+        tagText.split(",")
+            .map { it.trim() }
+            .filter { it.isNotBlank() && it != "*" }
+            .forEach { tag -> addDataDogTagFilter(tag, dataSource, filters) }
+        return filters
+    }
+
+    private fun addDataDogTagFilter(tag: String, dataSource: String, filters: MutableList<FilterDef>) {
+        val filter = parseTagFilter(tag) ?: return
+        if (isSupportedFilterField(dataSource, filter.field)) {
+            filters.add(filter)
+        }
+    }
+
+    private fun parseTagFilter(tag: String): FilterDef? {
+        if (tag.startsWith("$")) {
+            val name = tag.removePrefix("$")
+            return FilterDef(name, FilterOp.EQ, tag)
+        }
+
+        val normalized = tag.removePrefix("!")
+        val parts = normalized.split(":", limit = 2)
+        if (parts.size != 2 || parts[1] == "*") return null
+
+        return FilterDef(
+            field = parts[0].trim(),
+            op = if (tag.startsWith("!")) FilterOp.NEQ else FilterOp.EQ,
+            value = parts[1].trim()
+        )
+    }
+
+    private fun parseDataDogGroupBy(groupByText: String?, dataSource: String): List<GroupByDef> {
+        val groupFields = groupByText?.split(",")
+            ?.map { it.trim() }
+            ?.filter { it.isNotBlank() && isSupportedFilterField(dataSource, it) }
+            ?: emptyList()
+        return listOf(GroupByDef("timestamp", GroupByType.TIME, "auto")) +
+            groupFields.map { GroupByDef(it, GroupByType.FIELD) }
+    }
+
+    private fun isSupportedFilterField(dataSource: String, field: String): Boolean {
+        return filterFieldsBySource[dataSource]?.contains(field) ?: false
     }
 
     private fun mapDdFunction(fn: String): AggFunction = when (fn.lowercase()) {
@@ -251,23 +471,20 @@ class DataDogTranslator : DashboardTranslator {
     }
 
     private fun resolveDataSource(metricName: String): String {
+        if (metricName == "events") return "events"
         for ((prefix, source) in metricNamespaceMap) {
             if (metricName.startsWith(prefix)) return source
         }
-        return "events"
+        return "metrics"
     }
 
-    private fun mapMetricField(metricName: String, dataSource: String): String? {
-        return when {
-            metricName.contains("cpu") -> "cpu_percent"
-            metricName.contains("mem") -> "mem_used"
-            metricName.contains("disk") -> "disk_used"
-            metricName.contains("net.recv") || metricName.contains("net_recv") -> "net_recv_bytes"
-            metricName.contains("net.sent") || metricName.contains("net_sent") -> "net_sent_bytes"
-            metricName.contains("duration") || metricName.contains("latency") -> "duration_ms"
-            metricName.contains("load") -> "load_1"
-            dataSource == "events" -> null
-            else -> null
+    private fun mapMetricField(dataSource: String): String? {
+        return when (dataSource) {
+            "metrics" -> "value"
+            "spans" -> "duration_ms"
+            "logs" -> null
+            "containers" -> "cpu_percent"
+            else -> "value"
         }
     }
 
@@ -307,6 +524,7 @@ class DataDogTranslator : DashboardTranslator {
                     buildJsonObject {
                         put("type", reverseWidgetTypeMap[widget.widgetType] ?: "timeseries")
                         widget.title?.let { put("title", it) }
+                        widget.displayConfig["content"]?.let { put("content", it) }
                         put(
                             "requests",
                             buildJsonArray {
@@ -373,12 +591,17 @@ class DataDogTranslator : DashboardTranslator {
     }
 
     internal fun buildDdQueryString(dsl: QueryDsl): String {
+        dsl.rawQuery?.let { return it }
         val metric = dsl.metrics.firstOrNull() ?: return "count:events{*}"
         val fn = metric.function.value
-        val field = metric.field ?: dsl.dataSource
-        val filterStr = dsl.filters.joinToString(",") { f ->
-            "${f.field}:${f.value ?: f.values?.firstOrNull() ?: "*"}"
-        }.ifEmpty { "*" }
-        return "$fn:$field{$filterStr}"
+        val metricName = dsl.filters.firstOrNull { it.field == "metric_name" }?.value
+            ?: metric.field
+            ?: dsl.dataSource
+        val filterStr = dsl.filters
+            .filter { it.field != "metric_name" }
+            .joinToString(",") { f ->
+                "${f.field}:${f.value ?: f.values?.firstOrNull() ?: "*"}"
+            }.ifEmpty { "*" }
+        return "$fn:$metricName{$filterStr}"
     }
 }
