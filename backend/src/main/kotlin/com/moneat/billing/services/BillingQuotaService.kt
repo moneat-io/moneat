@@ -1901,6 +1901,7 @@ class BillingQuotaService(
     private fun normalizeEventType(eventType: String): String {
         return when (eventType.lowercase()) {
             "error" -> "error"
+            "session", "sessions" -> "session"
             "transaction" -> "transaction"
             "replay" -> "replay"
             "feedback" -> "feedback"

@@ -217,6 +217,13 @@ class ReleaseStatsServiceTest {
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
             when {
+                query.contains("GROUP BY user_id") && query.contains("sessions") -> {
+                    exchange.respond(
+                        200,
+                        """{"rate":"nan"}""",
+                        contentType = TEXT_PLAIN
+                    )
+                }
                 query.contains(COUNT_IF_ERRORS_0) && query.contains("sessions") -> {
                     exchange.respond(
                         200,
@@ -261,6 +268,7 @@ class ReleaseStatsServiceTest {
             val stats = service.getReleaseStats(1L, "1.0.0")
             assertNotNull(stats)
             assertNull(stats.crashFreeSessionRate)
+            assertNull(stats.crashFreeUserRate)
         }
     }
 }

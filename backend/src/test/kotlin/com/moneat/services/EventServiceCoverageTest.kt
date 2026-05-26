@@ -545,11 +545,44 @@ class EventServiceCoverageTest {
         val row = rowsSlot.captured.single()
         assertEquals("33333333-3333-3333-3333-333333333333", row.sessionId)
         assertEquals(0.0, row.durationMs)
-        assertEquals("abnormal", row.status)
+        assertEquals("errored", row.status)
         assertEquals(1, row.errors)
         assertEquals("1.1.0", row.release)
         assertEquals("production", row.environment)
         assertEquals("", row.userId)
+    }
+
+    @Test
+    fun `processEnvelope normalizes unknown session status with errors to abnormal`() = runBlocking {
+        val rowsSlot = slot<List<SessionInsertData>>()
+        coEvery { eventRepository.insertSessions(capture(rowsSlot)) } returns true
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "sess-unknown-status",
+                items = listOf(
+                    EnvelopeItem(
+                        "session",
+                        """
+                        {
+                          "sid": "33333333-3333-3333-3333-333333333334",
+                          "started": "2026-01-01T00:00:00Z",
+                          "status": "failed",
+                          "errors": 2,
+                          "attrs": {
+                            "release": "1.1.1"
+                          }
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        )
+
+        val row = rowsSlot.captured.single()
+        assertEquals("abnormal", row.status)
+        assertEquals(2, row.errors)
     }
 
     @Test
@@ -714,7 +747,8 @@ class EventServiceCoverageTest {
 
         val rows = rowsSlot.captured
         assertEquals(3, rows.size)
-        assertEquals(2, rows.count { it.status == "abnormal" && it.errors == 1 })
+        assertEquals(1, rows.count { it.status == "errored" && it.errors == 1 })
+        assertEquals(1, rows.count { it.status == "abnormal" && it.errors == 1 })
         assertEquals(1, rows.count { it.status == "ok" && it.errors == 0 })
         assertTrue(rows.all { it.release == "3.0.0" })
         assertTrue(rows.all { it.environment == "production" })

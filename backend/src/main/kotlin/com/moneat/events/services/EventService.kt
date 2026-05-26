@@ -227,7 +227,7 @@ class EventService(
         logger.debug { "Session payload: ${item.payload.take(LOG_PAYLOAD_PREVIEW_CHARS)}" }
         val session = json.decodeFromString<SentrySession>(item.payload)
         if (storeSession(projectId, session)) {
-            recordUsage(projectId, "error", item)
+            recordUsage(projectId, "session", item)
         }
     }
 
@@ -236,7 +236,7 @@ class EventService(
         val payload = json.decodeFromString<SentrySessionAggregatesPayload>(item.payload)
         val rows = payload.aggregates.flatMap { aggregate -> aggregate.toSessionRows(projectId) }
         if (storeSessionRows(projectId, rows)) {
-            recordUsage(projectId, "error", item)
+            recordUsage(projectId, "session", item)
         }
     }
 
@@ -664,7 +664,7 @@ class EventService(
 
         return buildList {
             addAggregateSessionRows(defaults, status = "exited", count = exited, errors = 0)
-            addAggregateSessionRows(defaults, status = "abnormal", count = errored, errors = 1)
+            addAggregateSessionRows(defaults, status = "errored", count = errored, errors = 1)
             addAggregateSessionRows(defaults, status = "crashed", count = crashed, errors = 1)
             addAggregateSessionRows(defaults, status = "abnormal", count = abnormal, errors = 1)
             addAggregateSessionRows(defaults, status = "ok", count = ok, errors = 0)
@@ -699,6 +699,7 @@ class EventService(
         return when (status?.lowercase()) {
             "ok" -> "ok"
             "exited" -> "exited"
+            "errored" -> "errored"
             "crashed" -> "crashed"
             "abnormal" -> "abnormal"
             else -> if (errors > 0) "abnormal" else "ok"

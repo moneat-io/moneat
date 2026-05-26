@@ -149,7 +149,8 @@ class IngestRoutesEnvelopeTest {
             assertEquals(HttpStatusCode.Accepted, response.status)
             assertEquals(1, reservations.size)
             assertEquals(1, reservations[0]["transaction"])
-            assertEquals(2, reservations[0]["error"])
+            assertEquals(1, reservations[0]["session"])
+            assertEquals(1, reservations[0]["error"])
         }
 
     @Test
@@ -324,8 +325,8 @@ class IngestRoutesEnvelopeTest {
         assertEquals("feedback", mapEnvelopeItemTypeToQuotaType("feedback"))
         assertEquals("feedback", mapEnvelopeItemTypeToQuotaType("user_report"))
         assertEquals("llm", mapEnvelopeItemTypeToQuotaType("llm_generation"))
-        assertEquals("error", mapEnvelopeItemTypeToQuotaType("session"))
-        assertEquals("error", mapEnvelopeItemTypeToQuotaType("sessions"))
+        assertEquals("session", mapEnvelopeItemTypeToQuotaType("session"))
+        assertEquals("session", mapEnvelopeItemTypeToQuotaType("sessions"))
         assertEquals("error", mapEnvelopeItemTypeToQuotaType("check_in"))
         assertEquals("error", mapEnvelopeItemTypeToQuotaType("unknown_type"))
     }
