@@ -191,6 +191,62 @@ class EventServiceCoverageTest {
     }
 
     @Test
+    fun `storeOtlpException continues when release upsert fails`() = runBlocking {
+        every {
+            releaseService.upsertReleaseFromEvent(testProjectId, "1.2.3", 1_700_000_000_000L)
+        } throws IllegalStateException("release unavailable")
+
+        val result = eventService.storeOtlpException(otlpException(serviceVersion = "1.2.3"))
+
+        assertEquals(true, result)
+        verify {
+            releaseService.upsertReleaseFromEvent(testProjectId, "1.2.3", 1_700_000_000_000L)
+        }
+    }
+
+    @Test
+    fun `storeOtlpException fingerprints message when stack has no frame`() = runBlocking {
+        val eventSlot = slot<ErrorEventInsertData>()
+        coEvery { eventRepository.insertErrorEvent(capture(eventSlot)) } returns true
+
+        val result = eventService.storeOtlpException(
+            otlpException(
+                exceptionMessage = "plain message",
+                stackTrace = "java.lang.IllegalStateException: plain message"
+            )
+        )
+
+        assertEquals(true, result)
+        assertTrue(eventSlot.captured.fingerprint.contains("java.lang.IllegalStateException"))
+        assertTrue(eventSlot.captured.fingerprint.contains("plain message"))
+        assertTrue(eventSlot.captured.fingerprint.contains("checkout-api"))
+    }
+
+    @Test
+    fun `storeOtlpException uses default fingerprint when otlp details are blank`() = runBlocking {
+        val eventSlot = slot<ErrorEventInsertData>()
+        coEvery { eventRepository.insertErrorEvent(capture(eventSlot)) } returns true
+
+        val result = eventService.storeOtlpException(
+            otlpException(
+                environment = "",
+                serviceNamespace = "",
+                service = "",
+                host = "",
+                exceptionType = "",
+                exceptionMessage = "",
+                stackTrace = "exception summary without a frame"
+            )
+        )
+
+        assertEquals(true, result)
+        assertEquals(listOf("{{ default }}"), eventSlot.captured.fingerprint)
+        assertEquals("production", eventSlot.captured.environment)
+        assertEquals(null, eventSlot.captured.tags?.get("service.namespace"))
+        assertEquals(null, eventSlot.captured.tags?.get("host"))
+    }
+
+    @Test
     fun `storeOtlpException returns false when insert fails`() = runBlocking {
         coEvery { eventRepository.insertErrorEvent(any()) } returns false
 
@@ -231,20 +287,25 @@ class EventServiceCoverageTest {
         projectId: Long? = testProjectId,
         environment: String = "staging",
         serviceVersion: String = "",
-        stackTrace: String = "at com.example.Worker.run(Worker.kt:12)"
+        stackTrace: String = "at com.example.Worker.run(Worker.kt:12)",
+        serviceNamespace: String = "checkout",
+        service: String = "checkout-api",
+        host: String = "api-host",
+        exceptionType: String = "java.lang.IllegalStateException",
+        exceptionMessage: String = "checkout failed",
     ): OtlpExceptionEvent =
         OtlpExceptionEvent(
             traceIdHex = "trace-1",
             spanIdHex = "span-1",
             organizationId = testOrgId.toLong(),
             projectId = projectId,
-            serviceNamespace = "checkout",
-            service = "checkout-api",
+            serviceNamespace = serviceNamespace,
+            service = service,
             environment = environment,
-            host = "api-host",
+            host = host,
             serviceVersion = serviceVersion,
-            exceptionType = "java.lang.IllegalStateException",
-            exceptionMessage = "checkout failed",
+            exceptionType = exceptionType,
+            exceptionMessage = exceptionMessage,
             stackTrace = stackTrace,
             timestampMs = 1_700_000_000_000L
         )

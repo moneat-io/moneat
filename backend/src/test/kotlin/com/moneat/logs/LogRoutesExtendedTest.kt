@@ -794,6 +794,30 @@ class LogRoutesExtendedTest {
             assertTrue(response.bodyAsText().contains("Mapping not found"))
         }
 
+    @Test
+    fun `DELETE otlp service mapping returns 400 for non-numeric id`() =
+        testApplication {
+            application {
+                installJwtAuth()
+                routing {
+                    logRoutes(
+                        mockLogService,
+                        mockOtlpApiKeyService,
+                        mockLogIndexService,
+                        mockOtlpServiceRoutingService
+                    )
+                }
+            }
+
+            val token = RouteTestSupport.createToken(userId = 1, orgId = 1)
+            val response = client.delete("/v1/otlp/service-mappings/not-a-number") {
+                withAuth(token)
+            }
+
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+            assertTrue(response.bodyAsText().contains("Invalid mapping ID"))
+        }
+
     private fun logIndexResponse(name: String = "errors"): LogIndexResponse =
         LogIndexResponse(
             id = 10,
