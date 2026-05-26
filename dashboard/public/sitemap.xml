@@ -18,12 +18,12 @@
   </url>
   <url>
     <loc>https://moneat.io/better-stack-alternative</loc>
-    <priority>0.7</priority>
+    <priority>0.8</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
     <loc>https://moneat.io/signoz-alternative</loc>
-    <priority>0.7</priority>
+    <priority>0.8</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url><loc>https://moneat.io/login</loc><priority>0.3</priority><changefreq>monthly</changefreq></url>

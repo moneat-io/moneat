@@ -15,6 +15,11 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 export type CompetitorSlug = 'datadog' | 'sentry' | 'better-stack' | 'signoz'
+export type CompetitorRoute =
+  | '/datadog-alternative'
+  | '/sentry-alternative'
+  | '/better-stack-alternative'
+  | '/signoz-alternative'
 
 interface SourceLink {
   label: string
@@ -53,7 +58,7 @@ export interface ComparisonMigrationStep {
 export interface CompetitorPageData {
   slug: CompetitorSlug
   name: string
-  route: string
+  route: CompetitorRoute
   title: string
   h1: string
   description: string
