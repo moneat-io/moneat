@@ -869,6 +869,10 @@ class LogServicesExtendedTest {
         assertEquals("15m", service.autoInterval(0L, 86_400_000L))
         // Exactly 7 days
         assertEquals("1h", service.autoInterval(0L, 604_800_000L))
+        // A slightly stale client "now" should not jump a 7-day dashboard to daily buckets.
+        assertEquals("1h", service.autoInterval(0L, 604_800_000L + 3_600_000L))
+        // Exactly 30 days
+        assertEquals("4h", service.autoInterval(0L, 2_592_000_000L))
     }
 
     // ──── Helper classes ────

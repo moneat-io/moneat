@@ -47,7 +47,7 @@ interface MonitorFormFieldsProps {
   readonly monitorType: string
   readonly onChange: (patch: MonitorFormData) => void
   readonly showRetries?: boolean
-  readonly showIncidentSeverity?: boolean
+  readonly showAlertSeverity?: boolean
 }
 
 export function MonitorFormFields({
@@ -55,7 +55,7 @@ export function MonitorFormFields({
   monitorType,
   onChange,
   showRetries = false,
-  showIncidentSeverity = false,
+  showAlertSeverity = false,
 }: MonitorFormFieldsProps) {
   return (
     <div className="space-y-4">
@@ -213,9 +213,9 @@ export function MonitorFormFields({
         </div>
       )}
 
-      {showIncidentSeverity && (
+      {showAlertSeverity && (
         <div>
-          <Label htmlFor="incidentSeverity">Incident Severity</Label>
+          <Label htmlFor="incidentSeverity">Alert Severity</Label>
           <Select
             value={formData.incidentSeverity || ''}
             onValueChange={(value) =>

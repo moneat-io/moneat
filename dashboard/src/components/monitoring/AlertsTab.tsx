@@ -315,7 +315,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
                         </p>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="incidentSeverity">Incident Severity</Label>
+                        <Label htmlFor="incidentSeverity">Alert Severity</Label>
                         <Select name="incidentSeverity" defaultValue="">
                           <SelectTrigger>
                             <SelectValue placeholder="Use routing rule default" />
@@ -550,7 +550,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="edit-incidentSeverity">Incident Severity</Label>
+                  <Label htmlFor="edit-incidentSeverity">Alert Severity</Label>
                   <Select name="incidentSeverity" defaultValue={editingAlert.incidentSeverity || ''}>
                     <SelectTrigger>
                       <SelectValue placeholder="Use routing rule default" />

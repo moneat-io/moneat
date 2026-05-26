@@ -18,16 +18,17 @@ package com.moneat.incident.services
 
 import com.moneat.config.EnvConfig
 import com.moneat.enterprise.FeatureRegistry
-import com.moneat.incident.models.AlertSource
-import com.moneat.incident.models.IncidentEvent
+import com.moneat.alerts.models.AlertSource
+import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.incident.models.IncidentEventLog
 import com.moneat.incident.models.IncidentProviderConfigs
 import com.moneat.incident.models.IncidentRoutingRules
-import com.moneat.incident.models.IncidentSeverity
-import com.moneat.incident.models.IncidentStatus
+import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertStatus
 import com.moneat.incident.models.ProviderConfig
 import com.moneat.shared.models.EscalationPolicies
 import com.moneat.shared.models.EscalationPolicyAlertSources
+import com.moneat.workflows.services.WorkflowService
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
@@ -46,7 +47,9 @@ import com.moneat.utils.suspendRunCatching
  * Middleware service for dispatching incident alerts to configured providers.
  * Handles routing rule lookup, severity resolution, and event logging.
  */
-class IncidentService {
+class IncidentService(
+    private val workflowService: WorkflowService = WorkflowService()
+) {
     private val logger = LoggerFactory.getLogger(IncidentService::class.java)
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -64,15 +67,30 @@ class IncidentService {
      * Fire an alert to all enabled incident providers for the organization.
      * Severity is resolved in order: per-monitor override > routing rule default > skip
      */
-    suspend fun fireAlert(event: IncidentEvent) {
-        suspendRunCatching {
-            // Check if native on-call is enabled
-            val onCallEnabled = EnvConfig.get("ONCALL_ENABLED", "false").toBoolean()
+    suspend fun fireAlert(
+        event: AlertLifecycleEvent,
+        publishWorkflow: Boolean = true
+    ) {
+        // Check if native on-call is enabled
+        val onCallEnabled = EnvConfig.get("ONCALL_ENABLED", "false").toBoolean()
 
-            if (onCallEnabled) {
+        if (onCallEnabled) {
+            suspendRunCatching {
                 triggerNativeEscalation(event)
+            }.getOrElse { e ->
+                logger.error("Error triggering native escalation", e)
             }
+        }
 
+        if (publishWorkflow) {
+            suspendRunCatching {
+                workflowService.publishAlertTriggered(event)
+            }.getOrElse { e ->
+                logger.error("Error publishing alert workflow", e)
+            }
+        }
+
+        suspendRunCatching {
             val configs = getEnabledProviderConfigs(event.organizationId)
             if (configs.isEmpty()) {
                 logger.debug("No enabled incident providers for org ${event.organizationId}")
@@ -125,8 +143,27 @@ class IncidentService {
     suspend fun resolveAlert(
         organizationId: Int,
         source: AlertSource,
-        deduplicationKey: String
+        deduplicationKey: String,
+        title: String = "Alert resolved",
+        description: String = "Moneat resolved alert $deduplicationKey",
+        moneatUrl: String = "",
+        publishWorkflow: Boolean = true
     ) {
+        if (publishWorkflow) {
+            suspendRunCatching {
+                workflowService.publishAlertResolved(
+                    organizationId = organizationId,
+                    source = source.name,
+                    deduplicationKey = deduplicationKey,
+                    title = title,
+                    description = description,
+                    moneatUrl = moneatUrl
+                )
+            }.getOrElse { e ->
+                logger.error("Error publishing resolved alert workflow", e)
+            }
+        }
+
         suspendRunCatching {
             val configs = getEnabledProviderConfigs(organizationId)
             if (configs.isEmpty()) {
@@ -197,14 +234,18 @@ class IncidentService {
     suspend fun autoResolveAlert(
         organizationId: Int,
         source: AlertSource,
-        deduplicationKey: String
+        deduplicationKey: String,
+        title: String = "Alert resolved",
+        description: String = "Moneat resolved alert $deduplicationKey",
+        moneatUrl: String = "",
+        publishWorkflow: Boolean = true
     ) {
         if (!isAutoResolvableSource(source)) {
             logger.warn("Skipping auto-resolve for source without clear signal: $source")
             return
         }
 
-        resolveAlert(organizationId, source, deduplicationKey)
+        resolveAlert(organizationId, source, deduplicationKey, title, description, moneatUrl, publishWorkflow)
     }
 
     internal fun isAutoResolvableSource(source: AlertSource): Boolean {
@@ -212,17 +253,17 @@ class IncidentService {
     }
 
     /**
-     * Get incident severity from per-monitor override or routing rule.
+     * Get alert severity from per-monitor override or routing rule.
      * Returns null if no severity is configured (alert should be skipped).
      */
-    fun resolveIncidentSeverity(
+    fun resolveAlertSeverity(
         providerConfigId: Int,
         alertSource: AlertSource,
         monitorSeverityOverride: String?
-    ): IncidentSeverity? {
+    ): AlertSeverity? {
         // First check per-monitor override
         monitorSeverityOverride?.let {
-            return IncidentSeverity.fromString(it)
+            return AlertSeverity.fromString(it)
         }
 
         // Fall back to routing rule
@@ -235,7 +276,7 @@ class IncidentService {
                         IncidentRoutingRules.alertType.isNull()
                 }.firstOrNull()
                 ?.let { row ->
-                    IncidentSeverity.fromString(row[IncidentRoutingRules.incidentSeverity])
+                    AlertSeverity.fromString(row[IncidentRoutingRules.incidentSeverity])
                 }
         }
     }
@@ -283,7 +324,7 @@ class IncidentService {
 
     private fun logEvent(
         config: ProviderConfig,
-        event: IncidentEvent,
+        event: AlertLifecycleEvent,
         success: Boolean,
         providerIncidentId: String? = null,
         errorMessage: String? = null
@@ -323,7 +364,7 @@ class IncidentService {
                 it[IncidentEventLog.alertSource] = source.name
                 it[IncidentEventLog.deduplicationKey] = deduplicationKey
                 it[IncidentEventLog.incidentSeverity] = "N/A"
-                it[IncidentEventLog.incidentStatus] = IncidentStatus.RESOLVED.name
+                it[IncidentEventLog.incidentStatus] = AlertStatus.RESOLVED.name
                 it[IncidentEventLog.title] = "Alert Resolved"
                 it[IncidentEventLog.description] = null
                 it[IncidentEventLog.providerIncidentId] = providerIncidentId
@@ -338,7 +379,7 @@ class IncidentService {
     /**
      * Trigger native on-call escalation engine if configured.
      */
-    private suspend fun triggerNativeEscalation(event: IncidentEvent) {
+    private suspend fun triggerNativeEscalation(event: AlertLifecycleEvent) {
         val bridge = FeatureRegistry.getOnCallBridge()
         if (bridge == null) {
             logger.debug("On-call enterprise module not loaded — skipping native escalation")

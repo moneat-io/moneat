@@ -16,10 +16,10 @@
 
 package com.moneat.services.incident
 
-import com.moneat.incident.models.AlertSource
+import com.moneat.alerts.models.AlertSource
 import com.moneat.incident.models.IncidentProviderConfigs
 import com.moneat.incident.models.IncidentRoutingRules
-import com.moneat.incident.models.IncidentSeverity
+import com.moneat.alerts.models.AlertSeverity
 import com.moneat.incident.services.IncidentService
 import com.moneat.shared.models.Organizations
 import com.moneat.testsupport.TestDatabaseHelper
@@ -85,39 +85,39 @@ class IncidentServiceTest {
     }
 
     @Test
-    fun `resolveIncidentSeverity prefers monitor override over routing rule`() {
+    fun `resolveAlertSeverity prefers monitor override over routing rule`() {
         val service = IncidentService()
 
         val severity =
-            service.resolveIncidentSeverity(
+            service.resolveAlertSeverity(
                 providerConfigId = providerConfigId,
                 alertSource = AlertSource.HOST_ALERT,
                 monitorSeverityOverride = "critical"
             )
 
-        assertEquals(IncidentSeverity.CRITICAL, severity)
+        assertEquals(AlertSeverity.CRITICAL, severity)
     }
 
     @Test
-    fun `resolveIncidentSeverity falls back to routing rule when override is absent`() {
+    fun `resolveAlertSeverity falls back to routing rule when override is absent`() {
         val service = IncidentService()
 
         val severity =
-            service.resolveIncidentSeverity(
+            service.resolveAlertSeverity(
                 providerConfigId = providerConfigId,
                 alertSource = AlertSource.HOST_ALERT,
                 monitorSeverityOverride = null
             )
 
-        assertEquals(IncidentSeverity.MEDIUM, severity)
+        assertEquals(AlertSeverity.MEDIUM, severity)
     }
 
     @Test
-    fun `resolveIncidentSeverity returns null for invalid override string`() {
+    fun `resolveAlertSeverity returns null for invalid override string`() {
         val service = IncidentService()
 
         val severity =
-            service.resolveIncidentSeverity(
+            service.resolveAlertSeverity(
                 providerConfigId = providerConfigId,
                 alertSource = AlertSource.HOST_ALERT,
                 monitorSeverityOverride = "not-a-severity"

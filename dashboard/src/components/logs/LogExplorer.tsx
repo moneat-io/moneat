@@ -38,6 +38,7 @@ import {
   parseLevelsFromUrl,
   serializeLogViewState,
 } from '@/components/logs/logViewUrlState'
+import {logIntervalToMs} from '@/components/logs/logInterval'
 import {getNowDate} from '@/lib/demo'
 
 interface LogExplorerProps {
@@ -94,23 +95,6 @@ function formatLogCount(n: number): string {
 function toDateTimeLocalValue(date: Date): string {
   const pad = (value: number) => String(value).padStart(2, '0')
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
-
-function intervalToMs(interval: string | undefined): number {
-  switch (interval) {
-    case '1m':
-      return 60_000
-    case '5m':
-      return 5 * 60_000
-    case '15m':
-      return 15 * 60_000
-    case '1h':
-      return 60 * 60_000
-    case '1d':
-      return 24 * 60 * 60_000
-    default:
-      return 60 * 60_000
-  }
 }
 
 export function LogExplorer({
@@ -527,7 +511,7 @@ export function LogExplorer({
   const handleHistogramBucketClick = useCallback((bucketStartIso: string) => {
     const bucketStart = new Date(bucketStartIso)
     if (Number.isNaN(bucketStart.getTime())) return
-    const bucketMs = intervalToMs(aggregateData?.interval)
+    const bucketMs = logIntervalToMs(aggregateData?.interval)
     const bucketEnd = new Date(bucketStart.getTime() + bucketMs)
     setTimePreset('custom')
     setCustomFrom(toDateTimeLocalValue(bucketStart))
@@ -806,6 +790,9 @@ export function LogExplorer({
                     buckets={aggregateData.buckets}
                     grouped={true}
                     height={72}
+                    interval={aggregateData.interval}
+                    rangeFrom={timeRange.from}
+                    rangeTo={timeRange.to ?? getNowDate().toISOString()}
                     onBucketClick={handleHistogramBucketClick}
                   />
                 </div>

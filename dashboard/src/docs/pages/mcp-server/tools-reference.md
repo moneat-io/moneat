@@ -92,7 +92,7 @@ Aggregate log volume and error rate over time buckets.
 |-----------|------|----------|-------------|
 | `from` | string | No | Start time (ISO 8601) |
 | `to` | string | No | End time (ISO 8601) |
-| `interval` | string | No | `1m`, `5m`, `15m`, `1h`, `1d` |
+| `interval` | string | No | `1m`, `5m`, `15m`, `1h`, `2h`, `4h`, `12h`, `1d` |
 | `query` | string | No | Search query |
 | `levels` | string | No | Comma-separated log levels |
 | `service` | string | No | Service filter |

@@ -19,11 +19,15 @@ import {Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis
 import type {LogAggregateBucket} from '@/lib/api'
 import {useTimezone} from '@/hooks/useTimezone'
 import {formatDateTime, formatMonthDay, formatTimeHM} from '@/lib/date-format'
+import {logIntervalToMs} from '@/components/logs/logInterval'
 
 interface LogHistogramProps {
   buckets: LogAggregateBucket[]
   grouped?: boolean
   height?: number
+  interval?: string
+  rangeFrom?: string
+  rangeTo?: string
   onBucketClick?: (timestamp: string) => void
 }
 
@@ -44,6 +48,7 @@ const LEVEL_COLORS: Record<string, string> = {
 }
 
 const GROUP_COLORS = ['#ef4444', '#f59e0b', '#6366f1', '#14b8a6', '#a855f7', '#22c55e', '#ec4899', '#0ea5e9']
+const MAX_BAR_WIDTH_PX = 14
 
 const levelOrder = ['fatal', 'error', 'warn', 'info', 'debug', 'trace']
 
@@ -56,7 +61,27 @@ function colorForGroup(key: string): string {
   return GROUP_COLORS[hash % GROUP_COLORS.length]
 }
 
-export function LogHistogram({buckets, grouped = true, height = 120, onBucketClick}: LogHistogramProps) {
+function toTimestampMs(value: string | undefined): number | undefined {
+  if (!value) return undefined
+  const timestamp = new Date(value).getTime()
+  return Number.isNaN(timestamp) ? undefined : timestamp
+}
+
+function formatTooltipValue(value: unknown, name: unknown): [string, string] {
+  const numericValue = typeof value === 'number' ? value : Number(value ?? 0)
+  const displayValue = Number.isFinite(numericValue) ? numericValue.toLocaleString() : '0'
+  return [displayValue, name === 'total' ? 'logs' : String(name ?? '')]
+}
+
+export function LogHistogram({
+  buckets,
+  grouped = true,
+  height = 120,
+  interval,
+  rangeFrom,
+  rangeTo,
+  onBucketClick,
+}: LogHistogramProps) {
   const { timezone } = useTimezone()
   const formatAxisTime = (ts: number, totalRangeMs: number): string => {
     const date = new Date(ts)
@@ -67,22 +92,25 @@ export function LogHistogram({buckets, grouped = true, height = 120, onBucketCli
     return formatMonthDay(date, timezone)
   }
   const formatTooltipTime = (ts: number): string => formatDateTime(new Date(ts), timezone)
-  const {chartData, groupKeys, totalRangeMs, domainMin, domainMax} = useMemo(() => {
+  const {chartData, groupKeys, totalRangeMs, domainMin, domainMax, estimatedBucketCount} = useMemo(() => {
     const keys = new Set<string>()
-    const data: HistogramPoint[] = buckets.map((b) => {
-      const point: HistogramPoint = {
-        timestamp: b.timestamp,
-        timestampMs: new Date(b.timestamp).getTime(),
-        total: b.count,
-      }
-      if (grouped && Object.keys(b.groups).length > 0) {
-        for (const [key, val] of Object.entries(b.groups)) {
-          keys.add(key)
-          point[key] = val
+    const data: HistogramPoint[] = buckets
+      .map((b) => {
+        const point: HistogramPoint = {
+          timestamp: b.timestamp,
+          timestampMs: new Date(b.timestamp).getTime(),
+          total: b.count,
         }
-      }
-      return point
-    })
+        if (grouped && Object.keys(b.groups).length > 0) {
+          for (const [key, val] of Object.entries(b.groups)) {
+            keys.add(key)
+            point[key] = val
+          }
+        }
+        return point
+      })
+      .filter((point) => !Number.isNaN(point.timestampMs))
+      .sort((a, b) => a.timestampMs - b.timestampMs)
     const sortedKeys = [...keys].sort((a, b) => {
       const ai = levelOrder.indexOf(a)
       const bi = levelOrder.indexOf(b)
@@ -91,20 +119,28 @@ export function LogHistogram({buckets, grouped = true, height = 120, onBucketCli
     })
     const firstTs = data[0]?.timestampMs ?? 0
     const lastTs = data[data.length - 1]?.timestampMs ?? firstTs
-    const bucketInterval = data.length > 1 ? data[1].timestampMs - data[0].timestampMs : 60_000
+    const bucketInterval = logIntervalToMs(interval)
+    const rangeStartMs = toTimestampMs(rangeFrom)
+    const rangeEndMs = toTimestampMs(rangeTo)
+    const minFromData = firstTs - bucketInterval / 2
+    const maxFromData = lastTs + bucketInterval / 2
+    const min = Math.min(rangeStartMs ?? minFromData, minFromData)
+    const max = Math.max(rangeEndMs ?? maxFromData, maxFromData)
+    const range = Math.max(max - min, bucketInterval)
     return {
       chartData: data,
       groupKeys: sortedKeys,
-      totalRangeMs: Math.max(lastTs - firstTs, 60_000),
-      domainMin: firstTs - bucketInterval / 2,
-      domainMax: lastTs + bucketInterval / 2,
+      totalRangeMs: range,
+      domainMin: min,
+      domainMax: max,
+      estimatedBucketCount: Math.max(1, Math.ceil(range / bucketInterval)),
     }
-  }, [buckets, grouped])
+  }, [buckets, grouped, interval, rangeFrom, rangeTo])
 
   if (chartData.length === 0) return null
 
   const useGroups = grouped && groupKeys.length > 0
-  const tickCount = Math.min(8, Math.max(3, Math.floor(chartData.length / 12)))
+  const tickCount = Math.min(8, Math.max(3, Math.floor(estimatedBucketCount / 12)))
 
   return (
     <div className="w-full" style={{height}}>
@@ -150,13 +186,7 @@ export function LogHistogram({buckets, grouped = true, height = 120, onBucketCli
           <Tooltip
             cursor={false}
             labelFormatter={(ts) => formatTooltipTime(ts as number)}
-            formatter={(value: unknown, name: unknown) => {
-              const numericValue = typeof value === 'number' ? value : Number(value)
-              return [
-                Number.isFinite(numericValue) ? numericValue.toLocaleString() : '0',
-                name === 'total' ? 'logs' : String(name ?? ''),
-              ]
-            }}
+            formatter={formatTooltipValue}
             contentStyle={{
               backgroundColor: 'hsl(var(--popover) / 0.95)',
               border: '1px solid hsl(var(--border))',
@@ -174,6 +204,7 @@ export function LogHistogram({buckets, grouped = true, height = 120, onBucketCli
                 stackId="1"
                 fill={colorForGroup(key)}
                 isAnimationActive={false}
+                maxBarSize={MAX_BAR_WIDTH_PX}
                 radius={[1, 1, 0, 0]}
               />
             ))
@@ -182,6 +213,7 @@ export function LogHistogram({buckets, grouped = true, height = 120, onBucketCli
               dataKey="total"
               fill={LEVEL_COLORS.error}
               isAnimationActive={false}
+              maxBarSize={MAX_BAR_WIDTH_PX}
               radius={[1, 1, 0, 0]}
             />
           )}

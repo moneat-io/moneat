@@ -30,7 +30,9 @@ import com.moneat.shared.models.Users
 import com.moneat.shared.repositories.MembershipRepositoryImpl
 import com.moneat.shared.repositories.OrganizationRepositoryImpl
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.workflows.services.WorkflowService
 import io.ktor.server.config.*
+import io.mockk.mockk
 import org.jetbrains.exposed.v1.core.*
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -41,7 +43,8 @@ class AuthServiceLegalConsentTest {
     private val authService = AuthService(
         UserRepositoryImpl(),
         MembershipRepositoryImpl(),
-        OrganizationRepositoryImpl()
+        OrganizationRepositoryImpl(),
+        workflowService = mockk<WorkflowService>(relaxed = true),
     )
     private val appConfig = ApplicationConfig("application.conf")
     private val termsVersion = appConfig.property("legal.termsVersion").getString()

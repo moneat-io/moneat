@@ -17,12 +17,8 @@
 package com.moneat.uptime.services
 
 import com.moneat.billing.services.BillingQuotaService
-import com.moneat.incident.models.AlertSource
+import com.moneat.alerts.models.AlertSource
 import com.moneat.incident.services.IncidentService
-import com.moneat.notifications.services.AlertNotificationPreferencesService
-import com.moneat.notifications.services.DiscordService
-import com.moneat.notifications.services.EmailService
-import com.moneat.notifications.services.SlackService
 import com.moneat.shared.services.TaskLock
 import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import com.moneat.utils.suspendRunCatching
@@ -54,11 +50,7 @@ private val logger = KotlinLogging.logger {}
 class UptimeScheduler(
     private val uptimeService: UptimeService = UptimeService(BillingQuotaService(), UptimeMonitorRepositoryImpl()),
     private val checkExecutor: UptimeCheckExecutor = UptimeCheckExecutor(),
-    private val slackService: SlackService = SlackService(),
-    private val discordService: DiscordService = DiscordService(),
     private val incidentService: IncidentService = IncidentService(),
-    private val emailService: EmailService = EmailService(),
-    private val prefsService: AlertNotificationPreferencesService = AlertNotificationPreferencesService(),
     private val billingQuotaService: BillingQuotaService = BillingQuotaService(),
 ) {
     companion object {
@@ -298,115 +290,27 @@ class UptimeScheduler(
             io.ktor.server.config
                 .ApplicationConfig("application.conf")
         val baseUrl = config.property("email.frontendUrl").getString()
-        val monitorUrl = "$baseUrl/uptime/${monitor.id}"
-        // Send email notifications
-        suspendRunCatching {
-            val emailRecipients =
-                prefsService.getUsersWithChannelEnabled(
-                    organizationId = monitor.organizationId,
-                    alertSource = "UPTIME_MONITOR",
-                    channel = "email"
-                )
 
-            emailRecipients.forEach { (_, email) ->
-                scope.launch {
-                    suspendRunCatching {
-                        emailService.sendUptimeAlertEmail(
-                            to = email,
-                            monitorName = monitor.name,
-                            status = newStatus,
-                            message = result.message,
-                            monitorUrl = monitorUrl
-                        )
-                    }.onFailure { e ->
-                        logger.error(e) { "Failed to send uptime alert email to $email" }
-                    }
-                }
-            }
-        }.onFailure { e ->
-            logger.error(e) { "Failed to send uptime alert emails" }
-        }
-
-        // Send Slack notification
-        val slackEnabled =
-            suspendRunCatching {
-                prefsService
-                    .getUsersWithChannelEnabled(
-                        organizationId = monitor.organizationId,
-                        alertSource = "UPTIME_MONITOR",
-                        channel = "slack"
-                    ).isNotEmpty()
-            }.getOrElse { e ->
-                logger.error(e) { "Failed to evaluate Slack notification preferences for uptime monitor" }
-                false
-            }
-        if (slackEnabled) {
-            suspendRunCatching {
-                slackService.sendUptimeAlert(
-                    organizationId = monitor.organizationId,
-                    monitorName = monitor.name,
-                    oldStatus = oldStatus,
-                    newStatus = newStatus,
-                    message = result.message,
-                    monitorId = monitor.id,
-                    baseUrl = baseUrl
-                )
-            }.onFailure { e ->
-                logger.error(e) { "Failed to send Slack notification for uptime monitor status change" }
-            }
-        }
-
-        // Send Discord notification
-        val discordEnabled =
-            suspendRunCatching {
-                prefsService
-                    .getUsersWithChannelEnabled(
-                        organizationId = monitor.organizationId,
-                        alertSource = "UPTIME_MONITOR",
-                        channel = "discord"
-                    ).isNotEmpty()
-            }.getOrElse { e ->
-                logger.error(e) { "Failed to evaluate Discord notification preferences for uptime monitor" }
-                false
-            }
-        if (discordEnabled) {
-            suspendRunCatching {
-                discordService.sendUptimeAlert(
-                    organizationId = monitor.organizationId,
-                    monitorUrl = monitor.url ?: "N/A",
-                    isDown = newStatus == "down",
-                    statusCode = result.statusCode,
-                    responseTime = result.responseTimeMs.toLong(),
-                    errorMessage = if (result.message.isNotBlank()) result.message else null,
-                    monitorId = monitor.id,
-                    baseUrl = baseUrl
-                )
-            }.onFailure { e ->
-                logger.error(e) { "Failed to send Discord notification for uptime monitor status change" }
-            }
-        }
-
-        // Fire or resolve incident alert
+        // Build an alert lifecycle event; IncidentService applies incident-provider routing.
         suspendRunCatching {
             if (newStatus == "down") {
-                // Get severity from monitor override or fall back to routing rules
-                // We always fire the incident; IncidentService will check routing rules
+                // Get severity from the monitor override or fall back to routing rules.
                 val severityOverride =
                     monitor.incidentSeverity?.let {
-                        com.moneat.incident.models.IncidentSeverity
+                        com.moneat.alerts.models.AlertSeverity
                             .fromString(it)
                     }
 
                 // Use override severity if set, otherwise use a default that routing rules can override
-                val severity = severityOverride ?: com.moneat.incident.models.IncidentSeverity.HIGH
+                val severity = severityOverride ?: com.moneat.alerts.models.AlertSeverity.HIGH
 
-                val incidentEvent =
-                    com.moneat.incident.models.IncidentEvent(
+                val alertLifecycleEvent =
+                    com.moneat.alerts.models.AlertLifecycleEvent(
                         title = "Uptime Monitor Down: ${monitor.name}",
                         description = "Monitor '${monitor.name}' (${monitor.type}) is down.\nError: ${result.message}",
                         severity = severity,
-                        status = com.moneat.incident.models.IncidentStatus.FIRING,
-                        source = com.moneat.incident.models.AlertSource.UPTIME_MONITOR,
+                        status = com.moneat.alerts.models.AlertStatus.FIRING,
+                        source = com.moneat.alerts.models.AlertSource.UPTIME_MONITOR,
                         deduplicationKey = "moneat-uptime-${monitor.id}",
                         organizationId = monitor.organizationId,
                         metadata =
@@ -419,18 +323,20 @@ class UptimeScheduler(
                         ),
                         moneatUrl = "$baseUrl/uptime/${monitor.id}"
                     )
-                // IncidentService will check routing rules and only fire if configured
-                incidentService.fireAlert(incidentEvent)
+                incidentService.fireAlert(alertLifecycleEvent)
             } else if (newStatus == "up") {
                 // Resolve the incident
                 incidentService.autoResolveAlert(
                     organizationId = monitor.organizationId,
                     source = AlertSource.UPTIME_MONITOR,
-                    deduplicationKey = "moneat-uptime-${monitor.id}"
+                    deduplicationKey = "moneat-uptime-${monitor.id}",
+                    title = "Uptime Monitor Recovered: ${monitor.name}",
+                    description = "Monitor '${monitor.name}' (${monitor.type}) is back up.",
+                    moneatUrl = "$baseUrl/uptime/${monitor.id}"
                 )
             }
         }.onFailure { e ->
-            logger.error(e) { "Failed to fire/resolve incident alert for uptime monitor" }
+            logger.error(e) { "Failed to fire/resolve incident provider alert for uptime monitor" }
         }
     }
 

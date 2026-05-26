@@ -57,6 +57,7 @@ import {
     ShieldAlert,
     Sparkles,
     Timer,
+    Workflow,
 } from 'lucide-react'
 import {cn} from '@/lib/utils'
 import {platforms, getPlatformInfo, type PlatformType} from '@/routes/projects'
@@ -279,6 +280,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
     // Operations (enterprise)
     ...datadogOperationsNavItems,
     ...onCallNavItems,
+    { key: 'workflows', icon: Workflow, label: 'Workflows', href: '/workflows', requiresProject: false, group: 'operations' },
     { key: 'analytics', icon: BarChart3, label: 'Analytics', href: '/analytics', requiresProject: false, group: 'analytics' },
     // Management
     ...adminNavItems,
