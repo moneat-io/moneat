@@ -90,7 +90,10 @@ private const val WARN_BODY_PREVIEW_CHARS = 500
 private const val MILLIS_PER_HOUR = 3_600_000L
 private const val MILLIS_PER_6_HOURS = 21_600_000L
 private const val MILLIS_PER_DAY = 86_400_000L
-private const val MILLIS_PER_WEEK = 604_800_000L
+private const val MILLIS_PER_10_DAYS = 10 * MILLIS_PER_DAY
+private const val MILLIS_PER_21_DAYS = 21 * MILLIS_PER_DAY
+private const val MILLIS_PER_45_DAYS = 45 * MILLIS_PER_DAY
+private const val MILLIS_PER_90_DAYS = 90 * MILLIS_PER_DAY
 private const val MAX_LOG_MESSAGE_CHARS = 8192
 private const val MAX_LOG_BODY_CHARS = 32768
 private const val MAX_LOG_SERVICE_CHARS = 256
@@ -489,18 +492,13 @@ class LogService(private val logRepository: LogRepository) {
         val rangeMs = toMs - fromMs
         return when {
             rangeMs <= MILLIS_PER_HOUR -> "1m"
-
-            // ≤1h → 1m
             rangeMs <= MILLIS_PER_6_HOURS -> "5m"
-
-            // ≤6h → 5m
             rangeMs <= MILLIS_PER_DAY -> "15m"
-
-            // ≤24h → 15m
-            rangeMs <= MILLIS_PER_WEEK -> "1h"
-
-            // ≤7d → 1h
-            else -> "1d" // >7d → 1d
+            rangeMs <= MILLIS_PER_10_DAYS -> "1h"
+            rangeMs <= MILLIS_PER_21_DAYS -> "2h"
+            rangeMs <= MILLIS_PER_45_DAYS -> "4h"
+            rangeMs <= MILLIS_PER_90_DAYS -> "12h"
+            else -> "1d"
         }
     }
 
@@ -510,6 +508,9 @@ class LogService(private val logRepository: LogRepository) {
             "5m" -> "5 MINUTE"
             "15m" -> "15 MINUTE"
             "1h" -> "1 HOUR"
+            "2h" -> "2 HOUR"
+            "4h" -> "4 HOUR"
+            "12h" -> "12 HOUR"
             "1d" -> "1 DAY"
             else -> "1 HOUR"
         }
