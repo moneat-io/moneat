@@ -136,111 +136,111 @@ Authenticate with an OTLP API key (created in **Settings → OTLP API Keys**) pa
 ### Core Observability
 
 <p align="center">
-  <img src="dashboard/public/screenshots/dashboard.png" alt="Dashboard Overview" width="800">
+  <img src="dashboard/public/screenshots/dashboard.png?v=dfadf856" alt="Dashboard Overview" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/issues.png" alt="Error Tracking / Issues" width="800">
+  <img src="dashboard/public/screenshots/issues.png?v=dfadf856" alt="Error Tracking / Issues" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/performance.png" alt="Performance Monitoring" width="800">
+  <img src="dashboard/public/screenshots/performance.png?v=dfadf856" alt="Performance Monitoring" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/logs.png" alt="Log Management" width="800">
+  <img src="dashboard/public/screenshots/logs.png?v=dfadf856" alt="Log Management" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/replays.png" alt="Session Replay" width="800">
+  <img src="dashboard/public/screenshots/replays.png?v=dfadf856" alt="Session Replay" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/profiles.png" alt="Continuous Profiling" width="800">
+  <img src="dashboard/public/screenshots/profiles.png?v=dfadf856" alt="Continuous Profiling" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/dashboards.png" alt="Custom Dashboards" width="800">
+  <img src="dashboard/public/screenshots/dashboards.png?v=dfadf856" alt="Custom Dashboards" width="800">
 </p>
 
 ### Infrastructure & Monitoring
 
 <p align="center">
-  <img src="dashboard/public/screenshots/monitoring-hosts.png" alt="Monitoring Hosts" width="800">
+  <img src="dashboard/public/screenshots/monitoring-hosts.png?v=dfadf856" alt="Monitoring Hosts" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/uptime.png" alt="Uptime Monitoring" width="800">
+  <img src="dashboard/public/screenshots/uptime.png?v=dfadf856" alt="Uptime Monitoring" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/status-pages.png" alt="Status Pages" width="800">
+  <img src="dashboard/public/screenshots/status-pages.png?v=dfadf856" alt="Status Pages" width="800">
 </p>
 
 ### Enterprise: On-Call
 
 <p align="center">
-  <img src="dashboard/public/screenshots/on-call-overview.png" alt="On-Call Overview" width="800">
+  <img src="dashboard/public/screenshots/on-call-overview.png?v=dfadf856" alt="On-Call Overview" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/on-call-schedules.png" alt="On-Call Schedules" width="800">
+  <img src="dashboard/public/screenshots/on-call-schedules.png?v=dfadf856" alt="On-Call Schedules" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/on-call-escalation-policies.png" alt="Escalation Policies" width="800">
+  <img src="dashboard/public/screenshots/on-call-escalation-policies.png?v=dfadf856" alt="Escalation Policies" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/on-call-alerts.png" alt="On-Call Alerts" width="800">
+  <img src="dashboard/public/screenshots/on-call-alerts.png?v=dfadf856" alt="On-Call Alerts" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/on-call-incidents.png" alt="On-Call Incidents" width="800">
+  <img src="dashboard/public/screenshots/on-call-incidents.png?v=dfadf856" alt="On-Call Incidents" width="800">
 </p>
 
 ### Status Pages
 
 <p align="center">
-  <img src="dashboard/public/screenshots/status-pages.png" alt="Custom Status Page" width="800">
+  <img src="dashboard/public/screenshots/status-pages.png?v=dfadf856" alt="Custom Status Page" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/status-page-public.png" alt="Public Status Page" width="800">
+  <img src="dashboard/public/screenshots/status-page-public.png?v=dfadf856" alt="Public Status Page" width="800">
 </p>
 
 ### Insights & Analytics
 
 <p align="center">
-  <img src="dashboard/public/screenshots/analytics.png" alt="Product Analytics" width="800">
+  <img src="dashboard/public/screenshots/analytics.png?v=dfadf856" alt="Product Analytics" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/ai.png" alt="AI Observability" width="800">
+  <img src="dashboard/public/screenshots/ai.png?v=dfadf856" alt="AI Observability" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/feedback.png" alt="User Feedback" width="800">
+  <img src="dashboard/public/screenshots/feedback.png?v=dfadf856" alt="User Feedback" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/releases.png" alt="Releases" width="800">
+  <img src="dashboard/public/screenshots/releases.png?v=dfadf856" alt="Releases" width="800">
 </p>
 
 ### APM & Tracing
 
 <p align="center">
-  <img src="dashboard/public/screenshots/apm-traces.png" alt="APM Traces" width="800">
+  <img src="dashboard/public/screenshots/apm-traces.png?v=dfadf856" alt="APM Traces" width="800">
 </p>
 
 ### Security & Synthetics
 
 <p align="center">
-  <img src="dashboard/public/screenshots/security.png" alt="Security & SBOM" width="800">
+  <img src="dashboard/public/screenshots/security.png?v=dfadf856" alt="Security & SBOM" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/synthetics.png" alt="Synthetics" width="800">
+  <img src="dashboard/public/screenshots/synthetics.png?v=dfadf856" alt="Synthetics" width="800">
 </p>
 
 </details>
