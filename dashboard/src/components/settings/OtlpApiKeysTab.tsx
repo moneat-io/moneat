@@ -16,8 +16,6 @@
 
 import {ScrollText} from 'lucide-react'
 import {api, type OtlpApiKey} from '@/lib/api'
-import {backendBaseUrl} from '@/lib/backend-url'
-import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {ApiKeysTabBase} from './ApiKeysTabBase'
 
 export function OtlpApiKeysTab() {
@@ -25,7 +23,8 @@ export function OtlpApiKeysTab() {
     <ApiKeysTabBase<OtlpApiKey>
       cardId="otlp-api-keys"
       cardTitle="OTLP API Keys"
-      cardDescription="Create org-level API keys for OpenTelemetry ingestion (logs, traces, and metrics). Use these keys with OTLP exporters or the ingest API. Keys are shown in full only once when created."
+      cardDescription="Create org-level API keys for OpenTelemetry ingestion."
+      docsHref="/docs/logging"
       icon={ScrollText}
       emptyTitle="No OTLP API keys yet"
       emptyDescription="Create a key to send logs, traces, and metrics via OpenTelemetry."
@@ -50,41 +49,6 @@ export function OtlpApiKeysTab() {
       revokeDialogTitle="Revoke OTLP API Key"
       revokeDialogDescription={(name) =>
         `Are you sure you want to revoke "${name}"? Any clients using this key will no longer be able to send data.`
-      }
-      setupInstructions={
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Setup Instructions</CardTitle>
-            <CardDescription>
-              Configure your OpenTelemetry SDK or Collector to send telemetry data to Moneat.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="text-sm font-medium mb-1">OTLP endpoints</p>
-              <code className="block text-xs bg-muted px-3 py-2 rounded-md break-all">
-                Logs: {backendBaseUrl}/v1/logs/otlp
-              </code>
-              <code className="block text-xs bg-muted px-3 py-2 rounded-md break-all mt-1">
-                Traces: {backendBaseUrl}/v1/traces/otlp
-              </code>
-              <code className="block text-xs bg-muted px-3 py-2 rounded-md break-all mt-1">
-                Metrics: {backendBaseUrl}/v1/metrics/otlp
-              </code>
-            </div>
-            <div>
-              <p className="text-sm font-medium mb-1">Authentication</p>
-              <p className="text-sm text-muted-foreground">
-                Set the <code className="bg-muted px-1 rounded">Authorization</code> header to{' '}
-                <code className="bg-muted px-1 rounded">Bearer YOUR_OTLP_API_KEY</code>
-              </p>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              For OpenTelemetry SDKs, configure the OTLP exporter with the endpoint URL and the
-              Authorization header containing your OTLP API key.
-            </p>
-          </CardContent>
-        </Card>
       }
     />
   )

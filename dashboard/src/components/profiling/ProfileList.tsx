@@ -302,8 +302,8 @@ function ProfilingEmptyState() {
         </div>
         <p className="font-semibold text-sm text-foreground">No profiles yet</p>
         <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-          Set up continuous profiling with the Sentry SDK or Datadog Agent to
-          start collecting flamegraph data from your applications.
+          Set up continuous profiling in your application or compatible agent to
+          start collecting flamegraph data.
         </p>
         <a
           href="https://moneat.io/docs/sdk-setup"

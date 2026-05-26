@@ -21,8 +21,10 @@ import {FeaturePageTemplate, type FeaturePageConfig} from '@/components/landing/
 const config: FeaturePageConfig = {
   slug: 'error-tracking',
   title: 'Error Tracking',
-  tagline: 'Sentry SDK compatible',
-  description: 'Catch, group, and triage errors with smart fingerprinting. See full stack traces, breadcrumbs, and user context for every exception across all your projects. Works with your existing Sentry SDKs.',
+  tagline: 'Triage production exceptions',
+  description:
+    'Catch, group, and triage errors with smart fingerprinting. See full stack traces, breadcrumbs, and user ' +
+    'context for every exception across all your projects. Works with Sentry-compatible SDKs.',
   metaDescription: 'Error tracking with smart fingerprinting, stack traces, and breadcrumbs. Compatible with Sentry SDKs. Start free with Moneat.',
   icon: Activity,
   iconColor: 'text-sky-400',
@@ -39,7 +41,8 @@ const config: FeaturePageConfig = {
     {icon: Workflow, title: 'Issue Workflow', description: 'Mark issues as resolved, ignored, or regressed. Get notified when resolved issues recur.', iconColor: 'text-amber-400'},
     {icon: Activity, title: 'Release Tracking', description: 'Track which releases introduced new errors and which resolved them.', iconColor: 'text-green-400'},
   ],
-  compatNote: 'Compatible with Sentry SDKs for 100+ platforms. Just change your DSN and redeploy — no code changes required.',
+  compatNote:
+    'Compatible with Sentry SDKs for 100+ platforms. Just change your DSN and redeploy — no code changes required.',
 }
 
 export const Route = createFileRoute('/error-tracking')({

@@ -39,7 +39,9 @@ const config: FeaturePageConfig = {
     {icon: Layers, title: 'Console & Network', description: 'View console logs, network requests, and JavaScript errors alongside the visual replay.', iconColor: 'text-cyan-400'},
     {icon: Play, title: 'Privacy Controls', description: 'Mask sensitive fields, exclude elements, and respect user privacy preferences automatically.', iconColor: 'text-green-400'},
   ],
-  compatNote: 'Works with Sentry SDKs. Enable session replay with a single config flag — no additional integration required.',
+  compatNote:
+    'Capture replays through compatible SDKs. Enable session replay with a single config flag — no additional ' +
+    'integration required.',
 }
 
 export const Route = createFileRoute('/session-replay')({

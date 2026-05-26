@@ -53,6 +53,7 @@ import {
   AlertTriangle,
   Bell,
   BellOff,
+  BookOpen,
   Calendar,
   Check,
   CheckCircle2,
@@ -347,20 +348,20 @@ function SettingsPage() {
 function ApiKeysTab() {
   const hasDatadog = true // Datadog module is always available (OSS)
   return (
-    <Tabs defaultValue="sentry">
+    <Tabs defaultValue="logs">
       <TabsList className="mb-4">
+        <TabsTrigger value="logs">OpenTelemetry</TabsTrigger>
         <TabsTrigger value="sentry">Sentry</TabsTrigger>
-        <TabsTrigger value="datadog" disabled={!hasDatadog}>Datadog</TabsTrigger>
-        <TabsTrigger value="logs">Logs</TabsTrigger>
+        <TabsTrigger value="datadog" disabled={!hasDatadog}>Datadog Agent</TabsTrigger>
       </TabsList>
+      <TabsContent value="logs" className="space-y-8 mt-0">
+        <OtlpApiKeysTab />
+      </TabsContent>
       <TabsContent value="sentry" className="space-y-8 mt-0">
         <AuthTokensSection />
       </TabsContent>
       <TabsContent value="datadog" className="space-y-8 mt-0">
         {hasDatadog && <AgentApiKeysTab />}
-      </TabsContent>
-      <TabsContent value="logs" className="space-y-8 mt-0">
-        <OtlpApiKeysTab />
       </TabsContent>
     </Tabs>
   )
@@ -438,20 +439,28 @@ function AuthTokensSection() {
   return (
     <>
       <Card>
-        <CardHeader className="flex flex-row items-start justify-between space-y-0 gap-4">
+        <CardHeader className="flex flex-col gap-4 space-y-0 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">
               <Key className="h-5 w-5" />
-              Auth Tokens
+              Sentry API Tokens
             </CardTitle>
             <CardDescription>
-              For CLI tools and CI/CD: upload source maps, manage releases, read events.
+              Create tokens for sentry-cli, source maps, releases, and Sentry-compatible API access.
             </CardDescription>
           </div>
-          <Button onClick={() => setCreateOpen(true)} disabled={!!createdTokenValue}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Token
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" asChild>
+              <a href="/docs/api-tokens" target="_blank" rel="noopener noreferrer">
+                <BookOpen className="h-4 w-4" />
+                Docs
+              </a>
+            </Button>
+            <Button onClick={() => setCreateOpen(true)} disabled={!!createdTokenValue}>
+              <Plus className="h-4 w-4 mr-2" />
+              New Token
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -460,7 +469,7 @@ function AuthTokensSection() {
             <div className="border rounded-lg p-8 text-center text-muted-foreground">
               <Key className="h-10 w-10 mx-auto mb-2 opacity-50" />
               <p className="font-medium">No tokens yet</p>
-              <p className="text-sm mt-1">Create a token to use with the API or upload tools.</p>
+              <p className="text-sm mt-1">Create a Sentry API token for CLI and upload tools.</p>
               <Button variant="outline" className="mt-4" onClick={() => setCreateOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Create token

@@ -199,7 +199,7 @@ export function TraceList({serviceFilter: externalService, envFilter, basePath}:
             <Clock className="h-10 w-10 mb-3 text-muted-foreground/40" />
             <p className="font-medium">No traces found</p>
             <p className="text-sm mt-1">
-              Send traces via a Datadog agent or OpenTelemetry SDK.
+              Send traces via an OpenTelemetry SDK, Collector, or compatible agent.
             </p>
           </div>
         ) : (

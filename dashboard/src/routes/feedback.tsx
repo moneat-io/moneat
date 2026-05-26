@@ -245,7 +245,7 @@ function FeedbackPage() {
               <div>
                 <h3 className="text-lg font-semibold mb-2">No projects yet</h3>
                 <p className="text-muted-foreground">
-                  Create a project and integrate the Sentry feedback widget to see user feedback here.
+                  Create a project and integrate the feedback widget to see user feedback here.
                 </p>
               </div>
             </div>
@@ -372,7 +372,7 @@ function FeedbackPage() {
                     <p className="text-sm text-muted-foreground">
                       {searchQuery
                         ? 'Try adjusting your search or changing the status filter.'
-                        : 'Use the Sentry User Feedback widget in your app to collect user feedback. It will appear here.'}
+                        : 'Use the feedback widget in your app to collect user feedback. It will appear here.'}
                     </p>
                   </div>
                 </div>

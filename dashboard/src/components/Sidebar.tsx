@@ -606,7 +606,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
                 <button
                   type="button"
                   className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                  title="Sentry SDK Setup and Docs"
+                  title="Setup and docs"
                 >
                   <HelpCircle className="h-3.5 w-3.5" />
                 </button>
@@ -614,7 +614,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
               <DropdownMenuContent align="start" side="right" className="w-48">
                 <DropdownMenuItem onClick={() => navigate({ to: activeProjectId ? `/projects/${activeProjectId}` : '/' })}>
                   <Rocket className="h-4 w-4 mr-2" />
-                  Sentry SDK Setup
+                  Project setup
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <a href="/docs/" target="_blank" rel="noopener noreferrer">
@@ -684,7 +684,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
                 <button
                   type="button"
                   className="flex w-full items-center justify-center rounded-md py-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                  title="Sentry SDK Setup and Docs"
+                  title="Setup and docs"
                 >
                   <HelpCircle className="h-3.5 w-3.5" />
                 </button>
@@ -692,7 +692,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
               <DropdownMenuContent align="start" side="right" className="w-48">
                 <DropdownMenuItem onClick={() => navigate({ to: activeProjectId ? `/projects/${activeProjectId}` : '/' })}>
                   <Rocket className="h-4 w-4 mr-2" />
-                  Sentry SDK Setup
+                  Project setup
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <a href="/docs/" target="_blank" rel="noopener noreferrer">

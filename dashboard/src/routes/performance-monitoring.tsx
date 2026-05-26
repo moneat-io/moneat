@@ -39,7 +39,7 @@ const config: FeaturePageConfig = {
     {icon: Search, title: 'Trace Search', description: 'Search traces by duration, status, tags, or any custom attribute attached to spans.', iconColor: 'text-violet-400'},
     {icon: Zap, title: 'Apdex Scoring', description: 'Measure user satisfaction with Apdex scores based on configurable thresholds.', iconColor: 'text-green-400'},
   ],
-  compatNote: 'Compatible with Sentry SDKs and the Datadog Agent. Ingest traces from either or both simultaneously.',
+  compatNote: 'Ingest traces via OpenTelemetry SDKs, Sentry-compatible SDKs, or compatible agents simultaneously.',
 }
 
 export const Route = createFileRoute('/performance-monitoring')({

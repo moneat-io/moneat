@@ -517,7 +517,7 @@ function EmptyState({
         <h3 className="text-2xl font-semibold mb-3">Create your first dashboard</h3>
         <p className="text-muted-foreground text-center mb-8 max-w-lg leading-relaxed">
           Visualize your data with custom charts, tables, and metrics.
-          Start from scratch, use a template, or import from Grafana and DataDog.
+          Start from scratch, use a template, or import from Grafana and Datadog.
         </p>
         <div className="flex flex-col sm:flex-row gap-3">
           <Button variant="outline" size="lg" onClick={onCreateFromTemplate}>
