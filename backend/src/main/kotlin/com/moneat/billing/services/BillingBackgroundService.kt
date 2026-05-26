@@ -374,8 +374,8 @@ class BillingBackgroundService(
         val today = java.time.LocalDate.now(ZoneOffset.UTC)
         if (today.dayOfWeek != DayOfWeek.MONDAY) return null
         val weekFields = WeekFields.of(Locale.US)
-        val week = today.get(weekFields.weekOfWeekBasedYear())
-        val year = today.get(weekFields.weekBasedYear())
+        val week = today[weekFields.weekOfWeekBasedYear()]
+        val year = today[weekFields.weekBasedYear()]
         return "${INSIGHTS_WEEKLY_NOTIFICATION_PREFIX}${year}_$week"
     }
 

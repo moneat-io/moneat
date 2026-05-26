@@ -61,6 +61,8 @@ private const val BADGE_NEGATIVE =
 private const val BADGE_NEUTRAL = "font-weight:500;background-color:#f5f5f5;" +
     "border:1px solid #e5e5e5;color:#737373;"
 private const val TOP_ISSUES_COUNT = 5
+private const val SETTINGS_URL_PLACEHOLDER = "{{ settingsUrl }}"
+private const val YEAR_PLACEHOLDER = "{{ year }}"
 
 /** Sends transactional and notification email via Jakarta Mail and HTML templates. */
 class EmailService {
@@ -802,9 +804,9 @@ class EmailService {
                 .replace("{{ environment }}", data.environment)
                 .replace("{{ timestamp }}", data.timestamp)
                 .replace("{{ stackTrace }}", data.stackTrace)
-                .replace("{{ settingsUrl }}", data.settingsUrl)
+                .replace(SETTINGS_URL_PLACEHOLDER, data.settingsUrl)
                 .replace("{{ unsubscribeUrl }}", data.unsubscribeUrl)
-                .replace("{{ year }}", year)
+                .replace(YEAR_PLACEHOLDER, year)
         } else {
             // Fallback HTML
             """
@@ -842,9 +844,9 @@ class EmailService {
                     .replace("{{ newIssues }}", data.newIssues)
                     .replace("{{ affectedUsers }}", data.affectedUsers)
                     .replace("{{ dashboardUrl }}", data.dashboardUrl)
-                    .replace("{{ settingsUrl }}", data.settingsUrl)
+                    .replace(SETTINGS_URL_PLACEHOLDER, data.settingsUrl)
                     .replace("{{ unsubscribeUrl }}", data.unsubscribeUrl)
-                    .replace("{{ year }}", year)
+                    .replace(YEAR_PLACEHOLDER, year)
 
             html = html.replace("EVENTS_TREND_PLACEHOLDER", trendBadgeHtml(data.eventsTrend, positiveIsGood = true))
             html = html.replace("ISSUES_TREND_PLACEHOLDER", trendBadgeHtml(data.issuesTrend, positiveIsGood = false))
@@ -950,9 +952,9 @@ class EmailService {
                     .replace("{{ headline }}", data.headline.escapeHtml())
                     .replace("{{ summary }}", data.summary.escapeHtml())
                     .replace("{{ dashboardUrl }}", data.dashboardUrl.escapeHtml())
-                    .replace("{{ settingsUrl }}", data.settingsUrl.escapeHtml())
+                    .replace(SETTINGS_URL_PLACEHOLDER, data.settingsUrl.escapeHtml())
                     .replace("{{ totalOverage }}", data.totalOverage.escapeHtml())
-                    .replace("{{ year }}", year)
+                    .replace(YEAR_PLACEHOLDER, year)
 
             html = html.replace("BILLING_ROWS_PLACEHOLDER", billingInsightRowsHtml(data.rows))
             html
