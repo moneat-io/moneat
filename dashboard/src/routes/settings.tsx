@@ -348,20 +348,20 @@ function SettingsPage() {
 function ApiKeysTab() {
   const hasDatadog = true // Datadog module is always available (OSS)
   return (
-    <Tabs defaultValue="sentry">
+    <Tabs defaultValue="logs">
       <TabsList className="mb-4">
+        <TabsTrigger value="logs">OpenTelemetry</TabsTrigger>
         <TabsTrigger value="sentry">Sentry</TabsTrigger>
         <TabsTrigger value="datadog" disabled={!hasDatadog}>Datadog Agent</TabsTrigger>
-        <TabsTrigger value="logs">OpenTelemetry</TabsTrigger>
       </TabsList>
+      <TabsContent value="logs" className="space-y-8 mt-0">
+        <OtlpApiKeysTab />
+      </TabsContent>
       <TabsContent value="sentry" className="space-y-8 mt-0">
         <AuthTokensSection />
       </TabsContent>
       <TabsContent value="datadog" className="space-y-8 mt-0">
         {hasDatadog && <AgentApiKeysTab />}
-      </TabsContent>
-      <TabsContent value="logs" className="space-y-8 mt-0">
-        <OtlpApiKeysTab />
       </TabsContent>
     </Tabs>
   )
