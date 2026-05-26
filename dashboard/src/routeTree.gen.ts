@@ -17,8 +17,10 @@ import { Route as TracesRouteImport } from './routes/traces'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SyntheticsRouteImport } from './routes/synthetics'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as SignozAlternativeRouteImport } from './routes/signoz-alternative'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SessionReplayRouteImport } from './routes/session-replay'
+import { Route as SentryAlternativeRouteImport } from './routes/sentry-alternative'
 import { Route as SecuritySbomRouteImport } from './routes/security-sbom'
 import { Route as SecurityRouteImport } from './routes/security'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
@@ -50,9 +52,12 @@ import { Route as FeatureFlagsRouteImport } from './routes/feature-flags'
 import { Route as ErrorTrackingRouteImport } from './routes/error-tracking'
 import { Route as DocsRouteImport } from './routes/docs'
 import { Route as DemoRouteImport } from './routes/demo'
+import { Route as DatadogAlternativeRouteImport } from './routes/datadog-alternative'
 import { Route as DashboardsRouteImport } from './routes/dashboards'
 import { Route as CustomDashboardsRouteImport } from './routes/custom-dashboards'
+import { Route as CompareRouteImport } from './routes/compare'
 import { Route as BlogRouteImport } from './routes/blog'
+import { Route as BetterStackAlternativeRouteImport } from './routes/better-stack-alternative'
 import { Route as ApmTracesRouteImport } from './routes/apm-traces'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as AlertingRouteImport } from './routes/alerting'
@@ -180,6 +185,11 @@ const SignupRoute = SignupRouteImport.update({
   path: '/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SignozAlternativeRoute = SignozAlternativeRouteImport.update({
+  id: '/signoz-alternative',
+  path: '/signoz-alternative',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -188,6 +198,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const SessionReplayRoute = SessionReplayRouteImport.update({
   id: '/session-replay',
   path: '/session-replay',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SentryAlternativeRoute = SentryAlternativeRouteImport.update({
+  id: '/sentry-alternative',
+  path: '/sentry-alternative',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SecuritySbomRoute = SecuritySbomRouteImport.update({
@@ -346,6 +361,11 @@ const DemoRoute = DemoRouteImport.update({
   path: '/demo',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DatadogAlternativeRoute = DatadogAlternativeRouteImport.update({
+  id: '/datadog-alternative',
+  path: '/datadog-alternative',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardsRoute = DashboardsRouteImport.update({
   id: '/dashboards',
   path: '/dashboards',
@@ -356,9 +376,19 @@ const CustomDashboardsRoute = CustomDashboardsRouteImport.update({
   path: '/custom-dashboards',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CompareRoute = CompareRouteImport.update({
+  id: '/compare',
+  path: '/compare',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BlogRoute = BlogRouteImport.update({
   id: '/blog',
   path: '/blog',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BetterStackAlternativeRoute = BetterStackAlternativeRouteImport.update({
+  id: '/better-stack-alternative',
+  path: '/better-stack-alternative',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApmTracesRoute = ApmTracesRouteImport.update({
@@ -813,9 +843,12 @@ export interface FileRoutesByFullPath {
   '/alerting': typeof AlertingRoute
   '/analytics': typeof AnalyticsRouteWithChildren
   '/apm-traces': typeof ApmTracesRouteWithChildren
+  '/better-stack-alternative': typeof BetterStackAlternativeRoute
   '/blog': typeof BlogRouteWithChildren
+  '/compare': typeof CompareRoute
   '/custom-dashboards': typeof CustomDashboardsRoute
   '/dashboards': typeof DashboardsRouteWithChildren
+  '/datadog-alternative': typeof DatadogAlternativeRoute
   '/demo': typeof DemoRoute
   '/docs': typeof DocsRouteWithChildren
   '/error-tracking': typeof ErrorTrackingRoute
@@ -847,8 +880,10 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/security': typeof SecurityRouteWithChildren
   '/security-sbom': typeof SecuritySbomRoute
+  '/sentry-alternative': typeof SentryAlternativeRoute
   '/session-replay': typeof SessionReplayRoute
   '/settings': typeof SettingsRoute
+  '/signoz-alternative': typeof SignozAlternativeRoute
   '/signup': typeof SignupRoute
   '/synthetics': typeof SyntheticsRouteWithChildren
   '/terms': typeof TermsRoute
@@ -942,7 +977,10 @@ export interface FileRoutesByTo {
   '/accept-invite': typeof AcceptInviteRoute
   '/ai-observability': typeof AiObservabilityRoute
   '/alerting': typeof AlertingRoute
+  '/better-stack-alternative': typeof BetterStackAlternativeRoute
+  '/compare': typeof CompareRoute
   '/custom-dashboards': typeof CustomDashboardsRoute
+  '/datadog-alternative': typeof DatadogAlternativeRoute
   '/demo': typeof DemoRoute
   '/error-tracking': typeof ErrorTrackingRoute
   '/feature-flags': typeof FeatureFlagsRoute
@@ -967,8 +1005,10 @@ export interface FileRoutesByTo {
   '/replays': typeof ReplaysRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/security-sbom': typeof SecuritySbomRoute
+  '/sentry-alternative': typeof SentryAlternativeRoute
   '/session-replay': typeof SessionReplayRoute
   '/settings': typeof SettingsRoute
+  '/signoz-alternative': typeof SignozAlternativeRoute
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
   '/traces': typeof TracesRoute
@@ -1063,9 +1103,12 @@ export interface FileRoutesById {
   '/alerting': typeof AlertingRoute
   '/analytics': typeof AnalyticsRouteWithChildren
   '/apm-traces': typeof ApmTracesRouteWithChildren
+  '/better-stack-alternative': typeof BetterStackAlternativeRoute
   '/blog': typeof BlogRouteWithChildren
+  '/compare': typeof CompareRoute
   '/custom-dashboards': typeof CustomDashboardsRoute
   '/dashboards': typeof DashboardsRouteWithChildren
+  '/datadog-alternative': typeof DatadogAlternativeRoute
   '/demo': typeof DemoRoute
   '/docs': typeof DocsRouteWithChildren
   '/error-tracking': typeof ErrorTrackingRoute
@@ -1097,8 +1140,10 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/security': typeof SecurityRouteWithChildren
   '/security-sbom': typeof SecuritySbomRoute
+  '/sentry-alternative': typeof SentryAlternativeRoute
   '/session-replay': typeof SessionReplayRoute
   '/settings': typeof SettingsRoute
+  '/signoz-alternative': typeof SignozAlternativeRoute
   '/signup': typeof SignupRoute
   '/synthetics': typeof SyntheticsRouteWithChildren
   '/terms': typeof TermsRoute
@@ -1197,9 +1242,12 @@ export interface FileRouteTypes {
     | '/alerting'
     | '/analytics'
     | '/apm-traces'
+    | '/better-stack-alternative'
     | '/blog'
+    | '/compare'
     | '/custom-dashboards'
     | '/dashboards'
+    | '/datadog-alternative'
     | '/demo'
     | '/docs'
     | '/error-tracking'
@@ -1231,8 +1279,10 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/security'
     | '/security-sbom'
+    | '/sentry-alternative'
     | '/session-replay'
     | '/settings'
+    | '/signoz-alternative'
     | '/signup'
     | '/synthetics'
     | '/terms'
@@ -1326,7 +1376,10 @@ export interface FileRouteTypes {
     | '/accept-invite'
     | '/ai-observability'
     | '/alerting'
+    | '/better-stack-alternative'
+    | '/compare'
     | '/custom-dashboards'
+    | '/datadog-alternative'
     | '/demo'
     | '/error-tracking'
     | '/feature-flags'
@@ -1351,8 +1404,10 @@ export interface FileRouteTypes {
     | '/replays'
     | '/reset-password'
     | '/security-sbom'
+    | '/sentry-alternative'
     | '/session-replay'
     | '/settings'
+    | '/signoz-alternative'
     | '/signup'
     | '/terms'
     | '/traces'
@@ -1446,9 +1501,12 @@ export interface FileRouteTypes {
     | '/alerting'
     | '/analytics'
     | '/apm-traces'
+    | '/better-stack-alternative'
     | '/blog'
+    | '/compare'
     | '/custom-dashboards'
     | '/dashboards'
+    | '/datadog-alternative'
     | '/demo'
     | '/docs'
     | '/error-tracking'
@@ -1480,8 +1538,10 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/security'
     | '/security-sbom'
+    | '/sentry-alternative'
     | '/session-replay'
     | '/settings'
+    | '/signoz-alternative'
     | '/signup'
     | '/synthetics'
     | '/terms'
@@ -1579,9 +1639,12 @@ export interface RootRouteChildren {
   AlertingRoute: typeof AlertingRoute
   AnalyticsRoute: typeof AnalyticsRouteWithChildren
   ApmTracesRoute: typeof ApmTracesRouteWithChildren
+  BetterStackAlternativeRoute: typeof BetterStackAlternativeRoute
   BlogRoute: typeof BlogRouteWithChildren
+  CompareRoute: typeof CompareRoute
   CustomDashboardsRoute: typeof CustomDashboardsRoute
   DashboardsRoute: typeof DashboardsRouteWithChildren
+  DatadogAlternativeRoute: typeof DatadogAlternativeRoute
   DemoRoute: typeof DemoRoute
   DocsRoute: typeof DocsRouteWithChildren
   ErrorTrackingRoute: typeof ErrorTrackingRoute
@@ -1613,8 +1676,10 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   SecurityRoute: typeof SecurityRouteWithChildren
   SecuritySbomRoute: typeof SecuritySbomRoute
+  SentryAlternativeRoute: typeof SentryAlternativeRoute
   SessionReplayRoute: typeof SessionReplayRoute
   SettingsRoute: typeof SettingsRoute
+  SignozAlternativeRoute: typeof SignozAlternativeRoute
   SignupRoute: typeof SignupRoute
   SyntheticsRoute: typeof SyntheticsRouteWithChildren
   TermsRoute: typeof TermsRoute
@@ -1696,6 +1761,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignupRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/signoz-alternative': {
+      id: '/signoz-alternative'
+      path: '/signoz-alternative'
+      fullPath: '/signoz-alternative'
+      preLoaderRoute: typeof SignozAlternativeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -1708,6 +1780,13 @@ declare module '@tanstack/react-router' {
       path: '/session-replay'
       fullPath: '/session-replay'
       preLoaderRoute: typeof SessionReplayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sentry-alternative': {
+      id: '/sentry-alternative'
+      path: '/sentry-alternative'
+      fullPath: '/sentry-alternative'
+      preLoaderRoute: typeof SentryAlternativeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/security-sbom': {
@@ -1927,6 +2006,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DemoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/datadog-alternative': {
+      id: '/datadog-alternative'
+      path: '/datadog-alternative'
+      fullPath: '/datadog-alternative'
+      preLoaderRoute: typeof DatadogAlternativeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboards': {
       id: '/dashboards'
       path: '/dashboards'
@@ -1941,11 +2027,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CustomDashboardsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/compare': {
+      id: '/compare'
+      path: '/compare'
+      fullPath: '/compare'
+      preLoaderRoute: typeof CompareRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/blog': {
       id: '/blog'
       path: '/blog'
       fullPath: '/blog'
       preLoaderRoute: typeof BlogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/better-stack-alternative': {
+      id: '/better-stack-alternative'
+      path: '/better-stack-alternative'
+      fullPath: '/better-stack-alternative'
+      preLoaderRoute: typeof BetterStackAlternativeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/apm-traces': {
@@ -2925,9 +3025,12 @@ const rootRouteChildren: RootRouteChildren = {
   AlertingRoute: AlertingRoute,
   AnalyticsRoute: AnalyticsRouteWithChildren,
   ApmTracesRoute: ApmTracesRouteWithChildren,
+  BetterStackAlternativeRoute: BetterStackAlternativeRoute,
   BlogRoute: BlogRouteWithChildren,
+  CompareRoute: CompareRoute,
   CustomDashboardsRoute: CustomDashboardsRoute,
   DashboardsRoute: DashboardsRouteWithChildren,
+  DatadogAlternativeRoute: DatadogAlternativeRoute,
   DemoRoute: DemoRoute,
   DocsRoute: DocsRouteWithChildren,
   ErrorTrackingRoute: ErrorTrackingRoute,
@@ -2959,8 +3062,10 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   SecurityRoute: SecurityRouteWithChildren,
   SecuritySbomRoute: SecuritySbomRoute,
+  SentryAlternativeRoute: SentryAlternativeRoute,
   SessionReplayRoute: SessionReplayRoute,
   SettingsRoute: SettingsRoute,
+  SignozAlternativeRoute: SignozAlternativeRoute,
   SignupRoute: SignupRoute,
   SyntheticsRoute: SyntheticsRouteWithChildren,
   TermsRoute: TermsRoute,
