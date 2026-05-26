@@ -17,6 +17,7 @@
 package com.moneat.services
 
 import com.moneat.notifications.services.SlackService
+import com.moneat.notifications.services.encodeSlackIssueIdPathSegment
 import com.moneat.shared.models.OrganizationIntegrations
 import com.moneat.shared.models.Organizations
 import com.moneat.testsupport.TestDatabaseHelper
@@ -27,6 +28,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.UUID
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Clock
@@ -182,6 +184,14 @@ class SlackServiceBuildersTest {
                 )
             )
         }
+
+    @Test
+    fun `issue ID path segment encoding preserves opaque IDs in Slack URLs`() {
+        assertEquals(
+            "a%2Fb%3Fc%23d%7Ce%3Ef%20g%2Bh",
+            encodeSlackIssueIdPathSegment("a/b?c#d|e>f g+h")
+        )
+    }
 
     @Test
     fun `testConnection returns not configured when no integration`() =
