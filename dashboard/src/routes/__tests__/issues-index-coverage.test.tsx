@@ -126,7 +126,7 @@ describe('Issues Index - data coverage', () => {
     mockApi.getIssues.mockResolvedValue(mockIssues)
     mockApi.getProjectStats.mockResolvedValue(null)
     mockApi.updateIssue.mockResolvedValue(undefined)
-    mockApi.getApmErrors.mockResolvedValue({ errors: [], totalCount: 0 })
+    mockApi.getApmErrors.mockResolvedValue({ errors: [], totalCount: 0, serviceFacets: [] })
   })
 
   it('renders issues list with projects and issues data', async () => {
@@ -232,6 +232,10 @@ describe('Issues Index - data coverage', () => {
         },
       ],
       totalCount: 2,
+      serviceFacets: [
+        { service: 'api-gateway', count: 35 },
+        { service: 'worker', count: 5 },
+      ],
     })
 
     renderRoute(IssuesIndexRoute)
@@ -242,6 +246,7 @@ describe('Issues Index - data coverage', () => {
     expect(await screen.findByText('Connection refused')).toBeInTheDocument()
     expect(screen.getByText('NetworkError')).toBeInTheDocument()
     expect(screen.getByText('View trace')).toBeInTheDocument()
+    expect(screen.getByText('worker')).toBeInTheDocument()
   })
 
   it('renders project settings and new project buttons', async () => {

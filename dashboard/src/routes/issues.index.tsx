@@ -787,13 +787,13 @@ function ApmErrorsTab({ isActive }: { isActive: boolean }) {
 
   const services = useMemo(() => {
     const countByService = new Map<string, number>()
-    for (const err of data?.errors ?? []) {
-      countByService.set(err.service, (countByService.get(err.service) ?? 0) + err.count)
+    for (const facet of data?.serviceFacets ?? []) {
+      countByService.set(facet.service, (countByService.get(facet.service) ?? 0) + facet.count)
     }
     return Array.from(countByService.entries())
       .map(([service, count]) => ({ service, count }))
       .sort((a, b) => b.count - a.count)
-  }, [data])
+  }, [data?.serviceFacets])
 
   function handleServiceChange(service: string) {
     setSelectedService(service)

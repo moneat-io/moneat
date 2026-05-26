@@ -101,7 +101,7 @@ describe('APM API', () => {
   // ──── getApmErrors ────
 
   it('fetches APM errors without params', async () => {
-    const mockResponse = { errors: [], total: 0 }
+    const mockResponse = { errors: [], totalCount: 0, serviceFacets: [] }
 
     server.use(
       http.get(`${API_BASE}/v1/apm-errors`, () => {
@@ -114,7 +114,11 @@ describe('APM API', () => {
   })
 
   it('fetches APM errors with filter params', async () => {
-    const mockResponse = { errors: [{ id: 'err-1' }], total: 1 }
+    const mockResponse = {
+      errors: [{ id: 'err-1' }],
+      totalCount: 1,
+      serviceFacets: [{ service: 'payment-svc', count: 1 }],
+    }
 
     server.use(
       http.get(`${API_BASE}/v1/apm-errors`, ({ request }) => {

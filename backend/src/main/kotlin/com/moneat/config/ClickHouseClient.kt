@@ -31,6 +31,7 @@ import io.ktor.server.application.*
 import io.sentry.ISpan
 import io.sentry.Sentry
 import kotlinx.coroutines.CancellationException
+import java.util.Locale
 
 private val CLICKHOUSE_ERROR_CODE = Regex("""^Code:\s*(\d+)""")
 
@@ -152,7 +153,7 @@ object ClickHouseClient {
         (System.nanoTime() - startedAt) / NANOS_PER_SECOND
 
     private fun isReadQuery(query: String): Boolean {
-        val normalized = query.trimStart().uppercase()
+        val normalized = query.trimStart().uppercase(Locale.ROOT)
         return normalized.startsWith("SELECT") ||
             normalized.startsWith("WITH") ||
             normalized.startsWith("SHOW") ||
@@ -167,7 +168,7 @@ object ClickHouseClient {
         format: String,
         span: ISpan? = null
     ): String {
-        val queryWithFormat = if (query.trimEnd().uppercase().contains("FORMAT")) {
+        val queryWithFormat = if (query.trimEnd().uppercase(Locale.ROOT).contains("FORMAT")) {
             query
         } else {
             "$query FORMAT $format"

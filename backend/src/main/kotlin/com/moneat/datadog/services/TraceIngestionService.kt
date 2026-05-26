@@ -27,6 +27,7 @@ import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_8
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_SHIFT
 import com.moneat.datadog.models.DdApmErrorGroup
 import com.moneat.datadog.models.DdApmErrorsResponse
+import com.moneat.datadog.models.DdApmServiceFacet
 import com.moneat.datadog.models.DdResourceStatsItem
 import com.moneat.datadog.models.DdResourceStatsResponse
 import com.moneat.datadog.models.DdServiceMapEntry
@@ -608,9 +609,38 @@ object TraceIngestionService {
                 }
         }
 
+        val serviceFacetsQuery = """
+            SELECT
+                service,
+                sumMerge(error_count_state) as error_count
+            FROM `$clickhouseDb`.$APM_ERROR_GROUPS_TABLE
+            WHERE ${ClickHouseQueryUtils.orgIdClause(organizationId.toLong())}
+                AND ${timeRange.bucketStartClause()}
+            GROUP BY service
+            ORDER BY error_count DESC
+            FORMAT JSONEachRow
+        """.trimIndent()
+        val serviceFacetsResult = ClickHouseClient.executeWithFormat(serviceFacetsQuery, "")
+        val serviceFacets = if (serviceFacetsResult.isBlank()) {
+            emptyList()
+        } else {
+            serviceFacetsResult.trim().lines()
+                .filter { it.isNotBlank() }
+                .map { line ->
+                    val obj = json.parseToJsonElement(line).jsonObject
+                    DdApmServiceFacet(
+                        service = obj["service"]!!
+                            .jsonPrimitive.content,
+                        count = obj["error_count"]!!
+                            .jsonPrimitive.long,
+                    )
+                }
+        }
+
         return DdApmErrorsResponse(
             errors = errors,
             totalCount = totalCount,
+            serviceFacets = serviceFacets,
         )
     }
 

@@ -86,9 +86,15 @@ export interface ApmErrorGroup {
   traceId: string
 }
 
+export interface ApmServiceFacet {
+  service: string
+  count: number
+}
+
 export interface ApmErrorsResponse {
   errors: ApmErrorGroup[]
   totalCount: number
+  serviceFacets: ApmServiceFacet[]
 }
 
 export interface ApmResourceStatsItem {
