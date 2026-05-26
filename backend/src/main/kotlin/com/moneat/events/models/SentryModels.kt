@@ -65,7 +65,7 @@ data class SentryEnvelope(
             // Known Sentry item types that indicate an item header line
             val knownItemTypes =
                 setOf(
-                    "event", "transaction", "session", "attachment",
+                    "event", "transaction", "session", "sessions", "attachment",
                     "replay_event", "replay_recording", "replay_video",
                     "feedback", "check_in", "statsd", "metric_buckets",
                     "profile", "client_report", "user_report"
@@ -473,6 +473,44 @@ data class UserInfo(
     val email: String? = null,
     val username: String? = null,
     @SerialName("ip_address") val ipAddress: String? = null
+)
+
+@Serializable
+data class SentrySession(
+    @SerialName("sid") val sessionId: String? = null,
+    @SerialName("did") val distinctId: String? = null,
+    @Serializable(with = FlexibleTimestampSerializer::class)
+    val started: Double? = null,
+    @Serializable(with = FlexibleTimestampSerializer::class)
+    val timestamp: Double? = null,
+    val duration: Double? = null,
+    val status: String? = null,
+    val errors: Int? = null,
+    val attrs: SentrySessionAttrs? = null
+)
+
+@Serializable
+data class SentrySessionAttrs(
+    val release: String? = null,
+    val environment: String? = null
+)
+
+@Serializable
+data class SentrySessionAggregatesPayload(
+    val aggregates: List<SentrySessionAggregate> = emptyList()
+)
+
+@Serializable
+data class SentrySessionAggregate(
+    @Serializable(with = FlexibleTimestampSerializer::class)
+    val started: Double? = null,
+    val exited: Int = 0,
+    val errored: Int = 0,
+    val crashed: Int = 0,
+    val abnormal: Int = 0,
+    val ok: Int = 0,
+    @SerialName("did") val distinctId: String? = null,
+    val attrs: SentrySessionAttrs? = null
 )
 
 @Serializable

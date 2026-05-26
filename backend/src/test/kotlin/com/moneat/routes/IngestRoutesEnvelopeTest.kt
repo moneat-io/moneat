@@ -325,6 +325,7 @@ class IngestRoutesEnvelopeTest {
         assertEquals("feedback", mapEnvelopeItemTypeToQuotaType("user_report"))
         assertEquals("llm", mapEnvelopeItemTypeToQuotaType("llm_generation"))
         assertEquals("error", mapEnvelopeItemTypeToQuotaType("session"))
+        assertEquals("error", mapEnvelopeItemTypeToQuotaType("sessions"))
         assertEquals("error", mapEnvelopeItemTypeToQuotaType("check_in"))
         assertEquals("error", mapEnvelopeItemTypeToQuotaType("unknown_type"))
     }

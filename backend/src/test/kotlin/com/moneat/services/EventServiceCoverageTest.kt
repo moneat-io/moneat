@@ -38,6 +38,7 @@ import com.moneat.events.repositories.models.FeedbackInsertData
 import com.moneat.events.repositories.models.LlmGenerationInsertData
 import com.moneat.events.repositories.models.ProjectKeyVerification
 import com.moneat.events.repositories.models.ReplayEventInsertData
+import com.moneat.events.repositories.models.SessionInsertData
 import com.moneat.events.repositories.models.TransactionEventInsertData
 import com.moneat.events.services.EventService
 import com.moneat.events.services.ReleaseService
@@ -126,6 +127,7 @@ class EventServiceCoverageTest {
 
         coEvery { eventRepository.insertErrorEvent(any()) } returns true
         coEvery { eventRepository.insertTransaction(any()) } returns true
+        coEvery { eventRepository.insertSessions(any()) } returns true
         coEvery { eventRepository.insertSpans(any()) } returns Unit
         coEvery { eventRepository.insertFeedback(any()) } returns true
         coEvery { eventRepository.insertReplayEvent(any()) } returns true
@@ -441,6 +443,89 @@ class EventServiceCoverageTest {
             )
         )
         // No crash - session items are skipped
+    }
+
+    @Test
+    fun `processEnvelope persists session items`() = runBlocking {
+        val rowsSlot = slot<List<SessionInsertData>>()
+        coEvery { eventRepository.insertSessions(capture(rowsSlot)) } returns true
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "sess-2",
+                items = listOf(
+                    EnvelopeItem(
+                        "session",
+                        """
+                        {
+                          "sid": "11111111-1111-1111-1111-111111111111",
+                          "did": "user-123",
+                          "started": "2026-01-01T00:00:00Z",
+                          "duration": 1.5,
+                          "status": "ok",
+                          "errors": 0,
+                          "attrs": {
+                            "release": "1.0.0",
+                            "environment": "production"
+                          }
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        )
+
+        val row = rowsSlot.captured.single()
+        assertEquals("11111111-1111-1111-1111-111111111111", row.sessionId)
+        assertEquals(testProjectId, row.projectId)
+        assertEquals(1_500.0, row.durationMs)
+        assertEquals("ok", row.status)
+        assertEquals(0, row.errors)
+        assertEquals("1.0.0", row.release)
+        assertEquals("production", row.environment)
+        assertEquals("user-123", row.userId)
+        verify { releaseService.upsertReleaseFromEvent(testProjectId, "1.0.0", row.startedMs) }
+    }
+
+    @Test
+    fun `processEnvelope persists session aggregate items`() = runBlocking {
+        val rowsSlot = slot<List<SessionInsertData>>()
+        coEvery { eventRepository.insertSessions(capture(rowsSlot)) } returns true
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "sess-aggregate-1",
+                items = listOf(
+                    EnvelopeItem(
+                        "sessions",
+                        """
+                        {
+                          "aggregates": [
+                            {
+                              "started": "2026-01-01T00:00:00Z",
+                              "exited": 2,
+                              "crashed": 1,
+                              "attrs": {
+                                "release": "2.0.0",
+                                "environment": "production"
+                              }
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        )
+
+        val rows = rowsSlot.captured
+        assertEquals(3, rows.size)
+        assertEquals(2, rows.count { it.status == "exited" && it.errors == 0 })
+        assertEquals(1, rows.count { it.status == "crashed" && it.errors == 1 })
+        assertTrue(rows.all { it.release == "2.0.0" })
+        assertTrue(rows.all { it.environment == "production" })
     }
 
     @Test

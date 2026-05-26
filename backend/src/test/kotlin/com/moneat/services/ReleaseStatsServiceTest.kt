@@ -75,8 +75,15 @@ class ReleaseStatsServiceTest {
                 else -> {
                     exchange.respond(
                         200,
-                        """{"version":"1.0.0","first_seen":"2026-01-01T00:00:00.000Z","last_seen":"2026-01-02T00:00:00.000Z","event_count":10,"user_count":5}
-                        """.trimIndent(),
+                        """
+                        {
+                          "version":"1.0.0",
+                          "first_seen":"2026-01-01T00:00:00.000Z",
+                          "last_seen":"2026-01-02T00:00:00.000Z",
+                          "event_count":10,
+                          "user_count":5
+                        }
+                        """.trimIndent().replace("\n", ""),
                         contentType = TEXT_PLAIN
                     )
                 }
@@ -122,6 +129,13 @@ class ReleaseStatsServiceTest {
                         contentType = TEXT_PLAIN
                     )
                 }
+                query.contains("GROUP BY user_id") && query.contains("sessions") -> {
+                    exchange.respond(
+                        200,
+                        """{"rate":87.5}""",
+                        contentType = TEXT_PLAIN
+                    )
+                }
                 query.contains(COUNT_IF_ERRORS_0) && query.contains("sessions") -> {
                     exchange.respond(
                         200,
@@ -154,8 +168,14 @@ class ReleaseStatsServiceTest {
                 else -> {
                     exchange.respond(
                         200,
-                        """{"first_seen":"2026-01-01T00:00:00.000Z","last_seen":"2026-01-02T00:00:00.000Z","total_events":20,"user_count":8}
-                        """.trimIndent(),
+                        """
+                        {
+                          "first_seen":"2026-01-01T00:00:00.000Z",
+                          "last_seen":"2026-01-02T00:00:00.000Z",
+                          "total_events":20,
+                          "user_count":8
+                        }
+                        """.trimIndent().replace("\n", ""),
                         contentType = TEXT_PLAIN
                     )
                 }
@@ -172,7 +192,7 @@ class ReleaseStatsServiceTest {
             assertEquals(8L, stats.userCount)
             assertEquals(3L, stats.newIssues)
             assertEquals(95.0, stats.crashFreeSessionRate)
-            assertNull(stats.crashFreeUserRate)
+            assertEquals(87.5, stats.crashFreeUserRate)
             assertTrue(stats.eventsTimeline.isNotEmpty())
             assertTrue(stats.eventsByLevel.isNotEmpty())
             assertTrue(stats.topIssues.isNotEmpty())
@@ -223,8 +243,14 @@ class ReleaseStatsServiceTest {
                 else -> {
                     exchange.respond(
                         200,
-                        """{"first_seen":"2026-01-01T00:00:00.000Z","last_seen":"2026-01-02T00:00:00.000Z","total_events":5,"user_count":2}
-                        """.trimIndent(),
+                        """
+                        {
+                          "first_seen":"2026-01-01T00:00:00.000Z",
+                          "last_seen":"2026-01-02T00:00:00.000Z",
+                          "total_events":5,
+                          "user_count":2
+                        }
+                        """.trimIndent().replace("\n", ""),
                         contentType = TEXT_PLAIN
                     )
                 }
