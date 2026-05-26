@@ -345,12 +345,22 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
         )
     }
 
+    private fun routedSpanProjectClause(projectId: Long): String =
+        """
+        (
+            project_id = $projectId OR
+            (meta['sentry.project_id'] = '$projectId' AND source = 'sentry')
+        )
+        """.trimIndent()
+
     suspend fun getTransactionSpans(eventId: String): TransactionWithSpansResponse? {
         val transaction = getTransaction(eventId) ?: return null
         val normalizedEventId = queryHelper.normalizeUuid(eventId) ?: return null
         val projectId = getProjectIdForTransaction(eventId) ?: return null
         val orgId = getOrganizationIdForProject(projectId)
             ?: return TransactionWithSpansResponse(transaction, emptyList())
+        val escapedTraceId = escapeSql(transaction.traceId)
+        val projectClause = routedSpanProjectClause(projectId)
 
         val query = """
             SELECT
@@ -365,9 +375,16 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
                 error
             FROM `$clickhouseDb`.apm_spans
             WHERE organization_id = $orgId
-              AND meta['sentry.transaction_id'] = '${escapeSql(normalizedEventId)}'
-              AND meta['sentry.project_id'] = '$projectId'
-              AND source = 'sentry'
+              AND (
+                  (
+                      meta['sentry.transaction_id'] = '${escapeSql(normalizedEventId)}'
+                      AND meta['sentry.project_id'] = '$projectId'
+                      AND source = 'sentry'
+                  ) OR (
+                      trace_id_hex = '$escapedTraceId'
+                      AND $projectClause
+                  )
+              )
             ORDER BY start ASC
             FORMAT JSONEachRow
         """.trimIndent()
@@ -427,6 +444,7 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
     ): TraceDetailResponse? {
         val escapedTraceId = escapeSql(traceId)
         val orgId = getOrganizationIdForProject(projectId) ?: return null
+        val projectClause = routedSpanProjectClause(projectId)
 
         val query = """
             SELECT
@@ -442,10 +460,7 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
             FROM `$clickhouseDb`.apm_spans
             WHERE organization_id = $orgId
               AND trace_id_hex = '$escapedTraceId'
-              AND (
-                  project_id = $projectId OR
-                  (meta['sentry.project_id'] = '$projectId' AND source = 'sentry')
-              )
+              AND $projectClause
             ORDER BY start ASC
             FORMAT JSONEachRow
         """.trimIndent()
@@ -479,6 +494,7 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
     ): SpanDetailResponse? {
         val escapedSpanId = escapeSql(spanId)
         val orgId = getOrganizationIdForProject(projectId) ?: return null
+        val projectClause = routedSpanProjectClause(projectId)
 
         val query = """
             SELECT
@@ -494,10 +510,7 @@ class TransactionService(private val queryHelper: DashboardQueryHelper) {
             FROM `$clickhouseDb`.apm_spans
             WHERE organization_id = $orgId
               AND span_id_hex = '$escapedSpanId'
-              AND (
-                  project_id = $projectId OR
-                  (meta['sentry.project_id'] = '$projectId' AND source = 'sentry')
-              )
+              AND $projectClause
             LIMIT 1
             FORMAT JSONEachRow
         """.trimIndent()

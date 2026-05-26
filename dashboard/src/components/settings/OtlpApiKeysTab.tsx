@@ -156,7 +156,9 @@ function OtlpServiceRoutingPanel() {
                 <TableHead>Signals</TableHead>
                 <TableHead>Environment</TableHead>
                 <TableHead>Project</TableHead>
-                <TableHead className="w-[80px]"></TableHead>
+                <TableHead className="w-[80px]">
+                  <span className="sr-only">Actions</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

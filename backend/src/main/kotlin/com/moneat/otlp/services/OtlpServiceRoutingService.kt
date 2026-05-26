@@ -65,7 +65,7 @@ class OtlpServiceRoutingService {
         }
         if (identities.isEmpty()) return emptyMap()
 
-        val environmentByIdentity = identities.toMap()
+        val environmentByIdentity = mergeEnvironmentsByIdentity(identities)
         return transaction {
             val mappings = getMappingsForOrg(organizationId)
             environmentByIdentity.forEach { (identity, environment) ->
@@ -219,6 +219,18 @@ class OtlpServiceRoutingService {
                 OtlpSignalType.METRICS -> it[OtelObservedServices.seen_metrics] = true
             }
         }
+    }
+
+    private fun mergeEnvironmentsByIdentity(
+        identities: List<Pair<OtlpServiceIdentity, String?>>
+    ): Map<OtlpServiceIdentity, String?> {
+        val environmentByIdentity = linkedMapOf<OtlpServiceIdentity, String?>()
+        identities.forEach { (identity, environment) ->
+            if (!environmentByIdentity.containsKey(identity) || environmentByIdentity[identity] == null) {
+                environmentByIdentity[identity] = environment
+            }
+        }
+        return environmentByIdentity
     }
 
     private fun getMappingsForOrg(organizationId: Int): Map<OtlpServiceIdentity, MappingRow> =

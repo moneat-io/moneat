@@ -133,6 +133,36 @@ class OtlpServiceRoutingServiceTest {
     }
 
     @Test
+    fun `resolveProjectIds preserves first non-null environment for duplicate services`() {
+        val projectIds = service.resolveProjectIds(
+            organizationId = orgOne.id,
+            services = listOf(
+                OtlpServiceDescriptor(
+                    serviceNamespace = "checkout",
+                    serviceName = "checkout-api",
+                    environment = null
+                ),
+                OtlpServiceDescriptor(
+                    serviceNamespace = "checkout",
+                    serviceName = "checkout-api",
+                    environment = "production"
+                )
+            ),
+            signalType = OtlpSignalType.METRICS
+        )
+        val identity = OtlpServiceIdentity(serviceNamespace = "checkout", serviceName = "checkout-api")
+
+        assertTrue(projectIds.containsKey(identity))
+        assertNull(projectIds[identity])
+
+        val observed = service.listObservedServices(orgOne.id).single()
+        assertEquals("production", observed.lastEnvironment)
+        assertFalse(observed.seenLogs)
+        assertFalse(observed.seenTraces)
+        assertTrue(observed.seenMetrics)
+    }
+
+    @Test
     fun `upsertMapping only accepts a valid service and project in the organization`() {
         val unknownServiceMapping = service.upsertMapping(
             organizationId = orgOne.id,
@@ -179,6 +209,23 @@ class OtlpServiceRoutingServiceTest {
         assertEquals(first.id, second.id)
         assertEquals(orgOne.projects.last(), second.projectId)
         assertEquals("Worker", second.projectName)
+    }
+
+    @Test
+    fun `deleteMapping removes only mappings in the organization`() {
+        val mapping = service.upsertMapping(
+            organizationId = orgOne.id,
+            request = CreateOtlpServiceMappingRequest(
+                serviceName = "checkout-api",
+                serviceNamespace = "checkout",
+                projectId = orgOne.projects.first()
+            )
+        )
+
+        assertNotNull(mapping)
+        assertFalse(service.deleteMapping(orgTwo.id, mapping.id))
+        assertTrue(service.deleteMapping(orgOne.id, mapping.id))
+        assertFalse(service.deleteMapping(orgOne.id, mapping.id))
     }
 
     private fun seedOrgWithProjects(

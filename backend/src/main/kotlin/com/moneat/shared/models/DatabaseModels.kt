@@ -223,11 +223,13 @@ object OtlpApiKeys : Table("otlp_api_keys") {
     override val primaryKey = PrimaryKey(id)
 }
 
+private const val OTEL_SERVICE_FIELD_MAX_LENGTH = 255
+
 object OtelServiceProjectMappings : Table("otel_service_project_mappings") {
     val id = integer("id").autoIncrement()
     val organization_id = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
-    val service_namespace = varchar("service_namespace", 255).default("")
-    val service_name = varchar("service_name", 255)
+    val service_namespace = varchar("service_namespace", OTEL_SERVICE_FIELD_MAX_LENGTH).default("")
+    val service_name = varchar("service_name", OTEL_SERVICE_FIELD_MAX_LENGTH)
     val project_id = long("project_id").references(Projects.id, onDelete = ReferenceOption.CASCADE)
     val created_at = timestamp("created_at")
     val updated_at = timestamp("updated_at")
@@ -240,14 +242,14 @@ object OtelServiceProjectMappings : Table("otel_service_project_mappings") {
 object OtelObservedServices : Table("otel_observed_services") {
     val id = integer("id").autoIncrement()
     val organization_id = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
-    val service_namespace = varchar("service_namespace", 255).default("")
-    val service_name = varchar("service_name", 255)
+    val service_namespace = varchar("service_namespace", OTEL_SERVICE_FIELD_MAX_LENGTH).default("")
+    val service_name = varchar("service_name", OTEL_SERVICE_FIELD_MAX_LENGTH)
     val first_seen_at = timestamp("first_seen_at")
     val last_seen_at = timestamp("last_seen_at")
     val seen_logs = bool("seen_logs").default(false)
     val seen_traces = bool("seen_traces").default(false)
     val seen_metrics = bool("seen_metrics").default(false)
-    val last_environment = varchar("last_environment", 255).nullable()
+    val last_environment = varchar("last_environment", OTEL_SERVICE_FIELD_MAX_LENGTH).nullable()
     init {
         uniqueIndex(organization_id, service_namespace, service_name)
     }

@@ -94,6 +94,7 @@ class EventService(
         private const val UUID_SEG2 = 12
         private const val UUID_SEG3 = 16
         private const val UUID_SEG4 = 20
+        private val OTLP_STACK_FRAME_PATTERN = Regex("""[\w.$/<>-]+\([^)]*\)""")
 
         /** Keys set by the server for apm_spans; must not be overwritten by SDK tag maps. */
         private val SENTRY_APM_META_RESERVED_KEYS = setOf("sentry.transaction_id", "sentry.project_id")
@@ -173,6 +174,13 @@ class EventService(
         val success = eventRepository.insertErrorEvent(eventData)
         if (!success) return false
         CacheService.invalidatePattern("cache:issues:$projectId:*")
+        exception.serviceVersion.takeIf { it.isNotBlank() }?.let { releaseVersion ->
+            suspendRunCatching {
+                releaseService.upsertReleaseFromEvent(projectId, releaseVersion, exception.timestampMs)
+            }.getOrElse { e ->
+                logger.warn(e) { "Failed to upsert OTLP release $releaseVersion for project $projectId" }
+            }
+        }
         maybeNotifyOtlpIssue(projectId, issueId, eventId, exception, tags)
         return true
     }
@@ -1066,7 +1074,7 @@ class EventService(
         val stackFrame = exception.stackTrace
             .lineSequence()
             .map { it.trim() }
-            .firstOrNull { it.isNotBlank() }
+            .firstOrNull { isOtlpStackFrame(it) }
 
         return buildList {
             exception.exceptionType.takeIf { it.isNotBlank() }?.let { add(it) }
@@ -1075,6 +1083,10 @@ class EventService(
             exception.service.takeIf { it.isNotBlank() }?.let { add(it) }
         }.ifEmpty { listOf("{{ default }}") }
     }
+
+    private fun isOtlpStackFrame(line: String): Boolean =
+        line.isNotBlank() &&
+            (line.startsWith("at ") || line.startsWith("File \"") || OTLP_STACK_FRAME_PATTERN.containsMatchIn(line))
 
     private fun otlpExceptionTags(exception: OtlpExceptionEvent): Map<String, String> =
         buildMap {
