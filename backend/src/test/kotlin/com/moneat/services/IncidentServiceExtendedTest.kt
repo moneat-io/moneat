@@ -20,19 +20,20 @@ import com.moneat.config.EnvConfig
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.enterprise.OnCallBridge
 import com.moneat.enterprise.PriorityInfo
-import com.moneat.incident.models.AlertSource
-import com.moneat.incident.models.IncidentEvent
+import com.moneat.alerts.models.AlertSource
+import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.incident.models.IncidentEventLog
 import com.moneat.incident.models.IncidentProviderConfigs
 import com.moneat.incident.models.IncidentRoutingRules
-import com.moneat.incident.models.IncidentSeverity
-import com.moneat.incident.models.IncidentStatus
+import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertStatus
 import com.moneat.incident.services.IncidentService
 import com.moneat.shared.models.EscalationPolicies
 import com.moneat.shared.models.EscalationPolicyAlertSources
 import com.moneat.shared.models.Organizations
 import com.moneat.testsupport.IncidentTestHelper
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.workflows.services.WorkflowService
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -57,7 +58,8 @@ import kotlin.time.Clock
 class IncidentServiceExtendedTest {
     private var orgId: Int = 0
     private var providerConfigId: Int = 0
-    private val service = IncidentService()
+    private val workflowService: WorkflowService = mockk(relaxed = true)
+    private val service = IncidentService(workflowService)
     private val testProviderType = "test_provider_ext"
 
     companion object {
@@ -121,10 +123,10 @@ class IncidentServiceExtendedTest {
 
     private fun makeEvent(
         source: AlertSource = AlertSource.UPTIME_MONITOR,
-        severity: IncidentSeverity = IncidentSeverity.HIGH,
-        status: IncidentStatus = IncidentStatus.FIRING,
+        severity: AlertSeverity = AlertSeverity.HIGH,
+        status: AlertStatus = AlertStatus.FIRING,
         dedupKey: String = "dedup-1"
-    ): IncidentEvent = IncidentEvent(
+    ): AlertLifecycleEvent = AlertLifecycleEvent(
         title = "Test Alert",
         description = "Something went wrong",
         severity = severity,
@@ -150,7 +152,7 @@ class IncidentServiceExtendedTest {
         assertEquals(1, logs.size)
         assertTrue(logs[0][IncidentEventLog.success])
         assertEquals("inc-123", logs[0][IncidentEventLog.providerIncidentId])
-        assertEquals(IncidentStatus.FIRING.name, logs[0][IncidentEventLog.incidentStatus])
+        assertEquals(AlertStatus.FIRING.name, logs[0][IncidentEventLog.incidentStatus])
     }
 
     @Test
@@ -264,7 +266,7 @@ class IncidentServiceExtendedTest {
         val logs = IncidentTestHelper.getEventLogs(orgId)
         assertEquals(1, logs.size)
         assertTrue(logs[0][IncidentEventLog.success])
-        assertEquals(IncidentStatus.RESOLVED.name, logs[0][IncidentEventLog.incidentStatus])
+        assertEquals(AlertStatus.RESOLVED.name, logs[0][IncidentEventLog.incidentStatus])
         assertEquals("resolved-1", logs[0][IncidentEventLog.providerIncidentId])
         assertEquals("Alert Resolved", logs[0][IncidentEventLog.title])
     }
@@ -335,7 +337,7 @@ class IncidentServiceExtendedTest {
         assertEquals(1, logs.size)
         assertTrue(logs[0][IncidentEventLog.success])
         assertEquals(AlertSource.UPTIME_MONITOR.name, logs[0][IncidentEventLog.alertSource])
-        assertEquals(IncidentStatus.RESOLVED.name, logs[0][IncidentEventLog.incidentStatus])
+        assertEquals(AlertStatus.RESOLVED.name, logs[0][IncidentEventLog.incidentStatus])
         assertEquals("auto-resolved-1", logs[0][IncidentEventLog.providerIncidentId])
     }
 
@@ -370,11 +372,11 @@ class IncidentServiceExtendedTest {
         assertFalse(service.isAutoResolvableSource(AlertSource.ERROR_ALERT))
     }
 
-    // ──── resolveIncidentSeverity edge cases ────
+    // ──── resolveAlertSeverity edge cases ────
 
     @Test
-    fun `resolveIncidentSeverity returns null when no routing rule exists for source`() {
-        val severity = service.resolveIncidentSeverity(
+    fun `resolveAlertSeverity returns null when no routing rule exists for source`() {
+        val severity = service.resolveAlertSeverity(
             providerConfigId = providerConfigId,
             alertSource = AlertSource.DASHBOARD_ALERT,
             monitorSeverityOverride = null
@@ -383,9 +385,9 @@ class IncidentServiceExtendedTest {
     }
 
     @Test
-    fun `resolveIncidentSeverity returns all severity levels from override`() {
-        for (level in IncidentSeverity.entries) {
-            val result = service.resolveIncidentSeverity(
+    fun `resolveAlertSeverity returns all severity levels from override`() {
+        for (level in AlertSeverity.entries) {
+            val result = service.resolveAlertSeverity(
                 providerConfigId = providerConfigId,
                 alertSource = AlertSource.UPTIME_MONITOR,
                 monitorSeverityOverride = level.name.lowercase()
@@ -395,13 +397,13 @@ class IncidentServiceExtendedTest {
     }
 
     @Test
-    fun `resolveIncidentSeverity is case insensitive for override`() {
-        val severity = service.resolveIncidentSeverity(
+    fun `resolveAlertSeverity is case insensitive for override`() {
+        val severity = service.resolveAlertSeverity(
             providerConfigId = providerConfigId,
             alertSource = AlertSource.UPTIME_MONITOR,
             monitorSeverityOverride = "CrItIcAl"
         )
-        assertEquals(IncidentSeverity.CRITICAL, severity)
+        assertEquals(AlertSeverity.CRITICAL, severity)
     }
 
     // ──── fireAlert with native escalation ────
@@ -584,11 +586,11 @@ class IncidentServiceExtendedTest {
             sendAlertResult = Result.success("meta-1")
         )
 
-        val eventWithMeta = IncidentEvent(
+        val eventWithMeta = AlertLifecycleEvent(
             title = "Metadata Alert",
             description = "With metadata",
-            severity = IncidentSeverity.CRITICAL,
-            status = IncidentStatus.FIRING,
+            severity = AlertSeverity.CRITICAL,
+            status = AlertStatus.FIRING,
             source = AlertSource.UPTIME_MONITOR,
             deduplicationKey = "meta-dedup",
             organizationId = orgId,

@@ -17,10 +17,8 @@
 package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
-import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.NotificationService
-import com.moneat.notifications.services.SlackService
 import com.moneat.shared.models.AlertNotificationPreferences
 import com.moneat.shared.models.EmailsSent
 import com.moneat.shared.models.Memberships
@@ -75,13 +73,11 @@ class NotificationServiceWeeklySummaryTest {
     }
 
     private val emailService = mockk<EmailService>(relaxed = true)
-    private val slackService = mockk<SlackService>(relaxed = true)
-    private val discordService = mockk<DiscordService>(relaxed = true)
 
     // ──── Setup & Helpers ────
     @BeforeTest
     fun setupDatabase() {
-        clearMocks(emailService, slackService, discordService)
+        clearMocks(emailService)
 
         if (db == null) {
             db = Database.connect(
@@ -240,11 +236,7 @@ class NotificationServiceWeeklySummaryTest {
             "default",
             "",
         )
-        val service = NotificationService(
-            emailService,
-            slackService,
-            discordService,
-        )
+        val service = NotificationService(emailService)
         try {
             block(service)
         } finally {
@@ -269,7 +261,7 @@ class NotificationServiceWeeklySummaryTest {
             ).use { server ->
                 ClickHouseClient.close()
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
-                val service = NotificationService(emailService, slackService, discordService)
+                val service = NotificationService(emailService)
                 try {
                     service.sendWeeklySummaryForUser(userId, "weeklyuser@moneat.io")
                 } finally {
@@ -304,7 +296,7 @@ class NotificationServiceWeeklySummaryTest {
             ).use { server ->
                 ClickHouseClient.close()
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
-                val service = NotificationService(emailService, slackService, discordService)
+                val service = NotificationService(emailService)
                 try {
                     service.sendWeeklySummaryForUser(userId, "weeklyuser2@moneat.io")
                 } finally {
@@ -336,7 +328,7 @@ class NotificationServiceWeeklySummaryTest {
             val result = MockHttpServer(failHandler).use { server ->
                 ClickHouseClient.close()
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
-                val service = NotificationService(emailService, slackService, discordService)
+                val service = NotificationService(emailService)
                 try {
                     service.sendWeeklySummaryForUser(userId, "weeklyskip@moneat.io")
                 } finally {
@@ -399,11 +391,7 @@ class NotificationServiceWeeklySummaryTest {
             val result = MockHttpServer(handler).use { server ->
                 ClickHouseClient.close()
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
-                val service = NotificationService(
-                    emailService,
-                    slackService,
-                    discordService,
-                )
+                val service = NotificationService(emailService)
                 try {
                     service.sendWeeklySummaryForUser(
                         userId,
@@ -467,11 +455,7 @@ class NotificationServiceWeeklySummaryTest {
             val result = MockHttpServer(handler).use { server ->
                 ClickHouseClient.close()
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
-                val service = NotificationService(
-                    emailService,
-                    slackService,
-                    discordService,
-                )
+                val service = NotificationService(emailService)
                 try {
                     service.sendWeeklySummaryForUser(
                         userId,
@@ -527,11 +511,7 @@ class NotificationServiceWeeklySummaryTest {
             val result = MockHttpServer(handler).use { server ->
                 ClickHouseClient.close()
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
-                val service = NotificationService(
-                    emailService,
-                    slackService,
-                    discordService,
-                )
+                val service = NotificationService(emailService)
                 try {
                     service.sendWeeklySummaryForUser(
                         userId,
@@ -557,7 +537,7 @@ class NotificationServiceWeeklySummaryTest {
             val userId = seedUser("noproj@moneat.io", "No Proj User")
             seedMembership(userId, orgId)
 
-            val service = NotificationService(emailService, slackService, discordService)
+            val service = NotificationService(emailService)
             try {
                 val result = service.sendWeeklySummaryForUser(
                     userId,

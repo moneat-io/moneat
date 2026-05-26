@@ -22,9 +22,6 @@ import com.moneat.incident.services.IncidentService
 import com.moneat.monitor.models.AlertData
 import com.moneat.monitor.models.CreateSilencePeriodRequest
 import com.moneat.monitor.services.MonitorAlertService
-import com.moneat.notifications.services.DiscordService
-import com.moneat.notifications.services.EmailService
-import com.moneat.notifications.services.SlackService
 import com.moneat.shared.models.AlertSilencePeriods
 import com.moneat.shared.models.HostAlertSettings
 import com.moneat.shared.models.HostAlertTemplateStates
@@ -34,6 +31,7 @@ import com.moneat.shared.models.OrganizationAlertTemplates
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.workflows.services.WorkflowService
 import io.mockk.mockk
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -67,10 +65,8 @@ class MonitorAlertServiceExtendedTest {
         private var db: Database? = null
     }
 
-    private lateinit var emailService: EmailService
-    private lateinit var slackService: SlackService
-    private lateinit var discordService: DiscordService
     private lateinit var incidentService: IncidentService
+    private lateinit var workflowService: WorkflowService
     private lateinit var service: MonitorAlertService
 
     @BeforeTest
@@ -95,16 +91,12 @@ class MonitorAlertServiceExtendedTest {
             HostAlertTemplateStates
         )
 
-        emailService = mockk(relaxed = true)
-        slackService = mockk(relaxed = true)
-        discordService = mockk(relaxed = true)
         incidentService = mockk(relaxed = true)
+        workflowService = mockk(relaxed = true)
 
         service = MonitorAlertService(
-            emailService = emailService,
-            slackService = slackService,
-            discordService = discordService,
             incidentService = incidentService,
+            workflowService = workflowService,
         )
     }
 

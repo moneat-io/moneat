@@ -45,6 +45,7 @@ import com.moneat.otlp.routes.otlpTraceRoutes
 import com.moneat.statuspage.routes.statusPageRoutes
 import com.moneat.summary.routes.summaryRoutes
 import com.moneat.uptime.routes.uptimeRoutes
+import com.moneat.workflows.routes.workflowRoutes
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -255,6 +256,9 @@ fun Application.configureRouting() {
 
         // Organization team management endpoints
         orgManagementRoutes()
+
+        // Workflow automation endpoints
+        workflowRoutes()
 
         routingLogger.info { "Registering enterprise routes..." }
         // Enterprise modules (SSO, On-Call, etc.) — registered via ServiceLoader

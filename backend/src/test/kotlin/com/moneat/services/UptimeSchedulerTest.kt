@@ -16,12 +16,8 @@
 
 package com.moneat.services
 
-import com.moneat.incident.models.AlertSource
+import com.moneat.alerts.models.AlertSource
 import com.moneat.incident.services.IncidentService
-import com.moneat.notifications.services.AlertNotificationPreferencesService
-import com.moneat.notifications.services.DiscordService
-import com.moneat.notifications.services.EmailService
-import com.moneat.notifications.services.SlackService
 import com.moneat.shared.services.TaskLock
 import com.moneat.uptime.models.CheckResult
 import com.moneat.uptime.models.UptimeMonitorData
@@ -48,21 +44,12 @@ class UptimeSchedulerTest {
 
     private val uptimeService = mockk<UptimeService>(relaxed = true)
     private val checkExecutor = mockk<UptimeCheckExecutor>(relaxed = true)
-    private val slackService = mockk<SlackService>(relaxed = true)
-    private val discordService = mockk<DiscordService>(relaxed = true)
     private val incidentService = mockk<IncidentService>(relaxed = true)
-    private val emailService = mockk<EmailService>(relaxed = true)
-    private val prefsService =
-        mockk<AlertNotificationPreferencesService>(relaxed = true)
 
     private val scheduler = UptimeScheduler(
         uptimeService = uptimeService,
         checkExecutor = checkExecutor,
-        slackService = slackService,
-        discordService = discordService,
         incidentService = incidentService,
-        emailService = emailService,
-        prefsService = prefsService
     )
 
     @AfterTest
@@ -270,7 +257,10 @@ class UptimeSchedulerTest {
                 incidentService.autoResolveAlert(
                     organizationId = monitor.organizationId,
                     source = AlertSource.UPTIME_MONITOR,
-                    deduplicationKey = "moneat-uptime-${monitor.id}"
+                    deduplicationKey = "moneat-uptime-${monitor.id}",
+                    title = "Uptime Monitor Recovered: Test Monitor",
+                    description = "Monitor 'Test Monitor' (http) is back up.",
+                    moneatUrl = "https://moneat.io/uptime/${monitor.id}",
                 )
             }
         }

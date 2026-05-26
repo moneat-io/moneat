@@ -19,6 +19,7 @@ package com.moneat.routes
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.auth.routes.authRoutes
+import com.moneat.auth.services.OAuthService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
@@ -27,6 +28,7 @@ import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.respond
 import com.moneat.testsupport.startTestKoin
 import com.moneat.testsupport.stopTestKoin
+import com.moneat.workflows.services.WorkflowService
 import io.ktor.client.request.cookie
 import io.ktor.client.request.get
 import io.ktor.http.HttpHeaders
@@ -39,6 +41,7 @@ import io.ktor.server.auth.jwt.jwt
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
+import io.mockk.mockk
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -214,7 +217,13 @@ class AuthRoutesTest {
             ) {
                 testApplication {
                     installPlugins()
-                    routing { authRoutes() }
+                    routing {
+                        authRoutes(
+                            oauthService = OAuthService(
+                                workflowService = mockk<WorkflowService>(relaxed = true)
+                            )
+                        )
+                    }
 
                     val response =
                         noRedirectClient().get("/auth/github/callback?code=test-code&state=good-state") {

@@ -36,6 +36,7 @@ object AiContextResolver {
             Regex("^/issues") to listOf("issues", "performance"),
             Regex("^/performance") to listOf("performance"),
             Regex("^/on-call") to listOf("on-call"),
+            Regex("^/workflows") to listOf("workflows"),
             Regex("^/monitoring") to listOf("monitoring"),
             Regex("^/settings") to listOf("settings"),
             Regex("^/releases") to listOf("projects"),

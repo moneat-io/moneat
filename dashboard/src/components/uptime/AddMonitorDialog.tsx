@@ -248,7 +248,7 @@ export default function AddMonitorDialog({open, onOpenChange}: AddMonitorDialogP
               formData={formData}
               monitorType={formData.type || 'http'}
               onChange={setFormData}
-              showIncidentSeverity
+              showAlertSeverity
             />
           </div>
         )}

@@ -20,8 +20,6 @@ import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {loadStripe} from '@stripe/stripe-js'
 import {Elements, PaymentElement, useElements, useStripe} from '@stripe/react-stripe-js'
 import {
-  type AlertNotificationPreference,
-  type AlertSource,
   api,
   type AuthToken,
 } from '@/lib/api'
@@ -80,7 +78,6 @@ import {
   Trash2,
   TrendingUp,
   Users,
-  Zap,
 } from 'lucide-react'
 import {SsoTab} from '@/components/SsoSettings'
 import {TeamSettings} from '@/components/settings/TeamSettings'
@@ -2421,47 +2418,10 @@ function NotificationsTab() {
   const { toast } = useToast()
   const { timezone } = useTimezone()
 
-  const { data: alertPrefs, isLoading: isLoadingAlertPrefs } = useQuery({
-    queryKey: ['alertNotificationPreferences'],
-    queryFn: () => api.getAlertNotificationPreferences(),
-    enabled: api.isAuthenticated(),
-  })
-
   const { data: preferences, isLoading: isLoadingPrefs } = useQuery({
     queryKey: ['notificationPreferences'],
     queryFn: () => api.getNotificationPreferences(),
     enabled: api.isAuthenticated(),
-  })
-
-  const { data: integrations = [] } = useQuery({
-    queryKey: ['integrations'],
-    queryFn: () => api.getIntegrations(),
-    enabled: api.isAuthenticated(),
-  })
-
-  const slackConfigured = useMemo(() => integrations.some(i => i.integrationType === 'slack' && i.enabled), [integrations])
-  const discordConfigured = useMemo(() => integrations.some(i => i.integrationType === 'discord' && i.enabled), [integrations])
-
-  const updateAlertPrefMutation = useMutation({
-    mutationFn: ({
-      source,
-      prefs,
-    }: {
-      source: AlertSource
-      prefs: Pick<AlertNotificationPreference, 'emailEnabled' | 'slackEnabled' | 'discordEnabled'>
-    }) =>
-      api.updateAlertNotificationPreference(source, prefs),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['alertNotificationPreferences'] })
-      toast({ title: 'Preferences updated' })
-    },
-    onError: (err: Error) => {
-      toast({
-        title: 'Failed to update preferences',
-        description: err.message,
-        variant: 'destructive',
-      })
-    },
   })
 
   const updateGlobalMutation = useMutation({
@@ -2559,7 +2519,7 @@ function NotificationsTab() {
     },
   })
 
-  if (isLoadingAlertPrefs || isLoadingPrefs) {
+  if (isLoadingPrefs) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -2574,126 +2534,6 @@ function NotificationsTab() {
 
   const projects = preferences?.projects || []
 
-  const getSourceLabel = (source: AlertSource) => {
-    switch (source) {
-      case 'HOST_ALERT':
-        return { 
-          label: 'Host Alerts', 
-          desc: 'Metric threshold breaches (CPU, memory, disk)', 
-          icon: Zap,
-          color: 'text-yellow-600',
-          bgColor: 'bg-yellow-500/10'
-        }
-      case 'HOST_DOWN':
-        return { 
-          label: 'Host Down', 
-          desc: 'Server stops reporting', 
-          icon: Server,
-          color: 'text-red-600',
-          bgColor: 'bg-red-500/10'
-        }
-      case 'UPTIME_MONITOR':
-        return { 
-          label: 'Uptime Monitors', 
-          desc: 'Website or service goes down', 
-          icon: Activity,
-          color: 'text-green-600',
-          bgColor: 'bg-green-500/10'
-        }
-      case 'ERROR_ALERT':
-        return { 
-          label: 'Error Alerts', 
-          desc: 'New errors and exceptions in your projects', 
-          icon: Shield,
-          color: 'text-blue-600',
-          bgColor: 'bg-blue-500/10'
-        }
-      case 'DASHBOARD_ALERT':
-        return { 
-          label: 'Dashboard Alerts', 
-          desc: 'Widget threshold alerts on custom dashboards', 
-          icon: LayoutDashboard,
-          color: 'text-purple-600',
-          bgColor: 'bg-purple-500/10'
-        }
-    }
-  }
-
-  const renderRow = (source: AlertSource) => {
-    // If not found, default to all enabled (safe default)
-    const pref = alertPrefs?.find((p) => p.alertSource === source) || {
-      emailEnabled: true,
-      slackEnabled: true,
-      discordEnabled: true,
-    }
-    const info = getSourceLabel(source)
-    const Icon = info.icon
-
-    return (
-      <div className="flex items-center justify-between py-4 border-b last:border-0" key={source}>
-        <div className="flex items-start gap-3">
-          <div className={`mt-1 p-2 rounded-full hidden sm:block ${info.bgColor}`}>
-            <Icon className={`h-4 w-4 ${info.color}`} />
-          </div>
-          <div>
-            <p className="font-medium">{info.label}</p>
-            <p className="text-sm text-muted-foreground max-w-xs sm:max-w-none">{info.desc}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-4 sm:gap-8 mr-2 sm:mr-4">
-          <div className="flex flex-col items-center gap-2 w-[50px]">
-            <Switch
-              checked={pref.emailEnabled}
-              onCheckedChange={(c) =>
-                updateAlertPrefMutation.mutate({
-                  source,
-                  prefs: {
-                    emailEnabled: c,
-                    slackEnabled: pref.slackEnabled,
-                    discordEnabled: pref.discordEnabled,
-                  },
-                })
-              }
-              disabled={updateAlertPrefMutation.isPending}
-            />
-          </div>
-          <div className="flex flex-col items-center gap-2 w-[50px]">
-            <Switch
-              checked={pref.slackEnabled}
-              disabled={!slackConfigured || updateAlertPrefMutation.isPending}
-              onCheckedChange={(c) =>
-                updateAlertPrefMutation.mutate({
-                  source,
-                  prefs: {
-                    emailEnabled: pref.emailEnabled,
-                    slackEnabled: c,
-                    discordEnabled: pref.discordEnabled,
-                  },
-                })
-              }
-            />
-          </div>
-          <div className="flex flex-col items-center gap-2 w-[50px]">
-            <Switch
-              checked={pref.discordEnabled}
-              disabled={!discordConfigured || updateAlertPrefMutation.isPending}
-              onCheckedChange={(c) =>
-                updateAlertPrefMutation.mutate({
-                  source,
-                  prefs: {
-                    emailEnabled: pref.emailEnabled,
-                    slackEnabled: pref.slackEnabled,
-                    discordEnabled: c,
-                  },
-                })
-              }
-            />
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-6">
       <Card>
@@ -2705,34 +2545,23 @@ function NotificationsTab() {
             <div>
               <CardTitle>Notification Channels</CardTitle>
               <CardDescription>
-                Configure how you want to be notified for different types of alerts.
+                Alert delivery is managed by workflows.
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-[1fr,auto] gap-4 mb-2 border-b pb-2">
-            <div className="font-medium text-sm text-muted-foreground uppercase tracking-wider pl-2">Alert Source</div>
-            <div className="flex items-center gap-4 sm:gap-8 mr-2 sm:mr-4">
-              <div className="w-[50px] text-center font-medium text-sm text-muted-foreground">Email</div>
-              <div className="w-[50px] text-center font-medium text-sm text-muted-foreground">Slack</div>
-              <div className="w-[50px] text-center font-medium text-sm text-muted-foreground">Discord</div>
+          <div className="flex flex-col gap-4 rounded-md border bg-muted/40 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="max-w-2xl">
+              <p className="font-medium">Alert notifications are managed by workflows.</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Use the default alert and recovery workflows to control email, Slack, and Discord delivery.
+              </p>
             </div>
+            <Button asChild>
+              <Link to="/workflows">Open workflows</Link>
+            </Button>
           </div>
-          
-          {['HOST_ALERT', 'HOST_DOWN', 'UPTIME_MONITOR', 'ERROR_ALERT', 'DASHBOARD_ALERT'].map((s) => renderRow(s as AlertSource))}
-
-          {(!slackConfigured || !discordConfigured) && (
-            <div className="mt-6 p-3 bg-muted/50 rounded-md text-sm text-muted-foreground flex items-center gap-2">
-              <Info className="h-4 w-4 shrink-0" />
-              <span>
-                Some channels are disabled because integrations are not configured.{' '}
-                <Link to="/settings" search={{ tab: 'integrations' }} className="text-primary hover:underline font-medium">
-                  Configure Integrations
-                </Link>
-              </span>
-            </div>
-          )}
         </CardContent>
       </Card>
 

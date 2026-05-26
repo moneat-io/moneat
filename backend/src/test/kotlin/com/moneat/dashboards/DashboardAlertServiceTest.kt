@@ -33,15 +33,12 @@ import com.moneat.dashboards.services.CustomDataSourceService
 import com.moneat.dashboards.services.DataSourceCredentials
 import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.dashboards.services.DashboardQueryEngine
-import com.moneat.incident.models.AlertSource
-import com.moneat.incident.models.IncidentSeverity
+import com.moneat.alerts.models.AlertSource
+import com.moneat.alerts.models.AlertSeverity
 import com.moneat.incident.services.IncidentService
-import com.moneat.notifications.services.AlertNotificationPreferencesService
-import com.moneat.notifications.services.DiscordService
-import com.moneat.notifications.services.EmailService
-import com.moneat.notifications.services.SlackService
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.workflows.services.WorkflowService
 import io.lettuce.core.api.sync.RedisCommands
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -49,7 +46,6 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
-import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
@@ -73,11 +69,8 @@ import kotlin.time.Clock
 
 class DashboardAlertServiceTest {
 
-    private val emailService: EmailService = mockk(relaxed = true)
-    private val slackService: SlackService = mockk(relaxed = true)
-    private val discordService: DiscordService = mockk(relaxed = true)
     private val incidentService: IncidentService = mockk(relaxed = true)
-    private val prefsService: AlertNotificationPreferencesService = mockk(relaxed = true)
+    private val workflowService: WorkflowService = mockk(relaxed = true)
     private val queryEngine: DashboardQueryEngine = mockk(relaxed = true)
     private val retentionPolicyService: RetentionPolicyService = mockk(relaxed = true)
     private val dataSourceService: CustomDataSourceService = mockk(relaxed = true)
@@ -85,11 +78,8 @@ class DashboardAlertServiceTest {
     private var redisConfigMocked = false
 
     private val service = DashboardAlertService(
-        emailService = emailService,
-        slackService = slackService,
-        discordService = discordService,
         incidentService = incidentService,
-        prefsService = prefsService,
+        workflowService = workflowService,
         queryEngine = queryEngine,
         retentionPolicyService = retentionPolicyService,
         dataSourceService = dataSourceService,
@@ -840,31 +830,38 @@ class DashboardAlertServiceTest {
                     CREATED_BY,
                     buildCreateRequest(
                         widgetId,
-                        AlertRequestOverrides(condition = ">", threshold = RECOVERY_THRESHOLD),
+                        AlertRequestOverrides(
+                            condition = ">",
+                            threshold = RECOVERY_THRESHOLD,
+                            incidentSeverity = "HIGH",
+                            notificationChannels = NotificationChannels(email = false, slack = true, discord = false),
+                        ),
                     ),
                 )
             every { redis.get("dashboard_alert_state:${created.id}") } returns "TRIGGERED"
             every { redis.del(any<String>()) } returns REDIS_DELETE_COUNT
-            every {
-                prefsService.getUsersWithChannelEnabled(ORG_ID.toInt(), "DASHBOARD_ALERT", "email")
-            } returns listOf(1 to "alerts@example.com")
 
             callPrivateSuspend("evaluateAlerts")
 
             coVerify(exactly = 1) {
+                workflowService.publishAlertTriggered(
+                    match {
+                        it.status.name == "RESOLVED" &&
+                            it.metadata["alert.channels.email"]?.jsonPrimitive?.content == "false" &&
+                            it.metadata["alert.channels.slack"]?.jsonPrimitive?.content == "true" &&
+                            it.metadata["alert.channels.discord"]?.jsonPrimitive?.content == "false"
+                    }
+                )
+            }
+            coVerify(exactly = 1) {
                 incidentService.autoResolveAlert(
                     organizationId = ORG_ID.toInt(),
                     source = AlertSource.DASHBOARD_ALERT,
-                    deduplicationKey = "moneat-dashboard-alert-${created.id}"
-                )
-            }
-            verify(exactly = 1) {
-                emailService.sendEmail(
-                    "alerts@example.com",
-                    match { it.contains("Dashboard Alert Resolved") },
-                    any(),
-                    any(),
-                    "dashboard_alert_recovery"
+                    deduplicationKey = "moneat-dashboard-alert-${created.id}",
+                    title = "Dashboard Alert Resolved: High Error Rate",
+                    description = "Test Widget on Test Dashboard recovered. Current value: 50.00",
+                    moneatUrl = "https://moneat.io/dashboards/$dashboardId",
+                    publishWorkflow = false,
                 )
             }
         }
@@ -875,15 +872,6 @@ class DashboardAlertServiceTest {
             mockkObject(RedisConfig)
             redisConfigMocked = true
             every { RedisConfig.isConnected() } returns false
-            every {
-                prefsService.getUsersWithChannelEnabled(ORG_ID.toInt(), "DASHBOARD_ALERT", "email")
-            } returns listOf(1 to "alerts@example.com")
-            every {
-                prefsService.getUsersWithChannelEnabled(ORG_ID.toInt(), "DASHBOARD_ALERT", "slack")
-            } returns listOf(1 to "alerts@example.com")
-            every {
-                prefsService.getUsersWithChannelEnabled(ORG_ID.toInt(), "DASHBOARD_ALERT", "discord")
-            } returns listOf(1 to "alerts@example.com")
             coEvery {
                 retentionPolicyService.getRetentionDaysForProject(any())
             } returns RECOVERY_RETENTION_DAYS
@@ -918,48 +906,12 @@ class DashboardAlertServiceTest {
             assertEquals("WARNING", fired.lastTriggeredLevel)
             assertEquals(90.0, fired.lastValue)
             coVerify(exactly = 1) {
-                incidentService.fireAlert(
+                workflowService.publishAlertTriggered(
                     match {
-                        it.severity == IncidentSeverity.LOW &&
-                            it.title == "Dashboard Warning: High Error Rate"
+                        it.severity == AlertSeverity.LOW &&
+                            it.title == "Dashboard Warning: High Error Rate" &&
+                            it.source == AlertSource.DASHBOARD_ALERT
                     }
-                )
-            }
-            verify(exactly = 1) {
-                emailService.sendEmail(
-                    "alerts@example.com",
-                    match { it.contains("Dashboard Warning") },
-                    match { it.contains("Dashboard Warning") },
-                    match { it.contains("Dashboard Warning") },
-                    "dashboard_alert"
-                )
-            }
-            coVerify(exactly = 1) {
-                slackService.sendDashboardAlert(
-                    organizationId = ORG_ID.toInt(),
-                    alertName = "Warning: High Error Rate",
-                    dashboardTitle = "Test Dashboard",
-                    widgetTitle = "Test Widget",
-                    condition = ">",
-                    threshold = "80.00",
-                    currentValue = "90.00",
-                    severity = "LOW",
-                    dashboardId = dashboardId,
-                    baseUrl = any(),
-                )
-            }
-            coVerify(exactly = 1) {
-                discordService.sendDashboardAlert(
-                    organizationId = ORG_ID.toInt(),
-                    alertName = "Warning: High Error Rate",
-                    dashboardTitle = "Test Dashboard",
-                    widgetTitle = "Test Widget",
-                    condition = ">",
-                    threshold = "80.00",
-                    currentValue = "90.00",
-                    severity = "LOW",
-                    dashboardId = dashboardId,
-                    baseUrl = any(),
                 )
             }
         }
@@ -1007,8 +959,18 @@ class DashboardAlertServiceTest {
             coVerify(exactly = 1) {
                 incidentService.fireAlert(
                     match {
-                        it.severity == IncidentSeverity.HIGH &&
+                        it.severity == AlertSeverity.HIGH &&
                             it.title == "Dashboard Error: High Error Rate"
+                    },
+                    publishWorkflow = false,
+                )
+            }
+            coVerify(exactly = 1) {
+                workflowService.publishAlertTriggered(
+                    match {
+                        it.metadata["alert.channels.email"]?.jsonPrimitive?.content == "false" &&
+                            it.metadata["alert.channels.slack"]?.jsonPrimitive?.content == "false" &&
+                            it.metadata["alert.channels.discord"]?.jsonPrimitive?.content == "false"
                     }
                 )
             }
@@ -1092,7 +1054,7 @@ class DashboardAlertServiceTest {
             callPrivateSuspend("evaluateAlerts")
             callPrivateSuspend("evaluateAlerts")
 
-            coVerify(exactly = 1) { incidentService.fireAlert(any()) }
+            coVerify(exactly = 1) { workflowService.publishAlertTriggered(any()) }
         }
 
     @Test

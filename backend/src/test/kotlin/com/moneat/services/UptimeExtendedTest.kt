@@ -17,10 +17,6 @@
 package com.moneat.services
 
 import com.moneat.incident.services.IncidentService
-import com.moneat.notifications.services.AlertNotificationPreferencesService
-import com.moneat.notifications.services.DiscordService
-import com.moneat.notifications.services.EmailService
-import com.moneat.notifications.services.SlackService
 import com.moneat.shared.services.TaskLock
 import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.respond
@@ -702,11 +698,7 @@ class UptimeExtendedTest {
     fun `scheduler retries on failure and succeeds on second attempt`() = runBlocking {
         val uptimeService = mockk<UptimeService>(relaxed = true)
         val checkExecutor = mockk<UptimeCheckExecutor>(relaxed = true)
-        val slackService = mockk<SlackService>(relaxed = true)
-        val discordService = mockk<DiscordService>(relaxed = true)
         val incidentService = mockk<IncidentService>(relaxed = true)
-        val emailService = mockk<EmailService>(relaxed = true)
-        val prefsService = mockk<AlertNotificationPreferencesService>(relaxed = true)
 
         val monitorData = UptimeMonitorData(
             id = UUID.randomUUID(),
@@ -744,11 +736,7 @@ class UptimeExtendedTest {
         val scheduler = UptimeScheduler(
             uptimeService = uptimeService,
             checkExecutor = checkExecutor,
-            slackService = slackService,
-            discordService = discordService,
             incidentService = incidentService,
-            emailService = emailService,
-            prefsService = prefsService
         )
 
         scheduler.start()
@@ -798,11 +786,7 @@ class UptimeExtendedTest {
         val scheduler = UptimeScheduler(
             uptimeService = uptimeService,
             checkExecutor = checkExecutor,
-            slackService = mockk(relaxed = true),
-            discordService = mockk(relaxed = true),
             incidentService = mockk(relaxed = true),
-            emailService = mockk(relaxed = true),
-            prefsService = mockk(relaxed = true)
         )
 
         scheduler.start()

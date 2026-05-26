@@ -21,48 +21,6 @@ import kotlinx.serialization.json.JsonObject
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.datetime.timestamp
 
-// Enums
-enum class IncidentSeverity {
-    CRITICAL, HIGH, MEDIUM, LOW;
-
-    companion object {
-        fun fromString(value: String?): IncidentSeverity? {
-            return value?.let {
-                try {
-                    valueOf(it.uppercase())
-                } catch (e: IllegalArgumentException) {
-                    null
-                }
-            }
-        }
-    }
-}
-
-enum class IncidentStatus {
-    FIRING, RESOLVED
-}
-
-enum class AlertSource {
-    HOST_ALERT,
-    HOST_DOWN,
-    UPTIME_MONITOR,
-    ERROR_ALERT,
-    DASHBOARD_ALERT
-}
-
-// Data class for incident events
-data class IncidentEvent(
-    val title: String,
-    val description: String,
-    val severity: IncidentSeverity,
-    val status: IncidentStatus,
-    val source: AlertSource,
-    val deduplicationKey: String,
-    val organizationId: Int,
-    val metadata: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap(),
-    val moneatUrl: String
-)
-
 // Provider config data class
 data class ProviderConfig(
     val id: Int,

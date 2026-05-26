@@ -16,7 +16,7 @@
 
 package com.moneat.incident.services
 
-import com.moneat.incident.models.IncidentEvent
+import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.incident.models.ProviderConfig
 
 /**
@@ -29,12 +29,12 @@ interface IncidentProvider {
 
     /**
      * Send an alert to the incident provider.
-     * @param event The incident event to send
+     * @param event The alert lifecycle event to send
      * @param config Provider-specific configuration
      * @return Result containing the provider's incident ID on success, or error message on failure
      */
     suspend fun sendAlert(
-        event: IncidentEvent,
+        event: AlertLifecycleEvent,
         config: ProviderConfig
     ): Result<String>
 

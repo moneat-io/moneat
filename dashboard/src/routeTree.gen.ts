@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WorkflowsRouteImport } from './routes/workflows'
 import { Route as VerifyEmailRequiredRouteImport } from './routes/verify-email-required'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as UptimeMonitoringRouteImport } from './routes/uptime-monitoring'
@@ -138,6 +139,11 @@ import { Route as AiTracesTraceIdRouteImport } from './routes/ai.traces.$traceId
 import { Route as AdminOrganizationsOrgIdRouteImport } from './routes/admin.organizations.$orgId'
 import { Route as ProjectsProjectIdSpansSpanIdRouteImport } from './routes/projects.$projectId.spans.$spanId'
 
+const WorkflowsRoute = WorkflowsRouteImport.update({
+  id: '/workflows',
+  path: '/workflows',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const VerifyEmailRequiredRoute = VerifyEmailRequiredRouteImport.update({
   id: '/verify-email-required',
   path: '/verify-email-required',
@@ -843,6 +849,7 @@ export interface FileRoutesByFullPath {
   '/uptime-monitoring': typeof UptimeMonitoringRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-email-required': typeof VerifyEmailRequiredRoute
+  '/workflows': typeof WorkflowsRoute
   '/admin/attribution': typeof AdminAttributionRoute
   '/admin/billing': typeof AdminBillingRoute
   '/admin/emails': typeof AdminEmailsRoute
@@ -960,6 +967,7 @@ export interface FileRoutesByTo {
   '/uptime-monitoring': typeof UptimeMonitoringRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-email-required': typeof VerifyEmailRequiredRoute
+  '/workflows': typeof WorkflowsRoute
   '/admin/attribution': typeof AdminAttributionRoute
   '/admin/billing': typeof AdminBillingRoute
   '/admin/emails': typeof AdminEmailsRoute
@@ -1089,6 +1097,7 @@ export interface FileRoutesById {
   '/uptime-monitoring': typeof UptimeMonitoringRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-email-required': typeof VerifyEmailRequiredRoute
+  '/workflows': typeof WorkflowsRoute
   '/admin/attribution': typeof AdminAttributionRoute
   '/admin/billing': typeof AdminBillingRoute
   '/admin/emails': typeof AdminEmailsRoute
@@ -1221,6 +1230,7 @@ export interface FileRouteTypes {
     | '/uptime-monitoring'
     | '/verify-email'
     | '/verify-email-required'
+    | '/workflows'
     | '/admin/attribution'
     | '/admin/billing'
     | '/admin/emails'
@@ -1338,6 +1348,7 @@ export interface FileRouteTypes {
     | '/uptime-monitoring'
     | '/verify-email'
     | '/verify-email-required'
+    | '/workflows'
     | '/admin/attribution'
     | '/admin/billing'
     | '/admin/emails'
@@ -1466,6 +1477,7 @@ export interface FileRouteTypes {
     | '/uptime-monitoring'
     | '/verify-email'
     | '/verify-email-required'
+    | '/workflows'
     | '/admin/attribution'
     | '/admin/billing'
     | '/admin/emails'
@@ -1597,6 +1609,7 @@ export interface RootRouteChildren {
   UptimeMonitoringRoute: typeof UptimeMonitoringRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   VerifyEmailRequiredRoute: typeof VerifyEmailRequiredRoute
+  WorkflowsRoute: typeof WorkflowsRoute
   AiGenerationsRoute: typeof AiGenerationsRoute
   LegalPrivacyRoute: typeof LegalPrivacyRoute
   LegalSmsConsentRoute: typeof LegalSmsConsentRoute
@@ -1614,6 +1627,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/workflows': {
+      id: '/workflows'
+      path: '/workflows'
+      fullPath: '/workflows'
+      preLoaderRoute: typeof WorkflowsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/verify-email-required': {
       id: '/verify-email-required'
       path: '/verify-email-required'
@@ -2927,6 +2947,7 @@ const rootRouteChildren: RootRouteChildren = {
   UptimeMonitoringRoute: UptimeMonitoringRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   VerifyEmailRequiredRoute: VerifyEmailRequiredRoute,
+  WorkflowsRoute: WorkflowsRoute,
   AiGenerationsRoute: AiGenerationsRoute,
   LegalPrivacyRoute: LegalPrivacyRoute,
   LegalSmsConsentRoute: LegalSmsConsentRoute,

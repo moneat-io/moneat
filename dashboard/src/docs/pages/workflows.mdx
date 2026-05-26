@@ -1,0 +1,145 @@
+---
+title: Workflows
+description: Automate alert routing and notifications with trigger-based workflows.
+---
+
+# Workflows
+
+## Overview
+
+Workflows automate actions when alerts change in Moneat. A workflow follows the pattern:
+
+> When an alert triggers or resolves, if these conditions match, run these steps.
+
+Use workflows to notify the right people, route critical alerts, and keep Slack, Discord, and email updates consistent without manually repeating the same response process.
+
+Every organization starts with two enabled notification workflows:
+
+| Workflow | Trigger | Default steps |
+|----------|---------|---------------|
+| **Send alert notifications** | When an alert triggers | Email organization members, post to Slack when configured, post to Discord when configured |
+| **Send recovery notifications** | When an alert resolves | Email organization members, post to Slack when configured, post to Discord when configured |
+
+Edit or disable these workflows to change who is notified and where messages are sent.
+
+## Workflow concepts
+
+### Triggers
+
+Triggers decide when a workflow is considered for execution. Moneat currently supports:
+
+| Trigger | When it runs |
+|---------|--------------|
+| **When an alert triggers** | When Moneat fires an alert lifecycle event. |
+| **When an alert resolves** | When Moneat resolves an alert by deduplication key. |
+
+The trigger also defines which alert fields are available to conditions, messages, and run identity.
+
+### Conditions
+
+Conditions decide which alerts the workflow applies to. If a workflow has no conditions, it applies to every alert for the selected trigger.
+
+Available alert references include:
+
+| Reference | Description |
+|-----------|-------------|
+| `alert.title` | Alert title |
+| `alert.description` | Alert description |
+| `alert.severity` | Alert severity |
+| `alert.status` | Firing or resolved state |
+| `alert.source` | Source system, such as host alerts or uptime monitors |
+| `alert.deduplication_key` | Alert deduplication key |
+| `alert.url` | Link back to the alert in Moneat |
+| `organization.id` | Organization identifier |
+
+Conditions are combined with **and** logic. Every condition must match before the workflow runs.
+
+### Steps
+
+Steps are the actions Moneat runs after the trigger fires and conditions match. Workflows can run one or more steps in order.
+
+Supported steps include:
+
+| Step | What it does |
+|------|--------------|
+| **Email organization members** | Sends an email to verified members in the organization. |
+| **Post to Slack** | Posts a message to the configured Slack alert channel. |
+| **Post to Discord** | Posts a message to the configured Discord alert channel. |
+
+## Creating a workflow
+
+Navigate to **Workflows** in the sidebar, then click **New Workflow**.
+
+<StepList
+  steps={[
+    {
+      title: 'Choose a trigger',
+      content: 'Select when the workflow should be evaluated, such as when an alert triggers or resolves.',
+    },
+    {
+      title: 'Name the workflow',
+      content: 'Use a name that describes the automation, for example "Notify Slack for critical host alerts".',
+    },
+    {
+      title: 'Set run identity',
+      content: 'Use "Run once per" to control idempotency. The default alert deduplication key prevents repeated executions for the same alert.',
+    },
+    {
+      title: 'Add conditions',
+      content: 'Choose alert fields and operations to narrow when the workflow applies.',
+    },
+    {
+      title: 'Configure steps',
+      content: 'Add notification steps and fill in the message fields.',
+    },
+    {
+      title: 'Save the workflow',
+      content: 'Enabled workflows start running for future matching alert events.',
+    },
+  ]}
+/>
+
+## Run once per
+
+The **Run once per** setting controls how often a workflow can run for matching events. By default, alert workflows run once per `alert.deduplication_key`.
+
+For resolved-alert workflows, the default identity includes `alert.status` as well, so triggered and resolved events do not collapse into the same run.
+
+You can include multiple references separated by commas in the editor. Moneat combines those values into the workflow run identity.
+
+:::tip[Use the deduplication key for alert workflows]
+Keep `alert.deduplication_key` in the run identity unless you intentionally want the same alert to run the workflow multiple times.
+:::
+
+## Message variables
+
+Workflow step fields support interpolation with double braces. Use references from the trigger scope inside email, Slack, and Discord messages:
+
+```text
+{{alert.title}}
+Severity: {{alert.severity}}
+Source: {{alert.source}}
+View: {{alert.url}}
+```
+
+When a workflow runs, Moneat replaces each variable with the matching alert value.
+
+## Viewing runs
+
+Select a workflow from the Workflows page to view recent runs. Each run records:
+
+- The workflow version that executed
+- The trigger that created the run
+- The run identity from **Run once per**
+- Step progress
+- Completion or failure details
+
+Use run history to confirm that a workflow matched the alerts you expected and to diagnose failed notification steps.
+
+## Current limitations
+
+- Workflows run immediately after the trigger and conditions match.
+- Delay configuration is visible in the builder but not available yet.
+- Conditions are currently combined with **and** logic only.
+- Workflow testing from the UI is not available yet; use run history after matching alert events fire.
+- Native on-call escalation and external incident-provider routing are not workflow steps yet.
