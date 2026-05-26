@@ -325,6 +325,7 @@ fun extractPublicKeyFromDsn(dsnLikeHeader: String?): String? {
 internal fun mapEnvelopeItemTypeToQuotaType(itemType: String): String {
     return when (itemType) {
         "transaction" -> "transaction"
+        "session", "sessions" -> "session"
         "replay_event", "replay_recording", "replay_video" -> "replay"
         "feedback", "user_report" -> "feedback"
         "llm_generation" -> "llm"

@@ -16,10 +16,16 @@
 
 package com.moneat.events.repositories
 
+import com.moneat.config.ClickHouseClient
+import com.moneat.events.repositories.models.SessionInsertData
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.ProjectKeys
 import com.moneat.shared.models.Projects
+import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.testsupport.requestBodyText
+import com.moneat.testsupport.respond
+import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -121,5 +127,57 @@ class EventRepositoryTest {
     fun `getOrganizationIdForProject returns null for unknown project`() {
         val result = repository.getOrganizationIdForProject(999999L)
         assertNull(result)
+    }
+
+    // ──── insertSessions ────
+
+    @Test
+    fun `insertSessions returns true for empty rows`() = runBlocking {
+        assertTrue(repository.insertSessions(emptyList()))
+    }
+
+    @Test
+    fun `insertSessions writes ClickHouse session rows`() = runBlocking {
+        val queries = mutableListOf<String>()
+        try {
+            MockHttpServer { exchange ->
+                queries += exchange.requestBodyText()
+                exchange.respond(200, "", contentType = "text/plain")
+            }.use { server ->
+                ClickHouseClient.close()
+                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+
+                val result = repository.insertSessions(
+                    listOf(
+                        SessionInsertData(
+                            sessionId = "11111111-1111-1111-1111-111111111111",
+                            projectId = 42L,
+                            startedMs = 1767225600000L,
+                            durationMs = 1500.0,
+                            status = "ok",
+                            errors = 0,
+                            release = "1.0.0",
+                            environment = "production",
+                            userId = "user-123",
+                            receivedAtMs = 1767225601000L
+                        )
+                    )
+                )
+
+                assertTrue(result)
+            }
+        } finally {
+            ClickHouseClient.close()
+        }
+
+        val sql = queries.single()
+        assertTrue(sql.contains("INSERT INTO `test`.sessions"))
+        assertTrue(sql.contains("toUUID('11111111-1111-1111-1111-111111111111')"))
+        assertTrue(sql.contains("fromUnixTimestamp64Milli(1767225600000)"))
+        assertTrue(sql.contains("1500.0"))
+        assertTrue(sql.contains("'ok'"))
+        assertTrue(sql.contains("'1.0.0'"))
+        assertTrue(sql.contains("'production'"))
+        assertTrue(sql.contains("'user-123'"))
     }
 }

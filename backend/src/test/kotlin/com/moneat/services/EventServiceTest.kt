@@ -656,6 +656,25 @@ class EventServiceTest {
     }
 
     @Test
+    fun `SentryEnvelope parses implicit sessions item`() {
+        val envelope =
+            SentryEnvelope.parse(
+                """
+                {"event_id":"sessions-env"}
+                {"type":"sessions"}
+                {"aggregates":[]}
+                {"type":"event"}
+                {"event_id":"evt-1"}
+                """.trimIndent().toByteArray()
+            )
+
+        assertEquals(2, envelope.items.size)
+        assertEquals("sessions", envelope.items[0].type)
+        assertEquals("""{"aggregates":[]}""", envelope.items[0].payload)
+        assertEquals("event", envelope.items[1].type)
+    }
+
+    @Test
     fun `exception with multiple stack frames is parsed correctly`() {
         val frames =
             listOf(

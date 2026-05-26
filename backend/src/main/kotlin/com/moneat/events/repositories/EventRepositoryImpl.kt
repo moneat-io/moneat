@@ -24,6 +24,7 @@ import com.moneat.events.repositories.models.ProfileInsertData
 import com.moneat.events.repositories.models.ProjectKeyVerification
 import com.moneat.events.repositories.models.ReplayEventInsertData
 import com.moneat.events.repositories.models.ReplayRecordingInsertData
+import com.moneat.events.repositories.models.SessionInsertData
 import com.moneat.events.repositories.models.SpanInsertData
 import com.moneat.events.repositories.models.TransactionEventInsertData
 import com.moneat.shared.models.ProjectKeys
@@ -184,6 +185,32 @@ class EventRepositoryImpl : EventRepository {
                 '${escapeSql(data.sdkName)}',
                 '${escapeSql(data.sdkVersion)}'
             )
+        """.trimIndent()
+        return executeInsert(sql)
+    }
+
+    override suspend fun insertSessions(rows: List<SessionInsertData>): Boolean {
+        if (rows.isEmpty()) return true
+        val valueRows = rows.joinToString(",\n") { session ->
+            """(
+                toUUID('${escapeSql(session.sessionId)}'),
+                ${session.projectId},
+                fromUnixTimestamp64Milli(${session.startedMs}),
+                ${session.durationMs},
+                '${escapeSql(session.status)}',
+                ${session.errors},
+                '${escapeSql(session.release)}',
+                '${escapeSql(session.environment)}',
+                '${escapeSql(session.userId)}',
+                fromUnixTimestamp64Milli(${session.receivedAtMs})
+            )"""
+        }
+        val sql = """
+            INSERT INTO `$db`.sessions (
+                session_id, project_id, started, duration_ms, status, errors,
+                release, environment, user_id, received_at
+            ) VALUES
+            $valueRows
         """.trimIndent()
         return executeInsert(sql)
     }

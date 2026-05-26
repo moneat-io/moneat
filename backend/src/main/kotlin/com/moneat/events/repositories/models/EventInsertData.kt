@@ -70,6 +70,19 @@ data class TransactionEventInsertData(
     val sdkVersion: String
 )
 
+data class SessionInsertData(
+    val sessionId: String,
+    val projectId: Long,
+    val startedMs: Long,
+    val durationMs: Double,
+    val status: String,
+    val errors: Int,
+    val release: String,
+    val environment: String,
+    val userId: String,
+    val receivedAtMs: Long
+)
+
 data class SpanInsertData(
     val spanId: String,
     val parentSpanId: String,

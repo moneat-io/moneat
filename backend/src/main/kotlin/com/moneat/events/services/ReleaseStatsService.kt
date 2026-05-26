@@ -128,14 +128,17 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
             val newIssues = getNewIssueCountForRelease(projectId, version, retentionDays)
             val resolvedIssues = 0L
             val crashFreeSessionRate = getCrashFreeRateForRelease(projectId, version, retentionDays)
-            // Crash-free user rate stays null until a user-based ClickHouse query is implemented.
-            val crashFreeUserRate: Double? = null
+            val crashFreeUserRate = getCrashFreeUserRateForRelease(projectId, version, retentionDays)
 
             val intervalMinutes = RELEASE_STATS_INTERVAL_MINUTES
             val eventsTimelineQuery =
                 """
                 SELECT
-                    formatDateTime(toStartOfInterval(timestamp, INTERVAL $intervalMinutes MINUTE), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as time,
+                    formatDateTime(
+                        toStartOfInterval(timestamp, INTERVAL $intervalMinutes MINUTE),
+                        '%Y-%m-%dT%H:%i:%S.000Z',
+                        'UTC'
+                    ) as time,
                     count() as count
                 FROM `$clickhouseDb`.events
                 WHERE project_id = $projectId AND release = '$escapedVersion'
@@ -301,14 +304,46 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
                 AND ${queryHelper.timestampRetentionClause("started", retentionDays)}
             FORMAT JSONEachRow
             """.trimIndent()
+        return executeNullableRateQuery(query, "crash-free session rate for project $projectId release $version")
+    }
+
+    private suspend fun getCrashFreeUserRateForRelease(
+        projectId: Long,
+        version: String,
+        retentionDays: Int
+    ): Double? {
+        val escapedVersion = escapeSql(version)
+        val query =
+            """
+            SELECT countIf(errors = 0) * 100.0 / count() as rate
+            FROM (
+                SELECT user_id, sum(errors) as errors
+                FROM `$clickhouseDb`.sessions
+                WHERE project_id = $projectId AND release = '$escapedVersion' AND user_id != ''
+                    AND ${queryHelper.timestampRetentionClause("started", retentionDays)}
+                GROUP BY user_id
+            )
+            FORMAT JSONEachRow
+            """.trimIndent()
+        return executeNullableRateQuery(query, "crash-free user rate for project $projectId release $version")
+    }
+
+    private suspend fun executeNullableRateQuery(
+        query: String,
+        errorContext: String
+    ): Double? {
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            if (body.isBlank()) return null
-            val obj = json.parseToJsonElement(body.lines().first()).jsonObject
-            val rate = obj["rate"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: return null
-            if (rate.isNaN() || rate.isInfinite()) null else rate
-        }.getOrElse { _ ->
+            if (body.isBlank()) {
+                null
+            } else {
+                val obj = json.parseToJsonElement(body.lines().first()).jsonObject
+                val rate = obj["rate"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()
+                rate?.takeUnless { it.isNaN() || it.isInfinite() }
+            }
+        }.getOrElse { e ->
+            logger.warn(e) { "Failed to fetch $errorContext" }
             null
         }
     }

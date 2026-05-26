@@ -24,6 +24,9 @@ import com.moneat.events.models.SentryEnvelope
 import com.moneat.events.models.SentryEvent
 import com.moneat.events.models.SentryFeedback
 import com.moneat.events.models.SentryReplayEvent
+import com.moneat.events.models.SentrySession
+import com.moneat.events.models.SentrySessionAggregate
+import com.moneat.events.models.SentrySessionAggregatesPayload
 import com.moneat.events.models.SentrySpan
 import com.moneat.events.models.SentryTransaction
 import com.moneat.events.models.isFeedbackEventPayload
@@ -35,6 +38,7 @@ import com.moneat.events.repositories.models.ProfileInsertData
 import com.moneat.events.repositories.models.ProjectKeyVerification
 import com.moneat.events.repositories.models.ReplayEventInsertData
 import com.moneat.events.repositories.models.ReplayRecordingInsertData
+import com.moneat.events.repositories.models.SessionInsertData
 import com.moneat.events.repositories.models.TransactionEventInsertData
 import com.moneat.notifications.services.NotificationService
 import com.moneat.otlp.hexToULongPair
@@ -89,6 +93,7 @@ class EventService(
 
         /** Keys set by the server for apm_spans; must not be overwritten by SDK tag maps. */
         private val SENTRY_APM_META_RESERVED_KEYS = setOf("sentry.transaction_id", "sentry.project_id")
+        private val SESSION_ERROR_STATUSES = setOf("abnormal", "crashed", "errored")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -161,10 +166,9 @@ class EventService(
                     }
                 }
 
-                "session" -> {
-                    // Session envelope items are accepted for usage accounting only; persistence not implemented.
-                    logger.debug { "Received session (not yet implemented)" }
-                }
+                "session" -> handleSessionItem(projectId, item)
+
+                "sessions" -> handleSessionAggregatesItem(projectId, item)
 
                 "replay_event" -> {
                     val replayEvent = parseReplayEventPayload(item.payload)
@@ -216,6 +220,23 @@ class EventService(
         val event = json.decodeFromString<SentryEvent>(item.payload)
         if (storeEvent(projectId, event)) {
             recordUsage(projectId, "error", item)
+        }
+    }
+
+    private suspend fun handleSessionItem(projectId: Long, item: EnvelopeItem) {
+        logger.debug { "Session payload: ${item.payload.take(LOG_PAYLOAD_PREVIEW_CHARS)}" }
+        val session = json.decodeFromString<SentrySession>(item.payload)
+        if (storeSession(projectId, session)) {
+            recordUsage(projectId, "session", item)
+        }
+    }
+
+    private suspend fun handleSessionAggregatesItem(projectId: Long, item: EnvelopeItem) {
+        logger.debug { "Session aggregates payload: ${item.payload.take(LOG_PAYLOAD_PREVIEW_CHARS)}" }
+        val payload = json.decodeFromString<SentrySessionAggregatesPayload>(item.payload)
+        val rows = payload.aggregates.flatMap { aggregate -> aggregate.toSessionRows(projectId) }
+        if (storeSessionRows(projectId, rows)) {
+            recordUsage(projectId, "session", item)
         }
     }
 
@@ -568,7 +589,142 @@ class EventService(
         }
     }
 
+    private suspend fun storeSession(
+        projectId: Long,
+        session: SentrySession
+    ): Boolean {
+        val row = session.toInsertData(projectId) ?: return false
+        return storeSessionRows(projectId, listOf(row))
+    }
+
+    private suspend fun storeSessionRows(
+        projectId: Long,
+        rows: List<SessionInsertData>
+    ): Boolean {
+        if (projectId == 0L) {
+            logger.error { "Invalid projectId $projectId for session, skipping insert" }
+            return false
+        }
+        if (rows.isEmpty()) return false
+
+        suspendRunCatching {
+            val success = eventRepository.insertSessions(rows)
+            if (!success) return false
+
+            for (row in rows.distinctBy { it.release }) {
+                suspendRunCatching {
+                    releaseService.upsertReleaseFromEvent(projectId, row.release, row.startedMs)
+                }.getOrElse { e ->
+                    logger.warn(e) { "Failed to upsert release ${row.release} for project $projectId" }
+                }
+            }
+
+            logger.debug { "Stored ${rows.size} session rows for project $projectId" }
+            return true
+        }.getOrElse { e ->
+            logger.error(e) { "Error storing sessions in ClickHouse" }
+            return false
+        }
+    }
+
     private fun JsonObject.string(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
+
+    private fun SentrySession.toInsertData(projectId: Long): SessionInsertData? {
+        val release = attrs?.release?.takeIf { it.isNotBlank() } ?: return null
+        val startedMs =
+            started?.let { unixSecondsToMillis(it) }
+                ?: timestamp?.let { unixSecondsToMillis(it) }
+                ?: System.currentTimeMillis()
+        val errors = sessionErrorCount(status, this.errors)
+
+        return SessionInsertData(
+            sessionId = normalizeUuid(sessionId ?: UUID.randomUUID().toString()),
+            projectId = projectId,
+            startedMs = startedMs,
+            durationMs = durationToMillis(duration),
+            status = normalizeSessionStatus(status, errors),
+            errors = errors,
+            release = release,
+            environment = attrs.environment ?: "production",
+            userId = distinctId ?: "",
+            receivedAtMs = System.currentTimeMillis()
+        )
+    }
+
+    private fun SentrySessionAggregate.toSessionRows(projectId: Long): List<SessionInsertData> {
+        val release = attrs?.release?.takeIf { it.isNotBlank() } ?: return emptyList()
+        val defaults = SessionAggregateDefaults(
+            projectId = projectId,
+            startedMs = started?.let { unixSecondsToMillis(it) } ?: System.currentTimeMillis(),
+            release = release,
+            environment = attrs.environment ?: "production",
+            userId = distinctId ?: "",
+            receivedAtMs = System.currentTimeMillis()
+        )
+
+        return buildList {
+            addAggregateSessionRows(defaults, status = "exited", count = exited, errors = 0)
+            addAggregateSessionRows(defaults, status = "errored", count = errored, errors = 1)
+            addAggregateSessionRows(defaults, status = "crashed", count = crashed, errors = 1)
+            addAggregateSessionRows(defaults, status = "abnormal", count = abnormal, errors = 1)
+            addAggregateSessionRows(defaults, status = "ok", count = ok, errors = 0)
+        }
+    }
+
+    private fun MutableList<SessionInsertData>.addAggregateSessionRows(
+        defaults: SessionAggregateDefaults,
+        status: String,
+        count: Int,
+        errors: Int
+    ) {
+        repeat(count.coerceAtLeast(0)) {
+            add(
+                SessionInsertData(
+                    sessionId = UUID.randomUUID().toString(),
+                    projectId = defaults.projectId,
+                    startedMs = defaults.startedMs,
+                    durationMs = 0.0,
+                    status = status,
+                    errors = errors,
+                    release = defaults.release,
+                    environment = defaults.environment,
+                    userId = defaults.userId,
+                    receivedAtMs = defaults.receivedAtMs
+                )
+            )
+        }
+    }
+
+    private fun normalizeSessionStatus(status: String?, errors: Int): String {
+        return when (status?.lowercase()) {
+            "ok" -> "ok"
+            "exited" -> "exited"
+            "errored" -> "errored"
+            "crashed" -> "crashed"
+            "abnormal" -> "abnormal"
+            else -> if (errors > 0) "abnormal" else "ok"
+        }
+    }
+
+    private fun sessionErrorCount(status: String?, errors: Int?): Int {
+        val explicitErrors = errors?.coerceAtLeast(0) ?: 0
+        val normalizedStatus = status?.lowercase()
+        val minimumErrors =
+            if (normalizedStatus != null && normalizedStatus in SESSION_ERROR_STATUSES) 1 else 0
+        return maxOf(explicitErrors, minimumErrors)
+    }
+
+    private fun durationToMillis(durationSeconds: Double?): Double =
+        ((durationSeconds ?: 0.0) * MS_PER_SECOND).coerceAtLeast(0.0)
+
+    private data class SessionAggregateDefaults(
+        val projectId: Long,
+        val startedMs: Long,
+        val release: String,
+        val environment: String,
+        val userId: String,
+        val receivedAtMs: Long
+    )
 
     private suspend fun storeReplayEvent(
         projectId: Long,
