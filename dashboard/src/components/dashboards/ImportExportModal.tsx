@@ -392,10 +392,11 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
         <div className="flex-1 overflow-auto px-5 py-4 space-y-4">
           {mode === 'import' ? (
             <>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2" role="group" aria-label="Import format">
                 <Button
                   variant={format === 'grafana' ? 'default' : 'outline'}
                   size="sm"
+                  aria-pressed={format === 'grafana'}
                   onClick={() => setFormat('grafana')}
                 >
                   Grafana
@@ -403,6 +404,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
                 <Button
                   variant={format === 'datadog' ? 'default' : 'outline'}
                   size="sm"
+                  aria-pressed={format === 'datadog'}
                   onClick={() => setFormat('datadog')}
                 >
                   Datadog

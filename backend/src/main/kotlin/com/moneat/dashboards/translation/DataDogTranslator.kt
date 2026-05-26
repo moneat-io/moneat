@@ -47,9 +47,11 @@ private const val DD_GRID_COLS = 12
 private const val DD_SECTION_HEIGHT = 1
 private const val DD_AUTO_WIDGETS_PER_ROW = 2
 private const val DD_DEFAULT_TABLE_LIMIT = 100
+private const val DD_GROUP_BY_MATCH_GROUP_INDEX = 4
 
-private val DD_METRIC_QUERY_REGEX = Regex("""([A-Za-z_][A-Za-z0-9_]*):([A-Za-z0-9_.]+)\{([^}]*)}""")
-private val DD_GROUP_BY_REGEX = Regex("""\s+by\s+\{([^}]*)}""")
+private val DD_METRIC_QUERY_REGEX = Regex(
+    """^\s*([A-Za-z_][A-Za-z0-9_]*):([A-Za-z0-9_.]+)\{([^}]*)}\s*(?:by\s+\{([^}]*)})?\s*$"""
+)
 private val DD_SIMPLE_FORMULA_REGEX = Regex("""^[A-Za-z_][A-Za-z0-9_]*$""")
 
 private data class DataDogLayout(
@@ -179,7 +181,7 @@ class DataDogTranslator : DashboardTranslator {
         }
 
         if (ddType == "group") {
-            return importGroupWidget(definition, index, warnings, layout)
+            return importGroupWidget(definition, index, warnings, layout, parentLayout)
         }
 
         val resolvedLayout = resolveLayout(layout, parentLayout)
@@ -208,8 +210,10 @@ class DataDogTranslator : DashboardTranslator {
         definition: JsonObject,
         index: Int,
         warnings: MutableList<String>,
-        layout: DataDogLayout
+        layout: DataDogLayout,
+        parentLayout: DataDogLayout? = null
     ): List<WidgetResponse> {
+        val resolvedLayout = resolveLayout(layout, parentLayout)
         val title = definition["title"]?.jsonPrimitive?.contentOrNull ?: "Section"
         val children = definition["widgets"]?.jsonArray ?: JsonArray(emptyList())
         val section = WidgetResponse(
@@ -217,9 +221,9 @@ class DataDogTranslator : DashboardTranslator {
             dashboardId = 0,
             title = title,
             widgetType = "section",
-            gridX = 0,
-            gridY = layout.y,
-            gridW = DD_GRID_COLS,
+            gridX = resolvedLayout.x.coerceIn(0, DD_MAX_GRID_COL),
+            gridY = resolvedLayout.y,
+            gridW = resolvedLayout.width.coerceIn(1, DD_GRID_COLS),
             gridH = DD_SECTION_HEIGHT,
             queryConfigs = emptyList(),
             displayConfig = mapOf(
@@ -229,7 +233,7 @@ class DataDogTranslator : DashboardTranslator {
             ),
             sortOrder = index
         )
-        val childParentLayout = layout.copy(y = layout.y + DD_SECTION_HEIGHT)
+        val childParentLayout = resolvedLayout.copy(y = resolvedLayout.y + DD_SECTION_HEIGHT)
         return listOf(section) + importWidgets(children, warnings, childParentLayout)
     }
 
@@ -377,8 +381,8 @@ class DataDogTranslator : DashboardTranslator {
     }
 
     private fun parseMetricQuery(queryStr: String): ParsedDataDogQuery? {
-        val match = DD_METRIC_QUERY_REGEX.find(queryStr) ?: return null
-        val groupByText = DD_GROUP_BY_REGEX.find(queryStr)?.groupValues?.get(1)
+        val match = DD_METRIC_QUERY_REGEX.matchEntire(queryStr) ?: return null
+        val groupByText = match.groupValues.getOrNull(DD_GROUP_BY_MATCH_GROUP_INDEX)?.takeIf { it.isNotBlank() }
         return ParsedDataDogQuery(
             function = mapDdFunction(match.groupValues[1]),
             metricName = match.groupValues[2].trim(),

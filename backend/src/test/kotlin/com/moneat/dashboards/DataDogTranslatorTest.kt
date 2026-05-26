@@ -49,6 +49,46 @@ class DataDogTranslatorTest {
             }.readText()
         ).jsonObject
 
+    private fun datadogLayout(x: Int, y: Int, width: Int, height: Int) = buildJsonObject {
+        put("x", x)
+        put("y", y)
+        put("width", width)
+        put("height", height)
+    }
+
+    private fun nestedGroupWidget() = buildJsonObject {
+        put(
+            "definition",
+            buildJsonObject {
+                put("type", "group")
+                put("title", "Inner")
+                put(
+                    "widgets",
+                    buildJsonArray {
+                        add(
+                            buildJsonObject {
+                                put(
+                                    "definition",
+                                    buildJsonObject {
+                                        put("type", "timeseries")
+                                        put(
+                                            "requests",
+                                            buildJsonArray {
+                                                add(buildJsonObject { put("q", "count:events{*}") })
+                                            }
+                                        )
+                                    }
+                                )
+                                put("layout", datadogLayout(1, 1, 3, 2))
+                            }
+                        )
+                    }
+                )
+            }
+        )
+        put("layout", datadogLayout(1, 2, 4, 3))
+    }
+
     // ──── Import ────
 
     @Test
@@ -388,6 +428,49 @@ class DataDogTranslatorTest {
     }
 
     @Test
+    fun `import applies parent offsets to nested Datadog group layouts`() {
+        val json = buildJsonObject {
+            put("title", "Nested Groups")
+            put(
+                "widgets",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put(
+                                "definition",
+                                buildJsonObject {
+                                    put("type", "group")
+                                    put("title", "Outer")
+                                    put(
+                                        "widgets",
+                                        buildJsonArray {
+                                            add(nestedGroupWidget())
+                                        }
+                                    )
+                                }
+                            )
+                            put("layout", datadogLayout(2, 3, 8, 6))
+                        }
+                    )
+                }
+            )
+        }
+
+        val widgets = translator.import(json).dashboard.widgets
+
+        assertEquals(3, widgets.size)
+        assertEquals("Outer", widgets[0].title)
+        assertEquals(2, widgets[0].gridX)
+        assertEquals(3, widgets[0].gridY)
+        assertEquals(8, widgets[0].gridW)
+        assertEquals("Inner", widgets[1].title)
+        assertEquals(3, widgets[1].gridX)
+        assertEquals(6, widgets[1].gridY)
+        assertEquals(4, widgets[2].gridX)
+        assertEquals(8, widgets[2].gridY)
+    }
+
+    @Test
     fun `import parses all Datadog request queries from integration fixture`() {
         val fixture = loadFixture("dashboards/datadog/postgres-integration-overview.json")
         val result = translator.import(fixture)
@@ -549,15 +632,16 @@ class DataDogTranslatorTest {
     @Test
     fun `parseDataDogQueryString preserves unparseable queries as raw queries`() {
         val warnings = mutableListOf<String>()
+        val rawQuery = "avg:system.cpu.user{host:web01} / max:system.cpu.user{host:web01} * 100"
 
-        val dsl = translator.parseDataDogQueryString("query1 / query2", warnings, 7, "ratio", "query3")
+        val dsl = translator.parseDataDogQueryString(rawQuery, warnings, 7, "ratio", "query3")
 
         assertEquals("metrics", dsl.dataSource)
         assertEquals(AggFunction.AVG, dsl.metrics.single().function)
         assertEquals("value", dsl.metrics.single().field)
         assertEquals("ratio", dsl.metrics.single().alias)
         assertEquals(GroupByType.TIME, dsl.groupBy.single().type)
-        assertEquals("query1 / query2", dsl.rawQuery)
+        assertEquals(rawQuery, dsl.rawQuery)
         assertEquals("query3", dsl.refId)
         assertTrue(warnings.any { it.contains("unable to parse Datadog query") })
     }

@@ -115,7 +115,16 @@ describe('ImportExportModal', () => {
       renderWithQuery(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
       )
-      await user.click(screen.getByText('Datadog'))
+      const grafanaButton = screen.getByRole('button', {name: 'Grafana'})
+      const datadogButton = screen.getByRole('button', {name: 'Datadog'})
+      expect(screen.getByRole('group', {name: 'Import format'})).toBeInTheDocument()
+      expect(grafanaButton).toHaveAttribute('aria-pressed', 'true')
+      expect(datadogButton).toHaveAttribute('aria-pressed', 'false')
+
+      await user.click(datadogButton)
+
+      expect(grafanaButton).toHaveAttribute('aria-pressed', 'false')
+      expect(datadogButton).toHaveAttribute('aria-pressed', 'true')
       expect(screen.getByText('Datadog Dashboard Import')).toBeInTheDocument()
       expect(screen.getByText('Upload Datadog JSON File')).toBeInTheDocument()
     })
