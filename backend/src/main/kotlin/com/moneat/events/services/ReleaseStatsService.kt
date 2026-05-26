@@ -304,7 +304,7 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
                 AND ${queryHelper.timestampRetentionClause("started", retentionDays)}
             FORMAT JSONEachRow
             """.trimIndent()
-        return executeNullableRateQuery(query)
+        return executeNullableRateQuery(query, "crash-free session rate for project $projectId release $version")
     }
 
     private suspend fun getCrashFreeUserRateForRelease(
@@ -325,10 +325,13 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
             )
             FORMAT JSONEachRow
             """.trimIndent()
-        return executeNullableRateQuery(query)
+        return executeNullableRateQuery(query, "crash-free user rate for project $projectId release $version")
     }
 
-    private suspend fun executeNullableRateQuery(query: String): Double? {
+    private suspend fun executeNullableRateQuery(
+        query: String,
+        errorContext: String
+    ): Double? {
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
@@ -339,7 +342,8 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
                 val rate = obj["rate"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()
                 rate?.takeUnless { it.isNaN() || it.isInfinite() }
             }
-        }.getOrElse { _ ->
+        }.getOrElse { e ->
+            logger.warn(e) { "Failed to fetch $errorContext" }
             null
         }
     }

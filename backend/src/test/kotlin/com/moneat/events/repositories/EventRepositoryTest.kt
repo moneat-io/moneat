@@ -139,31 +139,35 @@ class EventRepositoryTest {
     @Test
     fun `insertSessions writes ClickHouse session rows`() = runBlocking {
         val queries = mutableListOf<String>()
-        MockHttpServer { exchange ->
-            queries += exchange.requestBodyText()
-            exchange.respond(200, "", contentType = "text/plain")
-        }.use { server ->
-            ClickHouseClient.close()
-            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        try {
+            MockHttpServer { exchange ->
+                queries += exchange.requestBodyText()
+                exchange.respond(200, "", contentType = "text/plain")
+            }.use { server ->
+                ClickHouseClient.close()
+                ClickHouseClient.init(server.baseUrl, "test", "default", "")
 
-            val result = repository.insertSessions(
-                listOf(
-                    SessionInsertData(
-                        sessionId = "11111111-1111-1111-1111-111111111111",
-                        projectId = 42L,
-                        startedMs = 1767225600000L,
-                        durationMs = 1500.0,
-                        status = "ok",
-                        errors = 0,
-                        release = "1.0.0",
-                        environment = "production",
-                        userId = "user-123",
-                        receivedAtMs = 1767225601000L
+                val result = repository.insertSessions(
+                    listOf(
+                        SessionInsertData(
+                            sessionId = "11111111-1111-1111-1111-111111111111",
+                            projectId = 42L,
+                            startedMs = 1767225600000L,
+                            durationMs = 1500.0,
+                            status = "ok",
+                            errors = 0,
+                            release = "1.0.0",
+                            environment = "production",
+                            userId = "user-123",
+                            receivedAtMs = 1767225601000L
+                        )
                     )
                 )
-            )
 
-            assertTrue(result)
+                assertTrue(result)
+            }
+        } finally {
+            ClickHouseClient.close()
         }
 
         val sql = queries.single()
