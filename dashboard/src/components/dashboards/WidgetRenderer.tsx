@@ -40,6 +40,8 @@ import {
 import {useVirtualizer} from '@tanstack/react-virtual'
 import {TopListWidget} from './TopListWidget'
 import {HeatmapWidget} from './HeatmapWidget'
+import {ExtendedWidgetRenderer} from './ExtendedWidgets'
+import {isQueryDrivenExtendedWidget, isExtendedWidgetType} from './extendedWidgetTypes'
 import ReactMarkdown from 'react-markdown'
 import type {ValueMapping} from './formatValue'
 import {formatValue} from './formatValue'
@@ -140,8 +142,10 @@ export const WidgetRenderer = memo(function WidgetRenderer({
   variables,
   alertThresholdPreview,
 }: WidgetRendererProps) {
+  const widgetType = widget.widget_type
   const queries = widget.query_configs?.length > 0 ? widget.query_configs : []
   const isBatch = queries.length > 1
+  const isExtendedWidget = isExtendedWidgetType(widgetType)
   // Include query config fingerprint so datasource/query changes trigger refetch
   const queryFingerprint = JSON.stringify(queries.map(q => ({d: q.dataSource, r: q.rawQuery || ''})))
 
@@ -191,15 +195,15 @@ export const WidgetRenderer = memo(function WidgetRenderer({
         ? api.executeWidgetQuery(dashboardId, queries[0], effectiveProjectId, timeRange, variables)
         : []
     },
-    enabled: (!!projectId || isDemo()) && widget.widget_type !== 'text' && widget.widget_type !== 'section' && queries.length > 0,
+    enabled: (!!projectId || isDemo()) && isQueryDrivenWidget(widgetType) && queries.length > 0,
     refetchInterval: autoRefresh ? 30000 : false,
   })
 
-  if (widget.widget_type === 'section') {
+  if (widgetType === 'section') {
     return null
   }
 
-  if (widget.widget_type === 'text') {
+  if (widgetType === 'text') {
     return (
       <div className="prose prose-sm dark:prose-invert max-w-none p-2 overflow-auto h-full">
         <ReactMarkdown>{widget.display_config?.content || widget.title || ''}</ReactMarkdown>
@@ -211,7 +215,7 @@ export const WidgetRenderer = memo(function WidgetRenderer({
     return <div className="h-full w-full bg-muted/20 animate-pulse rounded" />
   }
 
-  if (error || !data || data.length === 0) {
+  if (error || (!isExtendedWidget && (!data || data.length === 0))) {
     return (
       <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
         {error ? 'Query error' : 'No data'}
@@ -219,11 +223,22 @@ export const WidgetRenderer = memo(function WidgetRenderer({
     )
   }
 
-  const rawData = data as Record<string, unknown>[]
+  const rawData = (data ?? []) as Record<string, unknown>[]
   const dc = widget.display_config || {}
   const chartData = applyFieldTransforms(rawData, dc)
 
-  switch (widget.widget_type) {
+  if (isExtendedWidget) {
+    return (
+      <ExtendedWidgetRenderer
+        widget={widget}
+        widgetType={widgetType}
+        data={chartData}
+        displayConfig={dc}
+      />
+    )
+  }
+
+  switch (widgetType) {
     case 'timeseries':
       return (
         <TimeseriesChart
@@ -259,7 +274,7 @@ export const WidgetRenderer = memo(function WidgetRenderer({
     default:
       return (
         <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-          Unknown widget type: {widget.widget_type}
+          Unknown widget type: {widgetType}
         </div>
       )
   }
@@ -267,6 +282,11 @@ export const WidgetRenderer = memo(function WidgetRenderer({
 
 function isTimeKey(key: string): boolean {
   return TIME_KEYS.has(key)
+}
+
+function isQueryDrivenWidget(widgetType: string): boolean {
+  if (widgetType === 'text' || widgetType === 'section') return false
+  return !isExtendedWidgetType(widgetType) || isQueryDrivenExtendedWidget(widgetType)
 }
 
 function getTimeSpanMs(timeRange: TimeRangeDef): number {
