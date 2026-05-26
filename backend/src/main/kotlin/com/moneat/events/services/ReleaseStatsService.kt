@@ -304,16 +304,7 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
                 AND ${queryHelper.timestampRetentionClause("started", retentionDays)}
             FORMAT JSONEachRow
             """.trimIndent()
-        return suspendRunCatching {
-            val response = ClickHouseClient.execute(query)
-            val body = response.bodyAsText()
-            if (body.isBlank()) return null
-            val obj = json.parseToJsonElement(body.lines().first()).jsonObject
-            val rate = obj["rate"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: return null
-            if (rate.isNaN() || rate.isInfinite()) null else rate
-        }.getOrElse { _ ->
-            null
-        }
+        return executeNullableRateQuery(query)
     }
 
     private suspend fun getCrashFreeUserRateForRelease(
@@ -334,13 +325,20 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
             )
             FORMAT JSONEachRow
             """.trimIndent()
+        return executeNullableRateQuery(query)
+    }
+
+    private suspend fun executeNullableRateQuery(query: String): Double? {
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            if (body.isBlank()) return null
-            val obj = json.parseToJsonElement(body.lines().first()).jsonObject
-            val rate = obj["rate"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: return null
-            if (rate.isNaN() || rate.isInfinite()) null else rate
+            if (body.isBlank()) {
+                null
+            } else {
+                val obj = json.parseToJsonElement(body.lines().first()).jsonObject
+                val rate = obj["rate"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()
+                rate?.takeUnless { it.isNaN() || it.isInfinite() }
+            }
         }.getOrElse { _ ->
             null
         }

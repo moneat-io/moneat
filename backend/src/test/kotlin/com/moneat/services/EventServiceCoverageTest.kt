@@ -489,6 +489,156 @@ class EventServiceCoverageTest {
     }
 
     @Test
+    fun `processEnvelope ignores session without release`() = runBlocking {
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "sess-no-release",
+                items = listOf(
+                    EnvelopeItem(
+                        "session",
+                        """
+                        {
+                          "sid": "22222222-2222-2222-2222-222222222222",
+                          "started": "2026-01-01T00:00:00Z",
+                          "status": "ok",
+                          "attrs": {}
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        )
+
+        coVerify(exactly = 0) { eventRepository.insertSessions(any()) }
+    }
+
+    @Test
+    fun `processEnvelope normalizes session defaults and error statuses`() = runBlocking {
+        val rowsSlot = slot<List<SessionInsertData>>()
+        coEvery { eventRepository.insertSessions(capture(rowsSlot)) } returns true
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "sess-defaults",
+                items = listOf(
+                    EnvelopeItem(
+                        "session",
+                        """
+                        {
+                          "sid": "33333333-3333-3333-3333-333333333333",
+                          "timestamp": "2026-01-01T00:00:01Z",
+                          "duration": -2.0,
+                          "status": "errored",
+                          "errors": -1,
+                          "attrs": {
+                            "release": "1.1.0"
+                          }
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        )
+
+        val row = rowsSlot.captured.single()
+        assertEquals("33333333-3333-3333-3333-333333333333", row.sessionId)
+        assertEquals(0.0, row.durationMs)
+        assertEquals("abnormal", row.status)
+        assertEquals(1, row.errors)
+        assertEquals("1.1.0", row.release)
+        assertEquals("production", row.environment)
+        assertEquals("", row.userId)
+    }
+
+    @Test
+    fun `processEnvelope skips session inserts for invalid project`() = runBlocking {
+        eventService.processEnvelope(
+            0L,
+            SentryEnvelope(
+                eventId = "sess-invalid-project",
+                items = listOf(
+                    EnvelopeItem(
+                        "session",
+                        """
+                        {
+                          "sid": "44444444-4444-4444-4444-444444444444",
+                          "started": "2026-01-01T00:00:00Z",
+                          "attrs": {
+                            "release": "1.2.0"
+                          }
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        )
+
+        coVerify(exactly = 0) { eventRepository.insertSessions(any()) }
+    }
+
+    @Test
+    fun `processEnvelope handles session repository failures`() = runBlocking {
+        coEvery { eventRepository.insertSessions(any()) } throws IllegalStateException("clickhouse down")
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "sess-insert-failure",
+                items = listOf(
+                    EnvelopeItem(
+                        "session",
+                        """
+                        {
+                          "sid": "55555555-5555-5555-5555-555555555555",
+                          "started": "2026-01-01T00:00:00Z",
+                          "attrs": {
+                            "release": "1.3.0"
+                          }
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        )
+
+        verify(exactly = 0) { releaseService.upsertReleaseFromEvent(any(), any(), any()) }
+    }
+
+    @Test
+    fun `processEnvelope stores session when release upsert fails`() = runBlocking {
+        val rowsSlot = slot<List<SessionInsertData>>()
+        coEvery { eventRepository.insertSessions(capture(rowsSlot)) } returns true
+        every {
+            releaseService.upsertReleaseFromEvent(testProjectId, "warn-release", any())
+        } throws IllegalStateException("release write failed")
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "sess-release-failure",
+                items = listOf(
+                    EnvelopeItem(
+                        "session",
+                        """
+                        {
+                          "sid": "66666666-6666-6666-6666-666666666666",
+                          "started": "2026-01-01T00:00:00Z",
+                          "attrs": {
+                            "release": "warn-release"
+                          }
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        )
+
+        assertEquals("warn-release", rowsSlot.captured.single().release)
+    }
+
+    @Test
     fun `processEnvelope persists session aggregate items`() = runBlocking {
         val rowsSlot = slot<List<SessionInsertData>>()
         coEvery { eventRepository.insertSessions(capture(rowsSlot)) } returns true
@@ -526,6 +676,77 @@ class EventServiceCoverageTest {
         assertEquals(1, rows.count { it.status == "crashed" && it.errors == 1 })
         assertTrue(rows.all { it.release == "2.0.0" })
         assertTrue(rows.all { it.environment == "production" })
+    }
+
+    @Test
+    fun `processEnvelope persists all session aggregate statuses`() = runBlocking {
+        val rowsSlot = slot<List<SessionInsertData>>()
+        coEvery { eventRepository.insertSessions(capture(rowsSlot)) } returns true
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "sess-aggregate-statuses",
+                items = listOf(
+                    EnvelopeItem(
+                        "sessions",
+                        """
+                        {
+                          "aggregates": [
+                            {
+                              "started": "2026-01-01T00:00:00Z",
+                              "exited": -1,
+                              "errored": 1,
+                              "abnormal": 1,
+                              "ok": 1,
+                              "did": "device-1",
+                              "attrs": {
+                                "release": "3.0.0"
+                              }
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        )
+
+        val rows = rowsSlot.captured
+        assertEquals(3, rows.size)
+        assertEquals(2, rows.count { it.status == "abnormal" && it.errors == 1 })
+        assertEquals(1, rows.count { it.status == "ok" && it.errors == 0 })
+        assertTrue(rows.all { it.release == "3.0.0" })
+        assertTrue(rows.all { it.environment == "production" })
+        assertTrue(rows.all { it.userId == "device-1" })
+    }
+
+    @Test
+    fun `processEnvelope ignores empty session aggregate rows`() = runBlocking {
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "sess-aggregate-no-release",
+                items = listOf(
+                    EnvelopeItem(
+                        "sessions",
+                        """
+                        {
+                          "aggregates": [
+                            {
+                              "started": "2026-01-01T00:00:00Z",
+                              "exited": 1,
+                              "attrs": {}
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        )
+
+        coVerify(exactly = 0) { eventRepository.insertSessions(any()) }
     }
 
     @Test
