@@ -42,6 +42,7 @@ export interface WorkflowResponse {
   trigger_name: string
   enabled: boolean
   version: number
+  system_key?: string | null
   conditions: WorkflowConditionConfig[]
   steps: WorkflowStepConfig[]
   once_for_template: string[]

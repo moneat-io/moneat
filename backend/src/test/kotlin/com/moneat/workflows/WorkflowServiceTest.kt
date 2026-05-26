@@ -226,7 +226,17 @@ class WorkflowServiceTest {
         assertTrue(firstOrgWorkflows.all { it.enabled && it.version == 1 })
         assertTrue(firstOrgWorkflows.any { it.triggerName == "alert.triggered" })
         assertTrue(firstOrgWorkflows.any { it.triggerName == "alert.resolved" })
+        assertEquals(
+            setOf("default_alert_notifications", "default_recovery_notifications"),
+            firstOrgWorkflows.mapNotNull { it.systemKey }.toSet()
+        )
         assertEquals(3, firstOrgWorkflows.first { it.triggerName == "alert.triggered" }.steps.size)
+        assertFailsWith<IllegalArgumentException> {
+            service.updateWorkflow(orgId, firstOrgWorkflows.first().id, UpdateWorkflowRequest(name = "Edited default"))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.deleteWorkflow(orgId, firstOrgWorkflows.first().id)
+        }
         assertEquals(2L, transaction { Workflows.selectAll().where { Workflows.organizationId eq orgId }.count() })
     }
 
@@ -406,9 +416,9 @@ class WorkflowServiceTest {
 
             service.publishAlertTriggered(alertEvent())
             val runsAfterRepeat = service.listRuns(orgId, workflow.id)
-            assertEquals(2, runsAfterRepeat.size)
-            assertEquals(setOf("complete", "pending"), runsAfterRepeat.map { it.status }.toSet())
-            assertEquals(2L, service.getWorkflow(orgId, workflow.id)?.runCount)
+            assertEquals(1, runsAfterRepeat.size)
+            assertEquals("complete", runsAfterRepeat.single().status)
+            assertEquals(1L, service.getWorkflow(orgId, workflow.id)?.runCount)
         }
 
     @Test
@@ -450,6 +460,41 @@ class WorkflowServiceTest {
             }
             coVerify(exactly = 0) {
                 discordService.sendWorkflowMessage(any(), any(), any(), any())
+            }
+        }
+
+    @Test
+    fun `failed notification steps do not block remaining workflow steps`() =
+        runBlocking {
+            every {
+                emailService.sendEmail(any(), any(), any(), any(), any())
+            } throws IllegalStateException("smtp down")
+            val workflow =
+                service.createWorkflow(
+                    orgId,
+                    validRequest(
+                        name = "Parallel notification workflow",
+                        steps = listOf(emailStep(), slackStep(), discordStep())
+                    )
+                )
+
+            service.publishAlertTriggered(alertEvent())
+            val queuedRun = service.listRuns(orgId, workflow.id).single()
+
+            service.executeRun(queuedRun.id)
+
+            val failedRun = service.listRuns(orgId, workflow.id).single()
+            val progressByStep = failedRun.progress.associateBy { it.step }
+            assertEquals("failed", failedRun.status)
+            assertEquals("smtp down", failedRun.errorMessage)
+            assertEquals("failed", progressByStep["notification.email_org"]?.status)
+            assertEquals("complete", progressByStep["notification.slack"]?.status)
+            assertEquals("complete", progressByStep["notification.discord"]?.status)
+            coVerify(exactly = 1) {
+                slackService.sendWorkflowMessage(orgId, any(), true)
+            }
+            coVerify(exactly = 1) {
+                discordService.sendWorkflowMessage(orgId, any(), any(), true)
             }
         }
 

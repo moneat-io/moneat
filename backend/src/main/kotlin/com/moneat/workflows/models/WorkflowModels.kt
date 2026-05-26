@@ -107,6 +107,7 @@ data class WorkflowResponse(
     @SerialName("trigger_name") val triggerName: String,
     val enabled: Boolean,
     val version: Int,
+    @SerialName("system_key") val systemKey: String? = null,
     val conditions: List<WorkflowConditionConfig>,
     val steps: List<WorkflowStepConfig>,
     @SerialName("once_for_template") val onceForTemplate: List<String>,

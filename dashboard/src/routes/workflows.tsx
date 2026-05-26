@@ -87,6 +87,10 @@ interface WorkflowFormState {
 
 type WorkflowEditorPanel = 'trigger' | 'conditions' | 'delay' | `step:${number}`
 
+function isDefaultWorkflow(workflow: WorkflowResponse): boolean {
+  return Boolean(workflow.system_key)
+}
+
 const defaultMessage = [
   '{{alert.title}}',
   '',
@@ -505,6 +509,7 @@ function WorkflowDetail({
 }) {
   if (!workflow) return null
   const trigger = triggerByName(catalog, workflow.trigger_name)
+  const defaultWorkflow = isDefaultWorkflow(workflow)
   return (
     <div className="space-y-3">
       <div className="rounded-lg border bg-background">
@@ -515,24 +520,27 @@ function WorkflowDetail({
               <Badge variant={workflow.enabled ? 'default' : 'secondary'}>
                 {workflow.enabled ? 'Enabled' : 'Paused'}
               </Badge>
+              {defaultWorkflow && <Badge variant="outline">Default</Badge>}
             </div>
             <p className="mt-1 text-sm text-muted-foreground">{trigger?.description ?? workflow.trigger_name}</p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => onEdit(workflow)}>
-              Edit
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={deletePending}
-              onClick={() => onDelete(workflow)}
-              className="gap-1.5 text-destructive hover:text-destructive"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Delete
-            </Button>
-          </div>
+          {!defaultWorkflow && (
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => onEdit(workflow)}>
+                Edit
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={deletePending}
+                onClick={() => onDelete(workflow)}
+                className="gap-1.5 text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
+              </Button>
+            </div>
+          )}
         </div>
 
         <div className="grid gap-4 p-4 lg:grid-cols-2">

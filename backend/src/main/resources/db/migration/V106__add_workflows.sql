@@ -51,8 +51,7 @@ CREATE TABLE workflow_runs (
 );
 
 CREATE UNIQUE INDEX idx_workflow_runs_idempotency_key
-    ON workflow_runs (workflow_id, once_for)
-    WHERE status IN ('pending', 'running');
+    ON workflow_runs (workflow_id, once_for);
 
 CREATE INDEX idx_workflow_runs_workflow_created
     ON workflow_runs (workflow_id, created_at DESC);

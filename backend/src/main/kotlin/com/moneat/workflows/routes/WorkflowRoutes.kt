@@ -106,12 +106,18 @@ fun Route.workflowRoutes() {
                     HttpStatusCode.BadRequest,
                     ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
                 )
-                val deleted = workflowService.deleteWorkflow(organizationId, workflowId)
-                if (deleted) {
-                    call.respond(HttpStatusCode.NoContent)
-                } else {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse(WORKFLOW_NOT_FOUND_MESSAGE))
-                }
+                suspendRunCatching {
+                    workflowService.deleteWorkflow(organizationId, workflowId)
+                }.fold(
+                    onSuccess = { deleted ->
+                        if (deleted) {
+                            call.respond(HttpStatusCode.NoContent)
+                        } else {
+                            call.respond(HttpStatusCode.NotFound, ErrorResponse(WORKFLOW_NOT_FOUND_MESSAGE))
+                        }
+                    },
+                    onFailure = { error -> respondWorkflowError(error) }
+                )
             }
 
             get("$WORKFLOW_ID_ROUTE/runs") {

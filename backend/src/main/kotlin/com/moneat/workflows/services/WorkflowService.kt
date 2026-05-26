@@ -40,6 +40,10 @@ import com.moneat.workflows.models.WorkflowStepConfig
 import com.moneat.workflows.models.WorkflowTriggerEvent
 import com.moneat.workflows.models.WorkflowVersions
 import com.moneat.workflows.models.Workflows
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -51,7 +55,6 @@ import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.Query
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
@@ -87,7 +90,7 @@ private const val DISCORD_STEP = "notification.discord"
 private const val SKIP_IF_UNCONFIGURED_PARAM = "skip_if_unconfigured"
 private const val ALERT_SOURCE_TEMPLATE_LINE = "Source: {{alert.source}}\n"
 private const val ALERT_URL_TEMPLATE = "{{alert.url}}"
-private val ACTIVE_WORKFLOW_RUN_STATUSES = listOf("pending", "running")
+private const val DEFAULT_WORKFLOW_READ_ONLY_MESSAGE = "Default workflows cannot be modified"
 private val ALERT_CHANNEL_REFERENCES =
     setOf(ALERT_CHANNEL_EMAIL_REFERENCE, ALERT_CHANNEL_SLACK_REFERENCE, ALERT_CHANNEL_DISCORD_REFERENCE)
 
@@ -220,6 +223,7 @@ class WorkflowService(
                     .selectAll()
                     .where { (Workflows.id eq workflowId) and (Workflows.organizationId eq organizationId) }
                     .firstOrNull() ?: return@transaction
+            require(workflowRow[Workflows.systemKey] == null) { DEFAULT_WORKFLOW_READ_ONLY_MESSAGE }
             val currentVersion = latestVersion(workflowId) ?: return@transaction
             val triggerName = workflowRow[Workflows.triggerName]
             val conditions = request.conditions ?: currentVersion.conditions
@@ -256,12 +260,24 @@ class WorkflowService(
     fun deleteWorkflow(
         organizationId: Int,
         workflowId: Int
-    ): Boolean =
-        transaction {
+    ): Boolean {
+        val shouldDelete =
+            transaction {
+                val workflowRow =
+                    Workflows
+                        .selectAll()
+                        .where { (Workflows.id eq workflowId) and (Workflows.organizationId eq organizationId) }
+                        .firstOrNull() ?: return@transaction false
+                require(workflowRow[Workflows.systemKey] == null) { DEFAULT_WORKFLOW_READ_ONLY_MESSAGE }
+                true
+            }
+        if (!shouldDelete) return false
+        return transaction {
             Workflows.deleteWhere {
                 (Workflows.id eq workflowId) and (Workflows.organizationId eq organizationId)
             } > 0
         }
+    }
 
     fun listRuns(
         organizationId: Int,
@@ -363,41 +379,44 @@ class WorkflowService(
         var progress = initialProgress
         updateRunProgress(runId, "running", progress)
 
-        for ((index, step) in loaded.version.steps.withIndex()) {
-            val existing = progress.getOrNull(index)
-            if (existing?.status == "complete") continue
+        val stepResults =
+            coroutineScope {
+                loaded.version.steps.mapIndexed { index, step ->
+                    async(Dispatchers.IO) {
+                        val existing = progress.getOrNull(index)
+                        if (existing?.status == "complete") return@async index to existing
 
-            val result =
-                suspendRunCatching {
-                    executeStep(
-                        organizationId = loaded.organizationId,
-                        step = step,
-                        scope = loaded.scope
-                    )
+                        val result =
+                            suspendRunCatching {
+                                executeStep(
+                                    organizationId = loaded.organizationId,
+                                    step = step,
+                                    scope = loaded.scope
+                                )
+                            }
+                        val now = Clock.System.now().toString()
+                        index to result.fold(
+                            onSuccess = {
+                                WorkflowRunStepProgress(step = step.name, status = "complete", completedAt = now)
+                            },
+                            onFailure = { error ->
+                                WorkflowRunStepProgress(
+                                    step = step.name,
+                                    status = "failed",
+                                    completedAt = now,
+                                    errorMessage = error.message ?: "Unknown workflow step error"
+                                )
+                            }
+                        )
+                    }
                 }
-            val now = Clock.System.now().toString()
-            progress =
-                progress.updateAt(index) {
-                    result.fold(
-                        onSuccess = {
-                            WorkflowRunStepProgress(step = step.name, status = "complete", completedAt = now)
-                        },
-                        onFailure = { error ->
-                            WorkflowRunStepProgress(
-                                step = step.name,
-                                status = "failed",
-                                completedAt = now,
-                                errorMessage = error.message ?: "Unknown workflow step error"
-                            )
-                        }
-                    )
-                }
+            }.awaitAll()
 
-            result.exceptionOrNull()?.let { error ->
-                markRunFailed(runId, progress, error.message ?: "Unknown workflow step error")
-                return
-            }
-            updateRunProgress(runId, "running", progress)
+        progress = progress.updateFrom(stepResults)
+        val failedStep = progress.firstOrNull { it.status == "failed" }
+        if (failedStep != null) {
+            markRunFailed(runId, progress, failedStep.errorMessage ?: "Unknown workflow step error")
+            return
         }
 
         markRunComplete(runId, progress)
@@ -409,7 +428,7 @@ class WorkflowService(
         onceFor: String
     ): Int? =
         transaction {
-            if (activeRunExists(candidate.workflowId, onceFor)) return@transaction null
+            if (workflowRunExists(candidate.workflowId, onceFor)) return@transaction null
             try {
                 WorkflowRuns.insertAndGetId {
                     it[workflowId] = candidate.workflowId
@@ -432,7 +451,7 @@ class WorkflowService(
             }
         }
 
-    private fun activeRunExists(
+    private fun workflowRunExists(
         workflowId: Int,
         onceFor: String
     ): Boolean =
@@ -440,8 +459,7 @@ class WorkflowService(
             .selectAll()
             .where {
                 (WorkflowRuns.workflowId eq workflowId) and
-                    (WorkflowRuns.onceFor eq onceFor) and
-                    (WorkflowRuns.status inList ACTIVE_WORKFLOW_RUN_STATUSES)
+                    (WorkflowRuns.onceFor eq onceFor)
             }.count() > 0
 
     private suspend fun enqueueRun(runId: Int) {
@@ -745,6 +763,7 @@ class WorkflowService(
             triggerName = row[Workflows.triggerName],
             enabled = row[Workflows.enabled],
             version = version.version,
+            systemKey = row[Workflows.systemKey],
             conditions = version.conditions,
             steps = version.steps,
             onceForTemplate = version.onceForTemplate,
@@ -964,13 +983,12 @@ private data class ExecutableWorkflowRun(
     val scope: Map<String, String>
 )
 
-private fun List<WorkflowRunStepProgress>.updateAt(
-    index: Int,
-    replacement: (WorkflowRunStepProgress?) -> WorkflowRunStepProgress
-): List<WorkflowRunStepProgress> =
-    mapIndexed { itemIndex, item ->
-        if (itemIndex == index) replacement(item) else item
-    }
+private fun List<WorkflowRunStepProgress>.updateFrom(
+    replacements: List<Pair<Int, WorkflowRunStepProgress>>
+): List<WorkflowRunStepProgress> {
+    val byIndex = replacements.toMap()
+    return mapIndexed { index, item -> byIndex[index] ?: item }
+}
 
 private fun interpolate(
     template: String,

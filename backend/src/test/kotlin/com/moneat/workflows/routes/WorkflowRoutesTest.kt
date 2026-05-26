@@ -71,6 +71,7 @@ class WorkflowRoutesTest {
     private val json = Json { encodeDefaults = true }
     private lateinit var workflowService: WorkflowService
     private var userId: Int = 0
+    private var memberUserId: Int = 0
     private var organizationId: Int = 0
 
     @BeforeTest
@@ -84,8 +85,10 @@ class WorkflowRoutesTest {
         TransactionManager.defaultDatabase = db
         TestDatabaseHelper.resetSchema(Users, Organizations, Memberships)
         userId = seedUser("owner@workflow-routes.test")
+        memberUserId = seedUser("member@workflow-routes.test")
         organizationId = seedOrganization(ORGANIZATION_NAME)
-        seedMembership(organizationId, userId)
+        seedMembership(organizationId, userId, "owner")
+        seedMembership(organizationId, memberUserId, "member")
 
         stopTestKoin()
         workflowService = mockk()
@@ -130,6 +133,21 @@ class WorkflowRoutesTest {
             }
 
             assertEquals(HttpStatusCode.Forbidden, response.status)
+        }
+
+    @Test
+    fun `list route allows organization member workflows`() =
+        testApplication {
+            setupApp()
+            val memberToken = RouteTestSupport.createToken(userId = memberUserId, orgId = organizationId)
+            every { workflowService.listWorkflows(organizationId) } returns listOf(workflowResponse())
+
+            val list = client.get("/v1/workflows") {
+                withAuth(memberToken)
+            }
+
+            assertEquals(HttpStatusCode.OK, list.status)
+            assertTrue(list.bodyAsText().contains("Route workflow"))
         }
 
     @Test
@@ -252,6 +270,9 @@ class WorkflowRoutesTest {
             setupApp()
             every { workflowService.deleteWorkflow(organizationId, WORKFLOW_ID) } returns true
             every { workflowService.deleteWorkflow(organizationId, WORKFLOW_ID + 1) } returns false
+            every {
+                workflowService.deleteWorkflow(organizationId, WORKFLOW_ID + 2)
+            } throws IllegalArgumentException("Default workflows cannot be modified")
 
             val invalidId = client.delete("/v1/workflows/nope") {
                 withAuth(token())
@@ -262,10 +283,15 @@ class WorkflowRoutesTest {
             val deleted = client.delete("/v1/workflows/$WORKFLOW_ID") {
                 withAuth(token())
             }
+            val defaultWorkflow = client.delete("/v1/workflows/${WORKFLOW_ID + 2}") {
+                withAuth(token())
+            }
 
             assertEquals(HttpStatusCode.BadRequest, invalidId.status)
             assertEquals(HttpStatusCode.NotFound, missing.status)
             assertEquals(HttpStatusCode.NoContent, deleted.status)
+            assertEquals(HttpStatusCode.BadRequest, defaultWorkflow.status)
+            assertTrue(defaultWorkflow.bodyAsText().contains("Default workflows cannot be modified"))
         }
 
     @Test
@@ -330,13 +356,14 @@ class WorkflowRoutesTest {
 
     private fun seedMembership(
         orgId: Int,
-        memberUserId: Int
+        memberUserId: Int,
+        role: String
     ) {
         transaction {
             Memberships.insert {
                 it[organization_id] = orgId
                 it[user_id] = memberUserId
-                it[role] = "owner"
+                it[Memberships.role] = role
             }
         }
     }
