@@ -33,6 +33,8 @@ import kotlinx.serialization.json.decodeFromJsonElement
 
 private val featureFlagService = FeatureFlagService()
 private val featureFlagValueTypes = FeatureFlagValueType.entries.map { it.name }
+private const val TAGS_ARRAY_ERROR = "tags must be an array of strings"
+private const val VARIANTS_ARRAY_ERROR = "variants must be an array of objects with key and value"
 
 class ListFeatureFlagsTool(
     private val service: FeatureFlagService = featureFlagService,
@@ -150,12 +152,12 @@ private fun JsonObject.booleanArg(name: String): ParseResult<Boolean> {
 
 private fun JsonObject.tagsArg(): ParseResult<List<String>> {
     val value = this["tags"] ?: return ParseResult.Success(emptyList())
-    val tags = value as? JsonArray ?: return ParseResult.Failure("tags must be an array of strings")
+    val tags = value as? JsonArray ?: return ParseResult.Failure(TAGS_ARRAY_ERROR)
     return ParseResult.Success(
         tags.mapNotNull { element ->
             val primitive = element as? JsonPrimitive
-                ?: return ParseResult.Failure("tags must be an array of strings")
-            if (!primitive.isString) return ParseResult.Failure("tags must be an array of strings")
+                ?: return ParseResult.Failure(TAGS_ARRAY_ERROR)
+            if (!primitive.isString) return ParseResult.Failure(TAGS_ARRAY_ERROR)
             primitive.content.trim().takeIf { it.isNotEmpty() }
         }
     )
@@ -164,14 +166,14 @@ private fun JsonObject.tagsArg(): ParseResult<List<String>> {
 private fun JsonObject.variantsArg(): ParseResult<List<FeatureFlagVariantRequest>> {
     val value = this["variants"] ?: return ParseResult.Failure("variants is required")
     if (value !is JsonArray) {
-        return ParseResult.Failure("variants must be an array of objects with key and value")
+        return ParseResult.Failure(VARIANTS_ARRAY_ERROR)
     }
     return try {
         ParseResult.Success(toolJson.decodeFromJsonElement(value))
     } catch (e: SerializationException) {
-        ParseResult.Failure("variants must be an array of objects with key and value")
+        ParseResult.Failure(VARIANTS_ARRAY_ERROR)
     } catch (e: IllegalArgumentException) {
-        ParseResult.Failure("variants must be an array of objects with key and value")
+        ParseResult.Failure(VARIANTS_ARRAY_ERROR)
     }
 }
 

@@ -60,6 +60,8 @@ private const val DEFAULT_AUDIT_LIMIT = 50
 private const val MAX_AUDIT_LIMIT = 100
 private const val DEFAULT_ANALYTICS_HOURS = 24
 private const val MICROSECONDS_PER_MILLISECOND = 1_000.0
+private const val FLAG_KEY_PATH = "/{flagKey}"
+private const val FEATURE_FLAG_NOT_FOUND = "Feature flag not found"
 
 fun Route.featureFlagRoutes(
     featureFlagService: FeatureFlagService = GlobalContext.get().get(),
@@ -73,124 +75,145 @@ fun Route.featureFlagRoutes(
 private fun Route.managementFeatureFlagRoutes(featureFlagService: FeatureFlagService) {
     route("/v1/feature-flags") {
         authenticate("auth-jwt") {
-            get("/environments") {
-                val orgId = call.orgId()
-                call.respond(mapOf("environments" to featureFlagService.listEnvironments(orgId)))
-            }
+            environmentManagementRoutes(featureFlagService)
+            segmentManagementRoutes(featureFlagService)
+            sdkKeyManagementRoutes(featureFlagService)
+            featureFlagAuditRoutes(featureFlagService)
+            featureFlagAnalyticsRoutes(featureFlagService)
+            flagManagementRoutes(featureFlagService)
+        }
+    }
+}
 
-            post("/environments") {
-                call.respondHandlingBadRequest {
-                    val request = call.receive<CreateFeatureFlagEnvironmentRequest>()
-                    val response = featureFlagService.createEnvironment(call.orgId(), call.userId(), request)
-                    call.respond(HttpStatusCode.Created, response)
-                }
-            }
+private fun Route.environmentManagementRoutes(featureFlagService: FeatureFlagService) {
+    get("/environments") {
+        val orgId = call.orgId()
+        call.respond(mapOf("environments" to featureFlagService.listEnvironments(orgId)))
+    }
 
-            get("/segments") {
-                call.respond(mapOf("segments" to featureFlagService.listSegments(call.orgId())))
-            }
+    post("/environments") {
+        call.respondHandlingBadRequest {
+            val request = call.receive<CreateFeatureFlagEnvironmentRequest>()
+            val response = featureFlagService.createEnvironment(call.orgId(), call.userId(), request)
+            call.respond(HttpStatusCode.Created, response)
+        }
+    }
+}
 
-            post("/segments") {
-                call.respondHandlingBadRequest {
-                    val request = call.receive<FeatureFlagSegmentRequest>()
-                    val response = featureFlagService.upsertSegment(call.orgId(), call.userId(), request)
-                    call.respond(HttpStatusCode.OK, response)
-                }
-            }
+private fun Route.segmentManagementRoutes(featureFlagService: FeatureFlagService) {
+    get("/segments") {
+        call.respond(mapOf("segments" to featureFlagService.listSegments(call.orgId())))
+    }
 
-            delete("/segments/{key}") {
-                val key = call.parameters["key"].orEmpty()
-                val deleted = featureFlagService.deleteSegment(call.orgId(), call.userId(), key)
-                if (deleted) call.respond(HttpStatusCode.NoContent) else call.respondNotFound("Segment not found")
-            }
+    post("/segments") {
+        call.respondHandlingBadRequest {
+            val request = call.receive<FeatureFlagSegmentRequest>()
+            val response = featureFlagService.upsertSegment(call.orgId(), call.userId(), request)
+            call.respond(HttpStatusCode.OK, response)
+        }
+    }
 
-            get("/sdk-keys") {
-                call.respond(mapOf("keys" to featureFlagService.listSdkKeys(call.orgId())))
-            }
+    delete("/segments/{key}") {
+        val key = call.parameters["key"].orEmpty()
+        val deleted = featureFlagService.deleteSegment(call.orgId(), call.userId(), key)
+        if (deleted) call.respond(HttpStatusCode.NoContent) else call.respondNotFound("Segment not found")
+    }
+}
 
-            post("/sdk-keys") {
-                call.respondHandlingBadRequest {
-                    val request = call.receive<FeatureFlagSdkKeyRequest>()
-                    val response = featureFlagService.createSdkKey(call.orgId(), call.userId(), request)
-                    call.respond(HttpStatusCode.Created, response)
-                }
-            }
+private fun Route.sdkKeyManagementRoutes(featureFlagService: FeatureFlagService) {
+    get("/sdk-keys") {
+        call.respond(mapOf("keys" to featureFlagService.listSdkKeys(call.orgId())))
+    }
 
-            delete("/sdk-keys/{id}") {
-                val id = call.parameters["id"]?.toIntOrNull()
-                if (id == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid SDK key ID"))
-                    return@delete
-                }
-                val revoked = featureFlagService.revokeSdkKey(call.orgId(), call.userId(), id)
-                if (revoked) call.respond(HttpStatusCode.NoContent) else call.respondNotFound("SDK key not found")
-            }
+    post("/sdk-keys") {
+        call.respondHandlingBadRequest {
+            val request = call.receive<FeatureFlagSdkKeyRequest>()
+            val response = featureFlagService.createSdkKey(call.orgId(), call.userId(), request)
+            call.respond(HttpStatusCode.Created, response)
+        }
+    }
 
-            get("/audit") {
-                val limit = call.request.queryParameters["limit"]?.toIntOrNull()
-                    ?.coerceIn(1, MAX_AUDIT_LIMIT)
-                    ?: DEFAULT_AUDIT_LIMIT
-                call.respond(mapOf("events" to featureFlagService.listAuditEvents(call.orgId(), limit)))
-            }
+    delete("/sdk-keys/{id}") {
+        val id = call.parameters["id"]?.toIntOrNull()
+        if (id == null) {
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid SDK key ID"))
+            return@delete
+        }
+        val revoked = featureFlagService.revokeSdkKey(call.orgId(), call.userId(), id)
+        if (revoked) call.respond(HttpStatusCode.NoContent) else call.respondNotFound("SDK key not found")
+    }
+}
 
-            get("/analytics") {
-                val environment = call.request.queryParameters["environment"]
-                val hours = call.request.queryParameters["hours"]?.toIntOrNull() ?: DEFAULT_ANALYTICS_HOURS
-                call.respond(featureFlagService.analytics(call.orgId(), environment, hours))
-            }
+private fun Route.featureFlagAuditRoutes(featureFlagService: FeatureFlagService) {
+    get("/audit") {
+        val limit = call.request.queryParameters["limit"]?.toIntOrNull()
+            ?.coerceIn(1, MAX_AUDIT_LIMIT)
+            ?: DEFAULT_AUDIT_LIMIT
+        call.respond(mapOf("events" to featureFlagService.listAuditEvents(call.orgId(), limit)))
+    }
+}
 
-            get {
-                val environment = call.request.queryParameters["environment"]
-                call.respond(featureFlagService.listFlags(call.orgId(), environment))
-            }
+private fun Route.featureFlagAnalyticsRoutes(featureFlagService: FeatureFlagService) {
+    get("/analytics") {
+        val environment = call.request.queryParameters["environment"]
+        val hours = call.request.queryParameters["hours"]?.toIntOrNull() ?: DEFAULT_ANALYTICS_HOURS
+        call.respond(featureFlagService.analytics(call.orgId(), environment, hours))
+    }
+}
 
-            post {
-                call.respondHandlingBadRequest {
-                    val request = call.receive<CreateFeatureFlagRequest>()
-                    val response = featureFlagService.createFlag(call.orgId(), call.userId(), request)
-                    call.respond(HttpStatusCode.Created, response)
-                }
-            }
+private fun Route.flagManagementRoutes(featureFlagService: FeatureFlagService) {
+    get {
+        val environment = call.request.queryParameters["environment"]
+        call.respond(featureFlagService.listFlags(call.orgId(), environment))
+    }
 
-            get("/{flagKey}") {
+    post {
+        call.respondHandlingBadRequest {
+            val request = call.receive<CreateFeatureFlagRequest>()
+            val response = featureFlagService.createFlag(call.orgId(), call.userId(), request)
+            call.respond(HttpStatusCode.Created, response)
+        }
+    }
+
+    route(FLAG_KEY_PATH) {
+        get {
+            val flagKey = call.parameters["flagKey"].orEmpty()
+            val environment = call.request.queryParameters["environment"]
+            val flag = featureFlagService.getFlag(call.orgId(), flagKey, environment)
+            if (flag == null) call.respondNotFound(FEATURE_FLAG_NOT_FOUND) else call.respond(flag)
+        }
+
+        put {
+            call.respondHandlingBadRequest {
                 val flagKey = call.parameters["flagKey"].orEmpty()
-                val environment = call.request.queryParameters["environment"]
-                val flag = featureFlagService.getFlag(call.orgId(), flagKey, environment)
-                if (flag == null) call.respondNotFound("Feature flag not found") else call.respond(flag)
+                val request = call.receive<UpdateFeatureFlagRequest>()
+                val response = featureFlagService.updateFlag(call.orgId(), call.userId(), flagKey, request)
+                if (response == null) call.respondNotFound(FEATURE_FLAG_NOT_FOUND) else call.respond(response)
             }
+        }
 
-            put("/{flagKey}") {
-                call.respondHandlingBadRequest {
-                    val flagKey = call.parameters["flagKey"].orEmpty()
-                    val request = call.receive<UpdateFeatureFlagRequest>()
-                    val response = featureFlagService.updateFlag(call.orgId(), call.userId(), flagKey, request)
-                    if (response == null) call.respondNotFound("Feature flag not found") else call.respond(response)
-                }
-            }
+        delete {
+            val flagKey = call.parameters["flagKey"].orEmpty()
+            val deleted = featureFlagService.archiveFlag(call.orgId(), call.userId(), flagKey)
+            if (deleted) call.respond(HttpStatusCode.NoContent) else call.respondNotFound(FEATURE_FLAG_NOT_FOUND)
+        }
 
-            delete("/{flagKey}") {
+        put("/config/{environmentKey}") {
+            call.respondHandlingBadRequest {
                 val flagKey = call.parameters["flagKey"].orEmpty()
-                val deleted = featureFlagService.archiveFlag(call.orgId(), call.userId(), flagKey)
-                if (deleted) call.respond(HttpStatusCode.NoContent) else call.respondNotFound("Feature flag not found")
-            }
-
-            put("/{flagKey}/config/{environmentKey}") {
-                call.respondHandlingBadRequest {
-                    val flagKey = call.parameters["flagKey"].orEmpty()
-                    val environmentKey = call.parameters["environmentKey"].orEmpty()
-                    val request = call.receive<UpdateFeatureFlagConfigRequest>()
-                    val response = featureFlagService.updateConfig(
-                        organizationId = call.orgId(),
-                        actorUserId = call.userId(),
-                        flagKey = flagKey,
-                        environmentKey = environmentKey,
-                        request = request,
-                    )
-                    if (response == null) {
-                        call.respondNotFound("Feature flag config not found")
-                    } else {
-                        call.respond(response)
-                    }
+                val environmentKey = call.parameters["environmentKey"].orEmpty()
+                val request = call.receive<UpdateFeatureFlagConfigRequest>()
+                val response = featureFlagService.updateConfig(
+                    organizationId = call.orgId(),
+                    actorUserId = call.userId(),
+                    flagKey = flagKey,
+                    environmentKey = environmentKey,
+                    request = request,
+                )
+                if (response == null) {
+                    call.respondNotFound("Feature flag config not found")
+                } else {
+                    call.respond(response)
                 }
             }
         }

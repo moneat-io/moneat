@@ -79,6 +79,7 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Clock
+import kotlin.time.Instant
 
 private const val SERVER_KEY_PREFIX = "mffsk_"
 private const val CLIENT_KEY_PREFIX = "mffpk_"
@@ -92,6 +93,17 @@ private const val ETAG_HASH_LENGTH = 24
 private const val DEFAULT_RULES_JSON = """{"rules":[]}"""
 private val FEATURE_FLAG_KEY_REGEX = Regex("^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,254}$")
 private val ENVIRONMENT_KEY_REGEX = Regex("^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$")
+
+private data class FeatureFlagAuditRecord(
+    val organizationId: Int,
+    val environmentId: Int?,
+    val flagId: Int?,
+    val actorUserId: Int,
+    val eventType: String,
+    val before: String?,
+    val after: String?,
+    val now: Instant,
+)
 
 class FeatureFlagService {
     private val json = Json {
@@ -154,14 +166,16 @@ class FeatureFlagService {
                 }
 
             audit(
-                organizationId = organizationId,
-                environmentId = id,
-                flagId = null,
-                actorUserId = actorUserId,
-                eventType = "environment.created",
-                before = null,
-                after = json.encodeToString(request),
-                now = now
+                FeatureFlagAuditRecord(
+                    organizationId = organizationId,
+                    environmentId = id,
+                    flagId = null,
+                    actorUserId = actorUserId,
+                    eventType = "environment.created",
+                    before = null,
+                    after = json.encodeToString(request),
+                    now = now
+                )
             )
             environmentResponse(
                 checkNotNull(
@@ -236,14 +250,16 @@ class FeatureFlagService {
             }
 
             audit(
-                organizationId = organizationId,
-                environmentId = null,
-                flagId = flagId,
-                actorUserId = actorUserId,
-                eventType = "flag.created",
-                before = null,
-                after = json.encodeToString(request),
-                now = now
+                FeatureFlagAuditRecord(
+                    organizationId = organizationId,
+                    environmentId = null,
+                    flagId = flagId,
+                    actorUserId = actorUserId,
+                    eventType = "flag.created",
+                    before = null,
+                    after = json.encodeToString(request),
+                    now = now
+                )
             )
             flagResponse(loadFlagRow(organizationId, request.key), environments, null)
         }
@@ -304,14 +320,16 @@ class FeatureFlagService {
                 incrementEnvironmentVersionInTransaction(environment[FeatureFlagEnvironments.id], now)
             }
             audit(
-                organizationId = organizationId,
-                environmentId = null,
-                flagId = flagId,
-                actorUserId = actorUserId,
-                eventType = "flag.updated",
-                before = null,
-                after = json.encodeToString(request),
-                now = now
+                FeatureFlagAuditRecord(
+                    organizationId = organizationId,
+                    environmentId = null,
+                    flagId = flagId,
+                    actorUserId = actorUserId,
+                    eventType = "flag.updated",
+                    before = null,
+                    after = json.encodeToString(request),
+                    now = now
+                )
             )
             flagResponse(loadFlagRow(organizationId, flagKey), environments, null)
         }.also {
@@ -334,14 +352,16 @@ class FeatureFlagService {
                 incrementEnvironmentVersionInTransaction(environment[FeatureFlagEnvironments.id], now)
             }
             audit(
-                organizationId = organizationId,
-                environmentId = null,
-                flagId = flagRow[FeatureFlags.id],
-                actorUserId = actorUserId,
-                eventType = "flag.archived",
-                before = null,
-                after = "{\"key\":\"$flagKey\"}",
-                now = now
+                FeatureFlagAuditRecord(
+                    organizationId = organizationId,
+                    environmentId = null,
+                    flagId = flagRow[FeatureFlags.id],
+                    actorUserId = actorUserId,
+                    eventType = "flag.archived",
+                    before = null,
+                    after = "{\"key\":\"$flagKey\"}",
+                    now = now
+                )
             )
             updated > 0
         }
@@ -379,14 +399,16 @@ class FeatureFlagService {
             }
             incrementEnvironmentVersionInTransaction(environmentRow[FeatureFlagEnvironments.id], now)
             audit(
-                organizationId = organizationId,
-                environmentId = environmentRow[FeatureFlagEnvironments.id],
-                flagId = flagRow[FeatureFlags.id],
-                actorUserId = actorUserId,
-                eventType = "config.updated",
-                before = configSnapshotJson(configRow),
-                after = json.encodeToString(request),
-                now = now
+                FeatureFlagAuditRecord(
+                    organizationId = organizationId,
+                    environmentId = environmentRow[FeatureFlagEnvironments.id],
+                    flagId = flagRow[FeatureFlags.id],
+                    actorUserId = actorUserId,
+                    eventType = "config.updated",
+                    before = configSnapshotJson(configRow),
+                    after = json.encodeToString(request),
+                    now = now
+                )
             )
             val updatedRow =
                 checkNotNull(
@@ -458,14 +480,16 @@ class FeatureFlagService {
                 incrementEnvironmentVersionInTransaction(environment[FeatureFlagEnvironments.id], now)
             }
             audit(
-                organizationId = organizationId,
-                environmentId = null,
-                flagId = null,
-                actorUserId = actorUserId,
-                eventType = if (existing == null) "segment.created" else "segment.updated",
-                before = existing?.let(::segmentSnapshotJson),
-                after = json.encodeToString(request),
-                now = now
+                FeatureFlagAuditRecord(
+                    organizationId = organizationId,
+                    environmentId = null,
+                    flagId = null,
+                    actorUserId = actorUserId,
+                    eventType = if (existing == null) "segment.created" else "segment.updated",
+                    before = existing?.let(::segmentSnapshotJson),
+                    after = json.encodeToString(request),
+                    now = now
+                )
             )
             val segmentRow =
                 checkNotNull(
@@ -502,14 +526,16 @@ class FeatureFlagService {
                 incrementEnvironmentVersionInTransaction(environment[FeatureFlagEnvironments.id], now)
             }
             audit(
-                organizationId = organizationId,
-                environmentId = null,
-                flagId = null,
-                actorUserId = actorUserId,
-                eventType = "segment.archived",
-                before = segmentSnapshotJson(row),
-                after = null,
-                now = now
+                FeatureFlagAuditRecord(
+                    organizationId = organizationId,
+                    environmentId = null,
+                    flagId = null,
+                    actorUserId = actorUserId,
+                    eventType = "segment.archived",
+                    before = segmentSnapshotJson(row),
+                    after = null,
+                    now = now
+                )
             )
             true
         }
@@ -572,14 +598,16 @@ class FeatureFlagService {
                 it[isActive] = true
             }[FeatureFlagSdkKeys.id]
             audit(
-                organizationId = organizationId,
-                environmentId = environment[FeatureFlagEnvironments.id],
-                flagId = null,
-                actorUserId = actorUserId,
-                eventType = "sdk_key.created",
-                before = null,
-                after = json.encodeToString(request.copy(name = request.name.trim(), keyType = keyType)),
-                now = now
+                FeatureFlagAuditRecord(
+                    organizationId = organizationId,
+                    environmentId = environment[FeatureFlagEnvironments.id],
+                    flagId = null,
+                    actorUserId = actorUserId,
+                    eventType = "sdk_key.created",
+                    before = null,
+                    after = json.encodeToString(request.copy(name = request.name.trim(), keyType = keyType)),
+                    now = now
+                )
             )
             CreateFeatureFlagSdkKeyResponse(
                 id = id,
@@ -609,14 +637,16 @@ class FeatureFlagService {
                 it[revokedAt] = now
             }
             audit(
-                organizationId = organizationId,
-                environmentId = row[FeatureFlagSdkKeys.environmentId],
-                flagId = null,
-                actorUserId = actorUserId,
-                eventType = "sdk_key.revoked",
-                before = null,
-                after = "{\"keyPrefix\":\"${row[FeatureFlagSdkKeys.keyPrefix]}\"}",
-                now = now
+                FeatureFlagAuditRecord(
+                    organizationId = organizationId,
+                    environmentId = row[FeatureFlagSdkKeys.environmentId],
+                    flagId = null,
+                    actorUserId = actorUserId,
+                    eventType = "sdk_key.revoked",
+                    before = null,
+                    after = "{\"keyPrefix\":\"${row[FeatureFlagSdkKeys.keyPrefix]}\"}",
+                    now = now
+                )
             )
             true
         }
@@ -1048,25 +1078,16 @@ class FeatureFlagService {
         return digest.joinToString("") { "%02x".format(it) }
     }
 
-    private fun audit(
-        organizationId: Int,
-        environmentId: Int?,
-        flagId: Int?,
-        actorUserId: Int,
-        eventType: String,
-        before: String?,
-        after: String?,
-        now: kotlin.time.Instant,
-    ) {
+    private fun audit(record: FeatureFlagAuditRecord) {
         FeatureFlagAuditEvents.insert {
-            it[FeatureFlagAuditEvents.organizationId] = organizationId
-            it[FeatureFlagAuditEvents.environmentId] = environmentId
-            it[FeatureFlagAuditEvents.flagId] = flagId
-            it[FeatureFlagAuditEvents.actorUserId] = actorUserId
-            it[FeatureFlagAuditEvents.eventType] = eventType
-            it[beforeJson] = before
-            it[afterJson] = after
-            it[createdAt] = now
+            it[FeatureFlagAuditEvents.organizationId] = record.organizationId
+            it[FeatureFlagAuditEvents.environmentId] = record.environmentId
+            it[FeatureFlagAuditEvents.flagId] = record.flagId
+            it[FeatureFlagAuditEvents.actorUserId] = record.actorUserId
+            it[FeatureFlagAuditEvents.eventType] = record.eventType
+            it[beforeJson] = record.before
+            it[afterJson] = record.after
+            it[createdAt] = record.now
         }
     }
 
