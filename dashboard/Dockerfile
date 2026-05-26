@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1.22
-FROM node:24-alpine AS dashboard-build
+# Build artifacts are architecture-neutral, so keep the build stage on the native runner platform.
+FROM --platform=$BUILDPLATFORM node:24-alpine AS dashboard-build
 WORKDIR /app
 COPY dashboard/package.json dashboard/package-lock.json dashboard/.npmrc ./
 RUN --mount=type=cache,target=/root/.npm \
