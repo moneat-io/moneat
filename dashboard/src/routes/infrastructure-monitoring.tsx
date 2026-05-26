@@ -21,8 +21,10 @@ import {FeaturePageTemplate, type FeaturePageConfig} from '@/components/landing/
 const config: FeaturePageConfig = {
   slug: 'infrastructure-monitoring',
   title: 'Infrastructure Monitoring',
-  tagline: 'Datadog Agent compatible',
-  description: 'Monitor hosts, containers, Kubernetes clusters, and databases with real-time metrics. Point your existing Datadog Agent at Moneat and get full visibility without changing a line of code.',
+  tagline: 'Infrastructure telemetry',
+  description:
+    'Monitor hosts, containers, Kubernetes clusters, and databases with real-time infrastructure telemetry. ' +
+    'Point compatible agents at Moneat and get full visibility without changing your applications.',
   metaDescription: 'Infrastructure monitoring for hosts, containers, Kubernetes, and databases. Compatible with the Datadog Agent. Start free with Moneat.',
   icon: Server,
   iconColor: 'text-orange-400',
@@ -37,9 +39,18 @@ const config: FeaturePageConfig = {
     {icon: Network, title: 'Kubernetes', description: 'Cluster, node, pod, and deployment metrics with automatic discovery and labeling.', iconColor: 'text-cyan-400'},
     {icon: Database, title: 'Database Monitoring', description: 'Track query performance, connections, and resource usage for PostgreSQL, MySQL, and more.', iconColor: 'text-violet-400'},
     {icon: HardDrive, title: 'Process Monitoring', description: 'Track individual processes, resource consumption, and detect runaway processes.', iconColor: 'text-amber-400'},
-    {icon: Server, title: 'Custom Metrics', description: 'Send custom metrics via DogStatsD or the Datadog Agent and visualize them on dashboards.', iconColor: 'text-green-400'},
+    {
+      icon: Server,
+      title: 'Custom Metrics',
+      description:
+        'Send custom metrics via OpenTelemetry, DogStatsD, or compatible agents and visualize them ' +
+        'on dashboards.',
+      iconColor: 'text-green-400',
+    },
   ],
-  compatNote: 'Works with the Datadog Agent. Just point dd_url at your Moneat instance and all infrastructure data flows through.',
+  compatNote:
+    'Works with compatible agents, including the Datadog Agent. Point the intake URL at your Moneat instance ' +
+    'and infrastructure data flows through.',
 }
 
 export const Route = createFileRoute('/infrastructure-monitoring')({

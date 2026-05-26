@@ -8,7 +8,6 @@
 
 import {createFileRoute} from '@tanstack/react-router'
 import {ServiceMap} from '@/components/apm/ServiceMap'
-import {Badge} from '@/components/ui/badge'
 
 export const Route = createFileRoute('/performance/service-map')({
   component: PerformanceServiceMapPage,
@@ -20,10 +19,7 @@ function PerformanceServiceMapPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Service Map</h1>
         <p className="text-muted-foreground text-sm mt-0.5">
-          Service dependency graph from APM instrumentation
-          <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0 font-normal">
-            Datadog
-          </Badge>
+          Service dependency graph from trace telemetry
         </p>
       </div>
       <ServiceMap />

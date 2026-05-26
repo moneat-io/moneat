@@ -22,7 +22,9 @@ const config: FeaturePageConfig = {
   slug: 'profiling',
   title: 'Continuous Profiling',
   tagline: 'Pinpoint hot paths in production',
-  description: 'CPU, heap, and wall-time profiles from your Datadog Agent. Identify hot functions, memory leaks, and resource bottlenecks in production without any performance overhead.',
+  description:
+    'CPU, heap, and wall-time profiles from production telemetry. Identify hot functions, memory leaks, ' +
+    'and resource bottlenecks without adding application overhead.',
   metaDescription: 'Continuous profiling with CPU, heap, and wall-time flamegraphs. Pinpoint performance bottlenecks in production. Start free with Moneat.',
   icon: Flame,
   iconColor: 'text-red-400',
@@ -36,10 +38,17 @@ const config: FeaturePageConfig = {
     {icon: Cpu, title: 'CPU Profiling', description: 'Identify hot functions and optimize the code paths that consume the most CPU cycles.', iconColor: 'text-orange-400'},
     {icon: HardDrive, title: 'Heap Profiling', description: 'Track memory allocations and find memory leaks before they cause OOM kills.', iconColor: 'text-amber-400'},
     {icon: Clock, title: 'Wall-Time Profiles', description: 'Understand where time is spent including I/O waits, locks, and external calls.', iconColor: 'text-blue-400'},
-    {icon: Layers, title: 'Multi-Language', description: 'Support for Go, Java, Python, Ruby, Node.js, .NET, and PHP via the Datadog Agent.', iconColor: 'text-violet-400'},
+    {
+      icon: Layers,
+      title: 'Multi-Language',
+      description: 'Support for Go, Java, Python, Ruby, Node.js, .NET, and PHP via compatible profiling agents.',
+      iconColor: 'text-violet-400',
+    },
     {icon: Search, title: 'Compare Profiles', description: 'Diff profiles across deployments to see exactly what changed in your performance.', iconColor: 'text-cyan-400'},
   ],
-  compatNote: 'Profiles are collected via the Datadog Agent with near-zero overhead. Enable profiling with a single config flag.',
+  compatNote:
+    'Profiles are collected through compatible profiling agents with near-zero overhead. Enable profiling with a ' +
+    'single config flag.',
 }
 
 export const Route = createFileRoute('/profiling')({

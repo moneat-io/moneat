@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {Check, Copy, Loader2, Plus, Trash2, type LucideIcon} from 'lucide-react'
+import {BookOpen, Check, Copy, Loader2, Plus, Trash2, type LucideIcon} from 'lucide-react'
 import {type ReactNode, useState} from 'react'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {Button} from '@/components/ui/button'
@@ -45,7 +45,8 @@ export interface ApiKeyRow {
 export interface ApiKeysTabConfig<T extends ApiKeyRow> {
   readonly cardId: string
   readonly cardTitle: string
-  readonly cardDescription: string
+  readonly cardDescription: ReactNode
+  readonly docsHref: string
   readonly icon: LucideIcon
   readonly emptyTitle: string
   readonly emptyDescription: string
@@ -80,6 +81,7 @@ export function ApiKeysTabBase<T extends ApiKeyRow>(config: Readonly<ApiKeysTabC
     cardId,
     cardTitle,
     cardDescription,
+    docsHref,
     icon: Icon,
     emptyTitle,
     emptyDescription,
@@ -232,7 +234,7 @@ export function ApiKeysTabBase<T extends ApiKeyRow>(config: Readonly<ApiKeysTabC
   return (
     <>
       <Card id={cardId}>
-        <CardHeader className="flex flex-row items-start justify-between space-y-0 gap-4">
+        <CardHeader className="flex flex-col gap-4 space-y-0 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">
               <Icon className="h-5 w-5" />
@@ -240,10 +242,18 @@ export function ApiKeysTabBase<T extends ApiKeyRow>(config: Readonly<ApiKeysTabC
             </CardTitle>
             <CardDescription>{cardDescription}</CardDescription>
           </div>
-          <Button onClick={() => setCreateOpen(true)} disabled={!!createdKey}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Key
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" asChild>
+              <a href={docsHref} target="_blank" rel="noopener noreferrer">
+                <BookOpen className="h-4 w-4" />
+                Docs
+              </a>
+            </Button>
+            <Button onClick={() => setCreateOpen(true)} disabled={!!createdKey}>
+              <Plus className="h-4 w-4 mr-2" />
+              New Key
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>{keysBody}</CardContent>
       </Card>

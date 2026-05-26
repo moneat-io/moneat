@@ -148,7 +148,7 @@ function PerformanceTraceDetailPage() {
               <span className="text-muted-foreground font-normal mx-1">.</span>
               {rootSpan?.name}
             </h1>
-            <SourceBadge source={rootSpan?.source ?? 'datadog'} />
+            <SourceBadge source={rootSpan?.source ?? ''} />
             {rootSpan?.env && (
               <Badge variant="outline" className="text-xs">
                 {rootSpan.env}

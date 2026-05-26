@@ -39,7 +39,7 @@ const config: FeaturePageConfig = {
     {icon: Link2, title: 'Correlated Signals', description: 'Jump from a log line to the related error, trace, or replay in one click.', iconColor: 'text-sky-400'},
     {icon: FileText, title: 'Log-Based Alerts', description: 'Set up alerts based on log patterns, error rates, or missing heartbeat logs.', iconColor: 'text-amber-400'},
   ],
-  compatNote: 'Ingest logs from the Datadog Agent, Sentry SDKs, or any source that sends structured JSON over HTTP.',
+  compatNote: 'Ingest logs via OpenTelemetry, compatible agents, or any source that sends structured JSON over HTTP.',
 }
 
 export const Route = createFileRoute('/log-management')({

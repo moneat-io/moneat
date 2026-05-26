@@ -343,7 +343,7 @@ function ReplaysPage() {
               <div>
                 <h3 className="text-lg font-semibold mb-2">No replays yet</h3>
                 <p className="text-muted-foreground">
-                  Session replays are recorded when you enable the Sentry Replay integration in your SDK.
+                  Session replays are recorded when you enable replay capture in a compatible SDK.
                   Configure replays in your project setup to start capturing user sessions.
                 </p>
               </div>
