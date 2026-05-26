@@ -19,12 +19,34 @@
 const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
-const pixelmatch = require('pixelmatch');
+const pixelmatchModule = require('pixelmatch');
 const { PNG } = require('pngjs');
+const pixelmatch = pixelmatchModule.default || pixelmatchModule;
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
 const SCREENSHOTS_DIR = path.join(__dirname, '../dashboard/public/screenshots');
 const CONCURRENCY = parseInt(process.env.SCREENSHOT_CONCURRENCY || '8', 10);
+const SCREENSHOT_THEME = 'light';
+const THEME_CLASSES = [
+  'dark',
+  'theme-midnight',
+  'theme-forest',
+  'theme-sunset',
+  'theme-gamer',
+  'theme-retro',
+  'theme-retro-dark',
+  'theme-terminal',
+];
+const SCREENSHOT_LOCAL_STORAGE = {
+  theme: SCREENSHOT_THEME,
+  'screenshot-mode': 'true',
+  'beta-banner-dismissed-apm-traces': 'true',
+  'beta-banner-dismissed-profiles': 'true',
+  'beta-banner-dismissed-security': 'true',
+};
+const SCREENSHOT_SESSION_STORAGE = {
+  authenticated: 'true',
+};
 
 // Diff threshold: 0.1 = 10% of pixels can differ
 const DIFF_THRESHOLD = 0.001; // 0.1% threshold for considering images identical
@@ -70,6 +92,12 @@ function areImagesIdentical(existingPath, newBuffer) {
 }
 
 const VIEWPORT = { width: 1920, height: 1080 };
+const requestedScreenshotNames = new Set(
+  (process.env.SCREENSHOT_NAMES || '')
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean)
+);
 
 // Screenshot configurations: every navbar page + every tab
 // Names match page/tab labels for consistency
@@ -125,21 +153,25 @@ const SCREENSHOTS = [
   { name: 'escalation-policies', description: 'Escalation policies (alias)', path: '/on-call/escalation-policies', waitFor: 'text=Escalation Policies', viewport: VIEWPORT },
   {
     name: 'apm-traces',
-    description: 'APM trace detail',
-    navigate: async (page) => {
-      await page.goto(`${BASE_URL}/apm-traces`, { waitUntil: 'networkidle' });
-      await page.waitForTimeout(1500);
-      const link = page.locator('a[href^="/apm-traces/"]').first();
-      if ((await link.count()) > 0) {
-        await link.click();
-        await page.waitForLoadState('networkidle');
-        await page.waitForTimeout(2000);
-      }
-    },
-    waitFor: 'text=Trace',
+    description: 'APM traces list',
+    path: '/performance/traces',
+    waitFor: 'text=Total Traces',
     viewport: VIEWPORT,
   },
 ];
+
+const SELECTED_SCREENSHOTS = requestedScreenshotNames.size === 0
+  ? SCREENSHOTS
+  : SCREENSHOTS.filter((screenshot) => requestedScreenshotNames.has(screenshot.name));
+
+const missingScreenshotNames = [...requestedScreenshotNames].filter(
+  (name) => !SCREENSHOTS.some((screenshot) => screenshot.name === name)
+);
+
+if (missingScreenshotNames.length > 0) {
+  console.error(`❌ Unknown screenshot name(s): ${missingScreenshotNames.join(', ')}`);
+  process.exit(1);
+}
 
 async function login(page) {
   console.log('🔐 Logging in via demo route...');
@@ -158,10 +190,7 @@ async function login(page) {
     
     // Set localStorage flags to suppress banners in screenshots
     await page.evaluate(() => {
-      localStorage.setItem('screenshot-mode', 'true');
-      localStorage.setItem('beta-banner-dismissed-apm-traces', 'true');
-      localStorage.setItem('beta-banner-dismissed-profiles', 'true');
-      localStorage.setItem('beta-banner-dismissed-security', 'true');
+      window.__moneatApplyScreenshotPreferences();
     });
     console.log('🚫 Banners suppressed via localStorage');
   } catch (error) {
@@ -203,10 +232,7 @@ function createPagePool(pages) {
 async function suppressBanners(page) {
   try {
     await page.evaluate(() => {
-      localStorage.setItem('screenshot-mode', 'true');
-      localStorage.setItem('beta-banner-dismissed-apm-traces', 'true');
-      localStorage.setItem('beta-banner-dismissed-profiles', 'true');
-      localStorage.setItem('beta-banner-dismissed-security', 'true');
+      window.__moneatApplyScreenshotPreferences();
     });
   } catch {
     // Ignore if not on app origin yet
@@ -351,6 +377,24 @@ async function main() {
   const context = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
     deviceScaleFactor: 2, // retina 2× for sharp, readable screenshots
+    colorScheme: SCREENSHOT_THEME,
+  });
+
+  await context.addInitScript(({ localStorageEntries, sessionStorageEntries, themeClasses }) => {
+    window.__moneatApplyScreenshotPreferences = () => {
+      for (const [key, value] of Object.entries(localStorageEntries)) {
+        localStorage.setItem(key, value);
+      }
+      for (const [key, value] of Object.entries(sessionStorageEntries)) {
+        sessionStorage.setItem(key, value);
+      }
+      document.documentElement.classList.remove(...themeClasses);
+    };
+    window.__moneatApplyScreenshotPreferences();
+  }, {
+    localStorageEntries: SCREENSHOT_LOCAL_STORAGE,
+    sessionStorageEntries: SCREENSHOT_SESSION_STORAGE,
+    themeClasses: THEME_CLASSES,
   });
   
   const loginPage = await context.newPage();
@@ -368,7 +412,7 @@ async function main() {
     console.log('✅ Authentication verified\n');
 
     // Create page pool for parallel capture
-    const poolSize = Math.min(CONCURRENCY, SCREENSHOTS.length);
+    const poolSize = Math.min(CONCURRENCY, SELECTED_SCREENSHOTS.length);
     console.log(`📸 Starting parallel screenshot capture (${poolSize} concurrent pages)...\n`);
 
     const poolPages = await Promise.all(
@@ -384,10 +428,7 @@ async function main() {
         await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
         await page.evaluate(() => {
           sessionStorage.setItem('authenticated', 'true');
-          localStorage.setItem('screenshot-mode', 'true');
-          localStorage.setItem('beta-banner-dismissed-apm-traces', 'true');
-          localStorage.setItem('beta-banner-dismissed-profiles', 'true');
-          localStorage.setItem('beta-banner-dismissed-security', 'true');
+          window.__moneatApplyScreenshotPreferences();
         });
       })
     );
@@ -395,14 +436,16 @@ async function main() {
     // Run all screenshots in parallel (pool limits concurrency)
     const startTime = Date.now();
     const results = await Promise.all(
-      SCREENSHOTS.map((config) =>
+      SELECTED_SCREENSHOTS.map((config) =>
         pool.acquire().then((page) => takeScreenshot(page, config, pool))
       )
     );
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     const successCount = results.filter(Boolean).length;
 
-    console.log(`\n✅ Screenshot capture complete! ${successCount}/${SCREENSHOTS.length} successful (${elapsed}s)`);
+    console.log(
+      `\n✅ Screenshot capture complete! ${successCount}/${SELECTED_SCREENSHOTS.length} successful (${elapsed}s)`
+    );
     console.log(`\n📁 Screenshots saved to: ${SCREENSHOTS_DIR}`);
     console.log('\n💡 Next steps:');
     console.log('   1. Review the screenshots in dashboard/public/screenshots/');
