@@ -586,8 +586,9 @@ class BillingUsageInsightsService(
         rateCents: Int,
         divisor: Long
     ): Int {
-        if (!isFinitePositiveLimit(limit) || rateCents <= 0 || projected <= limit) return 0
-        return (((projected - limit) * rateCents) / divisor).toInt().coerceAtLeast(0)
+        if (!isFinitePositiveLimit(limit) || rateCents <= 0 || divisor <= 0 || projected <= limit) return 0
+        val cents = ((projected - limit) * rateCents.toLong()) / divisor
+        return cents.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
     }
 
     private fun riskLevel(

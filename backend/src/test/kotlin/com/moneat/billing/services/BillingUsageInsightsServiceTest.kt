@@ -181,6 +181,26 @@ class BillingUsageInsightsServiceTest {
         assertNull(service.getUsageInsightsSafely(1))
     }
 
+    @Test
+    fun `projected overage cents clamps before narrowing`() {
+        val service = BillingUsageInsightsService(
+            quotaService = quotaService,
+            usageTrackingService = usageTrackingService
+        )
+        val method = BillingUsageInsightsService::class.java.getDeclaredMethod(
+            "projectedOverageCents",
+            java.lang.Long.TYPE,
+            java.lang.Long.TYPE,
+            java.lang.Integer.TYPE,
+            java.lang.Long.TYPE
+        )
+        method.isAccessible = true
+
+        val result = method.invoke(service, 3_000_000_000L, 1L, 1, 1L)
+
+        assertEquals(Int.MAX_VALUE, result)
+    }
+
     // ──── Helpers ────
 
     private fun seedOrg(): Int = transaction {
