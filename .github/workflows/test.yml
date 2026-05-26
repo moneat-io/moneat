@@ -152,10 +152,24 @@ jobs:
         working-directory: backend
         run: ./gradlew testClasses integrationTestClasses --no-daemon
 
+      - name: Resolve Sonar project version
+        id: sonar-version
+        run: |
+          set -euo pipefail
+
+          version="$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)"
+          if [[ -z "$version" ]]; then
+            version="0.0.0-${GITHUB_SHA::12}"
+          fi
+
+          echo "version=${version#v}" >> "$GITHUB_OUTPUT"
+
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v6
         with:
           projectBaseDir: backend
+          args: >
+            -Dsonar.projectVersion=${{ steps.sonar-version.outputs.version }}
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonar.moneat.io
