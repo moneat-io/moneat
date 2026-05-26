@@ -44,6 +44,7 @@ import {
     Globe,
     Home,
     LayoutDashboard,
+    LineChart,
     LogOut,
     MessageSquare,
     Package,
@@ -289,6 +290,14 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
       requiresProject: false,
       group: 'insights',
     },
+    {
+      key: 'usage-insights',
+      icon: LineChart,
+      label: 'Usage Insights',
+      href: '/usage-insights',
+      requiresProject: false,
+      group: 'insights',
+    },
     { key: 'replays', icon: Play, label: 'Replays', href: '/replays', requiresProject: false, group: 'insights' },
     { key: 'feedback', icon: MessageSquare, label: 'Feedback', href: '/feedback', requiresProject: false, group: 'insights' },
     { key: 'releases', icon: Package, label: 'Releases', href: '/releases', requiresProject: false, group: 'insights' },
@@ -303,6 +312,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
   ]
 
   const navItems = baseNavItems.filter(item => {
+    if (item.key === 'usage-insights' && features?.selfHost === true) return false
     return isSidebarItemVisible(item.key, user?.sidebarHiddenItems || [])
   })
 

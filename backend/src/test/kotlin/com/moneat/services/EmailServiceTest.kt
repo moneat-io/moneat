@@ -241,6 +241,22 @@ class EmailServiceTest {
         service.sendWeeklySummaryEmail("lead@example.com", data)
     }
 
+    @Test
+    fun `sendBillingThresholdAlertEmail does not throw when SMTP not configured`() {
+        val service = EmailService()
+        service.sendBillingThresholdAlertEmail(
+            to = "owner@example.com",
+            subject = "[Billing Org] Usage is over the included limit",
+            data = billingInsightEmailData()
+        )
+    }
+
+    @Test
+    fun `sendBillingInsightsEmail does not throw when SMTP not configured`() {
+        val service = EmailService()
+        service.sendBillingInsightsEmail("owner@example.com", billingInsightEmailData())
+    }
+
     // ──── HTML Rendering Tests ────
     @Test
     fun `sendWeeklySummaryEmail renders mdash badge for null trends in HTML`() {
@@ -275,4 +291,43 @@ class EmailServiceTest {
             "HTML should contain mdash entity for null trends"
         )
     }
+
+    @Test
+    fun `sendBillingInsightsEmail renders billing rows in HTML`() {
+        val service = spyk(EmailService())
+        val htmlSlot = slot<String>()
+        every {
+            service.sendEmail(
+                any(), any(), capture(htmlSlot), any(), any()
+            )
+        } just Runs
+
+        service.sendBillingInsightsEmail("owner@example.com", billingInsightEmailData())
+
+        assertTrue(htmlSlot.captured.contains("GB-Billed Ingestion"))
+        assertTrue(htmlSlot.captured.contains("80%"))
+        assertTrue(!htmlSlot.captured.contains("<svg"))
+    }
+
+    private fun billingInsightEmailData() =
+        EmailService.BillingInsightEmailData(
+            organizationName = "Billing Org",
+            plan = "PRO",
+            periodStart = "2026-01-01",
+            periodEnd = "2026-01-31",
+            headline = "Usage is approaching the included limit",
+            summary = "GB-billed ingestion is projected to reach the monthly limit.",
+            dashboardUrl = "https://app.example/usage-insights",
+            settingsUrl = "https://app.example/settings?tab=billing",
+            rows = listOf(
+                EmailService.BillingInsightRow(
+                    label = "GB-Billed Ingestion",
+                    used = "8.00 GB",
+                    limit = "10.00 GB",
+                    percent = "80%",
+                    status = "Watch"
+                )
+            ),
+            totalOverage = "\$0.00"
+        )
 }

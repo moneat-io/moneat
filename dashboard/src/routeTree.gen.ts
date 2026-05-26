@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as WorkflowsRouteImport } from './routes/workflows'
 import { Route as VerifyEmailRequiredRouteImport } from './routes/verify-email-required'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
+import { Route as UsageInsightsRouteImport } from './routes/usage-insights'
 import { Route as UptimeMonitoringRouteImport } from './routes/uptime-monitoring'
 import { Route as TracesRouteImport } from './routes/traces'
 import { Route as TermsRouteImport } from './routes/terms'
@@ -158,6 +159,11 @@ const VerifyEmailRequiredRoute = VerifyEmailRequiredRouteImport.update({
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
   path: '/verify-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UsageInsightsRoute = UsageInsightsRouteImport.update({
+  id: '/usage-insights',
+  path: '/usage-insights',
   getParentRoute: () => rootRouteImport,
 } as any)
 const UptimeMonitoringRoute = UptimeMonitoringRouteImport.update({
@@ -889,6 +895,7 @@ export interface FileRoutesByFullPath {
   '/terms': typeof TermsRoute
   '/traces': typeof TracesRoute
   '/uptime-monitoring': typeof UptimeMonitoringRoute
+  '/usage-insights': typeof UsageInsightsRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-email-required': typeof VerifyEmailRequiredRoute
   '/workflows': typeof WorkflowsRoute
@@ -1013,6 +1020,7 @@ export interface FileRoutesByTo {
   '/terms': typeof TermsRoute
   '/traces': typeof TracesRoute
   '/uptime-monitoring': typeof UptimeMonitoringRoute
+  '/usage-insights': typeof UsageInsightsRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-email-required': typeof VerifyEmailRequiredRoute
   '/workflows': typeof WorkflowsRoute
@@ -1149,6 +1157,7 @@ export interface FileRoutesById {
   '/terms': typeof TermsRoute
   '/traces': typeof TracesRoute
   '/uptime-monitoring': typeof UptimeMonitoringRoute
+  '/usage-insights': typeof UsageInsightsRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-email-required': typeof VerifyEmailRequiredRoute
   '/workflows': typeof WorkflowsRoute
@@ -1288,6 +1297,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/traces'
     | '/uptime-monitoring'
+    | '/usage-insights'
     | '/verify-email'
     | '/verify-email-required'
     | '/workflows'
@@ -1412,6 +1422,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/traces'
     | '/uptime-monitoring'
+    | '/usage-insights'
     | '/verify-email'
     | '/verify-email-required'
     | '/workflows'
@@ -1547,6 +1558,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/traces'
     | '/uptime-monitoring'
+    | '/usage-insights'
     | '/verify-email'
     | '/verify-email-required'
     | '/workflows'
@@ -1685,6 +1697,7 @@ export interface RootRouteChildren {
   TermsRoute: typeof TermsRoute
   TracesRoute: typeof TracesRoute
   UptimeMonitoringRoute: typeof UptimeMonitoringRoute
+  UsageInsightsRoute: typeof UsageInsightsRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   VerifyEmailRequiredRoute: typeof VerifyEmailRequiredRoute
   WorkflowsRoute: typeof WorkflowsRoute
@@ -1724,6 +1737,13 @@ declare module '@tanstack/react-router' {
       path: '/verify-email'
       fullPath: '/verify-email'
       preLoaderRoute: typeof VerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/usage-insights': {
+      id: '/usage-insights'
+      path: '/usage-insights'
+      fullPath: '/usage-insights'
+      preLoaderRoute: typeof UsageInsightsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/uptime-monitoring': {
@@ -3071,6 +3091,7 @@ const rootRouteChildren: RootRouteChildren = {
   TermsRoute: TermsRoute,
   TracesRoute: TracesRoute,
   UptimeMonitoringRoute: UptimeMonitoringRoute,
+  UsageInsightsRoute: UsageInsightsRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   VerifyEmailRequiredRoute: VerifyEmailRequiredRoute,
   WorkflowsRoute: WorkflowsRoute,

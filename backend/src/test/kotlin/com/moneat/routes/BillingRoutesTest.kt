@@ -18,6 +18,7 @@ package com.moneat.routes
 
 import com.moneat.billing.models.ApmSpanUsageDebugGroup
 import com.moneat.billing.models.ApmSpanUsageDebugResponse
+import com.moneat.billing.models.BillingUsageInsightsResponse
 import com.moneat.billing.models.BillingUsageResponse
 import com.moneat.billing.models.CancelSubscriptionResponse
 import com.moneat.billing.models.CheckoutSessionResponse
@@ -27,9 +28,11 @@ import com.moneat.billing.models.SetupIntentResponse
 import com.moneat.billing.models.UpdateOnCallSeatsResponse
 import com.moneat.billing.routes.billingRoutes
 import com.moneat.billing.services.BillingQuotaService
+import com.moneat.billing.services.BillingUsageInsightsService
 import com.moneat.billing.services.EffectiveTierContext
 import com.moneat.billing.services.PricingTierService
 import com.moneat.billing.services.StripeService
+import com.moneat.config.EnvConfig
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
@@ -73,6 +76,7 @@ import kotlin.test.assertTrue
 class BillingRoutesTest {
     companion object {
         private const val BILLING_USAGE = "/v1/billing/usage"
+        private const val BILLING_USAGE_INSIGHTS = "/v1/billing/usage/insights"
         private const val BILLING_APM_SPAN_DEBUG = "/v1/billing/usage/apm-spans"
         private const val BILLING_CHECKOUT = "/v1/billing/checkout"
         private const val BILLING_INVOICES = "/v1/billing/invoices"
@@ -86,6 +90,7 @@ class BillingRoutesTest {
 
     private lateinit var mockPricingTierService: PricingTierService
     private lateinit var mockQuotaService: BillingQuotaService
+    private lateinit var mockInsightsService: BillingUsageInsightsService
     private lateinit var mockStripeService: StripeService
     private lateinit var mockUsageTrackingService: UsageTrackingService
 
@@ -93,6 +98,7 @@ class BillingRoutesTest {
     fun setupDatabase() {
         mockPricingTierService = mockk<PricingTierService>(relaxed = true)
         mockQuotaService = mockk<BillingQuotaService>(relaxed = true)
+        mockInsightsService = mockk<BillingUsageInsightsService>(relaxed = true)
         mockStripeService = mockk<StripeService>(relaxed = true)
         mockUsageTrackingService = mockk<UsageTrackingService>(relaxed = true)
         if (db == null) {
@@ -112,14 +118,23 @@ class BillingRoutesTest {
         )
         mockkObject(UsageTrackingService)
         every { UsageTrackingService.instance } returns mockUsageTrackingService
+        mockkObject(EnvConfig.SelfHost)
+        every { EnvConfig.SelfHost.enabled } returns false
     }
 
     @AfterTest
     fun tearDown() {
         if (::mockPricingTierService.isInitialized) {
-            clearMocks(mockPricingTierService, mockQuotaService, mockStripeService, mockUsageTrackingService)
+            clearMocks(
+                mockPricingTierService,
+                mockQuotaService,
+                mockInsightsService,
+                mockStripeService,
+                mockUsageTrackingService
+            )
         }
         unmockkObject(UsageTrackingService)
+        unmockkObject(EnvConfig.SelfHost)
     }
 
     private fun Application.installAuth() {
@@ -169,6 +184,7 @@ class BillingRoutesTest {
                         pricingTierService = mockPricingTierService,
                         quotaService = mockQuotaService,
                         stripeService = mockStripeService,
+                        insightsService = mockInsightsService,
                     )
                 }
             }
@@ -232,6 +248,20 @@ class BillingRoutesTest {
         return response
     }
 
+    private fun makeUsageInsightsResponse(
+        orgId: Int,
+        usage: BillingUsageResponse = makeUsageResponse(orgId)
+    ) = BillingUsageInsightsResponse(
+        organizationId = orgId,
+        periodStart = usage.periodStart,
+        periodEnd = usage.periodEnd,
+        generatedAt = "2026-01-15T12:00:00Z",
+        billingMode = "cloud",
+        usage = usage,
+        dimensions = emptyList(),
+        apmSpanDebug = makeApmSpanDebugResponse(orgId, usage)
+    )
+
     // ──── Auth ────
 
     @Test
@@ -247,6 +277,14 @@ class BillingRoutesTest {
         testApplication {
             application { installRoutes(this) }
             val r = client.get(BILLING_APM_SPAN_DEBUG)
+            assertEquals(HttpStatusCode.Unauthorized, r.status)
+        }
+
+    @Test
+    fun `GET usage insights returns 401 when unauthenticated`() =
+        testApplication {
+            application { installRoutes(this) }
+            val r = client.get(BILLING_USAGE_INSIGHTS)
             assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
@@ -327,6 +365,18 @@ class BillingRoutesTest {
             every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns null
             application { installRoutes(this) }
             val r = client.get(BILLING_APM_SPAN_DEBUG) {
+                withAuth(token(userId))
+            }
+            assertEquals(HttpStatusCode.Forbidden, r.status)
+        }
+
+    @Test
+    fun `GET usage insights returns 403 when user has no org`() =
+        testApplication {
+            val userId = seedUser()
+            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns null
+            application { installRoutes(this) }
+            val r = client.get(BILLING_USAGE_INSIGHTS) {
                 withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.Forbidden, r.status)
@@ -448,6 +498,41 @@ class BillingRoutesTest {
             val body = r.bodyAsText()
             assertTrue(body.contains("\"totalSpans\":42"))
             assertTrue(body.contains("\"service\":\"api\""))
+        }
+
+    @Test
+    fun `GET usage insights returns 200 with insights data`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val response = makeUsageInsightsResponse(orgId)
+            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
+            coEvery { mockInsightsService.getUsageInsights(orgId) } returns response
+            application { installRoutes(this) }
+
+            val r = client.get(BILLING_USAGE_INSIGHTS) {
+                withAuth(token(userId))
+            }
+
+            assertEquals(HttpStatusCode.OK, r.status)
+            val body = r.bodyAsText()
+            assertTrue(body.contains("\"billingMode\":\"cloud\""))
+            assertTrue(body.contains("\"dimensions\":[]"))
+        }
+
+    @Test
+    fun `GET usage insights returns 403 for self hosted deployments`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            every { EnvConfig.SelfHost.enabled } returns true
+            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
+            application { installRoutes(this) }
+
+            val r = client.get(BILLING_USAGE_INSIGHTS) {
+                withAuth(token(userId))
+            }
+
+            assertEquals(HttpStatusCode.Forbidden, r.status)
+            assertTrue(r.bodyAsText().contains("Moneat Cloud"))
         }
 
     @Test

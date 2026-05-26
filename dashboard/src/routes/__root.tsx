@@ -74,6 +74,7 @@ const STATIC_TITLES: Record<string, string> = {
   '/releases': 'Releases',
   '/replays': 'Session Replays',
   '/logs': 'Logs',
+  '/usage-insights': 'Usage Insights',
   '/monitoring': 'Infrastructure Monitoring',
   '/monitoring/hosts': 'Hosts',
   '/monitoring/containers': 'Containers',
