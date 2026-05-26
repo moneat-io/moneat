@@ -1,0 +1,180 @@
+{
+  "title": "Postgres - Overview",
+  "description": "Synthetic fixture modeled after Datadog integration dashboards.",
+  "layout_type": "ordered",
+  "template_variables": [
+    {
+      "name": "scope",
+      "prefix": "scope",
+      "default": "*",
+      "available_values": []
+    },
+    {
+      "name": "host",
+      "prefix": "host",
+      "default": "*",
+      "available_values": []
+    }
+  ],
+  "widgets": [
+    {
+      "definition": {
+        "type": "group",
+        "title": "Resource Utilization",
+        "layout_type": "ordered",
+        "widgets": [
+          {
+            "definition": {
+              "type": "note",
+              "content": "## About Postgres\n\nKey database health signals for a Postgres integration."
+            },
+            "layout": {
+              "x": 0,
+              "y": 0,
+              "width": 4,
+              "height": 2
+            }
+          },
+          {
+            "definition": {
+              "type": "query_value",
+              "title": "Connections",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "query1",
+                      "query": "sum:postgresql.connections{$scope,host:$host}",
+                      "aggregator": "avg"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "query1",
+                      "alias": "connections"
+                    }
+                  ]
+                }
+              ]
+            },
+            "layout": {
+              "x": 4,
+              "y": 0,
+              "width": 4,
+              "height": 2
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Rows fetched / returned",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "requests": [
+                {
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "query1",
+                      "query": "avg:postgresql.rows_fetched{$scope,host:$host}",
+                      "semantic_mode": "combined"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "query1",
+                      "alias": "rows fetched"
+                    }
+                  ]
+                },
+                {
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "query1",
+                      "query": "avg:postgresql.rows_returned{$scope,host:$host}",
+                      "semantic_mode": "combined"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "query1",
+                      "alias": "rows returned"
+                    }
+                  ]
+                }
+              ]
+            },
+            "layout": {
+              "x": 0,
+              "y": 2,
+              "width": 6,
+              "height": 3
+            }
+          },
+          {
+            "definition": {
+              "type": "query_table",
+              "title": "Locks by host",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "query1",
+                      "query": "sum:postgresql.locks{$scope,host:$host} by {host}"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "query2",
+                      "query": "sum:postgresql.deadlocks{$scope,host:$host} by {host}"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "query1",
+                      "alias": "locks"
+                    },
+                    {
+                      "formula": "query2",
+                      "alias": "deadlocks"
+                    }
+                  ]
+                }
+              ],
+              "has_search_bar": "auto"
+            },
+            "layout": {
+              "x": 6,
+              "y": 2,
+              "width": 6,
+              "height": 3
+            }
+          }
+        ]
+      },
+      "layout": {
+        "x": 0,
+        "y": 0,
+        "width": 12,
+        "height": 6
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Standalone CPU",
+        "requests": [
+          {
+            "q": "avg:system.cpu.user{host:web01}"
+          }
+        ]
+      }
+    }
+  ]
+}

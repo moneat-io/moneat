@@ -28,7 +28,7 @@ vi.mock('@tanstack/react-router', () => ({
 
 vi.mock('@/lib/api', () => ({
   api: {
-    importDashboard: vi.fn().mockResolvedValue({warnings: []}),
+    importDashboard: vi.fn().mockResolvedValue({dashboard: {id: 42, widgets: []}, warnings: []}),
     exportDashboard: vi.fn().mockResolvedValue({title: 'Test', widgets: []}),
     listCustomDataSources: vi.fn().mockResolvedValue([]),
   },
@@ -110,6 +110,34 @@ describe('ImportExportModal', () => {
       expect(screen.getByText('Grafana Dashboard Import')).toBeInTheDocument()
     })
 
+    it('switches format when clicking Datadog import', async () => {
+      const user = userEvent.setup()
+      renderWithQuery(
+        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
+      )
+      await user.click(screen.getByText('Datadog'))
+      expect(screen.getByText('Datadog Dashboard Import')).toBeInTheDocument()
+      expect(screen.getByText('Upload Datadog JSON File')).toBeInTheDocument()
+    })
+
+    it('imports Datadog JSON using datadog format', async () => {
+      const {api} = await import('@/lib/api')
+      const user = userEvent.setup()
+      renderWithQuery(
+        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
+      )
+      await user.click(screen.getByText('Datadog'))
+      const textarea = screen.getByPlaceholderText(
+        '{"title": "My Dashboard", "layout_type": "ordered", "widgets": [...]}'
+      )
+      const {fireEvent, waitFor} = await import('@testing-library/react')
+      fireEvent.change(textarea, {target: {value: '{"title": "Datadog", "widgets": []}'}})
+      await user.click(screen.getByText('Import'))
+      await waitFor(() => {
+        expect(api.importDashboard).toHaveBeenCalledWith('datadog', '{"title": "Datadog", "widgets": []}')
+      })
+    })
+
     it('shows datasource mapper when Grafana JSON has __inputs with datasources', async () => {
       renderWithQuery(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="import" />
@@ -142,12 +170,13 @@ describe('ImportExportModal', () => {
       expect(screen.getByText('Export Dashboard')).toBeInTheDocument()
     })
 
-    it('renders two export format buttons', () => {
+    it('renders export format buttons', () => {
       renderWithQuery(
         <ImportExportModal open={true} onOpenChange={vi.fn()} mode="export" dashboardId={1} />
       )
       expect(screen.getByText('Export as Moneat JSON')).toBeInTheDocument()
       expect(screen.getByText('Export as Grafana JSON')).toBeInTheDocument()
+      expect(screen.getByText('Export as Datadog JSON')).toBeInTheDocument()
     })
 
     it('does not show Import button in export mode', () => {

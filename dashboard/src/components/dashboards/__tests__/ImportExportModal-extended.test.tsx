@@ -38,6 +38,7 @@ vi.mock('@/lib/api', () => ({
 const mockedApi = vi.mocked(api)
 
 const IMPORT_PLACEHOLDER = '{"title": "My Dashboard", "widgets": [...]}'
+const DATADOG_IMPORT_PLACEHOLDER = '{"title": "My Dashboard", "layout_type": "ordered", "widgets": [...]}'
 
 const makeDashboard = (id: number): CustomDashboard => ({
   id,
@@ -291,6 +292,37 @@ describe('ImportExportModal – extended branch coverage', () => {
     })
   })
 
+  // ──── Import: Datadog format skips Grafana datasource mapper ────
+  describe('import – Datadog format', () => {
+    it('imports Datadog JSON directly with datadog format', async () => {
+      const user = userEvent.setup()
+      const json = JSON.stringify({
+        title: 'Datadog dashboard',
+        layout_type: 'ordered',
+        widgets: [
+          {
+            definition: {
+              type: 'timeseries',
+              requests: [{q: 'avg:system.cpu.user{host:web01}'}],
+            },
+          },
+        ],
+      })
+      renderImportModal()
+
+      await user.click(screen.getByText('Datadog'))
+      fireEvent.change(screen.getByPlaceholderText(DATADOG_IMPORT_PLACEHOLDER), {
+        target: {value: json},
+      })
+      await user.click(screen.getByText('Import'))
+
+      await waitFor(() => {
+        expect(mockedApi.importDashboard).toHaveBeenCalledWith('datadog', json)
+      })
+      expect(screen.queryByText('Map Data Sources')).not.toBeInTheDocument()
+    })
+  })
+
   // ──── Import: auto-mapping with single matching custom datasource ────
   describe('import – auto-mapping', () => {
     it('auto-maps when exactly one custom datasource matches the expected type', async () => {
@@ -381,6 +413,21 @@ describe('ImportExportModal – extended branch coverage', () => {
 
       await waitFor(() => {
         expect(mockedApi.exportDashboard).toHaveBeenCalledWith(3, 'grafana')
+      })
+    })
+
+    it('calls exportDashboard with datadog format', async () => {
+      mockedApi.exportDashboard.mockResolvedValue({title: 'Datadog Export'})
+
+      globalThis.URL.createObjectURL = vi.fn().mockReturnValue('blob:mock')
+      globalThis.URL.revokeObjectURL = vi.fn()
+
+      renderExportModal({dashboardId: 4})
+
+      await userEvent.setup().click(screen.getByText('Export as Datadog JSON'))
+
+      await waitFor(() => {
+        expect(mockedApi.exportDashboard).toHaveBeenCalledWith(4, 'datadog')
       })
     })
   })

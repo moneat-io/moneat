@@ -20,10 +20,12 @@ import com.moneat.dashboards.models.AggFunction
 import com.moneat.dashboards.models.DashboardResponse
 import com.moneat.dashboards.models.FilterDef
 import com.moneat.dashboards.models.FilterOp
+import com.moneat.dashboards.models.GroupByType
 import com.moneat.dashboards.models.MetricDef
 import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.WidgetResponse
 import com.moneat.dashboards.translation.DataDogTranslator
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -38,6 +40,14 @@ import kotlin.test.assertTrue
 class DataDogTranslatorTest {
 
     private val translator = DataDogTranslator()
+    private val json = Json { ignoreUnknownKeys = true }
+
+    private fun loadFixture(path: String) =
+        json.parseToJsonElement(
+            requireNotNull(javaClass.classLoader.getResource(path)) {
+                "Missing test fixture: $path"
+            }.readText()
+        ).jsonObject
 
     // ──── Import ────
 
@@ -264,6 +274,153 @@ class DataDogTranslatorTest {
         assertEquals(0, result.dashboard.widgets[0].gridX)
     }
 
+    @Test
+    fun `import flattens Datadog integration groups into sections and child widgets`() {
+        val fixture = loadFixture("dashboards/datadog/postgres-integration-overview.json")
+        val result = translator.import(fixture)
+
+        assertEquals("Postgres - Overview", result.dashboard.title)
+        assertEquals(6, result.dashboard.widgets.size)
+        assertEquals("section", result.dashboard.widgets[0].widgetType)
+        assertEquals("Resource Utilization", result.dashboard.widgets[0].title)
+        assertEquals("text", result.dashboard.widgets[1].widgetType)
+        assertEquals("stat", result.dashboard.widgets[2].widgetType)
+        assertEquals("timeseries", result.dashboard.widgets[3].widgetType)
+        assertEquals("table", result.dashboard.widgets[4].widgetType)
+        assertEquals("timeseries", result.dashboard.widgets[5].widgetType)
+    }
+
+    @Test
+    fun `import offsets child widget layout below Datadog group section`() {
+        val fixture = loadFixture("dashboards/datadog/postgres-integration-overview.json")
+        val result = translator.import(fixture)
+        val note = result.dashboard.widgets[1]
+        val table = result.dashboard.widgets[4]
+        val standalone = result.dashboard.widgets[5]
+
+        assertEquals(1, note.gridY)
+        assertEquals(6, table.gridW)
+        assertEquals(3, table.gridY)
+        assertTrue(standalone.gridY >= 6)
+    }
+
+    @Test
+    fun `import auto-places Datadog group children after explicit child layouts`() {
+        val json = buildJsonObject {
+            put("title", "Grouped")
+            put(
+                "widgets",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put(
+                                "definition",
+                                buildJsonObject {
+                                    put("type", "group")
+                                    put("title", "Group")
+                                    put(
+                                        "widgets",
+                                        buildJsonArray {
+                                            add(
+                                                buildJsonObject {
+                                                    put(
+                                                        "definition",
+                                                        buildJsonObject {
+                                                            put("type", "timeseries")
+                                                            put(
+                                                                "requests",
+                                                                buildJsonArray {
+                                                                    add(buildJsonObject { put("q", "count:events{*}") })
+                                                                }
+                                                            )
+                                                        }
+                                                    )
+                                                    put(
+                                                        "layout",
+                                                        buildJsonObject {
+                                                            put("x", 0)
+                                                            put("y", 2)
+                                                            put("width", 6)
+                                                            put("height", 3)
+                                                        }
+                                                    )
+                                                }
+                                            )
+                                            add(
+                                                buildJsonObject {
+                                                    put(
+                                                        "definition",
+                                                        buildJsonObject {
+                                                            put("type", "query_value")
+                                                            put(
+                                                                "requests",
+                                                                buildJsonArray {
+                                                                    add(buildJsonObject { put("q", "count:events{*}") })
+                                                                }
+                                                            )
+                                                        }
+                                                    )
+                                                }
+                                            )
+                                        }
+                                    )
+                                }
+                            )
+                            put(
+                                "layout",
+                                buildJsonObject {
+                                    put("x", 0)
+                                    put("y", 0)
+                                    put("width", 12)
+                                    put("height", 6)
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+
+        val widgets = translator.import(json).dashboard.widgets
+
+        assertEquals(3, widgets[1].gridY)
+        assertTrue(widgets[2].gridY >= 6)
+    }
+
+    @Test
+    fun `import parses all Datadog request queries from integration fixture`() {
+        val fixture = loadFixture("dashboards/datadog/postgres-integration-overview.json")
+        val result = translator.import(fixture)
+        val timeseries = result.dashboard.widgets.first { it.title == "Rows fetched / returned" }
+        val table = result.dashboard.widgets.first { it.title == "Locks by host" }
+
+        assertEquals(2, timeseries.queryConfigs.size)
+        assertEquals("rows fetched", timeseries.queryConfigs[0].metrics[0].alias)
+        assertEquals("rows returned", timeseries.queryConfigs[1].metrics[0].alias)
+        assertEquals(2, table.queryConfigs.size)
+        assertTrue(
+            table.queryConfigs.all { query ->
+                query.filters.any { it.field == "metric_name" && it.value?.startsWith("postgresql.") == true }
+            }
+        )
+    }
+
+    @Test
+    fun `import supports Datadog effective dashboard fixture shapes`() {
+        val fixture = loadFixture("dashboards/datadog/kubernetes-capacity-planning.json")
+        val result = translator.import(fixture)
+
+        assertEquals("Kubernetes Capacity Planning", result.dashboard.title)
+        assertEquals(6, result.dashboard.widgets.size)
+        assertEquals("text", result.dashboard.widgets[0].widgetType)
+        assertEquals("text", result.dashboard.widgets[1].widgetType)
+        assertEquals("section", result.dashboard.widgets[2].widgetType)
+        assertEquals("table", result.dashboard.widgets[3].widgetType)
+        assertEquals("heatmap", result.dashboard.widgets[4].widgetType)
+        assertEquals("text", result.dashboard.widgets[5].widgetType)
+        assertTrue(result.warnings.any { it.contains("unsupported type 'scatterplot'") })
+    }
+
     // ──── parseDataDogQueryString ────
 
     @Test
@@ -272,7 +429,8 @@ class DataDogTranslatorTest {
         val dsl = translator.parseDataDogQueryString("avg:system.cpu.user{host:web01}", warnings, 0)
         assertEquals("metrics", dsl.dataSource)
         assertEquals(AggFunction.AVG, dsl.metrics[0].function)
-        assertEquals("cpu_percent", dsl.metrics[0].field)
+        assertEquals("value", dsl.metrics[0].field)
+        assertTrue(dsl.filters.any { it.field == "metric_name" && it.value == "system.cpu.user" })
         assertTrue(dsl.filters.any { it.field == "host" && it.value == "web01" })
     }
 
@@ -298,6 +456,73 @@ class DataDogTranslatorTest {
         val warnings = mutableListOf<String>()
         val dsl = translator.parseDataDogQueryString("sum:system.disk.used{host:web01,env:prod}", warnings, 0)
         assertEquals(2, dsl.filters.size)
+        assertTrue(dsl.filters.any { it.field == "metric_name" && it.value == "system.disk.used" })
+        assertTrue(dsl.filters.any { it.field == "host" && it.value == "web01" })
+    }
+
+    @Test
+    fun `parseDataDogQueryString extracts supported group by fields`() {
+        val warnings = mutableListOf<String>()
+        val dsl = translator.parseDataDogQueryString("sum:postgresql.locks{host:web01} by {host,env}", warnings, 0)
+        assertTrue(dsl.groupBy.any { it.field == "timestamp" && it.type == GroupByType.TIME })
+        assertTrue(dsl.groupBy.any { it.field == "host" && it.type == GroupByType.FIELD })
+        assertTrue(dsl.groupBy.none { it.field == "env" })
+    }
+
+    @Test
+    fun `parseDataDogQuery handles Datadog queries array and formula aliases`() {
+        val warnings = mutableListOf<String>()
+        val definition = buildJsonObject {
+            put("type", "query_table")
+            put(
+                "requests",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put(
+                                "queries",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("name", "query1")
+                                            put("query", "sum:mysql.net.connections{host:db01}")
+                                        }
+                                    )
+                                    add(
+                                        buildJsonObject {
+                                            put("name", "query2")
+                                            put("query", "max:mysql.net.max_connections{host:db01}")
+                                        }
+                                    )
+                                }
+                            )
+                            put(
+                                "formulas",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("formula", "query1")
+                                            put("alias", "connections")
+                                        }
+                                    )
+                                    add(
+                                        buildJsonObject {
+                                            put("formula", "query2")
+                                            put("alias", "max connections")
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+
+        val queries = translator.parseDataDogQueries(definition, warnings, 0)
+        assertEquals(2, queries.size)
+        assertEquals("connections", queries[0].metrics[0].alias)
+        assertEquals("max connections", queries[1].metrics[0].alias)
     }
 
     // ──── Export ────

@@ -24,6 +24,28 @@ import {CopyBlock} from '@/components/ui/copy-block'
 import {AlertTriangle, Check, Download, Upload} from 'lucide-react'
 import {DataSourceMapperModal} from './DataSourceMapperModal'
 
+type DashboardImportFormat = 'grafana' | 'datadog'
+
+const IMPORT_FORMAT_DETAILS: Record<DashboardImportFormat, {
+  title: string
+  description: string
+  uploadLabel: string
+  placeholder: string
+}> = {
+  grafana: {
+    title: 'Grafana Dashboard Import',
+    description: 'Upload or paste your Grafana JSON export',
+    uploadLabel: 'Upload Grafana JSON File',
+    placeholder: '{"title": "My Dashboard", "widgets": [...]}',
+  },
+  datadog: {
+    title: 'Datadog Dashboard Import',
+    description: 'Upload or paste your Datadog dashboard JSON export',
+    uploadLabel: 'Upload Datadog JSON File',
+    placeholder: '{"title": "My Dashboard", "layout_type": "ordered", "widgets": [...]}',
+  },
+}
+
 interface ImportExportModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -36,7 +58,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
   const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [jsonInput, setJsonInput] = useState('')
-  const format = 'grafana' // Only support Grafana for now
+  const [format, setFormat] = useState<DashboardImportFormat>('grafana')
   const [warnings, setWarnings] = useState<string[]>([])
   const [importSuccess, setImportSuccess] = useState(false)
   const [importedDashboardId, setImportedDashboardId] = useState<number | null>(null)
@@ -45,6 +67,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
   const [unmappedDataSources, setUnmappedDataSources] = useState<string[]>([])
   const [pendingImport, setPendingImport] = useState<{format: string; json: string} | null>(null)
   const [autoMappings, setAutoMappings] = useState<Record<string, string>>({})
+  const formatDetails = IMPORT_FORMAT_DETAILS[format]
   
   // Fetch custom data sources for mapping
   const {data: customDataSourcesData} = useQuery({
@@ -360,7 +383,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
             {mode === 'import'
-              ? 'Import a dashboard from Grafana JSON format'
+              ? `Import a dashboard from ${format === 'datadog' ? 'Datadog' : 'Grafana'} JSON format`
               : 'Export this dashboard in various formats'}
           </p>
         </div>
@@ -369,7 +392,24 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
         <div className="flex-1 overflow-auto px-5 py-4 space-y-4">
           {mode === 'import' ? (
             <>
-              {/* Grafana logo/info */}
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant={format === 'grafana' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFormat('grafana')}
+                >
+                  Grafana
+                </Button>
+                <Button
+                  variant={format === 'datadog' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFormat('datadog')}
+                >
+                  Datadog
+                </Button>
+              </div>
+
+              {/* Format logo/info */}
               <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
                 <svg className="h-8 w-8" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M57.9 13.4c-.7-2.2-1.8-4.3-3.3-6.1-.8-.9-1.6-1.7-2.6-2.4-1.3-1-2.7-1.8-4.2-2.4-2.2-.9-4.5-1.4-6.9-1.4-2 0-4 .3-5.9.9-1.6.5-3.2 1.2-4.6 2.1-1.1.7-2.1 1.5-3 2.4-1.3 1.3-2.4 2.7-3.3 4.3-1 1.7-1.7 3.6-2.1 5.5-.3 1.3-.4 2.7-.3 4 .1 1.6.4 3.1.9 4.6.6 1.7 1.4 3.3 2.5 4.7.9 1.2 2 2.3 3.2 3.2 1.5 1.2 3.2 2.1 5 2.7 2.1.7 4.3 1 6.5.9 2-.1 3.9-.5 5.7-1.2 1.5-.6 2.9-1.4 4.2-2.4 1-.8 1.9-1.7 2.7-2.7 1.2-1.5 2.1-3.2 2.8-4.9.7-1.9 1.1-3.9 1.1-5.9 0-2-.3-4-.9-5.9z" fill="#F05A28"/>
@@ -377,8 +417,8 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
                   <circle cx="41.2" cy="22" r="3" fill="#FFF"/>
                 </svg>
                 <div className="flex-1">
-                  <div className="text-sm font-medium">Grafana Dashboard Import</div>
-                  <div className="text-xs text-muted-foreground">Upload or paste your Grafana JSON export</div>
+                  <div className="text-sm font-medium">{formatDetails.title}</div>
+                  <div className="text-xs text-muted-foreground">{formatDetails.description}</div>
                 </div>
               </div>
 
@@ -397,7 +437,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
                   onClick={() => fileInputRef.current?.click()}
                   className="w-full"
                 >
-                  <Upload className="h-4 w-4 mr-2" /> Upload Grafana JSON File
+                  <Upload className="h-4 w-4 mr-2" /> {formatDetails.uploadLabel}
                 </Button>
               </div>
 
@@ -411,7 +451,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
                   rows={10}
                   value={jsonInput}
                   onChange={setJsonInput}
-                  placeholder='{"title": "My Dashboard", "widgets": [...]}'
+                  placeholder={formatDetails.placeholder}
                 />
               </div>
 
@@ -470,6 +510,9 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
                   <Download className="h-4 w-4 mr-2" /> Export as Grafana JSON
                 </Button>
               </div>
+              <Button variant="outline" className="w-full justify-start" onClick={() => handleExport('datadog')}>
+                <Download className="h-4 w-4 mr-2" /> Export as Datadog JSON
+              </Button>
 
               {exportData && (
                 <div>
