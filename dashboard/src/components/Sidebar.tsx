@@ -23,7 +23,6 @@ import {useProject} from '@/contexts/ProjectContext'
 import {ThemeSwitcher} from '@/components/ThemeSwitcher'
 import {Avatar, AvatarFallback} from '@/components/ui/avatar'
 import {Button} from '@/components/ui/button'
-import {Input} from '@/components/ui/input'
 import {Badge} from '@/components/ui/badge'
 import {useToast} from '@/hooks/useToast'
 import {
@@ -34,7 +33,6 @@ import {
     BookOpen,
     Brain,
     HelpCircle,
-    Check,
     ChevronDown,
     ChevronLeft,
     ChevronRight,
@@ -62,7 +60,7 @@ import {
     Workflow,
 } from 'lucide-react'
 import {cn} from '@/lib/utils'
-import {platforms, getPlatformInfo, type PlatformType} from '@/routes/projects'
+import {getPlatformInfo} from '@/routes/projects'
 import {Tooltip, TooltipContent, TooltipTrigger} from '@/components/ui/tooltip'
 import {
   DropdownMenu,
@@ -76,8 +74,14 @@ import {Logo} from '@/components/Logo'
 import {isSidebarItemVisible} from '@/lib/sidebar-config'
 import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
 import {useCommandPalette} from '@/hooks/useCommandPalette'
-
-type PlatformFilter = 'all' | 'mobile' | 'frontend' | 'backend' | 'desktop-gaming'
+import {
+  ProjectSetupForm,
+  type ProjectSetupSubmission,
+} from '@/components/projects/ProjectSetupForm'
+import {
+  serializeTelemetrySourceIds,
+  storeTelemetrySourceIdsForProject,
+} from '@/lib/telemetry-sources'
 
 export const SIDEBAR_COLLAPSED_WIDTH = 56
 export const SIDEBAR_EXPANDED_WIDTH = 176
@@ -92,14 +96,6 @@ function getInitials(name?: string) {
   if (!name) return 'U'
   return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
 }
-
-const platformFilterTabs: Array<{ id: PlatformFilter; label: string }> = [
-  { id: 'all', label: 'All' },
-  { id: 'mobile', label: 'Mobile' },
-  { id: 'frontend', label: 'Frontend' },
-  { id: 'backend', label: 'Backend' },
-  { id: 'desktop-gaming', label: 'Desktop & Gaming' },
-]
 
 export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarProps) {
   const router = useRouterState()
@@ -119,11 +115,6 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
     globalThis.addEventListener('open-create-project-dialog', handler)
     return () => globalThis.removeEventListener('open-create-project-dialog', handler)
   }, [])
-  const [newProjectName, setNewProjectName] = useState('')
-  const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null)
-  const [selectedTargets, setSelectedTargets] = useState<string[]>([])
-  const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all')
-
   const { data: user } = useQuery({
     queryKey: ['currentUser'],
     queryFn: () => api.getCurrentUser(),
@@ -140,14 +131,22 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
   const activeProjectId = activeProject?.id ?? null
 
   const createProjectMutation = useMutation({
-    mutationFn: (data: { name: string; framework: string; targets?: string[] }) =>
+    mutationFn: (data: ProjectSetupSubmission) =>
       api.createProject(data.name, data.framework, data.targets),
-    onSuccess: (project) => {
-      trackEvent('Project Create', { framework: project.framework || 'none' })
+    onSuccess: (project, submission) => {
+      storeTelemetrySourceIdsForProject(project.id, submission.sourceIds)
+      trackEvent('Project Create', {
+        framework: project.framework || 'none',
+        sources: serializeTelemetrySourceIds(submission.sourceIds),
+      })
       queryClient.invalidateQueries({ queryKey: ['projects'] })
       setSelectedProjectId(project.id)
       resetCreateForm()
-      navigate({ to: `/projects/${project.id}` })
+      navigate({
+        to: '/projects/$projectId',
+        params: { projectId: String(project.id) },
+        search: { sources: serializeTelemetrySourceIds(submission.sourceIds) },
+      })
     },
     onError: (error: Error) => {
       if (error.message.includes('project_limit_reached')) {
@@ -182,49 +181,8 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
 
   const resetCreateForm = () => {
     setShowCreateDialog(false)
-    setNewProjectName('')
-    setSelectedPlatform(null)
-    setSelectedTargets([])
-    setPlatformFilter('all')
+    createProjectMutation.reset()
   }
-
-  const handleCreateProject = () => {
-    if (newProjectName && selectedPlatform) {
-      const platform = platforms.find(p => p.id === selectedPlatform)
-      const targets = platform?.targets && selectedTargets.length > 0 ? selectedTargets : undefined
-      createProjectMutation.mutate({
-        name: newProjectName,
-        framework: selectedPlatform,
-        targets,
-      })
-    }
-  }
-
-  const handlePlatformSelect = (platformId: string) => {
-    setSelectedPlatform(platformId)
-    const platform = platforms.find(p => p.id === platformId)
-    if (platform?.targets && platform.defaultTargets) {
-      setSelectedTargets(platform.defaultTargets)
-    } else {
-      setSelectedTargets([])
-    }
-  }
-
-  const toggleTarget = (targetId: string) => {
-    setSelectedTargets(prev =>
-      prev.includes(targetId)
-        ? prev.filter(id => id !== targetId)
-        : [...prev, targetId]
-    )
-  }
-
-  const filteredPlatforms = platforms.filter((platform: PlatformType) => {
-    if (platform.alwaysVisible || platformFilter === 'all') return true
-    if (platformFilter === 'desktop-gaming') {
-      return platform.category === 'desktop' || platform.category === 'gaming'
-    }
-    return platform.category === platformFilter
-  })
 
   type NavGroupId = 'core' | 'infrastructure' | 'insights' | 'operations' | 'analytics' | 'management'
 
@@ -396,6 +354,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
+                  aria-label="Switch project"
                   className="flex w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-left text-xs cursor-default transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   {activeProject && (
@@ -446,6 +405,8 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
+                  aria-label={activeProject ? `Switch project: ${activeProject.name}` : 'Switch project'}
+                  title={activeProject ? `Switch project: ${activeProject.name}` : 'Switch project'}
                   className="flex w-full items-center justify-center rounded-md border bg-muted/50 p-1.5 cursor-default transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   {activeProject && (
@@ -492,7 +453,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
           )
             })()
         ) : (
-          isExpanded && (
+          isExpanded ? (
             <Button
               size="sm"
               variant="outline"
@@ -502,6 +463,22 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
               <Plus className="h-3 w-3" />
               New Project
             </Button>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Create new project"
+                  onClick={() => window.dispatchEvent(new CustomEvent('open-create-project-dialog'))}
+                  className="flex w-full items-center justify-center rounded-md border bg-muted/50 p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>New Project</p>
+              </TooltipContent>
+            </Tooltip>
           )
         )}
       </div>
@@ -606,7 +583,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
                 <button
                   type="button"
                   className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                  title="Setup and docs"
+                  title="Source setup and docs"
                 >
                   <HelpCircle className="h-3.5 w-3.5" />
                 </button>
@@ -614,7 +591,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
               <DropdownMenuContent align="start" side="right" className="w-48">
                 <DropdownMenuItem onClick={() => navigate({ to: activeProjectId ? `/projects/${activeProjectId}` : '/' })}>
                   <Rocket className="h-4 w-4 mr-2" />
-                  Project setup
+                  Source setup
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <a href="/docs/" target="_blank" rel="noopener noreferrer">
@@ -684,7 +661,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
                 <button
                   type="button"
                   className="flex w-full items-center justify-center rounded-md py-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                  title="Setup and docs"
+                  title="Source setup and docs"
                 >
                   <HelpCircle className="h-3.5 w-3.5" />
                 </button>
@@ -692,7 +669,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
               <DropdownMenuContent align="start" side="right" className="w-48">
                 <DropdownMenuItem onClick={() => navigate({ to: activeProjectId ? `/projects/${activeProjectId}` : '/' })}>
                   <Rocket className="h-4 w-4 mr-2" />
-                  Project setup
+                  Source setup
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <a href="/docs/" target="_blank" rel="noopener noreferrer">
@@ -756,121 +733,20 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
 
       {/* Create Project Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={(open) => { if (!open) resetCreateForm() }}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>Create New Project</DialogTitle>
             <DialogDescription>
-              Set up a new project to start tracking errors and monitoring your applications.
+              Pick the application and telemetry sources you want Moneat to walk you through.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 mt-4">
-            <div>
-              <label htmlFor="new-project-name" className="text-sm font-medium mb-2 block">Project Name</label>
-              <Input
-                id="new-project-name"
-                placeholder="My awesome app"
-                value={newProjectName}
-                onChange={(e) => setNewProjectName(e.target.value)}
-                autoFocus
-              />
-            </div>
-
-            <div>
-              <p className="text-sm font-medium mb-3 block">Select Platform</p>
-              <div className="mb-3 flex flex-wrap gap-2">
-                {platformFilterTabs.map((tab) => (
-                  <Button
-                    key={tab.id}
-                    type="button"
-                    size="sm"
-                    variant={platformFilter === tab.id ? 'default' : 'outline'}
-                    onClick={() => setPlatformFilter(tab.id)}
-                  >
-                    {tab.label}
-                  </Button>
-                ))}
-              </div>
-              <div className="max-h-64 overflow-y-auto rounded-lg border p-3 pr-2">
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                  {filteredPlatforms.map((platform: PlatformType) => {
-                    const Icon = platform.icon
-                    return (
-                      <button
-                        key={platform.id}
-                        onClick={() => handlePlatformSelect(platform.id)}
-                        className={cn(
-                          'relative flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 transition-all',
-                          selectedPlatform === platform.id
-                            ? 'border-primary bg-primary/5 shadow-md'
-                            : 'border-border hover:border-primary/50 hover:bg-accent'
-                        )}
-                      >
-                        <div className="p-2 rounded-lg" style={{ backgroundColor: platform.color }}>
-                          <Icon className="h-5 w-5 text-white" />
-                        </div>
-                        <span className="text-xs font-medium text-center leading-tight">{platform.name}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Target selection for multi-platform frameworks */}
-            {selectedPlatform && platforms.find(p => p.id === selectedPlatform)?.targets && (
-              <div>
-                <p className="text-sm font-medium mb-3 block">Select Target Platforms</p>
-                <div className="rounded-lg border p-4">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {platforms.find(p => p.id === selectedPlatform)?.targets?.map(target => (
-                      <button
-                        key={target.id}
-                        type="button"
-                        onClick={() => toggleTarget(target.id)}
-                        className={cn(
-                          'flex items-center gap-2 px-3 py-2 rounded-lg border-2 transition-all text-sm font-medium',
-                          selectedTargets.includes(target.id)
-                            ? 'border-primary bg-primary/5'
-                            : 'border-border hover:border-primary/50 hover:bg-accent'
-                        )}
-                      >
-                        <div className={cn(
-                          'w-4 h-4 rounded border-2 flex items-center justify-center',
-                          selectedTargets.includes(target.id) ? 'bg-primary border-primary' : 'border-border'
-                        )}>
-                          {selectedTargets.includes(target.id) && (
-                            <Check className="w-3 h-3 text-white" />
-                          )}
-                        </div>
-                        {target.name}
-                      </button>
-                    ))}
-                  </div>
-                  {selectedTargets.length === 0 && (
-                    <p className="text-sm text-destructive mt-2">Please select at least one target platform</p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            <div className="flex gap-2 pt-2">
-              <Button
-                onClick={handleCreateProject}
-                disabled={
-                  !newProjectName ||
-                  !selectedPlatform ||
-                  (platforms.find(p => p.id === selectedPlatform)?.targets && selectedTargets.length === 0) ||
-                  createProjectMutation.isPending
-                }
-              >
-                {createProjectMutation.isPending ? 'Creating...' : 'Create Project'}
-              </Button>
-              <Button variant="outline" onClick={resetCreateForm}>
-                Cancel
-              </Button>
-            </div>
-          </div>
+          <ProjectSetupForm
+            autoFocus
+            isSubmitting={createProjectMutation.isPending}
+            onCancel={resetCreateForm}
+            onSubmit={(submission) => createProjectMutation.mutate(submission)}
+          />
         </DialogContent>
       </Dialog>
     </>
