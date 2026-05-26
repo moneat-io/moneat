@@ -1,0 +1,22 @@
+Moneat has been rendered for namespace {{ .Release.Namespace }}.
+
+Backend service:
+  {{ include "moneat.fullname" . }}-backend:{{ .Values.backend.service.port }}
+
+Dashboard service:
+  {{ include "moneat.fullname" . }}-dashboard:{{ .Values.dashboard.service.port }}
+
+{{- if .Values.ingress.enabled }}
+Ingress is enabled. Public URLs should match:
+  FRONTEND_URL={{ .Values.app.frontendUrl }}
+  BACKEND_URL={{ .Values.app.backendUrl }}
+{{- else }}
+Ingress is disabled. For local access:
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "moneat.fullname" . }}-dashboard 3000:{{ .Values.dashboard.service.port }}
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "moneat.fullname" . }}-backend 8080:{{ .Values.backend.service.port }}
+{{- end }}
+
+Run the Helm test after pods are ready:
+  helm test {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+Data PVCs are retained by default. Delete them manually only after backups are verified.

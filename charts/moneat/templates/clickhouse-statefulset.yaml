@@ -1,0 +1,150 @@
+{{- if .Values.clickhouse.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "moneat.fullname" . }}-clickhouse
+  labels:
+    {{- include "moneat.labels" (dict "root" . "component" "clickhouse") | nindent 4 }}
+spec:
+  serviceName: {{ include "moneat.fullname" . }}-clickhouse
+  replicas: 1
+  {{- if and .Values.clickhouse.persistence.enabled (not .Values.clickhouse.persistence.existingClaim) }}
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: {{ .Values.clickhouse.persistence.retention.whenDeleted }}
+    whenScaled: {{ .Values.clickhouse.persistence.retention.whenScaled }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "moneat.selectorLabels" (dict "root" . "component" "clickhouse") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "moneat.selectorLabels" (dict "root" . "component" "clickhouse") | nindent 8 }}
+        {{- with .Values.clickhouse.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.clickhouse.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.clickhouse.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: clickhouse
+          image: {{ printf "%s:%s" .Values.clickhouse.image.repository .Values.clickhouse.image.tag | quote }}
+          imagePullPolicy: {{ .Values.clickhouse.image.pullPolicy }}
+          {{- with .Values.clickhouse.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: 8123
+              protocol: TCP
+            - name: native
+              containerPort: 9000
+              protocol: TCP
+          env:
+            - name: CLICKHOUSE_DB
+              value: {{ .Values.clickhouse.auth.database | quote }}
+            - name: CLICKHOUSE_USER
+              value: {{ .Values.clickhouse.auth.username | quote }}
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "moneat.secretName" . }}
+                  key: CLICKHOUSE_PASSWORD
+            - name: CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT
+              value: "1"
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          {{- with .Values.clickhouse.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/clickhouse
+            - name: config
+              mountPath: /etc/clickhouse-server/config.d/logging.xml
+              subPath: logging.xml
+            - name: config
+              mountPath: /etc/clickhouse-server/config.d/system-log-ttl.xml
+              subPath: system-log-ttl.xml
+            {{- if .Values.clickhouse.initdb.enabled }}
+            - name: initdb
+              mountPath: /docker-entrypoint-initdb.d
+            {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "moneat.fullname" . }}-clickhouse-config
+        {{- if .Values.clickhouse.initdb.enabled }}
+        - name: initdb
+          configMap:
+            name: {{ include "moneat.fullname" . }}-clickhouse-config
+            items:
+              - key: 00-create-database.sql
+                path: 00-create-database.sql
+        {{- end }}
+        {{- if not .Values.clickhouse.persistence.enabled }}
+        - name: data
+          emptyDir: {}
+        {{- else if .Values.clickhouse.persistence.existingClaim }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Values.clickhouse.persistence.existingClaim }}
+        {{- end }}
+      {{- with .Values.clickhouse.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.clickhouse.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.clickhouse.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  {{- if and .Values.clickhouse.persistence.enabled (not .Values.clickhouse.persistence.existingClaim) }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "moneat.labels" (dict "root" . "component" "clickhouse") | nindent 10 }}
+        {{- if .Values.clickhouse.persistence.keepPvc }}
+        annotations:
+          helm.sh/resource-policy: keep
+        {{- end }}
+      spec:
+        accessModes:
+          {{- toYaml .Values.clickhouse.persistence.accessModes | nindent 10 }}
+        resources:
+          requests:
+            storage: {{ .Values.clickhouse.persistence.size | quote }}
+        {{- if .Values.clickhouse.persistence.storageClass }}
+        storageClassName: {{ .Values.clickhouse.persistence.storageClass | quote }}
+        {{- end }}
+  {{- end }}
+{{- end }}

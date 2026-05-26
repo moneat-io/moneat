@@ -1,0 +1,19 @@
+apiVersion: v2
+name: moneat
+description: Self-hosted Moneat observability platform
+type: application
+version: 0.1.0
+appVersion: "v1.0.0"
+home: https://moneat.io
+icon: https://moneat.io/favicon.svg
+sources:
+  - https://github.com/moneat-io/moneat
+keywords:
+  - observability
+  - sentry
+  - opentelemetry
+  - datadog
+  - clickhouse
+maintainers:
+  - name: Moneat
+    url: https://moneat.io

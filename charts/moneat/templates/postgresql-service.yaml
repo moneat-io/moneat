@@ -1,0 +1,21 @@
+{{- if .Values.postgresql.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "moneat.fullname" . }}-postgresql
+  labels:
+    {{- include "moneat.labels" (dict "root" . "component" "postgresql") | nindent 4 }}
+  {{- with .Values.postgresql.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: postgresql
+      port: {{ .Values.postgresql.service.port }}
+      targetPort: postgresql
+      protocol: TCP
+  selector:
+    {{- include "moneat.selectorLabels" (dict "root" . "component" "postgresql") | nindent 4 }}
+{{- end }}

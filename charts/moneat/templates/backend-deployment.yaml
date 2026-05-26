@@ -1,0 +1,196 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "moneat.fullname" . }}-backend
+  labels:
+    {{- include "moneat.labels" (dict "root" . "component" "backend") | nindent 4 }}
+spec:
+  replicas: {{ .Values.backend.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "moneat.selectorLabels" (dict "root" . "component" "backend") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "moneat.selectorLabels" (dict "root" . "component" "backend") | nindent 8 }}
+        {{- with .Values.backend.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.backend.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.backend.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: backend
+          image: {{ include "moneat.image" (dict "root" . "image" .Values.backend.image) | quote }}
+          imagePullPolicy: {{ include "moneat.pullPolicy" (dict "root" . "image" .Values.backend.image) }}
+          {{- with .Values.backend.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: {{ include "moneat.secretName" . }}
+            {{- with .Values.backend.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          env:
+            - name: PORT
+              value: "8080"
+            - name: DATABASE_URL
+              value: {{ include "moneat.databaseUrl" . | quote }}
+            - name: DATABASE_USER
+              value: {{ include "moneat.databaseUser" . | quote }}
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "moneat.secretName" . }}
+                  key: DATABASE_PASSWORD
+            - name: CLICKHOUSE_URL
+              value: {{ include "moneat.clickhouseUrl" . | quote }}
+            - name: CLICKHOUSE_USER
+              value: {{ include "moneat.clickhouseUser" . | quote }}
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "moneat.secretName" . }}
+                  key: CLICKHOUSE_PASSWORD
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "moneat.secretName" . }}
+                  key: REDIS_PASSWORD
+            - name: REDIS_URL
+              value: {{ include "moneat.redisUrl" . | quote }}
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "moneat.secretName" . }}
+                  key: JWT_SECRET
+            - name: DATA_SOURCE_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "moneat.secretName" . }}
+                  key: DATA_SOURCE_ENCRYPTION_KEY
+            - name: FRONTEND_URL
+              value: {{ .Values.app.frontendUrl | quote }}
+            - name: BACKEND_URL
+              value: {{ .Values.app.backendUrl | quote }}
+            {{- if .Values.app.allowedOrigins }}
+            - name: ALLOWED_ORIGINS
+              value: {{ .Values.app.allowedOrigins | quote }}
+            {{- end }}
+            {{- if .Values.app.trustedProxies }}
+            - name: TRUSTED_PROXIES
+              value: {{ .Values.app.trustedProxies | quote }}
+            {{- end }}
+            - name: MONEAT_LICENSE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "moneat.secretName" . }}
+                  key: MONEAT_LICENSE_KEY
+                  optional: true
+            {{- if .Values.datadog.enabled }}
+            - name: DD_AGENT_HOST
+              value: {{ printf "%s-datadog-agent" (include "moneat.fullname" .) | quote }}
+            - name: DD_VERSION
+              value: {{ include "moneat.imageTag" (dict "root" . "image" .Values.backend.image) | quote }}
+            {{- range $name, $value := .Values.datadog.backendEnv }}
+            - name: {{ $name }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- end }}
+            {{- range $name, $value := .Values.backend.env }}
+            - name: {{ $name }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- with .Values.backend.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          startupProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          {{- with .Values.backend.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if .Values.backend.persistence.enabled }}
+          volumeMounts:
+            {{- if .Values.backend.persistence.split.enabled }}
+            - name: profiles
+              mountPath: /app/storage/profiles
+            - name: sourcemaps
+              mountPath: /app/storage/sourcemaps
+            - name: chunks
+              mountPath: /app/storage/chunks
+            - name: artifact-bundles
+              mountPath: /app/storage/artifact_bundles
+            {{- else }}
+            - name: backend-storage
+              mountPath: /app/storage
+            {{- end }}
+          {{- end }}
+      {{- if .Values.backend.persistence.enabled }}
+      volumes:
+        {{- if .Values.backend.persistence.split.enabled }}
+        - name: profiles
+          persistentVolumeClaim:
+            claimName: {{ default (include "moneat.backendSplitPvcName" (dict "root" . "name" "profiles")) .Values.backend.persistence.split.profiles.existingClaim }}
+        - name: sourcemaps
+          persistentVolumeClaim:
+            claimName: {{ default (include "moneat.backendSplitPvcName" (dict "root" . "name" "sourcemaps")) .Values.backend.persistence.split.sourcemaps.existingClaim }}
+        - name: chunks
+          persistentVolumeClaim:
+            claimName: {{ default (include "moneat.backendSplitPvcName" (dict "root" . "name" "chunks")) .Values.backend.persistence.split.chunks.existingClaim }}
+        - name: artifact-bundles
+          persistentVolumeClaim:
+            claimName: {{ default (include "moneat.backendSplitPvcName" (dict "root" . "name" "artifact-bundles")) .Values.backend.persistence.split.artifactBundles.existingClaim }}
+        {{- else }}
+        - name: backend-storage
+          persistentVolumeClaim:
+            claimName: {{ default (include "moneat.backendPvcName" .) .Values.backend.persistence.existingClaim }}
+        {{- end }}
+      {{- end }}
+      {{- with .Values.backend.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.backend.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.backend.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

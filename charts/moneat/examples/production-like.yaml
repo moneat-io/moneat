@@ -1,0 +1,91 @@
+image:
+  tag: v1.0.0
+
+app:
+  frontendUrl: https://moneat.example.com
+  backendUrl: https://api.moneat.example.com
+  trustedProxies: 10.0.0.0/8
+
+backend:
+  replicaCount: 1
+  persistence:
+    split:
+      enabled: true
+      profiles:
+        size: 50Gi
+        storageClass: block-storage
+      sourcemaps:
+        size: 100Gi
+        storageClass: block-storage
+      chunks:
+        size: 100Gi
+        storageClass: block-storage
+      artifactBundles:
+        size: 100Gi
+        storageClass: block-storage
+  resources:
+    requests:
+      cpu: "500m"
+      memory: 1Gi
+    limits:
+      memory: 2Gi
+
+postgresql:
+  persistence:
+    storageClass: block-storage
+    size: 100Gi
+  resources:
+    requests:
+      cpu: "500m"
+      memory: 1Gi
+    limits:
+      memory: 2Gi
+
+clickhouse:
+  persistence:
+    storageClass: block-storage
+    size: 500Gi
+  config:
+    loggerLevel: warning
+    logSize: 100M
+    logCount: 10
+    systemLogsTtlDays: 3
+    removeTextLog: true
+  resources:
+    requests:
+      cpu: "1"
+      memory: 4Gi
+    limits:
+      memory: 8Gi
+
+redis:
+  maxMemory: 3gb
+  persistence:
+    storageClass: block-storage
+    size: 20Gi
+
+secrets:
+  create: false
+  existingSecret: moneat-env
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: moneat.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: dashboard
+    - host: api.moneat.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: backend
+  tls:
+    - secretName: moneat-tls
+      hosts:
+        - moneat.example.com
+        - api.moneat.example.com

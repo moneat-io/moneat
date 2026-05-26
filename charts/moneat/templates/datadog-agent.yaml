@@ -1,0 +1,199 @@
+{{- if .Values.datadog.enabled }}
+{{- $endpointUrl := default (printf "http://%s-backend:%v/dd" (include "moneat.fullname" .) .Values.backend.service.port) .Values.datadog.endpointUrl }}
+{{- if .Values.datadog.serviceAccount.create }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "moneat.datadogServiceAccountName" . }}
+  labels:
+    {{- include "moneat.labels" (dict "root" . "component" "datadog-agent") | nindent 4 }}
+  {{- with .Values.datadog.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+---
+{{- end }}
+{{- if .Values.datadog.rbac.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "moneat.fullname" . }}-datadog-agent
+  labels:
+    {{- include "moneat.labels" (dict "root" . "component" "datadog-agent") | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes", "services", "endpoints", "events", "namespaces"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "daemonsets", "replicasets", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "moneat.fullname" . }}-datadog-agent
+  labels:
+    {{- include "moneat.labels" (dict "root" . "component" "datadog-agent") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "moneat.fullname" . }}-datadog-agent
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "moneat.datadogServiceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+---
+{{- end }}
+{{- if .Values.datadog.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "moneat.fullname" . }}-datadog-agent
+  labels:
+    {{- include "moneat.labels" (dict "root" . "component" "datadog-agent") | nindent 4 }}
+  {{- with .Values.datadog.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: apm
+      port: {{ .Values.datadog.service.apmPort }}
+      targetPort: apm
+      protocol: TCP
+    - name: dogstatsd
+      port: {{ .Values.datadog.service.dogstatsdPort }}
+      targetPort: dogstatsd
+      protocol: UDP
+  selector:
+    {{- include "moneat.selectorLabels" (dict "root" . "component" "datadog-agent") | nindent 4 }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "moneat.fullname" . }}-datadog-agent
+  labels:
+    {{- include "moneat.labels" (dict "root" . "component" "datadog-agent") | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "moneat.selectorLabels" (dict "root" . "component" "datadog-agent") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "moneat.selectorLabels" (dict "root" . "component" "datadog-agent") | nindent 8 }}
+        {{- with .Values.datadog.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.datadog.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "moneat.datadogServiceAccountName" . }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.datadog.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: agent
+          image: {{ printf "%s:%s" .Values.datadog.image.repository .Values.datadog.image.tag | quote }}
+          imagePullPolicy: {{ .Values.datadog.image.pullPolicy }}
+          {{- with .Values.datadog.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: apm
+              containerPort: 8126
+              protocol: TCP
+            - name: dogstatsd
+              containerPort: 8125
+              protocol: UDP
+          env:
+            - name: DD_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "moneat.secretName" . }}
+                  key: DD_API_KEY
+            - name: DD_DD_URL
+              value: {{ $endpointUrl | quote }}
+            - name: DD_APM_DD_URL
+              value: {{ $endpointUrl | quote }}
+            - name: DD_PROCESS_CONFIG_PROCESS_DD_URL
+              value: {{ $endpointUrl | quote }}
+            - name: DD_KUBERNETES_KUBELET_NODENAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: DD_HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            {{- range $name, $value := .Values.datadog.env }}
+            - name: {{ $name }}
+              value: {{ $value | quote }}
+            {{- end }}
+          {{- with .Values.datadog.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if or .Values.datadog.hostPaths.proc .Values.datadog.hostPaths.cgroup .Values.datadog.hostPaths.dockerSocket }}
+          volumeMounts:
+            {{- if .Values.datadog.hostPaths.proc }}
+            - name: proc
+              mountPath: /host/proc
+              readOnly: true
+            {{- end }}
+            {{- if .Values.datadog.hostPaths.cgroup }}
+            - name: cgroup
+              mountPath: /host/sys/fs/cgroup
+              readOnly: true
+            {{- end }}
+            {{- if .Values.datadog.hostPaths.dockerSocket }}
+            - name: docker-socket
+              mountPath: /var/run/docker.sock
+              readOnly: true
+            {{- end }}
+          {{- end }}
+      {{- if or .Values.datadog.hostPaths.proc .Values.datadog.hostPaths.cgroup .Values.datadog.hostPaths.dockerSocket }}
+      volumes:
+        {{- if .Values.datadog.hostPaths.proc }}
+        - name: proc
+          hostPath:
+            path: {{ .Values.datadog.hostPaths.proc | quote }}
+        {{- end }}
+        {{- if .Values.datadog.hostPaths.cgroup }}
+        - name: cgroup
+          hostPath:
+            path: {{ .Values.datadog.hostPaths.cgroup | quote }}
+        {{- end }}
+        {{- if .Values.datadog.hostPaths.dockerSocket }}
+        - name: docker-socket
+          hostPath:
+            path: {{ .Values.datadog.hostPaths.dockerSocket | quote }}
+            type: Socket
+        {{- end }}
+      {{- end }}
+      {{- with .Values.datadog.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.datadog.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.datadog.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

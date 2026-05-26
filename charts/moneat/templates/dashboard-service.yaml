@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "moneat.fullname" . }}-dashboard
+  labels:
+    {{- include "moneat.labels" (dict "root" . "component" "dashboard") | nindent 4 }}
+  {{- with .Values.dashboard.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.dashboard.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.dashboard.service.port }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "moneat.selectorLabels" (dict "root" . "component" "dashboard") | nindent 4 }}

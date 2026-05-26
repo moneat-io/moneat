@@ -1,0 +1,21 @@
+{{- if .Values.redis.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "moneat.fullname" . }}-redis
+  labels:
+    {{- include "moneat.labels" (dict "root" . "component" "redis") | nindent 4 }}
+  {{- with .Values.redis.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: redis
+      port: {{ .Values.redis.service.port }}
+      targetPort: redis
+      protocol: TCP
+  selector:
+    {{- include "moneat.selectorLabels" (dict "root" . "component" "redis") | nindent 4 }}
+{{- end }}

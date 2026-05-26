@@ -1,0 +1,407 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Moneat Helm values",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "nameOverride": {"type": "string"},
+    "fullnameOverride": {"type": "string"},
+    "global": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "imagePullSecrets": {"type": "array"},
+        "commonLabels": {"type": "object"}
+      }
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tag": {"type": "string"},
+        "pullPolicy": {"type": "string", "enum": ["Always", "IfNotPresent", "Never"]}
+      }
+    },
+    "app": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frontendUrl", "backendUrl"],
+      "properties": {
+        "frontendUrl": {"type": "string", "minLength": 1},
+        "backendUrl": {"type": "string", "minLength": 1},
+        "allowedOrigins": {"type": "string"},
+        "trustedProxies": {"type": "string"}
+      }
+    },
+    "secrets": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "create": {"type": "boolean"},
+        "existingSecret": {"type": "string"},
+        "annotations": {"type": "object"},
+        "values": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "jwtSecret": {"type": "string"},
+            "dataSourceEncryptionKey": {"type": "string"},
+            "databasePassword": {"type": "string"},
+            "clickhousePassword": {"type": "string"},
+            "redisPassword": {"type": "string"},
+            "moneatLicenseKey": {"type": "string"},
+            "ddApiKey": {"type": "string"},
+            "ddPostgresPassword": {"type": "string"}
+          }
+        },
+        "extraEnv": {"type": "object"}
+      }
+    },
+    "backend": {"$ref": "#/definitions/appDeployment"},
+    "dashboard": {"$ref": "#/definitions/appDeployment"},
+    "postgresql": {"$ref": "#/definitions/postgresql"},
+    "externalPostgresql": {"$ref": "#/definitions/externalPostgresql"},
+    "clickhouse": {"$ref": "#/definitions/clickhouse"},
+    "externalClickHouse": {"$ref": "#/definitions/externalClickHouse"},
+    "redis": {"$ref": "#/definitions/redis"},
+    "externalRedis": {"$ref": "#/definitions/externalRedis"},
+    "ingress": {"$ref": "#/definitions/ingress"},
+    "datadog": {"$ref": "#/definitions/datadog"}
+  },
+  "definitions": {
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "tag", "pullPolicy"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "tag": {"type": "string"},
+        "pullPolicy": {"type": "string", "enum": ["Always", "IfNotPresent", "Never", ""]}
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "podPlacement": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "podAnnotations": {"type": "object"},
+        "podLabels": {"type": "object"},
+        "podSecurityContext": {"type": "object"},
+        "securityContext": {"type": "object"},
+        "resources": {"$ref": "#/definitions/resources"},
+        "nodeSelector": {"type": "object"},
+        "tolerations": {"type": "array"},
+        "affinity": {"type": "object"}
+      }
+    },
+    "accessModes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string"}
+    },
+    "persistence": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "keepPvc": {"type": "boolean"},
+        "storageClass": {"type": "string"},
+        "accessModes": {"$ref": "#/definitions/accessModes"},
+        "size": {"type": "string", "minLength": 1},
+        "existingClaim": {"type": "string"},
+        "retention": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "whenDeleted": {"type": "string", "enum": ["Retain", "Delete"]},
+            "whenScaled": {"type": "string", "enum": ["Retain", "Delete"]}
+          }
+        }
+      }
+    },
+    "backendSplitVolume": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "size": {"type": "string", "minLength": 1},
+        "storageClass": {"type": "string"},
+        "accessModes": {"$ref": "#/definitions/accessModes"},
+        "existingClaim": {"type": "string"}
+      }
+    },
+    "appDeployment": {
+      "allOf": [
+        {"$ref": "#/definitions/podPlacement"},
+        {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "replicaCount": {"type": "integer", "minimum": 1},
+            "image": {"$ref": "#/definitions/image"},
+            "service": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "type": {"type": "string", "enum": ["ClusterIP", "NodePort", "LoadBalancer"]},
+                "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+                "annotations": {"type": "object"}
+              }
+            },
+            "env": {"type": "object"},
+            "extraEnv": {"type": "array"},
+            "extraEnvFrom": {"type": "array"},
+            "persistence": {
+              "allOf": [
+                {"$ref": "#/definitions/persistence"},
+                {
+                  "type": "object",
+                  "properties": {
+                    "split": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "enabled": {"type": "boolean"},
+                        "profiles": {"$ref": "#/definitions/backendSplitVolume"},
+                        "sourcemaps": {"$ref": "#/definitions/backendSplitVolume"},
+                        "chunks": {"$ref": "#/definitions/backendSplitVolume"},
+                        "artifactBundles": {"$ref": "#/definitions/backendSplitVolume"}
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "postgresql": {
+      "allOf": [
+        {"$ref": "#/definitions/podPlacement"},
+        {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "image": {"$ref": "#/definitions/image"},
+            "auth": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["database", "username"],
+              "properties": {
+                "database": {"type": "string", "minLength": 1},
+                "username": {"type": "string", "minLength": 1}
+              }
+            },
+            "service": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+                "annotations": {"type": "object"}
+              }
+            },
+            "persistence": {"$ref": "#/definitions/persistence"},
+            "initdb": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {"type": "boolean"},
+                "sql": {"type": "string"}
+              }
+            }
+          }
+        }
+      ]
+    },
+    "externalPostgresql": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": {"type": "string"},
+        "host": {"type": "string"},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+        "database": {"type": "string"},
+        "username": {"type": "string"}
+      }
+    },
+    "clickhouse": {
+      "allOf": [
+        {"$ref": "#/definitions/podPlacement"},
+        {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "image": {"$ref": "#/definitions/image"},
+            "auth": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["database", "username"],
+              "properties": {
+                "database": {"type": "string", "minLength": 1},
+                "username": {"type": "string", "minLength": 1}
+              }
+            },
+            "service": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "httpPort": {"type": "integer", "minimum": 1, "maximum": 65535},
+                "nativePort": {"type": "integer", "minimum": 1, "maximum": 65535},
+                "annotations": {"type": "object"}
+              }
+            },
+            "persistence": {"$ref": "#/definitions/persistence"},
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "loggerLevel": {"type": "string"},
+                "logSize": {"type": "string"},
+                "logCount": {"type": "integer", "minimum": 1},
+                "systemLogsTtlDays": {"type": "integer", "minimum": 1},
+                "removeTextLog": {"type": "boolean"}
+              }
+            },
+            "initdb": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {"enabled": {"type": "boolean"}}
+            }
+          }
+        }
+      ]
+    },
+    "externalClickHouse": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": {"type": "string"},
+        "database": {"type": "string"},
+        "username": {"type": "string"}
+      }
+    },
+    "redis": {
+      "allOf": [
+        {"$ref": "#/definitions/podPlacement"},
+        {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "image": {"$ref": "#/definitions/image"},
+            "service": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+                "annotations": {"type": "object"}
+              }
+            },
+            "persistence": {"$ref": "#/definitions/persistence"},
+            "appendOnly": {"type": "boolean"},
+            "maxMemory": {"type": "string"},
+            "maxMemoryPolicy": {"type": "string"}
+          }
+        }
+      ]
+    },
+    "externalRedis": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": {"type": "string"},
+        "host": {"type": "string"},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535}
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "className": {"type": "string"},
+        "annotations": {"type": "object"},
+        "hosts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["host", "paths"],
+            "properties": {
+              "host": {"type": "string", "minLength": 1},
+              "paths": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["path", "service"],
+                  "properties": {
+                    "path": {"type": "string", "minLength": 1},
+                    "pathType": {"type": "string", "enum": ["Prefix", "Exact", "ImplementationSpecific"]},
+                    "service": {"type": "string", "enum": ["backend", "dashboard"]}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tls": {"type": "array"}
+      }
+    },
+    "datadog": {
+      "allOf": [
+        {"$ref": "#/definitions/podPlacement"},
+        {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "image": {"$ref": "#/definitions/image"},
+            "serviceAccount": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "create": {"type": "boolean"},
+                "name": {"type": "string"},
+                "annotations": {"type": "object"}
+              }
+            },
+            "rbac": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {"create": {"type": "boolean"}}
+            },
+            "service": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {"type": "boolean"},
+                "annotations": {"type": "object"},
+                "apmPort": {"type": "integer", "minimum": 1, "maximum": 65535},
+                "dogstatsdPort": {"type": "integer", "minimum": 1, "maximum": 65535}
+              }
+            },
+            "endpointUrl": {"type": "string"},
+            "env": {"type": "object"},
+            "backendEnv": {"type": "object"},
+            "hostPaths": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "proc": {"type": "string"},
+                "cgroup": {"type": "string"},
+                "dockerSocket": {"type": "string"}
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

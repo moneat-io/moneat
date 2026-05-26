@@ -1,0 +1,87 @@
+{{- if .Values.clickhouse.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "moneat.fullname" . }}-clickhouse-config
+  labels:
+    {{- include "moneat.labels" (dict "root" . "component" "clickhouse") | nindent 4 }}
+data:
+  logging.xml: |
+    <clickhouse>
+        <logger>
+            <level>{{ .Values.clickhouse.config.loggerLevel }}</level>
+            <log>/var/lib/clickhouse/log/clickhouse-server.log</log>
+            <errorlog>/var/lib/clickhouse/log/clickhouse-server.err.log</errorlog>
+            <size>{{ .Values.clickhouse.config.logSize }}</size>
+            <count>{{ .Values.clickhouse.config.logCount }}</count>
+        </logger>
+        {{- if .Values.clickhouse.config.removeTextLog }}
+        <text_log remove="1" />
+        {{- end }}
+    </clickhouse>
+  system-log-ttl.xml: |
+    <clickhouse>
+        <trace_log>
+            <database>system</database>
+            <table>trace_log</table>
+            <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+            <ttl>event_date + INTERVAL {{ .Values.clickhouse.config.systemLogsTtlDays }} DAY</ttl>
+        </trace_log>
+        <query_log>
+            <database>system</database>
+            <table>query_log</table>
+            <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+            <ttl>event_date + INTERVAL {{ .Values.clickhouse.config.systemLogsTtlDays }} DAY</ttl>
+        </query_log>
+        <query_thread_log>
+            <database>system</database>
+            <table>query_thread_log</table>
+            <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+            <ttl>event_date + INTERVAL {{ .Values.clickhouse.config.systemLogsTtlDays }} DAY</ttl>
+        </query_thread_log>
+        <query_views_log>
+            <database>system</database>
+            <table>query_views_log</table>
+            <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+            <ttl>event_date + INTERVAL {{ .Values.clickhouse.config.systemLogsTtlDays }} DAY</ttl>
+        </query_views_log>
+        <query_metric_log>
+            <database>system</database>
+            <table>query_metric_log</table>
+            <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+            <ttl>event_date + INTERVAL {{ .Values.clickhouse.config.systemLogsTtlDays }} DAY</ttl>
+        </query_metric_log>
+        <metric_log>
+            <database>system</database>
+            <table>metric_log</table>
+            <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+            <ttl>event_date + INTERVAL {{ .Values.clickhouse.config.systemLogsTtlDays }} DAY</ttl>
+        </metric_log>
+        <asynchronous_metric_log>
+            <database>system</database>
+            <table>asynchronous_metric_log</table>
+            <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+            <ttl>event_date + INTERVAL {{ .Values.clickhouse.config.systemLogsTtlDays }} DAY</ttl>
+        </asynchronous_metric_log>
+        <part_log>
+            <database>system</database>
+            <table>part_log</table>
+            <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+            <ttl>event_date + INTERVAL {{ .Values.clickhouse.config.systemLogsTtlDays }} DAY</ttl>
+        </part_log>
+        <processors_profile_log>
+            <database>system</database>
+            <table>processors_profile_log</table>
+            <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+            <ttl>event_date + INTERVAL {{ .Values.clickhouse.config.systemLogsTtlDays }} DAY</ttl>
+        </processors_profile_log>
+        <error_log>
+            <database>system</database>
+            <table>error_log</table>
+            <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+            <ttl>event_date + INTERVAL {{ .Values.clickhouse.config.systemLogsTtlDays }} DAY</ttl>
+        </error_log>
+    </clickhouse>
+  00-create-database.sql: |
+    CREATE DATABASE IF NOT EXISTS {{ .Values.clickhouse.auth.database }};
+{{- end }}
