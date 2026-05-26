@@ -161,6 +161,7 @@ class NotificationServiceRoutingTest {
             assertEquals(AlertStatus.FIRING, event.status)
             assertEquals(AlertSource.ERROR_ALERT, event.source)
             assertEquals("moneat-error-2001", event.deduplicationKey)
+            assertEquals("https://moneat.io/issues/2001", event.moneatUrl)
             assertEquals(orgId, event.organizationId)
         }
 

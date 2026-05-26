@@ -18,6 +18,8 @@ package com.moneat.notifications.services
 
 import kotlinx.serialization.SerializationException
 import java.io.IOException
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrganizationIntegrations
@@ -43,9 +45,13 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.slf4j.LoggerFactory
 import com.moneat.utils.suspendRunCatching
-import java.util.*
+import java.util.Locale
+import java.util.UUID
 
 private const val SLACK_CHANNEL_FETCH_LIMIT = 200
+
+internal fun encodeSlackIssueIdPathSegment(value: String): String =
+    URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")
 
 class SlackService {
     private val logger = LoggerFactory.getLogger(SlackService::class.java)
@@ -625,7 +631,7 @@ class SlackService {
         issueTitle: String,
         level: String,
         culprit: String?,
-        issueId: Long,
+        issueId: String,
         baseUrl: String,
         occurrenceCount: Int = 1,
         environment: String? = null,
@@ -633,6 +639,7 @@ class SlackService {
         stackTrace: String? = null
     ): Boolean {
         val config = getSlackConfig(organizationId) ?: return false
+        val issueUrl = "$baseUrl/issues/${encodeSlackIssueIdPathSegment(issueId)}"
 
         val levelLower = level.lowercase()
         val levelEmoji =
@@ -681,7 +688,7 @@ class SlackService {
                 text =
                 SlackText(
                     type = "mrkdwn",
-                    text = "*<$baseUrl/issues/$issueId|$issueTitle>*"
+                    text = "*<$issueUrl|$issueTitle>*"
                 )
             )
         )
@@ -751,7 +758,7 @@ class SlackService {
                     SlackElement(
                         type = "button",
                         text = SlackText(type = "plain_text", text = "View Issue"),
-                        url = "$baseUrl/issues/$issueId"
+                        url = issueUrl
                     )
                 )
             )
