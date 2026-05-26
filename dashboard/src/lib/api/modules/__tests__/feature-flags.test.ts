@@ -66,9 +66,9 @@ const flag = {
 
 describe('Feature Flags API', () => {
   beforeEach(() => {
-    localStorage.clear()
-    sessionStorage.clear()
-    sessionStorage.setItem('authenticated', 'true')
+    globalThis.localStorage.clear()
+    globalThis.sessionStorage.clear()
+    globalThis.sessionStorage.setItem('authenticated', 'true')
   })
 
   // ──── Environments ────

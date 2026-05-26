@@ -251,20 +251,34 @@ class FeatureFlagEvaluator {
         context: JsonObject,
     ): Boolean {
         val condition = element as? JsonObject ?: return false
-        val all = condition["all"] as? JsonArray
-        if (all != null) {
+        evaluateLogicalNode(condition, segments, context)?.let { return it }
+        resolveSegmentCondition(condition, segments, context)?.let { return it }
+        return matchesAttributeCondition(condition, context)
+    }
+
+    private fun evaluateLogicalNode(
+        condition: JsonObject,
+        segments: Map<String, FeatureFlagSegmentSnapshot>,
+        context: JsonObject,
+    ): Boolean? {
+        (condition["all"] as? JsonArray)?.let { all ->
             return all.all { matchesConditions(it, segments, context) }
         }
-        val any = condition["any"] as? JsonArray
-        if (any != null) {
+        (condition["any"] as? JsonArray)?.let { any ->
             return any.any { matchesConditions(it, segments, context) }
         }
+        return null
+    }
+
+    private fun resolveSegmentCondition(
+        condition: JsonObject,
+        segments: Map<String, FeatureFlagSegmentSnapshot>,
+        context: JsonObject,
+    ): Boolean? {
         val segmentKey = readString(condition["segment"])
-        if (segmentKey != null) {
-            val segment = segments[segmentKey] ?: return false
-            return matchesConditions(segment.conditions, segments, context)
-        }
-        return matchesAttributeCondition(condition, context)
+            ?: return null
+        val segment = segments[segmentKey] ?: return false
+        return matchesConditions(segment.conditions, segments, context)
     }
 
     private fun matchesAttributeCondition(condition: JsonObject, context: JsonObject): Boolean {
@@ -273,6 +287,10 @@ class FeatureFlagEvaluator {
         val actual = readPath(context, attribute)
         val expected = condition["value"]
 
+        return evaluateOperator(actual, expected, operator)
+    }
+
+    private fun evaluateOperator(actual: JsonElement?, expected: JsonElement?, operator: String): Boolean {
         return when (operator) {
             "exists" -> actual != null && actual !is JsonNull
             "not_exists" -> actual == null || actual is JsonNull
@@ -280,9 +298,9 @@ class FeatureFlagEvaluator {
             "neq" -> !valuesEqual(actual, expected)
             "in" -> expected is JsonArray && expected.any { valuesEqual(actual, it) }
             "not_in" -> expected is JsonArray && expected.none { valuesEqual(actual, it) }
-            "contains" -> readString(actual)?.contains(readString(expected).orEmpty()) == true
-            "starts_with" -> readString(actual)?.startsWith(readString(expected).orEmpty()) == true
-            "ends_with" -> readString(actual)?.endsWith(readString(expected).orEmpty()) == true
+            "contains" -> evaluateStringOperator(actual, expected) { value, target -> value.contains(target) }
+            "starts_with" -> evaluateStringOperator(actual, expected) { value, target -> value.startsWith(target) }
+            "ends_with" -> evaluateStringOperator(actual, expected) { value, target -> value.endsWith(target) }
             "gt" -> compareNumbers(actual, expected) { result -> result > 0 }
             "gte" -> compareNumbers(actual, expected) { result -> result >= 0 }
             "lt" -> compareNumbers(actual, expected) { result -> result < 0 }
@@ -293,6 +311,16 @@ class FeatureFlagEvaluator {
             "semver_lte" -> compareSemver(actual, expected) { result -> result <= 0 }
             else -> false
         }
+    }
+
+    private fun evaluateStringOperator(
+        actual: JsonElement?,
+        expected: JsonElement?,
+        predicate: (String, String) -> Boolean,
+    ): Boolean {
+        val actualString = readString(actual) ?: return false
+        val expectedString = readString(expected) ?: return false
+        return predicate(actualString, expectedString)
     }
 
     private fun response(

@@ -173,6 +173,14 @@ class FeatureFlagServiceTest {
         assertNotNull(updated)
         assertEquals("Checkout Rollout", updated.name)
         assertEquals(listOf("checkout", "internal"), updated.tags)
+        val blankNameUpdate = service.updateFlag(
+            SERVICE_TEST_ORG_ID,
+            SERVICE_TEST_USER_ID,
+            "checkout.enabled",
+            UpdateFeatureFlagRequest(name = "   ")
+        )
+        assertNotNull(blankNameUpdate)
+        assertEquals("Checkout Rollout", blankNameUpdate.name)
 
         val segment = service.upsertSegment(
             SERVICE_TEST_ORG_ID,

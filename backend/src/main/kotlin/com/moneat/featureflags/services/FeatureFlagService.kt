@@ -64,12 +64,14 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.longOrNull
+import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.isNull
+import org.jetbrains.exposed.v1.core.plus
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -303,7 +305,7 @@ class FeatureFlagService {
             }
 
             FeatureFlags.update({ FeatureFlags.id eq flagId }) {
-                request.name?.trim()?.ifBlank { null }?.let { value -> it[name] = value }
+                request.name?.trim()?.takeIf(String::isNotBlank)?.let { value -> it[name] = value }
                 if (request.description != null) {
                     it[description] = request.description.trim().ifBlank { null }
                 }
@@ -945,22 +947,8 @@ class FeatureFlagService {
     private fun ensureDefaultEnvironmentsInTransaction(organizationId: Int): List<ResultRow> {
         val now = Clock.System.now()
         defaultEnvironments().forEach { (key, name) ->
-            val exists = FeatureFlagEnvironments
-                .selectAll()
-                .where {
-                    (FeatureFlagEnvironments.organizationId eq organizationId) and
-                        (FeatureFlagEnvironments.key eq key)
-                }
-                .any()
-            if (!exists) {
-                FeatureFlagEnvironments.insert {
-                    it[FeatureFlagEnvironments.organizationId] = organizationId
-                    it[FeatureFlagEnvironments.key] = key
-                    it[FeatureFlagEnvironments.name] = name
-                    it[version] = 1
-                    it[createdAt] = now
-                    it[updatedAt] = now
-                }
+            if (!defaultEnvironmentExists(organizationId, key)) {
+                insertDefaultEnvironment(organizationId, key, name, now)
             }
         }
         return FeatureFlagEnvironments
@@ -968,6 +956,31 @@ class FeatureFlagService {
             .where { FeatureFlagEnvironments.organizationId eq organizationId }
             .orderBy(FeatureFlagEnvironments.key to SortOrder.ASC)
             .toList()
+    }
+
+    private fun defaultEnvironmentExists(organizationId: Int, key: String): Boolean {
+        return FeatureFlagEnvironments
+            .selectAll()
+            .where {
+                (FeatureFlagEnvironments.organizationId eq organizationId) and
+                    (FeatureFlagEnvironments.key eq key)
+            }
+            .any()
+    }
+
+    private fun insertDefaultEnvironment(organizationId: Int, key: String, name: String, now: Instant) {
+        try {
+            FeatureFlagEnvironments.insert {
+                it[FeatureFlagEnvironments.organizationId] = organizationId
+                it[FeatureFlagEnvironments.key] = key
+                it[FeatureFlagEnvironments.name] = name
+                it[version] = 1
+                it[createdAt] = now
+                it[updatedAt] = now
+            }
+        } catch (e: ExposedSQLException) {
+            if (!defaultEnvironmentExists(organizationId, key)) throw e
+        }
     }
 
     private fun findFlagRow(organizationId: Int, flagKey: String): ResultRow? {
@@ -1017,13 +1030,8 @@ class FeatureFlagService {
     }
 
     private fun incrementEnvironmentVersionInTransaction(environmentId: Int, now: kotlin.time.Instant) {
-        val currentVersion = FeatureFlagEnvironments
-            .selectAll()
-            .where { FeatureFlagEnvironments.id eq environmentId }
-            .firstOrNull()
-            ?.get(FeatureFlagEnvironments.version) ?: 1
         FeatureFlagEnvironments.update({ FeatureFlagEnvironments.id eq environmentId }) {
-            it[version] = currentVersion + 1
+            it.update(version, version + 1)
             it[updatedAt] = now
         }
     }

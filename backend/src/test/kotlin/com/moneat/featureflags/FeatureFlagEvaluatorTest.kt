@@ -296,6 +296,9 @@ class FeatureFlagEvaluatorTest {
             condition("country", "in", stringValue("US")) to context("user-1", "country" to stringValue("US")),
             condition("country", "not_in", stringValue("US")) to context("user-1", "country" to stringValue("US")),
             condition("email", "contains", stringValue("@moneat")) to context("user-1", "email" to JsonPrimitive(5)),
+            condition("email", "contains") to context("user-1", "email" to stringValue("dev@moneat.test")),
+            condition("email", "starts_with") to context("user-1", "email" to stringValue("dev@moneat.test")),
+            condition("email", "ends_with") to context("user-1", "email" to stringValue("dev@moneat.test")),
             condition("score", "gt", stringValue("not-a-number")) to context("user-1", "score" to JsonPrimitive(11)),
             condition("app.version", "semver_gt", stringValue("1.2.3")) to
                 context("user-1", "app" to buildJsonObject { put("version", stringValue("bad")) }),

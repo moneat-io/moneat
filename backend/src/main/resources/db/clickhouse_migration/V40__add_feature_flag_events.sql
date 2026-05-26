@@ -24,11 +24,11 @@ CREATE TABLE IF NOT EXISTS feature_flag_tracking_events (
     environment String,
     event_name String,
     targeting_key String,
-    flag_key String,
-    variant_key String,
+    flag_key Nullable(String),
+    variant_key Nullable(String),
     sdk_key_prefix String,
     key_type LowCardinality(String),
-    value Float64,
+    value Nullable(Float64),
     properties_json String
 )
 ENGINE = MergeTree
@@ -77,15 +77,15 @@ CREATE TABLE IF NOT EXISTS feature_flag_tracking_events_hourly (
     organization_id UInt32,
     environment String,
     event_name String,
-    flag_key String,
-    variant_key String,
+    flag_key Nullable(String),
+    variant_key Nullable(String),
     events AggregateFunction(count),
     unique_targets AggregateFunction(uniqCombined64, String),
     total_value AggregateFunction(sum, Float64)
 )
 ENGINE = AggregatingMergeTree
 PARTITION BY toYYYYMM(hour)
-ORDER BY (organization_id, environment, event_name, flag_key, variant_key, hour)
+ORDER BY (organization_id, environment, event_name, ifNull(flag_key, ''), ifNull(variant_key, ''), hour)
 TTL hour + INTERVAL 180 DAY;
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS feature_flag_tracking_events_hourly_mv
@@ -100,7 +100,7 @@ SELECT
     variant_key,
     countState() AS events,
     uniqCombined64State(targeting_key) AS unique_targets,
-    sumState(value) AS total_value
+    sumState(ifNull(value, 0.0)) AS total_value
 FROM feature_flag_tracking_events
 GROUP BY
     hour,

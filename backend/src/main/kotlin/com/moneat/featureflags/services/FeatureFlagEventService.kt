@@ -100,11 +100,11 @@ class FeatureFlagEventService {
                 '${escapeSql(principal.environmentKey)}',
                 '${escapeSql(request.eventName)}',
                 '${escapeSql(targetingKey(request.context).orEmpty())}',
-                '${escapeSql(request.flagKey.orEmpty())}',
-                '${escapeSql(request.variant.orEmpty())}',
+                ${nullableSqlString(request.flagKey)},
+                ${nullableSqlString(request.variant)},
                 '${escapeSql(principal.keyPrefix)}',
                 '${escapeSql(principal.keyType)}',
-                ${request.value ?: 0.0},
+                ${request.value ?: "NULL"},
                 '${escapeSql(json.encodeToString<JsonElement>(request.properties))}'
             )
         """.trimIndent()
@@ -119,5 +119,9 @@ class FeatureFlagEventService {
 
     private fun readString(element: JsonElement?): String? {
         return (element as? JsonPrimitive)?.contentOrNull
+    }
+
+    private fun nullableSqlString(value: String?): String {
+        return value?.let { "'${escapeSql(it)}'" } ?: "NULL"
     }
 }

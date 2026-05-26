@@ -23,6 +23,7 @@ import com.moneat.featureflags.models.OfrepTrackRequest
 import com.moneat.featureflags.services.FeatureFlagEventService
 import io.ktor.client.statement.HttpResponse
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
@@ -92,6 +93,29 @@ class FeatureFlagEventServiceTest {
     }
 
     @Test
+    fun `records missing optional tracking fields as clickhouse nulls`() = runBlocking {
+        val queries = mutableListOf<String>()
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.isInitialized() } returns true
+            coEvery { ClickHouseClient.execute(capture(queries), any()) } returns mockk<HttpResponse>(relaxed = true)
+
+            FeatureFlagEventService().recordTrackingEvent(
+                principal = principal,
+                request = OfrepTrackRequest(eventName = "checkout.started")
+            )
+
+            assertEquals(1, queries.size)
+            val query = queries.single()
+            assertTrue(query.contains("INSERT INTO feature_flag_tracking_events"))
+            assertEquals(3, Regex("""\bNULL\b""").findAll(query).count())
+            assertTrue(query.contains("'{}'"))
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
     fun `skips event recording when clickhouse is unavailable`() = runBlocking {
         mockkObject(ClickHouseClient)
         try {
@@ -110,6 +134,8 @@ class FeatureFlagEventServiceTest {
                 durationMs = 0.0,
             )
             service.recordTrackingEvent(principal, OfrepTrackRequest(eventName = "ignored"))
+
+            coVerify(exactly = 0) { ClickHouseClient.execute(any<String>(), any()) }
         } finally {
             unmockkObject(ClickHouseClient)
         }

@@ -140,11 +140,11 @@ interface SegmentDraft {
   conditions: string
 }
 
-function parseJson<T>(raw: string, fallback: T): T {
+function parseJson<T>(raw: string, field: string): T {
   try {
     return JSON.parse(raw) as T
   } catch {
-    return fallback
+    throw new Error(`Invalid ${field} JSON`)
   }
 }
 
@@ -334,7 +334,7 @@ function FeatureFlagsPage() {
 
   const createFlagMutation = useMutation({
     mutationFn: () => {
-      const variants = parseJson<FeatureFlagVariantRequest[]>(newFlag.variants, [])
+      const variants = parseJson<FeatureFlagVariantRequest[]>(newFlag.variants, 'variants')
       return api.createFeatureFlag({
         key: newFlag.key.trim(),
         name: newFlag.name.trim(),
@@ -361,7 +361,7 @@ function FeatureFlagsPage() {
     mutationFn: () => {
       if (!selectedFlag) throw new Error('No flag selected')
       return api.updateFeatureFlag(selectedFlag.key, {
-        variants: parseJson<FeatureFlagVariantRequest[]>(variantDraft, []),
+        variants: parseJson<FeatureFlagVariantRequest[]>(variantDraft, 'variants'),
       })
     },
     onSuccess: () => {
@@ -381,7 +381,7 @@ function FeatureFlagsPage() {
         enabled: configDraft.enabled,
         defaultVariantKey: configDraft.defaultVariantKey || null,
         offVariantKey: configDraft.offVariantKey || null,
-        rules: parseJson(configDraft.rules, {rules: []}),
+        rules: parseJson<unknown>(configDraft.rules, 'rules'),
       })
     },
     onSuccess: () => {
@@ -427,7 +427,7 @@ function FeatureFlagsPage() {
       key: segmentDraft.key.trim(),
       name: segmentDraft.name.trim(),
       description: segmentDraft.description.trim() || null,
-      conditions: parseJson(segmentDraft.conditions, {all: []}),
+      conditions: parseJson<unknown>(segmentDraft.conditions, 'segment conditions'),
     }),
     onSuccess: () => {
       toast({title: 'Segment saved'})
