@@ -35,6 +35,11 @@ import {
   serializeTelemetrySourceIds,
   storeTelemetrySourceIdsForProject,
 } from '@/lib/telemetry-sources'
+import {
+  DATADOG_IMPORT_CAMPAIGN,
+  clearDatadogImportSignupIntent,
+  hasDatadogImportSignupIntent,
+} from '@/lib/datadogImportFunnel'
 
 export const Route = createFileRoute('/onboarding')({
   beforeLoad: ({ location }) => {
@@ -84,6 +89,7 @@ function OnboardingPage() {
   const queryClient = useQueryClient()
   const { setSelectedProjectId } = useProject()
   const [step, setStep] = useState<OnboardingStep>('org')
+  const isDatadogImportOnboarding = hasDatadogImportSignupIntent(new URLSearchParams())
 
   // Org step state
   const [organizationName, setOrganizationName] = useState('')
@@ -147,6 +153,11 @@ function OnboardingPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const navigateToDatadogImport = () => {
+    clearDatadogImportSignupIntent()
+    navigate({to: '/dashboards', search: {import: 'datadog'}})
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -179,13 +190,13 @@ function OnboardingPage() {
     setLoading(true)
     try {
       // Retrieve UTM parameters from localStorage
-      const utmParamsStr = localStorage.getItem('utm_params')
+      const utmParamsStr = globalThis.localStorage.getItem('utm_params')
       let utmParams: Record<string, string | undefined> = {}
       if (utmParamsStr) {
         try {
           utmParams = JSON.parse(utmParamsStr) as Record<string, string | undefined>
         } catch {
-          localStorage.removeItem('utm_params')
+          globalThis.localStorage.removeItem('utm_params')
         }
       }
       
@@ -202,8 +213,14 @@ function OnboardingPage() {
       })
       
       // Clean up UTM params after successful onboarding
-      localStorage.removeItem('utm_params')
+      globalThis.localStorage.removeItem('utm_params')
       trackEvent('Onboarding Complete', { company_size: companySize })
+
+      if (isDatadogImportOnboarding) {
+        trackEvent('datadog_import_onboarding_completed', {campaign: DATADOG_IMPORT_CAMPAIGN})
+        navigateToDatadogImport()
+        return
+      }
       
       setStep('project')
     } catch {
@@ -281,8 +298,14 @@ function OnboardingPage() {
             <Logo className="h-10" />
           </div>
           <div>
-            <CardTitle className="text-2xl">Welcome!</CardTitle>
-            <CardDescription className="mt-1">Let's set up your organization</CardDescription>
+            <CardTitle className="text-2xl">
+              {isDatadogImportOnboarding ? 'Set up dashboard import' : 'Welcome!'}
+            </CardTitle>
+            <CardDescription className="mt-1">
+              {isDatadogImportOnboarding
+                ? 'Create an organization so we can save your imported dashboard.'
+                : "Let's set up your organization"}
+            </CardDescription>
           </div>
         </CardHeader>
         <CardContent>

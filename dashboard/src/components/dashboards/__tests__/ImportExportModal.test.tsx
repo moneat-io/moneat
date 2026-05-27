@@ -129,6 +129,21 @@ describe('ImportExportModal', () => {
       expect(screen.getByText('Upload Datadog Export File')).toBeInTheDocument()
     })
 
+    it('can open directly in Datadog format', () => {
+      renderWithQuery(
+        <ImportExportModal
+          open={true}
+          onOpenChange={vi.fn()}
+          mode="import"
+          initialFormat="datadog"
+        />
+      )
+
+      expect(screen.getByText('Datadog Dashboard Import')).toBeInTheDocument()
+      expect(screen.getByText('Upload Datadog Export File')).toBeInTheDocument()
+      expect(screen.getByRole('button', {name: 'Datadog'})).toHaveAttribute('aria-pressed', 'true')
+    })
+
     it('imports Datadog JSON using datadog format', async () => {
       const {api} = await import('@/lib/api')
       const user = userEvent.setup()

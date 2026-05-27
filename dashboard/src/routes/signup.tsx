@@ -20,7 +20,6 @@ import {api} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
 import {
   DATADOG_IMPORT_CAMPAIGN,
-  clearDatadogImportSignupIntent,
   hasDatadogImportSignupIntent,
   isDatadogImportCampaign,
   markDatadogImportSignupIntent,
@@ -114,7 +113,6 @@ function SignupPage() {
       trackEvent('Signup')
       if (isDatadogImportSignup) {
         trackEvent('signup_from_import', {campaign: DATADOG_IMPORT_CAMPAIGN})
-        clearDatadogImportSignupIntent()
       }
       setSuccess(true)
     } catch (err: unknown) {

@@ -58,16 +58,26 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
+interface DashboardListSearch {
+  import?: 'datadog'
+}
+
 export const Route = createFileRoute('/dashboards/')({
   component: DashboardListPage,
+  validateSearch: (search: Record<string, unknown>): DashboardListSearch => ({
+    import: search.import === 'datadog' ? 'datadog' : undefined,
+  }),
 })
 
 type FolderFilter = 'all' | 'favorites' | 'uncategorized' | number
 
 function DashboardListPage() {
   const navigate = useNavigate()
+  const search = Route.useSearch()
   const queryClient = useQueryClient()
+  const shouldOpenDatadogImport = search.import === 'datadog'
   const [showImport, setShowImport] = useState(false)
+  const isImportOpen = showImport || shouldOpenDatadogImport
   const [selectedFolder, setSelectedFolder] = useState<FolderFilter>('all')
   const [newFolderName, setNewFolderName] = useState('')
   const [isCreatingFolder, setIsCreatingFolder] = useState(false)
@@ -82,6 +92,13 @@ function DashboardListPage() {
     queryKey: ['dashboard-folders'],
     queryFn: () => api.getDashboardFolders(),
   })
+
+  const handleImportOpenChange = (open: boolean) => {
+    setShowImport(open)
+    if (!open && shouldOpenDatadogImport) {
+      navigate({to: '/dashboards', search: {}, replace: true})
+    }
+  }
 
   const filteredDashboards = useMemo(() => {
     if (!dashboards) return []
@@ -390,7 +407,13 @@ function DashboardListPage() {
         </div>
       </div>
 
-      <ImportExportModal open={showImport} onOpenChange={setShowImport} mode="import" />
+      <ImportExportModal
+        key={shouldOpenDatadogImport ? 'datadog-import' : 'dashboard-import'}
+        open={isImportOpen}
+        onOpenChange={handleImportOpenChange}
+        mode="import"
+        initialFormat={shouldOpenDatadogImport ? 'datadog' : 'grafana'}
+      />
     </div>
   )
 }

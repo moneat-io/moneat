@@ -54,14 +54,21 @@ interface ImportExportModalProps {
   onOpenChange: (open: boolean) => void
   mode: 'import' | 'export'
   dashboardId?: number
+  initialFormat?: DashboardImportFormat
 }
 
-export function ImportExportModal({open, onOpenChange, mode, dashboardId}: ImportExportModalProps) {
+export function ImportExportModal({
+  open,
+  onOpenChange,
+  mode,
+  dashboardId,
+  initialFormat = 'grafana',
+}: ImportExportModalProps) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [jsonInput, setJsonInput] = useState('')
-  const [format, setFormat] = useState<DashboardImportFormat>('grafana')
+  const [format, setFormat] = useState<DashboardImportFormat>(initialFormat)
   const [inputSource, setInputSource] = useState<DashboardImportInputSource>('paste')
   const [warnings, setWarnings] = useState<string[]>([])
   const [importSuccess, setImportSuccess] = useState(false)

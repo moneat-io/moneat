@@ -31,7 +31,9 @@ import {Helmet} from 'react-helmet-async'
 import {Button} from '@/components/ui/button'
 import {LandingFooter, LandingNavbar} from '@/components/landing/LandingNavbar'
 import {trackEvent} from '@/lib/analytics'
+import {api} from '@/lib/api'
 import {
+  DATADOG_IMPORT_DASHBOARDS_URL,
   DATADOG_IMPORT_SIGNUP_URL,
   markDatadogImportSignupIntent,
 } from '@/lib/datadogImportFunnel'
@@ -85,6 +87,8 @@ function trackImportStart(source: string): void {
 }
 
 function DatadogDashboardImportPage() {
+  const importHref = api.isAuthenticated() ? DATADOG_IMPORT_DASHBOARDS_URL : DATADOG_IMPORT_SIGNUP_URL
+
   useEffect(() => {
     trackEvent('datadog_import_page_view')
   }, [])
@@ -140,7 +144,7 @@ function DatadogDashboardImportPage() {
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Button asChild size="lg" className="h-12 bg-slate-950 px-6 text-white hover:bg-slate-800">
-                  <a href={DATADOG_IMPORT_SIGNUP_URL} onClick={() => trackImportStart('hero_primary')}>
+                  <a href={importHref} onClick={() => trackImportStart('hero_primary')}>
                     Import a Datadog dashboard
                     <ArrowRight className="ml-2 size-4" />
                   </a>
@@ -266,7 +270,7 @@ function DatadogDashboardImportPage() {
                 </p>
               </div>
               <Button asChild size="lg" className="h-12 bg-sky-500 px-6 text-white hover:bg-sky-600">
-                <a href={DATADOG_IMPORT_SIGNUP_URL} onClick={() => trackImportStart('bottom_cta')}>
+                <a href={importHref} onClick={() => trackImportStart('bottom_cta')}>
                   Get a free conversion report
                   <ArrowRight className="ml-2 size-4" />
                 </a>

@@ -18,6 +18,7 @@ export const DATADOG_IMPORT_CAMPAIGN = 'datadog_dashboard_import'
 export const DATADOG_IMPORT_SIGNUP_URL =
   '/signup?utm_source=moneat_site&utm_medium=landing_page&' +
   `utm_campaign=${DATADOG_IMPORT_CAMPAIGN}&utm_content=dashboard_import_cta`
+export const DATADOG_IMPORT_DASHBOARDS_URL = '/dashboards?import=datadog'
 export const DATADOG_IMPORT_DEFAULT_UTM_PARAMS = {
   utmSource: 'moneat_site',
   utmMedium: 'landing_page',

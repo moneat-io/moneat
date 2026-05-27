@@ -17,6 +17,7 @@
 import {beforeEach, describe, expect, it} from 'vitest'
 import {
   DATADOG_IMPORT_CAMPAIGN,
+  DATADOG_IMPORT_DASHBOARDS_URL,
   DATADOG_IMPORT_DEFAULT_UTM_PARAMS,
   clearDatadogImportSignupIntent,
   hasDatadogImportSignupIntent,
@@ -30,6 +31,10 @@ import {
 describe('datadog import funnel helpers', () => {
   beforeEach(() => {
     localStorage.clear()
+  })
+
+  it('points authenticated users to the dashboard import entrypoint', () => {
+    expect(DATADOG_IMPORT_DASHBOARDS_URL).toBe('/dashboards?import=datadog')
   })
 
   it('recognizes the Datadog dashboard import campaign from query params and stored intent', () => {
