@@ -29,6 +29,7 @@ private const val NANOS_PER_MILLI = 1_000_000L
 
 data class ResourceContext(
     val attributes: Map<String, String>,
+    val serviceNamespace: String,
     val serviceName: String,
     val environment: String,
     val hostName: String,
@@ -73,6 +74,7 @@ object OtlpParsingUtils {
         val attrs = attributesToMap(resource?.get("attributes"))
         return ResourceContext(
             attributes = attrs,
+            serviceNamespace = attrs["service.namespace"] ?: "",
             serviceName = attrs["service.name"] ?: "",
             environment = attrs["deployment.environment"]
                 ?: attrs["service.environment"] ?: "",

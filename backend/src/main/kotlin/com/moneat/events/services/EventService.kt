@@ -20,6 +20,8 @@ import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.events.models.EnvelopeItem
 import com.moneat.events.models.ExceptionInfo
+import com.moneat.events.models.ExceptionValue
+import com.moneat.events.models.SdkInfo
 import com.moneat.events.models.SentryEnvelope
 import com.moneat.events.models.SentryEvent
 import com.moneat.events.models.SentryFeedback
@@ -42,6 +44,7 @@ import com.moneat.events.repositories.models.SessionInsertData
 import com.moneat.events.repositories.models.TransactionEventInsertData
 import com.moneat.notifications.services.NotificationService
 import com.moneat.otlp.hexToULongPair
+import com.moneat.otlp.services.OtlpExceptionEvent
 import com.moneat.shared.services.CacheService
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseSqlUtils.doubleMapToSqlMap
@@ -58,6 +61,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
@@ -90,6 +94,7 @@ class EventService(
         private const val UUID_SEG2 = 12
         private const val UUID_SEG3 = 16
         private const val UUID_SEG4 = 20
+        private val OTLP_STACK_FRAME_PATTERN = Regex("""[\w.$/<>-]+\([^)]*\)""")
 
         /** Keys set by the server for apm_spans; must not be overwritten by SDK tag maps. */
         private val SENTRY_APM_META_RESERVED_KEYS = setOf("sentry.transaction_id", "sentry.project_id")
@@ -124,6 +129,61 @@ class EventService(
     // Track replay segment counters for mobile replays that lack a separate replay_event item.
     // Maps replay_id -> next segment counter. Cleaned up when map exceeds threshold.
     private val replaySegmentCounters = ConcurrentHashMap<String, AtomicInteger>()
+
+    suspend fun storeOtlpException(exception: OtlpExceptionEvent): Boolean {
+        val projectId = exception.projectId ?: return false
+        val eventId = UUID.randomUUID().toString()
+        val fingerprint = generateOtlpFingerprint(exception)
+        val issueId = generateIssueId(fingerprint)
+        val tags = otlpExceptionTags(exception)
+        val contexts = buildJsonObject {
+            put("trace_id", JsonPrimitive(exception.traceIdHex))
+            put("span_id", JsonPrimitive(exception.spanIdHex))
+            put("service", JsonPrimitive(exception.service))
+            put("service_namespace", JsonPrimitive(exception.serviceNamespace))
+        }.toString()
+
+        val eventData = ErrorEventInsertData(
+            eventId = eventId,
+            projectId = projectId,
+            timestampMs = exception.timestampMs,
+            level = "error",
+            message = exception.exceptionMessage.ifBlank { exception.exceptionType },
+            platform = "otel",
+            environment = exception.environment.ifBlank { "production" },
+            release = exception.serviceVersion,
+            dist = "",
+            serverName = exception.host,
+            userId = "",
+            userEmail = "",
+            userUsername = "",
+            userIpAddress = "",
+            exceptionType = exception.exceptionType,
+            exceptionValue = exception.exceptionMessage,
+            stackTrace = exception.stackTrace,
+            fingerprint = fingerprint,
+            issueId = issueId,
+            tags = tags,
+            contexts = contexts,
+            breadcrumbs = "[]",
+            request = "{}",
+            sdkName = "opentelemetry",
+            sdkVersion = "",
+        )
+
+        val success = eventRepository.insertErrorEvent(eventData)
+        if (!success) return false
+        CacheService.invalidatePattern("cache:issues:$projectId:*")
+        exception.serviceVersion.takeIf { it.isNotBlank() }?.let { releaseVersion ->
+            suspendRunCatching {
+                releaseService.upsertReleaseFromEvent(projectId, releaseVersion, exception.timestampMs)
+            }.getOrElse { e ->
+                logger.warn(e) { "Failed to upsert OTLP release $releaseVersion for project $projectId" }
+            }
+        }
+        maybeNotifyOtlpIssue(projectId, issueId, eventId, exception, tags)
+        return true
+    }
 
     fun verifyProjectKey(
         projectId: Long,
@@ -1008,6 +1068,75 @@ class EventService(
         logger.trace { "Final fingerprint: $fingerprint" }
 
         return fingerprint.ifEmpty { listOf("{{ default }}") }
+    }
+
+    private fun generateOtlpFingerprint(exception: OtlpExceptionEvent): List<String> {
+        val stackFrame = exception.stackTrace
+            .lineSequence()
+            .map { it.trim() }
+            .firstOrNull { isOtlpStackFrame(it) }
+
+        return buildList {
+            exception.exceptionType.takeIf { it.isNotBlank() }?.let { add(it) }
+            stackFrame?.let { add(it) }
+                ?: exception.exceptionMessage.takeIf { it.isNotBlank() }?.let { add(it) }
+            exception.service.takeIf { it.isNotBlank() }?.let { add(it) }
+        }.ifEmpty { listOf("{{ default }}") }
+    }
+
+    private fun isOtlpStackFrame(line: String): Boolean =
+        line.isNotBlank() &&
+            (line.startsWith("at ") || line.startsWith("File \"") || OTLP_STACK_FRAME_PATTERN.containsMatchIn(line))
+
+    private fun otlpExceptionTags(exception: OtlpExceptionEvent): Map<String, String> =
+        buildMap {
+            put("source", "otlp_trace")
+            put("trace_id", exception.traceIdHex)
+            put("span_id", exception.spanIdHex)
+            put("service", exception.service)
+            if (exception.serviceNamespace.isNotBlank()) put("service.namespace", exception.serviceNamespace)
+            if (exception.host.isNotBlank()) put("host", exception.host)
+        }
+
+    private suspend fun maybeNotifyOtlpIssue(
+        projectId: Long,
+        issueId: String,
+        eventId: String,
+        exception: OtlpExceptionEvent,
+        tags: Map<String, String>,
+    ) {
+        scope.launch {
+            suspendRunCatching {
+                if (isNewIssue(projectId, issueId)) {
+                    logger.info { "New OTLP trace issue detected: $issueId for project $projectId" }
+                    notificationService?.onNewIssue(
+                        projectId,
+                        issueId,
+                        SentryEvent(
+                            eventId = eventId,
+                            level = "error",
+                            platform = "otel",
+                            sdk = SdkInfo(name = "opentelemetry", version = ""),
+                            exception = ExceptionInfo(
+                                values = listOf(
+                                    ExceptionValue(
+                                        type = exception.exceptionType,
+                                        value = exception.exceptionMessage,
+                                    )
+                                )
+                            ),
+                            message = exception.exceptionMessage.ifBlank { exception.exceptionType },
+                            environment = exception.environment.ifBlank { "production" },
+                            release = exception.serviceVersion.ifBlank { null },
+                            tags = tags,
+                            serverName = exception.host.ifBlank { null },
+                        )
+                    )
+                }
+            }.getOrElse { e ->
+                logger.error(e) { "Failed to process new OTLP trace issue notification" }
+            }
+        }
     }
 
     private fun generateIssueId(fingerprint: List<String>): String {

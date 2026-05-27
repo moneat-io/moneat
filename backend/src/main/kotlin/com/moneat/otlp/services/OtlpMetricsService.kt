@@ -52,6 +52,7 @@ private const val ERROR_MESSAGE_PREVIEW_LENGTH = 500
 @Serializable
 data class OtlpMetricInsert(
     val organizationId: Long,
+    val projectId: Long? = null,
     val metricName: String,
     val metricType: String,
     val description: String,
@@ -68,6 +69,7 @@ data class OtlpMetricInsert(
     val histExplicitBounds: List<Double>,
     val tags: Map<String, String>,
     val resourceAttributes: Map<String, String>,
+    val serviceNamespace: String = "",
     val service: String,
     val env: String,
     val host: String,
@@ -574,6 +576,7 @@ class OtlpMetricsService(
         val tsMs = OtlpParsingUtils.nanoToEpochMs(spec.timestampNs) ?: 0L
         return OtlpMetricInsert(
             organizationId = 0,
+            projectId = null,
             metricName = spec.name,
             metricType = spec.type,
             description = spec.description,
@@ -590,6 +593,7 @@ class OtlpMetricsService(
             histExplicitBounds = spec.histExplicitBounds,
             tags = spec.attrs,
             resourceAttributes = spec.resourceCtx.attributes,
+            serviceNamespace = spec.resourceCtx.serviceNamespace,
             service = spec.resourceCtx.serviceName,
             env = spec.resourceCtx.environment,
             host = spec.resourceCtx.hostName,
@@ -625,6 +629,7 @@ class OtlpMetricsService(
             """(
                 generateUUIDv4(),
                 ${m.organizationId},
+                ${m.projectId ?: 0L},
                 '${escapeSql(m.metricName)}',
                 '${escapeSql(m.metricType)}',
                 fromUnixTimestamp64Milli(${m.timestampMs}),
@@ -651,7 +656,7 @@ class OtlpMetricsService(
 
         val insert = """
             INSERT INTO `$clickhouseDb`.metrics (
-                metric_id, organization_id, metric_name, metric_type,
+                metric_id, organization_id, project_id, metric_name, metric_type,
                 timestamp, value, host, tags, unit, source_type_name,
                 source, is_monotonic, aggregation_temporality,
                 hist_count, hist_sum, hist_min, hist_max,

@@ -16,6 +16,7 @@
 
 package com.moneat.otlp.services
 
+import com.moneat.events.services.EventService
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.suspendRunCatching
 import mu.KotlinLogging
@@ -27,6 +28,7 @@ class OtlpTraceIngestionWorker(
     dlqKey: String,
     workerCount: Int,
     private val traceService: OtlpTraceService = OtlpTraceService(),
+    private val eventService: EventService? = null,
 ) : OtlpIngestionWorkerBase(
     queueKey,
     dlqKey,
@@ -46,13 +48,15 @@ class OtlpTraceIngestionWorker(
         insertResult.onFailure { e -> logTraceInsertFailure(workerId, payload, e) }
         if (insertResult.isFailure) return
         suspendRunCatching {
-            // Tracked: https://github.com/moneat-io/moneat/issues/275 — org→project resolution +
-            // project-scoped error tracking for extracted span exceptions.
             val exceptions = OtlpErrorExtractor.extractExceptions(batch.spans)
             if (exceptions.isNotEmpty()) {
+                val inserted = exceptions
+                    .filter { it.projectId != null }
+                    .count { eventService?.storeOtlpException(it) == true }
                 logger.debug {
                     "OTLP trace worker $workerId extracted ${exceptions.size} exceptions " +
-                        "from ${batch.spans.size} spans (org ${batch.organizationId})"
+                        "from ${batch.spans.size} spans and inserted $inserted error events " +
+                        "(org ${batch.organizationId})"
                 }
             }
         }.onFailure { e ->

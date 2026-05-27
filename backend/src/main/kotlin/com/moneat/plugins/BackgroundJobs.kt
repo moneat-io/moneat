@@ -22,6 +22,7 @@ import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.enterprise.FeatureRegistry
+import com.moneat.events.services.EventService
 import com.moneat.events.services.IngestionWorker
 import com.moneat.llm.services.LlmIngestionWorker
 import com.moneat.logs.services.LogIngestionWorker
@@ -113,7 +114,8 @@ fun Application.configureBackgroundJobs() {
     val otlpTraceIngestionWorker = OtlpTraceIngestionWorker(
         otlpTracesQueueKey,
         otlpTracesDlqKey,
-        otlpTracesWorkerCount
+        otlpTracesWorkerCount,
+        eventService = koin.get<EventService>()
     )
 
     val otlpMetricsQueueKey = environment.config.propertyOrNull("otlp.metricsQueueKey")

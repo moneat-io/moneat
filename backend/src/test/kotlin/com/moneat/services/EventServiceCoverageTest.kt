@@ -43,6 +43,7 @@ import com.moneat.events.repositories.models.TransactionEventInsertData
 import com.moneat.events.services.EventService
 import com.moneat.events.services.ReleaseService
 import com.moneat.notifications.services.NotificationService
+import com.moneat.otlp.services.OtlpExceptionEvent
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
@@ -143,6 +144,120 @@ class EventServiceCoverageTest {
         )
     }
 
+    // ──── OTLP exception storage ────
+
+    @Test
+    fun `storeOtlpException returns false without mapped project`() = runBlocking {
+        val result = eventService.storeOtlpException(otlpException(projectId = null))
+
+        assertEquals(false, result)
+        coVerify(exactly = 0) { eventRepository.insertErrorEvent(any()) }
+    }
+
+    @Test
+    fun `storeOtlpException inserts event and upserts release`() = runBlocking {
+        val eventSlot = slot<ErrorEventInsertData>()
+        coEvery { eventRepository.insertErrorEvent(capture(eventSlot)) } returns true
+
+        val result = eventService.storeOtlpException(
+            otlpException(
+                environment = "",
+                serviceVersion = "1.2.3",
+                stackTrace = """
+                    Traceback header
+                        at com.example.Checkout.pay(Checkout.kt:42)
+                        at com.example.Checkout.handle(Checkout.kt:21)
+                """.trimIndent()
+            )
+        )
+
+        assertEquals(true, result)
+        val event = eventSlot.captured
+        assertEquals(testProjectId, event.projectId)
+        assertEquals("otel", event.platform)
+        assertEquals("checkout failed", event.message)
+        assertEquals("production", event.environment)
+        assertEquals("1.2.3", event.release)
+        assertEquals("api-host", event.serverName)
+        assertEquals("otlp_trace", event.tags?.get("source"))
+        assertEquals("checkout-api", event.tags?.get("service"))
+        assertTrue(event.fingerprint.contains("java.lang.IllegalStateException"))
+        assertTrue(event.fingerprint.any { it.contains("com.example.Checkout.pay") })
+        assertTrue(event.fingerprint.contains("checkout-api"))
+        assertTrue(event.contexts.contains("\"trace_id\":\"trace-1\""))
+        verify {
+            releaseService.upsertReleaseFromEvent(testProjectId, "1.2.3", 1_700_000_000_000L)
+        }
+    }
+
+    @Test
+    fun `storeOtlpException continues when release upsert fails`() = runBlocking {
+        every {
+            releaseService.upsertReleaseFromEvent(testProjectId, "1.2.3", 1_700_000_000_000L)
+        } throws IllegalStateException("release unavailable")
+
+        val result = eventService.storeOtlpException(otlpException(serviceVersion = "1.2.3"))
+
+        assertEquals(true, result)
+        verify {
+            releaseService.upsertReleaseFromEvent(testProjectId, "1.2.3", 1_700_000_000_000L)
+        }
+    }
+
+    @Test
+    fun `storeOtlpException fingerprints message when stack has no frame`() = runBlocking {
+        val eventSlot = slot<ErrorEventInsertData>()
+        coEvery { eventRepository.insertErrorEvent(capture(eventSlot)) } returns true
+
+        val result = eventService.storeOtlpException(
+            otlpException(
+                exceptionMessage = "plain message",
+                stackTrace = "java.lang.IllegalStateException: plain message"
+            )
+        )
+
+        assertEquals(true, result)
+        assertTrue(eventSlot.captured.fingerprint.contains("java.lang.IllegalStateException"))
+        assertTrue(eventSlot.captured.fingerprint.contains("plain message"))
+        assertTrue(eventSlot.captured.fingerprint.contains("checkout-api"))
+    }
+
+    @Test
+    fun `storeOtlpException uses default fingerprint when otlp details are blank`() = runBlocking {
+        val eventSlot = slot<ErrorEventInsertData>()
+        coEvery { eventRepository.insertErrorEvent(capture(eventSlot)) } returns true
+
+        val result = eventService.storeOtlpException(
+            otlpException(
+                environment = "",
+                serviceNamespace = "",
+                service = "",
+                host = "",
+                exceptionType = "",
+                exceptionMessage = "",
+                stackTrace = "exception summary without a frame"
+            )
+        )
+
+        assertEquals(true, result)
+        assertEquals(listOf("{{ default }}"), eventSlot.captured.fingerprint)
+        assertEquals("production", eventSlot.captured.environment)
+        assertEquals(null, eventSlot.captured.tags?.get("service.namespace"))
+        assertEquals(null, eventSlot.captured.tags?.get("host"))
+    }
+
+    @Test
+    fun `storeOtlpException returns false when insert fails`() = runBlocking {
+        coEvery { eventRepository.insertErrorEvent(any()) } returns false
+
+        val result = eventService.storeOtlpException(otlpException())
+
+        assertEquals(false, result)
+        verify(exactly = 0) {
+            releaseService.upsertReleaseFromEvent(any(), any(), any())
+        }
+    }
+
     // ===================== processEnvelope routing =====================
 
     @Test
@@ -167,6 +282,33 @@ class EventServiceCoverageTest {
 
         coVerify(atLeast = 1) { eventRepository.insertErrorEvent(any()) }
     }
+
+    private fun otlpException(
+        projectId: Long? = testProjectId,
+        environment: String = "staging",
+        serviceVersion: String = "",
+        stackTrace: String = "at com.example.Worker.run(Worker.kt:12)",
+        serviceNamespace: String = "checkout",
+        service: String = "checkout-api",
+        host: String = "api-host",
+        exceptionType: String = "java.lang.IllegalStateException",
+        exceptionMessage: String = "checkout failed",
+    ): OtlpExceptionEvent =
+        OtlpExceptionEvent(
+            traceIdHex = "trace-1",
+            spanIdHex = "span-1",
+            organizationId = testOrgId.toLong(),
+            projectId = projectId,
+            serviceNamespace = serviceNamespace,
+            service = service,
+            environment = environment,
+            host = host,
+            serviceVersion = serviceVersion,
+            exceptionType = exceptionType,
+            exceptionMessage = exceptionMessage,
+            stackTrace = stackTrace,
+            timestampMs = 1_700_000_000_000L
+        )
 
     @Test
     fun `processEnvelope routes transaction item to storeTransaction`() = runBlocking {

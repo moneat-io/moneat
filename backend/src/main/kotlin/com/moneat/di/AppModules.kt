@@ -86,6 +86,7 @@ import com.moneat.org.services.AdminService
 import com.moneat.org.services.OrgInvitationService
 import com.moneat.org.services.OrgMembershipService
 import com.moneat.otlp.services.OtlpApiKeyService
+import com.moneat.otlp.services.OtlpServiceRoutingService
 import com.moneat.shared.repositories.MembershipRepository
 import com.moneat.shared.repositories.MembershipRepositoryImpl
 import com.moneat.shared.repositories.OrganizationRepository
@@ -213,6 +214,7 @@ val logsModule = module {
 
     single { LogService(get()) }
     single { OtlpApiKeyService() }
+    single { OtlpServiceRoutingService() }
     single { LogIndexService() }
 }
 

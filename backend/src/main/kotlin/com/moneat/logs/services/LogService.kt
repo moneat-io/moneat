@@ -191,6 +191,7 @@ class LogService(private val logRepository: LogRepository) {
             (
                 toUUID('${escapeSql(entry.logId)}'),
                 ${batch.effectiveOrganizationId},
+                ${entry.projectId ?: 0L},
                 toUUID('${escapeSql(systemIdValue)}'),
                 fromUnixTimestamp64Milli(${entry.timestampMs}),
                 '${escapeSql(entry.level)}',
@@ -217,6 +218,7 @@ class LogService(private val logRepository: LogRepository) {
             INSERT INTO `$clickhouseDb`.logs (
                 log_id,
                 organization_id,
+                project_id,
                 system_id,
                 timestamp,
                 level,
@@ -598,7 +600,11 @@ class LogService(private val logRepository: LogRepository) {
         val sql =
             if (validGroupBy != null) {
                 """
-            SELECT formatDateTime(toStartOfInterval(timestamp, INTERVAL $chInterval), '%Y-%m-%dT%H:%i:%SZ', 'UTC') AS bucket,
+            SELECT formatDateTime(
+                       toStartOfInterval(timestamp, INTERVAL $chInterval),
+                       '%Y-%m-%dT%H:%i:%SZ',
+                       'UTC'
+                   ) AS bucket,
                    $validGroupBy AS group_value,
                    count() AS cnt
             FROM `$clickhouseDb`.logs
@@ -609,7 +615,11 @@ class LogService(private val logRepository: LogRepository) {
                 """.trimIndent()
             } else {
                 """
-            SELECT formatDateTime(toStartOfInterval(timestamp, INTERVAL $chInterval), '%Y-%m-%dT%H:%i:%SZ', 'UTC') AS bucket,
+            SELECT formatDateTime(
+                       toStartOfInterval(timestamp, INTERVAL $chInterval),
+                       '%Y-%m-%dT%H:%i:%SZ',
+                       'UTC'
+                   ) AS bucket,
                    count() AS cnt
             FROM `$clickhouseDb`.logs
             WHERE $whereClause
@@ -1306,9 +1316,11 @@ class LogService(private val logRepository: LogRepository) {
             message = trimTo(entry.message.orEmpty(), MAX_LOG_MESSAGE_CHARS),
             body = trimTo(entry.body ?: entry.message.orEmpty(), MAX_LOG_BODY_CHARS),
             service = trimTo(entry.service.orEmpty(), MAX_LOG_SERVICE_CHARS),
+            serviceNamespace = trimTo(entry.serviceNamespace.orEmpty(), MAX_LOG_SERVICE_CHARS),
             environment = trimTo(entry.environment.orEmpty(), MAX_LOG_ENVIRONMENT_CHARS),
             host = trimTo(entry.host.orEmpty(), MAX_LOG_HOST_CHARS),
             source = normalizeSource(entry.source ?: "sdk"),
+            projectId = entry.projectId,
             containerName = trimTo(entry.containerName.orEmpty(), MAX_LOG_CONTAINER_NAME_CHARS),
             containerId = trimTo(entry.containerId.orEmpty(), MAX_LOG_CONTAINER_ID_CHARS),
             containerImage = trimTo(entry.containerImage.orEmpty(), MAX_LOG_CONTAINER_IMAGE_CHARS),
@@ -1339,6 +1351,7 @@ class LogService(private val logRepository: LogRepository) {
             message = trimTo(entry.message.orEmpty(), MAX_LOG_MESSAGE_CHARS),
             body = trimTo(entry.body ?: entry.message.orEmpty(), MAX_LOG_BODY_CHARS),
             service = trimTo(entry.service ?: entry.containerName.orEmpty(), MAX_LOG_SERVICE_CHARS),
+            serviceNamespace = "",
             environment = trimTo(entry.environment.orEmpty(), MAX_LOG_ENVIRONMENT_CHARS),
             host = trimTo(entry.host.orEmpty(), MAX_LOG_HOST_CHARS),
             source = source,
@@ -1439,6 +1452,7 @@ class LogService(private val logRepository: LogRepository) {
             message = message,
             body = bodyText,
             service = resourceCtx.serviceName.ifEmpty { attributes["service.name"] },
+            serviceNamespace = resourceCtx.serviceNamespace.ifEmpty { attributes["service.namespace"] },
             environment = resourceCtx.environment.ifEmpty {
                 attributes["deployment.environment"] ?: attributes["service.environment"]
             },
@@ -1516,6 +1530,7 @@ class LogService(private val logRepository: LogRepository) {
             message = message,
             body = bodyText,
             service = resourceCtx.serviceName.ifEmpty { attributes["service.name"] },
+            serviceNamespace = resourceCtx.serviceNamespace.ifEmpty { attributes["service.namespace"] },
             environment = resourceCtx.environment.ifEmpty {
                 attributes["deployment.environment"] ?: attributes["service.environment"]
             },
