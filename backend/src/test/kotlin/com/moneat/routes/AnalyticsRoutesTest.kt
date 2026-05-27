@@ -576,17 +576,20 @@ class AnalyticsRoutesTest {
     // ──── Events ────
 
     @Test
-    fun `GET events returns 200`() = testApplication {
+    fun `GET events forwards product grouping params`() = testApplication {
         val userId = seedUser()
         stubAccess(userId)
         coEvery {
-            mockAnalyticsService.getEvents(PROJECT_ID, any(), any(), any(), any(), any(), any())
+            mockAnalyticsService.getEvents(PROJECT_ID, any(), any(), any(), 25, "user_id", "server")
         } returns breakdownResponse
         application { installRoutes(this) }
-        val r = client.get(authedGet("/events?period=30d")) {
+        val r = client.get(authedGet("/events?period=30d&limit=25&group_by=user_id&source=server")) {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
+        coVerify(exactly = 1) {
+            mockAnalyticsService.getEvents(PROJECT_ID, any(), any(), any(), 25, "user_id", "server")
+        }
     }
 
     // ──── Realtime ────

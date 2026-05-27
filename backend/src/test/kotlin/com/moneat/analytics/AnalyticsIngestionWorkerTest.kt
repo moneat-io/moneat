@@ -38,6 +38,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class AnalyticsIngestionWorkerTest {
+    // ──── Mocks & Setup ────
 
     private val mockRedis = mockk<RedisCommands<String, String>>(relaxed = true)
 
@@ -53,6 +54,8 @@ class AnalyticsIngestionWorkerTest {
         unmockkObject(RedisConfig)
         ClickHouseClient.close()
     }
+
+    // ──── Companion Metadata ────
 
     @Test
     fun `companion exposes queue and dlq keys`() {
@@ -72,6 +75,8 @@ class AnalyticsIngestionWorkerTest {
         val raw = "a'b\\c\n"
         assertEquals(ClickHouseSqlUtils.escapeSql(raw), AnalyticsIngestionWorker.escapeCH(raw))
     }
+
+    // ──── Message Processing ────
 
     @Test
     fun `processMessage with invalid JSON does not throw`() {
@@ -133,6 +138,8 @@ class AnalyticsIngestionWorkerTest {
             assertTrue(queries.any { it.contains("'user-1'") && it.contains("'server'") })
         }
     }
+
+    // ──── Lifecycle ────
 
     @Test
     fun `stop without start does not throw`() {

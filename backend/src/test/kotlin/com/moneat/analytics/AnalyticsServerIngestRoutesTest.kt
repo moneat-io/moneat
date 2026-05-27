@@ -17,10 +17,13 @@
 package com.moneat.analytics
 
 import com.moneat.analytics.routes.analyticsServerIngestRoutes
+import com.moneat.analytics.services.AnalyticsIngestionWorker
+import com.moneat.config.RedisConfig
 import com.moneat.otlp.services.OtlpApiKeyService
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.testsupport.TestDatabaseHelper
+import io.lettuce.core.api.sync.RedisCommands
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -36,20 +39,29 @@ import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
+import io.mockk.verify
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class AnalyticsServerIngestRoutesTest {
+    // ──── Companion ────
+
     companion object {
         private const val API_KEY = "motlp_valid_server_key"
+        private const val TOO_MANY_EVENTS_COUNT = 501
         private var db: Database? = null
     }
+
+    // ──── Mocks & Setup ────
 
     private val otlpApiKeyService = mockk<OtlpApiKeyService>()
 
@@ -64,6 +76,13 @@ class AnalyticsServerIngestRoutesTest {
         TransactionManager.defaultDatabase = db
         TestDatabaseHelper.resetSchema(Organizations, Projects)
     }
+
+    @AfterTest
+    fun teardown() {
+        unmockkObject(RedisConfig)
+    }
+
+    // ──── Tests ────
 
     @Test
     fun `POST server analytics event enqueues canonical product event`() = testApplication {
@@ -125,6 +144,66 @@ class AnalyticsServerIngestRoutesTest {
     }
 
     @Test
+    fun `POST server analytics event uses default Redis queue`() = testApplication {
+        val (organizationId, projectId) = seedProject()
+        every { otlpApiKeyService.validateKey(API_KEY) } returns organizationId
+        val mockRedis = mockk<RedisCommands<String, String>>()
+        mockkObject(RedisConfig)
+        every {
+            mockRedis.lpush(AnalyticsIngestionWorker.QUEUE_KEY, *anyVararg())
+        } returns 2L
+        every { RedisConfig.sync() } returns mockRedis
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing {
+                analyticsServerIngestRoutes(otlpApiKeyService = otlpApiKeyService)
+            }
+        }
+
+        val response = client.post("/v1/analytics/$projectId/events") {
+            contentType(ContentType.Application.Json)
+            header(HttpHeaders.Authorization, "Bearer $API_KEY")
+            setBody(
+                """
+                {
+                  "events": [
+                    {"name": "recording.started", "user_id": "user-a"},
+                    {"name": "export.completed", "user_id": "user-a"}
+                  ]
+                }
+                """.trimIndent()
+            )
+        }
+
+        assertEquals(HttpStatusCode.Accepted, response.status, response.bodyAsText())
+        verify(exactly = 1) {
+            mockRedis.lpush(AnalyticsIngestionWorker.QUEUE_KEY, *anyVararg())
+        }
+    }
+
+    @Test
+    fun `POST server analytics event rejects invalid project ID`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            routing {
+                analyticsServerIngestRoutes(
+                    otlpApiKeyService = otlpApiKeyService,
+                    enqueueEvents = { },
+                )
+            }
+        }
+
+        val response = client.post("/v1/analytics/not-a-number/events") {
+            contentType(ContentType.Application.Json)
+            header(HttpHeaders.Authorization, "Bearer $API_KEY")
+            setBody("""{"events":[{"name":"recording.started","user_id":"user"}]}""")
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
     fun `POST server analytics event requires bearer token`() = testApplication {
         val (_, projectId) = seedProject()
 
@@ -141,6 +220,30 @@ class AnalyticsServerIngestRoutesTest {
         val response = client.post("/v1/analytics/$projectId/events") {
             contentType(ContentType.Application.Json)
             setBody("""{"events":[]}""")
+        }
+
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
+    }
+
+    @Test
+    fun `POST server analytics event rejects invalid API key`() = testApplication {
+        val (_, projectId) = seedProject()
+        every { otlpApiKeyService.validateKey(API_KEY) } returns null
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing {
+                analyticsServerIngestRoutes(
+                    otlpApiKeyService = otlpApiKeyService,
+                    enqueueEvents = { },
+                )
+            }
+        }
+
+        val response = client.post("/v1/analytics/$projectId/events") {
+            contentType(ContentType.Application.Json)
+            header(HttpHeaders.Authorization, "Bearer $API_KEY")
+            setBody("""{"events":[{"name":"recording.started","user_id":"user"}]}""")
         }
 
         assertEquals(HttpStatusCode.Unauthorized, response.status)
@@ -171,6 +274,81 @@ class AnalyticsServerIngestRoutesTest {
     }
 
     @Test
+    fun `POST server analytics event rejects malformed payload`() = testApplication {
+        val (organizationId, projectId) = seedProject()
+        every { otlpApiKeyService.validateKey(API_KEY) } returns organizationId
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing {
+                analyticsServerIngestRoutes(
+                    otlpApiKeyService = otlpApiKeyService,
+                    enqueueEvents = { },
+                )
+            }
+        }
+
+        val response = client.post("/v1/analytics/$projectId/events") {
+            contentType(ContentType.Application.Json)
+            header(HttpHeaders.Authorization, "Bearer $API_KEY")
+            setBody("{not-json")
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
+    fun `POST server analytics event rejects empty event list`() = testApplication {
+        val (organizationId, projectId) = seedProject()
+        every { otlpApiKeyService.validateKey(API_KEY) } returns organizationId
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing {
+                analyticsServerIngestRoutes(
+                    otlpApiKeyService = otlpApiKeyService,
+                    enqueueEvents = { },
+                )
+            }
+        }
+
+        val response = client.post("/v1/analytics/$projectId/events") {
+            contentType(ContentType.Application.Json)
+            header(HttpHeaders.Authorization, "Bearer $API_KEY")
+            setBody("""{"events":[]}""")
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
+    fun `POST server analytics event rejects oversized event list`() = testApplication {
+        val (organizationId, projectId) = seedProject()
+        every { otlpApiKeyService.validateKey(API_KEY) } returns organizationId
+        val events = List(TOO_MANY_EVENTS_COUNT) { index ->
+            """{"name":"recording.started","user_id":"user-$index"}"""
+        }.joinToString(prefix = """{"events":[""", separator = ",", postfix = "]}")
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing {
+                analyticsServerIngestRoutes(
+                    otlpApiKeyService = otlpApiKeyService,
+                    enqueueEvents = { },
+                )
+            }
+        }
+
+        val response = client.post("/v1/analytics/$projectId/events") {
+            contentType(ContentType.Application.Json)
+            header(HttpHeaders.Authorization, "Bearer $API_KEY")
+            setBody(events)
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
     fun `POST server analytics event validates payload events`() = testApplication {
         val (organizationId, projectId) = seedProject()
         every { otlpApiKeyService.validateKey(API_KEY) } returns organizationId
@@ -193,6 +371,32 @@ class AnalyticsServerIngestRoutesTest {
 
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
+
+    @Test
+    fun `POST server analytics event returns 500 when enqueue fails`() = testApplication {
+        val (organizationId, projectId) = seedProject()
+        every { otlpApiKeyService.validateKey(API_KEY) } returns organizationId
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing {
+                analyticsServerIngestRoutes(
+                    otlpApiKeyService = otlpApiKeyService,
+                    enqueueEvents = { throw RuntimeException("queue unavailable") },
+                )
+            }
+        }
+
+        val response = client.post("/v1/analytics/$projectId/events") {
+            contentType(ContentType.Application.Json)
+            header(HttpHeaders.Authorization, "Bearer $API_KEY")
+            setBody("""{"events":[{"name":"recording.started","user_id":"user"}]}""")
+        }
+
+        assertEquals(HttpStatusCode.InternalServerError, response.status)
+    }
+
+    // ──── Helpers ────
 
     private fun seedProject(): Pair<Int, Long> {
         return transaction {
