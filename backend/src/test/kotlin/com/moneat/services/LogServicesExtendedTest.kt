@@ -30,6 +30,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -527,7 +528,7 @@ class LogServicesExtendedTest {
 
             assertTrue(result.logs.isEmpty())
             assertFalse(result.hasMore)
-            assertEquals(0L, result.totalCount)
+            assertNull(result.totalCount)
             val allQueries = capturedQueries.joinToString("\n")
             assertTrue(allQueries.contains(SERVICE_EQ_API))
             assertTrue(allQueries.contains("environment = 'prod'"))

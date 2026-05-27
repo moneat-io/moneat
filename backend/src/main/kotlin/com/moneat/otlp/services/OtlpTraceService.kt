@@ -17,6 +17,8 @@
 package com.moneat.otlp.services
 
 import com.google.protobuf.InvalidProtocolBufferException
+import com.moneat.apm.services.ApmServiceMapRollups
+import com.moneat.apm.services.ApmServiceMapSpan
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.otlp.OtlpParsingUtils
@@ -61,6 +63,7 @@ private const val OTLP_SPAN_KIND_CLIENT = 3
 private const val OTLP_SPAN_KIND_PRODUCER = 4
 private const val OTLP_SPAN_KIND_CONSUMER = 5
 private const val ERROR_MESSAGE_PREVIEW_LENGTH = 500
+private const val OTLP_SOURCE = "otlp"
 
 @Serializable
 data class OtlpSpanInsert(
@@ -356,7 +359,7 @@ class OtlpTraceService(
                 '${escapeSql(s.traceIdHex)}',
                 '${escapeSql(s.spanIdHex)}',
                 '${escapeSql(s.parentIdHex)}',
-                'otlp',
+                '$OTLP_SOURCE',
                 '${escapeSql(s.kind)}',
                 ${s.statusCode},
                 '${escapeSql(s.statusMessage)}',
@@ -385,6 +388,7 @@ class OtlpTraceService(
 
         val response = ClickHouseClient.execute(insert)
         check(response.status.isSuccess()) { "Failed to insert OTLP spans into ClickHouse" }
+        ApmServiceMapRollups.insertForSpans(clickhouseDb, batch.spans.toServiceMapSpans())
 
         val totalBytes = batch.spans.calculateBillableBytes()
         usageTracking.recordOrgUsage(
@@ -403,6 +407,22 @@ class OtlpTraceService(
         OTLP_SPAN_KIND_CONSUMER -> "CONSUMER"
         else -> ""
     }
+
+    private fun List<OtlpSpanInsert>.toServiceMapSpans(): List<ApmServiceMapSpan> =
+        map { span ->
+            ApmServiceMapSpan(
+                organizationId = span.organizationId,
+                traceKey = span.traceIdHex,
+                spanKey = span.spanIdHex,
+                parentKey = span.parentIdHex,
+                service = span.service,
+                env = span.env,
+                source = OTLP_SOURCE,
+                startNanos = span.startNanos,
+                durationNanos = span.durationNanos,
+                error = span.error,
+            )
+        }
 
     private fun protoEventsToJson(events: List<Span.Event>): String {
         val jsonEvents =

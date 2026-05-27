@@ -21,6 +21,8 @@ import com.moneat.config.RedisConfig
 import com.moneat.datadog.models.DatadogConnectionsPayload
 import com.moneat.datadog.models.DatadogContainerPayload
 import com.moneat.datadog.models.DatadogProcessPayload
+import com.moneat.monitor.services.InfraContainerRollupRow
+import com.moneat.monitor.services.InfraTelemetryRollups
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
@@ -289,6 +291,25 @@ object DatadogInfraService {
         """.trimIndent()
 
         executeInsert(insert, "DD containers")
+        InfraTelemetryRollups.insertContainerRollups(
+            batch.containers.map { container ->
+                InfraContainerRollupRow(
+                    organizationId = batch.organizationId,
+                    host = container.host,
+                    containerId = container.containerId,
+                    name = container.name,
+                    image = container.image,
+                    state = container.state,
+                    cpuPercent = container.cpuPercent,
+                    memUsage = container.memUsage,
+                    memLimit = container.memLimit,
+                    netRxBytes = container.netRxBytes,
+                    netTxBytes = container.netTxBytes,
+                    tags = container.tags,
+                    timestampMs = container.timestampMs,
+                )
+            }
+        )
     }
 
     private suspend fun insertConnections(batch: QueuedInfraBatch) {

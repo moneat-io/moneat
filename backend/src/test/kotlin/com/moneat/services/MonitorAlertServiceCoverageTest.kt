@@ -225,6 +225,8 @@ class MonitorAlertServiceCoverageTest {
             assertTrue(
                 queries.single().contains("timestamp >= now64(3) - INTERVAL 10 MINUTE")
             )
+            assertTrue(queries.single().contains("metrics_latest_by_host"))
+            assertTrue(queries.single().contains("host_id = 1"))
         }
 
     @Test

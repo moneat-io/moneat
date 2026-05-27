@@ -19,6 +19,8 @@ package com.moneat.otlp.services
 import com.google.protobuf.InvalidProtocolBufferException
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
+import com.moneat.monitor.services.InfraMetricRollupRow
+import com.moneat.monitor.services.InfraTelemetryRollups
 import com.moneat.otlp.METRIC_BILLABLE_OVERHEAD_BYTES
 import com.moneat.otlp.OtlpParsingUtils
 import com.moneat.otlp.OtlpProtobufParser
@@ -668,6 +670,21 @@ class OtlpMetricsService(
 
         val response = ClickHouseClient.execute(insert)
         check(response.status.isSuccess()) { "Failed to insert OTLP metrics into ClickHouse" }
+
+        InfraTelemetryRollups.insertMetricRollups(
+            batch.metrics.map { metric ->
+                InfraMetricRollupRow(
+                    organizationId = metric.organizationId,
+                    metricName = metric.metricName,
+                    timestampMs = metric.timestampMs,
+                    value = metric.value,
+                    host = metric.host,
+                    tags = metric.resourceAttributes + metric.tags,
+                    unit = metric.unit,
+                    source = "otlp",
+                )
+            }
+        )
 
         val totalBytes = batch.metrics.sumOf { it.metricName.length + METRIC_BILLABLE_OVERHEAD_BYTES }
         usageTracking.recordOrgUsage(

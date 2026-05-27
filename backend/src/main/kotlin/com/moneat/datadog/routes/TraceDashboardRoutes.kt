@@ -19,6 +19,7 @@ package com.moneat.datadog.routes
 import com.moneat.datadog.services.DdApmQueryTimeRange
 import com.moneat.datadog.services.DdApmQueryTimeUnit
 import com.moneat.datadog.services.TraceIngestionService
+import com.moneat.plugins.getSentryTransaction
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
@@ -73,7 +74,8 @@ fun Route.traceDashboardRoutes() {
                     service,
                     limit,
                     offset,
-                    timeRange
+                    timeRange,
+                    call.getSentryTransaction(),
                 )
                 call.respond(result)
             }
@@ -108,7 +110,8 @@ fun Route.traceDashboardRoutes() {
                     env,
                     limit,
                     offset,
-                    timeRange
+                    timeRange,
+                    call.getSentryTransaction(),
                 )
                 call.respond(result)
             }
@@ -136,7 +139,8 @@ fun Route.traceDashboardRoutes() {
 
                 val result = TraceIngestionService.getTraceDetail(
                     orgId,
-                    traceId
+                    traceId,
+                    call.getSentryTransaction(),
                 )
                 if (result == null) {
                     call.respond(
@@ -158,7 +162,7 @@ fun Route.traceDashboardRoutes() {
                     HttpStatusCode.Unauthorized,
                     mapOf("error" to "Invalid token")
                 )
-            val result = TraceIngestionService.getServiceMap(orgId)
+            val result = TraceIngestionService.getServiceMap(orgId, call.getSentryTransaction())
             call.respond(result)
         }
 
@@ -189,7 +193,8 @@ fun Route.traceDashboardRoutes() {
                 service,
                 limit,
                 offset,
-                timeRange
+                timeRange,
+                call.getSentryTransaction(),
             )
             call.respond(result)
         }

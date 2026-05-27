@@ -51,6 +51,28 @@ private val logger = KotlinLogging.logger {}
 // Attribute key for storing Sentry transaction in call
 private val SentryTransactionKey = AttributeKey<ITransaction>("SentryTransaction")
 private val ingestPathRegex = Regex("^/api/[^/]+/(envelope|logs|store|security)/?$")
+private val datadogApiV1IntakePaths = setOf(
+    "/api/v1/container",
+    "/api/v1/discovery",
+)
+private val datadogApiV2IntakePaths = setOf(
+    "/api/v2/contimage",
+    "/api/v2/contlcycle",
+    "/api/v2/data_streams_messages",
+    "/api/v2/databasequery",
+    "/api/v2/dbmactivity",
+    "/api/v2/dbmhealth",
+    "/api/v2/dbmmetadata",
+    "/api/v2/dbmmetrics",
+    "/api/v2/events",
+    "/api/v2/ndm",
+    "/api/v2/ndmconfig",
+    "/api/v2/ndmflow",
+    "/api/v2/ndmtraps",
+    "/api/v2/netpath",
+    "/api/v2/sbom",
+    "/api/v2/synthetics",
+)
 
 private const val HTTP_CLIENT_ERROR_MIN = 400
 private const val HTTP_CLIENT_ERROR_MAX = 499
@@ -205,29 +227,37 @@ fun Application.configureMonitoring() {
     }
 }
 
-private fun shouldSkipTracing(path: String, method: String): Boolean {
-    if (path == "/health" || path == "/health/" || path.startsWith("/health/")) {
+internal fun shouldSkipTracing(path: String, method: String): Boolean {
+    val normalizedPath = path.trimEnd('/').ifEmpty { "/" }
+    val normalizedMethod = method.uppercase()
+    if (normalizedPath == "/health" || normalizedPath.startsWith("/health/")) {
         return true
     }
-    if (path == "/metrics" || path == "/metrics/") {
+    if (normalizedPath == "/metrics") {
         return true
     }
-    if (method == "POST") {
-        if (path == "/v1/logs/otlp" || path == "/v1/logs/otlp/" || path == "/v1/logs" || path == "/v1/logs/") {
-            return true
-        }
-        if (path == "/v1/traces" || path == "/v1/traces/otlp" ||
-            path == "/v1/traces/" || path == "/v1/traces/otlp/"
-        ) {
-            return true
-        }
-        if (path == "/v1/metrics" || path == "/v1/metrics/otlp" ||
-            path == "/v1/metrics/" || path == "/v1/metrics/otlp/"
-        ) {
-            return true
-        }
+    if (normalizedPath.startsWith("/dd/")) {
+        return true
     }
-    return ingestPathRegex.matches(path)
+    if (ingestPathRegex.matches(normalizedPath)) {
+        return true
+    }
+    if (normalizedMethod != "POST" && normalizedMethod != "PUT") {
+        return false
+    }
+    if (normalizedPath in datadogApiV1IntakePaths || normalizedPath in datadogApiV2IntakePaths) {
+        return true
+    }
+    return normalizedPath in setOf(
+        "/v1/logs",
+        "/v1/logs/ingest",
+        "/v1/logs/otlp",
+        "/v1/metrics",
+        "/v1/metrics/otlp",
+        "/v1/pulse",
+        "/v1/traces",
+        "/v1/traces/otlp",
+    )
 }
 
 /**

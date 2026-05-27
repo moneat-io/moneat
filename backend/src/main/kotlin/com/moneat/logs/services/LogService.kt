@@ -456,33 +456,11 @@ class LogService(private val logRepository: LogRepository) {
                 if (hasMore) encodeCursor(row.timestampMs, row.log.logId) else null
             }
 
-        // Query total count - use full where clause (scope + filters + time + query)
-        val totalCountQuery =
-            """
-            SELECT count() as count
-            FROM `$clickhouseDb`.logs
-            WHERE $whereClause
-            FORMAT JSONEachRow
-            """.trimIndent()
-
-        val totalCountBody = logRepository.executeClickHouseQuery(totalCountQuery)
-        val totalCount =
-            if (!totalCountBody.isClickHouseError()) {
-                suspendRunCatching {
-                    val jsonElement = Json.parseToJsonElement(totalCountBody.trim())
-                    jsonElement.jsonObject["count"]?.jsonPrimitive?.longOrNull ?: 0L
-                }.getOrElse { _ ->
-                    0L
-                }
-            } else {
-                0L
-            }
-
         return LogQueryResponse(
             logs = pageRows.map { it.log },
             nextCursor = nextCursor,
             hasMore = hasMore,
-            totalCount = totalCount
+            totalCount = null
         )
     }
 

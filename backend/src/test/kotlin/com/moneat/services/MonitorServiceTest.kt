@@ -4,7 +4,10 @@ import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.monitor.repositories.HostAlertRepositoryImpl
+import com.moneat.monitor.repositories.HostAlertRepository
 import com.moneat.monitor.repositories.HostRepositoryImpl
+import com.moneat.monitor.repositories.HostRepository
+import com.moneat.monitor.models.HostData
 import com.moneat.monitor.services.MonitorService
 import com.moneat.shared.models.HostAlertSettings
 import com.moneat.shared.models.HostAlertTemplateStates
@@ -23,6 +26,7 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
+import io.mockk.slot
 import io.mockk.unmockkObject
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.core.*
@@ -42,6 +46,7 @@ class MonitorServiceTest {
         mockkObject(ClickHouseClient)
         val clickHouseOk = mockk<HttpResponse>()
         every { clickHouseOk.status } returns HttpStatusCode.OK
+        every { ClickHouseClient.getDatabase() } returns "testdb"
         coEvery { ClickHouseClient.execute(any(), any()) } returns clickHouseOk
 
         mockkObject(EnvConfig.SelfHost)
@@ -158,6 +163,34 @@ class MonitorServiceTest {
     @Test
     fun `getHostById returns null for non-existent id`() {
         assertNull(service.getHostById(Int.MAX_VALUE))
+    }
+
+    @Test
+    fun `getLatestMetrics reads from latest metrics table`() = runBlocking {
+        val hostRepository = mockk<HostRepository>()
+        val hostAlertRepository = mockk<HostAlertRepository>(relaxed = true)
+        val querySlot = slot<String>()
+        val now = kotlin.time.Clock.System.now()
+        every { hostRepository.getById(7) } returns HostData(
+            id = 7,
+            organizationId = 42,
+            hostname = "web-01",
+            displayName = "web-01",
+            status = "online",
+            lastSeenAt = now,
+            agentVersion = null,
+            os = null,
+            arch = null,
+            firstSeenAt = now,
+            createdAt = now,
+        )
+        coEvery { hostRepository.executeClickHouseQuery(capture(querySlot)) } returns """{"data":[]}"""
+
+        MonitorService(hostRepository, hostAlertRepository).getLatestMetrics(7)
+
+        assertTrue(querySlot.captured.contains("metrics_latest_by_host"))
+        assertFalse(querySlot.captured.contains("FROM `testdb`.metrics\n"))
+        assertFalse(querySlot.captured.contains("tags['host_id']"))
     }
 
     // ──── deleteHost ────

@@ -369,19 +369,19 @@ fun Route.datadogHostQueryRoutes() {
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "Invalid host id")
                     )
-                val host = DatadogHostService.getHost(orgId, hostId)
+                DatadogHostService.getHost(orgId, hostId)
                     ?: return@get call.respond(
                         HttpStatusCode.NotFound,
                         mapOf("error" to "Host not found")
                     )
 
                 val db = ClickHouseClient.getDatabase()
-                // Use argMax to deduplicate: one row per container_id, taking the latest snapshot.
                 // Only show containers seen in the last 10 minutes — the DD agent reports every
                 // ~10s, so anything older is no longer running. The agent only reports running
                 // containers (stopped ones simply stop appearing).
                 val sql = """
                     SELECT
+                        argMax(host, timestamp) as host,
                         container_id,
                         argMax(name, timestamp) as name,
                         argMax(image, timestamp) as image,
@@ -393,9 +393,9 @@ fun Route.datadogHostQueryRoutes() {
                         argMax(net_tx_bytes, timestamp) as net_tx_bytes,
                         argMax(tags, timestamp) as tags,
                         formatDateTime(max(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as ts
-                    FROM `$db`.containers
+                    FROM `$db`.containers_latest_by_host
                     WHERE ${ClickHouseQueryUtils.orgIdClause(orgId.toLong())}
-                      AND host = '${escapeSqlHost(host.hostname)}'
+                      AND host_id = $hostId
                       AND timestamp >= now64(3) - INTERVAL 10 MINUTE
                     GROUP BY container_id
                     ORDER BY max(timestamp) DESC
@@ -425,7 +425,7 @@ fun Route.datadogHostQueryRoutes() {
                         }
                         buildJsonObject {
                             put("id", containerId)
-                            put("host", host.hostname)
+                            put("host", obj["host"]?.jsonPrimitive?.content ?: "")
                             put("containerId", containerId)
                             put("name", displayName)
                             put("image", image)

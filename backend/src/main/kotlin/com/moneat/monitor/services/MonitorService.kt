@@ -220,6 +220,18 @@ class MonitorService(
         val containersDelete =
             "ALTER TABLE `$clickhouseDb`.containers DELETE WHERE organization_id = $organizationId" +
                 " AND tags['host_id'] = '$hostId'"
+        val metricsLatestDelete =
+            "ALTER TABLE `$clickhouseDb`.metrics_latest_by_host DELETE WHERE organization_id = $organizationId" +
+                " AND host_id = $hostId"
+        val metricsRollupDelete =
+            "ALTER TABLE `$clickhouseDb`.metrics_rollup_1m DELETE WHERE organization_id = $organizationId" +
+                " AND host_id = $hostId"
+        val containersLatestDelete =
+            "ALTER TABLE `$clickhouseDb`.containers_latest_by_host DELETE WHERE organization_id = $organizationId" +
+                " AND host_id = $hostId"
+        val containersRollupDelete =
+            "ALTER TABLE `$clickhouseDb`.containers_rollup_1m DELETE WHERE organization_id = $organizationId" +
+                " AND host_id = $hostId"
 
         if (!hostRepository.deleteClickHouseData(metricsDelete)) {
             logger.error { "Failed to delete ClickHouse metrics for hostId=$hostId" }
@@ -228,6 +240,22 @@ class MonitorService(
         if (!hostRepository.deleteClickHouseData(containersDelete)) {
             logger.error { "Failed to delete ClickHouse containers for hostId=$hostId" }
             throw Exception("Failed to delete host telemetry (containers)")
+        }
+        if (!hostRepository.deleteClickHouseData(metricsLatestDelete)) {
+            logger.error { "Failed to delete ClickHouse latest metrics for hostId=$hostId" }
+            throw Exception("Failed to delete host telemetry (metrics latest)")
+        }
+        if (!hostRepository.deleteClickHouseData(metricsRollupDelete)) {
+            logger.error { "Failed to delete ClickHouse metrics rollups for hostId=$hostId" }
+            throw Exception("Failed to delete host telemetry (metrics rollup)")
+        }
+        if (!hostRepository.deleteClickHouseData(containersLatestDelete)) {
+            logger.error { "Failed to delete ClickHouse latest containers for hostId=$hostId" }
+            throw Exception("Failed to delete host telemetry (containers latest)")
+        }
+        if (!hostRepository.deleteClickHouseData(containersRollupDelete)) {
+            logger.error { "Failed to delete ClickHouse container rollups for hostId=$hostId" }
+            throw Exception("Failed to delete host telemetry (containers rollup)")
         }
 
         return hostRepository.delete(hostId, organizationId)
@@ -253,9 +281,9 @@ class MonitorService(
                 argMax(CASE WHEN metric_name='system.temp.max' THEN value END, timestamp) as temp_max,
                 argMax(CASE WHEN metric_name='system.gpu.percent' THEN value END, timestamp) as gpu_percent,
                 argMax(CASE WHEN metric_name='system.battery.percent' THEN value END, timestamp) as battery_percent
-            FROM `$clickhouseDb`.metrics
+            FROM `$clickhouseDb`.metrics_latest_by_host
             WHERE organization_id = ${host.organizationId}
-              AND tags['host_id'] = '$hostId'
+              AND host_id = $hostId
               AND metric_name IN ($LATEST_METRIC_NAMES_SQL)
               AND timestamp >= now64(3) - INTERVAL $LATEST_METRICS_LOOKBACK_HOURS HOUR
             FORMAT JSONCompact
@@ -351,7 +379,7 @@ class MonitorService(
         val query =
             """
             SELECT
-                toInt32OrZero(tags['host_id']) as host_id,
+                toInt32(host_id) as host_id,
                 argMax(CASE WHEN metric_name='system.cpu.percent' THEN value END, timestamp) as cpu_percent,
                 argMax(CASE WHEN metric_name='system.mem.total' THEN value END, timestamp) as mem_total,
                 argMax(CASE WHEN metric_name='system.mem.used' THEN value END, timestamp) as mem_used,
@@ -364,9 +392,9 @@ class MonitorService(
                 argMax(CASE WHEN metric_name='system.temp.max' THEN value END, timestamp) as temp_max,
                 argMax(CASE WHEN metric_name='system.gpu.percent' THEN value END, timestamp) as gpu_percent,
                 argMax(CASE WHEN metric_name='system.battery.percent' THEN value END, timestamp) as battery_percent
-            FROM `$clickhouseDb`.metrics
+            FROM `$clickhouseDb`.metrics_latest_by_host
             WHERE organization_id = $organizationId
-              AND toInt32OrZero(tags['host_id']) IN ($hostIdList)
+              AND host_id IN ($hostIdList)
               AND metric_name IN ($LATEST_METRIC_NAMES_SQL)
               AND timestamp >= now64(3) - INTERVAL $LATEST_METRICS_LOOKBACK_HOURS HOUR
             GROUP BY host_id
@@ -474,29 +502,48 @@ class MonitorService(
                     timeRange <= ONE_WEEK_SECONDS -> INTERVAL_THIRTY_MINUTES
                     else -> INTERVAL_ONE_HOUR
                 }
+            val rollupInterval = max(calculatedInterval, INTERVAL_ONE_MINUTE)
 
             val query =
                 """
             SELECT
-                toUnixTimestamp(toStartOfInterval(timestamp, INTERVAL $calculatedInterval second)) as ts,
-                avg(CASE WHEN metric_name='system.cpu.percent' THEN value END) as cpu,
-                (1 - avg(CASE WHEN metric_name='system.mem.available' THEN value END) /
-                    nullIf(avg(CASE WHEN metric_name='system.mem.total' THEN value END), 0)) * 100 as mem,
-                avg(CASE WHEN metric_name='system.disk.used' THEN value END) /
-                    nullIf(avg(CASE WHEN metric_name='system.disk.total' THEN value END), 0) * 100 as disk,
-                sum(CASE WHEN metric_name='system.net.recv_bytes' THEN value ELSE 0 END) as net_recv,
-                sum(CASE WHEN metric_name='system.net.sent_bytes' THEN value ELSE 0 END) as net_sent,
-                avg(CASE WHEN metric_name='system.load.1' THEN value END) as load1,
-                avg(CASE WHEN metric_name='system.load.5' THEN value END) as load5,
-                avg(CASE WHEN metric_name='system.load.15' THEN value END) as load15,
-                max(CASE WHEN metric_name='system.temp.max' THEN value END) as temp,
-                avg(CASE WHEN metric_name='system.gpu.percent' THEN value END) as gpu,
-                avg(CASE WHEN metric_name='system.battery.percent' THEN value END) as battery
-            FROM `$clickhouseDb`.metrics
+                toUnixTimestamp(toStartOfInterval(bucket_start, INTERVAL $rollupInterval second)) as ts,
+                sumIf(value_sum, metric_name='system.cpu.percent') /
+                    nullIf(sumIf(value_count, metric_name='system.cpu.percent'), 0) as cpu,
+                (1 - (
+                    sumIf(value_sum, metric_name='system.mem.available') /
+                    nullIf(sumIf(value_count, metric_name='system.mem.available'), 0)
+                ) / nullIf(
+                    sumIf(value_sum, metric_name='system.mem.total') /
+                    nullIf(sumIf(value_count, metric_name='system.mem.total'), 0),
+                    0
+                )) * 100 as mem,
+                (
+                    sumIf(value_sum, metric_name='system.disk.used') /
+                    nullIf(sumIf(value_count, metric_name='system.disk.used'), 0)
+                ) / nullIf(
+                    sumIf(value_sum, metric_name='system.disk.total') /
+                    nullIf(sumIf(value_count, metric_name='system.disk.total'), 0),
+                    0
+                ) * 100 as disk,
+                sumIf(value_sum, metric_name='system.net.recv_bytes') as net_recv,
+                sumIf(value_sum, metric_name='system.net.sent_bytes') as net_sent,
+                sumIf(value_sum, metric_name='system.load.1') /
+                    nullIf(sumIf(value_count, metric_name='system.load.1'), 0) as load1,
+                sumIf(value_sum, metric_name='system.load.5') /
+                    nullIf(sumIf(value_count, metric_name='system.load.5'), 0) as load5,
+                sumIf(value_sum, metric_name='system.load.15') /
+                    nullIf(sumIf(value_count, metric_name='system.load.15'), 0) as load15,
+                maxIf(value_sum / value_count, metric_name='system.temp.max') as temp,
+                sumIf(value_sum, metric_name='system.gpu.percent') /
+                    nullIf(sumIf(value_count, metric_name='system.gpu.percent'), 0) as gpu,
+                sumIf(value_sum, metric_name='system.battery.percent') /
+                    nullIf(sumIf(value_count, metric_name='system.battery.percent'), 0) as battery
+            FROM `$clickhouseDb`.metrics_rollup_1m
             WHERE organization_id = ${host.organizationId}
-              AND tags['host_id'] = '$hostId'
-              AND timestamp >= fromUnixTimestamp64Milli(${effectiveFrom * MILLIS_PER_SECOND_LONG})
-              AND timestamp <= fromUnixTimestamp64Milli(${effectiveTo * MILLIS_PER_SECOND_LONG})
+              AND host_id = $hostId
+              AND bucket_start >= fromUnixTimestamp64Milli(${effectiveFrom * MILLIS_PER_SECOND_LONG})
+              AND bucket_start <= fromUnixTimestamp64Milli(${effectiveTo * MILLIS_PER_SECOND_LONG})
             GROUP BY ts
             ORDER BY ts
             FORMAT JSONCompact
@@ -513,7 +560,7 @@ class MonitorService(
                             hostId = hostId,
                             from = effectiveFrom,
                             to = effectiveTo,
-                            intervalSeconds = calculatedInterval,
+                            intervalSeconds = rollupInterval,
                             dataPoints = emptyList()
                         )
 
@@ -554,7 +601,7 @@ class MonitorService(
                 hostId = hostId,
                 from = effectiveFrom,
                 to = effectiveTo,
-                intervalSeconds = calculatedInterval,
+                intervalSeconds = rollupInterval,
                 dataPoints = dataPoints
             )
         }
@@ -564,7 +611,6 @@ class MonitorService(
      */
     suspend fun getLatestContainers(hostId: Int): List<ContainerStats> {
         val host = getHostById(hostId) ?: return emptyList()
-        val retentionDays = retentionPolicyService.getRetentionDaysForHost(hostId) ?: PricingTier.FREE.retentionDays
         val monitorIntervalSeconds = getTierConfig(host.organizationId).monitorIntervalSeconds
         val freshnessWindowSeconds = max(
             monitorIntervalSeconds * FRESHNESS_MONITOR_MULTIPLIER,
@@ -573,16 +619,22 @@ class MonitorService(
 
         val query =
             """
-            SELECT name, container_id, image, state, cpu_percent, mem_usage, mem_limit, net_rx_bytes, net_tx_bytes
-            FROM (
-                SELECT *,
-                    ROW_NUMBER() OVER (PARTITION BY host, container_id ORDER BY timestamp DESC) as rn
-                FROM `$clickhouseDb`.containers
-                WHERE organization_id = ${host.organizationId}
-                  AND tags['host_id'] = '$hostId'
-                  AND timestamp >= now64(3) - INTERVAL $retentionDays DAY
-            ) WHERE rn = 1
+            SELECT
+                argMax(name, timestamp) as name,
+                container_id,
+                argMax(image, timestamp) as image,
+                argMax(state, timestamp) as state,
+                argMax(cpu_percent, timestamp) as cpu_percent,
+                argMax(mem_usage, timestamp) as mem_usage,
+                argMax(mem_limit, timestamp) as mem_limit,
+                argMax(net_rx_bytes, timestamp) as net_rx_bytes,
+                argMax(net_tx_bytes, timestamp) as net_tx_bytes
+            FROM `$clickhouseDb`.containers_latest_by_host
+            WHERE organization_id = ${host.organizationId}
+              AND host_id = $hostId
               AND timestamp >= now64(3) - INTERVAL $freshnessWindowSeconds SECOND
+            GROUP BY container_id
+            ORDER BY max(timestamp) DESC
             FORMAT JSONCompact
             """.trimIndent()
 
@@ -656,9 +708,7 @@ class MonitorService(
     }
 
     /**
-     * Get latest container stats per host+container_id from the containers table.
-     * Deduplicates time-series rows so each container appears once (fixes inflated
-     * counts when raw rows are returned to MCP/API consumers).
+     * Get latest container stats per host+container_id from the live latest table.
      */
     suspend fun getLatestInfraContainers(
         organizationIds: List<Int>,
@@ -671,16 +721,24 @@ class MonitorService(
         val hostClause = if (escapedHost != null) "AND host = '$escapedHost'" else ""
         val query =
             """
-            SELECT host, container_id, name, image, state, cpu_percent, mem_usage, mem_limit,
-                   net_rx_bytes, net_tx_bytes, tags, timestamp
-            FROM (
-                SELECT *,
-                    ROW_NUMBER() OVER (PARTITION BY organization_id, host, container_id ORDER BY timestamp DESC) as rn
-                FROM `$clickhouseDb`.containers
-                WHERE organization_id IN ($orgList)
-                  AND timestamp >= now64(3) - INTERVAL $INFRA_LOOKBACK_DAYS DAY
-                  $hostClause
-            ) WHERE rn = 1
+            SELECT
+                host,
+                container_id,
+                argMax(name, timestamp) as name,
+                argMax(image, timestamp) as image,
+                argMax(state, timestamp) as state,
+                argMax(cpu_percent, timestamp) as cpu_percent,
+                argMax(mem_usage, timestamp) as mem_usage,
+                argMax(mem_limit, timestamp) as mem_limit,
+                argMax(net_rx_bytes, timestamp) as net_rx_bytes,
+                argMax(net_tx_bytes, timestamp) as net_tx_bytes,
+                argMax(tags, timestamp) as tags,
+                max(timestamp) as timestamp
+            FROM `$clickhouseDb`.containers_latest_by_host
+            WHERE organization_id IN ($orgList)
+              AND timestamp >= now64(3) - INTERVAL $INFRA_LOOKBACK_DAYS DAY
+              $hostClause
+            GROUP BY organization_id, host_id, host, container_id
             ORDER BY host, name
             LIMIT $limit
             FORMAT JSONCompact
@@ -774,23 +832,24 @@ class MonitorService(
                 timeRange <= ONE_WEEK_SECONDS -> INTERVAL_THIRTY_MINUTES
                 else -> INTERVAL_ONE_HOUR
             }
+        val rollupInterval = max(calculatedInterval, INTERVAL_ONE_MINUTE)
 
         val escapedName = escapeSql(containerName)
         val query =
             """
             SELECT
-                toUnixTimestamp(toStartOfInterval(timestamp, INTERVAL $calculatedInterval second)) as ts,
-                avg(cpu_percent) as cpu,
-                avg(mem_usage) as mem_used,
-                avg(mem_limit) as mem_limit,
-                sum(net_rx_bytes) as net_recv,
-                sum(net_tx_bytes) as net_sent
-            FROM `$clickhouseDb`.containers
+                toUnixTimestamp(toStartOfInterval(bucket_start, INTERVAL $rollupInterval second)) as ts,
+                sum(cpu_sum) / nullIf(sum(cpu_count), 0) as cpu,
+                sum(mem_usage_sum) / nullIf(sum(cpu_count), 0) as mem_used,
+                sum(mem_limit_sum) / nullIf(sum(cpu_count), 0) as mem_limit,
+                sum(net_rx_bytes_sum) as net_recv,
+                sum(net_tx_bytes_sum) as net_sent
+            FROM `$clickhouseDb`.containers_rollup_1m
             WHERE organization_id = ${host.organizationId}
-              AND tags['host_id'] = '$hostId'
+              AND host_id = $hostId
               AND name = '$escapedName'
-              AND timestamp >= fromUnixTimestamp64Milli(${effectiveFrom * MILLIS_PER_SECOND_LONG})
-              AND timestamp <= fromUnixTimestamp64Milli(${effectiveTo * MILLIS_PER_SECOND_LONG})
+              AND bucket_start >= fromUnixTimestamp64Milli(${effectiveFrom * MILLIS_PER_SECOND_LONG})
+              AND bucket_start <= fromUnixTimestamp64Milli(${effectiveTo * MILLIS_PER_SECOND_LONG})
             GROUP BY ts
             ORDER BY ts
             FORMAT JSONCompact
@@ -806,7 +865,7 @@ class MonitorService(
                         containerName = containerName,
                         from = effectiveFrom,
                         to = effectiveTo,
-                        intervalSeconds = calculatedInterval,
+                        intervalSeconds = rollupInterval,
                         dataPoints = emptyList()
                     )
 
@@ -850,7 +909,7 @@ class MonitorService(
             containerName = containerName,
             from = effectiveFrom,
             to = effectiveTo,
-            intervalSeconds = calculatedInterval,
+            intervalSeconds = rollupInterval,
             dataPoints = dataPoints
         )
     }

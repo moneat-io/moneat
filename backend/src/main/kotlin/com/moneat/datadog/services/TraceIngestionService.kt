@@ -17,6 +17,8 @@
 package com.moneat.datadog.services
 
 import com.google.protobuf.CodedInputStream
+import com.moneat.apm.services.ApmServiceMapRollups
+import com.moneat.apm.services.ApmServiceMapSpan
 import com.moneat.config.ClickHouseClient
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_3
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_4
@@ -44,6 +46,7 @@ import com.moneat.utils.ClickHouseSqlUtils.doubleMapToSqlMap
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import com.moneat.utils.ClickHouseSqlUtils.mapToSqlMap
 import io.ktor.http.isSuccess
+import io.sentry.ISpan
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.double
@@ -61,6 +64,8 @@ private val logger = KotlinLogging.logger {}
 private const val APM_TRACE_SUMMARIES_TABLE = "apm_trace_summaries"
 private const val APM_ERROR_GROUPS_TABLE = "apm_error_groups_hourly"
 private const val APM_RESOURCE_STATS_TABLE = "apm_resource_stats_hourly"
+private const val APM_SERVICE_STATS_TABLE = "apm_service_stats_hourly"
+private const val APM_SERVICE_EDGES_TABLE = "apm_service_edges_hourly"
 private const val MAX_META_VALUE_LENGTH = 5000
 private const val DEFAULT_QUERY_LIMIT = 50
 private const val MAX_QUERY_LIMIT = 200
@@ -70,6 +75,7 @@ private const val PROTO_FIELD_9 = 9
 private const val PROTO_FIELD_10 = 10
 private const val PROTO_FIELD_11 = 11
 private const val PROTO_FIELD_12 = 12
+private const val DATADOG_SOURCE = "datadog"
 
 val defaultApmQueryTimeRange = DdApmQueryTimeRange(24, DdApmQueryTimeUnit.HOUR)
 
@@ -191,7 +197,7 @@ object TraceIngestionService {
                 '${java.lang.Long.toUnsignedString(span.traceId.toLong(), HEX_RADIX)}',
                 '${java.lang.Long.toUnsignedString(span.spanId.toLong(), HEX_RADIX)}',
                 '$parentIdHex',
-                'datadog'
+                '$DATADOG_SOURCE'
             )"""
         }
 
@@ -212,6 +218,10 @@ object TraceIngestionService {
                 "Failed to insert DD spans into ClickHouse"
             )
         }
+        ApmServiceMapRollups.insertForSpans(
+            clickhouseDb,
+            traces.toServiceMapSpans(organizationId, env)
+        )
 
         val totalBytes = allSpans.sumOf {
             it.name.length + it.service.length +
@@ -284,6 +294,7 @@ object TraceIngestionService {
         limit: Int,
         offset: Int,
         timeRange: DdApmQueryTimeRange = defaultApmQueryTimeRange,
+        parentSpan: ISpan? = null,
     ): DdTraceListResponse {
         val filters = mutableListOf(
             ClickHouseQueryUtils.orgIdClause(organizationId.toLong()),
@@ -306,9 +317,10 @@ object TraceIngestionService {
                 GROUP BY trace_id_canonical
             )
         """.trimIndent()
-        val countResult = ClickHouseClient.executeWithFormat(
+        val countResult = executeDashboardQuery(
             countQuery,
-            "TabSeparated"
+            "TabSeparated",
+            parentSpan,
         )
         val totalCount = countResult.trim().toLongOrNull() ?: 0
 
@@ -335,7 +347,7 @@ object TraceIngestionService {
             FORMAT JSONEachRow
         """.trimIndent()
 
-        val result = ClickHouseClient.executeWithFormat(query, "")
+        val result = executeDashboardQuery(query, "", parentSpan)
         val traces = if (result.isBlank()) {
             emptyList()
         } else {
@@ -374,6 +386,7 @@ object TraceIngestionService {
     suspend fun getTraceDetail(
         organizationId: Int,
         traceId: String,
+        parentSpan: ISpan? = null,
     ): DdTraceDetailResponse? {
         val orgClause = ClickHouseQueryUtils.orgIdClause(organizationId.toLong())
 
@@ -396,14 +409,16 @@ object TraceIngestionService {
             FORMAT JSONEachRow
         """.trimIndent()
 
-        var result = ClickHouseClient.executeWithFormat(
+        var result = executeDashboardQuery(
             detailQuery("trace_id_hex = '${escapeSql(traceId)}'"),
             "",
+            parentSpan,
         )
         if (result.isBlank() && parseTraceId(traceId) != null) {
-            result = ClickHouseClient.executeWithFormat(
+            result = executeDashboardQuery(
                 detailQuery("trace_id = ${parseTraceId(traceId)}"),
                 "",
+                parentSpan,
             )
         }
         if (result.isBlank()) return null
@@ -444,23 +459,24 @@ object TraceIngestionService {
 
     suspend fun getServiceMap(
         organizationId: Int,
+        parentSpan: ISpan? = null,
     ): DdServiceMapResponse {
         val query = """
             SELECT
                 service,
-                count() as span_count,
-                countIf(error = 1) as error_count,
-                avg(duration) as avg_duration_ns
-            FROM `$clickhouseDb`.apm_spans
+                sum(span_count) as span_count,
+                sum(error_count) as error_count,
+                if(sum(duration_count) = 0, 0, sum(duration_sum) / sum(duration_count)) as avg_duration_ns
+            FROM `$clickhouseDb`.$APM_SERVICE_STATS_TABLE
             WHERE ${ClickHouseQueryUtils.orgIdClause(organizationId.toLong())}
-              AND start >= now() - INTERVAL 1 HOUR
+              AND bucket_start >= toStartOfHour(now() - INTERVAL 1 HOUR)
             GROUP BY service
             ORDER BY span_count DESC
             LIMIT 100
             FORMAT JSONEachRow
         """.trimIndent()
 
-        val result = ClickHouseClient.executeWithFormat(query, "")
+        val result = executeDashboardQuery(query, "", parentSpan)
         val services = if (result.isBlank()) {
             emptyList()
         } else {
@@ -485,25 +501,21 @@ object TraceIngestionService {
         // Build service relationships from parent-child spans
         val callsQuery = """
             SELECT
-                parent.service as from_service,
-                child.service as to_service
-            FROM `$clickhouseDb`.apm_spans child
-            INNER JOIN `$clickhouseDb`.apm_spans parent
-                ON child.parent_id = parent.span_id
-                AND child.parent_id_high = parent.span_id_high
-                AND child.trace_id = parent.trace_id
-                AND child.trace_id_high = parent.trace_id_high
-                AND child.organization_id = parent.organization_id
-            WHERE ${ClickHouseQueryUtils.orgIdClause(organizationId.toLong(), "child.organization_id")}
-              AND child.start >= now() - INTERVAL 1 HOUR
-              AND parent.service != child.service
-            GROUP BY parent.service, child.service
+                from_service,
+                to_service
+            FROM `$clickhouseDb`.$APM_SERVICE_EDGES_TABLE
+            WHERE ${ClickHouseQueryUtils.orgIdClause(organizationId.toLong())}
+              AND bucket_start >= toStartOfHour(now() - INTERVAL 1 HOUR)
+            GROUP BY from_service, to_service
+            HAVING sum(call_count) > 0
+            ORDER BY sum(call_count) DESC
             FORMAT JSONEachRow
         """.trimIndent()
 
-        val callsResult = ClickHouseClient.executeWithFormat(
+        val callsResult = executeDashboardQuery(
             callsQuery,
-            ""
+            "",
+            parentSpan,
         )
         val callsMap = mutableMapOf<String, MutableSet<String>>()
         if (callsResult.isNotBlank()) {
@@ -535,6 +547,7 @@ object TraceIngestionService {
         limit: Int,
         offset: Int,
         timeRange: DdApmQueryTimeRange = defaultApmQueryTimeRange,
+        parentSpan: ISpan? = null,
     ): DdApmErrorsResponse {
         val effectiveLimit = limit.coerceAtMost(MAX_QUERY_LIMIT)
         val filters = mutableListOf(
@@ -555,9 +568,10 @@ object TraceIngestionService {
                 GROUP BY service, resource, error_message, error_type
             )
         """.trimIndent()
-        val countResult = ClickHouseClient.executeWithFormat(
+        val countResult = executeDashboardQuery(
             countQuery,
-            "TabSeparated"
+            "TabSeparated",
+            parentSpan,
         )
         val totalCount = countResult.trim().toLongOrNull() ?: 0
 
@@ -578,7 +592,7 @@ object TraceIngestionService {
             FORMAT JSONEachRow
         """.trimIndent()
 
-        val result = ClickHouseClient.executeWithFormat(query, "")
+        val result = executeDashboardQuery(query, "", parentSpan)
         val errors = if (result.isBlank()) {
             emptyList()
         } else {
@@ -620,7 +634,7 @@ object TraceIngestionService {
             ORDER BY error_count DESC
             FORMAT JSONEachRow
         """.trimIndent()
-        val serviceFacetsResult = ClickHouseClient.executeWithFormat(serviceFacetsQuery, "")
+        val serviceFacetsResult = executeDashboardQuery(serviceFacetsQuery, "", parentSpan)
         val serviceFacets = if (serviceFacetsResult.isBlank()) {
             emptyList()
         } else {
@@ -650,6 +664,7 @@ object TraceIngestionService {
         limit: Int,
         offset: Int,
         timeRange: DdApmQueryTimeRange = defaultApmQueryTimeRange,
+        parentSpan: ISpan? = null,
     ): DdResourceStatsResponse {
         val effectiveLimit = limit.coerceAtMost(MAX_QUERY_LIMIT)
         val filters = mutableListOf(
@@ -668,9 +683,10 @@ object TraceIngestionService {
                 GROUP BY service, resource, name, type
             )
         """.trimIndent()
-        val countResult = ClickHouseClient.executeWithFormat(
+        val countResult = executeDashboardQuery(
             countQuery,
-            "TabSeparated"
+            "TabSeparated",
+            parentSpan,
         )
         val totalCount = countResult.trim().toLongOrNull() ?: 0
 
@@ -692,7 +708,7 @@ object TraceIngestionService {
             FORMAT JSONEachRow
         """.trimIndent()
 
-        val result = ClickHouseClient.executeWithFormat(query, "")
+        val result = executeDashboardQuery(query, "", parentSpan)
         val resources = if (result.isBlank()) {
             emptyList()
         } else {
@@ -736,8 +752,38 @@ object TraceIngestionService {
     }
 
     // --- Internal helpers ---
+    private suspend fun executeDashboardQuery(
+        query: String,
+        format: String,
+        parentSpan: ISpan?,
+    ): String =
+        if (parentSpan == null) {
+            ClickHouseClient.executeWithFormat(query, format)
+        } else {
+            ClickHouseClient.executeWithFormat(query, format, parentSpan)
+        }
+
     internal fun parseTraceId(traceId: String): ULong? =
         traceId.toULongOrNull()
+
+    private fun List<List<DdSpan>>.toServiceMapSpans(
+        organizationId: Int,
+        env: String,
+    ): List<ApmServiceMapSpan> =
+        flatten().map { span ->
+            ApmServiceMapSpan(
+                organizationId = organizationId.toLong(),
+                traceKey = span.traceId.toString(),
+                spanKey = span.spanId.toString(),
+                parentKey = if (span.parentId == 0UL) "" else span.parentId.toString(),
+                service = span.service,
+                env = span.meta["env"] ?: env,
+                source = DATADOG_SOURCE,
+                startNanos = span.start,
+                durationNanos = span.duration,
+                error = span.error,
+            )
+        }
 
     @Suppress("NestedBlockDepth")
     private fun unpackSpan(unpacker: MessageUnpacker): DdSpan {

@@ -21,14 +21,16 @@ import com.moneat.config.RedisConfig
 import com.moneat.datadog.models.DatadogMetricSeriesV1
 import com.moneat.datadog.models.DatadogMetricV1
 import com.moneat.datadog.models.DatadogSketchPayload
+import com.moneat.monitor.services.InfraMetricRollupRow
+import com.moneat.monitor.services.InfraTelemetryRollups
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
-import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 private val logger = KotlinLogging.logger {}
 private const val METRIC_QUEUE_KEY = "moneat:metrics:queue"
@@ -198,6 +200,20 @@ object DatadogMetricService {
                 "Failed to insert DD metrics: ${errorBody.take(ERROR_BODY_MAX_LEN)}"
             )
         }
+        InfraTelemetryRollups.insertMetricRollups(
+            batch.metrics.map { metric ->
+                InfraMetricRollupRow(
+                    organizationId = batch.organizationId,
+                    metricName = metric.name,
+                    timestampMs = metric.timestampMs,
+                    value = metric.value,
+                    host = metric.host,
+                    tags = metric.tags,
+                    unit = metric.unit,
+                    source = "datadog",
+                )
+            }
+        )
     }
 
     suspend fun insertSketchBatch(batch: QueuedSketchBatch) {

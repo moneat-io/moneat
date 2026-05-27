@@ -16,6 +16,8 @@
 
 package com.moneat.events.services
 
+import com.moneat.apm.services.ApmServiceMapRollups
+import com.moneat.apm.services.ApmServiceMapSpan
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.events.models.EnvelopeItem
@@ -95,6 +97,7 @@ class EventService(
         private const val UUID_SEG3 = 16
         private const val UUID_SEG4 = 20
         private val OTLP_STACK_FRAME_PATTERN = Regex("""[\w.$/<>-]+\([^)]*\)""")
+        private const val SENTRY_SOURCE = "sentry"
 
         /** Keys set by the server for apm_spans; must not be overwritten by SDK tag maps. */
         private val SENTRY_APM_META_RESERVED_KEYS = setOf("sentry.transaction_id", "sentry.project_id")
@@ -1311,15 +1314,27 @@ class EventService(
         )
 
         val rows = mutableListOf<String>()
-        buildRootSpanRow(ctx, traceId, transactionOp, traceStatus, transaction)?.let { rows.add(it) }
+        val serviceMapSpans = mutableListOf<ApmServiceMapSpan>()
+        buildRootSpanRow(ctx, traceId, transactionOp, traceStatus, transaction)?.let {
+            rows.add(it.sqlRow)
+            serviceMapSpans.add(it.serviceMapSpan)
+        }
         for (span in childSpans) {
-            buildChildSpanRow(ctx, span, traceId, transaction)?.let { rows.add(it) }
+            buildChildSpanRow(ctx, span, traceId, transaction)?.let {
+                rows.add(it.sqlRow)
+                serviceMapSpans.add(it.serviceMapSpan)
+            }
         }
 
         if (rows.isNotEmpty()) {
-            executeApmSpanInsert(ctx, rows, eventId)
+            executeApmSpanInsert(ctx, rows, serviceMapSpans, eventId)
         }
     }
+
+    private data class ApmSpanInsertRow(
+        val sqlRow: String,
+        val serviceMapSpan: ApmServiceMapSpan,
+    )
 
     private fun buildRootSpanRow(
         ctx: ApmSpanContext,
@@ -1327,17 +1342,20 @@ class EventService(
         transactionOp: String,
         traceStatus: String?,
         transaction: SentryTransaction
-    ): String? {
+    ): ApmSpanInsertRow? {
         val rootSpanId = transaction.contexts?.get("trace")?.jsonObject
             ?.get("span_id")?.jsonPrimitive?.contentOrNull ?: ""
         if (rootSpanId.isBlank()) return null
 
         val startTs = transaction.startTimestamp ?: (System.currentTimeMillis() / MS_PER_SECOND)
+        val startNanos = unixSecondsToNanos(startTs)
+        val duration = durationNanos(transaction.startTimestamp, transaction.timestamp)
+        val error = sentryStatusToError(traceStatus)
         val (traceIdHigh, traceIdLow) = hexToULongPair(traceId)
         val (spanIdHigh, spanIdLow) = hexToULongPair(rootSpanId)
         val rootMetrics = extractMeasurementMetrics(transaction)
 
-        return """
+        val sqlRow = """
             (
             $spanIdLow, $spanIdHigh,
             $traceIdLow, $traceIdHigh,
@@ -1347,9 +1365,9 @@ class EventService(
             '${escapeSql(ctx.service)}',
             '${escapeSql(ctx.transactionName)}',
             '${escapeSql(transactionOp)}',
-            fromUnixTimestamp64Nano(${unixSecondsToNanos(startTs)}),
-            ${durationNanos(transaction.startTimestamp, transaction.timestamp)},
-            ${sentryStatusToError(traceStatus)},
+            fromUnixTimestamp64Nano($startNanos),
+            $duration,
+            $error,
             ${mapToSqlMap(ctx.baseMeta)},
             ${doubleMapToSqlMap(rootMetrics)},
             '${escapeSql(ctx.host)}',
@@ -1358,9 +1376,24 @@ class EventService(
             '$traceId',
             '$rootSpanId',
             '',
-            'sentry'
+            '$SENTRY_SOURCE'
             )
         """.trimIndent()
+        return ApmSpanInsertRow(
+            sqlRow = sqlRow,
+            serviceMapSpan = ApmServiceMapSpan(
+                organizationId = ctx.orgId.toLong(),
+                traceKey = traceId,
+                spanKey = rootSpanId,
+                parentKey = "",
+                service = ctx.service,
+                env = ctx.env,
+                source = SENTRY_SOURCE,
+                startNanos = startNanos,
+                durationNanos = duration,
+                error = error,
+            ),
+        )
     }
 
     private fun buildChildSpanRow(
@@ -1368,11 +1401,14 @@ class EventService(
         span: SentrySpan,
         fallbackTraceId: String,
         transaction: SentryTransaction
-    ): String? {
+    ): ApmSpanInsertRow? {
         val spanStart = span.startTimestamp ?: transaction.startTimestamp ?: return null
         val spanEnd = span.timestamp ?: transaction.timestamp ?: spanStart
         val spanId = span.spanId?.ifBlank { null } ?: UUID.randomUUID().toString().replace("-", "")
         val spanTraceId = span.traceId ?: fallbackTraceId
+        val startNanos = unixSecondsToNanos(spanStart)
+        val duration = durationNanos(spanStart, spanEnd)
+        val error = sentryStatusToError(span.status)
 
         val (traceIdHigh, traceIdLow) = hexToULongPair(spanTraceId)
         val (spanIdHigh, spanIdLow) = hexToULongPair(spanId)
@@ -1382,7 +1418,7 @@ class EventService(
         val spanMeta = extractSpanMeta(span, ctx.baseMeta)
         val spanMetrics = extractSpanMetrics(span)
 
-        return """
+        val sqlRow = """
             (
             $spanIdLow, $spanIdHigh,
             $traceIdLow, $traceIdHigh,
@@ -1392,9 +1428,9 @@ class EventService(
             '${escapeSql(ctx.service)}',
             '${escapeSql(span.description ?: "")}',
             '${escapeSql(span.op ?: "")}',
-            fromUnixTimestamp64Nano(${unixSecondsToNanos(spanStart)}),
-            ${durationNanos(spanStart, spanEnd)},
-            ${sentryStatusToError(span.status)},
+            fromUnixTimestamp64Nano($startNanos),
+            $duration,
+            $error,
             ${mapToSqlMap(spanMeta)},
             ${doubleMapToSqlMap(spanMetrics)},
             '${escapeSql(ctx.host)}',
@@ -1403,9 +1439,24 @@ class EventService(
             '${escapeSql(spanTraceId)}',
             '${escapeSql(spanId)}',
             '${escapeSql(parentHex)}',
-            'sentry'
+            '$SENTRY_SOURCE'
             )
         """.trimIndent()
+        return ApmSpanInsertRow(
+            sqlRow = sqlRow,
+            serviceMapSpan = ApmServiceMapSpan(
+                organizationId = ctx.orgId.toLong(),
+                traceKey = spanTraceId,
+                spanKey = spanId,
+                parentKey = parentHex,
+                service = ctx.service,
+                env = ctx.env,
+                source = SENTRY_SOURCE,
+                startNanos = startNanos,
+                durationNanos = duration,
+                error = error,
+            ),
+        )
     }
 
     private fun extractMeasurementMetrics(transaction: SentryTransaction): Map<String, Double> {
@@ -1462,7 +1513,12 @@ class EventService(
         return metrics
     }
 
-    private suspend fun executeApmSpanInsert(ctx: ApmSpanContext, rows: List<String>, eventId: String) {
+    private suspend fun executeApmSpanInsert(
+        ctx: ApmSpanContext,
+        rows: List<String>,
+        serviceMapSpans: List<ApmServiceMapSpan>,
+        eventId: String
+    ) {
         val insert = """
             INSERT INTO `${ctx.clickhouseDb}`.apm_spans (
                 span_id, span_id_high,
@@ -1479,6 +1535,7 @@ class EventService(
 
         val response = ClickHouseClient.execute(insert)
         if (response.status.isSuccess()) {
+            ApmServiceMapRollups.insertForSpans(ctx.clickhouseDb, serviceMapSpans)
             usageTracker.recordOrgUsage(ctx.orgId, "sentry_trace", rows.size, rows.sumOf { it.length })
         } else {
             logger.error { "Failed to insert Sentry spans into apm_spans for transaction $eventId" }
