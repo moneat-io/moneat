@@ -24,6 +24,7 @@ import com.moneat.analytics.models.BreakdownRow
 import com.moneat.analytics.models.FunnelResponse
 import com.moneat.analytics.models.FunnelStep
 import com.moneat.analytics.models.RealtimeResponse
+import com.moneat.analytics.models.RetentionResponse
 import com.moneat.analytics.models.TimeseriesPoint
 import com.moneat.analytics.routes.analyticsRoutes
 import com.moneat.analytics.services.AnalyticsService
@@ -144,9 +145,16 @@ class AnalyticsRoutesTest {
 
     private val funnelResponse = FunnelResponse(
         steps = listOf(
-            FunnelStep(name = "/home", visitors = 100, dropoff = 0.0),
-            FunnelStep(name = "/signup", visitors = 40, dropoff = 60.0),
-        )
+            FunnelStep(name = "/home", visitors = 100, dropoff = 0.0, conversionRate = 100.0),
+            FunnelStep(name = "/signup", visitors = 40, dropoff = 60.0, conversionRate = 40.0),
+        ),
+        overallConversion = 40.0,
+    )
+
+    private val retentionResponse = RetentionResponse(
+        startEvent = "signup.completed",
+        returnEvent = "recording.started",
+        cohorts = emptyList(),
     )
 
     // ──── Auth ────
@@ -568,17 +576,20 @@ class AnalyticsRoutesTest {
     // ──── Events ────
 
     @Test
-    fun `GET events returns 200`() = testApplication {
+    fun `GET events forwards product grouping params`() = testApplication {
         val userId = seedUser()
         stubAccess(userId)
         coEvery {
-            mockAnalyticsService.getEvents(PROJECT_ID, any(), any(), any(), any())
+            mockAnalyticsService.getEvents(PROJECT_ID, any(), any(), any(), 25, "user_id", "server")
         } returns breakdownResponse
         application { installRoutes(this) }
-        val r = client.get(authedGet("/events?period=30d")) {
+        val r = client.get(authedGet("/events?period=30d&limit=25&group_by=user_id&source=server")) {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
+        coVerify(exactly = 1) {
+            mockAnalyticsService.getEvents(PROJECT_ID, any(), any(), any(), 25, "user_id", "server")
+        }
     }
 
     // ──── Realtime ────
@@ -603,7 +614,7 @@ class AnalyticsRoutesTest {
         val userId = seedUser()
         stubAccess(userId)
         coEvery {
-            mockAnalyticsService.getFunnel(PROJECT_ID, any(), any(), any())
+            mockAnalyticsService.getFunnel(PROJECT_ID, any(), any(), any(), any(), any())
         } returns funnelResponse
         application { installRoutes(this) }
         val r = client.get(authedGet("/funnel?period=30d&steps=/home&steps=/signup")) {
@@ -612,6 +623,76 @@ class AnalyticsRoutesTest {
         assertEquals(HttpStatusCode.OK, r.status)
         val body = r.bodyAsText()
         assertTrue(body.contains("\"steps\""))
+    }
+
+    @Test
+    fun `GET funnel forwards product grouping params`() = testApplication {
+        val userId = seedUser()
+        stubAccess(userId)
+        coEvery {
+            mockAnalyticsService.getFunnel(
+                PROJECT_ID,
+                any(),
+                any(),
+                any(),
+                "user_id",
+                "server"
+            )
+        } returns funnelResponse
+        application { installRoutes(this) }
+        val path = "/funnel?period=30d&steps[]=signup.completed" +
+            "&steps[]=recording.started&group_by=user_id&source=server"
+        val r = client.get(authedGet(path)) {
+            withAuth(token(userId))
+        }
+        assertEquals(HttpStatusCode.OK, r.status)
+        coVerify(exactly = 1) {
+            mockAnalyticsService.getFunnel(
+                PROJECT_ID,
+                any(),
+                any(),
+                listOf("signup.completed", "recording.started"),
+                "user_id",
+                "server"
+            )
+        }
+    }
+
+    @Test
+    fun `GET retention returns 200`() = testApplication {
+        val userId = seedUser()
+        stubAccess(userId)
+        coEvery {
+            mockAnalyticsService.getRetention(
+                PROJECT_ID,
+                any(),
+                any(),
+                "signup.completed",
+                "recording.started",
+                listOf(1, 7, 30),
+            )
+        } returns retentionResponse
+        application { installRoutes(this) }
+        val path = "/retention?period=30d&start_event=signup.completed" +
+            "&return_event=recording.started&periods[]=1&periods[]=7&periods[]=30"
+        val r = client.get(
+            authedGet(path)
+        ) {
+            withAuth(token(userId))
+        }
+        assertEquals(HttpStatusCode.OK, r.status)
+        assertTrue(r.bodyAsText().contains("\"cohorts\""))
+    }
+
+    @Test
+    fun `GET retention returns 400 without events`() = testApplication {
+        val userId = seedUser()
+        stubAccess(userId)
+        application { installRoutes(this) }
+        val r = client.get(authedGet("/retention?period=30d")) {
+            withAuth(token(userId))
+        }
+        assertEquals(HttpStatusCode.BadRequest, r.status)
     }
 
     @Test

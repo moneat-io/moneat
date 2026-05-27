@@ -23,6 +23,9 @@ import com.moneat.analytics.models.BreakdownRow
 import com.moneat.analytics.models.FunnelResponse
 import com.moneat.analytics.models.FunnelStep
 import com.moneat.analytics.models.RealtimeResponse
+import com.moneat.analytics.models.RetentionCohort
+import com.moneat.analytics.models.RetentionPeriod
+import com.moneat.analytics.models.RetentionResponse
 import com.moneat.analytics.models.TimeseriesPoint
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
@@ -42,6 +45,7 @@ private val jsonParser = Json { ignoreUnknownKeys = true }
 private const val ERROR_TRUNCATE_LENGTH = 500
 private const val PERCENTAGE_MULTIPLIER = 100
 private const val DEFAULT_LIMIT = 100
+private const val FUNNEL_WINDOW_SECONDS = 86400
 
 /**
  * Query builder for analytics dashboard endpoints.
@@ -239,9 +243,14 @@ class AnalyticsService {
         dateFrom: LocalDate,
         dateTo: LocalDate,
         steps: List<String>,
+        groupBy: String = "session_id",
+        source: String? = null,
     ): FunnelResponse {
-        if (steps.size < 2) return FunnelResponse(emptyList())
+        if (steps.size < 2) return FunnelResponse(emptyList(), 0.0)
         val dateWhere = dateRange(dateFrom, dateTo)
+        val groupByColumn = resolveGroupByColumn(groupBy)
+        val sourceClause = sourceWhere(source)
+        val nonEmptyGroupClause = if (groupByColumn == "user_id") "AND user_id != ''" else ""
 
         // Build a windowFunnel query
         val events = steps.joinToString(", ") { "event_name = '${AnalyticsIngestionWorker.escapeCH(it)}'" }
@@ -251,11 +260,14 @@ class AnalyticsService {
                 count() AS cnt
             FROM (
                 SELECT
-                    session_id,
-                    windowFunnel(86400)(timestamp, $events) AS level
+                    $groupByColumn,
+                    windowFunnel($FUNNEL_WINDOW_SECONDS)(toDateTime(timestamp), $events) AS level
                 FROM analytics_events
-                WHERE project_id = ${asClickHouseProjectId(projectId)} AND $dateWhere
-                GROUP BY session_id
+                WHERE project_id = ${asClickHouseProjectId(projectId)}
+                  AND $dateWhere
+                  $sourceClause
+                  $nonEmptyGroupClause
+                GROUP BY $groupByColumn
             )
             WHERE level > 0
             GROUP BY level
@@ -279,20 +291,99 @@ class AnalyticsService {
                 name = name,
                 visitors = visitors,
                 dropoff = 0.0,
+                conversionRate = 0.0,
             )
         }
 
-        // Calculate dropoff rates
-        val withDropoff = funnelSteps.mapIndexed { i, step ->
+        // Calculate dropoff and conversion rates
+        val firstStepVisitors = funnelSteps.firstOrNull()?.visitors ?: 0
+        val withMetrics = funnelSteps.mapIndexed { i, step ->
+            val conversionRate = percentage(step.visitors, firstStepVisitors)
             if (i == 0) {
-                step
+                step.copy(conversionRate = conversionRate)
             } else {
                 val prev = funnelSteps[i - 1].visitors
-                val dropoff = if (prev > 0) ((prev - step.visitors).toDouble() / prev * PERCENTAGE_MULTIPLIER) else 0.0
-                step.copy(dropoff = dropoff)
+                val dropoff = percentage(prev - step.visitors, prev)
+                step.copy(dropoff = dropoff, conversionRate = conversionRate)
             }
         }
-        return FunnelResponse(withDropoff)
+        val overallConversion = percentage(funnelSteps.lastOrNull()?.visitors ?: 0, firstStepVisitors)
+        return FunnelResponse(withMetrics, overallConversion)
+    }
+
+    suspend fun getRetention(
+        projectId: Long,
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        startEvent: String,
+        returnEvent: String,
+        periods: List<Int>,
+    ): RetentionResponse {
+        if (startEvent.isBlank() || returnEvent.isBlank() || periods.isEmpty()) {
+            return RetentionResponse(startEvent, returnEvent, emptyList())
+        }
+
+        val dateWhere = dateRange(dateFrom, dateTo, "e", "timestamp")
+        val escapedStartEvent = AnalyticsIngestionWorker.escapeCH(startEvent)
+        val escapedReturnEvent = AnalyticsIngestionWorker.escapeCH(returnEvent)
+        val maxPeriod = periods.maxOrNull() ?: 0
+        val retentionColumns = periods.joinToString(",\n") { period ->
+            val cohortIsMature = "c.first_seen + INTERVAL $period DAY <= now()"
+            "                uniqExactIf(c.user_id, $cohortIsMature) AS eligible_$period,\n" +
+                "                uniqExactIf(c.user_id, $cohortIsMature " +
+                "AND e.timestamp > c.first_seen " +
+                "AND e.timestamp <= c.first_seen + INTERVAL $period DAY) AS retained_$period"
+        }
+
+        val sql = """
+            WITH cohorts AS (
+                SELECT
+                    user_id,
+                    min(timestamp) AS first_seen,
+                    toStartOfWeek(min(timestamp)) AS cohort_week
+                FROM analytics_events AS e
+                WHERE e.project_id = ${asClickHouseProjectId(projectId)}
+                  AND e.source = 'server'
+                  AND e.event_name = '$escapedStartEvent'
+                  AND e.user_id != ''
+                  AND $dateWhere
+                GROUP BY user_id
+            )
+            SELECT
+                toString(c.cohort_week) AS cohort_week,
+                uniqExact(c.user_id) AS users,
+$retentionColumns
+            FROM cohorts AS c
+            LEFT JOIN analytics_events AS e
+                ON e.project_id = ${asClickHouseProjectId(projectId)}
+                AND e.source = 'server'
+                AND e.user_id = c.user_id
+                AND e.event_name = '$escapedReturnEvent'
+                AND e.timestamp > c.first_seen
+                AND e.timestamp <= c.first_seen + INTERVAL $maxPeriod DAY
+            GROUP BY c.cohort_week
+            ORDER BY c.cohort_week
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        val cohorts = parseRows(ClickHouseClient.executeWithFormat(sql, "JSONEachRow")) { row ->
+            val users = row.longValue("users")
+            RetentionCohort(
+                cohortWeek = row.stringValue("cohort_week"),
+                users = users,
+                periods = periods.map { period ->
+                    val eligibleUsers = row.longValue("eligible_$period")
+                    val retainedUsers = row.longValue("retained_$period")
+                    RetentionPeriod(
+                        days = period,
+                        retainedUsers = retainedUsers,
+                        eligibleUsers = eligibleUsers,
+                        retentionRate = percentage(retainedUsers, eligibleUsers),
+                    )
+                },
+            )
+        }
+        return RetentionResponse(startEvent, returnEvent, cohorts)
     }
 
     // --- Events breakdown (custom events) ---
@@ -303,15 +394,23 @@ class AnalyticsService {
         dateTo: LocalDate,
         filters: List<AnalyticsFilter>,
         limit: Int = DEFAULT_LIMIT,
+        groupBy: String = "session_id",
+        source: String? = null,
     ): BreakdownResponse {
         val where = buildWhere(projectId, dateFrom, dateTo, filters, "e", "timestamp")
+        val groupByColumn = resolveGroupByColumn(groupBy)
+        val sourceClause = sourceWhere(source, "e")
+        val nonEmptyGroupClause = if (groupByColumn == "user_id") "AND e.user_id != ''" else ""
         val sql = """
             SELECT
                 e.event_name AS name,
-                uniq(e.session_id) AS visitors,
+                uniq(e.$groupByColumn) AS visitors,
                 count() AS pageviews
             FROM analytics_events AS e
-            WHERE $where AND e.event_name != 'pageview'
+            WHERE $where
+              AND e.event_name != 'pageview'
+              $sourceClause
+              $nonEmptyGroupClause
             GROUP BY name
             ORDER BY visitors DESC
             LIMIT $limit
@@ -374,6 +473,28 @@ class AnalyticsService {
             "event", "event_name" -> if (alias == "e") "event_name" else null
             else -> null
         }
+    }
+
+    private fun resolveGroupByColumn(groupBy: String): String =
+        when (groupBy) {
+            "user_id" -> "user_id"
+            else -> "session_id"
+        }
+
+    private fun percentage(
+        numerator: Long,
+        denominator: Long,
+    ): Double =
+        if (denominator > 0) numerator.toDouble() / denominator * PERCENTAGE_MULTIPLIER else 0.0
+
+    private fun sourceWhere(
+        source: String?,
+        alias: String = "",
+    ): String {
+        if (source.isNullOrBlank()) return ""
+        val prefix = if (alias.isNotEmpty()) "$alias." else ""
+        val escapedSource = AnalyticsIngestionWorker.escapeCH(source)
+        return "AND ${prefix}source = '$escapedSource'"
     }
 
     private fun asClickHouseProjectId(projectId: Long): String {

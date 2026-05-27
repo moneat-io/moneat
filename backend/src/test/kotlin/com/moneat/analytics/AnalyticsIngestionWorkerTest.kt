@@ -16,8 +16,13 @@
 
 package com.moneat.analytics
 
+import com.moneat.analytics.models.EnrichedAnalyticsEvent
 import com.moneat.analytics.services.AnalyticsIngestionWorker
+import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
+import com.moneat.testsupport.requestBodyText
+import com.moneat.testsupport.respond
+import com.moneat.testsupport.withClickHouseMockServer
 import com.moneat.utils.ClickHouseSqlUtils
 import io.lettuce.core.api.sync.RedisCommands
 import io.mockk.every
@@ -25,6 +30,7 @@ import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -32,6 +38,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class AnalyticsIngestionWorkerTest {
+    // ──── Mocks & Setup ────
 
     private val mockRedis = mockk<RedisCommands<String, String>>(relaxed = true)
 
@@ -45,7 +52,10 @@ class AnalyticsIngestionWorkerTest {
     @AfterTest
     fun teardown() {
         unmockkObject(RedisConfig)
+        ClickHouseClient.close()
     }
+
+    // ──── Companion Metadata ────
 
     @Test
     fun `companion exposes queue and dlq keys`() {
@@ -66,6 +76,8 @@ class AnalyticsIngestionWorkerTest {
         assertEquals(ClickHouseSqlUtils.escapeSql(raw), AnalyticsIngestionWorker.escapeCH(raw))
     }
 
+    // ──── Message Processing ────
+
     @Test
     fun `processMessage with invalid JSON does not throw`() {
         val worker = AnalyticsIngestionWorker(workerCount = 0)
@@ -81,6 +93,53 @@ class AnalyticsIngestionWorkerTest {
             worker.processMessage(2, "")
         }
     }
+
+    @Test
+    fun `processMessage inserts product analytics user and source columns`() = runBlocking {
+        val queries = mutableListOf<String>()
+        withClickHouseMockServer({ exchange ->
+            queries.add(exchange.requestBodyText())
+            exchange.respond(200, "", contentType = "text/plain")
+        }) { _ ->
+            val worker = AnalyticsIngestionWorker(workerCount = 0)
+            val message = Json.encodeToString(
+                EnrichedAnalyticsEvent(
+                    projectId = 42L,
+                    sessionId = "sess-1",
+                    userId = "user-1",
+                    eventName = "recording.started",
+                    source = "server",
+                    hostname = "",
+                    pathname = "",
+                    referrer = "",
+                    referrerSource = "",
+                    utmSource = "",
+                    utmMedium = "",
+                    utmCampaign = "",
+                    utmTerm = "",
+                    utmContent = "",
+                    countryCode = "",
+                    subdivision = "",
+                    city = "",
+                    browser = "",
+                    browserVersion = "",
+                    os = "",
+                    osVersion = "",
+                    deviceType = "",
+                    screenWidth = 0,
+                    props = mapOf("platform" to "ios"),
+                    timestamp = 1_716_825_600_000,
+                )
+            )
+
+            worker.processMessage(1, message)
+
+            assertTrue(queries.any { it.contains("session_id, user_id, event_name, source") })
+            assertTrue(queries.any { it.contains("'user-1'") && it.contains("'server'") })
+        }
+    }
+
+    // ──── Lifecycle ────
 
     @Test
     fun `stop without start does not throw`() {
