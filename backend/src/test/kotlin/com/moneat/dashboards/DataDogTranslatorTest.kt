@@ -41,6 +41,37 @@ class DataDogTranslatorTest {
 
     private val translator = DataDogTranslator()
     private val json = Json { ignoreUnknownKeys = true }
+    private val representativeDatadogWidgetTypes = listOf(
+        "timeseries",
+        "query_value",
+        "toplist",
+        "group",
+        "note",
+        "sunburst",
+        "query_table",
+        "image",
+        "heatmap",
+        "distribution",
+        "free_text",
+        "list_stream",
+        "geomap",
+        "check_status",
+        "manage_status",
+        "bar_chart",
+        "log_stream",
+        "treemap",
+        "change",
+        "hostmap",
+        "event_stream",
+        "wildcard",
+        "event_timeline",
+        "flame_graph",
+        "cloud_cost_summary",
+        "topology_map",
+        "sankey",
+        "iframe",
+        "scatterplot"
+    )
 
     private fun loadFixture(path: String) =
         json.parseToJsonElement(
@@ -87,6 +118,20 @@ class DataDogTranslatorTest {
             }
         )
         put("layout", datadogLayout(1, 2, 4, 3))
+    }
+
+    private fun collectDatadogWidgetTypes(dashboard: kotlinx.serialization.json.JsonObject): List<String> {
+        val widgets = dashboard["widgets"]?.jsonArray ?: return emptyList()
+        return widgets.flatMap { element -> collectDatadogWidgetTypesFromWidget(element.jsonObject) }
+    }
+
+    private fun collectDatadogWidgetTypesFromWidget(widget: kotlinx.serialization.json.JsonObject): List<String> {
+        val definition = widget["definition"]?.jsonObject ?: return emptyList()
+        val type = definition["type"]?.jsonPrimitive?.content ?: return emptyList()
+        val childTypes = definition["widgets"]?.jsonArray
+            ?.flatMap { child -> collectDatadogWidgetTypesFromWidget(child.jsonObject) }
+            ?: emptyList()
+        return listOf(type) + childTypes
     }
 
     // ──── Import ────
@@ -238,7 +283,7 @@ class DataDogTranslatorTest {
         }
         val result = translator.import(json)
         assertEquals("text", result.dashboard.widgets[0].widgetType)
-        assertTrue(result.warnings.any { it.contains("unsupported type") })
+        assertTrue(result.warnings.any { it.contains("unsupported Datadog widget type") })
     }
 
     @Test
@@ -500,8 +545,63 @@ class DataDogTranslatorTest {
         assertEquals("section", result.dashboard.widgets[2].widgetType)
         assertEquals("table", result.dashboard.widgets[3].widgetType)
         assertEquals("heatmap", result.dashboard.widgets[4].widgetType)
-        assertEquals("text", result.dashboard.widgets[5].widgetType)
-        assertTrue(result.warnings.any { it.contains("unsupported type 'scatterplot'") })
+        assertEquals("scatter", result.dashboard.widgets[5].widgetType)
+        assertTrue(result.warnings.none { it.contains("Datadog widget type 'scatterplot'") })
+    }
+
+    @Test
+    fun `import supports representative Datadog widget types without fallback warnings`() {
+        val fixture = loadFixture("dashboards/datadog/datadog-import-supported-widgets.json")
+        val fixtureTypes = collectDatadogWidgetTypes(fixture)
+        val result = translator.import(fixture)
+
+        assertTrue(fixtureTypes.containsAll(representativeDatadogWidgetTypes))
+        assertTrue(result.warnings.none { it.contains("unsupported Datadog widget type") })
+        assertTrue(result.warnings.none { it.contains("imported as") })
+
+        mapOf(
+            "timeseries" to "timeseries",
+            "toplist" to "toplist",
+            "query_value" to "stat",
+            "group" to "section",
+            "note" to "text",
+            "sunburst" to "donut",
+            "query_table" to "table",
+            "image" to "text",
+            "distribution" to "bar",
+            "free_text" to "text",
+            "list_stream" to "stream",
+            "geomap" to "geo_map",
+            "check_status" to "status",
+            "manage_status" to "status",
+            "bar_chart" to "bar",
+            "log_stream" to "stream",
+            "treemap" to "treemap",
+            "change" to "change",
+            "hostmap" to "host_map",
+            "event_stream" to "stream",
+            "wildcard" to "custom",
+            "event_timeline" to "timeline",
+            "flame_graph" to "flame_graph",
+            "cloud_cost_summary" to "cost_summary",
+            "topology_map" to "topology_map",
+            "sankey" to "sankey",
+            "iframe" to "iframe",
+            "scatterplot" to "scatter"
+        ).forEach { (datadogType, moneatType) ->
+            val widget = result.dashboard.widgets.first { it.displayConfig["source_widget_type"] == datadogType }
+            assertEquals(moneatType, widget.widgetType)
+            assertEquals("native", widget.displayConfig["source_import_strategy"])
+        }
+
+        val geomap = result.dashboard.widgets.first { it.displayConfig["source_widget_type"] == "geomap" }
+        assertTrue(geomap.displayConfig["source_definition_json"]?.contains("\"type\":\"geomap\"") == true)
+        assertTrue(geomap.displayConfig["source_layout_json"]?.contains("\"width\":6") == true)
+
+        val iframe = result.dashboard.widgets.first { it.displayConfig["source_widget_type"] == "iframe" }
+        assertEquals("iframe", iframe.widgetType)
+        assertEquals("https://status.example.com", iframe.displayConfig["iframe_url"])
+        assertTrue(iframe.displayConfig["content"]?.contains("https://status.example.com") == true)
     }
 
     // ──── parseDataDogQueryString ────
@@ -541,6 +641,27 @@ class DataDogTranslatorTest {
         assertEquals(2, dsl.filters.size)
         assertTrue(dsl.filters.any { it.field == "metric_name" && it.value == "system.disk.used" })
         assertTrue(dsl.filters.any { it.field == "host" && it.value == "web01" })
+    }
+
+    @Test
+    fun `parseDataDogQueryString supports Datadog IN and NOT IN tag filters`() {
+        val warnings = mutableListOf<String>()
+        val dsl = translator.parseDataDogQueryString(
+            "avg:system.cpu.user{host IN (web01, web02),host NOT IN (web03)}",
+            warnings,
+            0
+        )
+
+        assertTrue(
+            dsl.filters.any {
+                it.field == "host" && it.op == FilterOp.IN && it.values == listOf("web01", "web02")
+            }
+        )
+        assertTrue(
+            dsl.filters.any {
+                it.field == "host" && it.op == FilterOp.NOT_IN && it.values == listOf("web03")
+            }
+        )
     }
 
     @Test
@@ -606,6 +727,60 @@ class DataDogTranslatorTest {
         assertEquals(2, queries.size)
         assertEquals("connections", queries[0].metrics[0].alias)
         assertEquals("max connections", queries[1].metrics[0].alias)
+    }
+
+    @Test
+    fun `parseDataDogQueries preserves formula expressions and source queries`() {
+        val warnings = mutableListOf<String>()
+        val definition = buildJsonObject {
+            put("type", "scatterplot")
+            put(
+                "requests",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put(
+                                "queries",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("name", "query1")
+                                            put("query", "sum:kubernetes.cpu.usage.total{host:web01}")
+                                        }
+                                    )
+                                    add(
+                                        buildJsonObject {
+                                            put("name", "query2")
+                                            put("query", "sum:kubernetes.cpu.requests{host:web01}")
+                                        }
+                                    )
+                                }
+                            )
+                            put(
+                                "formulas",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("formula", "query1 / query2 * 100")
+                                            put("alias", "usage percent")
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+
+        val queries = translator.parseDataDogQueries(definition, warnings, 8)
+
+        assertEquals(3, queries.size)
+        assertEquals("query1", queries[0].refId)
+        assertEquals("query2", queries[1].refId)
+        assertEquals("query1 / query2 * 100", queries[2].rawQuery)
+        assertEquals("usage percent", queries[2].metrics.single().alias)
+        assertTrue(warnings.any { it.contains("Datadog formula 'query1 / query2 * 100'") })
     }
 
     @Test
@@ -730,6 +905,16 @@ class DataDogTranslatorTest {
                     dashboardId = 1,
                     widgetType = "donut",
                     queryConfigs = listOf(QueryDsl(dataSource = "events"))
+                ),
+                WidgetResponse(
+                    id = 3,
+                    dashboardId = 1,
+                    widgetType = "scatter",
+                    queryConfigs = listOf(QueryDsl(dataSource = "metrics")),
+                    displayConfig = mapOf(
+                        "source_format" to "datadog",
+                        "source_widget_type" to "scatterplot"
+                    )
                 )
             )
         )
@@ -737,8 +922,10 @@ class DataDogTranslatorTest {
         val widgets = exported["widgets"]!!.jsonArray
         val type0 = widgets[0].jsonObject["definition"]!!.jsonObject["type"]!!.jsonPrimitive.content
         val type1 = widgets[1].jsonObject["definition"]!!.jsonObject["type"]!!.jsonPrimitive.content
+        val type2 = widgets[2].jsonObject["definition"]!!.jsonObject["type"]!!.jsonPrimitive.content
         assertEquals("query_value", type0)
         assertEquals("pie", type1)
+        assertEquals("scatterplot", type2)
     }
 
     // ──── buildDdQueryString ────

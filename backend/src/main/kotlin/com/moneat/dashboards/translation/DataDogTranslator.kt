@@ -49,10 +49,17 @@ private const val DD_AUTO_WIDGETS_PER_ROW = 2
 private const val DD_DEFAULT_TABLE_LIMIT = 100
 private const val DD_GROUP_BY_MATCH_GROUP_INDEX = 4
 
+private const val DD_IMPORT_STRATEGY_NATIVE = "native"
+private const val DD_IMPORT_STRATEGY_UNSUPPORTED = "unsupported"
+private const val SOURCE_DEFINITION_JSON_KEY = "source_definition_json"
+private const val SOURCE_LAYOUT_JSON_KEY = "source_layout_json"
+
 private val DD_METRIC_QUERY_REGEX = Regex(
     """^\s*([A-Za-z_][A-Za-z0-9_]*):([A-Za-z0-9_.]+)\{([^}]*)}\s*(?:by\s+\{([^}]*)})?\s*$"""
 )
 private val DD_SIMPLE_FORMULA_REGEX = Regex("""^[A-Za-z_][A-Za-z0-9_]*$""")
+private val DD_IN_TAG_REGEX = Regex("""^([A-Za-z0-9_.-]+)\s+IN\s+\(([^)]*)\)$""", RegexOption.IGNORE_CASE)
+private val DD_NOT_IN_TAG_REGEX = Regex("""^([A-Za-z0-9_.-]+)\s+NOT\s+IN\s+\(([^)]*)\)$""", RegexOption.IGNORE_CASE)
 
 private data class DataDogLayout(
     val x: Int,
@@ -68,22 +75,54 @@ private data class ParsedDataDogQuery(
     val groupByText: String?
 )
 
+private data class DataDogWidgetImportSupport(
+    val moneatType: String,
+    val strategy: String = DD_IMPORT_STRATEGY_NATIVE
+)
+
+private fun native(moneatType: String): DataDogWidgetImportSupport {
+    return DataDogWidgetImportSupport(moneatType)
+}
+
+private data class NamedDataDogQuery(
+    val name: String?,
+    val dsl: QueryDsl
+)
+
 class DataDogTranslator : DashboardTranslator {
 
-    private val widgetTypeMap = mapOf(
-        "timeseries" to "timeseries",
-        "toplist" to "toplist",
-        "query_value" to "stat",
-        "table" to "table",
-        "query_table" to "table",
-        "heatmap" to "heatmap",
-        "distribution" to "bar",
-        "pie" to "donut",
-        "sunburst" to "donut",
-        "note" to "text",
-        "free_text" to "text",
-        "image" to "text",
-        "group" to "section"
+    private val widgetImportSupportByType = mapOf(
+        "timeseries" to native("timeseries"),
+        "toplist" to native("toplist"),
+        "query_value" to native("stat"),
+        "table" to native("table"),
+        "query_table" to native("table"),
+        "heatmap" to native("heatmap"),
+        "distribution" to native("bar"),
+        "pie" to native("donut"),
+        "sunburst" to native("donut"),
+        "note" to native("text"),
+        "free_text" to native("text"),
+        "image" to native("text"),
+        "group" to native("section"),
+        "bar_chart" to native("bar"),
+        "list_stream" to native("stream"),
+        "log_stream" to native("stream"),
+        "event_stream" to native("stream"),
+        "event_timeline" to native("timeline"),
+        "geomap" to native("geo_map"),
+        "hostmap" to native("host_map"),
+        "topology_map" to native("topology_map"),
+        "sankey" to native("sankey"),
+        "treemap" to native("treemap"),
+        "scatterplot" to native("scatter"),
+        "check_status" to native("status"),
+        "manage_status" to native("status"),
+        "change" to native("change"),
+        "wildcard" to native("custom"),
+        "flame_graph" to native("flame_graph"),
+        "cloud_cost_summary" to native("cost_summary"),
+        "iframe" to native("iframe")
     )
 
     private val reverseWidgetTypeMap = mapOf(
@@ -94,7 +133,21 @@ class DataDogTranslator : DashboardTranslator {
         "heatmap" to "heatmap",
         "bar" to "distribution",
         "donut" to "pie",
-        "text" to "note"
+        "text" to "note",
+        "stream" to "list_stream",
+        "timeline" to "event_timeline",
+        "geo_map" to "geomap",
+        "host_map" to "hostmap",
+        "topology_map" to "topology_map",
+        "sankey" to "sankey",
+        "treemap" to "treemap",
+        "scatter" to "scatterplot",
+        "status" to "check_status",
+        "change" to "change",
+        "custom" to "wildcard",
+        "flame_graph" to "flame_graph",
+        "cost_summary" to "cloud_cost_summary",
+        "iframe" to "iframe"
     )
 
     private val metricNamespaceMap = mapOf(
@@ -175,9 +228,12 @@ class DataDogTranslator : DashboardTranslator {
     ): List<WidgetResponse> {
         val definition = widgetJson["definition"]?.jsonObject ?: JsonObject(emptyMap())
         val ddType = definition["type"]?.jsonPrimitive?.contentOrNull ?: "timeseries"
-        val moneatType = widgetTypeMap[ddType]
-        if (moneatType == null) {
-            warnings.add("Widget $index: unsupported type '$ddType', imported as 'text'")
+        val support = widgetImportSupportByType[ddType]
+        if (support == null) {
+            warnings.add(
+                "Widget $index: unsupported Datadog widget type '$ddType', imported as 'text'; " +
+                    "original definition was preserved in displayConfig.$SOURCE_DEFINITION_JSON_KEY"
+            )
         }
 
         if (ddType == "group") {
@@ -187,14 +243,14 @@ class DataDogTranslator : DashboardTranslator {
         val resolvedLayout = resolveLayout(layout, parentLayout)
         val widgetTitle = definition["title"]?.jsonPrimitive?.contentOrNull
         val queryConfigs = parseDataDogQueries(definition, warnings, index)
-        val displayConfig = extractDisplayConfig(definition, ddType)
+        val displayConfig = extractDisplayConfig(definition, layout, ddType, support)
 
         return listOf(
             WidgetResponse(
                 id = 0,
                 dashboardId = 0,
                 title = widgetTitle,
-                widgetType = moneatType ?: "text",
+                widgetType = support?.moneatType ?: "text",
                 gridX = resolvedLayout.x.coerceIn(0, DD_MAX_GRID_COL),
                 gridY = resolvedLayout.y,
                 gridW = resolvedLayout.width.coerceIn(1, DD_GRID_COLS),
@@ -228,7 +284,8 @@ class DataDogTranslator : DashboardTranslator {
             queryConfigs = emptyList(),
             displayConfig = mapOf(
                 "source_format" to "datadog",
-                "datadog_widget_type" to "group",
+                "source_widget_type" to "group",
+                "source_import_strategy" to DD_IMPORT_STRATEGY_NATIVE,
                 "collapsed" to "false"
             ),
             sortOrder = index
@@ -262,22 +319,45 @@ class DataDogTranslator : DashboardTranslator {
         )
     }
 
-    private fun extractDisplayConfig(definition: JsonObject, ddType: String): Map<String, String> {
+    private fun extractDisplayConfig(
+        definition: JsonObject,
+        layout: DataDogLayout,
+        ddType: String,
+        support: DataDogWidgetImportSupport?
+    ): Map<String, String> {
         val config = mutableMapOf(
             "source_format" to "datadog",
-            "datadog_widget_type" to ddType
+            "source_widget_type" to ddType,
+            "source_import_strategy" to (support?.strategy ?: DD_IMPORT_STRATEGY_UNSUPPORTED),
+            SOURCE_DEFINITION_JSON_KEY to definition.toString(),
+            SOURCE_LAYOUT_JSON_KEY to layout.toJsonObject().toString()
         )
+        config["source_request_count"] = (definition["requests"]?.jsonArray?.size ?: 0).toString()
+        config["source_query_count"] = countDataDogQueries(definition).toString()
+        if (definition["requests"]?.jsonArray?.any { it.jsonObject["formulas"] is JsonArray } == true) {
+            config["source_has_formulas"] = "true"
+        }
         definition["content"]?.jsonPrimitive?.contentOrNull?.let { content ->
             config["content"] = content
         }
         definition["url"]?.jsonPrimitive?.contentOrNull?.let { url ->
-            config["content"] = "![]($url)"
+            config["content"] = if (ddType == "iframe") "[$url]($url)" else "![]($url)"
             config["image_url"] = url
+            if (ddType == "iframe") {
+                config["iframe_url"] = url
+            }
         }
         definition["legend_layout"]?.jsonPrimitive?.contentOrNull?.let { config["legendLayout"] = it }
         definition["display_type"]?.jsonPrimitive?.contentOrNull?.let { config["displayType"] = it }
         definition["background_color"]?.jsonPrimitive?.contentOrNull?.let { config["backgroundColor"] = it }
         return config
+    }
+
+    private fun DataDogLayout.toJsonObject(): JsonObject = buildJsonObject {
+        put("x", x)
+        put("y", y)
+        put("width", width)
+        put("height", height)
     }
 
     internal fun parseDataDogQuery(
@@ -293,15 +373,11 @@ class DataDogTranslator : DashboardTranslator {
         warnings: MutableList<String>,
         widgetIndex: Int
     ): List<QueryDsl> {
+        val ddType = definition["type"]?.jsonPrimitive?.contentOrNull ?: "timeseries"
         val requests = definition["requests"]?.jsonArray
 
         if (requests.isNullOrEmpty()) {
-            return listOf(
-                QueryDsl(
-                    dataSource = "events",
-                    metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count"))
-                )
-            )
+            return listOf(defaultQueryForWidget(definition, ddType, warnings, widgetIndex))
         }
 
         val parsedQueries = requests.flatMap { requestElement ->
@@ -330,26 +406,58 @@ class DataDogTranslator : DashboardTranslator {
             return listOf(parseDataDogQueryString(queryStr, warnings, widgetIndex))
         }
 
-        val formulaAliases = extractFormulaAliases(request)
         val queries = request["queries"]?.jsonArray ?: return emptyList()
-        return queries.mapNotNull { queryElement ->
+        val namedQueries = queries.mapNotNull { queryElement ->
             val queryObj = queryElement.jsonObject
-            val queryStr = queryObj["query"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+            val queryStr = extractDataDogQueryString(queryObj) ?: return@mapNotNull null
             val queryName = queryObj["name"]?.jsonPrimitive?.contentOrNull
-            val alias = queryName?.let { formulaAliases[it] } ?: queryName
-            parseDataDogQueryString(queryStr, warnings, widgetIndex, alias, queryName)
+            val dataSource = queryObj["data_source"]?.jsonPrimitive?.contentOrNull
+            val parsed = parseDataDogQueryString(queryStr, warnings, widgetIndex, queryName, queryName)
+            NamedDataDogQuery(queryName, applyDataDogQuerySource(parsed, dataSource))
         }
+
+        val formulaQueries = parseFormulaQueries(request, namedQueries, warnings, widgetIndex)
+        val hasPreservedFormula = formulaQueries.any { query ->
+            query.rawQuery != null && namedQueries.none { it.dsl.rawQuery == query.rawQuery }
+        }
+        if (hasPreservedFormula) {
+            return namedQueries.map { it.dsl } + formulaQueries
+        }
+        return formulaQueries.ifEmpty { namedQueries.map { it.dsl } }
     }
 
-    private fun extractFormulaAliases(request: JsonObject): Map<String, String> {
-        val formulas = request["formulas"]?.jsonArray ?: return emptyMap()
+    private fun parseFormulaQueries(
+        request: JsonObject,
+        namedQueries: List<NamedDataDogQuery>,
+        warnings: MutableList<String>,
+        widgetIndex: Int
+    ): List<QueryDsl> {
+        val formulas = request["formulas"]?.jsonArray ?: return emptyList()
         return formulas.mapNotNull { formulaElement ->
             val formula = formulaElement.jsonObject
             val expression = formula["formula"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-            if (!DD_SIMPLE_FORMULA_REGEX.matches(expression)) return@mapNotNull null
-            val alias = formula["alias"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-            expression to alias
-        }.toMap()
+            val alias = formula["alias"]?.jsonPrimitive?.contentOrNull
+            if (DD_SIMPLE_FORMULA_REGEX.matches(expression)) {
+                val namedQuery = namedQueries.firstOrNull { it.name == expression }
+                if (namedQuery != null) {
+                    return@mapNotNull namedQuery.dsl.withMetricAlias(alias)
+                }
+            }
+            warnings.add(
+                "Widget $widgetIndex: Datadog formula '$expression' cannot be translated directly; " +
+                    "preserved as raw query for manual review"
+            )
+            rawFormulaQueryDsl(expression, alias)
+        }
+    }
+
+    private fun QueryDsl.withMetricAlias(alias: String?): QueryDsl {
+        if (alias.isNullOrBlank() || metrics.isEmpty()) return this
+        return copy(
+            metrics = metrics.mapIndexed { index, metric ->
+                if (index == 0) metric.copy(alias = alias) else metric
+            }
+        )
     }
 
     internal fun parseDataDogQueryString(
@@ -401,6 +509,15 @@ class DataDogTranslator : DashboardTranslator {
         )
     }
 
+    private fun rawFormulaQueryDsl(expression: String, alias: String?): QueryDsl {
+        return QueryDsl(
+            dataSource = "metrics",
+            metrics = listOf(MetricDef(AggFunction.AVG, "value", alias ?: "formula")),
+            groupBy = listOf(GroupByDef("timestamp", GroupByType.TIME, "auto")),
+            rawQuery = expression
+        )
+    }
+
     private fun parseDataDogTags(
         tagText: String?,
         dataSource: String,
@@ -412,11 +529,40 @@ class DataDogTranslator : DashboardTranslator {
         }
         if (tagText.isNullOrBlank() || tagText == "*") return filters
 
-        tagText.split(",")
+        splitDataDogTags(tagText)
             .map { it.trim() }
             .filter { it.isNotBlank() && it != "*" }
             .forEach { tag -> addDataDogTagFilter(tag, dataSource, filters) }
         return filters
+    }
+
+    private fun splitDataDogTags(tagText: String): List<String> {
+        val tags = mutableListOf<String>()
+        val current = StringBuilder()
+        var parenthesisDepth = 0
+        for (char in tagText) {
+            when (char) {
+                '(' -> {
+                    parenthesisDepth++
+                    current.append(char)
+                }
+                ')' -> {
+                    parenthesisDepth = (parenthesisDepth - 1).coerceAtLeast(0)
+                    current.append(char)
+                }
+                ',' -> {
+                    if (parenthesisDepth == 0) {
+                        tags.add(current.toString())
+                        current.clear()
+                    } else {
+                        current.append(char)
+                    }
+                }
+                else -> current.append(char)
+            }
+        }
+        tags.add(current.toString())
+        return tags
     }
 
     private fun addDataDogTagFilter(tag: String, dataSource: String, filters: MutableList<FilterDef>) {
@@ -432,15 +578,28 @@ class DataDogTranslator : DashboardTranslator {
             return FilterDef(name, FilterOp.EQ, tag)
         }
 
-        val normalized = tag.removePrefix("!")
+        DD_NOT_IN_TAG_REGEX.matchEntire(tag)?.let { match ->
+            return FilterDef(match.groupValues[1], FilterOp.NOT_IN, values = parseTagValues(match.groupValues[2]))
+        }
+        DD_IN_TAG_REGEX.matchEntire(tag)?.let { match ->
+            return FilterDef(match.groupValues[1], FilterOp.IN, values = parseTagValues(match.groupValues[2]))
+        }
+
+        val normalized = tag.removePrefix("!").removePrefix("-")
         val parts = normalized.split(":", limit = 2)
         if (parts.size != 2 || parts[1] == "*") return null
 
         return FilterDef(
             field = parts[0].trim(),
-            op = if (tag.startsWith("!")) FilterOp.NEQ else FilterOp.EQ,
+            op = if (tag.startsWith("!") || tag.startsWith("-")) FilterOp.NEQ else FilterOp.EQ,
             value = parts[1].trim()
         )
+    }
+
+    private fun parseTagValues(valueText: String): List<String> {
+        return valueText.split(",")
+            .map { it.trim().trim('\'', '"') }
+            .filter { it.isNotBlank() }
     }
 
     private fun parseDataDogGroupBy(groupByText: String?, dataSource: String): List<GroupByDef> {
@@ -488,6 +647,75 @@ class DataDogTranslator : DashboardTranslator {
         }
     }
 
+    private fun defaultQueryForWidget(
+        definition: JsonObject,
+        ddType: String,
+        warnings: MutableList<String>,
+        widgetIndex: Int
+    ): QueryDsl {
+        val dataSource = defaultDataSourceForWidget(ddType)
+        val query = extractDataDogQueryString(definition)
+        if (!query.isNullOrBlank()) {
+            warnings.add(
+                "Widget $widgetIndex: Datadog widget type '$ddType' query preserved as raw query; " +
+                    "manual review is required before it can execute"
+            )
+            return preservedRawQueryDsl(query, dataSource)
+        }
+        return QueryDsl(
+            dataSource = dataSource,
+            metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count"))
+        )
+    }
+
+    private fun defaultDataSourceForWidget(ddType: String): String = when (ddType) {
+        "log_stream", "list_stream" -> "logs"
+        "event_stream", "event_timeline" -> "events"
+        "flame_graph", "topology_map", "sankey" -> "spans"
+        "hostmap", "check_status", "manage_status", "cloud_cost_summary" -> "metrics"
+        else -> "events"
+    }
+
+    private fun extractDataDogQueryString(json: JsonObject): String? {
+        json["query"]?.jsonPrimitive?.contentOrNull?.let { return it }
+        json["q"]?.jsonPrimitive?.contentOrNull?.let { return it }
+        return json["search"]?.jsonObject?.get("query")?.jsonPrimitive?.contentOrNull
+    }
+
+    private fun applyDataDogQuerySource(dsl: QueryDsl, dataDogSource: String?): QueryDsl {
+        if (dsl.rawQuery == null || dataDogSource.isNullOrBlank()) return dsl
+        val dataSource = mapDataDogQuerySource(dataDogSource)
+        return dsl.copy(
+            dataSource = dataSource,
+            metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count"))
+        )
+    }
+
+    private fun mapDataDogQuerySource(dataDogSource: String): String = when (dataDogSource.lowercase()) {
+        "logs", "log" -> "logs"
+        "events", "event" -> "events"
+        "spans", "trace", "traces", "apm", "apm_resource_stats", "profiles" -> "spans"
+        "containers", "container" -> "containers"
+        else -> "metrics"
+    }
+
+    private fun preservedRawQueryDsl(query: String, dataSource: String): QueryDsl {
+        return QueryDsl(
+            dataSource = dataSource,
+            metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count")),
+            rawQuery = query
+        )
+    }
+
+    private fun countDataDogQueries(definition: JsonObject): Int {
+        val requests = definition["requests"]?.jsonArray ?: return 0
+        return requests.sumOf { requestElement ->
+            val request = requestElement.jsonObject
+            val directQueryCount = if (request["q"]?.jsonPrimitive?.contentOrNull != null) 1 else 0
+            directQueryCount + (request["queries"]?.jsonArray?.size ?: 0)
+        }
+    }
+
     internal fun parseDataDogVariables(json: JsonObject): List<DashboardVariable> {
         val templateVars = json["template_variables"]?.jsonArray ?: return emptyList()
 
@@ -522,7 +750,7 @@ class DataDogTranslator : DashboardTranslator {
                 put(
                     "definition",
                     buildJsonObject {
-                        put("type", reverseWidgetTypeMap[widget.widgetType] ?: "timeseries")
+                        put("type", exportDataDogWidgetType(widget))
                         widget.title?.let { put("title", it) }
                         widget.displayConfig["content"]?.let { put("content", it) }
                         put(
@@ -588,6 +816,17 @@ class DataDogTranslator : DashboardTranslator {
                 )
             }
         }
+    }
+
+    private fun exportDataDogWidgetType(widget: WidgetResponse): String {
+        val sourceType = widget.displayConfig["source_widget_type"]
+        if (widget.displayConfig["source_format"] == "datadog" &&
+            sourceType != null &&
+            widgetImportSupportByType.containsKey(sourceType)
+        ) {
+            return sourceType
+        }
+        return reverseWidgetTypeMap[widget.widgetType] ?: "timeseries"
     }
 
     internal fun buildDdQueryString(dsl: QueryDsl): String {
