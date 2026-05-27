@@ -36,6 +36,7 @@ private val jwtSecret by lazy { EnvConfig.get("JWT_SECRET") }
 private val demoSafeWritePaths =
     setOf(
         "/auth/login",
+        "/auth/signup",
         "/auth/demo-login",
         "/auth/demo-refresh",
         "/auth/refresh",

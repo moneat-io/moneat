@@ -19,6 +19,11 @@ import {LandingPage} from '@/components/landing/LandingPage'
 import {useQuery} from '@tanstack/react-query'
 import {useState, useEffect} from 'react'
 import {api, type StatusPageDetail, type UptimeHeartbeat} from '@/lib/api'
+import {trackEvent} from '@/lib/analytics'
+import {
+  markFirstSignalAfterDatadogImportTracked,
+  readDatadogPendingImportSignal,
+} from '@/lib/datadogImportFunnel'
 import {useProject} from '@/contexts/ProjectContext'
 import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
 import {formatRelativeTime} from '@/lib/utils'
@@ -342,6 +347,21 @@ function UtilizationBar({
   )
 }
 
+function getFirstDatadogImportSignalSource({
+  totalEvents,
+  totalTransactions,
+  hostCount,
+}: {
+  totalEvents?: number
+  totalTransactions?: number
+  hostCount: number
+}): string | null {
+  if ((totalEvents ?? 0) > 0) return 'events'
+  if ((totalTransactions ?? 0) > 0) return 'apm'
+  if (hostCount > 0) return 'infrastructure'
+  return null
+}
+
 // ─── Main Dashboard ───────────────────────────────────────────────────
 function DashboardPage() {
   const {selectedProjectId, setSelectedProjectId} = useProject()
@@ -405,6 +425,25 @@ function DashboardPage() {
 
   const {data: enterpriseFeatures} = useEnterpriseFeatures()
   const hasOnCall = hasEnterpriseModule(enterpriseFeatures, 'oncall')
+
+  useEffect(() => {
+    const importContext = readDatadogPendingImportSignal()
+    if (!importContext) return
+
+    const signalSource = getFirstDatadogImportSignalSource({
+      totalEvents: stats?.totalEvents,
+      totalTransactions: perfStats?.totalTransactions,
+      hostCount: monitorHosts.length,
+    })
+    if (!signalSource) return
+
+    trackEvent('first_signal_after_import', {
+      dashboard_id: String(importContext.dashboardId),
+      warning_count: String(importContext.warningCount),
+      signal_source: signalSource,
+    })
+    markFirstSignalAfterDatadogImportTracked()
+  }, [monitorHosts.length, perfStats?.totalTransactions, stats?.totalEvents])
 
   const {data: incidents = [], isLoading: isLoadingIncidents} = useQuery({
     queryKey: ['incidents-overview'],

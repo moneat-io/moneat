@@ -1,13 +1,18 @@
 ---
 title: Dashboard Import
-description: Import your existing Datadog dashboards into Moneat with automatic widget and metric translation.
+description: Import your existing Datadog dashboard exports into Moneat with automatic widget translation.
 ---
 
 # Dashboard Import
 
 ## Overview
 
-If you're migrating from Datadog, you can import your existing dashboards into Moneat. The importer translates Datadog's dashboard JSON format into Moneat's native format, including widget types, metric queries, and template variables.
+If you're evaluating Moneat as a Datadog alternative, start with one dashboard export. The importer
+translates the exported JSON into Moneat's native format, including widget types, metric queries, and
+template variables.
+
+Use the public [Datadog dashboard import page](/datadog-dashboard-import) when you want a low-friction
+conversion path before changing production telemetry.
 
 ## Importing a Dashboard
 
@@ -19,14 +24,21 @@ If you're migrating from Datadog, you can import your existing dashboards into M
     },
     {
       title: 'Open the import dialog',
-      content: 'In Moneat, go to Dashboards and click Import. Paste the Datadog JSON into the editor.',
+      content: 'In Moneat, go to Dashboards and click Import. Paste the exported JSON into the editor.',
     },
     {
       title: 'Review and save',
-      content: 'Moneat translates widgets, metrics, and template variables automatically. Review any warnings, then save the imported dashboard.',
+      content:
+        'Moneat translates widgets, metrics, and template variables automatically. Review supported widgets, ' +
+        'warnings, and telemetry requirements, then save the imported dashboard.',
     },
   ]}
 />
+
+:::info
+Dashboard import moves the saved view. Live data still requires pointing the Datadog Agent or
+OTLP exporters at Moneat.
+:::
 
 ## Supported Widget Types
 

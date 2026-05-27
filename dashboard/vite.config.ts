@@ -37,24 +37,24 @@ import type { ProxyOptions } from 'vite'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DEV_PROXY_TARGET = 'http://localhost:8080'
-const DEV_PROXY_ALLOWED_ORIGIN = 'http://localhost:3000'
 
-function createBackendProxyOptions({rewriteOrigin = true, passCookies = true} = {}): ProxyOptions {
+function createBackendProxyOptions({stripOrigin = true, passCookies = true} = {}): ProxyOptions {
   return {
     target: DEV_PROXY_TARGET,
     changeOrigin: true,
     secure: false,
     cookieDomainRewrite: 'localhost',
     configure: (proxy) => {
-      if (rewriteOrigin) {
+      if (stripOrigin) {
         proxy.on('proxyReq', (proxyReq) => {
-          proxyReq.setHeader('Origin', DEV_PROXY_ALLOWED_ORIGIN)
+          // The browser sends the Vite dev server as Origin on same-origin proxy POSTs.
+          // Strip it so backend CORS accepts arbitrary local dev ports.
+          proxyReq.removeHeader('origin')
         })
       }
 
       if (passCookies) {
         proxy.on('proxyRes', (proxyRes, _req, res) => {
-          // Ensure cookies are passed through from backend to frontend
           const cookies = proxyRes.headers['set-cookie']
           if (cookies) {
             res.setHeader('set-cookie', cookies)

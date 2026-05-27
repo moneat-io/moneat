@@ -18,6 +18,8 @@ import {useMemo, useRef, useState} from 'react'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {useNavigate} from '@tanstack/react-router'
 import {api} from '@/lib/api'
+import {trackEvent} from '@/lib/analytics'
+import {markDatadogDashboardImportSuccess} from '@/lib/datadogImportFunnel'
 import {Button} from '@/components/ui/button'
 import {CodeEditor} from '@/components/ui/code-editor'
 import {CopyBlock} from '@/components/ui/copy-block'
@@ -25,6 +27,7 @@ import {AlertTriangle, Check, Download, Upload} from 'lucide-react'
 import {DataSourceMapperModal} from './DataSourceMapperModal'
 
 type DashboardImportFormat = 'grafana' | 'datadog'
+type DashboardImportInputSource = 'paste' | 'file'
 
 const IMPORT_FORMAT_DETAILS: Record<DashboardImportFormat, {
   title: string
@@ -40,8 +43,8 @@ const IMPORT_FORMAT_DETAILS: Record<DashboardImportFormat, {
   },
   datadog: {
     title: 'Datadog Dashboard Import',
-    description: 'Upload or paste your Datadog dashboard JSON export',
-    uploadLabel: 'Upload Datadog JSON File',
+    description: 'Upload or paste your Datadog dashboard export',
+    uploadLabel: 'Upload Datadog Export File',
     placeholder: '{"title": "My Dashboard", "layout_type": "ordered", "widgets": [...]}',
   },
 }
@@ -59,6 +62,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [jsonInput, setJsonInput] = useState('')
   const [format, setFormat] = useState<DashboardImportFormat>('grafana')
+  const [inputSource, setInputSource] = useState<DashboardImportInputSource>('paste')
   const [warnings, setWarnings] = useState<string[]>([])
   const [importSuccess, setImportSuccess] = useState(false)
   const [importedDashboardId, setImportedDashboardId] = useState<number | null>(null)
@@ -100,11 +104,17 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
 
   const importMutation = useMutation({
     mutationFn: ({format, json}: {format: string; json: string}) => api.importDashboard(format, json),
-    onSuccess: (result) => {
+    onSuccess: (result, variables) => {
       setWarnings(result.warnings)
       setImportSuccess(true)
       setImportedDashboardId(result.dashboard.id)
       queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
+      if (variables.format === 'datadog') {
+        const warningCount = String(result.warnings.length)
+        trackEvent('datadog_import_succeeded', {warning_count: warningCount})
+        trackEvent('datadog_import_warning_count', {count: warningCount})
+        markDatadogDashboardImportSuccess(result.dashboard.id, result.warnings.length)
+      }
       // Navigate immediately if no warnings to review
       if (result.warnings.length === 0) {
         onOpenChange(false)
@@ -120,9 +130,20 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
     const reader = new FileReader()
     reader.onload = (event) => {
       const content = event.target?.result as string
+      setInputSource('file')
       setJsonInput(content)
     }
     reader.readAsText(file)
+  }
+
+  const startImport = (request: {format: string; json: string}) => {
+    if (request.format === 'datadog') {
+      trackEvent('datadog_import_started', {
+        source: 'dashboard_import_modal',
+        input_method: inputSource,
+      })
+    }
+    importMutation.mutate(request)
   }
 
   const handleImport = () => {
@@ -261,7 +282,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
     }
     
     // No unmapped datasources, proceed with import
-    importMutation.mutate({format, json: jsonInput})
+    startImport({format, json: jsonInput})
   }
   
    const handleDataSourceMapped = (mapping: Record<string, string>) => {
@@ -335,7 +356,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
       
       // Import with mapped datasources
       const mappedJson = JSON.stringify(parsed)
-      importMutation.mutate({format: pendingImport.format, json: mappedJson})
+      startImport({format: pendingImport.format, json: mappedJson})
       
       setShowDataSourceMapper(false)
       setPendingImport(null)
@@ -452,7 +473,10 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
                   language="json"
                   rows={10}
                   value={jsonInput}
-                  onChange={setJsonInput}
+                  onChange={(value) => {
+                    setInputSource('paste')
+                    setJsonInput(value)
+                  }}
                   placeholder={formatDetails.placeholder}
                 />
               </div>

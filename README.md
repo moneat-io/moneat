@@ -93,14 +93,14 @@ Moneat is Sentry SDK, Datadog Agent, and OpenTelemetry (OTLP) compatible. Point 
 | OpenTelemetry (OTLP) | Ingest logs, traces, and metrics via standard OTLP/HTTP endpoints | [Docs](https://moneat.io/docs) |
 | Uptime & Status Pages | HTTP/TCP/ping checks with public status pages | [Docs](https://moneat.io/docs) |
 | Synthetics | API, multi-step, SSL, DNS, TCP, and UDP synthetic tests | [Docs](https://moneat.io/docs) |
-| Custom Dashboards | Drag-and-drop widgets, Grafana dashboard import | [Docs](https://moneat.io/docs) |
+| Custom Dashboards | Drag-and-drop widgets, Grafana import, and Datadog dashboard import | [Docs](https://moneat.io/docs) |
 | Product Analytics | Funnels, retention cohorts, event-based tracking | [Docs](https://moneat.io/docs) |
 | Feature Flags | OpenFeature-compatible flags with environment configs and remote evaluation | [Docs](https://moneat.io/docs/feature-flags) |
 | Releases | Crash-free rates, regression detection, source map upload | [Docs](https://moneat.io/docs) |
 | AI Observability | Trace and debug LLM calls | [Docs](https://moneat.io/docs) |
 | MCP Server | Model Context Protocol endpoint for AI coding assistants | [Docs](https://moneat.io/docs) |
 | User Feedback | Sentry-compatible feedback ingestion with status workflows | [Docs](https://moneat.io/docs) |
-| Datadog Compatibility | Ingest from existing Datadog agents with no code changes | [Docs](https://moneat.io/docs) |
+| Datadog Compatibility | Import Datadog dashboard exports and ingest from existing Datadog agents | [Docs](https://moneat.io/docs) |
 | On-Call & Incidents | PagerDuty-style escalations *(Enterprise)* | [Pricing](https://moneat.io/pricing) |
 | SSO (OIDC) | Sign in with any OpenID Connect provider | [Docs](https://moneat.io/docs) |
 | SSO (SAML) & Enforcement | SAML 2.0 and mandatory SSO *(Enterprise)* | [Pricing](https://moneat.io/pricing) |

@@ -15,9 +15,16 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute, Link, redirect} from '@tanstack/react-router'
-import {useState} from 'react'
+import {useEffect, useState} from 'react'
 import {api} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
+import {
+  DATADOG_IMPORT_CAMPAIGN,
+  clearDatadogImportSignupIntent,
+  hasDatadogImportSignupIntent,
+  isDatadogImportCampaign,
+  markDatadogImportSignupIntent,
+} from '@/lib/datadogImportFunnel'
 import {Button} from '@/components/ui/button'
 import {Checkbox} from '@/components/ui/checkbox'
 import {Input} from '@/components/ui/input'
@@ -35,9 +42,29 @@ export const Route = createFileRoute('/signup')({
   component: SignupPage,
 })
 
+function persistUtmParams(searchParams: URLSearchParams): void {
+  const utmParams = {
+    utmSource: searchParams.get('utm_source') ?? undefined,
+    utmMedium: searchParams.get('utm_medium') ?? undefined,
+    utmCampaign: searchParams.get('utm_campaign') ?? undefined,
+    utmContent: searchParams.get('utm_content') ?? undefined,
+    utmTerm: searchParams.get('utm_term') ?? undefined,
+  }
+
+  if (!Object.values(utmParams).some(Boolean)) return
+
+  try {
+    globalThis.localStorage.setItem('utm_params', JSON.stringify(utmParams))
+  } catch {
+    // Ignore storage failures so signup still works in restricted browsers.
+  }
+}
+
 function SignupPage() {
-  const searchParams = new URLSearchParams(window.location.search)
+  const locationSearch = globalThis.location.search
+  const searchParams = new URLSearchParams(locationSearch)
   const inviteToken = searchParams.get('inviteToken') || undefined
+  const isDatadogImportSignup = hasDatadogImportSignupIntent(searchParams)
   
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -48,6 +75,14 @@ function SignupPage() {
   const [success, setSuccess] = useState(false)
   const [resending, setResending] = useState(false)
   const [resendMessage, setResendMessage] = useState('')
+
+  useEffect(() => {
+    const currentSearchParams = new URLSearchParams(locationSearch)
+    persistUtmParams(currentSearchParams)
+    if (isDatadogImportCampaign(currentSearchParams)) {
+      markDatadogImportSignupIntent()
+    }
+  }, [locationSearch])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -77,6 +112,10 @@ function SignupPage() {
         privacyVersion: LEGAL_PRIVACY_VERSION,
       }, inviteToken)
       trackEvent('Signup')
+      if (isDatadogImportSignup) {
+        trackEvent('signup_from_import', {campaign: DATADOG_IMPORT_CAMPAIGN})
+        clearDatadogImportSignupIntent()
+      }
       setSuccess(true)
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -114,12 +153,24 @@ function SignupPage() {
           </div>
           <div>
             <h2 className="text-3xl font-bold text-white mb-3">
-              Error monitoring
-              <br />
-              that just works.
+              {isDatadogImportSignup ? (
+                <>
+                  Dashboard import
+                  <br />
+                  before cutover.
+                </>
+              ) : (
+                <>
+                  Error monitoring
+                  <br />
+                  that just works.
+                </>
+              )}
             </h2>
             <p className="text-slate-400 text-sm leading-relaxed max-w-xs">
-              Track, triage, and resolve issues before your users even notice.
+              {isDatadogImportSignup
+                ? 'Convert your Datadog dashboard export, review warnings, then connect live telemetry.'
+                : 'Track, triage, and resolve issues before your users even notice.'}
             </p>
           </div>
           <svg viewBox="0 0 400 60" className="absolute bottom-0 left-0 right-0 opacity-10" aria-hidden="true">
@@ -165,8 +216,14 @@ function SignupPage() {
               </>
             ) : (
               <>
-                <h1 className="text-2xl font-bold mb-1">Create an account</h1>
-                <p className="text-sm text-muted-foreground mb-8">Sign up to get started</p>
+                <h1 className="text-2xl font-bold mb-1">
+                  {isDatadogImportSignup ? 'Import your Datadog dashboard' : 'Create an account'}
+                </h1>
+                <p className="text-sm text-muted-foreground mb-8">
+                  {isDatadogImportSignup
+                    ? 'Create a free account to import and save your Datadog dashboard export.'
+                    : 'Sign up to get started'}
+                </p>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                   {error && <div className="text-sm text-destructive">{error}</div>}

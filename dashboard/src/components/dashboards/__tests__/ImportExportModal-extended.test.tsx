@@ -19,12 +19,19 @@ import {screen, fireEvent, waitFor} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {api} from '@/lib/api'
 import type {CustomDashboard, CustomDataSourceResponse} from '@/lib/api'
+import {readDatadogPendingImportSignal} from '@/lib/datadogImportFunnel'
 import {ImportExportModal} from '../ImportExportModal'
 import {renderWithQueryClient, clearAuthStorage} from '@/test/utils'
 
 const mockNavigate = vi.fn()
+const mockTrackEvent = vi.hoisted(() => vi.fn())
+
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => mockNavigate,
+}))
+
+vi.mock('@/lib/analytics', () => ({
+  trackEvent: mockTrackEvent,
 }))
 
 vi.mock('@/lib/api', () => ({
@@ -318,6 +325,20 @@ describe('ImportExportModal – extended branch coverage', () => {
 
       await waitFor(() => {
         expect(mockedApi.importDashboard).toHaveBeenCalledWith('datadog', json)
+      })
+      expect(mockTrackEvent).toHaveBeenCalledWith('datadog_import_started', {
+        source: 'dashboard_import_modal',
+        input_method: 'paste',
+      })
+      expect(mockTrackEvent).toHaveBeenCalledWith('datadog_import_succeeded', {
+        warning_count: '0',
+      })
+      expect(mockTrackEvent).toHaveBeenCalledWith('datadog_import_warning_count', {
+        count: '0',
+      })
+      expect(readDatadogPendingImportSignal()).toMatchObject({
+        dashboardId: 42,
+        warningCount: 0,
       })
       expect(screen.queryByText('Map Data Sources')).not.toBeInTheDocument()
     })

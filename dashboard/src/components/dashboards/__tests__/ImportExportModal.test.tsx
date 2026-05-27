@@ -126,7 +126,7 @@ describe('ImportExportModal', () => {
       expect(grafanaButton).toHaveAttribute('aria-pressed', 'false')
       expect(datadogButton).toHaveAttribute('aria-pressed', 'true')
       expect(screen.getByText('Datadog Dashboard Import')).toBeInTheDocument()
-      expect(screen.getByText('Upload Datadog JSON File')).toBeInTheDocument()
+      expect(screen.getByText('Upload Datadog Export File')).toBeInTheDocument()
     })
 
     it('imports Datadog JSON using datadog format', async () => {

@@ -38,6 +38,8 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import {Button} from '@/components/ui/button'
+import {trackEvent} from '@/lib/analytics'
+import {DATADOG_IMPORT_SIGNUP_URL, markDatadogImportSignupIntent} from '@/lib/datadogImportFunnel'
 import {cn} from '@/lib/utils'
 
 type FeatureGroup = {
@@ -83,6 +85,11 @@ const proofPoints: ProofPoint[] = [
     value: '1 GB free to start',
   },
 ]
+
+function trackHomepageDatadogImportStart(): void {
+  markDatadogImportSignupIntent()
+  trackEvent('datadog_import_started', {source: 'homepage_primary'})
+}
 
 const featureGroups: FeatureGroup[] = [
   {
@@ -542,10 +549,10 @@ export function VariantA() {
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="bg-slate-950 text-white hover:bg-slate-800">
-                <Link to="/signup">
-                  Start free
+                <a href={DATADOG_IMPORT_SIGNUP_URL} onClick={trackHomepageDatadogImportStart}>
+                  Import Datadog dashboard
                   <ArrowRight data-icon="inline-end" />
-                </Link>
+                </a>
               </Button>
               <Button asChild variant="outline" size="lg" className="border-slate-300 bg-white text-slate-950">
                 <Link to="/demo">

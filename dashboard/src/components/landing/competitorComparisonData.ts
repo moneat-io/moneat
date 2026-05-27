@@ -108,10 +108,10 @@ export const competitorPages: CompetitorPageData[] = [
     h1: 'Datadog Alternative',
     description:
       'Moneat gives infrastructure teams logs, APM, profiling, errors, replay, uptime, status pages, ' +
-      'and on-call without Datadog-style per-host multipliers.',
+      'on-call, and Datadog dashboard import without Datadog-style per-host multipliers.',
     metaDescription:
       'Compare Moneat with Datadog in 2026. See pricing model differences, Datadog Agent compatibility, ' +
-      'APM, logs, profiling, infrastructure monitoring, and on-call costs.',
+      'dashboard import, APM, logs, profiling, infrastructure monitoring, and on-call costs.',
     heroImage: comparisonHeroImage,
     heroImageAlt: comparisonHeroImageAlt,
     lede:
@@ -119,8 +119,8 @@ export const competitorPages: CompetitorPageData[] = [
       'forecast once infrastructure, APM, profiling, logs, containers, and responders are all metered separately.',
     summary:
       'Choose Moneat when Datadog gives you broad coverage but the bill grows with every host, ' +
-      'indexed log event, span, replay, and incident responder. Moneat keeps the migration practical ' +
-      'with Datadog Agent compatibility and an open-source deployment path.',
+      'indexed log event, span, replay, and incident responder. Moneat keeps evaluation practical ' +
+      'with Datadog dashboard import, Datadog Agent compatibility, and an open-source deployment path.',
     shortVersionRows: [
       {
         dimension: 'Best fit',
@@ -129,7 +129,9 @@ export const competitorPages: CompetitorPageData[] = [
       },
       {
         dimension: 'Migration',
-        moneat: 'Point Datadog Agent data, Sentry SDK events, or OTLP telemetry at Moneat.',
+        moneat:
+          'Import a Datadog dashboard export, then point Datadog Agent data, Sentry SDK events, ' +
+          'or OTLP telemetry at Moneat.',
         competitor: 'Stay inside Datadog agents, APIs, dashboards, and product-specific configuration.',
       },
       {
@@ -146,6 +148,7 @@ export const competitorPages: CompetitorPageData[] = [
     bestFor: [
       'Teams replacing host-based observability bills',
       'Stacks already running the Datadog Agent',
+      'Teams willing to test one Datadog dashboard export first',
       'Operators who want observability plus incident response in one product',
     ],
     competitorStrengths: [
@@ -159,6 +162,7 @@ export const competitorPages: CompetitorPageData[] = [
       'You can justify separate per-host and per-product costs for broad enterprise depth.',
     ],
     chooseMoneat: [
+      'You want a Datadog dashboard conversion report before changing production telemetry.',
       'You want Datadog Agent compatibility without a per-host APM/profiling/network multiplier.',
       'You need errors, logs, APM, profiling, infrastructure, uptime, status pages, and on-call in one product.',
       'You want an open-source and self-hostable path for data ownership or cost control.',
@@ -176,17 +180,20 @@ export const competitorPages: CompetitorPageData[] = [
       },
       {
         myth: 'A Datadog replacement means rewriting all telemetry.',
-        reality: 'Moneat can receive Datadog Agent data as well as OTLP and Sentry-compatible events.',
+        reality:
+          'Moneat can import Datadog dashboard exports and receive Datadog Agent data, OTLP, ' +
+          'and Sentry-compatible events.',
       },
     ],
     migrationSteps: [
       {
-        title: 'Mirror one service first',
-        detail: 'Send a low-risk Datadog Agent workload to Moneat and compare host, log, trace, and alert coverage.',
+        title: 'Import one dashboard first',
+        detail:
+          'Upload a Datadog dashboard export and review supported widgets, warnings, and telemetry requirements.',
       },
       {
-        title: 'Recreate the operational path',
-        detail: 'Move the monitors that page humans into Moneat uptime, status page, and on-call workflows.',
+        title: 'Mirror one service',
+        detail: 'Send a low-risk Datadog Agent workload to Moneat and compare host, log, trace, and alert coverage.',
       },
       {
         title: 'Model the invoice',
@@ -195,7 +202,7 @@ export const competitorPages: CompetitorPageData[] = [
     ],
     proofPoints: [
       {label: 'Moneat Pro', value: '$29/mo'},
-      {label: 'Datadog infra', value: '$15/host/mo'},
+      {label: 'Dashboard import', value: 'Datadog export'},
       {label: 'On-call delta', value: '$5 vs $20/seat'},
     ],
     featureRows: [
@@ -203,6 +210,11 @@ export const competitorPages: CompetitorPageData[] = [
         label: 'Migration path',
         moneat: 'Accepts Datadog Agent data, Sentry SDK events, and OTLP telemetry.',
         competitor: 'Native Datadog agents, APIs, and product-specific configuration.',
+      },
+      {
+        label: 'Dashboard import',
+        moneat: 'Imports Datadog dashboard exports and reports conversion warnings for unsupported widgets or queries.',
+        competitor: 'Native dashboards stay inside Datadog unless exported or rebuilt elsewhere.',
       },
       {
         label: 'Pricing model',

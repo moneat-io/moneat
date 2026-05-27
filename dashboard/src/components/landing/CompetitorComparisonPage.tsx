@@ -31,6 +31,8 @@ import {
 } from 'lucide-react'
 import {Helmet} from 'react-helmet-async'
 import {Button} from '@/components/ui/button'
+import {trackEvent} from '@/lib/analytics'
+import {DATADOG_IMPORT_SIGNUP_URL, markDatadogImportSignupIntent} from '@/lib/datadogImportFunnel'
 import {LandingFooter, LandingNavbar} from './LandingNavbar'
 import {
   SOURCE_REVIEW_DATE,
@@ -55,6 +57,11 @@ const hubSources = Array.from(
       .map((source) => [source.href, source]),
   ).values(),
 )
+
+function trackDatadogAlternativeImportStart(): void {
+  markDatadogImportSignupIntent()
+  trackEvent('datadog_import_started', {source: 'datadog_alternative_primary'})
+}
 
 function SourcesNote({page}: {readonly page: CompetitorPageData}) {
   return (
@@ -81,6 +88,8 @@ function SourcesNote({page}: {readonly page: CompetitorPageData}) {
 }
 
 function ComparisonHero({page}: {readonly page: CompetitorPageData}) {
+  const isDatadogPage = page.slug === 'datadog'
+
   return (
     <section className="relative isolate overflow-hidden border-b border-slate-200 px-4 pb-8 pt-10 sm:px-6 lg:px-8 lg:pb-12 lg:pt-14">
       <img
@@ -118,10 +127,17 @@ function ComparisonHero({page}: {readonly page: CompetitorPageData}) {
               size="lg"
               className="h-12 min-w-36 flex-1 bg-slate-950 px-6 text-white hover:bg-slate-800 sm:flex-none"
             >
-              <Link to="/signup">
-                Start free
-                <ArrowRight className="ml-2 size-4" />
-              </Link>
+              {isDatadogPage ? (
+                <a href={DATADOG_IMPORT_SIGNUP_URL} onClick={trackDatadogAlternativeImportStart}>
+                  Import a Datadog dashboard
+                  <ArrowRight className="ml-2 size-4" />
+                </a>
+              ) : (
+                <Link to="/signup">
+                  Start free
+                  <ArrowRight className="ml-2 size-4" />
+                </Link>
+              )}
             </Button>
             <Button
               asChild

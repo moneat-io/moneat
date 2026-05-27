@@ -22,8 +22,12 @@ const config: FeaturePageConfig = {
   slug: 'custom-dashboards',
   title: 'Dashboards',
   tagline: 'Visualize anything',
-  description: 'Build custom dashboards with drag-and-drop widgets powered by any data source. Connect PostgreSQL, ClickHouse, BigQuery, or use built-in Moneat metrics to create the views your team needs.',
-  metaDescription: 'Custom dashboards with drag-and-drop widgets. Connect any data source — PostgreSQL, ClickHouse, BigQuery, and more. Start free with Moneat.',
+  description:
+    'Build custom dashboards with drag-and-drop widgets powered by any data source. Import Grafana or ' +
+    'Datadog dashboard exports, connect PostgreSQL, ClickHouse, BigQuery, or use built-in Moneat metrics.',
+  metaDescription:
+    'Custom dashboards with drag-and-drop widgets, Grafana import, and Datadog dashboard import. ' +
+    'Start free with Moneat.',
   icon: LayoutDashboard,
   iconColor: 'text-sky-400',
   iconBg: 'bg-sky-500/10',
@@ -32,12 +36,42 @@ const config: FeaturePageConfig = {
   screenshot: '/screenshots/dashboard.png',
   screenshotAlt: 'Custom dashboard with multiple widgets showing metrics and charts',
   subFeatures: [
-    {icon: Grid3x3, title: 'Drag & Drop', description: 'Arrange widgets on a flexible grid. Resize, reorder, and organize your dashboard layout visually.', iconColor: 'text-sky-400'},
-    {icon: Database, title: 'Custom Data Sources', description: 'Connect PostgreSQL, ClickHouse, BigQuery, or any SQL database to power your dashboard widgets.', iconColor: 'text-blue-400'},
-    {icon: LineChart, title: 'Rich Visualizations', description: 'Time series, bar charts, tables, stat cards, and more — all with auto-refreshing data.', iconColor: 'text-violet-400'},
-    {icon: LayoutDashboard, title: 'Built-in Metrics', description: 'Use Moneat\'s built-in error, log, uptime, and infrastructure metrics without any extra config.', iconColor: 'text-amber-400'},
-    {icon: Share2, title: 'Shareable', description: 'Share dashboards across your team or embed them in internal tools and documentation.', iconColor: 'text-green-400'},
-    {icon: Palette, title: 'Theming', description: 'Dashboards respect your workspace theme and look great in both light and dark mode.', iconColor: 'text-rose-400'},
+    {
+      icon: Grid3x3,
+      title: 'Drag & Drop',
+      description: 'Arrange widgets on a flexible grid. Resize, reorder, and organize your dashboard layout visually.',
+      iconColor: 'text-sky-400',
+    },
+    {
+      icon: Database,
+      title: 'Custom Data Sources',
+      description: 'Connect PostgreSQL, ClickHouse, BigQuery, or any SQL database to power your dashboard widgets.',
+      iconColor: 'text-blue-400',
+    },
+    {
+      icon: LineChart,
+      title: 'Rich Visualizations',
+      description: 'Time series, bar charts, tables, stat cards, and more with auto-refreshing data.',
+      iconColor: 'text-violet-400',
+    },
+    {
+      icon: LayoutDashboard,
+      title: 'Dashboard Import',
+      description: 'Import Grafana dashboards or Datadog dashboard exports and review conversion warnings before saving.',
+      iconColor: 'text-amber-400',
+    },
+    {
+      icon: Share2,
+      title: 'Shareable',
+      description: 'Share dashboards across your team or embed them in internal tools and documentation.',
+      iconColor: 'text-green-400',
+    },
+    {
+      icon: Palette,
+      title: 'Theming',
+      description: 'Dashboards respect your workspace theme and look great in both light and dark mode.',
+      iconColor: 'text-rose-400',
+    },
   ],
 }
 

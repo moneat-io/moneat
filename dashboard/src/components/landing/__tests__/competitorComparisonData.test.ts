@@ -20,6 +20,14 @@ describe('competitor comparison data', () => {
     expect(pageText).not.toMatch(/lacks session replays/i)
   })
 
+  it('positions Datadog comparison around dashboard import without overclaiming migration parity', () => {
+    const datadogText = JSON.stringify(getCompetitorPage('datadog'))
+
+    expect(datadogText).toContain('Datadog dashboard export')
+    expect(datadogText).toContain('conversion warnings')
+    expect(datadogText).not.toMatch(/full Datadog account migration/i)
+  })
+
   it('uses reviewed source links for every comparison', () => {
     for (const page of competitorPages) {
       expect(page.sources.length).toBeGreaterThanOrEqual(2)

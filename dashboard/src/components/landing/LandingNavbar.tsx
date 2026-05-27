@@ -311,6 +311,13 @@ function MobileNav({tone = 'dark'}: LandingToneProps) {
             Compare
           </Link>
           <Link
+            to="/datadog-dashboard-import"
+            onClick={() => setOpen(false)}
+            className={navItemClass}
+          >
+            Import Datadog
+          </Link>
+          <Link
             to="/docs"
             onClick={() => setOpen(false)}
             className={navItemClass}
@@ -433,6 +440,12 @@ export function LandingNavbar({tone = 'dark'}: LandingToneProps) {
             className={navLinkClass}
           >
             Compare
+          </Link>
+          <Link
+            to="/datadog-dashboard-import"
+            className={navLinkClass}
+          >
+            Import Datadog
           </Link>
           <Link
             to="/docs"
@@ -569,6 +582,7 @@ export function LandingFooter({tone = 'dark'}: LandingToneProps) {
                   ['Documentation', '/docs'],
                   ['Pricing', '/pricing'],
                   ['Compare', '/compare'],
+                  ['Datadog Import', '/datadog-dashboard-import'],
                   ['Live Demo', '/demo'],
                   ['Blog', '/blog'],
                 ],
@@ -663,6 +677,14 @@ export function LandingFooter({tone = 'dark'}: LandingToneProps) {
               <li>
                 <Link to="/compare" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">
                   Compare
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/datadog-dashboard-import"
+                  className="text-sm text-slate-500 hover:text-sky-400 transition-colors"
+                >
+                  Datadog Import
                 </Link>
               </li>
               <li><Link to="/demo" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">Live Demo</Link></li>

@@ -53,6 +53,7 @@ import { Route as FeatureFlagsRouteImport } from './routes/feature-flags'
 import { Route as ErrorTrackingRouteImport } from './routes/error-tracking'
 import { Route as DocsRouteImport } from './routes/docs'
 import { Route as DemoRouteImport } from './routes/demo'
+import { Route as DatadogDashboardImportRouteImport } from './routes/datadog-dashboard-import'
 import { Route as DatadogAlternativeRouteImport } from './routes/datadog-alternative'
 import { Route as DashboardsRouteImport } from './routes/dashboards'
 import { Route as CustomDashboardsRouteImport } from './routes/custom-dashboards'
@@ -365,6 +366,11 @@ const DocsRoute = DocsRouteImport.update({
 const DemoRoute = DemoRouteImport.update({
   id: '/demo',
   path: '/demo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DatadogDashboardImportRoute = DatadogDashboardImportRouteImport.update({
+  id: '/datadog-dashboard-import',
+  path: '/datadog-dashboard-import',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DatadogAlternativeRoute = DatadogAlternativeRouteImport.update({
@@ -855,6 +861,7 @@ export interface FileRoutesByFullPath {
   '/custom-dashboards': typeof CustomDashboardsRoute
   '/dashboards': typeof DashboardsRouteWithChildren
   '/datadog-alternative': typeof DatadogAlternativeRoute
+  '/datadog-dashboard-import': typeof DatadogDashboardImportRoute
   '/demo': typeof DemoRoute
   '/docs': typeof DocsRouteWithChildren
   '/error-tracking': typeof ErrorTrackingRoute
@@ -988,6 +995,7 @@ export interface FileRoutesByTo {
   '/compare': typeof CompareRoute
   '/custom-dashboards': typeof CustomDashboardsRoute
   '/datadog-alternative': typeof DatadogAlternativeRoute
+  '/datadog-dashboard-import': typeof DatadogDashboardImportRoute
   '/demo': typeof DemoRoute
   '/error-tracking': typeof ErrorTrackingRoute
   '/feature-flags': typeof FeatureFlagsRoute
@@ -1117,6 +1125,7 @@ export interface FileRoutesById {
   '/custom-dashboards': typeof CustomDashboardsRoute
   '/dashboards': typeof DashboardsRouteWithChildren
   '/datadog-alternative': typeof DatadogAlternativeRoute
+  '/datadog-dashboard-import': typeof DatadogDashboardImportRoute
   '/demo': typeof DemoRoute
   '/docs': typeof DocsRouteWithChildren
   '/error-tracking': typeof ErrorTrackingRoute
@@ -1257,6 +1266,7 @@ export interface FileRouteTypes {
     | '/custom-dashboards'
     | '/dashboards'
     | '/datadog-alternative'
+    | '/datadog-dashboard-import'
     | '/demo'
     | '/docs'
     | '/error-tracking'
@@ -1390,6 +1400,7 @@ export interface FileRouteTypes {
     | '/compare'
     | '/custom-dashboards'
     | '/datadog-alternative'
+    | '/datadog-dashboard-import'
     | '/demo'
     | '/error-tracking'
     | '/feature-flags'
@@ -1518,6 +1529,7 @@ export interface FileRouteTypes {
     | '/custom-dashboards'
     | '/dashboards'
     | '/datadog-alternative'
+    | '/datadog-dashboard-import'
     | '/demo'
     | '/docs'
     | '/error-tracking'
@@ -1657,6 +1669,7 @@ export interface RootRouteChildren {
   CustomDashboardsRoute: typeof CustomDashboardsRoute
   DashboardsRoute: typeof DashboardsRouteWithChildren
   DatadogAlternativeRoute: typeof DatadogAlternativeRoute
+  DatadogDashboardImportRoute: typeof DatadogDashboardImportRoute
   DemoRoute: typeof DemoRoute
   DocsRoute: typeof DocsRouteWithChildren
   ErrorTrackingRoute: typeof ErrorTrackingRoute
@@ -2024,6 +2037,13 @@ declare module '@tanstack/react-router' {
       path: '/demo'
       fullPath: '/demo'
       preLoaderRoute: typeof DemoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/datadog-dashboard-import': {
+      id: '/datadog-dashboard-import'
+      path: '/datadog-dashboard-import'
+      fullPath: '/datadog-dashboard-import'
+      preLoaderRoute: typeof DatadogDashboardImportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/datadog-alternative': {
@@ -3051,6 +3071,7 @@ const rootRouteChildren: RootRouteChildren = {
   CustomDashboardsRoute: CustomDashboardsRoute,
   DashboardsRoute: DashboardsRouteWithChildren,
   DatadogAlternativeRoute: DatadogAlternativeRoute,
+  DatadogDashboardImportRoute: DatadogDashboardImportRoute,
   DemoRoute: DemoRoute,
   DocsRoute: DocsRouteWithChildren,
   ErrorTrackingRoute: ErrorTrackingRoute,
