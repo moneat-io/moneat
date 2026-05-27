@@ -196,7 +196,7 @@ function StatusPagesListPage() {
             {statusPages.map((page) => (
               <Card
                 key={page.id}
-                className="group hover:shadow-lg transition-all duration-200 cursor-pointer overflow-hidden"
+                className="group transition-all duration-200 cursor-pointer overflow-hidden"
                 onClick={() => navigate({to: '/status-pages/$pageId', params: {pageId: page.id}})}
               >
                 {/* Color Bar */}

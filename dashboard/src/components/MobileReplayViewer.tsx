@@ -870,7 +870,7 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
                           aria-label={`${marker.title} at ${formatClock(marker.globalTimeMs)}`}
                         >
                           {isHovered && (
-                            <div className="pointer-events-none absolute left-1/2 z-40 w-56 -translate-x-1/2 rounded-lg border bg-popover p-2.5 text-left shadow-lg" style={{ bottom: 'calc(100% + 10px)' }}>
+                            <div className="pointer-events-none absolute left-1/2 z-40 w-56 -translate-x-1/2 rounded-lg border bg-popover p-2.5 text-left" style={{ bottom: 'calc(100% + 10px)' }}>
                               <div className="text-xs font-semibold" style={{ color: marker.tooltipAccentColor }}>
                                 {marker.title}
                               </div>

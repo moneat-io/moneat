@@ -617,7 +617,7 @@ function OverviewTab({statusPage, onUpdate, isSaving, showPreview}: {statusPage:
           </Card>
 
           {/* Save Button */}
-          <div className={`flex items-center justify-between sticky bottom-4 p-3 border rounded-lg shadow-sm transition-colors ${hasChanges ? 'bg-primary/5 border-primary/20' : 'bg-background/80 backdrop-blur-sm'}`}>
+          <div className={`flex items-center justify-between sticky bottom-4 p-3 border rounded-lg transition-colors ${hasChanges ? 'bg-primary/5 border-primary/20' : 'bg-background/80 backdrop-blur-sm'}`}>
             {hasChanges && (
               <p className="text-sm text-muted-foreground flex items-center gap-2">
                 <CircleDot className="h-3.5 w-3.5 text-primary" />
@@ -848,7 +848,7 @@ function MonitorsTab({pageId, statusPage}: {pageId: string; statusPage: StatusPa
                   <div
                     key={monitor.id}
                     className={`flex items-center justify-between p-3.5 border rounded-lg transition-all ${
-                      isSelected ? 'border-primary bg-primary/5 shadow-sm' : ''
+                      isSelected ? 'border-primary bg-primary/5' : ''
                     } ${isAlreadyAdded ? 'opacity-50' : 'cursor-pointer hover:border-primary/40'}`}
                     onClick={() => {
                       if (!isAlreadyAdded) {

@@ -200,7 +200,7 @@ export function ChartTooltipContent({ active, payload, label, formatter }: Chart
   if (!active || !payload?.length) return null
 
   return (
-    <div className="rounded-lg border bg-card px-3 py-2 shadow-lg">
+    <div className="rounded-lg border bg-card px-3 py-2">
       <p className="text-xs font-medium text-muted-foreground mb-1.5">{label}</p>
       <div className="space-y-1">
         {payload.map((entry, i) => (

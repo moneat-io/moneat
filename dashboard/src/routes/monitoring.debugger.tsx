@@ -139,7 +139,7 @@ function DebuggerDashboard() {
         </div>
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <Card className="overflow-hidden border-border/60 shadow-sm">
+          <Card className="overflow-hidden border-border/60">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <Activity className="h-4 w-4 text-purple-500" />
@@ -195,7 +195,7 @@ function DebuggerDashboard() {
             </CardContent>
           </Card>
 
-          <Card className="overflow-hidden border-border/60 shadow-sm">
+          <Card className="overflow-hidden border-border/60">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <Bug className="h-4 w-4 text-pink-500" />

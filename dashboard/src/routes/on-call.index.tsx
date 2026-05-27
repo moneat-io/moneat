@@ -134,7 +134,7 @@ function OnCallOverview() {
       <div className="grid gap-3 md:grid-cols-3">
         <Card className={cn(
           'relative overflow-hidden transition-all',
-          hasActiveIncidents && 'border-red-500/25 shadow-md shadow-red-500/5'
+          hasActiveIncidents && 'border-red-500/25'
         )}>
           {hasActiveIncidents && (
             <div className="absolute inset-0 bg-gradient-to-br from-red-500/[0.03] to-transparent pointer-events-none" />

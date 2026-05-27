@@ -727,7 +727,7 @@ function HostCard({host, onDelete}: {host: DdHostResponse; onDelete: (id: number
       params={{hostId: String(host.id)}}
       className="block group"
     >
-      <Card className="relative overflow-hidden transition-all duration-200 hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20 group-hover:-translate-y-0.5">
+      <Card className="relative overflow-hidden transition-all duration-200 hover:border-primary/20 group-hover:-translate-y-0.5">
         {/* Top color accent bar */}
         <div
           className={cn(
@@ -1063,7 +1063,7 @@ function MonitoringHostsPage() {
                     className={cn(
                       'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                       statusFilter === f.key
-                        ? 'bg-secondary text-secondary-foreground shadow-sm'
+                        ? 'bg-secondary text-secondary-foreground'
                         : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                     )}
                   >
@@ -1079,7 +1079,7 @@ function MonitoringHostsPage() {
                   className={cn(
                     'p-1.5 rounded-md transition-colors',
                     viewMode === 'grid'
-                      ? 'bg-secondary text-secondary-foreground shadow-sm'
+                      ? 'bg-secondary text-secondary-foreground'
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                   )}
                 >
@@ -1090,7 +1090,7 @@ function MonitoringHostsPage() {
                   className={cn(
                     'p-1.5 rounded-md transition-colors',
                     viewMode === 'list'
-                      ? 'bg-secondary text-secondary-foreground shadow-sm'
+                      ? 'bg-secondary text-secondary-foreground'
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                   )}
                 >
@@ -1134,7 +1134,7 @@ function MonitoringHostsPage() {
             ))}
           </div>
         ) : (
-          <Card className="overflow-hidden border-border/60 shadow-sm">
+          <Card className="overflow-hidden border-border/60">
             <CardContent className="p-0">
               <Table className="min-w-[900px]">
                 <TableHeader>

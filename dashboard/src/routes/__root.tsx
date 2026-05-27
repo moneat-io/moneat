@@ -223,7 +223,7 @@ function NotFoundPage() {
       <div className="flex items-center gap-4">
         <Link
           to="/"
-          className="px-5 py-2.5 text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 rounded-lg shadow-md shadow-sky-500/25 transition-colors"
+          className="px-5 py-2.5 text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 rounded-lg transition-colors"
         >
           Go to overview
         </Link>

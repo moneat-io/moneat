@@ -37,7 +37,7 @@ function OnCallLayout() {
   return (
     <div className="p-4 space-y-4">
       <div className="flex items-center gap-2.5">
-        <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500/80 to-violet-500/80 shadow-md shadow-blue-500/10 shrink-0">
+        <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500/80 to-violet-500/80 shrink-0">
           <Shield className="h-4 w-4 text-white" />
         </div>
         <div className="min-w-0">

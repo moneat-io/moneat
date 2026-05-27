@@ -192,14 +192,16 @@ describe('DashboardToolbar – extended branch coverage', () => {
       renderToolbar({timeRange: {from: 'now-7d', to: 'now'}})
       const btn7d = screen.getByText('7d')
       expect(btn7d.className).toContain('bg-background')
-      expect(btn7d.className).toContain('shadow-sm')
+      expect(btn7d.className).toContain('text-foreground')
     })
 
     it('does not highlight non-active time range presets', () => {
       renderToolbar({timeRange: {from: 'now-7d', to: 'now'}})
       const btn1h = screen.getByText('1h')
+      const classTokens = btn1h.className.split(/\s+/)
       expect(btn1h.className).toContain('text-muted-foreground')
-      expect(btn1h.className).not.toContain('shadow-sm')
+      expect(classTokens).not.toContain('bg-background')
+      expect(classTokens).not.toContain('text-foreground')
     })
 
     it('applies inactive style to custom time range (no preset match)', () => {
@@ -208,7 +210,9 @@ describe('DashboardToolbar – extended branch coverage', () => {
       const allPresets = ['15m', '1h', '4h', '24h', '7d', '30d']
       for (const preset of allPresets) {
         const btn = screen.getByText(preset)
-        expect(btn.className).not.toContain('shadow-sm')
+        const classTokens = btn.className.split(/\s+/)
+        expect(classTokens).not.toContain('bg-background')
+        expect(classTokens).not.toContain('text-foreground')
       }
     })
   })

@@ -203,14 +203,14 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
       for (const ds of foundDataSources) {
         // Check if it's a built-in source - these don't need mapping
         if (builtInSources.has(ds)) {
-          console.log(`  ${ds} -> matched built-in, no mapping needed`)
+          console.log(`${ds} -> matched built-in, no mapping needed`)
           continue
         }
         
         // Everything else is external and needs to be mapped to a custom datasource
         // Even if we have a matching source_type, we can't assume which specific
         // custom datasource the user wants (they might have multiple Prometheus sources)
-        console.log(`  ${ds} -> external datasource, needs mapping`)
+        console.log(`${ds} -> external datasource, needs mapping`)
         unmapped.push(ds)
       }
       
@@ -370,7 +370,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0 bg-black/50" onClick={() => onOpenChange(false)} />
-      <div className="relative bg-background border rounded-lg shadow-xl w-[520px] max-h-[80vh] flex flex-col">
+      <div className="relative bg-background border rounded-lg w-[520px] max-h-[80vh] flex flex-col">
         {/* Header */}
         <div className="px-5 py-4 border-b">
           <h2 className="text-lg font-semibold flex items-center gap-2">

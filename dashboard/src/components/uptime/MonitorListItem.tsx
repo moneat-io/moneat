@@ -98,7 +98,7 @@ export default function MonitorListItem({monitor}: MonitorListItemProps) {
   }[monitor.status] || 'border-l-gray-300'
 
   return (
-    <Card className={cn("hover:shadow-md transition-shadow overflow-hidden border-l-4", statusColor)}>
+    <Card className={cn("overflow-hidden border-l-4", statusColor)}>
       <CardContent className="p-3">
         <div className="flex flex-col gap-3">
           {/* Header Row */}

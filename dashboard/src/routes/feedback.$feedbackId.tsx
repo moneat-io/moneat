@@ -247,7 +247,7 @@ function FeedbackDetailPage() {
                   {feedback.status !== 'resolved' && (
                     <Button
                       size="sm"
-                      className="bg-emerald-600 hover:bg-emerald-700 shadow-sm"
+                      className="bg-emerald-600 hover:bg-emerald-700"
                       onClick={() => updateMutation.mutate('resolved')}
                       disabled={updateMutation.isPending}
                     >

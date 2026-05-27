@@ -98,7 +98,7 @@ function DatabaseMonitoring() {
               <p className="text-sm mt-1">Try adjusting your search query.</p>
             </div>
           ) : (
-            <Card className="overflow-hidden border-border/60 shadow-sm">
+            <Card className="overflow-hidden border-border/60">
               <CardContent className="p-0">
                 <Table>
                   <TableHeader>

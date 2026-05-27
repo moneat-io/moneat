@@ -185,7 +185,7 @@ export function DashboardToolbar({
                 onClick={() => onTimeRangeChange({from: preset.from, to: preset.to})}
                 className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${
                   isActive
-                    ? 'bg-background text-foreground shadow-sm'
+                    ? 'bg-background text-foreground'
                     : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
                 }`}
               >
@@ -202,7 +202,7 @@ export function DashboardToolbar({
               variant={autoRefresh ? 'default' : 'outline'}
               size="icon"
               onClick={() => onAutoRefreshChange(!autoRefresh)}
-              className={`h-8 w-8 ${autoRefresh ? '' : 'shadow-none border-transparent hover:bg-muted'}`}
+              className={`h-8 w-8 ${autoRefresh ? '' : 'border-transparent hover:bg-muted'}`}
             >
               <RefreshCw className={`h-3.5 w-3.5 ${autoRefresh ? 'animate-spin' : ''}`} />
             </Button>
@@ -240,7 +240,7 @@ export function DashboardToolbar({
               </TooltipTrigger>
               <TooltipContent>Export dashboard</TooltipContent>
             </Tooltip>
-            <Button variant="outline" size="sm" onClick={onToggleEdit} className="h-8 text-xs shadow-none border-transparent hover:bg-muted">
+            <Button variant="outline" size="sm" onClick={onToggleEdit} className="h-8 text-xs border-transparent hover:bg-muted">
               <Pencil className="h-3.5 w-3.5" />
             </Button>
           </div>

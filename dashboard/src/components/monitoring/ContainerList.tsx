@@ -238,7 +238,7 @@ export function ContainerList() {
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                 stateFilter === f
-                  ? 'bg-secondary text-secondary-foreground shadow-sm'
+                  ? 'bg-secondary text-secondary-foreground'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
               )}
             >
@@ -289,7 +289,7 @@ export function ContainerList() {
           <p className="text-sm mt-1">Try adjusting your search or state filter.</p>
         </div>
       ) : (
-        <Card className="overflow-hidden border-border/60 shadow-sm">
+        <Card className="overflow-hidden border-border/60">
           <CardContent className="p-0">
             <Table className="min-w-[980px]">
               <TableHeader>

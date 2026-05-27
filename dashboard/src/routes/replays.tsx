@@ -246,21 +246,21 @@ function ReplaysPage() {
         {/* Stats Cards */}
         {replays.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
-            <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-2.5 transition-all hover:shadow-md hover:border-blue-500/30">
+            <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-2.5 transition-all hover:border-blue-500/30">
               <div className="flex items-center gap-1.5 mb-1">
                 <Play className="h-3 w-3 text-blue-500" />
                 <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Sessions</span>
               </div>
               <div className="text-xl font-bold text-blue-600 dark:text-blue-400">{stats.total}</div>
             </div>
-            <div className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-2.5 transition-all hover:shadow-md hover:border-rose-500/30">
+            <div className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-2.5 transition-all hover:border-rose-500/30">
               <div className="flex items-center gap-1.5 mb-1">
                 <AlertCircle className="h-3 w-3 text-rose-500" />
                 <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Errors</span>
               </div>
               <div className="text-xl font-bold text-rose-600 dark:text-rose-400">{stats.totalErrors}</div>
             </div>
-            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2.5 transition-all hover:shadow-md hover:border-emerald-500/30">
+            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2.5 transition-all hover:border-emerald-500/30">
               <div className="flex items-center gap-1.5 mb-1">
                 <Timer className="h-3 w-3 text-emerald-500" />
                 <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Avg Duration</span>
@@ -269,7 +269,7 @@ function ReplaysPage() {
                 {formatDuration(stats.avgDuration)}
               </div>
             </div>
-            <div className="rounded-lg border border-violet-500/20 bg-violet-500/5 p-2.5 transition-all hover:shadow-md hover:border-violet-500/30">
+            <div className="rounded-lg border border-violet-500/20 bg-violet-500/5 p-2.5 transition-all hover:border-violet-500/30">
               <div className="flex items-center gap-1.5 mb-1">
                 <User className="h-3 w-3 text-violet-500" />
                 <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Unique Users</span>
@@ -380,7 +380,7 @@ function ReplaysPage() {
                   <div
                     key={replay.replayId}
                     onClick={() => navigate({ to: '/replays/$replayId', params: { replayId: replay.replayId } })}
-                    className={`cursor-pointer rounded-xl border bg-card hover:bg-accent/50 transition-all hover:shadow-md border-l-[3px] ${
+                    className={`cursor-pointer rounded-xl border bg-card hover:bg-accent/50 transition-all border-l-[3px] ${
                       hasErrors
                         ? 'border-l-rose-500 border-border/60 hover:border-rose-500/30'
                         : 'border-l-blue-500/40 border-border/60 hover:border-blue-500/30'

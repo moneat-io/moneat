@@ -101,7 +101,7 @@ function DeclaredIncidents() {
             className={cn(
               'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all',
               statusFilter === 'OPEN'
-                ? 'bg-red-500/15 border-red-500/40 text-red-400 shadow-sm shadow-red-500/10'
+                ? 'bg-red-500/15 border-red-500/40 text-red-400'
                 : 'hover:bg-muted/60'
             )}
           >
@@ -113,7 +113,7 @@ function DeclaredIncidents() {
             className={cn(
               'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all',
               statusFilter === 'RESOLVED'
-                ? 'bg-green-500/15 border-green-500/40 text-green-400 shadow-sm shadow-green-500/10'
+                ? 'bg-green-500/15 border-green-500/40 text-green-400'
                 : 'hover:bg-muted/60'
             )}
           >
@@ -186,7 +186,7 @@ function DeclaredIncidents() {
                 className="block group"
               >
                 <Card className={cn(
-                  'transition-all hover:shadow-md border-l-4',
+                  'transition-all border-l-4',
                   incident.status === 'OPEN' && 'border-l-red-500 hover:border-red-500/40',
                   incident.status === 'RESOLVED' && 'border-l-transparent hover:border-muted-foreground/20',
                 )}>

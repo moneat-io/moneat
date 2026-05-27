@@ -211,7 +211,7 @@ function MonitorRow({monitor}: {readonly monitor: UptimeMonitor}) {
 
 export default function MonitorCompactTable({monitors}: MonitorCompactTableProps) {
   return (
-    <Card className="overflow-hidden border-border/60 shadow-sm">
+    <Card className="overflow-hidden border-border/60">
       <CardContent className="p-0">
         <Table className="min-w-[800px]">
           <TableHeader>

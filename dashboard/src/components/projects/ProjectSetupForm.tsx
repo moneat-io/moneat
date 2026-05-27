@@ -195,7 +195,7 @@ export function ProjectSetupForm({
                   className={cn(
                     'relative flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 transition-all',
                     isSelected
-                      ? 'border-primary bg-primary/5 shadow-md'
+                      ? 'border-primary bg-primary/5'
                       : 'border-border hover:border-primary/50 hover:bg-accent'
                   )}
                   aria-pressed={isSelected}

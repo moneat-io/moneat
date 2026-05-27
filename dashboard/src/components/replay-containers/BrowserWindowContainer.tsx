@@ -35,7 +35,7 @@ export function BrowserWindowContainer({
     displayUrl.length > 80 ? displayUrl.slice(0, 77) + '...' : displayUrl
 
   return (
-    <div className={cn('rounded-xl border bg-card shadow-sm overflow-hidden', className)}>
+    <div className={cn('rounded-xl border bg-card overflow-hidden', className)}>
       {/* Browser chrome / title bar */}
       <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/50">
         {/* Traffic light dots */}

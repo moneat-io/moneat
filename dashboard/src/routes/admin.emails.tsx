@@ -177,7 +177,7 @@ function AdminEmailsPage() {
                   content={({ active, payload }) => {
                     if (!active || !payload?.[0]) return null
                     return (
-                      <div className="bg-background border rounded-lg shadow-lg p-3">
+                      <div className="bg-background border rounded-lg p-3">
                         <p className="text-sm font-semibold">{payload[0].payload.type}</p>
                         <p className="text-sm text-muted-foreground">
                           {formatNumber(payload[0].value as number)} emails

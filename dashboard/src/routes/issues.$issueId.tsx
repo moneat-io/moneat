@@ -969,7 +969,7 @@ function ContextSection({ name, data, depth = 0, defaultOpen = true }: { name: s
     : [['value', data]]
 
   return (
-    <div className={`rounded-lg border border-border bg-card shadow-sm ${isNested ? 'ml-4 mt-2 mb-3 border-l-2 border-l-primary/20 first:mt-0' : ''}`}>
+    <div className={`rounded-lg border border-border bg-card ${isNested ? 'ml-4 mt-2 mb-3 border-l-2 border-l-primary/20 first:mt-0' : ''}`}>
       <button
         type="button"
         onClick={() => setOpen(!open)}

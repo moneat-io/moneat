@@ -210,7 +210,7 @@ function ChartTooltip({
   if (!active || !payload?.length) return null
 
   return (
-    <div className="bg-popover/95 backdrop-blur-sm border rounded-lg px-3 py-2 shadow-xl">
+    <div className="bg-popover/95 backdrop-blur-sm border rounded-lg px-3 py-2">
       <p className="text-xs text-muted-foreground mb-1">{label}</p>
       {payload.map((entry, idx: number) => (
         <div key={idx} className="flex items-center gap-2 text-sm">
@@ -1038,13 +1038,12 @@ function HostDetailPage() {
                 <CardContent className="py-12">
                   <div className="mx-auto max-w-2xl text-center">
                     <div
-                      className={
+                      className={[
+                        'mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl',
                         hostMonitoringLimitState
-                          ? 'mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl ' +
-                            'bg-amber-500/10 border border-amber-500/20'
-                          : 'mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl ' +
-                            'bg-cyan-500/10 border border-cyan-500/20'
-                      }
+                          ? 'bg-amber-500/10 border border-amber-500/20'
+                          : 'bg-cyan-500/10 border border-cyan-500/20',
+                      ].join(' ')}
                     >
                       {hostMonitoringLimitState ? (
                         <AlertTriangle className="h-8 w-8 text-amber-600 dark:text-amber-400" />

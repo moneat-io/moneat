@@ -201,14 +201,14 @@ function SettingsPage() {
               </div>
               <TabsTrigger 
                 value="general" 
-                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground"
               >
                 <SlidersHorizontal className="h-4 w-4 mr-2" />
                 General
               </TabsTrigger>
               <TabsTrigger 
                 value="api-keys" 
-                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground"
               >
                 <Key className="h-4 w-4 mr-2" />
                 API Keys
@@ -219,28 +219,28 @@ function SettingsPage() {
               </div>
               <TabsTrigger 
                 value="integrations" 
-                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground"
               >
                 <Plug className="h-4 w-4 mr-2" />
                 Integrations
               </TabsTrigger>
               <TabsTrigger 
                 value="notifications" 
-                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground"
               >
                 <Bell className="h-4 w-4 mr-2" />
                 Notifications
               </TabsTrigger>
               <TabsTrigger 
                 value="silence" 
-                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground"
               >
                 <BellOff className="h-4 w-4 mr-2" />
                 Silence Periods
               </TabsTrigger>
               <TabsTrigger 
                 value="log-indexes" 
-                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground"
               >
                 <Database className="h-4 w-4 mr-2" />
                 Log Indexes
@@ -253,7 +253,7 @@ function SettingsPage() {
               {canManageTeam && (
                 <TabsTrigger 
                   value="team" 
-                  className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                  className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground"
                 >
                   <Users className="h-4 w-4 mr-2" />
                   Team
@@ -262,7 +262,7 @@ function SettingsPage() {
               {!isSelfHosted && (
               <TabsTrigger 
                 value="billing" 
-                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground"
               >
                 <CreditCard className="h-4 w-4 mr-2" />
                 Billing
@@ -270,7 +270,7 @@ function SettingsPage() {
               )}
               <TabsTrigger 
                 value="usage" 
-                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground"
               >
                 <Layers className="h-4 w-4 mr-2" />
                 Usage
@@ -278,7 +278,7 @@ function SettingsPage() {
               {canViewSsoTab && (
                 <TabsTrigger 
                   value="sso" 
-                  className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                  className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground"
                 >
                   <Shield className="h-4 w-4 mr-2" />
                   SSO
@@ -290,7 +290,7 @@ function SettingsPage() {
               </div>
               <TabsTrigger 
                 value="account" 
-                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground"
               >
                 <Trash2 className="h-4 w-4 mr-2" />
                 Account
@@ -1630,7 +1630,7 @@ function BillingTab() {
                 onClick={() => setBillingInterval('monthly')}
                 className={`relative rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
                   billingInterval === 'monthly'
-                    ? 'bg-background text-foreground shadow-sm'
+                    ? 'bg-background text-foreground'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
@@ -1640,7 +1640,7 @@ function BillingTab() {
                 onClick={() => setBillingInterval('yearly')}
                 className={`relative rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
                   billingInterval === 'yearly'
-                    ? 'bg-background text-foreground shadow-sm'
+                    ? 'bg-background text-foreground'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
@@ -1673,7 +1673,7 @@ function BillingTab() {
                     key={plan.tier.id}
                     className={`flex flex-col rounded-xl border-2 p-6 transition-all ${
                       isCurrentPlan
-                        ? 'border-primary bg-primary/5 shadow-md relative'
+                        ? 'border-primary bg-primary/5 relative'
                         : 'border-muted hover:border-primary/50'
                     }`}
                   >
@@ -2099,7 +2099,7 @@ function IntegrationsTab() {
         <CardHeader className="bg-muted/10 pb-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-white shadow-sm border flex items-center justify-center p-2">
+              <div className="h-12 w-12 rounded-xl bg-white border flex items-center justify-center p-2">
                 <SlackLogo className="h-full w-full" />
               </div>
               <div>
@@ -2246,7 +2246,7 @@ function IntegrationsTab() {
         <CardHeader className="bg-muted/10 pb-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-white shadow-sm border flex items-center justify-center p-2">
+              <div className="h-12 w-12 rounded-xl bg-white border flex items-center justify-center p-2">
                 <DiscordLogo className="h-full w-full" />
               </div>
               <div>

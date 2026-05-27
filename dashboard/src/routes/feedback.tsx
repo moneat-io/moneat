@@ -257,9 +257,9 @@ function FeedbackPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5 mb-3">
                 <button
                   onClick={() => setStatusFilter('all')}
-                  className={`rounded-lg border p-2 text-left transition-all hover:shadow-md ${
+                  className={`rounded-lg border p-2 text-left transition-all ${
                     statusFilter === 'all'
-                      ? 'border-violet-500/40 bg-violet-500/10 shadow-sm ring-1 ring-violet-500/20'
+                      ? 'border-violet-500/40 bg-violet-500/10 ring-1 ring-violet-500/20'
                       : 'border-border/60 bg-card hover:border-violet-500/20'
                   }`}
                 >
@@ -271,9 +271,9 @@ function FeedbackPage() {
                 </button>
                 <button
                   onClick={() => setStatusFilter('unresolved')}
-                  className={`rounded-lg border p-2 text-left transition-all hover:shadow-md ${
+                  className={`rounded-lg border p-2 text-left transition-all ${
                     statusFilter === 'unresolved'
-                      ? 'border-amber-500/40 bg-amber-500/10 shadow-sm ring-1 ring-amber-500/20'
+                      ? 'border-amber-500/40 bg-amber-500/10 ring-1 ring-amber-500/20'
                       : 'border-border/60 bg-card hover:border-amber-500/20'
                   }`}
                 >
@@ -285,9 +285,9 @@ function FeedbackPage() {
                 </button>
                 <button
                   onClick={() => setStatusFilter('resolved')}
-                  className={`rounded-lg border p-2 text-left transition-all hover:shadow-md ${
+                  className={`rounded-lg border p-2 text-left transition-all ${
                     statusFilter === 'resolved'
-                      ? 'border-emerald-500/40 bg-emerald-500/10 shadow-sm ring-1 ring-emerald-500/20'
+                      ? 'border-emerald-500/40 bg-emerald-500/10 ring-1 ring-emerald-500/20'
                       : 'border-border/60 bg-card hover:border-emerald-500/20'
                   }`}
                 >
@@ -299,9 +299,9 @@ function FeedbackPage() {
                 </button>
                 <button
                   onClick={() => setStatusFilter('archived')}
-                  className={`rounded-lg border p-2 text-left transition-all hover:shadow-md ${
+                  className={`rounded-lg border p-2 text-left transition-all ${
                     statusFilter === 'archived'
-                      ? 'border-slate-500/40 bg-slate-500/10 shadow-sm ring-1 ring-slate-500/20'
+                      ? 'border-slate-500/40 bg-slate-500/10 ring-1 ring-slate-500/20'
                       : 'border-border/60 bg-card hover:border-slate-500/20'
                   }`}
                 >
@@ -390,7 +390,7 @@ function FeedbackPage() {
                       <div
                         key={f.feedbackId}
                         onClick={() => navigate({ to: '/feedback/$feedbackId', params: { feedbackId: f.feedbackId } })}
-                        className={`cursor-pointer rounded-lg border border-border/60 bg-card hover:bg-accent/50 hover:border-primary/20 transition-all hover:shadow-md border-l-[3px] ${config.border}`}
+                        className={`cursor-pointer rounded-lg border border-border/60 bg-card hover:bg-accent/50 hover:border-primary/20 transition-all border-l-[3px] ${config.border}`}
                       >
                         <div className="flex items-start gap-2 p-2">
                           {/* Checkbox */}
