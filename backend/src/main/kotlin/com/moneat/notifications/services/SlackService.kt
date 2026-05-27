@@ -351,7 +351,7 @@ class SlackService {
                 channel = config.channelId,
                 blocks = blocks,
                 fallbackText = message
-        )
+            )
         return success
     }
 

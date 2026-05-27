@@ -556,7 +556,7 @@ class DiscordService(
                 channelId = config.channelId,
                 embed = embed,
                 fallbackText = "$title: $message"
-        )
+            )
         return success
     }
 
@@ -582,7 +582,7 @@ class DiscordService(
                 channelId = config.channelId,
                 embed = embed,
                 fallbackText = preview.fallbackText
-        )
+            )
         return success
     }
 
