@@ -63,7 +63,7 @@ export function apmMethods(core: ApiClientCore) {
     },
 
     getApmOverview: (
-      params: Omit<ApmListParams, 'limit' | 'offset' | 'search'> = {}
+      params: Omit<ApmListParams, 'limit' | 'offset'> = {}
     ) => {
       const searchParams = new URLSearchParams()
       appendApmListParams(searchParams, params)

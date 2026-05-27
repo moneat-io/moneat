@@ -255,10 +255,13 @@ class TraceIngestionServiceTest {
 
             val overview = TraceIngestionService.getApmOverview(
                 organizationId = 10,
-                service = "checkout-service",
-                env = "production",
-                source = "otlp",
-                status = "error",
+                query = DdTraceListQuery(
+                    service = "checkout-service",
+                    env = "production",
+                    source = "otlp",
+                    status = "error",
+                    search = "checkout",
+                ),
             )
 
             assertEquals(20, overview.stats.totalTraces)
@@ -273,6 +276,7 @@ class TraceIngestionServiceTest {
             assertTrue(queries.any { "env = 'production'" in it })
             assertTrue(queries.any { "source = 'otlp'" in it })
             assertTrue(queries.any { "has_error = 1" in it })
+            assertTrue(queries.any { "positionCaseInsensitive(root_resource, 'checkout')" in it })
         } finally {
             unmockkObject(ClickHouseClient)
         }

@@ -105,11 +105,14 @@ fun Route.traceDashboardRoutes() {
 
                 val result = TraceIngestionService.getApmOverview(
                     organizationId = orgId,
-                    service = call.parameters["service"],
-                    env = call.parameters["env"],
-                    source = call.parameters["source"],
-                    status = status,
-                    timeRange = timeRange,
+                    query = DdTraceListQuery(
+                        service = call.parameters["service"],
+                        env = call.parameters["env"],
+                        source = call.parameters["source"],
+                        status = status,
+                        search = call.traceSearch(),
+                        timeRange = timeRange,
+                    ),
                     parentSpan = call.getSentryTransaction(),
                 )
                 call.respond(result)

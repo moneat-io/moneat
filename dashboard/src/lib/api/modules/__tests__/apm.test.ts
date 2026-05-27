@@ -111,6 +111,7 @@ describe('APM API', () => {
         expect(url.searchParams.get('source')).toBe('sentry')
         expect(url.searchParams.get('status')).toBe('ok')
         expect(url.searchParams.get('env')).toBe('production')
+        expect(url.searchParams.get('search')).toBe('checkout')
         expect(url.searchParams.get('timeRange')).toBe('24h')
         return HttpResponse.json(mockResponse)
       })
@@ -121,6 +122,7 @@ describe('APM API', () => {
       source: 'sentry',
       status: 'ok',
       env: 'production',
+      search: 'checkout',
       timeRange: '24h',
     })
     expect(result).toEqual(mockResponse)

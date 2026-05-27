@@ -113,6 +113,7 @@ interface OverviewParams {
   source?: string
   status?: ApmStatusFilter
   env?: string
+  search?: string
 }
 
 interface TraceListParams extends OverviewParams {
@@ -154,11 +155,18 @@ function PerformanceTracesPage() {
     }),
     [debouncedSearch, errorsOnly, page, queryParams],
   )
+  const overviewParams = useMemo<OverviewParams>(
+    () => ({
+      ...queryParams,
+      search: debouncedSearch === '' ? undefined : debouncedSearch,
+    }),
+    [debouncedSearch, queryParams],
+  )
   const refreshMs = REFRESH_OPTIONS.find((option) => option.value === refresh)?.ms ?? false
 
   const overviewQuery = useQuery({
-    queryKey: ['apm-overview', queryParams],
-    queryFn: () => api.getApmOverview(queryParams),
+    queryKey: ['apm-overview', overviewParams],
+    queryFn: () => api.getApmOverview(overviewParams),
     refetchInterval: refreshMs,
   })
 
@@ -172,6 +180,17 @@ function PerformanceTracesPage() {
   const traces = tracesQuery.data?.traces ?? []
   const totalTraces = tracesQuery.data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalTraces / TRACE_PAGE_SIZE))
+
+  useEffect(() => {
+    if (page >= totalPages) {
+      globalThis.queueMicrotask(() => {
+        setPage((currentPage) => {
+          if (currentPage < totalPages) return currentPage
+          return Math.max(0, totalPages - 1)
+        })
+      })
+    }
+  }, [page, totalPages])
 
   useEffect(() => {
     const panel = erroringResourcesRef.current
@@ -520,7 +539,7 @@ function ServiceHealthPanel({overview}: {overview: ApmOverviewResponse}) {
               {overview.serviceHealth.length === 0 ? (
                 <EmptyTableRow colSpan={4} label="No service health data" />
               ) : overview.serviceHealth.map((service, index) => (
-                <TableRow key={service.service}>
+                <TableRow key={`${service.service}-${service.source}-${index}`}>
                   <TableCell className="pl-4">
                     <div className="flex min-w-0 items-center gap-2">
                       <span className={cn('h-2 w-2 rounded-full', serviceDot(index))} />
@@ -704,6 +723,18 @@ function AllErroringResourcesPanel({
   const totalResources = resourcesQuery.data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalResources / RESOURCE_PAGE_SIZE))
 
+  useEffect(() => {
+    if (page >= totalPages) {
+      globalThis.queueMicrotask(() => {
+        setPageState((currentState) => {
+          const currentPage = currentState.key === resourceFilterKey ? currentState.page : 0
+          if (currentPage < totalPages) return currentState
+          return {key: resourceFilterKey, page: Math.max(0, totalPages - 1)}
+        })
+      })
+    }
+  }, [page, resourceFilterKey, totalPages])
+
   const updateResourceSearch = (value: string) => {
     setResourceSearch(value)
     setPageState({key: resourceFilterKey, page: 0})
@@ -871,8 +902,8 @@ function ResourceHotspotTable({
         <TableBody>
           {sorted.length === 0 ? (
             <EmptyTableRow colSpan={4} label="No resource hotspots" />
-          ) : sorted.map((resource) => (
-            <TableRow key={`${resource.service}-${resource.resource}`}>
+          ) : sorted.map((resource, index) => (
+            <TableRow key={`${resource.service}-${resource.resource}-${resource.source}-${index}`}>
               <TableCell className="max-w-[220px] truncate pl-4 font-mono text-xs">
                 {resource.resource}
               </TableCell>

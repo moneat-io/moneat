@@ -463,27 +463,16 @@ object TraceIngestionService {
 
     suspend fun getApmOverview(
         organizationId: Int,
-        service: String?,
-        env: String?,
-        source: String?,
-        status: String?,
-        timeRange: DdApmQueryTimeRange = defaultApmQueryTimeRange,
+        query: DdTraceListQuery,
         parentSpan: ISpan? = null,
     ): DdApmOverviewResponse {
-        val overviewQuery = DdTraceListQuery(
-            service = service,
-            env = env,
-            source = source,
-            status = status,
-            timeRange = timeRange,
-        )
         val currentSubquery = traceSummarySubquery(
             organizationId = organizationId,
-            query = overviewQuery,
+            query = query,
         )
         val previousSubquery = traceSummarySubquery(
             organizationId = organizationId,
-            query = overviewQuery,
+            query = query,
             previousWindow = true,
         )
         val previousStats = getOverviewPreviousStats(previousSubquery, parentSpan)
