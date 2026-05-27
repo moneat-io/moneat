@@ -65,12 +65,20 @@ export function markDatadogImportSignupIntent(): void {
 
 export function hasDatadogImportSignupIntent(searchParams: URLSearchParams): boolean {
   const storage = getStorage()
-  return isDatadogImportCampaign(searchParams) || storage?.getItem(SIGNUP_INTENT_KEY) != null
+  try {
+    return isDatadogImportCampaign(searchParams) || storage?.getItem(SIGNUP_INTENT_KEY) != null
+  } catch {
+    return isDatadogImportCampaign(searchParams)
+  }
 }
 
 export function clearDatadogImportSignupIntent(): void {
   const storage = getStorage()
-  storage?.removeItem(SIGNUP_INTENT_KEY)
+  try {
+    storage?.removeItem(SIGNUP_INTENT_KEY)
+  } catch {
+    // Ignore storage failures so core auth flows can continue.
+  }
 }
 
 export function markDatadogDashboardImportSuccess(dashboardId: number, warningCount: number): void {
@@ -80,25 +88,42 @@ export function markDatadogDashboardImportSuccess(dashboardId: number, warningCo
     warningCount,
     importedAt: new Date().toISOString(),
   }
-  storage?.setItem(PENDING_SIGNAL_KEY, JSON.stringify(context))
-  storage?.removeItem(FIRST_SIGNAL_TRACKED_KEY)
+  try {
+    storage?.setItem(PENDING_SIGNAL_KEY, JSON.stringify(context))
+    storage?.removeItem(FIRST_SIGNAL_TRACKED_KEY)
+  } catch {
+    // Ignore storage failures so import success UX can continue.
+  }
 }
 
 export function readDatadogPendingImportSignal(): DatadogImportSignalContext | null {
   const storage = getStorage()
-  const rawContext = storage?.getItem(PENDING_SIGNAL_KEY)
+  let rawContext: string | null | undefined
+  try {
+    rawContext = storage?.getItem(PENDING_SIGNAL_KEY)
+  } catch {
+    return null
+  }
   if (!rawContext) return null
 
   try {
     return JSON.parse(rawContext) as DatadogImportSignalContext
   } catch {
-    storage?.removeItem(PENDING_SIGNAL_KEY)
+    try {
+      storage?.removeItem(PENDING_SIGNAL_KEY)
+    } catch {
+      // Ignore storage failures while recovering from malformed funnel state.
+    }
     return null
   }
 }
 
 export function markFirstSignalAfterDatadogImportTracked(): void {
   const storage = getStorage()
-  storage?.setItem(FIRST_SIGNAL_TRACKED_KEY, new Date().toISOString())
-  storage?.removeItem(PENDING_SIGNAL_KEY)
+  try {
+    storage?.setItem(FIRST_SIGNAL_TRACKED_KEY, new Date().toISOString())
+    storage?.removeItem(PENDING_SIGNAL_KEY)
+  } catch {
+    // Ignore storage failures after telemetry succeeds.
+  }
 }

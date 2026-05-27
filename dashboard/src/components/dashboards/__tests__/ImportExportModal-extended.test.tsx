@@ -103,6 +103,8 @@ async function submitImport(json: string) {
 }
 
 beforeEach(() => {
+  globalThis.localStorage.clear()
+  globalThis.sessionStorage.clear()
   clearAuthStorage()
   vi.clearAllMocks()
   mockedApi.importDashboard.mockResolvedValue({
