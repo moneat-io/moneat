@@ -681,7 +681,7 @@ class TraceIngestionServiceCoverageTest {
     }
 
     @Test
-    fun `listResourceStats applies trace summary filters for erroring resources`() = runBlocking {
+    fun `listResourceStats filters erroring resources after grouping all matching traces`() = runBlocking {
         val capturedQueries = mutableListOf<String>()
         coEvery { ClickHouseClient.executeWithFormat(any(), any()) } coAnswers {
             val query = firstArg<String>()
@@ -717,12 +717,15 @@ class TraceIngestionServiceCoverageTest {
 
         assertEquals(1, result.totalCount)
         assertEquals("POST /checkout", result.resources.first().resource)
+        assertEquals(20L, result.resources.first().totalHits)
         assertEquals(5L, result.resources.first().totalErrors)
+        assertEquals(0.25, result.resources.first().errorRate)
         assertTrue(capturedQueries.all { it.contains("apm_trace_summaries") })
         assertTrue(capturedQueries.any { it.contains("service = 'api'") })
         assertTrue(capturedQueries.any { it.contains("env = 'production'") })
         assertTrue(capturedQueries.any { it.contains("source = 'otlp'") })
-        assertTrue(capturedQueries.any { it.contains("has_error = 1") })
+        assertTrue(capturedQueries.any { it.contains("HAVING total_errors > 0") })
+        assertFalse(capturedQueries.any { it.contains("has_error = 1") })
         assertTrue(capturedQueries.any { it.contains("positionCaseInsensitive(root_resource, 'checkout')") })
     }
 

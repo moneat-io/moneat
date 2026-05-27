@@ -1160,12 +1160,17 @@ object TraceIngestionService {
                 service = query.service,
                 env = query.env,
                 source = query.source,
-                status = query.status,
+                status = query.status.takeUnless { it == STATUS_ERROR },
                 search = query.search,
                 timeRange = query.timeRange,
             ),
         )
         val effectiveLimit = query.limit.coerceAtMost(MAX_QUERY_LIMIT)
+        val groupHavingClause = if (query.status == STATUS_ERROR) {
+            "HAVING total_errors > 0"
+        } else {
+            ""
+        }
         val groupedResources = """
             SELECT
                 root_service as service,
@@ -1178,6 +1183,7 @@ object TraceIngestionService {
                 if(count() > 0, sum(has_error) / count(), 0) as error_rate
             FROM ($subquery)
             GROUP BY root_service, root_resource
+            $groupHavingClause
         """.trimIndent()
 
         val countQuery = """
