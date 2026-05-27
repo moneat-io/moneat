@@ -140,7 +140,11 @@ class EventRepositoryImpl : EventRepository {
                 '${escapeSql(data.sdkVersion)}'
             )
         """.trimIndent()
-        return executeInsert(sql)
+        val inserted = executeInsert(sql)
+        if (inserted) {
+            insertErrorEventRollups(data)
+        }
+        return inserted
     }
 
     override suspend fun insertTransaction(data: TransactionEventInsertData): Boolean {
@@ -433,8 +437,55 @@ class EventRepositoryImpl : EventRepository {
         }
     }
 
+    private suspend fun insertErrorEventRollups(data: ErrorEventInsertData) {
+        val projectRollup = """
+            INSERT INTO `$db`.event_project_rollup_1h (
+                project_id, bucket_start, level, platform, browser_name,
+                environment, event_count
+            ) VALUES (
+                ${data.projectId},
+                toStartOfHour(fromUnixTimestamp64Milli(${data.timestampMs})),
+                '${escapeSql(data.level)}',
+                '${escapeSql(data.platform)}',
+                '',
+                '${escapeSql(data.environment)}',
+                1
+            )
+        """.trimIndent()
+        val issueRollup = """
+            INSERT INTO `$db`.event_issue_rollup_1h (
+                project_id, issue_id, bucket_start, title, event_count
+            ) VALUES (
+                ${data.projectId},
+                '${escapeSql(data.issueId)}',
+                toStartOfHour(fromUnixTimestamp64Milli(${data.timestampMs})),
+                '${escapeSql(data.message)}',
+                1
+            )
+        """.trimIndent()
+
+        executeRollupInsert(projectRollup, "project event rollup")
+        executeRollupInsert(issueRollup, "issue event rollup")
+    }
+
+    private suspend fun executeRollupInsert(sql: String, label: String) {
+        suspendRunCatching {
+            val response = ClickHouseClient.execute(sql)
+            if (!response.status.isSuccess()) {
+                val errorBody = response.bodyAsText()
+                logger.warn { "ClickHouse $label insert failed: ${errorBody.take(ERROR_BODY_PREVIEW_CHARS)}" }
+            }
+        }.getOrElse { e ->
+            logger.warn(e) { "ClickHouse $label insert failed" }
+        }
+    }
+
     private fun tagsToMap(tags: Map<String, String>?): String {
         if (tags.isNullOrEmpty()) return "{}"
         return "{${tags.entries.joinToString(",") { "'${escapeSql(it.key)}':'${escapeSql(it.value)}'" }}}"
+    }
+
+    companion object {
+        private const val ERROR_BODY_PREVIEW_CHARS = 600
     }
 }

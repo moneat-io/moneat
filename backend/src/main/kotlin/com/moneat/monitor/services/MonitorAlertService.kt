@@ -586,9 +586,9 @@ class MonitorAlertService(
         val query =
             """
             SELECT $selectExpr as value
-            FROM `$clickhouseDb`.metrics
+            FROM `$clickhouseDb`.metrics_latest_by_host
             WHERE organization_id = $organizationId
-              AND tags['host_id'] = '$hostId'
+              AND host_id = $hostId
               AND $metricFilter
               AND timestamp >= now64(3) - INTERVAL $CURRENT_METRIC_LOOKBACK_MINUTES MINUTE
             FORMAT JSONCompact
@@ -621,8 +621,8 @@ class MonitorAlertService(
      */
     private suspend fun checkSustainedCondition(alert: AlertData): Boolean {
         val baseFilter =
-            "organization_id = ${alert.organizationId} AND tags['host_id'] = '${alert.hostId}' " +
-                "AND timestamp >= now64(3) - INTERVAL ${alert.durationSeconds} SECOND"
+            "organization_id = ${alert.organizationId} AND host_id = ${alert.hostId} " +
+                "AND bucket_start >= now64(3) - INTERVAL ${alert.durationSeconds} SECOND"
 
         val (query, usesDerived) =
             when (alert.metric) {
@@ -640,11 +640,11 @@ class MonitorAlertService(
                             else -> return false
                         }
                     val pctExpr = if (availName != null) {
-                        "(1 - max(CASE WHEN metric_name='$availName' THEN value END) / " +
-                            "nullIf(max(CASE WHEN metric_name='$totalName' THEN value END), 0)) * 100"
+                        "(1 - sumIf(value_sum, metric_name='$availName') / " +
+                            "nullIf(sumIf(value_sum, metric_name='$totalName'), 0)) * 100"
                     } else {
-                        "max(CASE WHEN metric_name='$usedName' THEN value END) / " +
-                            "nullIf(max(CASE WHEN metric_name='$totalName' THEN value END), 0) * 100"
+                        "sumIf(value_sum, metric_name='$usedName') / " +
+                            "nullIf(sumIf(value_sum, metric_name='$totalName'), 0) * 100"
                     }
                     val metricFilter = if (availName != null) {
                         "metric_name IN ('$availName','$totalName')"
@@ -654,11 +654,11 @@ class MonitorAlertService(
                     val q =
                         """
                         SELECT count(*) as cnt FROM (
-                            SELECT timestamp,
+                            SELECT bucket_start,
                                 $pctExpr as pct
-                            FROM `$clickhouseDb`.metrics
+                            FROM `$clickhouseDb`.metrics_rollup_1m
                             WHERE $baseFilter AND $metricFilter
-                            GROUP BY timestamp
+                            GROUP BY bucket_start
                             HAVING $havingClause
                         )
                         FORMAT JSONCompact
@@ -689,8 +689,14 @@ class MonitorAlertService(
                     val q =
                         """
                         SELECT count(*) as cnt
-                        FROM `$clickhouseDb`.metrics
-                        WHERE $baseFilter AND metric_name = '$metricName' AND $conditionSql
+                        FROM (
+                            SELECT bucket_start,
+                                sum(value_sum) / nullIf(sum(value_count), 0) as value
+                            FROM `$clickhouseDb`.metrics_rollup_1m
+                            WHERE $baseFilter AND metric_name = '$metricName'
+                            GROUP BY bucket_start
+                            HAVING $conditionSql
+                        )
                         FORMAT JSONCompact
                         """.trimIndent()
                     q to false
@@ -718,7 +724,7 @@ class MonitorAlertService(
             val expectedDataPoints = if (alert.durationSeconds == 0) {
                 0
             } else {
-                kotlin.math.ceil(alert.durationSeconds.toDouble() / POLL_INTERVAL_SECONDS).toInt()
+                kotlin.math.ceil(alert.durationSeconds.toDouble() / SECONDS_PER_MINUTE).toInt()
             }
             count >= expectedDataPoints * MIN_DATA_POINT_RATIO
         }.getOrElse { e ->

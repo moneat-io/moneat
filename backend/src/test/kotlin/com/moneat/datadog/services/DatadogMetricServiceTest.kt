@@ -16,11 +16,20 @@
 
 package com.moneat.datadog.services
 
+import com.moneat.config.ClickHouseClient
 import com.moneat.datadog.models.DatadogMetricSeriesV1
 import com.moneat.datadog.models.DatadogMetricV1
 import com.moneat.datadog.models.DatadogSketch
 import com.moneat.datadog.models.DatadogSketchPayload
 import com.moneat.datadog.models.DatadogSketchPoint
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.HttpStatusCode
+import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -218,5 +227,82 @@ class DatadogMetricServiceTest {
         assertEquals(batch.metrics.size, decoded.metrics.size)
         assertEquals(batch.metrics[0].name, decoded.metrics[0].name)
         assertEquals(batch.metrics[0].value, decoded.metrics[0].value)
+    }
+
+    @Test
+    fun `insertMetricBatch writes raw metrics and infra rollups for host metrics`() = runBlocking {
+        val queries = mutableListOf<String>()
+        val response = mockk<HttpResponse>()
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "test_db"
+            every { response.status } returns HttpStatusCode.OK
+            coEvery { ClickHouseClient.execute(capture(queries)) } returns response
+
+            DatadogMetricService.insertMetricBatch(
+                QueuedMetricBatch(
+                    organizationId = 42L,
+                    metrics = listOf(
+                        QueuedMetricEntry(
+                            name = "system.cpu.percent",
+                            type = "gauge",
+                            timestampMs = 1_700_000_000_000L,
+                            value = 42.5,
+                            host = "web-01",
+                            tags = mapOf("host_id" to "7"),
+                            unit = "%",
+                        )
+                    )
+                )
+            )
+
+            assertTrue(queries.any { it.contains("INSERT INTO `test_db`.metrics ") })
+            assertTrue(queries.any { it.contains("metrics_latest_by_host") })
+            assertTrue(queries.any { it.contains("metrics_rollup_1m") })
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
+    fun `insertMetricBatch preserves raw insert success when rollup setup fails`() = runBlocking {
+        val queries = mutableListOf<String>()
+        val response = mockk<HttpResponse>()
+        var getDatabaseCalls = 0
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } answers {
+                getDatabaseCalls += 1
+                if (getDatabaseCalls == 1) {
+                    "test_db"
+                } else {
+                    throw IllegalStateException("rollup database unavailable")
+                }
+            }
+            every { response.status } returns HttpStatusCode.OK
+            coEvery { ClickHouseClient.execute(capture(queries)) } returns response
+
+            DatadogMetricService.insertMetricBatch(
+                QueuedMetricBatch(
+                    organizationId = 42L,
+                    metrics = listOf(
+                        QueuedMetricEntry(
+                            name = "system.cpu.percent",
+                            type = "gauge",
+                            timestampMs = 1_700_000_000_000L,
+                            value = 42.5,
+                            host = "web-01",
+                            tags = mapOf("host_id" to "7"),
+                            unit = "%",
+                        )
+                    )
+                )
+            )
+
+            assertEquals(1, queries.size)
+            assertTrue(queries.single().contains("INSERT INTO `test_db`.metrics "))
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
     }
 }

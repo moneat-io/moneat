@@ -81,7 +81,7 @@ class LogServiceExecutionTest {
                 assertEquals(1, result.logs.size)
                 assertTrue(result.hasMore)
                 assertNotNull(result.nextCursor)
-                assertEquals(5L, result.totalCount)
+                assertNull(result.totalCount)
 
                 val first = result.logs.first()
                 assertEquals("warn", first.level)

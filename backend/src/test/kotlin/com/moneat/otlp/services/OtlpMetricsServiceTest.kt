@@ -17,7 +17,12 @@
 package com.moneat.otlp.services
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.shared.services.UsageTrackingService
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.HttpStatusCode
+import io.mockk.coEvery
 import io.mockk.every
+import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import io.opentelemetry.proto.collector.metrics.v1.ExportMetricsServiceRequest
@@ -35,6 +40,7 @@ import io.opentelemetry.proto.metrics.v1.Sum
 import io.opentelemetry.proto.metrics.v1.Summary
 import io.opentelemetry.proto.metrics.v1.SummaryDataPoint
 import io.opentelemetry.proto.resource.v1.Resource
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -594,6 +600,49 @@ class OtlpMetricsServiceTest {
         assertEquals("cpu.usage", decoded.metrics[0].metricName)
         assertEquals(DECODE_BATCH_METRIC_VALUE, decoded.metrics[0].value)
         assertEquals(TEST_ENV, decoded.metrics[0].tags["env"])
+    }
+
+    @Test
+    fun `insertBatch writes raw metrics and infra rollups for host metrics`() = runBlocking {
+        val queries = mutableListOf<String>()
+        val response = mockk<HttpResponse>()
+        every { response.status } returns HttpStatusCode.OK
+        coEvery { ClickHouseClient.execute(capture(queries)) } returns response
+
+        val localService = OtlpMetricsService(mockk<UsageTrackingService>(relaxed = true))
+        localService.insertBatch(
+            QueuedOtlpMetricsBatch(
+                organizationId = 42L,
+                metrics = listOf(
+                    OtlpMetricInsert(
+                        organizationId = 42L,
+                        metricName = "system.mem.used",
+                        metricType = "gauge",
+                        description = "memory used",
+                        unit = "bytes",
+                        timestampMs = TEST_TIMESTAMP_MS_PRIMARY,
+                        value = 2048.0,
+                        isMonotonic = 0,
+                        aggregationTemporality = "",
+                        histCount = 0,
+                        histSum = null,
+                        histMin = null,
+                        histMax = null,
+                        histBucketCounts = emptyList(),
+                        histExplicitBounds = emptyList(),
+                        tags = emptyMap(),
+                        resourceAttributes = mapOf("host_id" to "7"),
+                        service = TEST_SVC,
+                        env = TEST_ENV,
+                        host = TEST_HOST,
+                    )
+                )
+            )
+        )
+
+        assertTrue(queries.any { it.contains("INSERT INTO `test_db`.metrics ") })
+        assertTrue(queries.any { it.contains("metrics_latest_by_host") })
+        assertTrue(queries.any { it.contains("metrics_rollup_1m") })
     }
 
     // ──── PROTOBUF PARSING ────

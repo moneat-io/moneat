@@ -25,7 +25,9 @@ import com.moneat.datadog.models.DdStatsPayload
 import com.moneat.datadog.services.DdApmQueryTimeRange
 import com.moneat.datadog.services.DdApmQueryTimeUnit
 import com.moneat.datadog.services.TraceIngestionService
+import io.sentry.ISpan
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
@@ -291,6 +293,14 @@ class TraceIngestionServiceCoverageTest {
                     duration = 500000000L, error = 0,
                     meta = mapOf("env" to "prod", "http.method" to "GET"),
                     metrics = mapOf("_dd.measured" to 1.0)
+                ),
+                DdSpan(
+                    traceId = 1u, spanId = 11u, parentId = 10u,
+                    name = "db.query", service = "postgres", resource = "SELECT 1",
+                    type = "sql", start = 1700000000100000000L,
+                    duration = 250000000L, error = 1,
+                    meta = mapOf("env" to "prod"),
+                    metrics = emptyMap()
                 )
             )
         )
@@ -307,6 +317,9 @@ class TraceIngestionServiceCoverageTest {
         val sql = capturedSql.first()
         assertTrue(sql.contains("INSERT INTO"))
         assertTrue(sql.contains("apm_spans"))
+        assertTrue(capturedSql.any { it.contains("apm_service_stats_hourly") })
+        assertTrue(capturedSql.any { it.contains("apm_service_edges_hourly") })
+        assertTrue(capturedSql.any { it.contains("'api'") && it.contains("'postgres'") })
     }
 
     @Test
@@ -481,8 +494,10 @@ class TraceIngestionServiceCoverageTest {
     @Test
     fun `getServiceMap returns services with relationships`() = runBlocking {
         var callCount = 0
+        val capturedQueries = mutableListOf<String>()
         coEvery { ClickHouseClient.executeWithFormat(any(), any()) } coAnswers {
             callCount++
+            capturedQueries.add(firstArg())
             if (callCount == 1) {
                 """
                 {"service":"web","span_count":100,"error_count":5,"avg_duration_ns":500000.0}
@@ -500,6 +515,22 @@ class TraceIngestionServiceCoverageTest {
         assertEquals("web", result.services[0].service)
         assertEquals(listOf("db"), result.services[0].callsTo)
         assertTrue(result.services[1].callsTo.isEmpty())
+        assertTrue(capturedQueries.any { it.contains("apm_service_stats_hourly") })
+        assertTrue(capturedQueries.any { it.contains("apm_service_edges_hourly") })
+        assertTrue(capturedQueries.none { it.contains("INNER JOIN") })
+        assertTrue(capturedQueries.none { it.contains("FROM `test_db`.apm_spans") })
+    }
+
+    @Test
+    fun `getServiceMap passes explicit Sentry span to ClickHouse queries`() = runBlocking {
+        val span = mockk<ISpan>(relaxed = true)
+        coEvery { ClickHouseClient.executeWithFormat(any(), any(), span) } returns ""
+
+        TraceIngestionService.getServiceMap(1, span)
+
+        coVerify(exactly = 2) {
+            ClickHouseClient.executeWithFormat(any(), any(), span)
+        }
     }
 
     // ===================== getApmErrors =====================
