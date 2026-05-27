@@ -50,6 +50,8 @@ import com.moneat.datadog.services.DatadogMetricService
 import com.moneat.datadog.services.DatadogService
 import com.moneat.datadog.services.DbmIngestionService
 import com.moneat.datadog.services.DdHostInfo
+import com.moneat.datadog.services.DdResourceStatsQuery
+import com.moneat.datadog.services.DdTraceListQuery
 import com.moneat.datadog.services.DebuggerIngestionService
 import com.moneat.datadog.services.MiscIngestionService
 import com.moneat.datadog.services.OrchestratorIngestionService
@@ -1457,7 +1459,7 @@ class DatadogRoutesExtendedTest {
     fun `GET v1 traces resources returns 200`() = testApplication {
         val (userId, orgId) = seedUserAndOrg()
         coEvery {
-            TraceIngestionService.listResourceStats(orgId, null, any(), any(), any())
+            TraceIngestionService.listResourceStats(orgId, any<DdResourceStatsQuery>())
         } returns DdResourceStatsResponse(emptyList(), 0L)
         application {
             installAuth()
@@ -1473,7 +1475,11 @@ class DatadogRoutesExtendedTest {
     fun `GET v1 traces returns 200`() = testApplication {
         val (userId, orgId) = seedUserAndOrg()
         coEvery {
-            TraceIngestionService.listTraces(orgId, null, null, any(), any(), any())
+            TraceIngestionService.listTraces(
+                organizationId = orgId,
+                query = any<DdTraceListQuery>(),
+                parentSpan = any(),
+            )
         } returns DdTraceListResponse(emptyList(), 0L)
         application {
             installAuth()

@@ -17,16 +17,22 @@
 import type { ApiClientCore } from '../client'
 import { urlWithQuery } from '../utils'
 import type {
+  ApmOverviewResponse,
   ApmTraceListResponse,
   ApmTraceDetailResponse,
   ApmServiceMapResponse,
   ApmErrorsResponse,
   ApmResourceStatsResponse,
+  ApmStatusFilter,
   ApmTimeRange,
 } from '../types'
 
 type ApmListParams = {
   service?: string
+  source?: string
+  env?: string
+  status?: ApmStatusFilter
+  search?: string
   limit?: number
   offset?: number
   timeRange?: ApmTimeRange
@@ -34,6 +40,10 @@ type ApmListParams = {
 
 function appendApmListParams(searchParams: URLSearchParams, params: ApmListParams): void {
   if (params.service) searchParams.set('service', params.service)
+  if (params.source) searchParams.set('source', params.source)
+  if (params.env) searchParams.set('env', params.env)
+  if (params.status) searchParams.set('status', params.status)
+  if (params.search) searchParams.set('search', params.search)
   if (params.limit != null) searchParams.set('limit', String(params.limit))
   if (params.offset != null) searchParams.set('offset', String(params.offset))
   if (params.timeRange) searchParams.set('timeRange', params.timeRange)
@@ -44,19 +54,21 @@ export function apmMethods(core: ApiClientCore) {
 
   return {
     getApmTraces: (
-      params: {
-        service?: string
-        env?: string
-        limit?: number
-        offset?: number
-        timeRange?: ApmTimeRange
-      } = {}
+      params: ApmListParams = {}
     ) => {
       const searchParams = new URLSearchParams()
       appendApmListParams(searchParams, params)
-      if (params.env) searchParams.set('env', params.env)
       const qs = searchParams.toString()
       return core.request<ApmTraceListResponse>(urlWithQuery(`${base}/traces`, qs))
+    },
+
+    getApmOverview: (
+      params: Omit<ApmListParams, 'limit' | 'offset'> = {}
+    ) => {
+      const searchParams = new URLSearchParams()
+      appendApmListParams(searchParams, params)
+      const qs = searchParams.toString()
+      return core.request<ApmOverviewResponse>(urlWithQuery(`${base}/traces/overview`, qs))
     },
 
     getApmTraceDetail: (traceId: string) =>

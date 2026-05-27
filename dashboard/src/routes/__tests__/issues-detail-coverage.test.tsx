@@ -136,6 +136,7 @@ const mockTransaction = {
   op: 'http.server',
   duration: 1500,
   timestamp: '2026-03-14T14:00:00Z',
+  traceId: 'trace-1',
 }
 
 const mockReplay = {
@@ -175,7 +176,7 @@ describe('Issue Detail - full data coverage', () => {
     mockApi.getIssueTransactions.mockResolvedValue([mockTransaction])
     mockApi.getReplaysForIssue.mockResolvedValue([mockReplay, mockReplayAnon])
     mockApi.getTransactionSpans.mockResolvedValue({
-      transaction: { eventId: 'tx-1' },
+      transaction: { eventId: 'tx-1', traceId: 'trace-1' },
       spans: [{ spanId: 's1' }],
     })
 
@@ -213,8 +214,8 @@ describe('Issue Detail - full data coverage', () => {
     expect(screen.getByText('v1.2.3')).toBeInTheDocument()
     expect(screen.getByText('test@example.com')).toBeInTheDocument()
 
-    // Transactions
-    expect(screen.getByText('Transactions (1)')).toBeInTheDocument()
+    // Traces
+    expect(screen.getByText('Traces (1)')).toBeInTheDocument()
     expect(screen.getByText('GET /api/data')).toBeInTheDocument()
     expect(screen.getByText('1.50s')).toBeInTheDocument()
 

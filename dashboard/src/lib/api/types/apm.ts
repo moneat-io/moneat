@@ -33,6 +33,77 @@ export interface ApmTraceListResponse {
   totalCount: number
 }
 
+export type ApmStatusFilter = 'error' | 'ok'
+
+export interface ApmOverviewPreviousStats {
+  totalTraces: number
+  errorRate: number
+  p50DurationNs: number
+  p95DurationNs: number
+  p99DurationNs: number
+  avgSpansPerTrace: number
+}
+
+export interface ApmOverviewStats {
+  totalTraces: number
+  errorTraces: number
+  errorRate: number
+  serviceCount: number
+  sourceCount: number
+  p50DurationNs: number
+  p95DurationNs: number
+  p99DurationNs: number
+  avgSpansPerTrace: number
+  previous: ApmOverviewPreviousStats
+}
+
+export interface ApmLatencyPoint {
+  timestamp: string
+  p50DurationNs: number
+  p95DurationNs: number
+  p99DurationNs: number
+}
+
+export interface ApmServiceHealthItem {
+  service: string
+  source: string
+  traceCount: number
+  errorCount: number
+  errorRate: number
+  p95DurationNs: number
+  avgSpansPerTrace: number
+}
+
+export interface ApmResourceHotspotItem {
+  service: string
+  resource: string
+  source: string
+  traceCount: number
+  errorCount: number
+  errorRate: number
+  p95DurationNs: number
+}
+
+export interface ApmFacetItem {
+  value: string
+  count: number
+}
+
+export interface ApmOverviewFacets {
+  services: ApmFacetItem[]
+  sources: ApmFacetItem[]
+  environments: ApmFacetItem[]
+}
+
+export interface ApmOverviewResponse {
+  stats: ApmOverviewStats
+  latencySeries: ApmLatencyPoint[]
+  serviceHealth: ApmServiceHealthItem[]
+  resourceHotspots: ApmResourceHotspotItem[]
+  errors: ApmErrorGroup[]
+  facets: ApmOverviewFacets
+}
+
 export interface ApmSpanResponse {
   spanId: string
   traceId: string

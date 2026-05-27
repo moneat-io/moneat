@@ -75,6 +75,9 @@ internal suspend fun purgeDatadogDemoData() {
     val tables =
         listOf(
             "apm_spans",
+            "apm_trace_summaries",
+            "apm_error_groups_hourly",
+            "apm_resource_stats_hourly",
             "trace_stats",
             "profiles",
             "infra_events",
@@ -86,7 +89,9 @@ internal suspend fun purgeDatadogDemoData() {
     for (table in tables) {
         suspendRunCatching {
             requireClickHouse2xx(
-                ClickHouseClient.execute("ALTER TABLE $table DELETE WHERE organization_id = $ORG1"),
+                ClickHouseClient.execute(
+                    "ALTER TABLE $table DELETE WHERE organization_id = $ORG1 SETTINGS mutations_sync = 2"
+                ),
                 "Purge Datadog $table"
             )
         }.onFailure { logger.warn { "Purge $table failed (non-fatal): ${it.message}" } }

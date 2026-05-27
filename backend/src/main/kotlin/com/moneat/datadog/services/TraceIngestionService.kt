@@ -29,7 +29,15 @@ import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_8
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_SHIFT
 import com.moneat.datadog.models.DdApmErrorGroup
 import com.moneat.datadog.models.DdApmErrorsResponse
+import com.moneat.datadog.models.DdApmFacetItem
+import com.moneat.datadog.models.DdApmLatencyPoint
+import com.moneat.datadog.models.DdApmOverviewFacets
+import com.moneat.datadog.models.DdApmOverviewPreviousStats
+import com.moneat.datadog.models.DdApmOverviewResponse
+import com.moneat.datadog.models.DdApmOverviewStats
+import com.moneat.datadog.models.DdApmResourceHotspotItem
 import com.moneat.datadog.models.DdApmServiceFacet
+import com.moneat.datadog.models.DdApmServiceHealthItem
 import com.moneat.datadog.models.DdResourceStatsItem
 import com.moneat.datadog.models.DdResourceStatsResponse
 import com.moneat.datadog.models.DdServiceMapEntry
@@ -69,8 +77,12 @@ private const val APM_SERVICE_EDGES_TABLE = "apm_service_edges_hourly"
 private const val MAX_META_VALUE_LENGTH = 5000
 private const val DEFAULT_QUERY_LIMIT = 50
 private const val MAX_QUERY_LIMIT = 200
+private const val OVERVIEW_LIMIT = 5
 private const val HEX_RADIX = 16
 private const val NANOSECONDS_PER_MILLISECOND = 1_000_000L
+private const val STATUS_ERROR = "error"
+private const val STATUS_OK = "ok"
+private const val MAX_FILTER_FACETS = 100
 private const val PROTO_FIELD_9 = 9
 private const val PROTO_FIELD_10 = 10
 private const val PROTO_FIELD_11 = 11
@@ -78,6 +90,28 @@ private const val PROTO_FIELD_12 = 12
 private const val DATADOG_SOURCE = "datadog"
 
 val defaultApmQueryTimeRange = DdApmQueryTimeRange(24, DdApmQueryTimeUnit.HOUR)
+
+data class DdResourceStatsQuery(
+    val service: String? = null,
+    val env: String? = null,
+    val source: String? = null,
+    val status: String? = null,
+    val search: String? = null,
+    val limit: Int = DEFAULT_QUERY_LIMIT,
+    val offset: Int = 0,
+    val timeRange: DdApmQueryTimeRange = defaultApmQueryTimeRange,
+)
+
+data class DdTraceListQuery(
+    val service: String? = null,
+    val env: String? = null,
+    val source: String? = null,
+    val status: String? = null,
+    val search: String? = null,
+    val limit: Int = DEFAULT_QUERY_LIMIT,
+    val offset: Int = 0,
+    val timeRange: DdApmQueryTimeRange = defaultApmQueryTimeRange,
+)
 
 enum class DdApmQueryTimeUnit(val sql: String) {
     HOUR("HOUR"),
@@ -93,6 +127,10 @@ data class DdApmQueryTimeRange(
 
     fun bucketStartClause(column: String = "bucket_start"): String =
         "$column >= toStartOfHour(now() - INTERVAL $amount ${unit.sql})"
+
+    fun previousBucketStartClause(column: String = "bucket_start"): String =
+        "$column >= toStartOfHour(now() - INTERVAL ${amount * 2} ${unit.sql}) " +
+            "AND $column < toStartOfHour(now() - INTERVAL $amount ${unit.sql})"
 }
 
 object TraceIngestionService {
@@ -287,35 +325,81 @@ object TraceIngestionService {
 
     // --- Dashboard query methods ---
 
-    suspend fun listTraces(
+    private fun traceSummarySubquery(
         organizationId: Int,
-        service: String?,
-        env: String?,
-        limit: Int,
-        offset: Int,
-        timeRange: DdApmQueryTimeRange = defaultApmQueryTimeRange,
-        parentSpan: ISpan? = null,
-    ): DdTraceListResponse {
+        query: DdTraceListQuery,
+        previousWindow: Boolean = false,
+    ): String {
         val filters = mutableListOf(
             ClickHouseQueryUtils.orgIdClause(organizationId.toLong()),
-            timeRange.bucketStartClause()
+            if (previousWindow) {
+                query.timeRange.previousBucketStartClause()
+            } else {
+                query.timeRange.bucketStartClause()
+            }
         )
-        service?.let {
+        query.service?.let {
             filters.add("service = '${escapeSql(it)}'")
         }
-        env?.let {
+        query.env?.let {
             filters.add("env = '${escapeSql(it)}'")
         }
-        val whereClause = filters.joinToString(" AND ")
+
+        val havingFilters = mutableListOf<String>()
+        query.source?.let {
+            havingFilters.add("source = '${escapeSql(it)}'")
+        }
+        when (query.status) {
+            STATUS_ERROR -> havingFilters.add("has_error = 1")
+            STATUS_OK -> havingFilters.add("has_error = 0")
+        }
+        query.search?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            havingFilters.add(traceSearchClause(it))
+        }
+        val havingClause = if (havingFilters.isEmpty()) {
+            ""
+        } else {
+            "HAVING ${havingFilters.joinToString(" AND ")}"
+        }
+
+        return """
+            SELECT
+                trace_id_canonical,
+                argMinMerge(root_service_state) as root_service,
+                argMinMerge(root_resource_state) as root_resource,
+                argMinMerge(root_name_state) as root_name,
+                any(env) as env,
+                toUInt32(sumMerge(span_count_state)) as span_count,
+                toUInt64(greatest(
+                    0,
+                    toUnixTimestamp64Nano(maxMerge(trace_end_state)) -
+                        toUnixTimestamp64Nano(minMerge(trace_start_state))
+                )) as duration_ns,
+                minMerge(trace_start_state) as trace_start,
+                toInt64(toUnixTimestamp64Nano(minMerge(trace_start_state))) as start_ns,
+                toUInt8(sumMerge(error_count_state) > 0) as has_error,
+                toUInt64(sumMerge(error_count_state)) as error_count,
+                argMinMerge(source_state) as source
+            FROM `$clickhouseDb`.$APM_TRACE_SUMMARIES_TABLE
+            WHERE ${filters.joinToString(" AND ")}
+            GROUP BY trace_id_canonical
+            $havingClause
+        """.trimIndent()
+    }
+
+    suspend fun listTraces(
+        organizationId: Int,
+        query: DdTraceListQuery,
+        parentSpan: ISpan? = null,
+    ): DdTraceListResponse {
+        val subquery = traceSummarySubquery(
+            organizationId = organizationId,
+            query = query,
+        )
 
         val countQuery = """
             SELECT count()
-            FROM (
-                SELECT 1
-                FROM `$clickhouseDb`.$APM_TRACE_SUMMARIES_TABLE
-                WHERE $whereClause
-                GROUP BY trace_id_canonical
-            )
+            FROM ($subquery)
         """.trimIndent()
         val countResult = executeDashboardQuery(
             countQuery,
@@ -327,23 +411,17 @@ object TraceIngestionService {
         val query = """
             SELECT
                 trace_id_canonical,
-                argMinMerge(root_service_state) as root_service,
-                argMinMerge(root_resource_state) as root_resource,
-                argMinMerge(root_name_state) as root_name,
-                toUInt32(sumMerge(span_count_state)) as span_count,
-                toUInt64(greatest(
-                    0,
-                    toUnixTimestamp64Nano(maxMerge(trace_end_state)) -
-                        toUnixTimestamp64Nano(minMerge(trace_start_state))
-                )) as duration_ns,
-                toInt64(toUnixTimestamp64Nano(minMerge(trace_start_state))) as start_ns,
-                toUInt8(sumMerge(error_count_state) > 0) as has_error,
-                argMinMerge(source_state) as source
-            FROM `$clickhouseDb`.$APM_TRACE_SUMMARIES_TABLE
-            WHERE $whereClause
-            GROUP BY trace_id_canonical
+                root_service,
+                root_resource,
+                root_name,
+                span_count,
+                duration_ns,
+                start_ns,
+                has_error,
+                source
+            FROM ($subquery)
             ORDER BY start_ns DESC
-            LIMIT $limit OFFSET $offset
+            LIMIT ${query.limit} OFFSET ${query.offset}
             FORMAT JSONEachRow
         """.trimIndent()
 
@@ -382,6 +460,306 @@ object TraceIngestionService {
 
         return DdTraceListResponse(traces = traces, totalCount = totalCount)
     }
+
+    suspend fun getApmOverview(
+        organizationId: Int,
+        query: DdTraceListQuery,
+        parentSpan: ISpan? = null,
+    ): DdApmOverviewResponse {
+        val currentSubquery = traceSummarySubquery(
+            organizationId = organizationId,
+            query = query,
+        )
+        val previousSubquery = traceSummarySubquery(
+            organizationId = organizationId,
+            query = query,
+            previousWindow = true,
+        )
+        val previousStats = getOverviewPreviousStats(previousSubquery, parentSpan)
+
+        return DdApmOverviewResponse(
+            stats = getOverviewStats(currentSubquery, previousStats, parentSpan),
+            latencySeries = getLatencySeries(currentSubquery, parentSpan),
+            serviceHealth = getServiceHealth(currentSubquery, parentSpan),
+            resourceHotspots = getResourceHotspots(currentSubquery, parentSpan),
+            errors = getOverviewErrors(currentSubquery, parentSpan),
+            facets = getOverviewFacets(currentSubquery, parentSpan),
+        )
+    }
+
+    private suspend fun getOverviewStats(
+        subquery: String,
+        previousStats: DdApmOverviewPreviousStats,
+        parentSpan: ISpan?,
+    ): DdApmOverviewStats {
+        val query = """
+            SELECT
+                count() as total_traces,
+                sum(has_error) as error_traces,
+                if(count() > 0, sum(has_error) / count(), 0) as error_rate,
+                uniqExact(root_service) as service_count,
+                uniqExact(source) as source_count,
+                if(count() > 0, toUInt64(quantile(0.50)(duration_ns)), 0) as p50_duration_ns,
+                if(count() > 0, toUInt64(quantile(0.95)(duration_ns)), 0) as p95_duration_ns,
+                if(count() > 0, toUInt64(quantile(0.99)(duration_ns)), 0) as p99_duration_ns,
+                avg(span_count) as avg_spans_per_trace
+            FROM ($subquery)
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        val obj = firstJsonRow(query, parentSpan) ?: return emptyOverviewStats(previousStats)
+        return DdApmOverviewStats(
+            totalTraces = obj.longValue("total_traces"),
+            errorTraces = obj.longValue("error_traces"),
+            errorRate = obj.doubleValue("error_rate"),
+            serviceCount = obj.longValue("service_count"),
+            sourceCount = obj.longValue("source_count"),
+            p50DurationNs = obj.longValue("p50_duration_ns"),
+            p95DurationNs = obj.longValue("p95_duration_ns"),
+            p99DurationNs = obj.longValue("p99_duration_ns"),
+            avgSpansPerTrace = obj.doubleValue("avg_spans_per_trace"),
+            previous = previousStats,
+        )
+    }
+
+    private suspend fun getOverviewPreviousStats(
+        subquery: String,
+        parentSpan: ISpan?,
+    ): DdApmOverviewPreviousStats {
+        val query = """
+            SELECT
+                count() as total_traces,
+                if(count() > 0, sum(has_error) / count(), 0) as error_rate,
+                if(count() > 0, toUInt64(quantile(0.50)(duration_ns)), 0) as p50_duration_ns,
+                if(count() > 0, toUInt64(quantile(0.95)(duration_ns)), 0) as p95_duration_ns,
+                if(count() > 0, toUInt64(quantile(0.99)(duration_ns)), 0) as p99_duration_ns,
+                avg(span_count) as avg_spans_per_trace
+            FROM ($subquery)
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        val obj = firstJsonRow(query, parentSpan) ?: return emptyOverviewPreviousStats()
+        return DdApmOverviewPreviousStats(
+            totalTraces = obj.longValue("total_traces"),
+            errorRate = obj.doubleValue("error_rate"),
+            p50DurationNs = obj.longValue("p50_duration_ns"),
+            p95DurationNs = obj.longValue("p95_duration_ns"),
+            p99DurationNs = obj.longValue("p99_duration_ns"),
+            avgSpansPerTrace = obj.doubleValue("avg_spans_per_trace"),
+        )
+    }
+
+    private suspend fun getLatencySeries(
+        subquery: String,
+        parentSpan: ISpan?,
+    ): List<DdApmLatencyPoint> {
+        val query = """
+            SELECT
+                formatDateTime(toStartOfHour(trace_start), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as timestamp,
+                toUInt64(quantile(0.50)(duration_ns)) as p50_duration_ns,
+                toUInt64(quantile(0.95)(duration_ns)) as p95_duration_ns,
+                toUInt64(quantile(0.99)(duration_ns)) as p99_duration_ns
+            FROM ($subquery)
+            GROUP BY timestamp
+            ORDER BY timestamp
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return jsonRows(query, parentSpan).map { obj ->
+            DdApmLatencyPoint(
+                timestamp = obj.stringValue("timestamp"),
+                p50DurationNs = obj.longValue("p50_duration_ns"),
+                p95DurationNs = obj.longValue("p95_duration_ns"),
+                p99DurationNs = obj.longValue("p99_duration_ns"),
+            )
+        }
+    }
+
+    private suspend fun getServiceHealth(
+        subquery: String,
+        parentSpan: ISpan?,
+    ): List<DdApmServiceHealthItem> {
+        val query = """
+            SELECT
+                root_service as service,
+                argMax(source, start_ns) as source,
+                count() as trace_count,
+                sum(has_error) as error_count,
+                if(count() > 0, sum(has_error) / count(), 0) as error_rate,
+                toUInt64(quantile(0.95)(duration_ns)) as p95_duration_ns,
+                avg(span_count) as avg_spans_per_trace
+            FROM ($subquery)
+            GROUP BY root_service
+            ORDER BY error_rate DESC, p95_duration_ns DESC, trace_count DESC
+            LIMIT $OVERVIEW_LIMIT
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return jsonRows(query, parentSpan).map { obj ->
+            DdApmServiceHealthItem(
+                service = obj.stringValue("service"),
+                source = obj.stringValue("source"),
+                traceCount = obj.longValue("trace_count"),
+                errorCount = obj.longValue("error_count"),
+                errorRate = obj.doubleValue("error_rate"),
+                p95DurationNs = obj.longValue("p95_duration_ns"),
+                avgSpansPerTrace = obj.doubleValue("avg_spans_per_trace"),
+            )
+        }
+    }
+
+    private suspend fun getResourceHotspots(
+        subquery: String,
+        parentSpan: ISpan?,
+    ): List<DdApmResourceHotspotItem> {
+        val query = """
+            SELECT
+                root_service as service,
+                root_resource as resource,
+                argMax(source, start_ns) as source,
+                count() as trace_count,
+                sum(has_error) as error_count,
+                if(count() > 0, sum(has_error) / count(), 0) as error_rate,
+                toUInt64(quantile(0.95)(duration_ns)) as p95_duration_ns
+            FROM ($subquery)
+            GROUP BY root_service, root_resource
+            ORDER BY error_rate DESC, error_count DESC, p95_duration_ns DESC
+            LIMIT $OVERVIEW_LIMIT
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return jsonRows(query, parentSpan).map { obj ->
+            DdApmResourceHotspotItem(
+                service = obj.stringValue("service"),
+                resource = obj.stringValue("resource"),
+                source = obj.stringValue("source"),
+                traceCount = obj.longValue("trace_count"),
+                errorCount = obj.longValue("error_count"),
+                errorRate = obj.doubleValue("error_rate"),
+                p95DurationNs = obj.longValue("p95_duration_ns"),
+            )
+        }
+    }
+
+    private suspend fun getOverviewErrors(
+        subquery: String,
+        parentSpan: ISpan?,
+    ): List<DdApmErrorGroup> {
+        val query = """
+            SELECT
+                root_service as service,
+                root_resource as resource,
+                sum(error_count) as error_count,
+                formatDateTime(max(trace_start), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as last_seen,
+                argMax(trace_id_canonical, start_ns) as sample_trace_id
+            FROM ($subquery)
+            WHERE has_error = 1
+            GROUP BY root_service, root_resource
+            ORDER BY error_count DESC, last_seen DESC
+            LIMIT $OVERVIEW_LIMIT
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return jsonRows(query, parentSpan).mapIndexed { index, obj ->
+            val service = obj.stringValue("service")
+            val resource = obj.stringValue("resource")
+            DdApmErrorGroup(
+                id = "$service-$resource-$index",
+                service = service,
+                resource = resource,
+                errorMessage = "Trace contains errored spans",
+                errorType = "trace_error",
+                count = obj.longValue("error_count"),
+                lastSeen = obj.stringValue("last_seen"),
+                traceId = obj.stringValue("sample_trace_id"),
+            )
+        }
+    }
+
+    private suspend fun getOverviewFacets(
+        subquery: String,
+        parentSpan: ISpan?,
+    ): DdApmOverviewFacets =
+        DdApmOverviewFacets(
+            services = getFacetItems(subquery, "root_service", parentSpan),
+            sources = getFacetItems(subquery, "source", parentSpan),
+            environments = getFacetItems(subquery, "env", parentSpan),
+        )
+
+    private suspend fun getFacetItems(
+        subquery: String,
+        field: String,
+        parentSpan: ISpan?,
+    ): List<DdApmFacetItem> {
+        val query = """
+            SELECT
+                $field as value,
+                count() as count
+            FROM ($subquery)
+            WHERE $field != ''
+            GROUP BY value
+            ORDER BY count DESC, value ASC
+            LIMIT $MAX_FILTER_FACETS
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return jsonRows(query, parentSpan).map { obj ->
+            DdApmFacetItem(
+                value = obj.stringValue("value"),
+                count = obj.longValue("count"),
+            )
+        }
+    }
+
+    private suspend fun firstJsonRow(
+        query: String,
+        parentSpan: ISpan?,
+    ): JsonObject? =
+        jsonRows(query, parentSpan).firstOrNull()
+
+    private suspend fun jsonRows(
+        query: String,
+        parentSpan: ISpan?,
+    ): List<JsonObject> {
+        val result = executeDashboardQuery(query, "", parentSpan)
+        if (result.isBlank()) return emptyList()
+        return result.trim().lines()
+            .filter { it.isNotBlank() }
+            .map { line -> json.parseToJsonElement(line).jsonObject }
+    }
+
+    private fun emptyOverviewStats(previousStats: DdApmOverviewPreviousStats): DdApmOverviewStats =
+        DdApmOverviewStats(
+            totalTraces = 0,
+            errorTraces = 0,
+            errorRate = 0.0,
+            serviceCount = 0,
+            sourceCount = 0,
+            p50DurationNs = 0,
+            p95DurationNs = 0,
+            p99DurationNs = 0,
+            avgSpansPerTrace = 0.0,
+            previous = previousStats,
+        )
+
+    private fun emptyOverviewPreviousStats(): DdApmOverviewPreviousStats =
+        DdApmOverviewPreviousStats(
+            totalTraces = 0,
+            errorRate = 0.0,
+            p50DurationNs = 0,
+            p95DurationNs = 0,
+            p99DurationNs = 0,
+            avgSpansPerTrace = 0.0,
+        )
+
+    private fun JsonObject.longValue(key: String): Long =
+        this[key]?.jsonPrimitive?.content?.toDoubleOrNull()?.toLong() ?: 0L
+
+    private fun JsonObject.doubleValue(key: String): Double =
+        this[key]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0
+
+    private fun JsonObject.stringValue(key: String): String =
+        this[key]?.jsonPrimitive?.content ?: ""
 
     suspend fun getTraceDetail(
         organizationId: Int,
@@ -665,13 +1043,33 @@ object TraceIngestionService {
         offset: Int,
         timeRange: DdApmQueryTimeRange = defaultApmQueryTimeRange,
         parentSpan: ISpan? = null,
+    ): DdResourceStatsResponse =
+        listResourceStats(
+            organizationId = organizationId,
+            query = DdResourceStatsQuery(
+                service = service,
+                limit = limit,
+                offset = offset,
+                timeRange = timeRange,
+            ),
+            parentSpan = parentSpan,
+        )
+
+    suspend fun listResourceStats(
+        organizationId: Int,
+        query: DdResourceStatsQuery,
+        parentSpan: ISpan? = null,
     ): DdResourceStatsResponse {
-        val effectiveLimit = limit.coerceAtMost(MAX_QUERY_LIMIT)
+        if (query.requiresTraceSummaryResources()) {
+            return listTraceSummaryResourceStats(organizationId, query, parentSpan)
+        }
+
+        val effectiveLimit = query.limit.coerceAtMost(MAX_QUERY_LIMIT)
         val filters = mutableListOf(
             ClickHouseQueryUtils.orgIdClause(organizationId.toLong()),
-            timeRange.bucketStartClause()
+            query.timeRange.bucketStartClause()
         )
-        service?.let { filters.add("service = '${escapeSql(it)}'") }
+        query.service?.let { filters.add("service = '${escapeSql(it)}'") }
         val whereClause = filters.joinToString(" AND ")
 
         val countQuery = """
@@ -690,7 +1088,7 @@ object TraceIngestionService {
         )
         val totalCount = countResult.trim().toLongOrNull() ?: 0
 
-        val query = """
+        val querySql = """
             SELECT
                 service,
                 resource,
@@ -704,11 +1102,11 @@ object TraceIngestionService {
             WHERE $whereClause
             GROUP BY service, resource, name, type
             ORDER BY total_hits DESC
-            LIMIT $effectiveLimit OFFSET $offset
+            LIMIT $effectiveLimit OFFSET ${query.offset}
             FORMAT JSONEachRow
         """.trimIndent()
 
-        val result = executeDashboardQuery(query, "", parentSpan)
+        val result = executeDashboardQuery(querySql, "", parentSpan)
         val resources = if (result.isBlank()) {
             emptyList()
         } else {
@@ -751,6 +1149,95 @@ object TraceIngestionService {
         )
     }
 
+    private suspend fun listTraceSummaryResourceStats(
+        organizationId: Int,
+        query: DdResourceStatsQuery,
+        parentSpan: ISpan?,
+    ): DdResourceStatsResponse {
+        val subquery = traceSummarySubquery(
+            organizationId = organizationId,
+            query = DdTraceListQuery(
+                service = query.service,
+                env = query.env,
+                source = query.source,
+                status = query.status.takeUnless { it == STATUS_ERROR },
+                search = query.search,
+                timeRange = query.timeRange,
+            ),
+        )
+        val effectiveLimit = query.limit.coerceAtMost(MAX_QUERY_LIMIT)
+        val groupHavingClause = if (query.status == STATUS_ERROR) {
+            "HAVING total_errors > 0"
+        } else {
+            ""
+        }
+        val groupedResources = """
+            SELECT
+                root_service as service,
+                root_resource as resource,
+                argMax(root_name, start_ns) as name,
+                '' as type,
+                count() as total_hits,
+                sum(has_error) as total_errors,
+                toUInt64(avg(duration_ns)) as avg_duration_ns,
+                if(count() > 0, sum(has_error) / count(), 0) as error_rate
+            FROM ($subquery)
+            GROUP BY root_service, root_resource
+            $groupHavingClause
+        """.trimIndent()
+
+        val countQuery = """
+            SELECT count()
+            FROM ($groupedResources)
+        """.trimIndent()
+        val countResult = executeDashboardQuery(
+            countQuery,
+            "TabSeparated",
+            parentSpan,
+        )
+        val totalCount = countResult.trim().toLongOrNull() ?: 0
+
+        val querySql = """
+            SELECT
+                service,
+                resource,
+                name,
+                type,
+                total_hits,
+                total_errors,
+                avg_duration_ns,
+                error_rate
+            FROM ($groupedResources)
+            ORDER BY total_errors DESC, error_rate DESC, avg_duration_ns DESC, total_hits DESC
+            LIMIT $effectiveLimit OFFSET ${query.offset}
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        val resources = jsonRows(querySql, parentSpan).map { obj ->
+            DdResourceStatsItem(
+                service = obj.stringValue("service"),
+                resource = obj.stringValue("resource"),
+                name = obj.stringValue("name"),
+                type = obj.stringValue("type"),
+                totalHits = obj.longValue("total_hits"),
+                totalErrors = obj.longValue("total_errors"),
+                avgDurationNs = obj.longValue("avg_duration_ns"),
+                errorRate = obj.doubleValue("error_rate"),
+            )
+        }
+
+        return DdResourceStatsResponse(
+            resources = resources,
+            totalCount = totalCount,
+        )
+    }
+
+    private fun DdResourceStatsQuery.requiresTraceSummaryResources(): Boolean =
+        !env.isNullOrBlank() ||
+            !source.isNullOrBlank() ||
+            !status.isNullOrBlank() ||
+            !search.isNullOrBlank()
+
     // --- Internal helpers ---
     private suspend fun executeDashboardQuery(
         query: String,
@@ -762,6 +1249,18 @@ object TraceIngestionService {
         } else {
             ClickHouseClient.executeWithFormat(query, format, parentSpan)
         }
+
+    private fun traceSearchClause(search: String): String {
+        val escapedSearch = escapeSql(search)
+        return """
+            (
+                positionCaseInsensitive(trace_id_canonical, '$escapedSearch') > 0 OR
+                positionCaseInsensitive(root_service, '$escapedSearch') > 0 OR
+                positionCaseInsensitive(root_resource, '$escapedSearch') > 0 OR
+                positionCaseInsensitive(root_name, '$escapedSearch') > 0
+            )
+        """.trimIndent()
+    }
 
     internal fun parseTraceId(traceId: String): ULong? =
         traceId.toULongOrNull()
