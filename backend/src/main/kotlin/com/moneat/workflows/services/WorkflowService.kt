@@ -103,6 +103,9 @@ private const val FORMAT_PARAM = "format"
 private const val ALERT_LIFECYCLE_FORMAT = "alert_lifecycle"
 private const val ALERT_SOURCE_TEMPLATE_LINE = "Source: {{alert.source}}\n"
 private const val ALERT_URL_TEMPLATE = "{{alert.url}}"
+private const val ALERT_PRIORITY_TEMPLATE_LINE = "Priority: {{alert.priority}}\n"
+private const val ALERT_DESCRIPTION_TEMPLATE_BLOCK = "{{alert.description}}\n\n"
+private const val DEFAULT_WORKFLOW_TITLE = "Moneat workflow"
 private const val DEFAULT_WORKFLOW_READ_ONLY_MESSAGE = "Default workflows cannot be modified"
 private const val ALERT_DISPLAY_TITLE_REFERENCE = "alert.display_title"
 private const val ALERT_DASHBOARD_TITLE_REFERENCE = "alert.dashboard.title"
@@ -570,7 +573,7 @@ class WorkflowService(
                             skipIfUnconfigured
                         )
                     } else {
-                        val title = interpolate(step.params["title"] ?: "Moneat workflow", scope)
+                        val title = interpolate(step.params["title"] ?: DEFAULT_WORKFLOW_TITLE, scope)
                         val message = interpolate(step.params["message"].orEmpty(), scope)
                         discordService.sendWorkflowMessage(organizationId, title, message, skipIfUnconfigured)
                     }
@@ -666,7 +669,7 @@ class WorkflowService(
         } else {
             discordService.sendWorkflowMessage(
                 organizationId,
-                interpolate(step.params["title"] ?: "Moneat workflow", scope),
+                interpolate(step.params["title"] ?: DEFAULT_WORKFLOW_TITLE, scope),
                 interpolate(step.params["message"].orEmpty(), scope),
                 skipIfUnconfigured = false
             )
@@ -756,7 +759,7 @@ class WorkflowService(
                 WorkflowStepPreview(
                     step = step.name,
                     channel = SLACK_CHANNEL,
-                    title = "Moneat workflow",
+                    title = DEFAULT_WORKFLOW_TITLE,
                     body = body,
                     textBody = body,
                     color = ALERT_COLOR_PURPLE,
@@ -764,7 +767,7 @@ class WorkflowService(
                 )
             }
             DISCORD_STEP -> {
-                val title = interpolate(step.params["title"] ?: "Moneat workflow", scope)
+                val title = interpolate(step.params["title"] ?: DEFAULT_WORKFLOW_TITLE, scope)
                 val body = interpolate(step.params["message"].orEmpty(), scope)
                 WorkflowStepPreview(
                     step = step.name,
@@ -773,7 +776,7 @@ class WorkflowService(
                     body = body,
                     textBody = body,
                     color = ALERT_COLOR_PURPLE,
-                    footer = "Moneat workflow",
+                    footer = DEFAULT_WORKFLOW_TITLE,
                     fallbackText = "$title: $body"
                 )
             }
@@ -948,8 +951,8 @@ class WorkflowService(
 
     private fun alertEmailEmoji(preview: WorkflowStepPreview): String {
         val status = previewFieldValue(preview, "Status")
-        if (status.equals("Resolved", ignoreCase = true)) return "✅"
-        return if (preview.color.equals(ALERT_COLOR_RED, ignoreCase = true)) "🔴" else "⚠️"
+        if (status == "Resolved") return "✅"
+        return if (preview.color == ALERT_COLOR_RED) "🔴" else "⚠️"
     }
 
     private fun previewFieldValue(
@@ -1419,8 +1422,8 @@ class WorkflowService(
                             params = mapOf(
                                 FORMAT_PARAM to ALERT_LIFECYCLE_FORMAT,
                                 "subject" to "[Moneat] {{alert.priority}} {{alert.display_title}}",
-                                "body" to "{{alert.display_title}}\n\n{{alert.description}}\n\n" +
-                                    "Priority: {{alert.priority}}\n" +
+                                "body" to "{{alert.display_title}}\n\n" + ALERT_DESCRIPTION_TEMPLATE_BLOCK +
+                                    ALERT_PRIORITY_TEMPLATE_LINE +
                                     ALERT_SOURCE_TEMPLATE_LINE +
                                     "Status: {{alert.status}}\n\n" +
                                     "View: {{alert.url}}"
@@ -1443,8 +1446,8 @@ class WorkflowService(
                             params = mapOf(
                                 FORMAT_PARAM to ALERT_LIFECYCLE_FORMAT,
                                 "title" to "{{alert.priority}} {{alert.display_title}}",
-                                "message" to "{{alert.description}}\n\n" +
-                                    "Priority: {{alert.priority}}\n" +
+                                "message" to ALERT_DESCRIPTION_TEMPLATE_BLOCK +
+                                    ALERT_PRIORITY_TEMPLATE_LINE +
                                     ALERT_SOURCE_TEMPLATE_LINE +
                                     "Status: {{alert.status}}\n" +
                                     ALERT_URL_TEMPLATE,
@@ -1464,8 +1467,8 @@ class WorkflowService(
                             params = mapOf(
                                 FORMAT_PARAM to ALERT_LIFECYCLE_FORMAT,
                                 "subject" to "[Moneat] {{alert.priority}} Resolved: {{alert.display_title}}",
-                                "body" to "{{alert.display_title}}\n\n{{alert.description}}\n\n" +
-                                    "Priority: {{alert.priority}}\n" +
+                                "body" to "{{alert.display_title}}\n\n" + ALERT_DESCRIPTION_TEMPLATE_BLOCK +
+                                    ALERT_PRIORITY_TEMPLATE_LINE +
                                     ALERT_SOURCE_TEMPLATE_LINE +
                                     "Status: {{alert.status}}\n\n" +
                                     "View: {{alert.url}}"
@@ -1476,7 +1479,7 @@ class WorkflowService(
                             params = mapOf(
                                 FORMAT_PARAM to ALERT_LIFECYCLE_FORMAT,
                                 "message" to "*{{alert.priority}} Resolved: {{alert.display_title}}*\n" +
-                                    "{{alert.description}}\n\n" +
+                                    ALERT_DESCRIPTION_TEMPLATE_BLOCK +
                                     "*Priority:* {{alert.priority}}\n" +
                                     "*Source:* {{alert.source}}\n" +
                                     "*Status:* {{alert.status}}\n" +
@@ -1489,8 +1492,8 @@ class WorkflowService(
                             params = mapOf(
                                 FORMAT_PARAM to ALERT_LIFECYCLE_FORMAT,
                                 "title" to "{{alert.priority}} Resolved: {{alert.display_title}}",
-                                "message" to "{{alert.description}}\n\n" +
-                                    "Priority: {{alert.priority}}\n" +
+                                "message" to ALERT_DESCRIPTION_TEMPLATE_BLOCK +
+                                    ALERT_PRIORITY_TEMPLATE_LINE +
                                     ALERT_SOURCE_TEMPLATE_LINE +
                                     "Status: {{alert.status}}\n" +
                                     ALERT_URL_TEMPLATE,

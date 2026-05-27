@@ -604,7 +604,7 @@ class DiscordService(
     private fun discordWorkflowAlertHeaderText(preview: WorkflowStepPreview): String {
         val emoji =
             when {
-                discordWorkflowAlertFieldValue(preview, "Status").equals("Resolved", ignoreCase = true) -> "✅"
+                discordWorkflowAlertFieldValue(preview, "Status") == "Resolved" -> "✅"
                 parseHexColor(preview.color) == DISCORD_COLOR_RED -> "🔴"
                 else -> "⚠️"
             }

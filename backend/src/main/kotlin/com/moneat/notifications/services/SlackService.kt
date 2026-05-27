@@ -50,6 +50,9 @@ import java.util.Locale
 import java.util.UUID
 
 private const val SLACK_CHANNEL_FETCH_LIMIT = 200
+private const val SLACK_COLOR_RED = "#E01E5A"
+private const val SLACK_COLOR_GREEN = "#2EB67D"
+private const val SLACK_COLOR_YELLOW = "#ECB22E"
 
 internal fun encodeSlackIssueIdPathSegment(value: String): String =
     URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")
@@ -312,7 +315,7 @@ class SlackService {
         val attachments =
             listOf(
                 SlackAttachment(
-                    color = "#ECB22E", // Warning yellow
+                    color = SLACK_COLOR_YELLOW,
                     blocks = attachmentBlocks,
                     fallback = "⚠️ Host Alert: $hostName"
                 )
@@ -425,8 +428,8 @@ class SlackService {
     private fun workflowAlertHeaderText(preview: WorkflowStepPreview): String {
         val emoji =
             when {
-                workflowAlertFieldValue(preview, "Status").equals("Resolved", ignoreCase = true) -> "✅"
-                preview.color.equals("#E01E5A", ignoreCase = true) -> "🔴"
+                workflowAlertFieldValue(preview, "Status") == "Resolved" -> "✅"
+                preview.color == SLACK_COLOR_RED -> "🔴"
                 else -> "⚠️"
             }
         return listOf(emoji, preview.title)
@@ -491,7 +494,7 @@ class SlackService {
         val attachments =
             listOf(
                 SlackAttachment(
-                    color = "#E01E5A", // Error red
+                    color = SLACK_COLOR_RED,
                     blocks = attachmentBlocks,
                     fallback = "🔴 Host Down: $hostName"
                 )
@@ -555,7 +558,7 @@ class SlackService {
         val attachments =
             listOf(
                 SlackAttachment(
-                    color = "#2EB67D", // Success green
+                    color = SLACK_COLOR_GREEN,
                     blocks = attachmentBlocks,
                     fallback = "🟢 Host Recovered: $hostName"
                 )
@@ -586,7 +589,7 @@ class SlackService {
         val isDown = newStatus.equals("down", ignoreCase = true)
         val emoji = if (isDown) "🔴" else "🟢"
         val headerText = if (isDown) "Monitor Down" else "Monitor Recovered"
-        val color = if (isDown) "#E01E5A" else "#2EB67D"
+        val color = if (isDown) SLACK_COLOR_RED else SLACK_COLOR_GREEN
 
         val mainBlocks =
             listOf(
@@ -661,10 +664,10 @@ class SlackService {
 
         val emoji = if (severity == "CRITICAL" || severity == "HIGH") "🔴" else "⚠️"
         val color = when (severity) {
-            "CRITICAL" -> "#E01E5A"
-            "HIGH" -> "#E01E5A"
-            "MEDIUM" -> "#ECB22E"
-            else -> "#ECB22E"
+            "CRITICAL" -> SLACK_COLOR_RED
+            "HIGH" -> SLACK_COLOR_RED
+            "MEDIUM" -> SLACK_COLOR_YELLOW
+            else -> SLACK_COLOR_YELLOW
         }
 
         val mainBlocks = listOf(
@@ -741,16 +744,10 @@ class SlackService {
 
         val color =
             when (levelLower) {
-                "error" -> "#E01E5A"
-
-                // Slack red
-                "warning" -> "#ECB22E"
-
-                // Slack warning yellow
-                "info" -> "#2EB67D"
-
-                // Slack green
-                else -> "#ECB22E"
+                "error" -> SLACK_COLOR_RED
+                "warning" -> SLACK_COLOR_YELLOW
+                "info" -> SLACK_COLOR_GREEN
+                else -> SLACK_COLOR_YELLOW
             }
 
         // Header block
