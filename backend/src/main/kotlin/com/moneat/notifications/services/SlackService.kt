@@ -23,6 +23,7 @@ import java.nio.charset.StandardCharsets
 
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrganizationIntegrations
+import com.moneat.workflows.models.WorkflowStepPreview
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpTimeout
@@ -49,6 +50,9 @@ import java.util.Locale
 import java.util.UUID
 
 private const val SLACK_CHANNEL_FETCH_LIMIT = 200
+private const val SLACK_COLOR_RED = "#E01E5A"
+private const val SLACK_COLOR_GREEN = "#2EB67D"
+private const val SLACK_COLOR_YELLOW = "#ECB22E"
 
 internal fun encodeSlackIssueIdPathSegment(value: String): String =
     URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")
@@ -301,7 +305,7 @@ class SlackService {
                     listOf(
                         SlackElement(
                             type = "button",
-                            text = SlackText(type = "plain_text", text = "View Host"),
+                            text = SlackText(type = "plain_text", text = "View"),
                             url = "$baseUrl/monitoring/hosts/$hostId"
                         )
                     )
@@ -311,7 +315,7 @@ class SlackService {
         val attachments =
             listOf(
                 SlackAttachment(
-                    color = "#ECB22E", // Warning yellow
+                    color = SLACK_COLOR_YELLOW,
                     blocks = attachmentBlocks,
                     fallback = "⚠️ Host Alert: $hostName"
                 )
@@ -354,6 +358,94 @@ class SlackService {
         return success
     }
 
+    suspend fun sendWorkflowAlertMessage(
+        organizationId: Int,
+        preview: WorkflowStepPreview,
+        skipIfUnconfigured: Boolean = false
+    ): Boolean {
+        val config = getSlackConfig(organizationId) ?: return skipIfUnconfigured
+        val blocks =
+            listOf(
+                SlackBlock(
+                    type = "header",
+                    text = SlackText(type = "plain_text", text = workflowAlertHeaderText(preview), emoji = true)
+                )
+            )
+        val attachmentBlocks = buildWorkflowAlertSlackBlocks(preview)
+        val attachments =
+            listOf(
+                SlackAttachment(
+                    color = preview.color,
+                    blocks = attachmentBlocks,
+                    fallback = preview.fallbackText
+                )
+            )
+        val (success, _) =
+            sendMessage(
+                accessToken = config.accessToken,
+                channel = config.channelId,
+                blocks = blocks,
+                attachments = attachments,
+                fallbackText = preview.fallbackText
+            )
+        return success
+    }
+
+    private fun buildWorkflowAlertSlackBlocks(preview: WorkflowStepPreview): List<SlackBlock> {
+        val blocks = mutableListOf<SlackBlock>()
+        if (preview.body.isNotBlank()) {
+            blocks += SlackBlock(
+                type = "section",
+                text = SlackText(type = "mrkdwn", text = preview.body)
+            )
+        }
+        if (preview.fields.isNotEmpty()) {
+            blocks += SlackBlock(
+                type = "section",
+                fields = preview.fields.map { field ->
+                    SlackText(type = "mrkdwn", text = "*${field.label}:*\n${field.value}")
+                }
+            )
+        }
+        val ctaUrl = preview.ctaUrl
+        val ctaLabel = preview.ctaLabel
+        if (!ctaUrl.isNullOrBlank() && !ctaLabel.isNullOrBlank()) {
+            blocks += SlackBlock(
+                type = "actions",
+                elements =
+                listOf(
+                    SlackElement(
+                        type = "button",
+                        text = SlackText(type = "plain_text", text = ctaLabel),
+                        url = ctaUrl
+                    )
+                )
+            )
+        }
+        return blocks
+    }
+
+    private fun workflowAlertHeaderText(preview: WorkflowStepPreview): String {
+        val emoji =
+            when {
+                workflowAlertFieldValue(preview, "Status") == "Resolved" -> "✅"
+                preview.color == SLACK_COLOR_RED -> "🔴"
+                else -> "⚠️"
+            }
+        return listOf(emoji, preview.title)
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+    }
+
+    private fun workflowAlertFieldValue(
+        preview: WorkflowStepPreview,
+        label: String
+    ): String =
+        preview.fields
+            .firstOrNull { it.label.equals(label, ignoreCase = true) }
+            ?.value
+            .orEmpty()
+
     suspend fun sendHostDown(
         organizationId: Int,
         hostName: String,
@@ -392,7 +484,7 @@ class SlackService {
                     listOf(
                         SlackElement(
                             type = "button",
-                            text = SlackText(type = "plain_text", text = "View Host"),
+                            text = SlackText(type = "plain_text", text = "View"),
                             url = "$baseUrl/monitoring/hosts/$hostId"
                         )
                     )
@@ -402,7 +494,7 @@ class SlackService {
         val attachments =
             listOf(
                 SlackAttachment(
-                    color = "#E01E5A", // Error red
+                    color = SLACK_COLOR_RED,
                     blocks = attachmentBlocks,
                     fallback = "🔴 Host Down: $hostName"
                 )
@@ -456,7 +548,7 @@ class SlackService {
                     listOf(
                         SlackElement(
                             type = "button",
-                            text = SlackText(type = "plain_text", text = "View Host"),
+                            text = SlackText(type = "plain_text", text = "View"),
                             url = "$baseUrl/monitoring/hosts/$hostId"
                         )
                     )
@@ -466,7 +558,7 @@ class SlackService {
         val attachments =
             listOf(
                 SlackAttachment(
-                    color = "#2EB67D", // Success green
+                    color = SLACK_COLOR_GREEN,
                     blocks = attachmentBlocks,
                     fallback = "🟢 Host Recovered: $hostName"
                 )
@@ -497,7 +589,7 @@ class SlackService {
         val isDown = newStatus.equals("down", ignoreCase = true)
         val emoji = if (isDown) "🔴" else "🟢"
         val headerText = if (isDown) "Monitor Down" else "Monitor Recovered"
-        val color = if (isDown) "#E01E5A" else "#2EB67D"
+        val color = if (isDown) SLACK_COLOR_RED else SLACK_COLOR_GREEN
 
         val mainBlocks =
             listOf(
@@ -529,7 +621,7 @@ class SlackService {
                     listOf(
                         SlackElement(
                             type = "button",
-                            text = SlackText(type = "plain_text", text = "View Monitor"),
+                            text = SlackText(type = "plain_text", text = "View"),
                             url = "$baseUrl/uptime?monitor=$monitorId"
                         )
                     )
@@ -572,10 +664,10 @@ class SlackService {
 
         val emoji = if (severity == "CRITICAL" || severity == "HIGH") "🔴" else "⚠️"
         val color = when (severity) {
-            "CRITICAL" -> "#E01E5A"
-            "HIGH" -> "#E01E5A"
-            "MEDIUM" -> "#ECB22E"
-            else -> "#ECB22E"
+            "CRITICAL" -> SLACK_COLOR_RED
+            "HIGH" -> SLACK_COLOR_RED
+            "MEDIUM" -> SLACK_COLOR_YELLOW
+            else -> SLACK_COLOR_YELLOW
         }
 
         val mainBlocks = listOf(
@@ -600,7 +692,7 @@ class SlackService {
                 elements = listOf(
                     SlackElement(
                         type = "button",
-                        text = SlackText(type = "plain_text", text = "View Dashboard"),
+                        text = SlackText(type = "plain_text", text = "View"),
                         url = "$baseUrl/dashboards/$dashboardId"
                     )
                 )
@@ -652,16 +744,10 @@ class SlackService {
 
         val color =
             when (levelLower) {
-                "error" -> "#E01E5A"
-
-                // Slack red
-                "warning" -> "#ECB22E"
-
-                // Slack warning yellow
-                "info" -> "#2EB67D"
-
-                // Slack green
-                else -> "#ECB22E"
+                "error" -> SLACK_COLOR_RED
+                "warning" -> SLACK_COLOR_YELLOW
+                "info" -> SLACK_COLOR_GREEN
+                else -> SLACK_COLOR_YELLOW
             }
 
         // Header block
@@ -757,7 +843,7 @@ class SlackService {
                 listOf(
                     SlackElement(
                         type = "button",
-                        text = SlackText(type = "plain_text", text = "View Issue"),
+                        text = SlackText(type = "plain_text", text = "View"),
                         url = issueUrl
                     )
                 )

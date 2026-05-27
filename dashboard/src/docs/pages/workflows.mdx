@@ -117,12 +117,20 @@ Workflow step fields support interpolation with double braces. Use references fr
 
 ```text
 {{alert.title}}
-Severity: {{alert.severity}}
+{{alert.display_title}}
+Priority: {{alert.priority}}
 Source: {{alert.source}}
 View: {{alert.url}}
 ```
 
 When a workflow runs, Moneat replaces each variable with the matching alert value.
+`alert.severity` keeps the internal enum value, while `alert.priority` renders `[P0]` through `[P3]`.
+Dashboard alerts also expose `alert.dashboard.title`, `alert.widget.title`, `alert.condition`,
+`alert.threshold`, and `alert.current_value`.
+
+Use **Preview** in the workflow editor to render representative Slack, Discord, and email messages
+without sending them. Use the test action on an individual step to send that step's representative
+sample to its configured destination without creating a workflow run.
 
 ## Viewing runs
 
@@ -141,5 +149,4 @@ Use run history to confirm that a workflow matched the alerts you expected and t
 - Workflows run immediately after the trigger and conditions match.
 - Delay configuration is visible in the builder but not available yet.
 - Conditions are currently combined with **and** logic only.
-- Workflow testing from the UI is not available yet; use run history after matching alert events fire.
 - Native on-call escalation and external incident-provider routing are not workflow steps yet.

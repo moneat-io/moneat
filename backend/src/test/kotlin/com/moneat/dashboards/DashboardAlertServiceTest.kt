@@ -849,7 +849,9 @@ class DashboardAlertServiceTest {
                         it.status.name == "RESOLVED" &&
                             it.metadata["alert.channels.email"]?.jsonPrimitive?.content == "false" &&
                             it.metadata["alert.channels.slack"]?.jsonPrimitive?.content == "true" &&
-                            it.metadata["alert.channels.discord"]?.jsonPrimitive?.content == "false"
+                            it.metadata["alert.channels.discord"]?.jsonPrimitive?.content == "false" &&
+                            it.metadata["alert.display_title"]?.jsonPrimitive?.content == "High Error Rate" &&
+                            it.metadata["alert.current_value"]?.jsonPrimitive?.content == "50.00"
                     }
                 )
             }
@@ -910,7 +912,9 @@ class DashboardAlertServiceTest {
                     match {
                         it.severity == AlertSeverity.LOW &&
                             it.title == "Dashboard Warning: High Error Rate" &&
-                            it.source == AlertSource.DASHBOARD_ALERT
+                            it.source == AlertSource.DASHBOARD_ALERT &&
+                            it.metadata["alert.display_title"]?.jsonPrimitive?.content == "High Error Rate" &&
+                            it.metadata["alert.dashboard.title"]?.jsonPrimitive?.content == "Test Dashboard"
                     }
                 )
             }

@@ -21,6 +21,8 @@ import com.moneat.notifications.services.encodeSlackIssueIdPathSegment
 import com.moneat.shared.models.OrganizationIntegrations
 import com.moneat.shared.models.Organizations
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.workflows.models.WorkflowPreviewField
+import com.moneat.workflows.models.WorkflowStepPreview
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -82,6 +84,24 @@ class SlackServiceBuildersTest {
         }
     }
 
+    private fun workflowPreview(): WorkflowStepPreview =
+        WorkflowStepPreview(
+            step = "notification.slack",
+            channel = "slack",
+            title = "[P1] Worker failures detected",
+            body = "Worker failures crossed the threshold",
+            textBody = "[P1] Worker failures detected",
+            color = "#E01E5A",
+            fields = listOf(
+                WorkflowPreviewField("Status", "Firing"),
+                WorkflowPreviewField("Priority", "[P1]"),
+                WorkflowPreviewField("Dashboard", "Moneat Backend System Health")
+            ),
+            ctaLabel = "View",
+            ctaUrl = "$BASE_URL/dashboards/13",
+            fallbackText = "[P1] Worker failures detected"
+        )
+
     // ── No-config path tests ────────────────────────────────────────────
 
     @Test
@@ -115,6 +135,24 @@ class SlackServiceBuildersTest {
                     baseUrl = BASE_URL
                 )
             )
+        }
+
+    @Test
+    fun `sendWorkflowAlertMessage returns false when no integration configured`() =
+        runBlocking {
+            val orgId = seedOrg()
+            assertFalse(slackService.sendWorkflowAlertMessage(orgId, workflowPreview()))
+        }
+
+    @Test
+    fun `sendWorkflowAlertMessage builds rich alert blocks with configured integration`() =
+        runBlocking {
+            val orgId = seedOrg("Alert Org Workflow")
+            seedSlackIntegration(orgId)
+
+            val result = slackService.sendWorkflowAlertMessage(orgId, workflowPreview())
+
+            assertFalse(result)
         }
 
     @Test

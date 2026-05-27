@@ -74,6 +74,56 @@ data class WorkflowStepConfig(
 )
 
 @Serializable
+data class WorkflowPreviewRequest(
+    @SerialName("trigger_name") val triggerName: String,
+    val steps: List<WorkflowStepConfig>,
+    val scope: Map<String, String> = emptyMap()
+)
+
+@Serializable
+data class WorkflowPreviewResponse(
+    val scope: Map<String, String>,
+    val previews: List<WorkflowStepPreview>
+)
+
+@Serializable
+data class WorkflowTestMessageResponse(
+    val scope: Map<String, String>,
+    val results: List<WorkflowTestMessageResult>
+)
+
+@Serializable
+data class WorkflowTestMessageResult(
+    val step: String,
+    val channel: String,
+    val status: String,
+    @SerialName("error_message") val errorMessage: String? = null
+)
+
+@Serializable
+data class WorkflowStepPreview(
+    val step: String,
+    val channel: String,
+    val title: String,
+    val subject: String? = null,
+    val body: String,
+    @SerialName("html_body") val htmlBody: String? = null,
+    @SerialName("text_body") val textBody: String,
+    val fields: List<WorkflowPreviewField> = emptyList(),
+    val color: String,
+    @SerialName("cta_label") val ctaLabel: String? = null,
+    @SerialName("cta_url") val ctaUrl: String? = null,
+    val footer: String? = null,
+    @SerialName("fallback_text") val fallbackText: String
+)
+
+@Serializable
+data class WorkflowPreviewField(
+    val label: String,
+    val value: String
+)
+
+@Serializable
 data class WorkflowRunStepProgress(
     val step: String,
     val status: String,

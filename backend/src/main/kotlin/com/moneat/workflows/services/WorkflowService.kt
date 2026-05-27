@@ -16,6 +16,7 @@
 
 package com.moneat.workflows.services
 
+import com.moneat.config.EnvConfig
 import com.moneat.config.RedisConfig
 import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.alerts.models.AlertSeverity
@@ -31,12 +32,18 @@ import com.moneat.workflows.engine.WorkflowCatalog
 import com.moneat.workflows.models.CreateWorkflowRequest
 import com.moneat.workflows.models.UpdateWorkflowRequest
 import com.moneat.workflows.models.WorkflowConditionConfig
+import com.moneat.workflows.models.WorkflowPreviewField
+import com.moneat.workflows.models.WorkflowPreviewRequest
+import com.moneat.workflows.models.WorkflowPreviewResponse
 import com.moneat.workflows.models.WorkflowResponse
 import com.moneat.workflows.models.WorkflowRunQueuedMessage
 import com.moneat.workflows.models.WorkflowRunResponse
 import com.moneat.workflows.models.WorkflowRunStepProgress
+import com.moneat.workflows.models.WorkflowStepPreview
 import com.moneat.workflows.models.WorkflowRuns
 import com.moneat.workflows.models.WorkflowStepConfig
+import com.moneat.workflows.models.WorkflowTestMessageResponse
+import com.moneat.workflows.models.WorkflowTestMessageResult
 import com.moneat.workflows.models.WorkflowTriggerEvent
 import com.moneat.workflows.models.WorkflowVersions
 import com.moneat.workflows.models.Workflows
@@ -76,6 +83,7 @@ private const val SEVERITY_UNKNOWN_RANK = 0
 private const val ALERT_TITLE_REFERENCE = "alert.title"
 private const val ALERT_DESCRIPTION_REFERENCE = "alert.description"
 private const val ALERT_SEVERITY_REFERENCE = "alert.severity"
+private const val ALERT_PRIORITY_REFERENCE = "alert.priority"
 private const val ALERT_STATUS_REFERENCE = "alert.status"
 private const val ALERT_SOURCE_REFERENCE = "alert.source"
 private const val ALERT_DEDUPLICATION_KEY_REFERENCE = "alert.deduplication_key"
@@ -87,12 +95,41 @@ private const val ORGANIZATION_ID_REFERENCE = "organization.id"
 private const val EMAIL_ORG_STEP = "notification.email_org"
 private const val SLACK_STEP = "notification.slack"
 private const val DISCORD_STEP = "notification.discord"
+private const val EMAIL_CHANNEL = "email"
+private const val SLACK_CHANNEL = "slack"
+private const val DISCORD_CHANNEL = "discord"
 private const val SKIP_IF_UNCONFIGURED_PARAM = "skip_if_unconfigured"
+private const val FORMAT_PARAM = "format"
+private const val ALERT_LIFECYCLE_FORMAT = "alert_lifecycle"
 private const val ALERT_SOURCE_TEMPLATE_LINE = "Source: {{alert.source}}\n"
 private const val ALERT_URL_TEMPLATE = "{{alert.url}}"
+private const val ALERT_PRIORITY_TEMPLATE_LINE = "Priority: {{alert.priority}}\n"
+private const val ALERT_DESCRIPTION_TEMPLATE_BLOCK = "{{alert.description}}\n\n"
+private const val DEFAULT_WORKFLOW_TITLE = "Moneat workflow"
 private const val DEFAULT_WORKFLOW_READ_ONLY_MESSAGE = "Default workflows cannot be modified"
+private const val ALERT_DISPLAY_TITLE_REFERENCE = "alert.display_title"
+private const val ALERT_DASHBOARD_TITLE_REFERENCE = "alert.dashboard.title"
+private const val ALERT_WIDGET_TITLE_REFERENCE = "alert.widget.title"
+private const val ALERT_CONDITION_REFERENCE = "alert.condition"
+private const val ALERT_THRESHOLD_REFERENCE = "alert.threshold"
+private const val ALERT_CURRENT_VALUE_REFERENCE = "alert.current_value"
+private const val ALERT_COLOR_RED = "#E01E5A"
+private const val ALERT_COLOR_GREEN = "#2EB67D"
+private const val ALERT_COLOR_YELLOW = "#ECB22E"
+private const val ALERT_COLOR_PURPLE = "#6366F1"
+private const val VIEW_CTA_LABEL = "View"
 private val ALERT_CHANNEL_REFERENCES =
     setOf(ALERT_CHANNEL_EMAIL_REFERENCE, ALERT_CHANNEL_SLACK_REFERENCE, ALERT_CHANNEL_DISCORD_REFERENCE)
+private val ALERT_METADATA_REFERENCES =
+    ALERT_CHANNEL_REFERENCES + setOf(
+        ALERT_PRIORITY_REFERENCE,
+        ALERT_DISPLAY_TITLE_REFERENCE,
+        ALERT_DASHBOARD_TITLE_REFERENCE,
+        ALERT_WIDGET_TITLE_REFERENCE,
+        ALERT_CONDITION_REFERENCE,
+        ALERT_THRESHOLD_REFERENCE,
+        ALERT_CURRENT_VALUE_REFERENCE
+    )
 
 class WorkflowService(
     private val emailService: EmailService = EmailService(),
@@ -102,6 +139,34 @@ class WorkflowService(
     private val json = Json { ignoreUnknownKeys = true }
 
     fun catalog() = WorkflowCatalog.response()
+
+    fun previewWorkflow(request: WorkflowPreviewRequest): WorkflowPreviewResponse {
+        val scope = previewScopeForRequest(request)
+        return WorkflowPreviewResponse(
+            scope = scope,
+            previews = request.steps.map { step -> renderStepPreview(step, scope) }
+        )
+    }
+
+    suspend fun testWorkflowMessage(
+        organizationId: Int,
+        request: WorkflowPreviewRequest
+    ): WorkflowTestMessageResponse {
+        val scope = previewScopeForRequest(request)
+        return WorkflowTestMessageResponse(
+            scope = scope,
+            results = request.steps.map { step -> sendTestMessageStep(organizationId, step, scope) }
+        )
+    }
+
+    private fun previewScopeForRequest(request: WorkflowPreviewRequest): Map<String, String> {
+        val trigger = WorkflowCatalog.trigger(request.triggerName)
+            ?: throw IllegalArgumentException("Unknown workflow trigger ${request.triggerName}")
+        request.steps.forEach { step ->
+            WorkflowCatalog.step(step.name) ?: throw IllegalArgumentException("Unknown workflow step ${step.name}")
+        }
+        return sampleScopeForTrigger(trigger.name) + request.scope
+    }
 
     fun ensureDefaultWorkflowsForOrganization(organizationId: Int) {
         val now = Clock.System.now()
@@ -334,6 +399,7 @@ class WorkflowService(
                     ALERT_TITLE_REFERENCE to title,
                     ALERT_DESCRIPTION_REFERENCE to description,
                     ALERT_SEVERITY_REFERENCE to severity?.name.orEmpty(),
+                    ALERT_PRIORITY_REFERENCE to priorityLabelForSeverity(severity?.name),
                     ALERT_STATUS_REFERENCE to AlertStatus.RESOLVED.name,
                     ALERT_SOURCE_REFERENCE to source,
                     ALERT_DEDUPLICATION_KEY_REFERENCE to deduplicationKey,
@@ -481,23 +547,133 @@ class WorkflowService(
         when (step.name) {
             EMAIL_ORG_STEP -> sendOrganizationEmail(organizationId, step.params, scope)
             SLACK_STEP -> {
-                val message = interpolate(step.params["message"].orEmpty(), scope)
                 val skipIfUnconfigured = step.params[SKIP_IF_UNCONFIGURED_PARAM]?.toBoolean() ?: true
-                check(slackService.sendWorkflowMessage(organizationId, message, skipIfUnconfigured)) {
+                val sent =
+                    if (step.usesAlertLifecycleFormat()) {
+                        slackService.sendWorkflowAlertMessage(
+                            organizationId,
+                            renderStepPreview(step, scope),
+                            skipIfUnconfigured
+                        )
+                    } else {
+                        val message = interpolate(step.params["message"].orEmpty(), scope)
+                        slackService.sendWorkflowMessage(organizationId, message, skipIfUnconfigured)
+                    }
+                check(sent) {
                     "Slack workflow message was not sent"
                 }
             }
             DISCORD_STEP -> {
-                val title = interpolate(step.params["title"] ?: "Moneat workflow", scope)
-                val message = interpolate(step.params["message"].orEmpty(), scope)
                 val skipIfUnconfigured = step.params[SKIP_IF_UNCONFIGURED_PARAM]?.toBoolean() ?: true
-                check(discordService.sendWorkflowMessage(organizationId, title, message, skipIfUnconfigured)) {
+                val sent =
+                    if (step.usesAlertLifecycleFormat()) {
+                        discordService.sendWorkflowAlertMessage(
+                            organizationId,
+                            renderStepPreview(step, scope),
+                            skipIfUnconfigured
+                        )
+                    } else {
+                        val title = interpolate(step.params["title"] ?: DEFAULT_WORKFLOW_TITLE, scope)
+                        val message = interpolate(step.params["message"].orEmpty(), scope)
+                        discordService.sendWorkflowMessage(organizationId, title, message, skipIfUnconfigured)
+                    }
+                check(sent) {
                     "Discord workflow message was not sent"
                 }
             }
             else -> throw IllegalArgumentException("Unknown workflow step ${step.name}")
         }
     }
+
+    private suspend fun sendTestMessageStep(
+        organizationId: Int,
+        step: WorkflowStepConfig,
+        scope: Map<String, String>
+    ): WorkflowTestMessageResult {
+        val channel = channelForStep(step.name)
+        if (!notificationStepEnabled(step.name, scope)) {
+            return WorkflowTestMessageResult(
+                step = step.name,
+                channel = channel,
+                status = "skipped",
+                errorMessage = "Notification channel is disabled for this sample"
+            )
+        }
+        return suspendRunCatching {
+            sendTestMessageStepOrThrow(organizationId, step, scope)
+        }.fold(
+            onSuccess = { WorkflowTestMessageResult(step.name, channel, "sent") },
+            onFailure = { error ->
+                WorkflowTestMessageResult(
+                    step = step.name,
+                    channel = channel,
+                    status = "failed",
+                    errorMessage = error.message ?: "Test message was not sent"
+                )
+            }
+        )
+    }
+
+    private suspend fun sendTestMessageStepOrThrow(
+        organizationId: Int,
+        step: WorkflowStepConfig,
+        scope: Map<String, String>
+    ) {
+        when (step.name) {
+            EMAIL_ORG_STEP -> {
+                val recipientCount = sendOrganizationEmail(organizationId, step.params, scope)
+                check(recipientCount > 0) {
+                    "No verified organization email recipients"
+                }
+            }
+            SLACK_STEP -> check(sendSlackTestMessage(organizationId, step, scope)) {
+                "Slack test message was not sent"
+            }
+            DISCORD_STEP -> check(sendDiscordTestMessage(organizationId, step, scope)) {
+                "Discord test message was not sent"
+            }
+            else -> throw IllegalArgumentException("Unknown workflow step ${step.name}")
+        }
+    }
+
+    private suspend fun sendSlackTestMessage(
+        organizationId: Int,
+        step: WorkflowStepConfig,
+        scope: Map<String, String>
+    ): Boolean =
+        if (step.usesAlertLifecycleFormat()) {
+            slackService.sendWorkflowAlertMessage(
+                organizationId,
+                renderStepPreview(step, scope),
+                skipIfUnconfigured = false
+            )
+        } else {
+            slackService.sendWorkflowMessage(
+                organizationId,
+                interpolate(step.params["message"].orEmpty(), scope),
+                skipIfUnconfigured = false
+            )
+        }
+
+    private suspend fun sendDiscordTestMessage(
+        organizationId: Int,
+        step: WorkflowStepConfig,
+        scope: Map<String, String>
+    ): Boolean =
+        if (step.usesAlertLifecycleFormat()) {
+            discordService.sendWorkflowAlertMessage(
+                organizationId,
+                renderStepPreview(step, scope),
+                skipIfUnconfigured = false
+            )
+        } else {
+            discordService.sendWorkflowMessage(
+                organizationId,
+                interpolate(step.params["title"] ?: DEFAULT_WORKFLOW_TITLE, scope),
+                interpolate(step.params["message"].orEmpty(), scope),
+                skipIfUnconfigured = false
+            )
+        }
 
     private fun notificationStepEnabled(
         stepName: String,
@@ -520,7 +696,7 @@ class WorkflowService(
         organizationId: Int,
         params: Map<String, String>,
         scope: Map<String, String>
-    ) {
+    ): Int {
         val recipients =
             transaction {
                 Memberships
@@ -533,12 +709,381 @@ class WorkflowService(
             }
         val subject = interpolate(params["subject"] ?: "Moneat workflow: {{alert.title}}", scope)
         val body = interpolate(params["body"].orEmpty(), scope)
-        val htmlBody = "<pre style=\"font-family:system-ui,sans-serif;white-space:pre-wrap\">" +
-            body.escapeHtml() +
-            "</pre>"
+        val preview =
+            if (params[FORMAT_PARAM] == ALERT_LIFECYCLE_FORMAT) {
+                renderStepPreview(WorkflowStepConfig(EMAIL_ORG_STEP, params), scope)
+            } else {
+                null
+            }
+        val htmlBody = preview?.htmlBody ?: body.preformattedHtml()
+        val textBody = preview?.textBody ?: body
+        val emailSubject = preview?.subject ?: subject
         recipients.forEach { email ->
-            emailService.sendEmail(email, subject, htmlBody, body, "workflow")
+            emailService.sendEmail(email, emailSubject, htmlBody, textBody, "workflow")
         }
+        return recipients.size
+    }
+
+    private fun renderStepPreview(
+        step: WorkflowStepConfig,
+        scope: Map<String, String>
+    ): WorkflowStepPreview =
+        if (step.usesAlertLifecycleFormat()) {
+            renderAlertLifecyclePreview(step, scope)
+        } else {
+            renderFreeformStepPreview(step, scope)
+        }
+
+    private fun renderFreeformStepPreview(
+        step: WorkflowStepConfig,
+        scope: Map<String, String>
+    ): WorkflowStepPreview =
+        when (step.name) {
+            EMAIL_ORG_STEP -> {
+                val subject = interpolate(step.params["subject"] ?: "Moneat workflow: {{alert.title}}", scope)
+                val body = interpolate(step.params["body"].orEmpty(), scope)
+                WorkflowStepPreview(
+                    step = step.name,
+                    channel = EMAIL_CHANNEL,
+                    title = subject,
+                    subject = subject,
+                    body = body,
+                    htmlBody = body.preformattedHtml(),
+                    textBody = body,
+                    color = ALERT_COLOR_PURPLE,
+                    fallbackText = "$subject: $body"
+                )
+            }
+            SLACK_STEP -> {
+                val body = interpolate(step.params["message"].orEmpty(), scope)
+                WorkflowStepPreview(
+                    step = step.name,
+                    channel = SLACK_CHANNEL,
+                    title = DEFAULT_WORKFLOW_TITLE,
+                    body = body,
+                    textBody = body,
+                    color = ALERT_COLOR_PURPLE,
+                    fallbackText = body
+                )
+            }
+            DISCORD_STEP -> {
+                val title = interpolate(step.params["title"] ?: DEFAULT_WORKFLOW_TITLE, scope)
+                val body = interpolate(step.params["message"].orEmpty(), scope)
+                WorkflowStepPreview(
+                    step = step.name,
+                    channel = DISCORD_CHANNEL,
+                    title = title,
+                    body = body,
+                    textBody = body,
+                    color = ALERT_COLOR_PURPLE,
+                    footer = DEFAULT_WORKFLOW_TITLE,
+                    fallbackText = "$title: $body"
+                )
+            }
+            else -> throw IllegalArgumentException("Unknown workflow step ${step.name}")
+        }
+
+    private fun renderAlertLifecyclePreview(
+        step: WorkflowStepConfig,
+        scope: Map<String, String>
+    ): WorkflowStepPreview {
+        val channel = channelForStep(step.name)
+        val displayTitle = alertDisplayTitle(scope)
+        val title = alertLifecycleTitle(displayTitle, scope)
+        val body = scope[ALERT_DESCRIPTION_REFERENCE]?.ifBlank { null } ?: "Moneat detected an alert lifecycle event."
+        val fields = alertLifecycleFields(scope)
+        val color = alertLifecycleColor(scope)
+        val ctaUrl = scope[ALERT_URL_REFERENCE]?.takeIf { it.isNotBlank() }
+        val ctaLabel = ctaUrl?.let { VIEW_CTA_LABEL }
+        val sourceLabel = sourceLabel(scope[ALERT_SOURCE_REFERENCE])
+        val textBody = buildAlertText(title, body, fields, ctaLabel, ctaUrl)
+        val preview =
+            WorkflowStepPreview(
+                step = step.name,
+                channel = channel,
+                title = title,
+                subject = if (channel == EMAIL_CHANNEL) "[Moneat] $title" else null,
+                body = body,
+                textBody = textBody,
+                fields = fields,
+                color = color,
+                ctaLabel = ctaLabel,
+                ctaUrl = ctaUrl,
+                footer = sourceLabel,
+                fallbackText = "$title: $body"
+            )
+        return if (channel == EMAIL_CHANNEL) {
+            preview.copy(htmlBody = buildAlertLifecycleHtml(preview))
+        } else {
+            preview
+        }
+    }
+
+    private fun channelForStep(stepName: String): String =
+        when (stepName) {
+            EMAIL_ORG_STEP -> EMAIL_CHANNEL
+            SLACK_STEP -> SLACK_CHANNEL
+            DISCORD_STEP -> DISCORD_CHANNEL
+            else -> throw IllegalArgumentException("Unknown workflow step $stepName")
+        }
+
+    private fun alertDisplayTitle(scope: Map<String, String>): String =
+        scope[ALERT_DISPLAY_TITLE_REFERENCE]?.takeIf { it.isNotBlank() }
+            ?: cleanAlertTitle(scope[ALERT_TITLE_REFERENCE], scope[ALERT_STATUS_REFERENCE])
+
+    private fun alertLifecycleTitle(
+        displayTitle: String,
+        scope: Map<String, String>
+    ): String {
+        val priority = priorityLabel(scope)
+        if (scope[ALERT_STATUS_REFERENCE] == AlertStatus.RESOLVED.name) {
+            val prefix = listOf(priority, "Resolved").filter { it.isNotBlank() }.joinToString(" ")
+            return if (prefix.isBlank()) displayTitle else "$prefix: $displayTitle"
+        }
+        return listOf(priority, displayTitle).filter { it.isNotBlank() }.joinToString(" ")
+    }
+
+    private fun cleanAlertTitle(
+        title: String?,
+        status: String?
+    ): String {
+        val prefixes =
+            if (status == AlertStatus.RESOLVED.name) {
+                listOf("Resolved: ", "Dashboard Alert Resolved: ")
+            } else {
+                listOf("Dashboard Critical: ", "Dashboard Error: ", "Dashboard Warning: ", "Dashboard Alert: ")
+            }
+        return prefixes.fold(title.orEmpty()) { current, prefix ->
+            current.removePrefix(prefix)
+        }.ifBlank { "Moneat alert" }
+    }
+
+    private fun alertLifecycleFields(scope: Map<String, String>): List<WorkflowPreviewField> {
+        val fields = mutableListOf<WorkflowPreviewField>()
+        addField(fields, "Status", humanizeEnum(scope[ALERT_STATUS_REFERENCE]))
+        addField(fields, "Priority", priorityLabel(scope))
+        addField(fields, "Source", sourceLabel(scope[ALERT_SOURCE_REFERENCE]))
+        addField(fields, "Dashboard", scope[ALERT_DASHBOARD_TITLE_REFERENCE])
+        addField(fields, "Widget", scope[ALERT_WIDGET_TITLE_REFERENCE])
+        addField(fields, "Current value", scope[ALERT_CURRENT_VALUE_REFERENCE])
+        addField(fields, "Threshold", thresholdText(scope))
+        return fields
+    }
+
+    private fun addField(
+        fields: MutableList<WorkflowPreviewField>,
+        label: String,
+        value: String?
+    ) {
+        if (!value.isNullOrBlank()) {
+            fields += WorkflowPreviewField(label, value)
+        }
+    }
+
+    private fun thresholdText(scope: Map<String, String>): String? {
+        val condition = scope[ALERT_CONDITION_REFERENCE]?.takeIf { it.isNotBlank() }
+        val threshold = scope[ALERT_THRESHOLD_REFERENCE]?.takeIf { it.isNotBlank() }
+        return when {
+            condition != null && threshold != null -> "$condition $threshold"
+            threshold != null -> threshold
+            else -> null
+        }
+    }
+
+    private fun alertLifecycleColor(scope: Map<String, String>): String {
+        if (scope[ALERT_STATUS_REFERENCE] == AlertStatus.RESOLVED.name) return ALERT_COLOR_GREEN
+        return when (scope[ALERT_SEVERITY_REFERENCE]) {
+            AlertSeverity.CRITICAL.name, AlertSeverity.HIGH.name -> ALERT_COLOR_RED
+            else -> ALERT_COLOR_YELLOW
+        }
+    }
+
+    private fun priorityLabel(scope: Map<String, String>): String =
+        scope[ALERT_PRIORITY_REFERENCE]?.takeIf { it.isNotBlank() }
+            ?: priorityLabelForSeverity(scope[ALERT_SEVERITY_REFERENCE])
+
+    private fun priorityLabelForSeverity(severity: String?): String =
+        when (severity?.uppercase()) {
+            AlertSeverity.CRITICAL.name -> "[P0]"
+            AlertSeverity.HIGH.name -> "[P1]"
+            AlertSeverity.MEDIUM.name -> "[P2]"
+            AlertSeverity.LOW.name -> "[P3]"
+            else -> ""
+        }
+
+    private fun sourceLabel(source: String?): String =
+        when (source) {
+            "DASHBOARD_ALERT" -> "Dashboard alert"
+            "HOST_ALERT" -> "Host metric alert"
+            "HOST_DOWN" -> "Host down"
+            "UPTIME_MONITOR" -> "Uptime monitor"
+            "SYNTHETIC_TEST" -> "Synthetic test"
+            "ERROR_ALERT" -> "Error issue"
+            else -> humanizeEnum(source).ifBlank { "Moneat alert" }
+        }
+
+    private fun buildAlertText(
+        title: String,
+        body: String,
+        fields: List<WorkflowPreviewField>,
+        ctaLabel: String?,
+        ctaUrl: String?
+    ): String =
+        buildString {
+            appendLine(title)
+            appendLine()
+            appendLine(body)
+            if (fields.isNotEmpty()) {
+                appendLine()
+                fields.forEach { field -> appendLine("${field.label}: ${field.value}") }
+            }
+            if (!ctaUrl.isNullOrBlank()) {
+                appendLine()
+                appendLine("${ctaLabel ?: VIEW_CTA_LABEL}: $ctaUrl")
+            }
+        }.trim()
+
+    private fun alertEmailHeaderText(preview: WorkflowStepPreview): String {
+        return listOf(alertEmailEmoji(preview), preview.title)
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+    }
+
+    private fun alertEmailEmoji(preview: WorkflowStepPreview): String {
+        val status = previewFieldValue(preview, "Status")
+        if (status == "Resolved") return "✅"
+        return if (preview.color == ALERT_COLOR_RED) "🔴" else "⚠️"
+    }
+
+    private fun previewFieldValue(
+        preview: WorkflowStepPreview,
+        label: String
+    ): String =
+        preview.fields
+            .firstOrNull { it.label.equals(label, ignoreCase = true) }
+            ?.value
+            .orEmpty()
+
+    private fun buildAlertLifecycleHtml(preview: WorkflowStepPreview): String {
+        val fieldRows = preview.fields.chunked(2).joinToString("") { row ->
+            val cells =
+                row.joinToString("") { field ->
+                    """
+                    <td style="width:50%;padding:0 20px 16px 0;vertical-align:top;">
+                        <div style="font-size:14px;line-height:20px;font-weight:700;color:#334155;">
+                            ${field.label.escapeHtml()}:
+                        </div>
+                        <div style="font-size:14px;line-height:20px;color:#475569;word-break:break-word;">
+                            ${field.value.escapeHtml()}
+                        </div>
+                    </td>
+                    """.trimIndent()
+                }
+            val filler =
+                if (row.size == 1) {
+                    """<td style="width:50%;padding:0 20px 16px 0;vertical-align:top;"></td>"""
+                } else {
+                    ""
+                }
+            "<tr>$cells$filler</tr>"
+        }
+        val ctaHtml =
+            if (!preview.ctaUrl.isNullOrBlank() && !preview.ctaLabel.isNullOrBlank()) {
+                """
+                <div style="margin-top:20px;">
+                    <a href="${preview.ctaUrl.escapeHtml()}" style="display:inline-block;background:#111827;
+                        color:#f8fafc;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:700;
+                        font-size:14px;line-height:20px;">
+                        ${preview.ctaLabel.escapeHtml()}
+                    </a>
+                </div>
+                """.trimIndent()
+            } else {
+                ""
+            }
+        val appHeader = alertEmailHeaderText(preview).escapeHtml()
+        val accentColor = preview.color.escapeHtml()
+        val logoUrl = moneatFaviconUrl().escapeHtml()
+        return """
+            <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;
+                padding:24px;">
+                <div style="max-width:640px;margin:0 auto;border:1px solid #e2e8f0;border-radius:12px;
+                    background:#ffffff;color:#0f172a;padding:24px;">
+                    <table role="presentation" style="width:100%;border-collapse:collapse;margin:0;">
+                        <tr>
+                            <td style="width:48px;padding:0 12px 0 0;vertical-align:top;">
+                                <div style="width:40px;height:40px;border-radius:10px;background:#ffffff;
+                                    border:1px solid #e2e8f0;text-align:center;">
+                                    <img src="$logoUrl" width="40" height="40" alt="Moneat" style="display:block;
+                                        width:40px;height:40px;border-radius:10px;">
+                                </div>
+                            </td>
+                            <td style="padding:0;vertical-align:top;">
+                                <div style="font-size:14px;line-height:20px;font-weight:700;color:#0f172a;">Moneat</div>
+                                <div style="margin-top:10px;font-size:18px;line-height:26px;font-weight:700;
+                                    color:#0f172a;">
+                                    $appHeader
+                                </div>
+                            </td>
+                        </tr>
+                    </table>
+                    <div style="margin-top:20px;border-top:4px solid $accentColor;padding-top:18px;">
+                        <div style="margin:0 0 18px;color:#334155;font-size:14px;line-height:21px;">
+                            ${preview.body.toHtmlLines()}
+                        </div>
+                        <table role="presentation" style="width:100%;border-collapse:collapse;margin:0;">
+                            $fieldRows
+                        </table>
+                        $ctaHtml
+                        <div style="margin-top:18px;color:#64748b;font-size:12px;line-height:18px;">
+                            Added by Moneat
+                        </div>
+                    </div>
+                </div>
+            </div>
+        """.trimIndent()
+    }
+
+    private fun moneatFaviconUrl(): String {
+        val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io").trimEnd('/')
+        return "$frontendUrl/favicon.svg"
+    }
+
+    private fun sampleScopeForTrigger(triggerName: String): Map<String, String> {
+        val resolved = triggerName == ALERT_RESOLVED_TRIGGER
+        val status = if (resolved) AlertStatus.RESOLVED.name else AlertStatus.FIRING.name
+        val severity = if (resolved) AlertSeverity.LOW.name else AlertSeverity.HIGH.name
+        val title = if (resolved) {
+            "Dashboard Alert Resolved: Worker failures detected"
+        } else {
+            "Dashboard Error: Worker failures detected"
+        }
+        val description = if (resolved) {
+            "Worker failures [1h] on Moneat Backend System Health recovered. Current value: 0.00"
+        } else {
+            "Worker failures [1h] on Moneat Backend System Health crossed > 5.00. Current value: 12.00"
+        }
+        val currentValue = if (resolved) "0.00" else "12.00"
+        return mapOf(
+            ALERT_TITLE_REFERENCE to title,
+            ALERT_DISPLAY_TITLE_REFERENCE to "Worker failures detected",
+            ALERT_DESCRIPTION_REFERENCE to description,
+            ALERT_SEVERITY_REFERENCE to severity,
+            ALERT_PRIORITY_REFERENCE to priorityLabelForSeverity(severity),
+            ALERT_STATUS_REFERENCE to status,
+            ALERT_SOURCE_REFERENCE to "DASHBOARD_ALERT",
+            ALERT_DEDUPLICATION_KEY_REFERENCE to "moneat-dashboard-alert-preview",
+            ALERT_URL_REFERENCE to "https://moneat.io/dashboards/13",
+            ALERT_DASHBOARD_TITLE_REFERENCE to "Moneat Backend System Health",
+            ALERT_WIDGET_TITLE_REFERENCE to "Worker failures [1h]",
+            ALERT_CONDITION_REFERENCE to ">",
+            ALERT_THRESHOLD_REFERENCE to "5.00",
+            ALERT_CURRENT_VALUE_REFERENCE to currentValue,
+            ALERT_CHANNEL_EMAIL_REFERENCE to "true",
+            ALERT_CHANNEL_SLACK_REFERENCE to "true",
+            ALERT_CHANNEL_DISCORD_REFERENCE to "true",
+            ORGANIZATION_ID_REFERENCE to "1"
+        )
     }
 
     private fun latestVersion(workflowId: Int): WorkflowVersionRecord? =
@@ -839,6 +1384,7 @@ class WorkflowService(
             ALERT_TITLE_REFERENCE to event.title,
             ALERT_DESCRIPTION_REFERENCE to event.description,
             ALERT_SEVERITY_REFERENCE to event.severity.name,
+            ALERT_PRIORITY_REFERENCE to priorityLabelForSeverity(event.severity.name),
             ALERT_STATUS_REFERENCE to event.status.name,
             ALERT_SOURCE_REFERENCE to event.source.name,
             ALERT_DEDUPLICATION_KEY_REFERENCE to event.deduplicationKey,
@@ -849,7 +1395,7 @@ class WorkflowService(
     private fun alertMetadataScope(metadata: Map<String, JsonElement>): Map<String, String> =
         metadata
             .mapNotNull { (reference, value) ->
-                if (reference !in ALERT_CHANNEL_REFERENCES) return@mapNotNull null
+                if (reference !in ALERT_METADATA_REFERENCES) return@mapNotNull null
                 value.workflowScopeValue()?.let { reference to it }
             }.toMap()
 
@@ -874,19 +1420,21 @@ class WorkflowService(
                         WorkflowStepConfig(
                             name = EMAIL_ORG_STEP,
                             params = mapOf(
-                                "subject" to "[Moneat] {{alert.title}}",
-                                "body" to "{{alert.title}}\n\n{{alert.description}}\n\n" +
-                                    "Severity: {{alert.severity}}\n" +
+                                FORMAT_PARAM to ALERT_LIFECYCLE_FORMAT,
+                                "subject" to "[Moneat] {{alert.priority}} {{alert.display_title}}",
+                                "body" to "{{alert.display_title}}\n\n" + ALERT_DESCRIPTION_TEMPLATE_BLOCK +
+                                    ALERT_PRIORITY_TEMPLATE_LINE +
                                     ALERT_SOURCE_TEMPLATE_LINE +
                                     "Status: {{alert.status}}\n\n" +
-                                    "View in Moneat: {{alert.url}}"
+                                    "View: {{alert.url}}"
                             )
                         ),
                         WorkflowStepConfig(
                             name = SLACK_STEP,
                             params = mapOf(
-                                "message" to "*{{alert.title}}*\n{{alert.description}}\n\n" +
-                                    "*Severity:* {{alert.severity}}\n" +
+                                FORMAT_PARAM to ALERT_LIFECYCLE_FORMAT,
+                                "message" to "*{{alert.priority}} {{alert.display_title}}*\n{{alert.description}}\n\n" +
+                                    "*Priority:* {{alert.priority}}\n" +
                                     "*Source:* {{alert.source}}\n" +
                                     "*Status:* {{alert.status}}\n" +
                                     ALERT_URL_TEMPLATE,
@@ -896,9 +1444,10 @@ class WorkflowService(
                         WorkflowStepConfig(
                             name = DISCORD_STEP,
                             params = mapOf(
-                                "title" to "{{alert.title}}",
-                                "message" to "{{alert.description}}\n\n" +
-                                    "Severity: {{alert.severity}}\n" +
+                                FORMAT_PARAM to ALERT_LIFECYCLE_FORMAT,
+                                "title" to "{{alert.priority}} {{alert.display_title}}",
+                                "message" to ALERT_DESCRIPTION_TEMPLATE_BLOCK +
+                                    ALERT_PRIORITY_TEMPLATE_LINE +
                                     ALERT_SOURCE_TEMPLATE_LINE +
                                     "Status: {{alert.status}}\n" +
                                     ALERT_URL_TEMPLATE,
@@ -916,17 +1465,22 @@ class WorkflowService(
                         WorkflowStepConfig(
                             name = EMAIL_ORG_STEP,
                             params = mapOf(
-                                "subject" to "[Moneat] Resolved: {{alert.title}}",
-                                "body" to "{{alert.title}}\n\n{{alert.description}}\n\n" +
+                                FORMAT_PARAM to ALERT_LIFECYCLE_FORMAT,
+                                "subject" to "[Moneat] {{alert.priority}} Resolved: {{alert.display_title}}",
+                                "body" to "{{alert.display_title}}\n\n" + ALERT_DESCRIPTION_TEMPLATE_BLOCK +
+                                    ALERT_PRIORITY_TEMPLATE_LINE +
                                     ALERT_SOURCE_TEMPLATE_LINE +
                                     "Status: {{alert.status}}\n\n" +
-                                    "View in Moneat: {{alert.url}}"
+                                    "View: {{alert.url}}"
                             )
                         ),
                         WorkflowStepConfig(
                             name = SLACK_STEP,
                             params = mapOf(
-                                "message" to "*Resolved: {{alert.title}}*\n{{alert.description}}\n\n" +
+                                FORMAT_PARAM to ALERT_LIFECYCLE_FORMAT,
+                                "message" to "*{{alert.priority}} Resolved: {{alert.display_title}}*\n" +
+                                    ALERT_DESCRIPTION_TEMPLATE_BLOCK +
+                                    "*Priority:* {{alert.priority}}\n" +
                                     "*Source:* {{alert.source}}\n" +
                                     "*Status:* {{alert.status}}\n" +
                                     ALERT_URL_TEMPLATE,
@@ -936,8 +1490,10 @@ class WorkflowService(
                         WorkflowStepConfig(
                             name = DISCORD_STEP,
                             params = mapOf(
-                                "title" to "Resolved: {{alert.title}}",
-                                "message" to "{{alert.description}}\n\n" +
+                                FORMAT_PARAM to ALERT_LIFECYCLE_FORMAT,
+                                "title" to "{{alert.priority}} Resolved: {{alert.display_title}}",
+                                "message" to ALERT_DESCRIPTION_TEMPLATE_BLOCK +
+                                    ALERT_PRIORITY_TEMPLATE_LINE +
                                     ALERT_SOURCE_TEMPLATE_LINE +
                                     "Status: {{alert.status}}\n" +
                                     ALERT_URL_TEMPLATE,
@@ -997,6 +1553,25 @@ private fun interpolate(
     scope.entries.fold(template) { text, (reference, value) ->
         text.replace("{{$reference}}", value)
     }
+
+private fun WorkflowStepConfig.usesAlertLifecycleFormat(): Boolean =
+    params[FORMAT_PARAM] == ALERT_LIFECYCLE_FORMAT
+
+private fun humanizeEnum(value: String?): String =
+    value
+        ?.takeIf { it.isNotBlank() }
+        ?.lowercase()
+        ?.split("_")
+        ?.joinToString(" ") { part -> part.replaceFirstChar { it.uppercase() } }
+        .orEmpty()
+
+private fun String.preformattedHtml(): String =
+    "<pre style=\"font-family:system-ui,sans-serif;white-space:pre-wrap\">" +
+        escapeHtml() +
+        "</pre>"
+
+private fun String.toHtmlLines(): String =
+    escapeHtml().replace("\n", "<br>")
 
 private fun String.escapeHtml(): String =
     replace("&", "&amp;")
