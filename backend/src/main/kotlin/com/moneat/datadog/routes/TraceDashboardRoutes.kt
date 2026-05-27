@@ -18,6 +18,7 @@ package com.moneat.datadog.routes
 
 import com.moneat.datadog.services.DdApmQueryTimeRange
 import com.moneat.datadog.services.DdApmQueryTimeUnit
+import com.moneat.datadog.services.DdResourceStatsQuery
 import com.moneat.datadog.services.TraceIngestionService
 import com.moneat.plugins.getSentryTransaction
 import io.ktor.http.HttpStatusCode
@@ -28,11 +29,17 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.route
+import java.util.Locale
 
 private const val DEFAULT_LIMIT = 50
 private const val MAX_LIMIT = 200
 private const val DEFAULT_APM_TIME_RANGE = "24h"
 private const val INVALID_TIME_RANGE_ERROR = "Invalid timeRange"
+private const val INVALID_STATUS_ERROR = "Invalid status"
+private const val STATUS_ERROR = "error"
+private const val STATUS_OK = "ok"
+private const val MAX_TRACE_SEARCH_LENGTH = 200
+private val hexTraceIdPattern = Regex("^[0-9a-fA-F]+$")
 
 private val apmTimeRanges = mapOf(
     "1h" to DdApmQueryTimeRange(1, DdApmQueryTimeUnit.HOUR),
@@ -56,13 +63,22 @@ fun Route.traceDashboardRoutes() {
                         mapOf("error" to "Invalid token")
                     )
                 val service = call.parameters["service"]
+                val env = call.parameters["env"]
+                val source = call.parameters["source"]
+                val search = call.traceSearch()
+                val status = call.apmStatus()
+                    ?: return@get call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to INVALID_STATUS_ERROR)
+                    )
                 val limit = (
                     call.parameters["limit"]
                         ?.toIntOrNull() ?: DEFAULT_LIMIT
                     )
-                    .coerceAtMost(MAX_LIMIT)
+                    .coerceIn(1, MAX_LIMIT)
                 val offset = call.parameters["offset"]
-                    ?.toIntOrNull() ?: 0
+                    ?.toIntOrNull()
+                    ?.coerceAtLeast(0) ?: 0
                 val timeRange = call.apmTimeRange()
                     ?: return@get call.respond(
                         HttpStatusCode.BadRequest,
@@ -70,12 +86,50 @@ fun Route.traceDashboardRoutes() {
                     )
 
                 val result = TraceIngestionService.listResourceStats(
-                    orgId,
-                    service,
-                    limit,
-                    offset,
-                    timeRange,
-                    call.getSentryTransaction(),
+                    organizationId = orgId,
+                    query = DdResourceStatsQuery(
+                        service = service,
+                        env = env,
+                        source = source,
+                        status = status,
+                        search = search,
+                        limit = limit,
+                        offset = offset,
+                        timeRange = timeRange,
+                    ),
+                    parentSpan = call.getSentryTransaction(),
+                )
+                call.respond(result)
+            }
+
+            // GET /v1/traces/overview - APM overview metrics for the main traces page
+            get("/overview") {
+                val principal = call.principal<JWTPrincipal>()
+                val orgId = principal?.payload
+                    ?.getClaim("orgId")?.asInt()
+                    ?: return@get call.respond(
+                        HttpStatusCode.Unauthorized,
+                        mapOf("error" to "Invalid token")
+                    )
+                val status = call.apmStatus()
+                    ?: return@get call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to INVALID_STATUS_ERROR)
+                    )
+                val timeRange = call.apmTimeRange()
+                    ?: return@get call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to INVALID_TIME_RANGE_ERROR)
+                    )
+
+                val result = TraceIngestionService.getApmOverview(
+                    organizationId = orgId,
+                    service = call.parameters["service"],
+                    env = call.parameters["env"],
+                    source = call.parameters["source"],
+                    status = status,
+                    timeRange = timeRange,
+                    parentSpan = call.getSentryTransaction(),
                 )
                 call.respond(result)
             }
@@ -91,13 +145,21 @@ fun Route.traceDashboardRoutes() {
                     )
                 val service = call.parameters["service"]
                 val env = call.parameters["env"]
+                val source = call.parameters["source"]
+                val search = call.traceSearch()
+                val status = call.apmStatus()
+                    ?: return@get call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to INVALID_STATUS_ERROR)
+                    )
                 val limit = (
                     call.parameters["limit"]
                         ?.toIntOrNull() ?: DEFAULT_LIMIT
                     )
-                    .coerceAtMost(MAX_LIMIT)
+                    .coerceIn(1, MAX_LIMIT)
                 val offset = call.parameters["offset"]
-                    ?.toIntOrNull() ?: 0
+                    ?.toIntOrNull()
+                    ?.coerceAtLeast(0) ?: 0
                 val timeRange = call.apmTimeRange()
                     ?: return@get call.respond(
                         HttpStatusCode.BadRequest,
@@ -105,13 +167,16 @@ fun Route.traceDashboardRoutes() {
                     )
 
                 val result = TraceIngestionService.listTraces(
-                    orgId,
-                    service,
-                    env,
-                    limit,
-                    offset,
-                    timeRange,
-                    call.getSentryTransaction(),
+                    organizationId = orgId,
+                    service = service,
+                    env = env,
+                    source = source,
+                    status = status,
+                    search = search,
+                    limit = limit,
+                    offset = offset,
+                    timeRange = timeRange,
+                    parentSpan = call.getSentryTransaction(),
                 )
                 call.respond(result)
             }
@@ -130,7 +195,7 @@ fun Route.traceDashboardRoutes() {
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "Missing traceId")
                     )
-                if (traceId.toULongOrNull() == null) {
+                if (!traceId.isSupportedTraceId()) {
                     return@get call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "Invalid traceId")
@@ -205,3 +270,21 @@ private fun io.ktor.server.application.ApplicationCall.apmTimeRange(): DdApmQuer
     val rawValue = parameters["timeRange"] ?: parameters["range"] ?: DEFAULT_APM_TIME_RANGE
     return apmTimeRanges[rawValue]
 }
+
+private fun io.ktor.server.application.ApplicationCall.apmStatus(): String? {
+    val rawValue = parameters["status"] ?: return ""
+    val normalized = rawValue.lowercase(Locale.ROOT)
+    return when (normalized) {
+        "", STATUS_ERROR, STATUS_OK -> normalized
+        else -> null
+    }
+}
+
+private fun io.ktor.server.application.ApplicationCall.traceSearch(): String? =
+    parameters["search"]
+        ?.trim()
+        ?.take(MAX_TRACE_SEARCH_LENGTH)
+        ?.takeIf { it.isNotEmpty() }
+
+private fun String.isSupportedTraceId(): Boolean =
+    isNotBlank() && (toULongOrNull() != null || hexTraceIdPattern.matches(this))

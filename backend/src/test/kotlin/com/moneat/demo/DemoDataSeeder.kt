@@ -3930,14 +3930,17 @@ object DemoDataSeeder {
         println("Deleting Datadog agent ClickHouse data...")
         val ddClickhouseQueries =
             listOf(
-                "ALTER TABLE apm_spans DELETE WHERE toInt64(organization_id) = $orgId",
-                "ALTER TABLE trace_stats DELETE WHERE toInt64(organization_id) = $orgId",
-                "ALTER TABLE profiles DELETE WHERE toInt64(organization_id) = $orgId",
-                "ALTER TABLE infra_events DELETE WHERE toInt64(organization_id) = $orgId",
-                "ALTER TABLE service_checks DELETE WHERE toInt64(organization_id) = $orgId",
-                "ALTER TABLE processes DELETE WHERE toInt64(organization_id) = $orgId",
-                "ALTER TABLE containers DELETE WHERE toInt64(organization_id) = $orgId",
-                "ALTER TABLE network_connections DELETE WHERE toInt64(organization_id) = $orgId",
+                datadogDeleteQuery("apm_spans", orgId),
+                datadogDeleteQuery("apm_trace_summaries", orgId),
+                datadogDeleteQuery("apm_error_groups_hourly", orgId),
+                datadogDeleteQuery("apm_resource_stats_hourly", orgId),
+                datadogDeleteQuery("trace_stats", orgId),
+                datadogDeleteQuery("profiles", orgId),
+                datadogDeleteQuery("infra_events", orgId),
+                datadogDeleteQuery("service_checks", orgId),
+                datadogDeleteQuery("processes", orgId),
+                datadogDeleteQuery("containers", orgId),
+                datadogDeleteQuery("network_connections", orgId),
             )
 
         for (query in ddClickhouseQueries) {
@@ -3948,6 +3951,9 @@ object DemoDataSeeder {
             }
         }
     }
+
+    private fun datadogDeleteQuery(table: String, orgId: Int): String =
+        "ALTER TABLE $table DELETE WHERE toInt64(organization_id) = $orgId SETTINGS mutations_sync = 2"
 
     suspend fun deleteDemoData() {
         println("🗑️  Deleting existing demo data...")

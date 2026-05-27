@@ -134,6 +134,83 @@ data class DdTraceListResponse(
 )
 
 @Serializable
+data class DdApmOverviewStats(
+    val totalTraces: Long,
+    val errorTraces: Long,
+    val errorRate: Double,
+    val serviceCount: Long,
+    val sourceCount: Long,
+    val p50DurationNs: Long,
+    val p95DurationNs: Long,
+    val p99DurationNs: Long,
+    val avgSpansPerTrace: Double,
+    val previous: DdApmOverviewPreviousStats,
+)
+
+@Serializable
+data class DdApmOverviewPreviousStats(
+    val totalTraces: Long,
+    val errorRate: Double,
+    val p50DurationNs: Long,
+    val p95DurationNs: Long,
+    val p99DurationNs: Long,
+    val avgSpansPerTrace: Double,
+)
+
+@Serializable
+data class DdApmLatencyPoint(
+    val timestamp: String,
+    val p50DurationNs: Long,
+    val p95DurationNs: Long,
+    val p99DurationNs: Long,
+)
+
+@Serializable
+data class DdApmServiceHealthItem(
+    val service: String,
+    val source: String,
+    val traceCount: Long,
+    val errorCount: Long,
+    val errorRate: Double,
+    val p95DurationNs: Long,
+    val avgSpansPerTrace: Double,
+)
+
+@Serializable
+data class DdApmResourceHotspotItem(
+    val service: String,
+    val resource: String,
+    val source: String,
+    val traceCount: Long,
+    val errorCount: Long,
+    val errorRate: Double,
+    val p95DurationNs: Long,
+)
+
+@Serializable
+data class DdApmFacetItem(
+    val value: String,
+    val count: Long,
+)
+
+@Serializable
+data class DdApmOverviewFacets(
+    val services: List<DdApmFacetItem>,
+    val sources: List<DdApmFacetItem>,
+    val environments: List<DdApmFacetItem>,
+)
+
+@Serializable
+data class DdApmOverviewResponse(
+    val stats: DdApmOverviewStats,
+    val latencySeries: List<DdApmLatencyPoint>,
+    val serviceHealth: List<DdApmServiceHealthItem>,
+    val resourceHotspots: List<DdApmResourceHotspotItem>,
+    val errors: List<DdApmErrorGroup>,
+    val facets: DdApmOverviewFacets,
+)
+
+@Serializable
 data class DdServiceMapEntry(
     val service: String,
     val spanCount: Long,

@@ -17,11 +17,16 @@
 package com.moneat.datadog.routes
 
 import com.moneat.datadog.models.DdApmErrorsResponse
+import com.moneat.datadog.models.DdApmOverviewFacets
+import com.moneat.datadog.models.DdApmOverviewPreviousStats
+import com.moneat.datadog.models.DdApmOverviewResponse
+import com.moneat.datadog.models.DdApmOverviewStats
 import com.moneat.datadog.models.DdProfileListResponse
 import com.moneat.datadog.models.DdResourceStatsResponse
 import com.moneat.datadog.models.DdServiceMapResponse
 import com.moneat.datadog.models.DdTraceListResponse
 import com.moneat.datadog.services.DatadogHostService
+import com.moneat.datadog.services.DdResourceStatsQuery
 import com.moneat.datadog.services.ProfileIngestionService
 import com.moneat.datadog.services.TraceIngestionService
 import com.moneat.testsupport.RouteTestSupport
@@ -35,6 +40,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
@@ -55,10 +61,14 @@ class DatadogQueryRoutesTest {
         every { DatadogHostService.listHosts(any<Int>()) } returns emptyList()
         every { DatadogHostService.getHost(any<Int>(), any<Int>()) } returns null
         every { DatadogHostService.deleteHost(any<Int>(), any<Int>()) } returns false
-        coEvery { TraceIngestionService.listResourceStats(any(), any(), any(), any(), any()) } returns
+        coEvery { TraceIngestionService.listResourceStats(any(), any<DdResourceStatsQuery>()) } returns
             DdResourceStatsResponse(emptyList(), 0L)
-        coEvery { TraceIngestionService.listTraces(any(), any(), any(), any(), any(), any()) } returns
+        coEvery {
+            TraceIngestionService.listTraces(any(), any(), any(), any(), any(), any(), any(), any(), any())
+        } returns
             DdTraceListResponse(emptyList(), 0L)
+        coEvery { TraceIngestionService.getApmOverview(any(), any(), any(), any(), any(), any()) } returns
+            emptyApmOverview()
         coEvery { TraceIngestionService.getTraceDetail(any(), any()) } returns null
         coEvery { TraceIngestionService.getServiceMap(any()) } returns
             DdServiceMapResponse(emptyList())
@@ -271,6 +281,12 @@ class DatadogQueryRoutesTest {
     }
 
     @Test
+    fun `traces overview returns 401 without jwt`() = testApplication {
+        installTraceRoutes()()
+        assertEquals(HttpStatusCode.Unauthorized, client.get("/v1/traces/overview").status)
+    }
+
+    @Test
     fun `trace detail returns 401 without jwt`() = testApplication {
         installTraceRoutes()()
         assertEquals(HttpStatusCode.Unauthorized, client.get("/v1/traces/12345").status)
@@ -307,6 +323,83 @@ class DatadogQueryRoutesTest {
     }
 
     @Test
+    fun `traces overview rejects invalid status`() = testApplication {
+        installTraceRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get("/v1/traces/overview?status=slow") { withAuth(token) }
+        assertEquals(HttpStatusCode.BadRequest, resp.status)
+    }
+
+    @Test
+    fun `traces resources forwards server side filters`() = testApplication {
+        installTraceRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get(
+            "/v1/traces/resources?service=api&env=prod&source=otlp&status=error&search=checkout&limit=500&offset=-10"
+        ) {
+            withAuth(token)
+        }
+
+        assertEquals(HttpStatusCode.OK, resp.status)
+        coVerify {
+            TraceIngestionService.listResourceStats(
+                organizationId = 10,
+                query = match {
+                    it.service == "api" &&
+                        it.env == "prod" &&
+                        it.source == "otlp" &&
+                        it.status == "error" &&
+                        it.search == "checkout" &&
+                        it.limit == 200 &&
+                        it.offset == 0
+                },
+            )
+        }
+    }
+
+    @Test
+    fun `traces overview rejects invalid time range`() = testApplication {
+        installTraceRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get("/v1/traces/overview?timeRange=2y") { withAuth(token) }
+        assertEquals(HttpStatusCode.BadRequest, resp.status)
+    }
+
+    @Test
+    fun `traces list forwards server side paging search and filters`() = testApplication {
+        installTraceRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get(
+            "/v1/traces?service=api&env=prod&source=otlp&status=error&search=checkout&limit=500&offset=-10"
+        ) {
+            withAuth(token)
+        }
+
+        assertEquals(HttpStatusCode.OK, resp.status)
+        coVerify {
+            TraceIngestionService.listTraces(
+                organizationId = 10,
+                service = "api",
+                env = "prod",
+                source = "otlp",
+                status = "error",
+                limit = 200,
+                offset = 0,
+                timeRange = any(),
+                search = "checkout",
+            )
+        }
+    }
+
+    @Test
+    fun `trace detail allows hex trace id`() = testApplication {
+        installTraceRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get("/v1/traces/4f8a2c9b8e7f4a1a8c1d2e3f4b5c6d7e") { withAuth(token) }
+        assertEquals(HttpStatusCode.NotFound, resp.status)
+    }
+
+    @Test
     fun `trace detail returns bad request for invalid traceId`() = testApplication {
         installTraceRoutes()()
         val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
@@ -321,6 +414,38 @@ class DatadogQueryRoutesTest {
         val resp = client.get("/v1/traces/12345") { withAuth(token) }
         assertEquals(HttpStatusCode.NotFound, resp.status)
     }
+
+    private fun emptyApmOverview(): DdApmOverviewResponse =
+        DdApmOverviewResponse(
+            stats = DdApmOverviewStats(
+                totalTraces = 0,
+                errorTraces = 0,
+                errorRate = 0.0,
+                serviceCount = 0,
+                sourceCount = 0,
+                p50DurationNs = 0,
+                p95DurationNs = 0,
+                p99DurationNs = 0,
+                avgSpansPerTrace = 0.0,
+                previous = DdApmOverviewPreviousStats(
+                    totalTraces = 0,
+                    errorRate = 0.0,
+                    p50DurationNs = 0,
+                    p95DurationNs = 0,
+                    p99DurationNs = 0,
+                    avgSpansPerTrace = 0.0,
+                ),
+            ),
+            latencySeries = emptyList(),
+            serviceHealth = emptyList(),
+            resourceHotspots = emptyList(),
+            errors = emptyList(),
+            facets = DdApmOverviewFacets(
+                services = emptyList(),
+                sources = emptyList(),
+                environments = emptyList(),
+            ),
+        )
 
     // ──── Profile Dashboard Routes — 401 without JWT ────
 

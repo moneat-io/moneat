@@ -903,7 +903,7 @@ function DashboardPage() {
           <DashboardSection
             title="Performance"
             icon={Zap}
-            to="/performance"
+            to="/performance/traces"
             iconClassName="text-violet-600 dark:text-violet-400"
             iconBgClassName="bg-violet-100 dark:bg-violet-900/20"
             headerRight={

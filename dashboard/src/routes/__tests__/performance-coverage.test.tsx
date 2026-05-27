@@ -1,42 +1,19 @@
 import React from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { screen } from '@testing-library/react'
-import { renderRoute, clearAuthStorage } from '@/test/utils'
+import {beforeEach, describe, expect, it, vi} from 'vitest'
+import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
+import {fireEvent, render, screen, waitFor} from '@testing-library/react'
 
-const { mockNavigate, mockApi } = vi.hoisted(() => ({
-  mockNavigate: vi.fn(),
+const {mockApi} = vi.hoisted(() => ({
   mockApi: {
     isAuthenticated: vi.fn(),
-    checkAuth: vi.fn(),
-    getProjects: vi.fn(),
-    getBillingUsage: vi.fn(),
-    getTransactions: vi.fn(),
-    getPerformanceStats: vi.fn(),
-    getCurrentUser: vi.fn(),
-    updateUserTimezone: vi.fn(),
+    getApmOverview: vi.fn(),
+    getApmTraces: vi.fn(),
+    getApmResourceStats: vi.fn(),
   },
 }))
 
 vi.mock('@/lib/api', () => ({
   api: mockApi,
-}))
-
-vi.mock('@/hooks/useEnterpriseFeatures', () => ({
-  useHasModule: () => false,
-}))
-
-vi.mock('@/components/charts/StatsCard', () => ({
-  StatsCard: ({ title, value }: { title: string; value: string }) => <div data-testid="stats-card">{title}:{value}</div>,
-  StatsCardSkeleton: () => <div>stats-skeleton</div>,
-}))
-
-vi.mock('@/components/charts/EventsChart', () => ({
-  EventsChart: () => <div>events-chart</div>,
-  EventsChartSkeleton: () => <div>events-chart-skeleton</div>,
-}))
-
-vi.mock('@/components/charts/BarChart', () => ({
-  BarChart: () => <div>bar-chart</div>,
 }))
 
 vi.mock('@tanstack/react-router', () => ({
@@ -45,123 +22,195 @@ vi.mock('@tanstack/react-router', () => ({
     options,
     useParams: () => ({}),
   }),
-  Link: ({ children, ...props }: { children: React.ReactNode }) => React.createElement('a', props, children),
-  redirect: (opts: Record<string, unknown>) => ({ ...opts, __redirect: true }),
-  useNavigate: () => mockNavigate,
-  useMatches: () => [],
-  Outlet: () => null,
+  Link: ({children, ...props}: {children: React.ReactNode}) => React.createElement('a', props, children),
+  Outlet: () => <div data-testid="performance-outlet" />,
+  redirect: (opts: Record<string, unknown>) => ({...opts, __redirect: true}),
+  useRouterState: () => ({location: {pathname: '/performance/traces'}}),
 }))
 
-import { Route as PerformanceRoute } from '../performance.index'
+vi.mock('recharts', () => ({
+  CartesianGrid: () => <div data-testid="cartesian-grid" />,
+  Line: () => <div data-testid="chart-line" />,
+  LineChart: ({children}: {children: React.ReactNode}) => <div data-testid="line-chart">{children}</div>,
+  ResponsiveContainer: ({children}: {children: React.ReactNode}) => <div>{children}</div>,
+  Tooltip: () => <div data-testid="chart-tooltip" />,
+  XAxis: () => <div data-testid="x-axis" />,
+  YAxis: () => <div data-testid="y-axis" />,
+}))
 
-const mockProject = {
-  id: 'proj-1',
-  name: 'Test Project',
-  slug: 'test-project',
-  platform: 'javascript',
+import {Route as PerformanceIndexRoute} from '../performance.index'
+import {Route as PerformanceLayoutRoute} from '../performance'
+import {Route as PerformanceTracesRoute} from '../performance.traces.index'
+
+const mockOverview = {
+  stats: {
+    totalTraces: 24732,
+    errorTraces: 580,
+    errorRate: 0.0235,
+    serviceCount: 5,
+    sourceCount: 2,
+    p50DurationNs: 42100000,
+    p95DurationNs: 312000000,
+    p99DurationNs: 842000000,
+    avgSpansPerTrace: 18.7,
+    previous: {
+      totalTraces: 20852,
+      errorRate: 0.0277,
+      p50DurationNs: 44900000,
+      p95DurationNs: 268000000,
+      p99DurationNs: 730000000,
+      avgSpansPerTrace: 15.6,
+    },
+  },
+  latencySeries: [
+    {
+      timestamp: '2026-05-26T10:00:00.000Z',
+      p50DurationNs: 42100000,
+      p95DurationNs: 312000000,
+      p99DurationNs: 842000000,
+    },
+  ],
+  serviceHealth: [
+    {
+      service: 'checkout-service',
+      source: 'otlp',
+      traceCount: 5642,
+      errorCount: 326,
+      errorRate: 0.0578,
+      p95DurationNs: 612000000,
+      avgSpansPerTrace: 22.4,
+    },
+  ],
+  resourceHotspots: [
+    {
+      service: 'checkout-service',
+      resource: 'POST /checkout',
+      source: 'otlp',
+      traceCount: 1234,
+      errorCount: 154,
+      errorRate: 0.1245,
+      p95DurationNs: 612000000,
+    },
+  ],
+  errors: [],
+  facets: {
+    services: [{value: 'checkout-service', count: 5642}],
+    sources: [{value: 'otlp', count: 5000}],
+    environments: [{value: 'production', count: 5000}],
+  },
 }
 
-const mockTransactions = [
-  {
-    name: 'GET /api/users',
-    op: 'http.server',
-    tpm: 120.5,
-    p50: 45,
-    p75: 120,
-    p95: 350,
-    failureRate: 0.5,
-  },
-  {
-    name: 'POST /api/data',
-    op: 'http.server',
-    tpm: 80.2,
-    p50: 200,
-    p75: 400,
-    p95: 1500,
-    failureRate: 3.2,
-  },
-  {
-    name: 'DB query',
-    op: 'db.query',
-    tpm: 500,
-    p50: 5,
-    p75: 15,
-    p95: 50,
-    failureRate: 0.1,
-  },
-]
-
-const mockStats = {
-  apdex: 0.92,
-  totalTransactions: 25000,
-  avgDuration: 150,
-  throughput: [
-    { timestamp: '2026-03-14T00:00:00Z', count: 100 },
-    { timestamp: '2026-03-14T01:00:00Z', count: 120 },
-  ],
-  slowestTransactions: [
-    { eventId: 'tx-slow-1', name: 'Heavy query', op: 'db.sql.query', duration: 5200 },
-    { eventId: 'tx-slow-2', name: 'External call', op: 'http.client', duration: 3100 },
-  ],
+const mockTrace = {
+  traceId: '4f8a2c9b8e7f4a1a8c1d2e3f4b5c6d7e',
+  rootService: 'checkout-service',
+  rootResource: 'POST /checkout',
+  rootName: 'web.request',
+  spanCount: 42,
+  durationNs: 842000000,
+  startNs: Date.now() * 1_000_000,
+  hasError: true,
+  source: 'otlp',
 }
 
-describe('Performance Index - data coverage', () => {
+const scrollIntoViewMock = vi.fn()
+
+function renderWithQueryClient(Component: React.ComponentType) {
+  const queryClient = new QueryClient({
+    defaultOptions: {queries: {retry: false}},
+  })
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <Component />
+    </QueryClientProvider>
+  )
+}
+
+describe('Performance routes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    clearAuthStorage()
-
+    Object.defineProperty(globalThis.HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoViewMock,
+    })
     mockApi.isAuthenticated.mockReturnValue(true)
-    mockApi.checkAuth.mockResolvedValue(true)
-    mockApi.getProjects.mockResolvedValue([mockProject])
-    mockApi.getBillingUsage.mockResolvedValue({ retentionDays: 30 })
-    mockApi.getTransactions.mockResolvedValue(mockTransactions)
-    mockApi.getPerformanceStats.mockResolvedValue(mockStats)
+    mockApi.getApmOverview.mockResolvedValue(mockOverview)
+    mockApi.getApmTraces.mockResolvedValue({
+      traces: [mockTrace],
+      totalCount: 1,
+    })
+    mockApi.getApmResourceStats.mockResolvedValue({
+      resources: [{
+        service: 'checkout-service',
+        resource: 'POST /checkout',
+        name: 'web.request',
+        type: '',
+        totalHits: 42,
+        totalErrors: 7,
+        avgDurationNs: 321000000,
+        errorRate: 0.1667,
+      }],
+      totalCount: 1,
+    })
   })
 
-  it('renders performance page with stats, charts, and transaction table', async () => {
-    renderRoute(PerformanceRoute)
+  it('redirects the performance index to traces', async () => {
+    const beforeLoad = (PerformanceIndexRoute as unknown as {beforeLoad: () => Promise<void>}).beforeLoad
 
-    // Header
-    expect(await screen.findByText('Performance')).toBeInTheDocument()
-
-    // Wait for data to load - transaction table appears after queries resolve
-    expect(await screen.findByText('GET /api/users')).toBeInTheDocument()
-
-    // Stats cards
-    const statsCards = screen.getAllByTestId('stats-card')
-    expect(statsCards.length).toBeGreaterThanOrEqual(3)
-
-    // Charts
-    expect(screen.getByText('events-chart')).toBeInTheDocument()
-
-    // Slowest transactions card
-    expect(screen.getByText('Slowest Transactions')).toBeInTheDocument()
-    expect(screen.getByText('Heavy query')).toBeInTheDocument()
-
-    // Transaction table
-    expect(screen.getByText('Transaction Groups')).toBeInTheDocument()
-    expect(screen.getByText('POST /api/data')).toBeInTheDocument()
-    expect(screen.getByText('DB query')).toBeInTheDocument()
+    await expect(beforeLoad()).rejects.toMatchObject({
+      __redirect: true,
+      to: '/performance/traces',
+    })
   })
 
-  it('renders no data state when transactions are empty', async () => {
-    mockApi.getTransactions.mockResolvedValue([])
-    mockApi.getPerformanceStats.mockResolvedValue(null)
+  it('renders traces as the primary performance tab without transactions', () => {
+    const Component = (PerformanceLayoutRoute as unknown as {component: React.ComponentType}).component
 
-    renderRoute(PerformanceRoute)
+    render(<Component />)
 
-    expect(await screen.findByText('No transaction data for this period')).toBeInTheDocument()
+    expect(screen.getByText('Traces')).toBeInTheDocument()
+    expect(screen.getByText('Service Map')).toBeInTheDocument()
+    expect(screen.queryByText('Transactions')).not.toBeInTheDocument()
+    expect(screen.getByTestId('performance-outlet')).toBeInTheDocument()
   })
 
-  it('renders loading state', () => {
-    mockApi.getProjects.mockResolvedValue([mockProject])
-    mockApi.getTransactions.mockReturnValue(new Promise(() => {}))
-    mockApi.getPerformanceStats.mockReturnValue(new Promise(() => {}))
+  it('renders the traces dashboard analysis surface', async () => {
+    const Component = (PerformanceTracesRoute as unknown as {component: React.ComponentType}).component
+    renderWithQueryClient(Component)
 
-    renderRoute(PerformanceRoute)
+    expect(await screen.findByText('Health overview')).toBeInTheDocument()
+    expect(screen.getByText('Service health')).toBeInTheDocument()
+    expect(screen.getByText('Latency distribution (ms)')).toBeInTheDocument()
+    expect(screen.getByText('Errors & top resources')).toBeInTheDocument()
+    expect(screen.getByText('Recent traces')).toBeInTheDocument()
+    expect(screen.getAllByText('Source').length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('POST /checkout')).length).toBeGreaterThan(0)
+    await waitFor(() => {
+      expect(mockApi.getApmTraces).toHaveBeenCalledWith(expect.objectContaining({
+        limit: 25,
+        offset: 0,
+      }))
+    })
+  })
 
-    // Initially shows no-projects or loading depending on timing
-    // The projects query needs to resolve first
-    expect(screen.getByText(/Performance|Loading|No projects/)).toBeInTheDocument()
+  it('opens a real paged erroring resources view', async () => {
+    const Component = (PerformanceTracesRoute as unknown as {component: React.ComponentType}).component
+    renderWithQueryClient(Component)
+
+    const viewAllButton = await screen.findByRole('button', {name: /View all erroring resources/i})
+    expect(viewAllButton).toHaveClass('cursor-pointer')
+    fireEvent.click(viewAllButton)
+
+    expect(await screen.findByText('All erroring resources')).toBeInTheDocument()
+    await waitFor(() => expect(scrollIntoViewMock).toHaveBeenCalledTimes(1))
+    await waitFor(() => {
+      expect(mockApi.getApmResourceStats).toHaveBeenCalledWith(expect.objectContaining({
+        status: 'error',
+        limit: 25,
+        offset: 0,
+      }))
+    })
+
+    fireEvent.click(viewAllButton)
+    await waitFor(() => expect(scrollIntoViewMock).toHaveBeenCalledTimes(2))
   })
 })

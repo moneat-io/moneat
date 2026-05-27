@@ -24,6 +24,7 @@ import com.moneat.datadog.models.DdStatsEntry
 import com.moneat.datadog.models.DdStatsPayload
 import com.moneat.datadog.services.DdApmQueryTimeRange
 import com.moneat.datadog.services.DdApmQueryTimeUnit
+import com.moneat.datadog.services.DdResourceStatsQuery
 import com.moneat.datadog.services.TraceIngestionService
 import io.sentry.ISpan
 import io.mockk.coEvery
@@ -407,6 +408,8 @@ class TraceIngestionServiceCoverageTest {
             organizationId = 1,
             service = null,
             env = null,
+            source = null,
+            status = null,
             limit = 10,
             offset = 0
         )
@@ -433,6 +436,8 @@ class TraceIngestionServiceCoverageTest {
             organizationId = 1,
             service = "api",
             env = "prod",
+            source = "datadog",
+            status = "ok",
             limit = 10,
             offset = 0
         )
@@ -444,6 +449,34 @@ class TraceIngestionServiceCoverageTest {
         assertEquals("GET /", result.traces[0].rootResource)
         assertEquals(5, result.traces[0].spanCount)
         assertFalse(result.traces[0].hasError)
+    }
+
+    @Test
+    fun `listTraces applies search to server side query`() = runBlocking {
+        val capturedQueries = mutableListOf<String>()
+        coEvery { ClickHouseClient.executeWithFormat(any(), any()) } coAnswers {
+            capturedQueries.add(firstArg())
+            if (secondArg<String>() == "TabSeparated") {
+                "0"
+            } else {
+                ""
+            }
+        }
+
+        TraceIngestionService.listTraces(
+            organizationId = 1,
+            service = null,
+            env = null,
+            source = null,
+            status = null,
+            limit = 10,
+            offset = 0,
+            search = "checkout's"
+        )
+
+        assertTrue(capturedQueries.any { it.contains("positionCaseInsensitive(trace_id_canonical") })
+        assertTrue(capturedQueries.any { it.contains("positionCaseInsensitive(root_resource") })
+        assertTrue(capturedQueries.any { it.contains("checkout\\'s") })
     }
 
     // ===================== getTraceDetail =====================
@@ -652,6 +685,52 @@ class TraceIngestionServiceCoverageTest {
     }
 
     @Test
+    fun `listResourceStats applies trace summary filters for erroring resources`() = runBlocking {
+        val capturedQueries = mutableListOf<String>()
+        coEvery { ClickHouseClient.executeWithFormat(any(), any()) } coAnswers {
+            val query = firstArg<String>()
+            capturedQueries.add(query)
+            if (secondArg<String>() == "TabSeparated") {
+                "1"
+            } else {
+                "{" +
+                    "\"service\":\"api\"," +
+                    "\"resource\":\"POST /checkout\"," +
+                    "\"name\":\"web.request\"," +
+                    "\"type\":\"\"," +
+                    "\"total_hits\":20," +
+                    "\"total_errors\":5," +
+                    "\"avg_duration_ns\":300000000," +
+                    "\"error_rate\":0.25" +
+                    "}"
+            }
+        }
+
+        val result = TraceIngestionService.listResourceStats(
+            organizationId = 1,
+            query = DdResourceStatsQuery(
+                service = "api",
+                env = "production",
+                source = "otlp",
+                status = "error",
+                search = "checkout",
+                limit = 10,
+                offset = 0,
+            )
+        )
+
+        assertEquals(1, result.totalCount)
+        assertEquals("POST /checkout", result.resources.first().resource)
+        assertEquals(5L, result.resources.first().totalErrors)
+        assertTrue(capturedQueries.all { it.contains("apm_trace_summaries") })
+        assertTrue(capturedQueries.any { it.contains("service = 'api'") })
+        assertTrue(capturedQueries.any { it.contains("env = 'production'") })
+        assertTrue(capturedQueries.any { it.contains("source = 'otlp'") })
+        assertTrue(capturedQueries.any { it.contains("has_error = 1") })
+        assertTrue(capturedQueries.any { it.contains("positionCaseInsensitive(root_resource, 'checkout')") })
+    }
+
+    @Test
     fun `APM dashboard list queries use requested time range filters`() = runBlocking {
         val capturedQueries = mutableListOf<String>()
         val timeRange = DdApmQueryTimeRange(90, DdApmQueryTimeUnit.DAY)
@@ -668,6 +747,8 @@ class TraceIngestionServiceCoverageTest {
             organizationId = 1,
             service = null,
             env = null,
+            source = null,
+            status = null,
             limit = 10,
             offset = 0,
             timeRange = timeRange

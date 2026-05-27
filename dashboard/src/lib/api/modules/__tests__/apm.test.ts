@@ -50,7 +50,10 @@ describe('APM API', () => {
       http.get(`${API_BASE}/v1/traces`, ({ request }) => {
         const url = new URL(request.url)
         expect(url.searchParams.get('service')).toBe('api-gateway')
+        expect(url.searchParams.get('source')).toBe('otlp')
+        expect(url.searchParams.get('status')).toBe('error')
         expect(url.searchParams.get('env')).toBe('production')
+        expect(url.searchParams.get('search')).toBe('checkout')
         expect(url.searchParams.get('limit')).toBe('20')
         expect(url.searchParams.get('offset')).toBe('10')
         expect(url.searchParams.get('timeRange')).toBe('7d')
@@ -60,10 +63,65 @@ describe('APM API', () => {
 
     const result = await api.getApmTraces({
       service: 'api-gateway',
+      source: 'otlp',
+      status: 'error',
       env: 'production',
+      search: 'checkout',
       limit: 20,
       offset: 10,
       timeRange: '7d',
+    })
+    expect(result).toEqual(mockResponse)
+  })
+
+  // ──── getApmOverview ────
+
+  it('fetches APM overview with filter params', async () => {
+    const mockResponse = {
+      stats: {
+        totalTraces: 10,
+        errorTraces: 1,
+        errorRate: 0.1,
+        serviceCount: 2,
+        sourceCount: 1,
+        p50DurationNs: 42000000,
+        p95DurationNs: 312000000,
+        p99DurationNs: 842000000,
+        avgSpansPerTrace: 18.7,
+        previous: {
+          totalTraces: 8,
+          errorRate: 0,
+          p50DurationNs: 40000000,
+          p95DurationNs: 300000000,
+          p99DurationNs: 800000000,
+          avgSpansPerTrace: 15.2,
+        },
+      },
+      latencySeries: [],
+      serviceHealth: [],
+      resourceHotspots: [],
+      errors: [],
+      facets: { services: [], sources: [], environments: [] },
+    }
+
+    server.use(
+      http.get(`${API_BASE}/v1/traces/overview`, ({ request }) => {
+        const url = new URL(request.url)
+        expect(url.searchParams.get('service')).toBe('api-gateway')
+        expect(url.searchParams.get('source')).toBe('sentry')
+        expect(url.searchParams.get('status')).toBe('ok')
+        expect(url.searchParams.get('env')).toBe('production')
+        expect(url.searchParams.get('timeRange')).toBe('24h')
+        return HttpResponse.json(mockResponse)
+      })
+    )
+
+    const result = await api.getApmOverview({
+      service: 'api-gateway',
+      source: 'sentry',
+      status: 'ok',
+      env: 'production',
+      timeRange: '24h',
     })
     expect(result).toEqual(mockResponse)
   })
@@ -162,7 +220,12 @@ describe('APM API', () => {
       http.get(`${API_BASE}/v1/traces/resources`, ({ request }) => {
         const url = new URL(request.url)
         expect(url.searchParams.get('service')).toBe('user-svc')
+        expect(url.searchParams.get('source')).toBe('otlp')
+        expect(url.searchParams.get('status')).toBe('error')
+        expect(url.searchParams.get('env')).toBe('production')
+        expect(url.searchParams.get('search')).toBe('checkout')
         expect(url.searchParams.get('limit')).toBe('10')
+        expect(url.searchParams.get('offset')).toBe('20')
         expect(url.searchParams.get('timeRange')).toBe('30d')
         return HttpResponse.json(mockResponse)
       })
@@ -170,7 +233,12 @@ describe('APM API', () => {
 
     const result = await api.getApmResourceStats({
       service: 'user-svc',
+      source: 'otlp',
+      status: 'error',
+      env: 'production',
+      search: 'checkout',
       limit: 10,
+      offset: 20,
       timeRange: '30d',
     })
     expect(result).toEqual(mockResponse)

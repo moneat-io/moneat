@@ -150,11 +150,13 @@ describe('priority route coverage', () => {
     expect(mockApi.getIssue).toHaveBeenCalledWith('issue-123', null)
   })
 
-  it('performance route renders no projects message when there are no projects', async () => {
-    const Component = (PerformanceRoute as unknown as { component: React.ComponentType }).component
-    renderRoute(Component)
+  it('performance route redirects to traces', async () => {
+    const beforeLoad = (PerformanceRoute as unknown as { beforeLoad: () => Promise<void> }).beforeLoad
 
-    expect(await screen.findByText('No projects yet. Create a project to view performance data.')).toBeInTheDocument()
+    await expect(beforeLoad()).rejects.toMatchObject({
+      __redirect: true,
+      to: '/performance/traces',
+    })
   })
 
   it('ai route prompts for project selection when no project is selected', () => {

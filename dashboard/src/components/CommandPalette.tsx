@@ -73,7 +73,7 @@ const PAGE_ITEMS: Array<{
 }> = [
   {label: 'Overview', description: 'Project metrics and key stats', href: '/', icon: Home, keywords: ['home']},
   {label: 'Issues', description: 'Errors and exceptions', href: '/issues', icon: AlertCircle, keywords: ['errors', 'bugs']},
-  {label: 'Performance', description: 'Traces and transaction timing', href: '/performance', icon: Timer, keywords: ['traces', 'transactions']},
+  {label: 'Performance', description: 'Distributed traces and service latency', href: '/performance/traces', icon: Timer, keywords: ['traces', 'services', 'latency']},
   {label: 'APM Traces', description: 'Application performance traces and spans', href: '/apm-traces', icon: Cpu, keywords: ['apm', 'traces', 'spans', 'distributed tracing']},
   {label: 'Profiles', description: 'Continuous profiling and flamegraphs', href: '/profiles', icon: Flame, keywords: ['profiling', 'flamegraph', 'cpu', 'memory']},
   {label: 'Logs', description: 'Search and explore log events', href: '/logs', icon: ScrollText, keywords: ['logging']},

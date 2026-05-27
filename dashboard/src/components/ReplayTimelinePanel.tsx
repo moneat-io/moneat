@@ -355,13 +355,13 @@ function WaterfallPanel({
               View Issue <ExternalLink className="h-3 w-3" />
             </Link>
           )}
-          {item.eventId && item.type === 'transaction' && (
+          {item.traceId && item.type === 'transaction' && (
             <Link
-              to="/performance/$transactionId"
-              params={{ transactionId: item.eventId }}
+              to="/performance/traces/$traceId"
+              params={{ traceId: item.traceId }}
               className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline"
             >
-              Full Transaction <ExternalLink className="h-3 w-3" />
+              Full Trace <ExternalLink className="h-3 w-3" />
             </Link>
           )}
         </div>
@@ -642,13 +642,13 @@ const TimelineList = React.forwardRef<HTMLDivElement, TimelineListProps>(functio
                       <ExternalLink className="h-3.5 w-3.5" />
                     </Link>
                   )}
-                  {item.eventId && !item.issueId && item.type === 'transaction' && (
+                  {item.traceId && !item.issueId && item.type === 'transaction' && (
                     <Link
-                      to="/performance/$transactionId"
-                      params={{ transactionId: item.eventId }}
+                      to="/performance/traces/$traceId"
+                      params={{ traceId: item.traceId }}
                       onClick={(e) => e.stopPropagation()}
                       className="shrink-0 p-1.5 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-500 transition-colors"
-                      aria-label="View transaction"
+                      aria-label="View trace"
                     >
                       <ExternalLink className="h-3.5 w-3.5" />
                     </Link>

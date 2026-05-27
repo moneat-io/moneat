@@ -16,6 +16,12 @@
 
 package com.moneat.datadog.services
 
+import com.moneat.config.ClickHouseClient
+import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import org.msgpack.core.MessageBufferPacker
 import org.msgpack.core.MessagePack
@@ -194,6 +200,82 @@ class TraceIngestionServiceTest {
 
         assertEquals(999uL, result[0][0].traceId)
         assertEquals("test.op", result[0][0].name)
+    }
+
+    @Test
+    fun `getApmOverview aggregates filtered trace summaries`() = runBlocking {
+        mockkObject(ClickHouseClient)
+        val queries = mutableListOf<String>()
+        try {
+            every { ClickHouseClient.getDatabase() } returns "moneat"
+            coEvery { ClickHouseClient.executeWithFormat(any(), any()) } answers {
+                val query = firstArg<String>()
+                queries += query
+                when {
+                    "service_count" in query ->
+                        "{" +
+                            "\"total_traces\":20,\"error_traces\":3,\"error_rate\":0.15,\"service_count\":4," +
+                            "\"source_count\":2,\"p50_duration_ns\":42000000," +
+                            "\"p95_duration_ns\":312000000,\"p99_duration_ns\":842000000," +
+                            "\"avg_spans_per_trace\":18.7}"
+                    "GROUP BY timestamp" in query ->
+                        "{" +
+                            "\"timestamp\":\"2026-05-26T10:00:00.000Z\"," +
+                            "\"p50_duration_ns\":42000000,\"p95_duration_ns\":312000000," +
+                            "\"p99_duration_ns\":842000000}"
+                    "WHERE has_error = 1" in query ->
+                        "{" +
+                            "\"service\":\"checkout-service\",\"resource\":\"POST /checkout\"," +
+                            "\"error_count\":154,\"last_seen\":\"2026-05-26T10:05:00.000Z\"," +
+                            "\"sample_trace_id\":\"abc123\"}"
+                    "GROUP BY root_service, root_resource" in query ->
+                        "{" +
+                            "\"service\":\"checkout-service\",\"resource\":\"POST /checkout\"," +
+                            "\"source\":\"otlp\",\"trace_count\":1234,\"error_count\":154," +
+                            "\"error_rate\":0.1248,\"p95_duration_ns\":612000000}"
+                    "GROUP BY root_service" in query ->
+                        "{" +
+                            "\"service\":\"checkout-service\",\"source\":\"otlp\",\"trace_count\":5642," +
+                            "\"error_count\":326,\"error_rate\":0.0578,\"p95_duration_ns\":612000000," +
+                            "\"avg_spans_per_trace\":22.4}"
+                    "avg_spans_per_trace" in query ->
+                        "{" +
+                            "\"total_traces\":10,\"error_rate\":0.10,\"p50_duration_ns\":50000000," +
+                            "\"p95_duration_ns\":400000000,\"p99_duration_ns\":900000000," +
+                            "\"avg_spans_per_trace\":15.2}"
+                    "GROUP BY value" in query && "root_service as value" in query ->
+                        "{\"value\":\"checkout-service\",\"count\":5642}"
+                    "GROUP BY value" in query && "source as value" in query ->
+                        "{\"value\":\"otlp\",\"count\":5000}"
+                    "GROUP BY value" in query && "env as value" in query ->
+                        "{\"value\":\"production\",\"count\":5000}"
+                    else -> ""
+                }
+            }
+
+            val overview = TraceIngestionService.getApmOverview(
+                organizationId = 10,
+                service = "checkout-service",
+                env = "production",
+                source = "otlp",
+                status = "error",
+            )
+
+            assertEquals(20, overview.stats.totalTraces)
+            assertEquals(0.15, overview.stats.errorRate)
+            assertEquals(312000000, overview.stats.p95DurationNs)
+            assertEquals(10, overview.stats.previous.totalTraces)
+            assertEquals("checkout-service", overview.serviceHealth.first().service)
+            assertEquals("POST /checkout", overview.resourceHotspots.first().resource)
+            assertEquals("abc123", overview.errors.first().traceId)
+            assertEquals("production", overview.facets.environments.first().value)
+            assertTrue(queries.any { "service = 'checkout-service'" in it })
+            assertTrue(queries.any { "env = 'production'" in it })
+            assertTrue(queries.any { "source = 'otlp'" in it })
+            assertTrue(queries.any { "has_error = 1" in it })
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
     }
 
     // ──── JSON PARSING TESTS ────

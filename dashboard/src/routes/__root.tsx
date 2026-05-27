@@ -71,6 +71,8 @@ const STATIC_TITLES: Record<string, string> = {
   '/projects': 'Projects',
   '/feedback': 'Feedback',
   '/performance': 'Performance',
+  '/performance/traces': 'Distributed Traces',
+  '/performance/service-map': 'Service Map',
   '/releases': 'Releases',
   '/replays': 'Session Replays',
   '/logs': 'Logs',
@@ -154,11 +156,17 @@ function getDocumentTitle(pathname: string, isAuthenticated: boolean): string {
     return 'Moneat | Error, Performance, and Replay Monitoring'
   }
 
+  const staticTitle = STATIC_TITLES[normalizedPath]
+  if (staticTitle) {
+    return `${staticTitle} | Moneat`
+  }
+
   const dynamicMatchers: Array<[RegExp, (matches: RegExpMatchArray) => string]> = [
     [/^\/projects\/([^/]+)\/settings$/, (match) => `Project ${formatEntityId(match[1])} Settings`],
     [/^\/projects\/([^/]+)$/, (match) => `Project ${formatEntityId(match[1])}`],
     [/^\/issues\/([^/]+)$/, (match) => `Issue ${formatEntityId(match[1])}`],
     [/^\/feedback\/([^/]+)$/, (match) => `Feedback ${formatEntityId(match[1])}`],
+    [/^\/performance\/traces\/([^/]+)$/, (match) => `Trace ${formatEntityId(match[1])}`],
     [/^\/performance\/([^/]+)$/, (match) => `Transaction ${formatEntityId(match[1])}`],
     [/^\/releases\/([^/]+)$/, (match) => `Release ${formatEntityId(match[1])}`],
     [/^\/replays\/([^/]+)$/, (match) => `Replay ${formatEntityId(match[1])}`],
@@ -167,15 +175,10 @@ function getDocumentTitle(pathname: string, isAuthenticated: boolean): string {
   ]
 
   for (const [pattern, toTitle] of dynamicMatchers) {
-    const matches = normalizedPath.match(pattern)
+    const matches = pattern.exec(normalizedPath)
     if (matches) {
       return `${toTitle(matches)} | Moneat`
     }
-  }
-
-  const staticTitle = STATIC_TITLES[normalizedPath]
-  if (staticTitle) {
-    return `${staticTitle} | Moneat`
   }
 
   return 'Moneat | Error, Performance, and Replay Monitoring'

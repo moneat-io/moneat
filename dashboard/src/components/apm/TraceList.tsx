@@ -69,6 +69,9 @@ const SERVICE_COLORS = [
   'bg-fuchsia-500',
 ]
 
+const TRACE_LIST_COLUMNS_CLASS =
+  'grid-cols-[minmax(160px,1.5fr)_104px_minmax(220px,3fr)_72px_132px_minmax(110px,1fr)_76px]'
+
 function getDurationColor(ns: number, maxNs: number): string {
   if (maxNs === 0) return 'text-foreground'
   const ratio = ns / maxNs
@@ -203,10 +206,16 @@ export function TraceList({serviceFilter: externalService, envFilter, basePath}:
             </p>
           </div>
         ) : (
-          <div className="border rounded-lg overflow-hidden">
+          <div className="border rounded-lg overflow-x-auto">
             {/* Column headers */}
-            <div className="grid grid-cols-[minmax(180px,2fr)_minmax(200px,3fr)_80px_140px_minmax(120px,1.5fr)_80px] gap-px bg-muted/50 border-b px-3 py-2 text-xs font-medium text-muted-foreground">
+            <div
+              className={cn(
+                'grid min-w-[930px] gap-px bg-muted/50 border-b px-3 py-2 text-xs font-medium text-muted-foreground',
+                TRACE_LIST_COLUMNS_CLASS
+              )}
+            >
               <div>Service</div>
+              <div>Source</div>
               <div>Resource</div>
               <button
                 onClick={() => toggleSort('spans')}
@@ -239,7 +248,10 @@ export function TraceList({serviceFilter: externalService, envFilter, basePath}:
                     key={trace.traceId}
                     to={`${basePath || '/apm-traces'}/$traceId` as '/apm-traces/$traceId'}
                     params={{traceId: trace.traceId}}
-                    className="grid grid-cols-[minmax(180px,2fr)_minmax(200px,3fr)_80px_140px_minmax(120px,1.5fr)_80px] gap-px px-3 py-2 hover:bg-muted/40 transition-colors items-center group"
+                    className={cn(
+                      'grid min-w-[930px] gap-px px-3 py-2 hover:bg-muted/40 transition-colors items-center group',
+                      TRACE_LIST_COLUMNS_CLASS
+                    )}
                   >
                     {/* Service */}
                     <div className="flex items-center gap-2 min-w-0">
@@ -252,7 +264,11 @@ export function TraceList({serviceFilter: externalService, envFilter, basePath}:
                       <span className="font-medium text-sm truncate group-hover:text-primary transition-colors">
                         {trace.rootService}
                       </span>
-                      <SourceBadge source={trace.source} />
+                    </div>
+
+                    {/* Source */}
+                    <div className="flex items-center min-w-0">
+                      <SourceBadge source={trace.source} className="max-w-[92px] truncate" />
                     </div>
 
                     {/* Resource */}

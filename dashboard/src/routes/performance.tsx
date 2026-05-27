@@ -16,9 +16,8 @@
 
 import {createFileRoute, Link, Outlet, redirect, useRouterState} from '@tanstack/react-router'
 import {api} from '@/lib/api'
-import {useHasModule} from '@/hooks/useEnterpriseFeatures'
 import {cn} from '@/lib/utils'
-import {Activity, Layers, Server} from 'lucide-react'
+import {Layers, Server} from 'lucide-react'
 
 export const Route = createFileRoute('/performance')({
   beforeLoad: async ({ location }) => {
@@ -30,28 +29,18 @@ export const Route = createFileRoute('/performance')({
 })
 
 const tabs = [
-  { id: 'transactions', label: 'Transactions', href: '/performance', icon: Activity },
-  { id: 'traces', label: 'Traces', href: '/performance/traces', icon: Layers, requiresDatadog: true },
-  { id: 'service-map', label: 'Service Map', href: '/performance/service-map', icon: Server, requiresDatadog: true },
+  { id: 'traces', label: 'Traces', href: '/performance/traces', icon: Layers },
+  { id: 'service-map', label: 'Service Map', href: '/performance/service-map', icon: Server },
 ] as const
 
 function PerformanceLayout() {
   const router = useRouterState()
   const currentPath = router.location.pathname
-  const hasDatadog = useHasModule('datadog')
-
-  const visibleTabs = tabs.filter((t) => !('requiresDatadog' in t && t.requiresDatadog) || hasDatadog)
+  const visibleTabs = tabs
 
   const activeTab = visibleTabs.find(
-    (t) => t.href !== '/performance'
-      ? currentPath.startsWith(t.href)
-      : currentPath === '/performance' || currentPath === '/performance/',
+    (t) => currentPath.startsWith(t.href),
   ) ?? visibleTabs[0]
-
-  // Only show tabs when there's more than just Transactions
-  if (visibleTabs.length <= 1) {
-    return <Outlet />
-  }
 
   return (
     <div>

@@ -167,6 +167,7 @@ function IssueDetailPage() {
   })
 
   const primaryTransactionId = relatedTransactions[0]?.eventId
+  const relatedTraceTransactions = relatedTransactions.filter((tx) => !!tx.traceId)
 
   const { data: primaryTransactionSpans } = useQuery({
     queryKey: ['issue-transaction-spans', primaryTransactionId],
@@ -421,14 +422,16 @@ function IssueDetailPage() {
                       spans={primaryTransactionSpans.spans}
                     />
                   </div>
-                  <Link
-                    to="/performance/$transactionId"
-                    params={{ transactionId: primaryTransactionSpans.transaction.eventId }}
-                    className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-                  >
-                    Open Full Span Waterfall
-                    <ArrowUpRight className="h-3.5 w-3.5" />
-                  </Link>
+                  {primaryTransactionSpans.transaction.traceId && (
+                    <Link
+                      to="/performance/traces/$traceId"
+                      params={{ traceId: primaryTransactionSpans.transaction.traceId }}
+                      className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                    >
+                      Open Full Trace
+                      <ArrowUpRight className="h-3.5 w-3.5" />
+                    </Link>
+                  )}
                 </CardContent>
               </Card>
             )}
@@ -612,22 +615,22 @@ function IssueDetailPage() {
               </Card>
             )}
 
-            {/* Related Transactions */}
-            {relatedTransactions.length > 0 && (
+            {/* Related Traces */}
+            {relatedTraceTransactions.length > 0 && (
               <Card>
                 <CardHeader className="pb-2 px-3 pt-3">
                   <CardTitle className="flex items-center gap-2 text-sm font-medium">
                     <Activity className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />
-                    Transactions ({relatedTransactions.length})
+                    Traces ({relatedTraceTransactions.length})
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="px-3 pb-3">
                   <div className="space-y-1.5 max-h-[300px] overflow-auto">
-                    {relatedTransactions.map((tx) => (
+                    {relatedTraceTransactions.map((tx) => (
                       <Link
                         key={tx.eventId}
-                        to="/performance/$transactionId"
-                        params={{ transactionId: tx.eventId }}
+                        to="/performance/traces/$traceId"
+                        params={{ traceId: tx.traceId ?? '' }}
                         className="flex items-center justify-between rounded border p-2.5 transition-colors hover:bg-accent"
                       >
                         <div className="min-w-0 flex-1">
