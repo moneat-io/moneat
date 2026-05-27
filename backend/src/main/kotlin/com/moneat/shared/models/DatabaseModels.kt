@@ -285,6 +285,22 @@ object AgentApiKeys : Table("agent_api_keys") {
     override val primaryKey = PrimaryKey(id)
 }
 
+object McpApiKeys : Table("mcp_api_keys") {
+    val id = integer("id").autoIncrement()
+    val organization_id = integer("organization_id").references(Organizations.id)
+    val name = varchar("name", 255)
+    val key_hash = varchar("key_hash", 255).uniqueIndex()
+    val key_prefix = varchar("key_prefix", 12)
+    val enabled_tools = registerColumn<List<String>>("enabled_tools", TextArrayColumnType())
+    val enabled_resources = registerColumn<List<String>>("enabled_resources", TextArrayColumnType())
+    val created_by = integer("created_by").references(Users.id)
+    val created_at = timestamp("created_at")
+    val last_used_at = timestamp("last_used_at").nullable()
+    val expires_at = timestamp("expires_at").nullable()
+    val is_active = bool("is_active").default(true)
+    override val primaryKey = PrimaryKey(id)
+}
+
 object AuthTokens : Table("auth_tokens") {
     val id = integer("id").autoIncrement()
     val user_id = integer("user_id").references(Users.id)

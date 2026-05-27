@@ -17,6 +17,7 @@
 package com.moneat.mcp.auth
 
 import com.moneat.auth.services.AuthTokenService
+import com.moneat.mcp.services.McpApiKeyService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import kotlinx.serialization.Serializable
@@ -44,6 +45,7 @@ private val authJson = Json {
 object McpAuthProvider {
 
     private val authTokenService = AuthTokenService()
+    private val mcpApiKeyService = McpApiKeyService()
 
     /**
      * Validates an MCP Authorization header and resolves a concrete organization.
@@ -64,6 +66,19 @@ object McpAuthProvider {
         val cleanToken = authorization.removePrefix("Bearer ").trim()
         if (cleanToken.isBlank()) {
             return null
+        }
+
+        val mcpValidation = mcpApiKeyService.validateKey(cleanToken)
+        if (mcpValidation != null) {
+            return McpAuthResult(
+                organizationId = mcpValidation.organizationId,
+                userId = mcpValidation.userId,
+                tokenId = -mcpValidation.keyId,
+                mcpApiKeyId = mcpValidation.keyId,
+                scopes = AuthTokenService.VALID_SCOPES,
+                allowedTools = mcpValidation.enabledTools,
+                allowedResources = mcpValidation.enabledResources,
+            )
         }
 
         val validation = authTokenService.validateToken(cleanToken)
@@ -150,5 +165,8 @@ data class McpAuthResult(
     val organizationId: Int,
     val userId: Int,
     val tokenId: Int,
-    val scopes: Set<String>
+    val scopes: Set<String>,
+    val mcpApiKeyId: Int? = null,
+    val allowedTools: Set<String>? = null,
+    val allowedResources: Set<String>? = null,
 )

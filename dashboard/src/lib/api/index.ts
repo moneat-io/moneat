@@ -45,6 +45,7 @@ import { syntheticsMethods } from './modules/synthetics'
 import { logIndexesMethods } from './modules/log-indexes'
 import { workflowsMethods } from './modules/workflows'
 import { featureFlagsMethods } from './modules/feature-flags'
+import { mcpMethods } from './modules/mcp'
 
 const core = createApiClientCore()
 
@@ -80,6 +81,7 @@ export const api = {
   ...logIndexesMethods(core),
   ...workflowsMethods(core),
   ...featureFlagsMethods(core),
+  ...mcpMethods(core),
 }
 
 export { formatErrorForLogging } from './utils'
