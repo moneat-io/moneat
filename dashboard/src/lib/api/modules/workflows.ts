@@ -17,9 +17,12 @@
 import type {ApiClientCore} from '../client'
 import type {
   WorkflowCatalogResponse,
+  WorkflowPreviewRequest,
+  WorkflowPreviewResponse,
   WorkflowRequest,
   WorkflowResponse,
   WorkflowRunResponse,
+  WorkflowTestMessageResponse,
   WorkflowUpdateRequest,
 } from '../types'
 
@@ -35,6 +38,18 @@ export function workflowsMethods(core: ApiClientCore) {
 
     createWorkflow: (request: WorkflowRequest) =>
       core.request<WorkflowResponse>(`${base}/workflows`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }),
+
+    previewWorkflow: (request: WorkflowPreviewRequest) =>
+      core.request<WorkflowPreviewResponse>(`${base}/workflows/preview`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }),
+
+    testWorkflowMessage: (request: WorkflowPreviewRequest) =>
+      core.request<WorkflowTestMessageResponse>(`${base}/workflows/test-message`, {
         method: 'POST',
         body: JSON.stringify(request),
       }),

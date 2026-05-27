@@ -26,6 +26,13 @@ private const val ALERT_DEDUPLICATION_KEY_REFERENCE = "alert.deduplication_key"
 private const val ALERT_CHANNEL_EMAIL_REFERENCE = "alert.channels.email"
 private const val ALERT_CHANNEL_SLACK_REFERENCE = "alert.channels.slack"
 private const val ALERT_CHANNEL_DISCORD_REFERENCE = "alert.channels.discord"
+private const val ALERT_DISPLAY_TITLE_REFERENCE = "alert.display_title"
+private const val ALERT_PRIORITY_REFERENCE = "alert.priority"
+private const val ALERT_DASHBOARD_TITLE_REFERENCE = "alert.dashboard.title"
+private const val ALERT_WIDGET_TITLE_REFERENCE = "alert.widget.title"
+private const val ALERT_CONDITION_REFERENCE = "alert.condition"
+private const val ALERT_THRESHOLD_REFERENCE = "alert.threshold"
+private const val ALERT_CURRENT_VALUE_REFERENCE = "alert.current_value"
 
 @Serializable
 data class WorkflowFieldConfig(
@@ -170,12 +177,19 @@ object WorkflowCatalog {
 
     private val alertScope = listOf(
         WorkflowScopeReferenceDefinition("alert.title", "Alert title", "String"),
+        WorkflowScopeReferenceDefinition(ALERT_DISPLAY_TITLE_REFERENCE, "Display title", "String"),
         WorkflowScopeReferenceDefinition("alert.description", "Alert description", "Text"),
         WorkflowScopeReferenceDefinition("alert.severity", "Severity", "AlertSeverity"),
+        WorkflowScopeReferenceDefinition(ALERT_PRIORITY_REFERENCE, "Priority", "String"),
         WorkflowScopeReferenceDefinition(ALERT_STATUS_REFERENCE, "Status", "AlertStatus"),
         WorkflowScopeReferenceDefinition("alert.source", "Source", "AlertSource"),
         WorkflowScopeReferenceDefinition(ALERT_DEDUPLICATION_KEY_REFERENCE, "Deduplication key", "String"),
         WorkflowScopeReferenceDefinition("alert.url", "Moneat URL", "String"),
+        WorkflowScopeReferenceDefinition(ALERT_DASHBOARD_TITLE_REFERENCE, "Dashboard title", "String"),
+        WorkflowScopeReferenceDefinition(ALERT_WIDGET_TITLE_REFERENCE, "Widget title", "String"),
+        WorkflowScopeReferenceDefinition(ALERT_CONDITION_REFERENCE, "Condition", "String"),
+        WorkflowScopeReferenceDefinition(ALERT_THRESHOLD_REFERENCE, "Threshold", "String"),
+        WorkflowScopeReferenceDefinition(ALERT_CURRENT_VALUE_REFERENCE, "Current value", "String"),
         WorkflowScopeReferenceDefinition(ALERT_CHANNEL_EMAIL_REFERENCE, "Email channel", "Boolean"),
         WorkflowScopeReferenceDefinition(ALERT_CHANNEL_SLACK_REFERENCE, "Slack channel", "Boolean"),
         WorkflowScopeReferenceDefinition(ALERT_CHANNEL_DISCORD_REFERENCE, "Discord channel", "Boolean"),

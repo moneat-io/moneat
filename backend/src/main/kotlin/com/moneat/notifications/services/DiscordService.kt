@@ -18,6 +18,7 @@ package com.moneat.notifications.services
 
 import com.moneat.config.EnvConfig
 import com.moneat.shared.models.OrganizationIntegrations
+import com.moneat.workflows.models.WorkflowStepPreview
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpTimeout
@@ -555,9 +556,71 @@ class DiscordService(
                 channelId = config.channelId,
                 embed = embed,
                 fallbackText = "$title: $message"
-            )
+        )
         return success
     }
+
+    suspend fun sendWorkflowAlertMessage(
+        organizationId: Int,
+        preview: WorkflowStepPreview,
+        skipIfUnconfigured: Boolean = false
+    ): Boolean {
+        val config = getDiscordConfig(organizationId) ?: return skipIfUnconfigured
+        val embed =
+            DiscordEmbed(
+                title = discordWorkflowAlertHeaderText(preview),
+                description = discordWorkflowAlertDescription(preview),
+                color = parseHexColor(preview.color),
+                fields = preview.fields.map { field ->
+                    DiscordField(field.label, field.value, inline = true)
+                },
+                footer = DiscordFooter("Added by Moneat"),
+                timestamp = Clock.System.now().toString()
+            )
+        val (success, _) =
+            sendMessage(
+                channelId = config.channelId,
+                embed = embed,
+                fallbackText = preview.fallbackText
+        )
+        return success
+    }
+
+    private fun discordWorkflowAlertDescription(preview: WorkflowStepPreview): String =
+        buildString {
+            if (preview.body.isNotBlank()) {
+                appendLine(preview.body)
+            }
+            if (!preview.ctaUrl.isNullOrBlank()) {
+                appendLine()
+                append("[")
+                append(preview.ctaLabel ?: "View")
+                append("](")
+                append(preview.ctaUrl)
+                append(")")
+            }
+        }.trim()
+
+    private fun discordWorkflowAlertHeaderText(preview: WorkflowStepPreview): String {
+        val emoji =
+            when {
+                discordWorkflowAlertFieldValue(preview, "Status").equals("Resolved", ignoreCase = true) -> "✅"
+                parseHexColor(preview.color) == DISCORD_COLOR_RED -> "🔴"
+                else -> "⚠️"
+            }
+        return listOf(emoji, preview.title)
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+    }
+
+    private fun discordWorkflowAlertFieldValue(
+        preview: WorkflowStepPreview,
+        label: String
+    ): String =
+        preview.fields
+            .firstOrNull { it.label.equals(label, ignoreCase = true) }
+            ?.value
+            .orEmpty()
 
     suspend fun testConnection(
         organizationId: Int,
@@ -626,3 +689,10 @@ class DiscordService(
         }
     }
 }
+
+private fun parseHexColor(color: String): Int? {
+    val normalized = color.removePrefix("#")
+    return normalized.toIntOrNull(HEX_RADIX)
+}
+
+private const val HEX_RADIX = 16

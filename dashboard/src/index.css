@@ -333,7 +333,6 @@
   box-shadow: 2px 2px 0px 0px hsl(var(--foreground));
 }
 
-
 /* Gamer theme neon glow effects */
 .theme-gamer *:focus-visible {
   box-shadow: 0 0 8px hsl(var(--ring) / 0.5);
@@ -541,4 +540,10 @@
 
 .service-map .react-flow__edge-path {
   stroke-linecap: round;
+}
+
+.workflows-page :is(.shadow, .shadow-sm, .shadow-md, .shadow-lg),
+.workflow-editor-dialog:is(.shadow, .shadow-sm, .shadow-md, .shadow-lg),
+.workflow-editor-dialog :is(.shadow, .shadow-sm, .shadow-md, .shadow-lg) {
+  box-shadow: none;
 }

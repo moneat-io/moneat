@@ -20,6 +20,7 @@ import com.moneat.utils.ErrorResponse
 import com.moneat.utils.suspendRunCatching
 import com.moneat.workflows.models.CreateWorkflowRequest
 import com.moneat.workflows.models.UpdateWorkflowRequest
+import com.moneat.workflows.models.WorkflowPreviewRequest
 import com.moneat.workflows.services.WorkflowService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
@@ -64,6 +65,28 @@ fun Route.workflowRoutes() {
                     workflowService.createWorkflow(organizationId, request)
                 }.fold(
                     onSuccess = { workflow -> call.respond(HttpStatusCode.Created, workflow) },
+                    onFailure = { error -> respondWorkflowError(error) }
+                )
+            }
+
+            post("/preview") {
+                currentOrganizationId() ?: return@post call.respond(HttpStatusCode.Forbidden)
+                val request = call.receive<WorkflowPreviewRequest>()
+                suspendRunCatching {
+                    workflowService.previewWorkflow(request)
+                }.fold(
+                    onSuccess = { preview -> call.respond(preview) },
+                    onFailure = { error -> respondWorkflowError(error) }
+                )
+            }
+
+            post("/test-message") {
+                val organizationId = currentOrganizationId() ?: return@post call.respond(HttpStatusCode.Forbidden)
+                val request = call.receive<WorkflowPreviewRequest>()
+                suspendRunCatching {
+                    workflowService.testWorkflowMessage(organizationId, request)
+                }.fold(
+                    onSuccess = { result -> call.respond(result) },
                     onFailure = { error -> respondWorkflowError(error) }
                 )
             }

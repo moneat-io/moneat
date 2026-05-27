@@ -656,7 +656,7 @@ class EmailService {
                     <p><strong>Status:</strong> $safeLastSeenText</p>
                     <p>The monitoring agent has stopped reporting metrics. Please check if the host is online and the agent is running.</p>
                     <div style="margin: 30px 0;">
-                        <a href="$safeHostUrl" style="display: inline-block; background-color: #dc2626; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View Host</a>
+                        <a href="$safeHostUrl" style="display: inline-block; background-color: #dc2626; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View</a>
                     </div>
                     <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
                     <p style="color: #999; font-size: 12px;">Moneat Server Monitoring</p>
@@ -674,7 +674,7 @@ class EmailService {
             
             The monitoring agent has stopped reporting metrics. Please check if the host is online and the agent is running.
             
-            View host: $hostUrl
+            View: $hostUrl
             
             ---
             Moneat Server Monitoring
@@ -713,7 +713,7 @@ class EmailService {
                     <p><strong>Status:</strong> ${status.uppercase()}</p>
                     ${if (message.isNotBlank()) "<p><strong>Message:</strong> $message</p>" else ""}
                     <div style="margin: 30px 0;">
-                        <a href="$monitorUrl" style="display: inline-block; background-color: $buttonColor; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View Monitor</a>
+                        <a href="$monitorUrl" style="display: inline-block; background-color: $buttonColor; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View</a>
                     </div>
                     <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
                     <p style="color: #999; font-size: 12px;">Moneat Uptime Monitoring</p>
@@ -728,7 +728,7 @@ class EmailService {
             Status: ${status.uppercase()}
             ${if (message.isNotBlank()) "Message: $message" else ""}
             
-            View monitor: $monitorUrl
+            View: $monitorUrl
             """.trimIndent()
 
         sendEmail(to, subject, htmlBody, textBody, "uptime_alert")
@@ -756,7 +756,7 @@ class EmailService {
                     <p><strong>Host:</strong> $safeHostName</p>
                     <p>The host is now reporting metrics again.</p>
                     <div style="margin: 30px 0;">
-                        <a href="$safeHostUrl" style="display: inline-block; background-color: #16a34a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View Host</a>
+                        <a href="$safeHostUrl" style="display: inline-block; background-color: #16a34a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View</a>
                     </div>
                     <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
                     <p style="color: #999; font-size: 12px;">Moneat Server Monitoring</p>
@@ -773,7 +773,7 @@ class EmailService {
             
             The host is now reporting metrics again.
             
-            View host: $hostUrl
+            View: $hostUrl
             
             ---
             Moneat Server Monitoring

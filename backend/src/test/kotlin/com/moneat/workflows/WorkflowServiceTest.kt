@@ -32,6 +32,7 @@ import com.moneat.workflows.engine.WorkflowCatalog
 import com.moneat.workflows.models.CreateWorkflowRequest
 import com.moneat.workflows.models.UpdateWorkflowRequest
 import com.moneat.workflows.models.WorkflowConditionConfig
+import com.moneat.workflows.models.WorkflowPreviewRequest
 import com.moneat.workflows.models.WorkflowRuns
 import com.moneat.workflows.models.WorkflowStepConfig
 import com.moneat.workflows.models.WorkflowVersions
@@ -96,7 +97,9 @@ class WorkflowServiceTest {
         every { redis.lpush(any(), any<String>()) } returns 1L
         every { emailService.sendEmail(any(), any(), any(), any(), any()) } just runs
         coEvery { slackService.sendWorkflowMessage(any(), any(), any()) } returns true
+        coEvery { slackService.sendWorkflowAlertMessage(any(), any(), any()) } returns true
         coEvery { discordService.sendWorkflowMessage(any(), any(), any(), any()) } returns true
+        coEvery { discordService.sendWorkflowAlertMessage(any(), any(), any()) } returns true
         service = WorkflowService(emailService, slackService, discordService)
         orgId = seedOrganizationWithMembers()
     }
@@ -202,6 +205,7 @@ class WorkflowServiceTest {
         )
         assertEquals("Email organization members", WorkflowCatalog.step("notification.email_org")?.label)
         assertEquals("AlertSeverity", WorkflowCatalog.scopeType("alert.triggered", "alert.severity"))
+        assertEquals("String", WorkflowCatalog.scopeType("alert.triggered", "alert.priority"))
         assertEquals("Boolean", WorkflowCatalog.scopeType("alert.triggered", "alert.channels.email"))
         assertNull(WorkflowCatalog.trigger("missing.trigger"))
         assertNull(WorkflowCatalog.step("notification.unknown"))
@@ -230,7 +234,9 @@ class WorkflowServiceTest {
             setOf("default_alert_notifications", "default_recovery_notifications"),
             firstOrgWorkflows.mapNotNull { it.systemKey }.toSet()
         )
-        assertEquals(3, firstOrgWorkflows.first { it.triggerName == "alert.triggered" }.steps.size)
+        val defaultAlertWorkflow = firstOrgWorkflows.first { it.triggerName == "alert.triggered" }
+        assertEquals(3, defaultAlertWorkflow.steps.size)
+        assertTrue(defaultAlertWorkflow.steps.all { it.params["format"] == "alert_lifecycle" })
         assertFailsWith<IllegalArgumentException> {
             service.updateWorkflow(orgId, firstOrgWorkflows.first().id, UpdateWorkflowRequest(name = "Edited default"))
         }
@@ -239,6 +245,96 @@ class WorkflowServiceTest {
         }
         assertEquals(2L, transaction { Workflows.selectAll().where { Workflows.organizationId eq orgId }.count() })
     }
+
+    @Test
+    fun `workflow preview renders rich alert lifecycle messages`() {
+        val response =
+            service.previewWorkflow(
+                WorkflowPreviewRequest(
+                    triggerName = "alert.resolved",
+                    steps = listOf(
+                        WorkflowStepConfig(
+                            name = "notification.email_org",
+                            params = mapOf("format" to "alert_lifecycle")
+                        ),
+                        WorkflowStepConfig(
+                            name = "notification.slack",
+                            params = mapOf("format" to "alert_lifecycle")
+                        )
+                    )
+                )
+            )
+
+        assertEquals("RESOLVED", response.scope["alert.status"])
+        assertEquals("[P3]", response.scope["alert.priority"])
+        assertEquals(2, response.previews.size)
+        val emailPreview = response.previews.first { it.channel == "email" }
+        assertEquals("[Moneat] [P3] Resolved: Worker failures detected", emailPreview.subject)
+        assertEquals("#2EB67D", emailPreview.color)
+        assertTrue(emailPreview.htmlBody.orEmpty().contains("View"))
+        assertTrue(emailPreview.htmlBody.orEmpty().contains("/favicon.svg"))
+        assertFalse(emailPreview.htmlBody.orEmpty().contains(">APP</span>"))
+        assertTrue(emailPreview.fields.any { it.label == "Dashboard" })
+        assertTrue(emailPreview.fields.any { it.label == "Priority" && it.value == "[P3]" })
+        val slackPreview = response.previews.first { it.channel == "slack" }
+        assertEquals("[P3] Resolved: Worker failures detected", slackPreview.title)
+        assertEquals("View", slackPreview.ctaLabel)
+        assertTrue(slackPreview.textBody.contains("Status: Resolved"))
+    }
+
+    @Test
+    fun `testWorkflowMessage sends representative alert messages without creating a run`() =
+        runBlocking {
+            val request =
+                WorkflowPreviewRequest(
+                    triggerName = "alert.triggered",
+                    steps = listOf(
+                        WorkflowStepConfig(
+                            name = "notification.email_org",
+                            params = mapOf("format" to "alert_lifecycle")
+                        ),
+                        WorkflowStepConfig(
+                            name = "notification.slack",
+                            params = mapOf("format" to "alert_lifecycle")
+                        ),
+                        WorkflowStepConfig(
+                            name = "notification.discord",
+                            params = mapOf("format" to "alert_lifecycle")
+                        )
+                    )
+                )
+
+            val response = service.testWorkflowMessage(orgId, request)
+
+            assertEquals(listOf("sent", "sent", "sent"), response.results.map { it.status })
+            assertEquals(emptyList(), service.listRuns(orgId, workflowId = 1))
+            verify(exactly = 1) {
+                emailService.sendEmail(
+                    "verified@moneat.io",
+                    "[Moneat] [P1] Worker failures detected",
+                    match { it.contains("Added by Moneat") && it.contains("/favicon.svg") },
+                    match { it.contains("View: https://moneat.io/dashboards/13") },
+                    "workflow"
+                )
+            }
+            verify(exactly = 0) {
+                emailService.sendEmail("unverified@moneat.io", any(), any(), any(), any())
+            }
+            coVerify(exactly = 1) {
+                slackService.sendWorkflowAlertMessage(
+                    orgId,
+                    match { it.ctaLabel == "View" && it.title.contains("[P1]") },
+                    false
+                )
+            }
+            coVerify(exactly = 1) {
+                discordService.sendWorkflowAlertMessage(
+                    orgId,
+                    match { it.ctaLabel == "View" && it.title.contains("[P1]") },
+                    false
+                )
+            }
+        }
 
     @Test
     fun `create update list get and delete workflow validates the catalog contract`() {

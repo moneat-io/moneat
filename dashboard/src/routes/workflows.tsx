@@ -26,11 +26,13 @@ import {
   Filter,
   GitBranch,
   Hash,
+  Eye,
   Loader2,
   Mail,
   MessageSquare,
   Plus,
   Save,
+  Send,
   Trash2,
   Workflow,
   X,
@@ -40,12 +42,15 @@ import type {
   WorkflowCatalogResponse,
   WorkflowConditionConfig,
   WorkflowOperationDefinition,
+  WorkflowPreviewResponse,
   WorkflowRequest,
   WorkflowResponse,
   WorkflowRunResponse,
   WorkflowScopeReferenceDefinition,
   WorkflowStepConfig,
   WorkflowStepDefinition,
+  WorkflowStepPreview,
+  WorkflowTestMessageResponse,
   WorkflowTriggerDefinition,
 } from '@/lib/api'
 import {Badge} from '@/components/ui/badge'
@@ -62,6 +67,7 @@ import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {Switch} from '@/components/ui/switch'
+import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {Textarea} from '@/components/ui/textarea'
 import {Tooltip, TooltipContent, TooltipTrigger} from '@/components/ui/tooltip'
 import {useToast} from '@/hooks/useToast'
@@ -94,7 +100,7 @@ function isDefaultWorkflow(workflow: WorkflowResponse): boolean {
 const defaultMessage = [
   '{{alert.title}}',
   '',
-  'Severity: {{alert.severity}}',
+  'Priority: {{alert.priority}}',
   'Source: {{alert.source}}',
   'View: {{alert.url}}',
 ].join('\n')
@@ -132,6 +138,34 @@ function formToRequest(form: WorkflowFormState): WorkflowRequest {
     steps: form.steps,
     once_for_template: splitReferences(form.onceForTemplate),
   }
+}
+
+function formToPreviewRequest(form: WorkflowFormState) {
+  return {
+    trigger_name: form.triggerName,
+    steps: form.steps,
+  }
+}
+
+function formToStepPreviewRequest(form: WorkflowFormState, step: WorkflowStepConfig) {
+  return {
+    trigger_name: form.triggerName,
+    steps: [step],
+  }
+}
+
+function workflowTestMessageSummary(response: WorkflowTestMessageResponse): string {
+  const sentCount = response.results.filter((result) => result.status === 'sent').length
+  const skippedCount = response.results.filter((result) => result.status === 'skipped').length
+  const failed = response.results.filter((result) => result.status === 'failed')
+  if (failed.length > 0) {
+    return failed
+      .map((result) => `${previewChannelLabel(result.channel)}: ${result.error_message ?? 'not sent'}`)
+      .join('; ')
+  }
+  const parts = [`${sentCount} sent`]
+  if (skippedCount > 0) parts.push(`${skippedCount} skipped`)
+  return parts.join(', ')
 }
 
 function splitReferences(value: string): string[] {
@@ -329,7 +363,7 @@ function WorkflowsPage() {
   const isLoading = catalogLoading || workflowsLoading
 
   return (
-    <div>
+    <div className="workflows-page">
       <div className="border-b bg-card/50">
         <div className="px-4 py-3 lg:px-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -524,11 +558,11 @@ function WorkflowDetail({
             </div>
             <p className="mt-1 text-sm text-muted-foreground">{trigger?.description ?? workflow.trigger_name}</p>
           </div>
-          {!defaultWorkflow && (
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => onEdit(workflow)}>
-                Edit
-              </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => onEdit(workflow)}>
+              Edit
+            </Button>
+            {!defaultWorkflow && (
               <Button
                 variant="outline"
                 size="sm"
@@ -539,8 +573,8 @@ function WorkflowDetail({
                 <Trash2 className="h-3.5 w-3.5" />
                 Delete
               </Button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         <div className="grid gap-4 p-4 lg:grid-cols-2">
@@ -669,17 +703,55 @@ function WorkflowDialog({
   onFormChange: (form: WorkflowFormState) => void
   onSubmit: () => void
 }) {
+  const {toast} = useToast()
   const [selectedPanel, setSelectedPanel] = useState<WorkflowEditorPanel>('trigger')
+  const [preview, setPreview] = useState<WorkflowPreviewResponse | null>(null)
   const selectedStepIndex = selectedPanel.startsWith('step:') ? Number(selectedPanel.slice(5)) : null
   const activePanel: WorkflowEditorPanel = selectedStepIndex !== null && !form.steps[selectedStepIndex]
     ? 'trigger'
     : selectedPanel
+  const previewMutation = useMutation({
+    mutationFn: () => api.previewWorkflow(formToPreviewRequest(form)),
+    onSuccess: (response) => {
+      setPreview(response)
+    },
+    onError: (error: Error) => {
+      toast({title: 'Failed to preview workflow', description: error.message, variant: 'destructive'})
+    },
+  })
+  const testMessageMutation = useMutation({
+    mutationFn: ({step}: {step: WorkflowStepConfig; index: number}) =>
+      api.testWorkflowMessage(formToStepPreviewRequest(form, step)),
+    onSuccess: (response) => {
+      const failedCount = response.results.filter((result) => result.status === 'failed').length
+      toast({
+        title: failedCount > 0 ? 'Test message failed' : 'Test message sent',
+        description: workflowTestMessageSummary(response),
+        variant: failedCount > 0 ? 'destructive' : undefined,
+      })
+    },
+    onError: (error: Error) => {
+      toast({title: 'Failed to send test message', description: error.message, variant: 'destructive'})
+    },
+  })
+
+  const handleFormChange = (nextForm: WorkflowFormState) => {
+    setPreview(null)
+    onFormChange(nextForm)
+  }
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      setPreview(null)
+    }
+    onOpenChange(nextOpen)
+  }
 
   const addCondition = () => {
     const firstReference = activeTrigger?.scope[0]
     const operation = operationsForReference(catalog, firstReference)[0]
     if (!firstReference || !operation) return
-    onFormChange({
+    handleFormChange({
       ...form,
       conditions: [...form.conditions, {reference: firstReference.name, operation: operation.name, value: ''}],
     })
@@ -689,7 +761,7 @@ function WorkflowDialog({
   const addStep = () => {
     const step = catalog?.steps[0]
     if (!step) return
-    onFormChange({
+    handleFormChange({
       ...form,
       steps: [...form.steps, {name: step.name, params: defaultStepParams(step)}],
     })
@@ -697,14 +769,15 @@ function WorkflowDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] max-w-6xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{editingWorkflow ? 'Edit Workflow' : 'New Workflow'}</DialogTitle>
-          <DialogDescription className="sr-only">
-            Configure trigger conditions, idempotency, and notification steps for alert automation.
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent className="workflow-editor-dialog max-h-[92vh] max-w-6xl overflow-y-auto shadow-none">
+          <DialogHeader>
+            <DialogTitle>{editingWorkflow ? 'Edit Workflow' : 'New Workflow'}</DialogTitle>
+            <DialogDescription className="sr-only">
+              Configure trigger conditions, idempotency, and notification steps for alert automation.
+            </DialogDescription>
+          </DialogHeader>
 
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="mx-auto w-full max-w-3xl">
@@ -730,10 +803,14 @@ function WorkflowDialog({
               catalog={catalog}
               steps={form.steps}
               selectedStepIndex={activePanel.startsWith('step:') ? Number(activePanel.slice(5)) : null}
+              testMessageStepIndex={testMessageMutation.variables?.index ?? null}
+              testMessagePending={testMessageMutation.isPending}
+              testMessageDisabled={testMessageMutation.isPending}
               onSelectStep={(index) => setSelectedPanel(`step:${index}`)}
+              onTestStep={(step, index) => testMessageMutation.mutate({step, index})}
               onAddStep={addStep}
               onRemoveStep={(index) => {
-                onFormChange({...form, steps: form.steps.filter((_, itemIndex) => itemIndex !== index)})
+                handleFormChange({...form, steps: form.steps.filter((_, itemIndex) => itemIndex !== index)})
                 setSelectedPanel('trigger')
               }}
             />
@@ -746,15 +823,21 @@ function WorkflowDialog({
               trigger={activeTrigger}
               form={form}
               editingWorkflow={editingWorkflow}
-              onFormChange={onFormChange}
+              onFormChange={handleFormChange}
               onSelectPanel={setSelectedPanel}
+            />
+            <WorkflowPreviewPanel
+              preview={preview}
+              pending={previewMutation.isPending}
+              canPreview={form.steps.length > 0}
+              onPreview={() => previewMutation.mutate()}
             />
             <CatalogPanel catalog={catalog} trigger={activeTrigger} />
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+        <DialogFooter className="mt-2 gap-2 sm:space-x-0">
+          <Button variant="outline" onClick={() => handleOpenChange(false)}>
             <X className="mr-1.5 h-3.5 w-3.5" />
             Cancel
           </Button>
@@ -763,8 +846,9 @@ function WorkflowDialog({
             Save Workflow
           </Button>
         </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 
@@ -791,7 +875,7 @@ function TriggerNode({
         }
       }}
       className={cn(
-        'w-full rounded-lg border bg-background p-4 text-left shadow-sm transition-colors hover:bg-muted/30',
+        'w-full rounded-lg border bg-background p-4 text-left transition-colors hover:bg-muted/30',
         selected && 'border-primary/60 ring-2 ring-primary/15'
       )}
     >
@@ -926,7 +1010,7 @@ function DelayNode({
         }
       }}
       className={cn(
-        'flex w-full items-center justify-between gap-3 rounded-lg border bg-background px-4 py-3 text-left shadow-sm transition-colors hover:bg-muted/30',
+        'flex w-full items-center justify-between gap-3 rounded-lg border bg-background px-4 py-3 text-left transition-colors hover:bg-muted/30',
         selected && 'border-primary/60 ring-2 ring-primary/15'
       )}
     >
@@ -970,7 +1054,7 @@ function ConditionNode({
         }
       }}
       className={cn(
-        'overflow-hidden rounded-lg border bg-background text-left shadow-sm transition-colors hover:bg-muted/30',
+        'overflow-hidden rounded-lg border bg-background text-left transition-colors hover:bg-muted/30',
         selected && 'border-primary/60 ring-2 ring-primary/15'
       )}
     >
@@ -1095,14 +1179,22 @@ function StepEditor({
   catalog,
   steps,
   selectedStepIndex,
+  testMessageStepIndex,
+  testMessagePending,
+  testMessageDisabled,
   onSelectStep,
+  onTestStep,
   onAddStep,
   onRemoveStep,
 }: {
   catalog?: WorkflowCatalogResponse
   steps: WorkflowStepConfig[]
   selectedStepIndex: number | null
+  testMessageStepIndex: number | null
+  testMessagePending: boolean
+  testMessageDisabled: boolean
   onSelectStep: (index: number) => void
+  onTestStep: (step: WorkflowStepConfig, index: number) => void
   onAddStep: () => void
   onRemoveStep: (index: number) => void
 }) {
@@ -1116,7 +1208,10 @@ function StepEditor({
               step={step}
               index={index}
               selected={selectedStepIndex === index}
+              testMessagePending={testMessagePending && testMessageStepIndex === index}
+              testMessageDisabled={testMessageDisabled}
               onSelect={() => onSelectStep(index)}
+              onTest={() => onTestStep(step, index)}
               onRemove={() => onRemoveStep(index)}
             />
             <FlowConnector />
@@ -1124,7 +1219,7 @@ function StepEditor({
         ))}
       </div>
       <div className="flex justify-center">
-        <Button type="button" variant="outline" size="sm" onClick={onAddStep} className="gap-1.5 rounded-lg shadow-sm">
+        <Button type="button" variant="outline" size="sm" onClick={onAddStep} className="gap-1.5 rounded-lg">
           <Plus className="h-3.5 w-3.5" />
           Add step
         </Button>
@@ -1138,14 +1233,20 @@ function StepNode({
   step,
   index,
   selected,
+  testMessagePending,
+  testMessageDisabled,
   onSelect,
+  onTest,
   onRemove,
 }: {
   definition?: WorkflowStepDefinition
   step: WorkflowStepConfig
   index: number
   selected: boolean
+  testMessagePending: boolean
+  testMessageDisabled: boolean
   onSelect: () => void
+  onTest: () => void
   onRemove: () => void
 }) {
   const firstParam = definition?.params[0]
@@ -1162,7 +1263,7 @@ function StepNode({
         }
       }}
       className={cn(
-        'overflow-hidden rounded-lg border bg-background text-left shadow-sm transition-colors hover:bg-muted/30',
+        'overflow-hidden rounded-lg border bg-background text-left transition-colors hover:bg-muted/30',
         selected && 'border-primary/60 ring-2 ring-primary/15'
       )}
     >
@@ -1175,17 +1276,42 @@ function StepNode({
           <p className="truncate text-sm font-semibold">{definition?.label ?? step.name}</p>
           {firstValue && <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{firstValue}</p>}
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={(event) => {
-            event.stopPropagation()
-            onRemove()
-          }}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        <div className="flex shrink-0 items-center gap-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={`Send test message for ${definition?.label ?? step.name}`}
+                disabled={testMessageDisabled}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onTest()
+                }}
+                className="h-8 w-8"
+              >
+                {testMessagePending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Send className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Send test message</TooltipContent>
+          </Tooltip>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={(event) => {
+              event.stopPropagation()
+              onRemove()
+            }}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
     </div>
   )
@@ -1292,7 +1418,7 @@ function WorkflowInspector({
   const selectedStep = selectedStepIndex !== null ? form.steps[selectedStepIndex] : undefined
 
   return (
-    <div className="rounded-lg border bg-muted/20 p-3 shadow-sm">
+    <div className="rounded-lg border bg-muted/20 p-3">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold">{inspectorTitle(panel)}</h3>
@@ -1382,6 +1508,226 @@ function inspectorSubtitle(panel: WorkflowEditorPanel): string {
   if (panel === 'conditions') return 'Filter when this workflow should apply.'
   if (panel === 'delay') return 'Timing for execution after a match.'
   return 'Choose the action and fill in its parameters.'
+}
+
+function WorkflowPreviewPanel({
+  preview,
+  pending,
+  canPreview,
+  onPreview,
+}: {
+  preview: WorkflowPreviewResponse | null
+  pending: boolean
+  canPreview: boolean
+  onPreview: () => void
+}) {
+  const previewItems = preview?.previews ?? []
+  const hasPreview = previewItems.length > 0
+  const firstTab = hasPreview ? previewTabValue(previewItems[0], 0) : ''
+  return (
+    <div className="rounded-lg border bg-muted/20 p-3">
+      <div className="mb-3 flex flex-col gap-3">
+        <div>
+          <h3 className="text-sm font-semibold">Message preview</h3>
+          <p className="text-xs text-muted-foreground">Representative alert sample</p>
+        </div>
+        <div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onPreview}
+            disabled={!canPreview || pending}
+            className="h-8 justify-center gap-1.5"
+          >
+            {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
+            Preview
+          </Button>
+        </div>
+      </div>
+
+      {pending ? (
+        <div className="flex items-center gap-2 rounded-md border bg-background px-3 py-4 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Rendering preview
+        </div>
+      ) : hasPreview ? (
+        <Tabs defaultValue={firstTab} className="w-full">
+          <TabsList className="grid h-auto w-full auto-cols-fr grid-flow-col">
+            {previewItems.map((item, index) => (
+              <TabsTrigger key={previewTabValue(item, index)} value={previewTabValue(item, index)}>
+                {previewChannelLabel(item.channel)}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          {previewItems.map((item, index) => (
+            <TabsContent key={previewTabValue(item, index)} value={previewTabValue(item, index)} className="mt-3">
+              <WorkflowPreviewCard item={item} />
+            </TabsContent>
+          ))}
+        </Tabs>
+      ) : (
+        <div className="rounded-md border border-dashed bg-background px-3 py-4 text-sm text-muted-foreground">
+          Not rendered yet.
+        </div>
+      )}
+    </div>
+  )
+}
+
+function WorkflowPreviewCard({item}: {item: WorkflowStepPreview}) {
+  if (item.channel === 'email') return <EmailPreview item={item} />
+  if (item.channel === 'discord') return <DiscordPreview item={item} />
+  return <SlackPreview item={item} />
+}
+
+function EmailPreview({item}: {item: WorkflowStepPreview}) {
+  return (
+    <div className="overflow-hidden rounded-md border bg-background">
+      <div className="border-b px-3 py-2 text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">Subject:</span> {item.subject ?? item.title}
+      </div>
+      <div className="bg-muted/20 p-4">
+        <div className="rounded-md border bg-card p-4 text-card-foreground">
+          <div className="flex items-start gap-3">
+            <MoneatMessageAvatar />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold">Moneat</p>
+              <h4 className="mt-3 flex items-start gap-2 text-base font-semibold leading-snug">
+                <span aria-hidden="true">{previewStatusEmoji(item)}</span>
+                <span>{previewHeaderText(item)}</span>
+              </h4>
+              <p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{item.body}</p>
+              <EmailFieldGrid fields={item.fields} />
+              <PreviewCta item={item} />
+              {item.footer && <p className="mt-4 text-xs text-muted-foreground">Added by Moneat</p>}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SlackPreview({item}: {item: WorkflowStepPreview}) {
+  return <AlertMessagePreview item={item} />
+}
+
+function DiscordPreview({item}: {item: WorkflowStepPreview}) {
+  return <AlertMessagePreview item={item} />
+}
+
+function AlertMessagePreview({item}: {item: WorkflowStepPreview}) {
+  return (
+    <div className="rounded-md border bg-[#1f2227] p-3 text-[#d1d2d3]">
+      <div className="flex items-start gap-3">
+        <MoneatMessageAvatar />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5 text-sm leading-none">
+            <span className="font-bold text-[#f2f3f5]">Moneat</span>
+            <span className="rounded bg-[#34373c] px-1 py-0.5 text-[10px] font-bold text-[#c9cbd0]">APP</span>
+            <span className="text-[#a5a7aa]">now</span>
+          </div>
+          <div className="mt-3 flex items-center gap-2 text-sm font-bold text-[#f2f3f5]">
+            <span>{previewStatusEmoji(item)}</span>
+            <span>{previewHeaderText(item)}</span>
+          </div>
+          <div className="mt-3 border-l-4 py-1 pl-4" style={{borderLeftColor: item.color}}>
+            <p className="mb-3 whitespace-pre-wrap text-sm text-[#d1d2d3]">{item.body}</p>
+            <AlertFieldGrid fields={item.fields} />
+            <PreviewCta item={item} dark />
+            {item.footer && <p className="mt-3 text-xs text-[#a5a7aa]">Added by Moneat</p>}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MoneatMessageAvatar() {
+  return (
+    <div
+      aria-hidden="true"
+      className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white"
+    >
+      <img src="/favicon.svg" alt="" className="h-8 w-8" />
+    </div>
+  )
+}
+
+function EmailFieldGrid({fields}: {fields: WorkflowStepPreview['fields']}) {
+  if (fields.length === 0) return null
+  return (
+    <div className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-2">
+      {fields.map((field) => (
+        <div key={field.label} className="min-w-0">
+          <p className="text-sm font-semibold text-foreground">{field.label}:</p>
+          <p className="break-words text-sm text-muted-foreground">{field.value}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function AlertFieldGrid({fields}: {fields: WorkflowStepPreview['fields']}) {
+  if (fields.length === 0) return null
+  return (
+    <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+      {fields.map((field) => (
+        <div key={field.label} className="min-w-0">
+          <p className="text-sm font-bold text-[#d1d2d3]">{field.label}:</p>
+          <p className="break-words text-sm text-[#d1d2d3]">{field.value}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function PreviewCta({
+  item,
+  dark = false,
+}: {
+  item: WorkflowStepPreview
+  dark?: boolean
+}) {
+  if (!item.cta_label || !item.cta_url) return null
+  return (
+    <div className="mt-3">
+      <Button type="button" variant={dark ? 'secondary' : 'outline'} size="sm" className="h-8 px-3">
+        {item.cta_label}
+      </Button>
+    </div>
+  )
+}
+
+function previewStatusEmoji(item: WorkflowStepPreview): string {
+  const status = previewFieldValue(item, 'Status')
+  if (status.toLowerCase() === 'resolved') return '✅'
+  return item.color.toLowerCase() === '#e01e5a' ? '🔴' : '⚠️'
+}
+
+function previewHeaderText(item: WorkflowStepPreview): string {
+  return item.title
+}
+
+function previewFieldValue(
+  item: WorkflowStepPreview,
+  label: string
+): string {
+  return item.fields.find((field) => field.label.toLowerCase() === label.toLowerCase())?.value ?? ''
+}
+
+function previewTabValue(
+  item: WorkflowStepPreview,
+  index: number
+): string {
+  return item.channel + '-' + index
+}
+
+function previewChannelLabel(channel: string): string {
+  if (channel === 'email') return 'Email'
+  if (channel === 'discord') return 'Discord'
+  if (channel === 'slack') return 'Slack'
+  return channel
 }
 
 function CatalogPanel({

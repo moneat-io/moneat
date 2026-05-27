@@ -25,6 +25,50 @@ export interface WorkflowStepConfig {
   params: Record<string, string>
 }
 
+export interface WorkflowPreviewRequest {
+  trigger_name: string
+  steps: WorkflowStepConfig[]
+  scope?: Record<string, string>
+}
+
+export interface WorkflowPreviewField {
+  label: string
+  value: string
+}
+
+export interface WorkflowStepPreview {
+  step: string
+  channel: string
+  title: string
+  subject?: string | null
+  body: string
+  html_body?: string | null
+  text_body: string
+  fields: WorkflowPreviewField[]
+  color: string
+  cta_label?: string | null
+  cta_url?: string | null
+  footer?: string | null
+  fallback_text: string
+}
+
+export interface WorkflowPreviewResponse {
+  scope: Record<string, string>
+  previews: WorkflowStepPreview[]
+}
+
+export interface WorkflowTestMessageResult {
+  step: string
+  channel: string
+  status: string
+  error_message?: string | null
+}
+
+export interface WorkflowTestMessageResponse {
+  scope: Record<string, string>
+  results: WorkflowTestMessageResult[]
+}
+
 export interface WorkflowRequest {
   name: string
   trigger_name: string

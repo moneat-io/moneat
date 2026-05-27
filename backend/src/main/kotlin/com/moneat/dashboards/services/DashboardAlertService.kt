@@ -68,6 +68,12 @@ private val logger = KotlinLogging.logger {}
 private const val ALERT_CHANNEL_EMAIL_REFERENCE = "alert.channels.email"
 private const val ALERT_CHANNEL_SLACK_REFERENCE = "alert.channels.slack"
 private const val ALERT_CHANNEL_DISCORD_REFERENCE = "alert.channels.discord"
+private const val ALERT_DISPLAY_TITLE_REFERENCE = "alert.display_title"
+private const val ALERT_DASHBOARD_TITLE_REFERENCE = "alert.dashboard.title"
+private const val ALERT_WIDGET_TITLE_REFERENCE = "alert.widget.title"
+private const val ALERT_CONDITION_REFERENCE = "alert.condition"
+private const val ALERT_THRESHOLD_REFERENCE = "alert.threshold"
+private const val ALERT_CURRENT_VALUE_REFERENCE = "alert.current_value"
 
 private enum class DashboardAlertLevel(val label: String) {
     WARNING("Warning"),
@@ -383,9 +389,14 @@ class DashboardAlertService(
             DashboardAlertLevel.WARNING -> AlertSeverity.LOW
             DashboardAlertLevel.ERROR -> AlertSeverity.HIGH
         }
+        val formattedValue = "%.2f".format(currentValue)
+        val recoveredThreshold = when (previousLevel) {
+            DashboardAlertLevel.WARNING -> alert.warningThreshold ?: alert.threshold
+            DashboardAlertLevel.ERROR -> alert.threshold
+        }
         val title = "Dashboard Alert Resolved: ${alert.name}"
         val description = "${alert.widgetTitle} on ${alert.dashboardTitle} recovered. " +
-            "Current value: ${"%.2f".format(currentValue)}"
+            "Current value: $formattedValue"
         val moneatUrl = "$baseUrl/dashboards/${alert.dashboardId}"
         val event =
             AlertLifecycleEvent(
@@ -396,7 +407,9 @@ class DashboardAlertService(
                 source = AlertSource.DASHBOARD_ALERT,
                 deduplicationKey = "moneat-dashboard-alert-${alert.alertId}",
                 organizationId = alert.orgId.toInt(),
-                metadata = alert.notificationChannels.workflowScopeMetadata(),
+                metadata = alert.notificationChannels.workflowScopeMetadata(
+                    alert.workflowScopeMetadata(formattedValue, "%.2f".format(recoveredThreshold))
+                ),
                 moneatUrl = moneatUrl
             )
         suspendRunCatching {
@@ -700,7 +713,9 @@ class DashboardAlertService(
                 source = AlertSource.DASHBOARD_ALERT,
                 deduplicationKey = "moneat-dashboard-alert-${alert.alertId}",
                 organizationId = orgId,
-                metadata = alert.notificationChannels.workflowScopeMetadata(),
+                metadata = alert.notificationChannels.workflowScopeMetadata(
+                    alert.workflowScopeMetadata(formattedValue, formattedThreshold)
+                ),
                 moneatUrl = "$baseUrl/dashboards/${alert.dashboardId}"
             )
 
@@ -740,11 +755,26 @@ class DashboardAlertService(
         }
     }
 
-    private fun NotificationChannels.workflowScopeMetadata(): Map<String, JsonElement> =
+    private fun NotificationChannels.workflowScopeMetadata(
+        alertMetadata: Map<String, JsonElement>
+    ): Map<String, JsonElement> =
         mapOf(
             ALERT_CHANNEL_EMAIL_REFERENCE to JsonPrimitive(email),
             ALERT_CHANNEL_SLACK_REFERENCE to JsonPrimitive(slack),
             ALERT_CHANNEL_DISCORD_REFERENCE to JsonPrimitive(discord)
+        ) + alertMetadata
+
+    private fun AlertContext.workflowScopeMetadata(
+        formattedCurrentValue: String,
+        formattedThreshold: String
+    ): Map<String, JsonElement> =
+        mapOf(
+            ALERT_DISPLAY_TITLE_REFERENCE to JsonPrimitive(name),
+            ALERT_DASHBOARD_TITLE_REFERENCE to JsonPrimitive(dashboardTitle),
+            ALERT_WIDGET_TITLE_REFERENCE to JsonPrimitive(widgetTitle),
+            ALERT_CONDITION_REFERENCE to JsonPrimitive(condition),
+            ALERT_THRESHOLD_REFERENCE to JsonPrimitive(formattedThreshold),
+            ALERT_CURRENT_VALUE_REFERENCE to JsonPrimitive(formattedCurrentValue)
         )
 
     private fun toResponse(row: ResultRow): DashboardAlertResponse {

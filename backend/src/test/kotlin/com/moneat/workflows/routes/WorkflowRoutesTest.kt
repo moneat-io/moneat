@@ -28,9 +28,14 @@ import com.moneat.workflows.engine.WorkflowCatalog
 import com.moneat.workflows.models.CreateWorkflowRequest
 import com.moneat.workflows.models.UpdateWorkflowRequest
 import com.moneat.workflows.models.WorkflowConditionConfig
+import com.moneat.workflows.models.WorkflowPreviewRequest
+import com.moneat.workflows.models.WorkflowPreviewResponse
 import com.moneat.workflows.models.WorkflowResponse
 import com.moneat.workflows.models.WorkflowRunResponse
 import com.moneat.workflows.models.WorkflowStepConfig
+import com.moneat.workflows.models.WorkflowStepPreview
+import com.moneat.workflows.models.WorkflowTestMessageResponse
+import com.moneat.workflows.models.WorkflowTestMessageResult
 import com.moneat.workflows.services.WorkflowService
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
@@ -44,6 +49,8 @@ import io.ktor.http.contentType
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -191,6 +198,78 @@ class WorkflowRoutesTest {
             assertTrue(created.bodyAsText().contains("Route workflow"))
             assertEquals(HttpStatusCode.BadRequest, invalid.status)
             assertTrue(invalid.bodyAsText().contains("Workflow name is required"))
+        }
+
+    @Test
+    fun `preview route returns rendered workflow messages`() =
+        testApplication {
+            setupApp()
+            val request =
+                WorkflowPreviewRequest(
+                    triggerName = "alert.triggered",
+                    steps = listOf(WorkflowStepConfig("notification.slack"))
+                )
+            val preview =
+                WorkflowPreviewResponse(
+                    scope = mapOf("alert.status" to "FIRING"),
+                    previews = listOf(
+                        WorkflowStepPreview(
+                            step = "notification.slack",
+                            channel = "slack",
+                            title = "[P1] Worker failures detected",
+                            body = "Worker failures crossed the threshold",
+                            textBody = "[P1] Worker failures detected",
+                            color = "#E01E5A",
+                            ctaLabel = "View",
+                            ctaUrl = "https://moneat.io/dashboards/13",
+                            fallbackText = "[P1] Worker failures detected"
+                        )
+                    )
+                )
+            every { workflowService.previewWorkflow(request) } returns preview
+
+            val response = client.post("/v1/workflows/preview") {
+                withAuth(token())
+                contentType(ContentType.Application.Json)
+                setBody(json.encodeToString(request))
+            }
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertTrue(response.bodyAsText().contains("\"cta_label\":\"View\""))
+            verify { workflowService.previewWorkflow(request) }
+        }
+
+    @Test
+    fun `test message route sends rendered workflow messages`() =
+        testApplication {
+            setupApp()
+            val request =
+                WorkflowPreviewRequest(
+                    triggerName = "alert.triggered",
+                    steps = listOf(WorkflowStepConfig("notification.slack"))
+                )
+            val result =
+                WorkflowTestMessageResponse(
+                    scope = mapOf("alert.status" to "FIRING"),
+                    results = listOf(
+                        WorkflowTestMessageResult(
+                            step = "notification.slack",
+                            channel = "slack",
+                            status = "sent"
+                        )
+                    )
+                )
+            coEvery { workflowService.testWorkflowMessage(organizationId, request) } returns result
+
+            val response = client.post("/v1/workflows/test-message") {
+                withAuth(token())
+                contentType(ContentType.Application.Json)
+                setBody(json.encodeToString(request))
+            }
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertTrue(response.bodyAsText().contains("\"status\":\"sent\""))
+            coVerify { workflowService.testWorkflowMessage(organizationId, request) }
         }
 
     @Test

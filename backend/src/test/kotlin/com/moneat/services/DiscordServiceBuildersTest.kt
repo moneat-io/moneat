@@ -23,6 +23,7 @@ import com.moneat.shared.models.Organizations
 import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.respond
+import com.moneat.workflows.models.WorkflowStepPreview
 import io.mockk.every
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
@@ -84,6 +85,19 @@ class DiscordServiceBuildersTest {
             } get Organizations.id
         }
 
+    private fun workflowPreview(): WorkflowStepPreview =
+        WorkflowStepPreview(
+            step = "notification.discord",
+            channel = "discord",
+            title = "[P1] Worker failures detected",
+            body = "Worker failures crossed the threshold",
+            textBody = "[P1] Worker failures detected",
+            color = "#E01E5A",
+            ctaLabel = "View",
+            ctaUrl = "$BASE_URL_APP/dashboards/13",
+            fallbackText = "[P1] Worker failures detected"
+        )
+
     // ── No-config path tests ────────────────────────────────────────────
 
     @Test
@@ -117,6 +131,13 @@ class DiscordServiceBuildersTest {
                     baseUrl = BASE_URL_APP
                 )
             )
+        }
+
+    @Test
+    fun `sendWorkflowAlertMessage returns false when no integration configured`() =
+        runBlocking {
+            val orgId = seedOrg()
+            assertFalse(discordService.sendWorkflowAlertMessage(orgId, workflowPreview()))
         }
 
     @Test

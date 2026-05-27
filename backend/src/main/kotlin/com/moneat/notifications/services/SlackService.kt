@@ -23,6 +23,7 @@ import java.nio.charset.StandardCharsets
 
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrganizationIntegrations
+import com.moneat.workflows.models.WorkflowStepPreview
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpTimeout
@@ -301,7 +302,7 @@ class SlackService {
                     listOf(
                         SlackElement(
                             type = "button",
-                            text = SlackText(type = "plain_text", text = "View Host"),
+                            text = SlackText(type = "plain_text", text = "View"),
                             url = "$baseUrl/monitoring/hosts/$hostId"
                         )
                     )
@@ -350,9 +351,97 @@ class SlackService {
                 channel = config.channelId,
                 blocks = blocks,
                 fallbackText = message
+        )
+        return success
+    }
+
+    suspend fun sendWorkflowAlertMessage(
+        organizationId: Int,
+        preview: WorkflowStepPreview,
+        skipIfUnconfigured: Boolean = false
+    ): Boolean {
+        val config = getSlackConfig(organizationId) ?: return skipIfUnconfigured
+        val blocks =
+            listOf(
+                SlackBlock(
+                    type = "header",
+                    text = SlackText(type = "plain_text", text = workflowAlertHeaderText(preview), emoji = true)
+                )
+            )
+        val attachmentBlocks = buildWorkflowAlertSlackBlocks(preview)
+        val attachments =
+            listOf(
+                SlackAttachment(
+                    color = preview.color,
+                    blocks = attachmentBlocks,
+                    fallback = preview.fallbackText
+                )
+            )
+        val (success, _) =
+            sendMessage(
+                accessToken = config.accessToken,
+                channel = config.channelId,
+                blocks = blocks,
+                attachments = attachments,
+                fallbackText = preview.fallbackText
             )
         return success
     }
+
+    private fun buildWorkflowAlertSlackBlocks(preview: WorkflowStepPreview): List<SlackBlock> {
+        val blocks = mutableListOf<SlackBlock>()
+        if (preview.body.isNotBlank()) {
+            blocks += SlackBlock(
+                type = "section",
+                text = SlackText(type = "mrkdwn", text = preview.body)
+            )
+        }
+        if (preview.fields.isNotEmpty()) {
+            blocks += SlackBlock(
+                type = "section",
+                fields = preview.fields.map { field ->
+                    SlackText(type = "mrkdwn", text = "*${field.label}:*\n${field.value}")
+                }
+            )
+        }
+        val ctaUrl = preview.ctaUrl
+        val ctaLabel = preview.ctaLabel
+        if (!ctaUrl.isNullOrBlank() && !ctaLabel.isNullOrBlank()) {
+            blocks += SlackBlock(
+                type = "actions",
+                elements =
+                listOf(
+                    SlackElement(
+                        type = "button",
+                        text = SlackText(type = "plain_text", text = ctaLabel),
+                        url = ctaUrl
+                    )
+                )
+            )
+        }
+        return blocks
+    }
+
+    private fun workflowAlertHeaderText(preview: WorkflowStepPreview): String {
+        val emoji =
+            when {
+                workflowAlertFieldValue(preview, "Status").equals("Resolved", ignoreCase = true) -> "✅"
+                preview.color.equals("#E01E5A", ignoreCase = true) -> "🔴"
+                else -> "⚠️"
+            }
+        return listOf(emoji, preview.title)
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+    }
+
+    private fun workflowAlertFieldValue(
+        preview: WorkflowStepPreview,
+        label: String
+    ): String =
+        preview.fields
+            .firstOrNull { it.label.equals(label, ignoreCase = true) }
+            ?.value
+            .orEmpty()
 
     suspend fun sendHostDown(
         organizationId: Int,
@@ -392,7 +481,7 @@ class SlackService {
                     listOf(
                         SlackElement(
                             type = "button",
-                            text = SlackText(type = "plain_text", text = "View Host"),
+                            text = SlackText(type = "plain_text", text = "View"),
                             url = "$baseUrl/monitoring/hosts/$hostId"
                         )
                     )
@@ -456,7 +545,7 @@ class SlackService {
                     listOf(
                         SlackElement(
                             type = "button",
-                            text = SlackText(type = "plain_text", text = "View Host"),
+                            text = SlackText(type = "plain_text", text = "View"),
                             url = "$baseUrl/monitoring/hosts/$hostId"
                         )
                     )
@@ -529,7 +618,7 @@ class SlackService {
                     listOf(
                         SlackElement(
                             type = "button",
-                            text = SlackText(type = "plain_text", text = "View Monitor"),
+                            text = SlackText(type = "plain_text", text = "View"),
                             url = "$baseUrl/uptime?monitor=$monitorId"
                         )
                     )
@@ -600,7 +689,7 @@ class SlackService {
                 elements = listOf(
                     SlackElement(
                         type = "button",
-                        text = SlackText(type = "plain_text", text = "View Dashboard"),
+                        text = SlackText(type = "plain_text", text = "View"),
                         url = "$baseUrl/dashboards/$dashboardId"
                     )
                 )
@@ -757,7 +846,7 @@ class SlackService {
                 listOf(
                     SlackElement(
                         type = "button",
-                        text = SlackText(type = "plain_text", text = "View Issue"),
+                        text = SlackText(type = "plain_text", text = "View"),
                         url = issueUrl
                     )
                 )
