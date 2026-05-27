@@ -17,6 +17,7 @@
 package com.moneat.analytics.models
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 
 /** Inbound payload from the tracking script. */
 @Serializable
@@ -34,7 +35,9 @@ data class AnalyticsEventPayload(
 data class EnrichedAnalyticsEvent(
     val projectId: Long,
     val sessionId: String,
+    val userId: String = "",
     val eventName: String,
+    val source: String = "web",
     val hostname: String,
     val pathname: String,
     val referrer: String,
@@ -55,6 +58,22 @@ data class EnrichedAnalyticsEvent(
     val screenWidth: Int,
     val props: Map<String, String>,
     val timestamp: Long,
+)
+
+@Serializable
+data class ServerAnalyticsEventPayload(
+    val events: List<ServerAnalyticsEvent> = emptyList(),
+)
+
+@Serializable
+data class ServerAnalyticsEvent(
+    val name: String = "",
+    @SerialName("user_id")
+    val userId: String = "",
+    @SerialName("session_id")
+    val sessionId: String = "",
+    val props: Map<String, String> = emptyMap(),
+    val timestamp: Long? = null,
 )
 
 // --- Dashboard API response models ---
@@ -104,11 +123,34 @@ data class FunnelStep(
     val name: String,
     val visitors: Long,
     val dropoff: Double,
+    val conversionRate: Double,
 )
 
 @Serializable
 data class FunnelResponse(
     val steps: List<FunnelStep>,
+    val overallConversion: Double,
+)
+
+@Serializable
+data class RetentionPeriod(
+    val days: Int,
+    val retainedUsers: Long,
+    val retentionRate: Double,
+)
+
+@Serializable
+data class RetentionCohort(
+    val cohortWeek: String,
+    val users: Long,
+    val periods: List<RetentionPeriod>,
+)
+
+@Serializable
+data class RetentionResponse(
+    val startEvent: String,
+    val returnEvent: String,
+    val cohorts: List<RetentionCohort>,
 )
 
 @Serializable

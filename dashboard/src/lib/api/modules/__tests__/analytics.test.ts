@@ -347,9 +347,10 @@ describe('Analytics API', () => {
     it('fetches funnel data with steps', async () => {
       const mockFunnel = {
         steps: [
-          { name: '/home', visitors: 100, dropoff: 0 },
-          { name: '/signup', visitors: 60, dropoff: 40 },
+          { name: '/home', visitors: 100, dropoff: 0, conversionRate: 100 },
+          { name: '/signup', visitors: 60, dropoff: 40, conversionRate: 60 },
         ],
+        overallConversion: 60,
       }
 
       server.use(
@@ -363,6 +364,59 @@ describe('Analytics API', () => {
 
       const result = await api.getAnalyticsFunnel(1, ['/home', '/signup'])
       expect(result.steps).toHaveLength(2)
+    })
+
+    it('passes product funnel options', async () => {
+      server.use(
+        http.get(`${API_BASE}/v1/analytics/1/funnel`, ({ request }) => {
+          const url = new URL(request.url)
+          expect(url.searchParams.get('source')).toBe('server')
+          expect(url.searchParams.get('group_by')).toBe('user_id')
+          expect(url.searchParams.getAll('steps[]')).toEqual(['signup.completed', 'recording.started'])
+          return HttpResponse.json({ steps: [], overallConversion: 0 })
+        })
+      )
+
+      await api.getAnalyticsFunnel(
+        1,
+        ['signup.completed', 'recording.started'],
+        { period: '30d' },
+        { source: 'server', groupBy: 'user_id' }
+      )
+    })
+  })
+
+  // ──── getAnalyticsRetention ────
+
+  describe('getAnalyticsRetention', () => {
+    it('fetches retention cohorts', async () => {
+      server.use(
+        http.get(`${API_BASE}/v1/analytics/1/retention`, ({ request }) => {
+          const url = new URL(request.url)
+          expect(url.searchParams.get('start_event')).toBe('signup.completed')
+          expect(url.searchParams.get('return_event')).toBe('recording.started')
+          expect(url.searchParams.getAll('periods[]')).toEqual(['1', '7', '30'])
+          return HttpResponse.json({
+            startEvent: 'signup.completed',
+            returnEvent: 'recording.started',
+            cohorts: [
+              {
+                cohortWeek: '2026-01-05 00:00:00',
+                users: 10,
+                periods: [{ days: 7, retainedUsers: 4, retentionRate: 40 }],
+              },
+            ],
+          })
+        })
+      )
+
+      const result = await api.getAnalyticsRetention(1, {
+        period: '30d',
+        startEvent: 'signup.completed',
+        returnEvent: 'recording.started',
+        periods: [1, 7, 30],
+      })
+      expect(result.cohorts[0].periods[0].retentionRate).toBe(40)
     })
   })
 })

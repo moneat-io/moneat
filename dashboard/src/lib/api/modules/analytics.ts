@@ -22,14 +22,16 @@ import type {
   AnalyticsBreakdownItem,
   AnalyticsRealtimeResponse,
   AnalyticsFunnelResponse,
+  AnalyticsEventQueryOptions,
   AnalyticsOverviewApiResponse,
   AnalyticsTimeseriesApiPoint,
   AnalyticsBreakdownApiResponse,
   AnalyticsRealtimeApiResponse,
+  AnalyticsRetentionQuery,
+  AnalyticsRetentionResponse,
 } from '../types'
 
-function buildAnalyticsQuery(params?: AnalyticsParams): string {
-  const qs = new URLSearchParams()
+function appendAnalyticsParams(qs: URLSearchParams, params?: AnalyticsParams) {
   if (params?.period) qs.append('period', params.period)
   if (params?.from) qs.append('date_from', params.from)
   if (params?.to) qs.append('date_to', params.to)
@@ -41,8 +43,39 @@ function buildAnalyticsQuery(params?: AnalyticsParams): string {
       qs.append('filters[]', `${f.property}:${f.operator}:${f.value}`)
     }
   }
+}
+
+function appendEventQueryOptions(
+  qs: URLSearchParams,
+  options?: AnalyticsEventQueryOptions
+) {
+  if (options?.source) qs.append('source', options.source)
+  if (options?.groupBy) qs.append('group_by', options.groupBy)
+  if (options?.limit != null) qs.append('limit', String(options.limit))
+}
+
+function toQueryString(qs: URLSearchParams): string {
   const s = qs.toString()
   return s ? `?${s}` : ''
+}
+
+function buildAnalyticsQuery(
+  params?: AnalyticsParams,
+  options?: AnalyticsEventQueryOptions
+): string {
+  const qs = new URLSearchParams()
+  appendAnalyticsParams(qs, params)
+  appendEventQueryOptions(qs, options)
+  return toQueryString(qs)
+}
+
+function buildRetentionQuery(params: AnalyticsRetentionQuery): string {
+  const qs = new URLSearchParams()
+  appendAnalyticsParams(qs, params)
+  qs.append('start_event', params.startEvent)
+  qs.append('return_event', params.returnEvent)
+  params.periods?.forEach((period) => qs.append('periods[]', String(period)))
+  return toQueryString(qs)
 }
 
 function normalizeAnalyticsOverview(
@@ -173,9 +206,13 @@ export function analyticsMethods(core: ApiClientCore) {
       )
     },
 
-    getAnalyticsEvents: (projectId: number, params?: AnalyticsParams) =>
+    getAnalyticsEvents: (
+      projectId: number,
+      params?: AnalyticsParams,
+      options?: AnalyticsEventQueryOptions
+    ) =>
       fetchAnalyticsBreakdown(
-        `${base}/analytics/${projectId}/events${buildAnalyticsQuery(params)}`
+        `${base}/analytics/${projectId}/events${buildAnalyticsQuery(params, options)}`
       ),
 
     getAnalyticsRealtime: async (projectId: number) => {
@@ -190,9 +227,10 @@ export function analyticsMethods(core: ApiClientCore) {
     getAnalyticsFunnel: (
       projectId: number,
       steps: string[],
-      params?: AnalyticsParams
+      params?: AnalyticsParams,
+      options?: AnalyticsEventQueryOptions
     ) => {
-      const qs = buildAnalyticsQuery(params)
+      const qs = buildAnalyticsQuery(params, options)
       const sep = qs ? '&' : '?'
       const stepsParam = steps
         .map((s) => `steps[]=${encodeURIComponent(s)}`)
@@ -201,5 +239,13 @@ export function analyticsMethods(core: ApiClientCore) {
         `${base}/analytics/${projectId}/funnel${qs}${sep}${stepsParam}`
       )
     },
+
+    getAnalyticsRetention: (
+      projectId: number,
+      params: AnalyticsRetentionQuery
+    ) =>
+      core.request<AnalyticsRetentionResponse>(
+        `${base}/analytics/${projectId}/retention${buildRetentionQuery(params)}`
+      ),
   }
 }

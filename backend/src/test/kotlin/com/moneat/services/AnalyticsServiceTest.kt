@@ -371,17 +371,22 @@ class AnalyticsServiceTest {
             assertEquals("page_load", result.steps[0].name)
             assertEquals(90L, result.steps[0].visitors)
             assertEquals(0.0, result.steps[0].dropoff)
+            assertEquals(100.0, result.steps[0].conversionRate)
             // Step 2: level>=2 => 30+10 = 40
             assertEquals("signup_click", result.steps[1].name)
             assertEquals(40L, result.steps[1].visitors)
             // dropoff = (90-40)/90*100 ≈ 55.56
             assertTrue(result.steps[1].dropoff > 55.0)
             assertTrue(result.steps[1].dropoff < 56.0)
+            assertTrue(result.steps[1].conversionRate > 44.0)
+            assertTrue(result.steps[1].conversionRate < 45.0)
             // Step 3: level>=3 => 10
             assertEquals("signup_complete", result.steps[2].name)
             assertEquals(10L, result.steps[2].visitors)
             // dropoff = (40-10)/40*100 = 75.0
             assertEquals(75.0, result.steps[2].dropoff)
+            assertTrue(result.overallConversion > 11.0)
+            assertTrue(result.overallConversion < 12.0)
         }
     }
 
@@ -398,6 +403,62 @@ class AnalyticsServiceTest {
             assertEquals(2, result.steps.size)
             assertEquals(0L, result.steps[0].visitors)
             assertEquals(0L, result.steps[1].visitors)
+            assertEquals(0.0, result.overallConversion)
+        }
+    }
+
+    @Test
+    fun `getFunnel can group product events by user id and source`() = runBlocking {
+        val queries = mutableListOf<String>()
+        withClickHouseMockServer({ exchange ->
+            queries.add(exchange.requestBodyText())
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
+        }) { _ ->
+
+            service.getFunnel(
+                projectId,
+                dateFrom,
+                dateTo,
+                listOf("signup.completed", "recording.started"),
+                groupBy = "user_id",
+                source = "server"
+            )
+
+            assertTrue(queries.any { it.contains("GROUP BY user_id") })
+            assertTrue(queries.any { it.contains("source = 'server'") })
+            assertTrue(queries.any { it.contains("user_id != ''") })
+        }
+    }
+
+    @Test
+    fun `getRetention returns weekly cohorts`() = runBlocking {
+        val queries = mutableListOf<String>()
+        withClickHouseMockServer({ exchange ->
+            queries.add(exchange.requestBodyText())
+            exchange.respond(
+                200,
+                """{"cohort_week":"2026-01-05 00:00:00","users":10,"retained_1":4,"retained_7":6}""",
+                contentType = CONTENT_TYPE_TEXT_PLAIN
+            )
+        }) { _ ->
+
+            val result = service.getRetention(
+                projectId,
+                dateFrom,
+                dateTo,
+                "signup.completed",
+                "recording.started",
+                listOf(1, 7),
+            )
+
+            assertEquals("signup.completed", result.startEvent)
+            assertEquals("recording.started", result.returnEvent)
+            assertEquals(1, result.cohorts.size)
+            assertEquals(10L, result.cohorts[0].users)
+            assertEquals(40.0, result.cohorts[0].periods[0].retentionRate)
+            assertEquals(60.0, result.cohorts[0].periods[1].retentionRate)
+            assertTrue(queries.any { it.contains("e.source = 'server'") })
+            assertTrue(queries.any { it.contains("retained_7") })
         }
     }
 
@@ -435,6 +496,29 @@ class AnalyticsServiceTest {
             service.getEvents(projectId, dateFrom, dateTo, emptyList())
 
             assertTrue(queries.any { it.contains("event_name != 'pageview'") })
+        }
+    }
+
+    @Test
+    fun `getEvents can count product events by user id and source`() = runBlocking {
+        val queries = mutableListOf<String>()
+        withClickHouseMockServer({ exchange ->
+            queries.add(exchange.requestBodyText())
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
+        }) { _ ->
+
+            service.getEvents(
+                projectId,
+                dateFrom,
+                dateTo,
+                emptyList(),
+                groupBy = "user_id",
+                source = "server",
+            )
+
+            assertTrue(queries.any { it.contains("uniq(e.user_id)") })
+            assertTrue(queries.any { it.contains("e.source = 'server'") })
+            assertTrue(queries.any { it.contains("e.user_id != ''") })
         }
     }
 

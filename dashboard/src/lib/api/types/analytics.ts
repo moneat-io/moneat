@@ -41,6 +41,21 @@ export interface AnalyticsParams {
   comparison?: AnalyticsComparison
 }
 
+export type AnalyticsEventSource = 'web' | 'server'
+export type AnalyticsGroupBy = 'session_id' | 'user_id'
+
+export interface AnalyticsEventQueryOptions {
+  source?: AnalyticsEventSource
+  groupBy?: AnalyticsGroupBy
+  limit?: number
+}
+
+export interface AnalyticsRetentionQuery extends AnalyticsParams {
+  startEvent: string
+  returnEvent: string
+  periods?: number[]
+}
+
 export interface AnalyticsOverview {
   uniqueVisitors: number
   totalPageviews: number
@@ -85,6 +100,24 @@ export interface AnalyticsFunnelStep {
 export interface AnalyticsFunnelResponse {
   steps: AnalyticsFunnelStep[]
   overallConversion: number
+}
+
+export interface AnalyticsRetentionPeriod {
+  days: number
+  retainedUsers: number
+  retentionRate: number
+}
+
+export interface AnalyticsRetentionCohort {
+  cohortWeek: string
+  users: number
+  periods: AnalyticsRetentionPeriod[]
+}
+
+export interface AnalyticsRetentionResponse {
+  startEvent: string
+  returnEvent: string
+  cohorts: AnalyticsRetentionCohort[]
 }
 
 export interface AnalyticsOverviewApiResponse {
