@@ -303,7 +303,7 @@ function OnboardingPage() {
             </CardTitle>
             <CardDescription className="mt-1">
               {isDatadogImportOnboarding
-                ? 'Create an organization so we can save your imported dashboard.'
+                ? 'Create an organization, then we will open the Datadog dashboard importer.'
                 : "Let's set up your organization"}
             </CardDescription>
           </div>
@@ -422,7 +422,7 @@ function OnboardingPage() {
                 </>
               ) : (
                 <>
-                  Continue
+                  {isDatadogImportOnboarding ? 'Continue to import' : 'Continue'}
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </>
               )}
