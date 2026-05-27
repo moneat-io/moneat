@@ -102,6 +102,17 @@ data class DdResourceStatsQuery(
     val timeRange: DdApmQueryTimeRange = defaultApmQueryTimeRange,
 )
 
+data class DdTraceListQuery(
+    val service: String? = null,
+    val env: String? = null,
+    val source: String? = null,
+    val status: String? = null,
+    val search: String? = null,
+    val limit: Int = DEFAULT_QUERY_LIMIT,
+    val offset: Int = 0,
+    val timeRange: DdApmQueryTimeRange = defaultApmQueryTimeRange,
+)
+
 enum class DdApmQueryTimeUnit(val sql: String) {
     HOUR("HOUR"),
     DAY("DAY")
@@ -316,38 +327,33 @@ object TraceIngestionService {
 
     private fun traceSummarySubquery(
         organizationId: Int,
-        service: String?,
-        env: String?,
-        source: String?,
-        status: String?,
-        timeRange: DdApmQueryTimeRange,
-        search: String? = null,
+        query: DdTraceListQuery,
         previousWindow: Boolean = false,
     ): String {
         val filters = mutableListOf(
             ClickHouseQueryUtils.orgIdClause(organizationId.toLong()),
             if (previousWindow) {
-                timeRange.previousBucketStartClause()
+                query.timeRange.previousBucketStartClause()
             } else {
-                timeRange.bucketStartClause()
+                query.timeRange.bucketStartClause()
             }
         )
-        service?.let {
+        query.service?.let {
             filters.add("service = '${escapeSql(it)}'")
         }
-        env?.let {
+        query.env?.let {
             filters.add("env = '${escapeSql(it)}'")
         }
 
         val havingFilters = mutableListOf<String>()
-        source?.let {
+        query.source?.let {
             havingFilters.add("source = '${escapeSql(it)}'")
         }
-        when (status) {
+        when (query.status) {
             STATUS_ERROR -> havingFilters.add("has_error = 1")
             STATUS_OK -> havingFilters.add("has_error = 0")
         }
-        search?.trim()?.takeIf { it.isNotEmpty() }?.let {
+        query.search?.trim()?.takeIf { it.isNotEmpty() }?.let {
             havingFilters.add(traceSearchClause(it))
         }
         val havingClause = if (havingFilters.isEmpty()) {
@@ -383,24 +389,12 @@ object TraceIngestionService {
 
     suspend fun listTraces(
         organizationId: Int,
-        service: String?,
-        env: String?,
-        source: String?,
-        status: String?,
-        limit: Int,
-        offset: Int,
-        timeRange: DdApmQueryTimeRange = defaultApmQueryTimeRange,
-        search: String? = null,
+        query: DdTraceListQuery,
         parentSpan: ISpan? = null,
     ): DdTraceListResponse {
         val subquery = traceSummarySubquery(
             organizationId = organizationId,
-            service = service,
-            env = env,
-            source = source,
-            status = status,
-            search = search,
-            timeRange = timeRange,
+            query = query,
         )
 
         val countQuery = """
@@ -427,7 +421,7 @@ object TraceIngestionService {
                 source
             FROM ($subquery)
             ORDER BY start_ns DESC
-            LIMIT $limit OFFSET $offset
+            LIMIT ${query.limit} OFFSET ${query.offset}
             FORMAT JSONEachRow
         """.trimIndent()
 
@@ -476,21 +470,20 @@ object TraceIngestionService {
         timeRange: DdApmQueryTimeRange = defaultApmQueryTimeRange,
         parentSpan: ISpan? = null,
     ): DdApmOverviewResponse {
-        val currentSubquery = traceSummarySubquery(
-            organizationId = organizationId,
+        val overviewQuery = DdTraceListQuery(
             service = service,
             env = env,
             source = source,
             status = status,
             timeRange = timeRange,
         )
+        val currentSubquery = traceSummarySubquery(
+            organizationId = organizationId,
+            query = overviewQuery,
+        )
         val previousSubquery = traceSummarySubquery(
             organizationId = organizationId,
-            service = service,
-            env = env,
-            source = source,
-            status = status,
-            timeRange = timeRange,
+            query = overviewQuery,
             previousWindow = true,
         )
         val previousStats = getOverviewPreviousStats(previousSubquery, parentSpan)
@@ -1174,12 +1167,14 @@ object TraceIngestionService {
     ): DdResourceStatsResponse {
         val subquery = traceSummarySubquery(
             organizationId = organizationId,
-            service = query.service,
-            env = query.env,
-            source = query.source,
-            status = query.status,
-            search = query.search,
-            timeRange = query.timeRange,
+            query = DdTraceListQuery(
+                service = query.service,
+                env = query.env,
+                source = query.source,
+                status = query.status,
+                search = query.search,
+                timeRange = query.timeRange,
+            ),
         )
         val effectiveLimit = query.limit.coerceAtMost(MAX_QUERY_LIMIT)
         val groupedResources = """

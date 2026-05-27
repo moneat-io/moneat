@@ -27,6 +27,7 @@ import com.moneat.datadog.models.DdServiceMapResponse
 import com.moneat.datadog.models.DdTraceListResponse
 import com.moneat.datadog.services.DatadogHostService
 import com.moneat.datadog.services.DdResourceStatsQuery
+import com.moneat.datadog.services.DdTraceListQuery
 import com.moneat.datadog.services.ProfileIngestionService
 import com.moneat.datadog.services.TraceIngestionService
 import com.moneat.testsupport.RouteTestSupport
@@ -61,18 +62,18 @@ class DatadogQueryRoutesTest {
         every { DatadogHostService.listHosts(any<Int>()) } returns emptyList()
         every { DatadogHostService.getHost(any<Int>(), any<Int>()) } returns null
         every { DatadogHostService.deleteHost(any<Int>(), any<Int>()) } returns false
-        coEvery { TraceIngestionService.listResourceStats(any(), any<DdResourceStatsQuery>()) } returns
+        coEvery { TraceIngestionService.listResourceStats(any(), any<DdResourceStatsQuery>(), any()) } returns
             DdResourceStatsResponse(emptyList(), 0L)
         coEvery {
-            TraceIngestionService.listTraces(any(), any(), any(), any(), any(), any(), any(), any(), any())
+            TraceIngestionService.listTraces(any(), any<DdTraceListQuery>(), any())
         } returns
             DdTraceListResponse(emptyList(), 0L)
-        coEvery { TraceIngestionService.getApmOverview(any(), any(), any(), any(), any(), any()) } returns
+        coEvery { TraceIngestionService.getApmOverview(any(), any(), any(), any(), any(), any(), any()) } returns
             emptyApmOverview()
-        coEvery { TraceIngestionService.getTraceDetail(any(), any()) } returns null
-        coEvery { TraceIngestionService.getServiceMap(any()) } returns
+        coEvery { TraceIngestionService.getTraceDetail(any(), any(), any()) } returns null
+        coEvery { TraceIngestionService.getServiceMap(any(), any()) } returns
             DdServiceMapResponse(emptyList())
-        coEvery { TraceIngestionService.getApmErrors(any(), any(), any(), any(), any()) } returns
+        coEvery { TraceIngestionService.getApmErrors(any(), any(), any(), any(), any(), any()) } returns
             DdApmErrorsResponse(emptyList(), 0L)
         coEvery { ProfileIngestionService.listProfiles(any(), any(), any(), any(), any(), any()) } returns
             DdProfileListResponse(emptyList(), 0L)
@@ -379,14 +380,16 @@ class DatadogQueryRoutesTest {
         coVerify {
             TraceIngestionService.listTraces(
                 organizationId = 10,
-                service = "api",
-                env = "prod",
-                source = "otlp",
-                status = "error",
-                limit = 200,
-                offset = 0,
-                timeRange = any(),
-                search = "checkout",
+                query = match {
+                    it.service == "api" &&
+                        it.env == "prod" &&
+                        it.source == "otlp" &&
+                        it.status == "error" &&
+                        it.limit == 200 &&
+                        it.offset == 0 &&
+                        it.search == "checkout"
+                },
+                parentSpan = any(),
             )
         }
     }

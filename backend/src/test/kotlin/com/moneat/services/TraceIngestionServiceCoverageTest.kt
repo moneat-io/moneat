@@ -25,6 +25,7 @@ import com.moneat.datadog.models.DdStatsPayload
 import com.moneat.datadog.services.DdApmQueryTimeRange
 import com.moneat.datadog.services.DdApmQueryTimeUnit
 import com.moneat.datadog.services.DdResourceStatsQuery
+import com.moneat.datadog.services.DdTraceListQuery
 import com.moneat.datadog.services.TraceIngestionService
 import io.sentry.ISpan
 import io.mockk.coEvery
@@ -406,12 +407,7 @@ class TraceIngestionServiceCoverageTest {
 
         val result = TraceIngestionService.listTraces(
             organizationId = 1,
-            service = null,
-            env = null,
-            source = null,
-            status = null,
-            limit = 10,
-            offset = 0
+            query = DdTraceListQuery(limit = 10, offset = 0)
         )
 
         assertEquals(0, result.totalCount)
@@ -434,12 +430,14 @@ class TraceIngestionServiceCoverageTest {
 
         val result = TraceIngestionService.listTraces(
             organizationId = 1,
-            service = "api",
-            env = "prod",
-            source = "datadog",
-            status = "ok",
-            limit = 10,
-            offset = 0
+            query = DdTraceListQuery(
+                service = "api",
+                env = "prod",
+                source = "datadog",
+                status = "ok",
+                limit = 10,
+                offset = 0,
+            )
         )
 
         assertEquals(1, result.totalCount)
@@ -465,13 +463,11 @@ class TraceIngestionServiceCoverageTest {
 
         TraceIngestionService.listTraces(
             organizationId = 1,
-            service = null,
-            env = null,
-            source = null,
-            status = null,
-            limit = 10,
-            offset = 0,
-            search = "checkout's"
+            query = DdTraceListQuery(
+                limit = 10,
+                offset = 0,
+                search = "checkout's",
+            )
         )
 
         assertTrue(capturedQueries.any { it.contains("positionCaseInsensitive(trace_id_canonical") })
@@ -745,13 +741,11 @@ class TraceIngestionServiceCoverageTest {
 
         TraceIngestionService.listTraces(
             organizationId = 1,
-            service = null,
-            env = null,
-            source = null,
-            status = null,
-            limit = 10,
-            offset = 0,
-            timeRange = timeRange
+            query = DdTraceListQuery(
+                limit = 10,
+                offset = 0,
+                timeRange = timeRange,
+            )
         )
         TraceIngestionService.getApmErrors(
             organizationId = 1,

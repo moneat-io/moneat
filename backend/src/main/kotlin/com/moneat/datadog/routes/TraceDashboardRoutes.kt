@@ -19,6 +19,7 @@ package com.moneat.datadog.routes
 import com.moneat.datadog.services.DdApmQueryTimeRange
 import com.moneat.datadog.services.DdApmQueryTimeUnit
 import com.moneat.datadog.services.DdResourceStatsQuery
+import com.moneat.datadog.services.DdTraceListQuery
 import com.moneat.datadog.services.TraceIngestionService
 import com.moneat.plugins.getSentryTransaction
 import io.ktor.http.HttpStatusCode
@@ -34,6 +35,7 @@ import java.util.Locale
 private const val DEFAULT_LIMIT = 50
 private const val MAX_LIMIT = 200
 private const val DEFAULT_APM_TIME_RANGE = "24h"
+private const val INVALID_TOKEN_ERROR = "Invalid token"
 private const val INVALID_TIME_RANGE_ERROR = "Invalid timeRange"
 private const val INVALID_STATUS_ERROR = "Invalid status"
 private const val STATUS_ERROR = "error"
@@ -60,7 +62,7 @@ fun Route.traceDashboardRoutes() {
                     ?.getClaim("orgId")?.asInt()
                     ?: return@get call.respond(
                         HttpStatusCode.Unauthorized,
-                        mapOf("error" to "Invalid token")
+                        mapOf("error" to INVALID_TOKEN_ERROR)
                     )
                 val service = call.parameters["service"]
                 val env = call.parameters["env"]
@@ -109,7 +111,7 @@ fun Route.traceDashboardRoutes() {
                     ?.getClaim("orgId")?.asInt()
                     ?: return@get call.respond(
                         HttpStatusCode.Unauthorized,
-                        mapOf("error" to "Invalid token")
+                        mapOf("error" to INVALID_TOKEN_ERROR)
                     )
                 val status = call.apmStatus()
                     ?: return@get call.respond(
@@ -141,7 +143,7 @@ fun Route.traceDashboardRoutes() {
                     ?.getClaim("orgId")?.asInt()
                     ?: return@get call.respond(
                         HttpStatusCode.Unauthorized,
-                        mapOf("error" to "Invalid token")
+                        mapOf("error" to INVALID_TOKEN_ERROR)
                     )
                 val service = call.parameters["service"]
                 val env = call.parameters["env"]
@@ -168,14 +170,16 @@ fun Route.traceDashboardRoutes() {
 
                 val result = TraceIngestionService.listTraces(
                     organizationId = orgId,
-                    service = service,
-                    env = env,
-                    source = source,
-                    status = status,
-                    search = search,
-                    limit = limit,
-                    offset = offset,
-                    timeRange = timeRange,
+                    query = DdTraceListQuery(
+                        service = service,
+                        env = env,
+                        source = source,
+                        status = status,
+                        search = search,
+                        limit = limit,
+                        offset = offset,
+                        timeRange = timeRange,
+                    ),
                     parentSpan = call.getSentryTransaction(),
                 )
                 call.respond(result)
@@ -188,7 +192,7 @@ fun Route.traceDashboardRoutes() {
                     ?.getClaim("orgId")?.asInt()
                     ?: return@get call.respond(
                         HttpStatusCode.Unauthorized,
-                        mapOf("error" to "Invalid token")
+                        mapOf("error" to INVALID_TOKEN_ERROR)
                     )
                 val traceId = call.parameters["traceId"]
                     ?: return@get call.respond(
@@ -225,7 +229,7 @@ fun Route.traceDashboardRoutes() {
                 ?.getClaim("orgId")?.asInt()
                 ?: return@get call.respond(
                     HttpStatusCode.Unauthorized,
-                    mapOf("error" to "Invalid token")
+                    mapOf("error" to INVALID_TOKEN_ERROR)
                 )
             val result = TraceIngestionService.getServiceMap(orgId, call.getSentryTransaction())
             call.respond(result)
@@ -238,7 +242,7 @@ fun Route.traceDashboardRoutes() {
                 ?.getClaim("orgId")?.asInt()
                 ?: return@get call.respond(
                     HttpStatusCode.Unauthorized,
-                    mapOf("error" to "Invalid token")
+                    mapOf("error" to INVALID_TOKEN_ERROR)
                 )
             val service = call.parameters["service"]
             val limit = (
