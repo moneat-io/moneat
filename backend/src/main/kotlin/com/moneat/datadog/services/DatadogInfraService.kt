@@ -26,6 +26,7 @@ import com.moneat.monitor.services.InfraTelemetryRollups
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -291,25 +292,7 @@ object DatadogInfraService {
         """.trimIndent()
 
         executeInsert(insert, "DD containers")
-        InfraTelemetryRollups.insertContainerRollups(
-            batch.containers.map { container ->
-                InfraContainerRollupRow(
-                    organizationId = batch.organizationId,
-                    host = container.host,
-                    containerId = container.containerId,
-                    name = container.name,
-                    image = container.image,
-                    state = container.state,
-                    cpuPercent = container.cpuPercent,
-                    memUsage = container.memUsage,
-                    memLimit = container.memLimit,
-                    netRxBytes = container.netRxBytes,
-                    netTxBytes = container.netTxBytes,
-                    tags = container.tags,
-                    timestampMs = container.timestampMs,
-                )
-            }
-        )
+        insertContainerRollupsBestEffort(batch)
     }
 
     private suspend fun insertConnections(batch: QueuedInfraBatch) {
@@ -372,5 +355,36 @@ object DatadogInfraService {
 
     fun decodeInfraBatch(encoded: String): QueuedInfraBatch {
         return json.decodeFromString(encoded)
+    }
+
+    private suspend fun insertContainerRollupsBestEffort(batch: QueuedInfraBatch) {
+        try {
+            InfraTelemetryRollups.insertContainerRollups(
+                batch.containers.map { container ->
+                    InfraContainerRollupRow(
+                        organizationId = batch.organizationId,
+                        host = container.host,
+                        containerId = container.containerId,
+                        name = container.name,
+                        image = container.image,
+                        state = container.state,
+                        cpuPercent = container.cpuPercent,
+                        memUsage = container.memUsage,
+                        memLimit = container.memLimit,
+                        netRxBytes = container.netRxBytes,
+                        netTxBytes = container.netTxBytes,
+                        tags = container.tags,
+                        timestampMs = container.timestampMs,
+                    )
+                }
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.warn(e) {
+                "Failed to write Datadog container rollups for org ${batch.organizationId} " +
+                    "(${batch.containers.size} containers); raw containers were already written"
+            }
+        }
     }
 }

@@ -189,7 +189,10 @@ class MonitorServiceTest {
         MonitorService(hostRepository, hostAlertRepository).getLatestMetrics(7)
 
         assertTrue(querySlot.captured.contains("metrics_latest_by_host"))
-        assertFalse(querySlot.captured.contains("FROM `testdb`.metrics\n"))
+        assertFalse(
+            Regex("""FROM\s+`testdb`\.metrics\b""", RegexOption.IGNORE_CASE)
+                .containsMatchIn(querySlot.captured)
+        )
         assertFalse(querySlot.captured.contains("tags['host_id']"))
     }
 

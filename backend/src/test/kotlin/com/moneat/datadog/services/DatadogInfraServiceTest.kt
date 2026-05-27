@@ -284,4 +284,49 @@ class DatadogInfraServiceTest {
             unmockkObject(ClickHouseClient)
         }
     }
+
+    @Test
+    fun `insertInfraBatch preserves raw container success when rollup setup fails`() = runBlocking {
+        val queries = mutableListOf<String>()
+        val response = mockk<HttpResponse>()
+        var getDatabaseCalls = 0
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } answers {
+                getDatabaseCalls += 1
+                if (getDatabaseCalls == 1) {
+                    "test_db"
+                } else {
+                    throw IllegalStateException("rollup database unavailable")
+                }
+            }
+            every { response.status } returns HttpStatusCode.OK
+            coEvery { ClickHouseClient.execute(capture(queries)) } returns response
+
+            DatadogInfraService.insertInfraBatch(
+                QueuedInfraBatch(
+                    organizationId = 42L,
+                    type = "containers",
+                    containers = listOf(
+                        QueuedContainerEntry(
+                            host = "web-01",
+                            containerId = "abc123",
+                            name = "nginx",
+                            image = "nginx:latest",
+                            cpuPercent = 5.0,
+                            memUsage = 100L,
+                            memLimit = 200L,
+                            tags = mapOf("host_id" to "7"),
+                            timestampMs = 1_700_000_000_000L,
+                        )
+                    )
+                )
+            )
+
+            assertEquals(1, queries.size)
+            assertTrue(queries.single().contains("INSERT INTO `test_db`.containers "))
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
 }

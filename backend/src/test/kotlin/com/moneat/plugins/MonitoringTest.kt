@@ -21,12 +21,17 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class MonitoringTest {
+
+    // ──── Health endpoints ────
+
     @Test
     fun `skips health and metrics endpoints`() {
         assertTrue(shouldSkipTracing("/health", "GET"))
         assertTrue(shouldSkipTracing("/health/ready", "GET"))
         assertTrue(shouldSkipTracing("/metrics", "GET"))
     }
+
+    // ──── Ingestion endpoints ────
 
     @Test
     fun `skips OTLP and log ingestion endpoints`() {
@@ -57,6 +62,8 @@ class MonitoringTest {
         assertTrue(shouldSkipTracing("/api/123/logs", "POST"))
         assertTrue(shouldSkipTracing("/api/123/security", "POST"))
     }
+
+    // ──── Dashboard endpoints ────
 
     @Test
     fun `does not skip dashboard reads`() {

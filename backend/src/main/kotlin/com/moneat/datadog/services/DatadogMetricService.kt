@@ -27,6 +27,7 @@ import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -200,20 +201,7 @@ object DatadogMetricService {
                 "Failed to insert DD metrics: ${errorBody.take(ERROR_BODY_MAX_LEN)}"
             )
         }
-        InfraTelemetryRollups.insertMetricRollups(
-            batch.metrics.map { metric ->
-                InfraMetricRollupRow(
-                    organizationId = batch.organizationId,
-                    metricName = metric.name,
-                    timestampMs = metric.timestampMs,
-                    value = metric.value,
-                    host = metric.host,
-                    tags = metric.tags,
-                    unit = metric.unit,
-                    source = "datadog",
-                )
-            }
-        )
+        insertMetricRollupsBestEffort(batch)
     }
 
     suspend fun insertSketchBatch(batch: QueuedSketchBatch) {
@@ -289,6 +277,32 @@ object DatadogMetricService {
             "rate" -> "rate"
             "count" -> "count"
             else -> "gauge"
+        }
+    }
+
+    private suspend fun insertMetricRollupsBestEffort(batch: QueuedMetricBatch) {
+        try {
+            InfraTelemetryRollups.insertMetricRollups(
+                batch.metrics.map { metric ->
+                    InfraMetricRollupRow(
+                        organizationId = batch.organizationId,
+                        metricName = metric.name,
+                        timestampMs = metric.timestampMs,
+                        value = metric.value,
+                        host = metric.host,
+                        tags = metric.tags,
+                        unit = metric.unit,
+                        source = "datadog",
+                    )
+                }
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.warn(e) {
+                "Failed to write Datadog metric rollups for org ${batch.organizationId} " +
+                    "(${batch.metrics.size} metrics); raw metrics were already written"
+            }
         }
     }
 }

@@ -263,4 +263,46 @@ class DatadogMetricServiceTest {
             unmockkObject(ClickHouseClient)
         }
     }
+
+    @Test
+    fun `insertMetricBatch preserves raw insert success when rollup setup fails`() = runBlocking {
+        val queries = mutableListOf<String>()
+        val response = mockk<HttpResponse>()
+        var getDatabaseCalls = 0
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } answers {
+                getDatabaseCalls += 1
+                if (getDatabaseCalls == 1) {
+                    "test_db"
+                } else {
+                    throw IllegalStateException("rollup database unavailable")
+                }
+            }
+            every { response.status } returns HttpStatusCode.OK
+            coEvery { ClickHouseClient.execute(capture(queries)) } returns response
+
+            DatadogMetricService.insertMetricBatch(
+                QueuedMetricBatch(
+                    organizationId = 42L,
+                    metrics = listOf(
+                        QueuedMetricEntry(
+                            name = "system.cpu.percent",
+                            type = "gauge",
+                            timestampMs = 1_700_000_000_000L,
+                            value = 42.5,
+                            host = "web-01",
+                            tags = mapOf("host_id" to "7"),
+                            unit = "%",
+                        )
+                    )
+                )
+            )
+
+            assertEquals(1, queries.size)
+            assertTrue(queries.single().contains("INSERT INTO `test_db`.metrics "))
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
 }
