@@ -791,7 +791,7 @@ function TriggerNode({
         }
       }}
       className={cn(
-        'w-full rounded-lg border bg-background p-4 text-left shadow-sm transition-colors hover:bg-muted/30',
+        'w-full rounded-lg border bg-background p-4 text-left transition-colors hover:bg-muted/30',
         selected && 'border-primary/60 ring-2 ring-primary/15'
       )}
     >
@@ -926,7 +926,7 @@ function DelayNode({
         }
       }}
       className={cn(
-        'flex w-full items-center justify-between gap-3 rounded-lg border bg-background px-4 py-3 text-left shadow-sm transition-colors hover:bg-muted/30',
+        'flex w-full items-center justify-between gap-3 rounded-lg border bg-background px-4 py-3 text-left transition-colors hover:bg-muted/30',
         selected && 'border-primary/60 ring-2 ring-primary/15'
       )}
     >
@@ -970,7 +970,7 @@ function ConditionNode({
         }
       }}
       className={cn(
-        'overflow-hidden rounded-lg border bg-background text-left shadow-sm transition-colors hover:bg-muted/30',
+        'overflow-hidden rounded-lg border bg-background text-left transition-colors hover:bg-muted/30',
         selected && 'border-primary/60 ring-2 ring-primary/15'
       )}
     >
@@ -1124,7 +1124,7 @@ function StepEditor({
         ))}
       </div>
       <div className="flex justify-center">
-        <Button type="button" variant="outline" size="sm" onClick={onAddStep} className="gap-1.5 rounded-lg shadow-sm">
+        <Button type="button" variant="outline" size="sm" onClick={onAddStep} className="gap-1.5 rounded-lg">
           <Plus className="h-3.5 w-3.5" />
           Add step
         </Button>
@@ -1162,7 +1162,7 @@ function StepNode({
         }
       }}
       className={cn(
-        'overflow-hidden rounded-lg border bg-background text-left shadow-sm transition-colors hover:bg-muted/30',
+        'overflow-hidden rounded-lg border bg-background text-left transition-colors hover:bg-muted/30',
         selected && 'border-primary/60 ring-2 ring-primary/15'
       )}
     >
@@ -1292,7 +1292,7 @@ function WorkflowInspector({
   const selectedStep = selectedStepIndex !== null ? form.steps[selectedStepIndex] : undefined
 
   return (
-    <div className="rounded-lg border bg-muted/20 p-3 shadow-sm">
+    <div className="rounded-lg border bg-muted/20 p-3">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold">{inspectorTitle(panel)}</h3>

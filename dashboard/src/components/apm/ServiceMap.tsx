@@ -199,9 +199,9 @@ const ServiceNode = memo(function ServiceNode({data}: NodeProps<Node<ServiceNode
   return (
     <div
       className={[
-        'rounded-lg border-2 bg-card text-card-foreground shadow-sm',
+        'rounded-lg border-2 bg-card text-card-foreground',
         'transition-all duration-200 cursor-pointer',
-        data.selected ? 'ring-2 ring-primary shadow-lg scale-[1.02]' : '',
+        data.selected ? 'ring-2 ring-primary scale-[1.02]' : '',
         data.dimmed ? 'opacity-25' : '',
         data.isExternal ? 'border-dashed' : '',
       ].join(' ')}
@@ -343,7 +343,7 @@ export function ServiceMap() {
 
       {/* Detail panel */}
       {selected && (
-        <div className="absolute top-3 right-3 w-60 bg-card border rounded-lg shadow-lg overflow-hidden animate-in fade-in slide-in-from-right-2 duration-200">
+        <div className="absolute top-3 right-3 w-60 bg-card border rounded-lg overflow-hidden animate-in fade-in slide-in-from-right-2 duration-200">
           <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
             <h3 className="font-semibold text-sm truncate">{selected.service}</h3>
             <button

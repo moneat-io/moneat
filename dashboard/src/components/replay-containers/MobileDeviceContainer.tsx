@@ -139,7 +139,7 @@ export function MobileDeviceContainer({
       {/* Phone bezel - dimensions swap for landscape, smooth transition */}
       <div
         className={cn(
-          'relative bg-[#1a1a1e] shadow-2xl shadow-black/50 border border-white/[0.08] overflow-hidden flex transition-all duration-300 ease-in-out',
+          'relative bg-[#1a1a1e] border border-white/[0.08] overflow-hidden flex transition-all duration-300 ease-in-out',
           isIOS ? 'rounded-[2.5rem]' : 'rounded-[1.5rem]',
           isLandscape ? 'flex-row' : 'flex-col'
         )}

@@ -215,7 +215,7 @@ export function ReplayTimelineScrubber({
             >
               {isHovered && (
                 <div
-                  className="pointer-events-none absolute left-1/2 z-50 w-52 -translate-x-1/2 rounded-lg border bg-popover p-2 text-left shadow-lg overflow-hidden"
+                  className="pointer-events-none absolute left-1/2 z-50 w-52 -translate-x-1/2 rounded-lg border bg-popover p-2 text-left overflow-hidden"
                   style={{ bottom: 'calc(100% + 10px)' }}
                 >
                   <div className="text-xs font-semibold truncate min-w-0" style={{ color: markerColor(marker.type) }} title={marker.title}>
@@ -247,7 +247,7 @@ export function ReplayTimelineScrubber({
           className="absolute top-1/2 z-30 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
           style={{ left: `${playheadPercent}%` }}
         >
-          <div className="w-3 h-3 rounded-full bg-primary border-2 border-background shadow-md" />
+          <div className="w-3 h-3 rounded-full bg-primary border-2 border-background" />
         </div>
       </div>
 

@@ -269,7 +269,7 @@ export function LogSetupGuide({sdkVersions}: LogSetupGuideProps) {
                   key={platform.id}
                   value={platform.id}
                   className={cn(
-                    'gap-2 rounded-lg border px-4 py-2.5 text-sm data-[state=active]:shadow-sm',
+                    'gap-2 rounded-lg border px-4 py-2.5 text-sm',
                     'data-[state=active]:border-border data-[state=active]:bg-card',
                     'data-[state=inactive]:border-transparent data-[state=inactive]:bg-transparent'
                   )}

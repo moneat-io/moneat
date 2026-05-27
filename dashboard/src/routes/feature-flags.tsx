@@ -79,7 +79,7 @@ const defaultSegmentConditions = JSON.stringify({all: []}, null, 2)
 const tabTriggerClass = [
   'border border-transparent',
   'data-[state=active]:border-foreground data-[state=active]:bg-background',
-  'data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-foreground/20',
+  'data-[state=active]:ring-1 data-[state=active]:ring-foreground/20',
 ].join(' ')
 const tooltipText = {
   environment: 'Choose which environment you are editing and evaluating flags for.',
@@ -809,7 +809,7 @@ function CompactMetric({
   return (
     <div
       aria-label={`${label}: ${value}`}
-      className="flex h-8 items-center gap-2 rounded-md border bg-card px-2.5 text-left text-sm shadow-sm"
+      className="flex h-8 items-center gap-2 rounded-md border bg-card px-2.5 text-left text-sm"
     >
       <Icon className="h-3.5 w-3.5 text-muted-foreground" />
       <span className="flex items-center gap-1.5">

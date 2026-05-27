@@ -1564,7 +1564,7 @@ function AdminBillingPage() {
                     onClick={() => setPreviewInterval('monthly')}
                     className={`relative rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
                       previewInterval === 'monthly'
-                        ? 'bg-background text-foreground shadow-sm'
+                        ? 'bg-background text-foreground'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                     type="button"
@@ -1575,7 +1575,7 @@ function AdminBillingPage() {
                     onClick={() => setPreviewInterval('yearly')}
                     className={`relative rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
                       previewInterval === 'yearly'
-                        ? 'bg-background text-foreground shadow-sm'
+                        ? 'bg-background text-foreground'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                     type="button"
@@ -2349,7 +2349,7 @@ function PricingPreviewGrid({
       {cards.map((tier) => (
         <Card
           key={tier.tierName}
-          className={tier.highlight ? 'relative border-sky-500/50 shadow-md shadow-sky-500/10' : 'border-border/60'}
+          className={tier.highlight ? 'relative border-sky-500/50' : 'border-border/60'}
         >
           {tier.highlight && (
             <div className="absolute -top-3 left-1/2 -translate-x-1/2">
@@ -2384,7 +2384,7 @@ function PricingPreviewGrid({
             </ul>
             <div className="pt-2 text-center">
               <Button
-                className={`w-full ${tier.highlight ? 'bg-sky-500 hover:bg-sky-400 text-white shadow-md shadow-sky-500/25' : ''}`}
+                className={`w-full ${tier.highlight ? 'bg-sky-500 hover:bg-sky-400 text-white' : ''}`}
                 variant={tier.highlight ? 'default' : 'outline'}
                 size="sm"
                 disabled

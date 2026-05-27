@@ -119,7 +119,7 @@ function TimeRuler({ durationMs }: TimeRulerProps) {
 function SpanTooltip({ span, x, y }: SpanTooltipProps) {
   return (
     <div
-      className="fixed z-50 w-72 rounded-md border bg-popover px-3 py-2 text-xs shadow-lg text-popover-foreground"
+      className="fixed z-50 w-72 rounded-md border bg-popover px-3 py-2 text-xs text-popover-foreground"
       style={{ left: x, top: y }}
     >
       <div className="mb-1 font-semibold">{span.op || 'operation'}</div>

@@ -675,7 +675,7 @@ const DashboardCard = memo(function DashboardCard({
     <Link
       to="/dashboards/$dashboardId"
       params={{dashboardId: String(dashboard.id)}}
-      className="group relative block rounded-lg border bg-card overflow-hidden hover:shadow-lg hover:border-primary/40 transition-all duration-200"
+      className="group relative block rounded-lg border bg-card overflow-hidden hover:border-primary/40 transition-all duration-200"
     >
       <div className={`h-1.5 w-full bg-gradient-to-r ${accent}`} />
       <div className="p-4">

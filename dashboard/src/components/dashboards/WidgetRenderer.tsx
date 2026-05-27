@@ -1517,7 +1517,7 @@ const TableWidget = memo(function TableWidget({data, displayConfig: dc}: {data: 
   return (
     <div ref={parentRef} className="h-full overflow-auto">
       <table className="w-full text-xs">
-        <thead className="sticky top-0 bg-muted/90 z-10 shadow-sm">
+        <thead className="sticky top-0 bg-muted/90 z-10">
           <tr>
             {columns.map((col) => (
               <th key={col} className="text-left px-2 py-1.5 font-medium whitespace-nowrap bg-background/95 backdrop-blur">

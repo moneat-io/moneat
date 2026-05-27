@@ -458,7 +458,7 @@ export function ReplayTimelinePanel({ items, currentOffsetMs, projectId, onSeek 
   }, [onSeek])
 
   return (
-    <div className="h-full min-h-0 rounded-lg border bg-card shadow-sm">
+    <div className="h-full min-h-0 rounded-lg border bg-card">
       <Tabs
         value={tab}
         onValueChange={(v) => setTab(v as FilterValue)}
@@ -467,22 +467,22 @@ export function ReplayTimelinePanel({ items, currentOffsetMs, projectId, onSeek 
         {/* Colored tab bar */}
         <div className="px-2 pt-2">
           <TabsList className="w-full grid grid-cols-4 h-9 gap-1 p-1 bg-muted/50">
-            <TabsTrigger value="all" className="text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            <TabsTrigger value="all" className="text-xs data-[state=active]:bg-background">
               All <span className="ml-1 text-[10px] font-mono text-muted-foreground">{items.length}</span>
             </TabsTrigger>
-            <TabsTrigger value="error" className="text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-red-600 dark:data-[state=active]:text-red-400">
+            <TabsTrigger value="error" className="text-xs data-[state=active]:bg-background data-[state=active]:text-red-600 dark:data-[state=active]:text-red-400">
               <span className="flex items-center gap-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-red-500" />Errors
               </span>
               <span className="ml-1 text-[10px] font-mono">{errorItems.length}</span>
             </TabsTrigger>
-            <TabsTrigger value="transaction" className="text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-blue-600 dark:data-[state=active]:text-blue-400">
+            <TabsTrigger value="transaction" className="text-xs data-[state=active]:bg-background data-[state=active]:text-blue-600 dark:data-[state=active]:text-blue-400">
               <span className="flex items-center gap-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />Txns
               </span>
               <span className="ml-1 text-[10px] font-mono">{transactionItems.length}</span>
             </TabsTrigger>
-            <TabsTrigger value="span" className="text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-emerald-600 dark:data-[state=active]:text-emerald-400">
+            <TabsTrigger value="span" className="text-xs data-[state=active]:bg-background data-[state=active]:text-emerald-600 dark:data-[state=active]:text-emerald-400">
               <span className="flex items-center gap-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />Spans
               </span>

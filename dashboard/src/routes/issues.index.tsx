@@ -870,7 +870,7 @@ function ApmErrorsTab({ isActive }: { isActive: boolean }) {
                 value={overflowSelected ? selectedService : ''}
                 onValueChange={(val) => handleServiceChange(val)}
               >
-                <SelectTrigger className="h-8 text-sm border-0 shadow-none px-2 gap-1 text-muted-foreground hover:text-foreground focus:ring-0 w-auto">
+                <SelectTrigger className="h-8 text-sm border-0 px-2 gap-1 text-muted-foreground hover:text-foreground focus:ring-0 w-auto">
                   <SelectValue placeholder={`+${overflowServices.length} more`} />
                 </SelectTrigger>
                 <SelectContent>

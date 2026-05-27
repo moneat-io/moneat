@@ -458,7 +458,7 @@ export function LogSearchBar({
           {showSuggestions && suggestions.length > 0 && (
             <div
               ref={suggestionsRef}
-              className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border bg-popover p-1 shadow-lg"
+              className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border bg-popover p-1"
             >
               {suggestions.map((suggestion, index) => (
                 <button
@@ -511,7 +511,7 @@ export function LogSearchBar({
           </Button>
 
           {showLevelDropdown && (
-            <div className="absolute right-0 top-full z-50 mt-1 w-[200px] rounded-lg border bg-popover p-1 shadow-lg">
+            <div className="absolute right-0 top-full z-50 mt-1 w-[200px] rounded-lg border bg-popover p-1">
               {LEVEL_OPTIONS.map((level) => {
                 const active = levels.includes(level)
                 return (
@@ -562,7 +562,7 @@ export function LogSearchBar({
             </Button>
 
           {showTimeDropdown && (
-            <div className="absolute right-0 top-full z-50 mt-1 w-[260px] rounded-lg border bg-popover p-1 shadow-lg">
+            <div className="absolute right-0 top-full z-50 mt-1 w-[260px] rounded-lg border bg-popover p-1">
               {TIME_PRESETS.map((preset) => (
                 <button
                   key={preset.value}

@@ -103,7 +103,7 @@ function AdminLayout() {
       {/* Mobile Menu Button */}
       <button
         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-background border shadow-lg"
+        className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-background border"
         aria-label="Toggle admin menu"
       >
         {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -159,7 +159,7 @@ function AdminLayout() {
                       className={cn(
                         'flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all',
                         isActive
-                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          ? 'bg-primary text-primary-foreground'
                           : 'text-muted-foreground hover:text-foreground hover:bg-accent'
                       )}
                     >

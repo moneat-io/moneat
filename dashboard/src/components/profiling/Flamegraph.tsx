@@ -427,7 +427,7 @@ export function Flamegraph({frames, emptyMessage}: Props) {
             top: -9999,
           }}
         >
-          <div className="bg-popover border rounded-lg px-3 py-2 shadow-lg text-xs space-y-1.5">
+          <div className="bg-popover border rounded-lg px-3 py-2 text-xs space-y-1.5">
             <p className="font-semibold text-popover-foreground break-all leading-snug">
               {hoveredFrame.frame.name}
             </p>

@@ -303,14 +303,14 @@ function DataSourcesPage() {
                 <div className="bg-muted inline-flex rounded-md p-0.5">
                   <button
                     type="button"
-                    className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${connectionMode === 'fields' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                    className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${connectionMode === 'fields' ? 'bg-background' : 'text-muted-foreground hover:text-foreground'}`}
                     onClick={() => setConnectionMode('fields')}
                   >
                     Fields
                   </button>
                   <button
                     type="button"
-                    className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${connectionMode === 'url' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                    className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${connectionMode === 'url' ? 'bg-background' : 'text-muted-foreground hover:text-foreground'}`}
                     onClick={() => setConnectionMode('url')}
                   >
                     <Link2 className="mr-1 inline h-3 w-3" />

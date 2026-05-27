@@ -42,7 +42,7 @@ export function LogVizTabs({mode, onModeChange}: LogVizTabsProps) {
           className={cn(
             'flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium transition-colors',
             mode === value
-              ? 'bg-background text-foreground shadow-sm'
+              ? 'bg-background text-foreground'
               : 'text-muted-foreground hover:text-foreground'
           )}
         >
