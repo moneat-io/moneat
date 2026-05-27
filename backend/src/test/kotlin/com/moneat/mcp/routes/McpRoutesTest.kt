@@ -16,6 +16,8 @@
 
 package com.moneat.mcp.routes
 
+import com.auth0.jwt.JWT
+import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.auth.services.AuthTokenService
 import com.moneat.mcp.McpModule
 import com.moneat.mcp.auth.McpScopes
@@ -45,6 +47,9 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.install
+import io.ktor.server.auth.Authentication
+import io.ktor.server.auth.jwt.JWTPrincipal
+import io.ktor.server.auth.jwt.jwt
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.ratelimit.RateLimit
 import io.ktor.server.plugins.ratelimit.RateLimitName
@@ -269,6 +274,17 @@ class McpRoutesTest {
                 register(RateLimitName("mcp")) {
                     requestKey { "test" }
                     rateLimiter(limit = 100, refillPeriod = 1.seconds)
+                }
+            }
+            install(Authentication) {
+                jwt("auth-jwt") {
+                    verifier(
+                        JWT.require(Algorithm.HMAC256("test-secret"))
+                            .withIssuer("moneat")
+                            .withAudience("moneat-users")
+                            .build()
+                    )
+                    validate { JWTPrincipal(it.payload) }
                 }
             }
             routing {
