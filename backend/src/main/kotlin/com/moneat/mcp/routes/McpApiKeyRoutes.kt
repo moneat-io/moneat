@@ -25,6 +25,7 @@ import com.moneat.mcp.services.McpApiKeyService
 import com.moneat.mcp.services.McpToolCatalogService
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
@@ -45,113 +46,143 @@ fun Route.mcpApiKeyRoutes(
     authenticate("auth-jwt") {
         route("/v1/mcp") {
             get("/tool-catalog") {
-                call.respond(
-                    HttpStatusCode.OK,
-                    McpToolCatalogService.buildCatalog(toolRegistry, resourceRegistry),
-                )
+                call.respondToolCatalog(toolRegistry, resourceRegistry)
             }
 
             route("/api-keys") {
                 get {
-                    val principal = call.principal<JWTPrincipal>()!!
-                    val orgId = principal.payload.getClaim("orgId").asInt()
-                    call.respond(
-                        HttpStatusCode.OK,
-                        McpApiKeysResponse(mcpApiKeyService.listKeys(orgId)),
-                    )
+                    call.respondMcpApiKeys(mcpApiKeyService)
                 }
 
                 post {
-                    val principal = call.principal<JWTPrincipal>()!!
-                    val userId = principal.payload.getClaim("userId").asInt()
-                    val orgId = principal.payload.getClaim("orgId").asInt()
-                    val request = call.receive<CreateMcpApiKeyRequest>()
-                    val validationError = validateToolSelection(
-                        request.enabledTools,
-                        request.enabledResources,
-                        toolRegistry,
-                        resourceRegistry,
-                    )
-                    if (validationError != null) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse(validationError))
-                        return@post
-                    }
-
-                    try {
-                        val response = mcpApiKeyService.createKey(
-                            organizationId = orgId,
-                            userId = userId,
-                            name = request.name,
-                            enabledTools = request.enabledTools,
-                            enabledResources = request.enabledResources,
-                            expiresInDays = request.expiresInDays,
-                        )
-                        call.respond(HttpStatusCode.Created, response)
-                    } catch (e: IllegalArgumentException) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
-                    }
+                    call.createMcpApiKey(mcpApiKeyService, toolRegistry, resourceRegistry)
                 }
 
                 put("/{id}") {
-                    val principal = call.principal<JWTPrincipal>()!!
-                    val orgId = principal.payload.getClaim("orgId").asInt()
-                    val keyId = call.parameters["id"]?.toIntOrNull()
-                    if (keyId == null) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid key ID"))
-                        return@put
-                    }
-
-                    val request = call.receive<UpdateMcpApiKeyRequest>()
-                    val validationError = validateToolSelection(
-                        request.enabledTools,
-                        request.enabledResources,
-                        toolRegistry,
-                        resourceRegistry,
-                    )
-                    if (validationError != null) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse(validationError))
-                        return@put
-                    }
-
-                    try {
-                        val updated = mcpApiKeyService.updateKey(
-                            organizationId = orgId,
-                            keyId = keyId,
-                            name = request.name,
-                            enabledTools = request.enabledTools,
-                            enabledResources = request.enabledResources,
-                            expiresInDays = request.expiresInDays,
-                        )
-                        if (updated) {
-                            call.respond(HttpStatusCode.OK)
-                        } else {
-                            call.respond(HttpStatusCode.NotFound, ErrorResponse("Key not found"))
-                        }
-                    } catch (e: IllegalArgumentException) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
-                    }
+                    call.updateMcpApiKey(mcpApiKeyService, toolRegistry, resourceRegistry)
                 }
 
                 delete("/{id}") {
-                    val principal = call.principal<JWTPrincipal>()!!
-                    val orgId = principal.payload.getClaim("orgId").asInt()
-                    val keyId = call.parameters["id"]?.toIntOrNull()
-                    if (keyId == null) {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid key ID"))
-                        return@delete
-                    }
-
-                    val deleted = mcpApiKeyService.revokeKey(orgId, keyId)
-                    if (deleted) {
-                        call.respond(HttpStatusCode.NoContent)
-                    } else {
-                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Key not found"))
-                    }
+                    call.deleteMcpApiKey(mcpApiKeyService)
                 }
             }
         }
     }
 }
+
+private suspend fun ApplicationCall.respondToolCatalog(
+    toolRegistry: McpToolRegistry,
+    resourceRegistry: McpResourceRegistry,
+) {
+    respond(
+        HttpStatusCode.OK,
+        McpToolCatalogService.buildCatalog(toolRegistry, resourceRegistry),
+    )
+}
+
+private suspend fun ApplicationCall.respondMcpApiKeys(mcpApiKeyService: McpApiKeyService) {
+    respond(
+        HttpStatusCode.OK,
+        McpApiKeysResponse(mcpApiKeyService.listKeys(mcpOrgId)),
+    )
+}
+
+private suspend fun ApplicationCall.createMcpApiKey(
+    mcpApiKeyService: McpApiKeyService,
+    toolRegistry: McpToolRegistry,
+    resourceRegistry: McpResourceRegistry,
+) {
+    val request = receive<CreateMcpApiKeyRequest>()
+    val validationError = validateToolSelection(
+        request.enabledTools,
+        request.enabledResources,
+        toolRegistry,
+        resourceRegistry,
+    )
+    if (validationError != null) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse(validationError))
+        return
+    }
+
+    try {
+        val response = mcpApiKeyService.createKey(
+            organizationId = mcpOrgId,
+            userId = mcpUserId,
+            name = request.name,
+            enabledTools = request.enabledTools,
+            enabledResources = request.enabledResources,
+            expiresInDays = request.expiresInDays,
+        )
+        respond(HttpStatusCode.Created, response)
+    } catch (e: IllegalArgumentException) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
+    }
+}
+
+private suspend fun ApplicationCall.updateMcpApiKey(
+    mcpApiKeyService: McpApiKeyService,
+    toolRegistry: McpToolRegistry,
+    resourceRegistry: McpResourceRegistry,
+) {
+    val keyId = callKeyId() ?: return
+    val request = receive<UpdateMcpApiKeyRequest>()
+    val validationError = validateToolSelection(
+        request.enabledTools,
+        request.enabledResources,
+        toolRegistry,
+        resourceRegistry,
+    )
+    if (validationError != null) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse(validationError))
+        return
+    }
+
+    try {
+        val updated = mcpApiKeyService.updateKey(
+            organizationId = mcpOrgId,
+            keyId = keyId,
+            name = request.name,
+            enabledTools = request.enabledTools,
+            enabledResources = request.enabledResources,
+            expiresInDays = request.expiresInDays,
+        )
+        respondUpdateResult(updated)
+    } catch (e: IllegalArgumentException) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
+    }
+}
+
+private suspend fun ApplicationCall.deleteMcpApiKey(mcpApiKeyService: McpApiKeyService) {
+    val keyId = callKeyId() ?: return
+    val deleted = mcpApiKeyService.revokeKey(mcpOrgId, keyId)
+    if (deleted) {
+        respond(HttpStatusCode.NoContent)
+    } else {
+        respond(HttpStatusCode.NotFound, ErrorResponse("Key not found"))
+    }
+}
+
+private suspend fun ApplicationCall.callKeyId(): Int? {
+    val keyId = parameters["id"]?.toIntOrNull()
+    if (keyId == null) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid key ID"))
+    }
+    return keyId
+}
+
+private suspend fun ApplicationCall.respondUpdateResult(updated: Boolean) {
+    if (updated) {
+        respond(HttpStatusCode.OK)
+    } else {
+        respond(HttpStatusCode.NotFound, ErrorResponse("Key not found"))
+    }
+}
+
+private val ApplicationCall.mcpOrgId: Int
+    get() = principal<JWTPrincipal>()!!.payload.getClaim("orgId").asInt()
+
+private val ApplicationCall.mcpUserId: Int
+    get() = principal<JWTPrincipal>()!!.payload.getClaim("userId").asInt()
 
 private fun validateToolSelection(
     tools: List<String>?,
