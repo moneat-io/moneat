@@ -23,6 +23,7 @@ import com.moneat.shared.models.Organizations
 import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.respond
+import com.moneat.workflows.models.WorkflowPreviewField
 import com.moneat.workflows.models.WorkflowStepPreview
 import io.mockk.every
 import io.mockk.mockkObject
@@ -93,10 +94,29 @@ class DiscordServiceBuildersTest {
             body = "Worker failures crossed the threshold",
             textBody = "[P1] Worker failures detected",
             color = "#E01E5A",
+            fields = listOf(
+                WorkflowPreviewField("Status", "Firing"),
+                WorkflowPreviewField("Priority", "[P1]"),
+                WorkflowPreviewField("Dashboard", "Moneat Backend System Health")
+            ),
             ctaLabel = "View",
             ctaUrl = "$BASE_URL_APP/dashboards/13",
             fallbackText = "[P1] Worker failures detected"
         )
+
+    private fun seedDiscordIntegration(orgId: Int) {
+        transaction {
+            OrganizationIntegrations.insert {
+                it[organization_id] = orgId
+                it[integration_type] = "discord"
+                it[team_id] = "123"
+                it[channel_id] = "456"
+                it[enabled] = true
+                it[created_at] = Clock.System.now()
+                it[updated_at] = Clock.System.now()
+            }
+        }
+    }
 
     // ── No-config path tests ────────────────────────────────────────────
 
@@ -138,6 +158,17 @@ class DiscordServiceBuildersTest {
         runBlocking {
             val orgId = seedOrg()
             assertFalse(discordService.sendWorkflowAlertMessage(orgId, workflowPreview()))
+        }
+
+    @Test
+    fun `sendWorkflowAlertMessage builds rich alert embed with configured integration`() =
+        runBlocking {
+            val orgId = seedOrg("Workflow Discord Org")
+            seedDiscordIntegration(orgId)
+
+            val result = discordService.sendWorkflowAlertMessage(orgId, workflowPreview())
+
+            assertFalse(result)
         }
 
     @Test

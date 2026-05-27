@@ -283,6 +283,44 @@ class WorkflowServiceTest {
     }
 
     @Test
+    fun `workflow preview renders freeform notification messages`() {
+        val response =
+            service.previewWorkflow(
+                WorkflowPreviewRequest(
+                    triggerName = "alert.triggered",
+                    steps = listOf(emailStep(), slackStep(), discordStep())
+                )
+            )
+
+        assertEquals(3, response.previews.size)
+        val emailPreview = response.previews.first { it.channel == "email" }
+        assertEquals("Workflow Dashboard Error: Worker failures detected", emailPreview.subject)
+        assertTrue(emailPreview.htmlBody.orEmpty().contains("Worker failures [1h]"))
+        assertTrue(emailPreview.fallbackText.contains("DASHBOARD_ALERT"))
+
+        val slackPreview = response.previews.first { it.channel == "slack" }
+        assertEquals("Moneat workflow", slackPreview.title)
+        assertTrue(slackPreview.body.contains("https://moneat.io/dashboards/13"))
+
+        val discordPreview = response.previews.first { it.channel == "discord" }
+        assertEquals("Dashboard Error: Worker failures detected", discordPreview.title)
+        assertEquals("Moneat workflow", discordPreview.footer)
+        assertTrue(discordPreview.fallbackText.contains("DASHBOARD_ALERT"))
+    }
+
+    @Test
+    fun `workflow preview rejects unknown triggers`() {
+        assertFailsWith<IllegalArgumentException> {
+            service.previewWorkflow(
+                WorkflowPreviewRequest(
+                    triggerName = "alert.missing",
+                    steps = listOf(slackStep())
+                )
+            )
+        }
+    }
+
+    @Test
     fun `testWorkflowMessage sends representative alert messages without creating a run`() =
         runBlocking {
             val request =
@@ -331,6 +369,85 @@ class WorkflowServiceTest {
                 discordService.sendWorkflowAlertMessage(
                     orgId,
                     match { it.ctaLabel == "View" && it.title.contains("[P1]") },
+                    false
+                )
+            }
+        }
+
+    @Test
+    fun `testWorkflowMessage sends freeform Slack and Discord messages`() =
+        runBlocking {
+            val response =
+                service.testWorkflowMessage(
+                    orgId,
+                    WorkflowPreviewRequest(
+                        triggerName = "alert.triggered",
+                        steps = listOf(slackStep(), discordStep())
+                    )
+                )
+
+            assertEquals(listOf("sent", "sent"), response.results.map { it.status })
+            coVerify(exactly = 1) {
+                slackService.sendWorkflowMessage(
+                    orgId,
+                    match { it.contains("Worker failures detected") && it.contains("https://moneat.io/dashboards/13") },
+                    false
+                )
+            }
+            coVerify(exactly = 1) {
+                discordService.sendWorkflowMessage(
+                    orgId,
+                    "Dashboard Error: Worker failures detected",
+                    match { it.contains("DASHBOARD_ALERT") && it.contains("FIRING") },
+                    false
+                )
+            }
+        }
+
+    @Test
+    fun `testWorkflowMessage reports skipped and failed notification steps`() =
+        runBlocking {
+            coEvery { discordService.sendWorkflowAlertMessage(any(), any(), any()) } returns false
+
+            val response =
+                service.testWorkflowMessage(
+                    orgId,
+                    WorkflowPreviewRequest(
+                        triggerName = "alert.triggered",
+                        steps = listOf(
+                            WorkflowStepConfig(
+                                name = "notification.slack",
+                                params = mapOf(
+                                    "format" to "alert_lifecycle",
+                                    "message" to "{{alert.description}}"
+                                )
+                            ),
+                            WorkflowStepConfig(
+                                name = "notification.discord",
+                                params = mapOf(
+                                    "format" to "alert_lifecycle",
+                                    "title" to "{{alert.title}}",
+                                    "message" to "{{alert.description}}"
+                                )
+                            )
+                        ),
+                        scope = mapOf("alert.channels.slack" to "false")
+                    )
+                )
+
+            val resultsByChannel = response.results.associateBy { it.channel }
+            assertEquals("skipped", resultsByChannel["slack"]?.status)
+            assertEquals(
+                "Notification channel is disabled for this sample",
+                resultsByChannel["slack"]?.errorMessage
+            )
+            assertEquals("failed", resultsByChannel["discord"]?.status)
+            assertEquals("Discord test message was not sent", resultsByChannel["discord"]?.errorMessage)
+            coVerify(exactly = 0) { slackService.sendWorkflowAlertMessage(any(), any(), any()) }
+            coVerify(exactly = 1) {
+                discordService.sendWorkflowAlertMessage(
+                    orgId,
+                    match { it.title.contains("[P1]") },
                     false
                 )
             }
@@ -435,6 +552,62 @@ class WorkflowServiceTest {
             )
         }
     }
+
+    @Test
+    fun `executing alert lifecycle workflows sends rich previews`() =
+        runBlocking {
+            val workflow =
+                service.createWorkflow(
+                    orgId,
+                    CreateWorkflowRequest(
+                        name = "Rich alert lifecycle",
+                        triggerName = "alert.triggered",
+                        steps = listOf(
+                            WorkflowStepConfig(
+                                name = "notification.slack",
+                                params = mapOf(
+                                    "format" to "alert_lifecycle",
+                                    "message" to "{{alert.description}}"
+                                )
+                            ),
+                            WorkflowStepConfig(
+                                name = "notification.discord",
+                                params = mapOf(
+                                    "format" to "alert_lifecycle",
+                                    "title" to "{{alert.title}}",
+                                    "message" to "{{alert.description}}"
+                                )
+                            )
+                        ),
+                        onceForTemplate = listOf("alert.deduplication_key")
+                    )
+                )
+
+            service.publishAlertTriggered(alertEvent())
+            val queuedRun = service.listRuns(orgId, workflow.id).single()
+
+            service.executeRun(queuedRun.id)
+
+            val completedRun = service.listRuns(orgId, workflow.id).single()
+            assertEquals("complete", completedRun.status)
+            coVerify(exactly = 1) {
+                slackService.sendWorkflowAlertMessage(
+                    orgId,
+                    match { it.title == "[P0] CPU saturation" && it.ctaLabel == "View" },
+                    true
+                )
+            }
+            coVerify(exactly = 1) {
+                discordService.sendWorkflowAlertMessage(
+                    orgId,
+                    match { preview ->
+                        preview.footer == "Host metric alert" &&
+                            preview.fields.any { field -> field.label == "Priority" }
+                    },
+                    true
+                )
+            }
+        }
 
     @Test
     fun `publishing and executing alert workflows records successful runs`() =
