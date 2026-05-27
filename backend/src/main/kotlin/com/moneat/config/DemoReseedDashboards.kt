@@ -1053,7 +1053,7 @@ private fun insertWidgetGalleryBreakdownRow(dashboardId: Long, row: Int) {
         DemoWidgetInsertSpec(
             dashboardId = dashboardId,
             presentation = DemoWidgetPresentation(
-                title = "Service to Host Flow",
+                title = "Platform to Environment Flow",
                 type = "sankey",
                 grid = DemoWidgetGrid(0, row, 4, 4),
             ),
@@ -1061,7 +1061,7 @@ private fun insertWidgetGalleryBreakdownRow(dashboardId: Long, row: Int) {
                 countByFieldsQuery(
                     DemoGalleryQuerySpec(
                         dataSource = "events",
-                        groupByFields = listOf("platform", "server_name"),
+                        groupByFields = listOf("platform", "environment"),
                         limit = 40,
                     ),
                 ),
@@ -1124,17 +1124,29 @@ private fun insertWidgetGalleryAnalysisRow(dashboardId: Long, row: Int) {
                 QueryDsl(
                     dataSource = "events",
                     metrics = listOf(
-                        MetricDef(AggFunction.AVG, "duration_ms", "avg_ms"),
                         MetricDef(AggFunction.COUNT, alias = "events"),
+                        MetricDef(AggFunction.AVG, "duration_ms", "avg_ms"),
                     ),
-                    groupBy = listOf(GroupByDef("transaction_name", GroupByType.FIELD)),
+                    groupBy = listOf(
+                        GroupByDef("transaction_name", GroupByType.FIELD),
+                        GroupByDef("platform", GroupByType.FIELD),
+                        GroupByDef("environment", GroupByType.FIELD),
+                    ),
                     filters = listOf(FilterDef("event_type", FilterOp.EQ, "transaction")),
                     orderBy = OrderByDef("events", "desc"),
                     timeRange = defaultTimeRange,
                     limit = 40,
                 ),
             ),
-            display = mapOf("unit" to "ms"),
+            display = mapOf(
+                "unit" to "ms",
+                "x_key" to "events",
+                "x_label" to "event count",
+                "x_unit" to "short",
+                "y_key" to "avg_ms",
+                "y_label" to "avg latency",
+                "y_unit" to "ms",
+            ),
             order = 9,
         ),
     )
