@@ -32,7 +32,6 @@ import com.moneat.utils.suspendRunCatching
 private val logger = KotlinLogging.logger {}
 private val demoUserId = EnvConfig.Demo.USER_ID
 private val demoUserEmail = EnvConfig.Demo.USER_EMAIL
-private val jwtSecret by lazy { EnvConfig.get("JWT_SECRET") }
 private val demoSafeWritePaths =
     setOf(
         "/auth/login",
@@ -69,7 +68,7 @@ private fun isDemoToken(token: String?): Boolean {
     if (token.isNullOrBlank()) return false
 
     return suspendRunCatching {
-        val decoded = JWT.require(Algorithm.HMAC256(jwtSecret)).build().verify(token)
+        val decoded = JWT.require(Algorithm.HMAC256(EnvConfig.get("JWT_SECRET"))).build().verify(token)
         if (decoded.getClaim("isDemo")?.asBoolean() == true) return true
 
         val userId =
