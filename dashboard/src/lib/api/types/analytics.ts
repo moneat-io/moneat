@@ -105,6 +105,7 @@ export interface AnalyticsFunnelResponse {
 export interface AnalyticsRetentionPeriod {
   days: number
   retainedUsers: number
+  eligibleUsers?: number
   retentionRate: number
 }
 

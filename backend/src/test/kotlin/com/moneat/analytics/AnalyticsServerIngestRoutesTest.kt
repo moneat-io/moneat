@@ -70,13 +70,17 @@ class AnalyticsServerIngestRoutesTest {
         val (organizationId, projectId) = seedProject()
         every { otlpApiKeyService.validateKey(API_KEY) } returns organizationId
         val queuedMessages = mutableListOf<String>()
+        var enqueueCalls = 0
 
         application {
             install(ContentNegotiation) { json() }
             routing {
                 analyticsServerIngestRoutes(
                     otlpApiKeyService = otlpApiKeyService,
-                    enqueueEvent = queuedMessages::add,
+                    enqueueEvents = { messages ->
+                        enqueueCalls += 1
+                        queuedMessages.addAll(messages)
+                    },
                 )
             }
         }
@@ -87,20 +91,30 @@ class AnalyticsServerIngestRoutesTest {
             setBody(
                 """
                 {
-                  "events": [{
-                    "name": "recording.started",
-                    "user_id": "sha256-user",
-                    "session_id": "sess-abc",
-                    "props": {"platform": "ios", "app_version": "1.2.3"},
-                    "timestamp": 1716825600000
-                  }]
+                  "events": [
+                    {
+                      "name": "recording.started",
+                      "user_id": "sha256-user",
+                      "session_id": "sess-abc",
+                      "props": {"platform": "ios", "app_version": "1.2.3"},
+                      "timestamp": 1716825600000
+                    },
+                    {
+                      "name": "export.completed",
+                      "user_id": "sha256-user",
+                      "session_id": "sess-abc",
+                      "props": {"platform": "ios"},
+                      "timestamp": 1716825601000
+                    }
+                  ]
                 }
                 """.trimIndent()
             )
         }
 
         assertEquals(HttpStatusCode.Accepted, response.status, response.bodyAsText())
-        assertEquals(1, queuedMessages.size)
+        assertEquals(1, enqueueCalls)
+        assertEquals(2, queuedMessages.size)
         val message = queuedMessages.first()
         assertTrue(message.contains("\"projectId\":$projectId"))
         assertTrue(message.contains("\"sessionId\":\"sess-abc\""))
@@ -119,7 +133,7 @@ class AnalyticsServerIngestRoutesTest {
             routing {
                 analyticsServerIngestRoutes(
                     otlpApiKeyService = otlpApiKeyService,
-                    enqueueEvent = { },
+                    enqueueEvents = { },
                 )
             }
         }
@@ -142,7 +156,7 @@ class AnalyticsServerIngestRoutesTest {
             routing {
                 analyticsServerIngestRoutes(
                     otlpApiKeyService = otlpApiKeyService,
-                    enqueueEvent = { },
+                    enqueueEvents = { },
                 )
             }
         }
@@ -166,7 +180,7 @@ class AnalyticsServerIngestRoutesTest {
             routing {
                 analyticsServerIngestRoutes(
                     otlpApiKeyService = otlpApiKeyService,
-                    enqueueEvent = { },
+                    enqueueEvents = { },
                 )
             }
         }

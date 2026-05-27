@@ -136,6 +136,7 @@ data class FunnelResponse(
 data class RetentionPeriod(
     val days: Int,
     val retainedUsers: Long,
+    val eligibleUsers: Long,
     val retentionRate: Double,
 )
 

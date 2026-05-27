@@ -25,8 +25,13 @@ function retentionTone(rate: number): string {
   return 'bg-muted text-muted-foreground'
 }
 
+function retentionPeriods(data: AnalyticsRetentionResponse): number[] {
+  const periods = data.cohorts.flatMap(cohort => cohort.periods.map(period => period.days))
+  return [...new Set(periods)].sort((a, b) => a - b)
+}
+
 export function AnalyticsRetentionTable({data, isLoading}: AnalyticsRetentionTableProps) {
-  const periods = data?.cohorts[0]?.periods.map(period => period.days) ?? [1, 7, 14, 30]
+  const periods = data ? retentionPeriods(data) : [1, 7, 14, 30]
 
   if (isLoading) {
     return (
@@ -88,11 +93,12 @@ export function AnalyticsRetentionTable({data, isLoading}: AnalyticsRetentionTab
                 </TableCell>
                 {periods.map(period => {
                   const periodData = cohort.periods.find(item => item.days === period)
+                  const isEligible = periodData !== undefined && (periodData.eligibleUsers ?? cohort.users) > 0
                   const rate = periodData?.retentionRate ?? 0
                   return (
                     <TableCell key={period} className="p-1 text-right">
                       <span className={cn('inline-flex min-w-14 justify-end rounded px-2 py-1 text-xs', retentionTone(rate))}>
-                        {formatPercent(rate)}
+                        {isEligible ? formatPercent(rate) : '-'}
                       </span>
                     </TableCell>
                   )

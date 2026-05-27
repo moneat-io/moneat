@@ -327,8 +327,11 @@ class AnalyticsService {
         val escapedStartEvent = AnalyticsIngestionWorker.escapeCH(startEvent)
         val escapedReturnEvent = AnalyticsIngestionWorker.escapeCH(returnEvent)
         val maxPeriod = periods.maxOrNull() ?: 0
-        val retainedColumns = periods.joinToString(",\n") { period ->
-            "                uniqExactIf(c.user_id, e.timestamp > c.first_seen " +
+        val retentionColumns = periods.joinToString(",\n") { period ->
+            val cohortIsMature = "c.first_seen + INTERVAL $period DAY <= now()"
+            "                uniqExactIf(c.user_id, $cohortIsMature) AS eligible_$period,\n" +
+                "                uniqExactIf(c.user_id, $cohortIsMature " +
+                "AND e.timestamp > c.first_seen " +
                 "AND e.timestamp <= c.first_seen + INTERVAL $period DAY) AS retained_$period"
         }
 
@@ -349,7 +352,7 @@ class AnalyticsService {
             SELECT
                 toString(c.cohort_week) AS cohort_week,
                 uniqExact(c.user_id) AS users,
-$retainedColumns
+$retentionColumns
             FROM cohorts AS c
             LEFT JOIN analytics_events AS e
                 ON e.project_id = ${asClickHouseProjectId(projectId)}
@@ -369,11 +372,13 @@ $retainedColumns
                 cohortWeek = row.stringValue("cohort_week"),
                 users = users,
                 periods = periods.map { period ->
+                    val eligibleUsers = row.longValue("eligible_$period")
                     val retainedUsers = row.longValue("retained_$period")
                     RetentionPeriod(
                         days = period,
                         retainedUsers = retainedUsers,
-                        retentionRate = percentage(retainedUsers, users),
+                        eligibleUsers = eligibleUsers,
+                        retentionRate = percentage(retainedUsers, eligibleUsers),
                     )
                 },
             )

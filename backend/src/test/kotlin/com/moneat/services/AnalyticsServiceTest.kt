@@ -435,9 +435,17 @@ class AnalyticsServiceTest {
         val queries = mutableListOf<String>()
         withClickHouseMockServer({ exchange ->
             queries.add(exchange.requestBodyText())
+            val retentionRow = listOf(
+                """"cohort_week":"2026-01-05 00:00:00"""",
+                """"users":10""",
+                """"eligible_1":10""",
+                """"retained_1":4""",
+                """"eligible_7":8""",
+                """"retained_7":6""",
+            ).joinToString(prefix = "{", postfix = "}")
             exchange.respond(
                 200,
-                """{"cohort_week":"2026-01-05 00:00:00","users":10,"retained_1":4,"retained_7":6}""",
+                retentionRow,
                 contentType = CONTENT_TYPE_TEXT_PLAIN
             )
         }) { _ ->
@@ -455,9 +463,12 @@ class AnalyticsServiceTest {
             assertEquals("recording.started", result.returnEvent)
             assertEquals(1, result.cohorts.size)
             assertEquals(10L, result.cohorts[0].users)
+            assertEquals(10L, result.cohorts[0].periods[0].eligibleUsers)
             assertEquals(40.0, result.cohorts[0].periods[0].retentionRate)
-            assertEquals(60.0, result.cohorts[0].periods[1].retentionRate)
+            assertEquals(8L, result.cohorts[0].periods[1].eligibleUsers)
+            assertEquals(75.0, result.cohorts[0].periods[1].retentionRate)
             assertTrue(queries.any { it.contains("e.source = 'server'") })
+            assertTrue(queries.any { it.contains("eligible_7") })
             assertTrue(queries.any { it.contains("retained_7") })
         }
     }

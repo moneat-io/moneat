@@ -48,8 +48,10 @@ private const val MAX_SERVER_ANALYTICS_EVENTS = 500
 
 fun Route.analyticsServerIngestRoutes(
     otlpApiKeyService: OtlpApiKeyService = GlobalContext.get().get(),
-    enqueueEvent: (String) -> Unit = { message ->
-        RedisConfig.sync().lpush(AnalyticsIngestionWorker.QUEUE_KEY, message)
+    enqueueEvents: (List<String>) -> Unit = { messages ->
+        if (messages.isNotEmpty()) {
+            RedisConfig.sync().lpush(AnalyticsIngestionWorker.QUEUE_KEY, *messages.toTypedArray())
+        }
     },
 ) {
     route("/v1/analytics/{projectId}") {
@@ -65,10 +67,10 @@ fun Route.analyticsServerIngestRoutes(
             val events = validateServerAnalyticsEvents(call, payload.events) ?: return@post
 
             try {
-                events
+                val messages = events
                     .map { event -> createServerAnalyticsEvent(projectId, event) }
                     .map { event -> serverIngestJson.encodeToString(event) }
-                    .forEach(enqueueEvent)
+                enqueueEvents(messages)
             } catch (e: RuntimeException) {
                 serverIngestLogger.error(e) {
                     "Failed to enqueue server analytics events for project $projectId organization $organizationId"
