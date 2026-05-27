@@ -41,6 +41,7 @@ private const val PERIOD_6MO_MONTHS = 6L
 private const val PERIOD_12MO_MONTHS = 12L
 private const val FILTER_PARTS_COUNT = 3
 private const val MAX_RETENTION_PERIOD_DAYS = 365
+private const val INVALID_DATE_RANGE = "Invalid date range"
 private val DEFAULT_RETENTION_PERIODS = listOf(1, 7, 14, 30)
 
 /**
@@ -56,7 +57,7 @@ fun Route.analyticsRoutes(
             get("/overview") {
                 val (projectId, _) = extractContext(call, dashboardService) ?: return@get
                 val (dateFrom, dateTo) = parseDateRange(call) ?: run {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid date range"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_DATE_RANGE))
                     return@get
                 }
                 val filters = parseFilters(call)
@@ -69,7 +70,7 @@ fun Route.analyticsRoutes(
             get("/timeseries") {
                 val (projectId, _) = extractContext(call, dashboardService) ?: return@get
                 val (dateFrom, dateTo) = parseDateRange(call) ?: run {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid date range"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_DATE_RANGE))
                     return@get
                 }
                 val filters = parseFilters(call)
@@ -81,7 +82,7 @@ fun Route.analyticsRoutes(
             get("/pages") {
                 val (projectId, _) = extractContext(call, dashboardService) ?: return@get
                 val (dateFrom, dateTo) = parseDateRange(call) ?: run {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid date range"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_DATE_RANGE))
                     return@get
                 }
                 val filters = parseFilters(call)
@@ -94,7 +95,7 @@ fun Route.analyticsRoutes(
             get("/entry-pages") {
                 val (projectId, _) = extractContext(call, dashboardService) ?: return@get
                 val (dateFrom, dateTo) = parseDateRange(call) ?: run {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid date range"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_DATE_RANGE))
                     return@get
                 }
                 val filters = parseFilters(call)
@@ -107,7 +108,7 @@ fun Route.analyticsRoutes(
             get("/exit-pages") {
                 val (projectId, _) = extractContext(call, dashboardService) ?: return@get
                 val (dateFrom, dateTo) = parseDateRange(call) ?: run {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid date range"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_DATE_RANGE))
                     return@get
                 }
                 val filters = parseFilters(call)
@@ -120,7 +121,7 @@ fun Route.analyticsRoutes(
             get("/sources") {
                 val (projectId, _) = extractContext(call, dashboardService) ?: return@get
                 val (dateFrom, dateTo) = parseDateRange(call) ?: run {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid date range"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_DATE_RANGE))
                     return@get
                 }
                 val filters = parseFilters(call)
@@ -140,7 +141,7 @@ fun Route.analyticsRoutes(
             get("/utm/{param}") {
                 val (projectId, _) = extractContext(call, dashboardService) ?: return@get
                 val (dateFrom, dateTo) = parseDateRange(call) ?: run {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid date range"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_DATE_RANGE))
                     return@get
                 }
                 val filters = parseFilters(call)
@@ -155,7 +156,7 @@ fun Route.analyticsRoutes(
             get("/locations") {
                 val (projectId, _) = extractContext(call, dashboardService) ?: return@get
                 val (dateFrom, dateTo) = parseDateRange(call) ?: run {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid date range"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_DATE_RANGE))
                     return@get
                 }
                 val filters = parseFilters(call)
@@ -175,7 +176,7 @@ fun Route.analyticsRoutes(
             get("/devices") {
                 val (projectId, _) = extractContext(call, dashboardService) ?: return@get
                 val (dateFrom, dateTo) = parseDateRange(call) ?: run {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid date range"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_DATE_RANGE))
                     return@get
                 }
                 val filters = parseFilters(call)
@@ -194,7 +195,7 @@ fun Route.analyticsRoutes(
             get("/events") {
                 val (projectId, _) = extractContext(call, dashboardService) ?: return@get
                 val (dateFrom, dateTo) = parseDateRange(call) ?: run {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid date range"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_DATE_RANGE))
                     return@get
                 }
                 val filters = parseFilters(call)
@@ -215,7 +216,7 @@ fun Route.analyticsRoutes(
             get("/funnel") {
                 val (projectId, _) = extractContext(call, dashboardService) ?: return@get
                 val (dateFrom, dateTo) = parseDateRange(call) ?: run {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid date range"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_DATE_RANGE))
                     return@get
                 }
                 val steps = call.request.queryParameters.getAll("steps")
@@ -235,7 +236,7 @@ fun Route.analyticsRoutes(
             get("/retention") {
                 val (projectId, _) = extractContext(call, dashboardService) ?: return@get
                 val (dateFrom, dateTo) = parseDateRange(call) ?: run {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid date range"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_DATE_RANGE))
                     return@get
                 }
                 val startEvent = call.request.queryParameters["start_event"]
