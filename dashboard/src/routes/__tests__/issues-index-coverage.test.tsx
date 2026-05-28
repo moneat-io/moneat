@@ -47,7 +47,8 @@ vi.mock('@tanstack/react-router', () => ({
 import { Route as IssuesIndexRoute } from '../issues.index'
 
 const mockProject = {
-  id: 'proj-1',
+  id: 1,
+  resourceId: 'proj-1',
   name: 'Test Project',
   slug: 'test-project',
   platform: 'javascript',
