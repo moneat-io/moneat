@@ -41,7 +41,9 @@ import com.moneat.otlp.services.OtlpServiceRoutingService
 import com.moneat.otlp.services.OtlpSignalType
 import com.moneat.plugins.getDemoEpochMs
 import com.moneat.plugins.isDemoUser
+import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.utils.ErrorResponse
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -69,7 +71,6 @@ import org.koin.core.context.GlobalContext
 import java.time.Instant
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -603,6 +604,7 @@ fun Route.logIngestRoutes(
     otlpApiKeyService: OtlpApiKeyService = GlobalContext.get().get(),
     eventService: EventService = GlobalContext.get().get(),
     otlpServiceRoutingService: OtlpServiceRoutingService = GlobalContext.get().get(),
+    projectIdResolver: ProjectIdResolver = ProjectIdResolver(),
 ) {
     route("/v1") {
         // Standard OTLP/HTTP path alias
@@ -613,7 +615,8 @@ fun Route.logIngestRoutes(
                 quotaService,
                 otlpApiKeyService,
                 eventService,
-                otlpServiceRoutingService
+                otlpServiceRoutingService,
+                projectIdResolver
             )
         }
         // Moneat convention path
@@ -624,7 +627,8 @@ fun Route.logIngestRoutes(
                 quotaService,
                 otlpApiKeyService,
                 eventService,
-                otlpServiceRoutingService
+                otlpServiceRoutingService,
+                projectIdResolver
             )
         }
 
@@ -696,6 +700,7 @@ private suspend fun handleOtlpLogIngest(
     otlpApiKeyService: OtlpApiKeyService,
     eventService: EventService,
     otlpServiceRoutingService: OtlpServiceRoutingService,
+    projectIdResolver: ProjectIdResolver,
 ) {
     val contentType = call.request.header(HttpHeaders.ContentType) ?: ""
     val isJson = contentType.contains("application/json", ignoreCase = true)
@@ -711,7 +716,7 @@ private suspend fun handleOtlpLogIngest(
     }
 
     val organizationId: Int? =
-        OtlpAuth.resolveOtlpIngestOrganizationId(call, otlpApiKeyService, eventService)
+        OtlpAuth.resolveOtlpIngestOrganizationId(call, otlpApiKeyService, eventService, projectIdResolver)
 
     if (organizationId == null) {
         call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Missing or invalid OTLP API key or DSN"))

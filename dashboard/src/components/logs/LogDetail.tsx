@@ -32,7 +32,7 @@ interface LogDetailProps {
   onClose: () => void
   onViewInContext?: (log: LogEntry) => void
   /** Optional project ID for trace/span links (traces are project-scoped) */
-  projectId?: number
+  projectId?: string | number
 }
 
 const levelStyles: Record<string, string> = {

@@ -29,7 +29,7 @@ import {ChevronLeft, ChevronRight, Loader2, TerminalSquare} from 'lucide-react'
 interface EmbeddedLogsProps {
   systemId?: string
   /** Optional project ID for trace/span links in log detail (e.g. when embedded in issue view) */
-  projectId?: number
+  projectId?: string | number
   /**
    * Filter logs by time range around a specific timestamp
    * Shows logs from [centerTimestamp - contextMinutes] to [centerTimestamp + contextMinutes]

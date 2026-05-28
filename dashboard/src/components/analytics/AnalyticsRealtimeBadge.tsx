@@ -1,7 +1,7 @@
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 
-export function AnalyticsRealtimeBadge({projectId}: {projectId: number}) {
+export function AnalyticsRealtimeBadge({projectId}: {projectId: string | number}) {
   const {data} = useQuery({
     queryKey: ['analytics-realtime', projectId],
     queryFn: () => api.getAnalyticsRealtime(projectId),

@@ -24,7 +24,6 @@ import com.moneat.events.models.CreateProjectRequest
 import com.moneat.events.services.DashboardService
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.long
 
 private val projectDashboardService = DashboardService.create()
 
@@ -87,7 +86,7 @@ class GetProjectTool : McpTool {
         "Get project details including DSN and settings"
     override val inputSchema = InputSchema(
         properties = JsonObject(
-            mapOf("project_id" to schemaNumber("Project ID"))
+            mapOf("project_id" to schemaProjectId())
         ),
         required = listOf("project_id")
     )
@@ -96,7 +95,7 @@ class GetProjectTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val projectId = args["project_id"]?.jsonPrimitive?.long
+        val projectId = args.projectIdArg()
             ?: return errorResult("project_id is required")
         val project = projectDashboardService.getProject(projectId)
             ?: return errorResult("Project not found: $projectId")
@@ -111,7 +110,7 @@ class GetProjectStatsTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "project_id" to schemaNumber("Project ID"),
+                "project_id" to schemaProjectId(),
                 "period" to schemaEnum(
                     "Time period",
                     listOf("24h", "7d", "30d")
@@ -125,7 +124,7 @@ class GetProjectStatsTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val projectId = args["project_id"]?.jsonPrimitive?.long
+        val projectId = args.projectIdArg()
             ?: return errorResult("project_id is required")
         val period = args["period"]?.jsonPrimitive?.content ?: "7d"
         val stats = projectDashboardService.getProjectStats(

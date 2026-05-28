@@ -19,6 +19,7 @@ package com.moneat.analytics.routes
 import com.moneat.analytics.models.AnalyticsFilter
 import com.moneat.analytics.services.AnalyticsService
 import com.moneat.events.services.DashboardService
+import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
@@ -51,11 +52,12 @@ private val DEFAULT_RETENTION_PERIODS = listOf(1, 7, 14, 30)
 fun Route.analyticsRoutes(
     analyticsService: AnalyticsService = GlobalContext.get().get(),
     dashboardService: DashboardService = GlobalContext.get().get(),
+    projectIdResolver: ProjectIdResolver = ProjectIdResolver(),
 ) {
     route("/v1/analytics/{projectId}") {
         authenticate("auth-jwt") {
             get("/overview") {
-                val (projectId, _) = extractContext(call, dashboardService) ?: return@get
+                val (projectId, _) = extractContext(call, dashboardService, projectIdResolver) ?: return@get
                 val (dateFrom, dateTo) = parseDateRange(call) ?: run {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_DATE_RANGE))
                     return@get
@@ -68,7 +70,7 @@ fun Route.analyticsRoutes(
             }
 
             get("/timeseries") {
-                val (projectId, _) = extractContext(call, dashboardService) ?: return@get
+                val (projectId, _) = extractContext(call, dashboardService, projectIdResolver) ?: return@get
                 val (dateFrom, dateTo) = parseDateRange(call) ?: run {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_DATE_RANGE))
                     return@get
@@ -80,7 +82,7 @@ fun Route.analyticsRoutes(
             }
 
             get("/pages") {
-                val (projectId, _) = extractContext(call, dashboardService) ?: return@get
+                val (projectId, _) = extractContext(call, dashboardService, projectIdResolver) ?: return@get
                 val (dateFrom, dateTo) = parseDateRange(call) ?: run {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_DATE_RANGE))
                     return@get
@@ -93,7 +95,7 @@ fun Route.analyticsRoutes(
             }
 
             get("/entry-pages") {
-                val (projectId, _) = extractContext(call, dashboardService) ?: return@get
+                val (projectId, _) = extractContext(call, dashboardService, projectIdResolver) ?: return@get
                 val (dateFrom, dateTo) = parseDateRange(call) ?: run {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_DATE_RANGE))
                     return@get
@@ -106,7 +108,7 @@ fun Route.analyticsRoutes(
             }
 
             get("/exit-pages") {
-                val (projectId, _) = extractContext(call, dashboardService) ?: return@get
+                val (projectId, _) = extractContext(call, dashboardService, projectIdResolver) ?: return@get
                 val (dateFrom, dateTo) = parseDateRange(call) ?: run {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_DATE_RANGE))
                     return@get
@@ -119,7 +121,7 @@ fun Route.analyticsRoutes(
             }
 
             get("/sources") {
-                val (projectId, _) = extractContext(call, dashboardService) ?: return@get
+                val (projectId, _) = extractContext(call, dashboardService, projectIdResolver) ?: return@get
                 val (dateFrom, dateTo) = parseDateRange(call) ?: run {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_DATE_RANGE))
                     return@get
@@ -139,7 +141,7 @@ fun Route.analyticsRoutes(
             }
 
             get("/utm/{param}") {
-                val (projectId, _) = extractContext(call, dashboardService) ?: return@get
+                val (projectId, _) = extractContext(call, dashboardService, projectIdResolver) ?: return@get
                 val (dateFrom, dateTo) = parseDateRange(call) ?: run {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_DATE_RANGE))
                     return@get
@@ -154,7 +156,7 @@ fun Route.analyticsRoutes(
             }
 
             get("/locations") {
-                val (projectId, _) = extractContext(call, dashboardService) ?: return@get
+                val (projectId, _) = extractContext(call, dashboardService, projectIdResolver) ?: return@get
                 val (dateFrom, dateTo) = parseDateRange(call) ?: run {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_DATE_RANGE))
                     return@get
@@ -174,7 +176,7 @@ fun Route.analyticsRoutes(
             }
 
             get("/devices") {
-                val (projectId, _) = extractContext(call, dashboardService) ?: return@get
+                val (projectId, _) = extractContext(call, dashboardService, projectIdResolver) ?: return@get
                 val (dateFrom, dateTo) = parseDateRange(call) ?: run {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_DATE_RANGE))
                     return@get
@@ -193,7 +195,7 @@ fun Route.analyticsRoutes(
             }
 
             get("/events") {
-                val (projectId, _) = extractContext(call, dashboardService) ?: return@get
+                val (projectId, _) = extractContext(call, dashboardService, projectIdResolver) ?: return@get
                 val (dateFrom, dateTo) = parseDateRange(call) ?: run {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_DATE_RANGE))
                     return@get
@@ -208,13 +210,13 @@ fun Route.analyticsRoutes(
             }
 
             get("/realtime") {
-                val (projectId, _) = extractContext(call, dashboardService) ?: return@get
+                val (projectId, _) = extractContext(call, dashboardService, projectIdResolver) ?: return@get
                 val result = analyticsService.getRealtime(projectId)
                 call.respond(result)
             }
 
             get("/funnel") {
-                val (projectId, _) = extractContext(call, dashboardService) ?: return@get
+                val (projectId, _) = extractContext(call, dashboardService, projectIdResolver) ?: return@get
                 val (dateFrom, dateTo) = parseDateRange(call) ?: run {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_DATE_RANGE))
                     return@get
@@ -234,7 +236,7 @@ fun Route.analyticsRoutes(
             }
 
             get("/retention") {
-                val (projectId, _) = extractContext(call, dashboardService) ?: return@get
+                val (projectId, _) = extractContext(call, dashboardService, projectIdResolver) ?: return@get
                 val (dateFrom, dateTo) = parseDateRange(call) ?: run {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_DATE_RANGE))
                     return@get
@@ -267,6 +269,7 @@ private const val DEFAULT_LIMIT = 100
 private suspend fun extractContext(
     call: io.ktor.server.application.ApplicationCall,
     dashboardService: DashboardService,
+    projectIdResolver: ProjectIdResolver,
 ): Pair<Long, Int>? {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal?.payload?.getClaim("userId")?.asInt()
@@ -274,7 +277,7 @@ private suspend fun extractContext(
         call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
         return null
     }
-    val projectId = call.parameters["projectId"]?.toLongOrNull()
+    val projectId = call.parameters["projectId"]?.let(projectIdResolver::resolve)
     if (projectId == null) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid project ID"))
         return null

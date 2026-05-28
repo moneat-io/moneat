@@ -29,6 +29,7 @@ import com.moneat.events.services.DashboardQueryHelper
 import com.moneat.events.services.FeedbackService
 import com.moneat.events.services.IngestionWorker
 import com.moneat.events.services.IssueService
+import com.moneat.shared.services.ProjectIdResolver
 import io.ktor.server.plugins.BadRequestException
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -83,7 +84,11 @@ class EventServicesExtendedTest {
         } returns "timestamp >= now() - INTERVAL 30 DAY"
         every { queryHelper.demoNowClause(any()) } returns "now()"
 
-        issueService = IssueService(issueRepository, queryHelper)
+        issueService = IssueService(
+            issueRepository,
+            queryHelper,
+            ProjectIdResolver(lookupResourceIdByProjectId = { null })
+        )
     }
 
     // ================================================================

@@ -61,7 +61,7 @@ export const Route = createFileRoute('/projects/$projectId/settings')({
     }
   },
   loader: async ({ params }) => {
-    const project = await api.getProject(Number(params.projectId))
+    const project = await api.getProject(params.projectId)
     return { project }
   },
   component: ProjectSettingsPage,
@@ -126,11 +126,11 @@ project=${project.slug}` : null
   }, [platformFilter])
 
   const updateProjectMutation = useMutation({
-    mutationFn: (updates: { name?: string; framework?: string }) => api.updateProject(project.id, updates),
+    mutationFn: (updates: { name?: string; framework?: string }) => api.updateProject(project.resourceId, updates),
     onSuccess: async () => {
       trackEvent('Project Update')
       await queryClient.invalidateQueries({ queryKey: ['projects'] })
-      await queryClient.invalidateQueries({ queryKey: ['project', project.id] })
+      await queryClient.invalidateQueries({ queryKey: ['project', project.resourceId] })
       await router.invalidate()
       toast({
         title: 'Project updated',
@@ -147,11 +147,11 @@ project=${project.slug}` : null
   })
 
   const deleteProjectMutation = useMutation({
-    mutationFn: () => api.deleteProject(project.id),
+    mutationFn: () => api.deleteProject(project.resourceId),
     onSuccess: async () => {
       trackEvent('Project Delete')
       await queryClient.invalidateQueries({ queryKey: ['projects'] })
-      if (selectedProjectId === project.id) {
+      if (selectedProjectId === project.resourceId) {
         setSelectedProjectId(null)
       }
       toast({
@@ -170,7 +170,7 @@ project=${project.slug}` : null
   })
 
   const addTargetMutation = useMutation({
-    mutationFn: (target: string) => api.addProjectTarget(project.id, target),
+    mutationFn: (target: string) => api.addProjectTarget(project.resourceId, target),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['projects'] })
       await router.invalidate()
@@ -227,7 +227,7 @@ project=${project.slug}` : null
           <div className="space-y-2">
             <Link
               to="/projects/$projectId"
-              params={{ projectId: String(project.id) }}
+              params={{ projectId: project.resourceId }}
               className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="h-4 w-4" />

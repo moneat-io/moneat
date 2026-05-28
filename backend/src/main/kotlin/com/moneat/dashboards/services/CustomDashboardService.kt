@@ -227,7 +227,7 @@ class CustomDashboardService(
             mapToResponse(d, loadWidgets(d.id))
         }
         val projects = projectRepository.searchProjectsByName(orgId.toInt(), pattern, limit = 10).map { row ->
-            SearchProjectResponse(id = row.projectId, name = row.name)
+            SearchProjectResponse(id = row.projectId, resourceId = row.resourceId, name = row.name)
         }
         return SearchResponse(dashboards = dashboards, projects = projects)
     }

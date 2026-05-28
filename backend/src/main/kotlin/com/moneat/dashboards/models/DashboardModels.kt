@@ -209,6 +209,7 @@ data class SearchResponse(
 @Serializable
 data class SearchProjectResponse(
     val id: Long,
+    val resourceId: String = id.toString(),
     val name: String
 )
 

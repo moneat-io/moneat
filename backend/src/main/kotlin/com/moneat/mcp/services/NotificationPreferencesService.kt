@@ -71,20 +71,24 @@ class NotificationPreferencesService {
             }.toList()
 
         val projectIds = projectPrefs.map { it[NotificationPreferences.project_id]!! }
-        val projectNames: Map<Long, String> = if (projectIds.isEmpty()) {
+        val projectRows = if (projectIds.isEmpty()) {
             emptyMap()
         } else {
             Projects
                 .selectAll()
                 .where { Projects.id inList projectIds }
-                .associate { it[Projects.id] to it[Projects.name] }
+                .associate {
+                    it[Projects.id] to (it[Projects.name] to it[Projects.resource_id].toString())
+                }
         }
 
         val projects = projectPrefs.map { pref ->
             val projectId = pref[NotificationPreferences.project_id]!!
+            val projectRow = projectRows[projectId]
             ProjectNotificationPreferences(
                 projectId = projectId,
-                projectName = projectNames[projectId] ?: "Unknown",
+                projectResourceId = projectRow?.second ?: projectId.toString(),
+                projectName = projectRow?.first ?: "Unknown",
                 issueAlerts = pref[NotificationPreferences.issue_alerts],
                 errorAlerts = pref[NotificationPreferences.error_alerts],
                 weeklySummary = pref[NotificationPreferences.weekly_summary],

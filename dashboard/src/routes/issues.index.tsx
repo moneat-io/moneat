@@ -260,13 +260,13 @@ function DashboardPage() {
   })
   const hasProjects = (projects?.length ?? 0) > 0
 
-  const projectId = selectedProjectId || projects?.[0]?.id
-  const currentProject = projects?.find(p => p.id === projectId)
+  const projectId = selectedProjectId || projects?.[0]?.resourceId
+  const currentProject = projects?.find(p => p.resourceId === projectId)
 
   // Auto-select first project after data load without mutating state during render.
   useEffect(() => {
-    if (!selectedProjectId && projects && projects.length > 0 && projects[0]?.id) {
-      setSelectedProjectId(projects[0].id)
+    if (!selectedProjectId && projects && projects.length > 0 && projects[0]?.resourceId) {
+      setSelectedProjectId(projects[0].resourceId)
     }
   }, [selectedProjectId, projects, setSelectedProjectId])
 

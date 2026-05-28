@@ -24,7 +24,6 @@ import com.moneat.events.services.DashboardService
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.long
 
 private val apmDeepService = DashboardService.create()
 
@@ -38,7 +37,7 @@ class GetTransactionStatsTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "project_id" to schemaNumber("Project ID"),
+                "project_id" to schemaProjectId(),
                 "period" to schemaEnum(
                     "Time period",
                     listOf("1h", "6h", "24h", "7d", "30d")
@@ -54,7 +53,7 @@ class GetTransactionStatsTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val projectId = args["project_id"]?.jsonPrimitive?.long
+        val projectId = args.projectIdArg()
             ?: return errorResult("project_id is required")
         val period = args["period"]?.jsonPrimitive?.content
             ?: "24h"

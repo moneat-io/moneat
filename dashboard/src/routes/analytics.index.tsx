@@ -42,9 +42,9 @@ function AnalyticsOverview() {
     queryFn: () => api.getProjects(),
   })
 
-  const hasSelectedProject = selectedProjectId != null && projects?.some(p => p.id === selectedProjectId)
-  const projectId = (hasSelectedProject ? selectedProjectId : null) || projects?.[0]?.id
-  const project = projects?.find(p => p.id === projectId)
+  const hasSelectedProject = selectedProjectId != null && projects?.some(p => p.resourceId === selectedProjectId)
+  const projectId = (hasSelectedProject ? selectedProjectId : null) || projects?.[0]?.resourceId
+  const project = projects?.find(p => p.resourceId === projectId)
 
   const buildDateParams = useCallback((): AnalyticsParams => ({
     period,
@@ -395,7 +395,7 @@ function AnalyticsOverview() {
   )
 }
 
-function ProductAnalyticsTab({projectId, params}: {projectId: number; params: AnalyticsParams}) {
+function ProductAnalyticsTab({projectId, params}: {projectId: string; params: AnalyticsParams}) {
   const {data: productEvents, isLoading: productEventsLoading} = useQuery({
     queryKey: ['analytics-product-events', projectId, params],
     queryFn: () => api.getAnalyticsEvents(projectId, params, {
@@ -431,7 +431,7 @@ function ProductAnalyticsTab({projectId, params}: {projectId: number; params: An
   )
 }
 
-function ProductFunnelPanel({projectId, params}: {projectId: number; params: AnalyticsParams}) {
+function ProductFunnelPanel({projectId, params}: {projectId: string; params: AnalyticsParams}) {
   const [steps, setSteps] = useState(DEFAULT_PRODUCT_FUNNEL_STEPS)
   const validSteps = steps.map(step => step.trim()).filter(Boolean)
   const {data: funnel, isLoading} = useQuery({

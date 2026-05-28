@@ -71,7 +71,7 @@ class ListFeedbackTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "project_id" to schemaNumber("Project ID"),
+                "project_id" to schemaProjectId(),
                 "limit" to schemaNumber(
                     "Max results (default 50)"
                 )
@@ -84,10 +84,8 @@ class ListFeedbackTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val projectIdStr = args["project_id"]?.jsonPrimitive?.content
+        val projectId = args.projectIdArg()
             ?: return errorResult("project_id is required")
-        val projectId = projectIdStr.toLongOrNull()
-            ?: return errorResult("project_id must be a numeric id")
         val limit = (
             args["limit"]?.jsonPrimitive?.intOrNull
                 ?: DEFAULT_FEEDBACK_LIMIT

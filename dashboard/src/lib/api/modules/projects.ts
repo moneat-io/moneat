@@ -28,7 +28,7 @@ export function projectsMethods(core: ApiClientCore) {
   return {
     getProjects: () => core.request<Project[]>(`${base}/projects`),
 
-    getProject: (projectId: number) =>
+    getProject: (projectId: string | number) =>
       core.request<Project>(`${base}/projects/${projectId}`),
 
     getSdkVersions: () =>
@@ -44,14 +44,14 @@ export function projectsMethods(core: ApiClientCore) {
         body: JSON.stringify({ name, framework, targets }),
       }),
 
-    addProjectTarget: (projectId: number, target: string) =>
+    addProjectTarget: (projectId: string | number, target: string) =>
       core.request<ProjectKey>(`${base}/projects/${projectId}/targets`, {
         method: 'POST',
         body: JSON.stringify({ target }),
       }),
 
     updateProject: (
-      projectId: number,
+      projectId: string | number,
       updates: { name?: string; framework?: string }
     ) =>
       core.request(`${base}/projects/${projectId}`, {
@@ -59,11 +59,11 @@ export function projectsMethods(core: ApiClientCore) {
         body: JSON.stringify(updates),
       }),
 
-    deleteProject: (projectId: number) =>
+    deleteProject: (projectId: string | number) =>
       core.request(`${base}/projects/${projectId}`, { method: 'DELETE' }),
 
     getProjectStats: (
-      projectId: number,
+      projectId: string | number,
       period: '24h' | '7d' | '30d' | '90d' = '7d'
     ) =>
       core.request<ProjectStats>(

@@ -22,6 +22,8 @@ import com.moneat.events.routes.extractPublicKey
 import com.moneat.events.services.EventService
 import com.moneat.otlp.OtlpAuth
 import com.moneat.otlp.services.OtlpApiKeyService
+import com.moneat.shared.services.ProjectIdResolver
+import com.moneat.utils.suspendRunCatching
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.auth.jwt.JWTPrincipal
@@ -34,7 +36,6 @@ import org.koin.core.context.GlobalContext
 import java.net.InetAddress
 import java.security.MessageDigest
 import kotlin.time.Duration.Companion.seconds
-import com.moneat.utils.suspendRunCatching
 
 /**
  * Trusted upstream proxies consulted before accepting forwarded-IP headers.
@@ -128,8 +129,10 @@ private fun bearerToken(header: String?): String? {
 fun Application.configureRateLimiting() {
     install(RateLimit) {
         register(RateLimitName("ingestion")) {
+            val projectIdResolver = GlobalContext.get().get<ProjectIdResolver>()
             requestKey { call ->
-                val projectId = call.parameters["projectId"] ?: "unknown"
+                val rawProjectId = call.parameters["projectId"]
+                val projectId = rawProjectId?.let(projectIdResolver::resolve)?.toString() ?: rawProjectId ?: "unknown"
                 val auth = call.request.headers.get("X-Sentry-Auth")
                 val sentryKey = call.request.queryParameters["sentry_key"]
                 val key = extractPublicKey(auth, sentryKey) ?: "anon"
@@ -187,10 +190,16 @@ fun Application.configureRateLimiting() {
             } else {
                 null
             }
+            val projectIdResolver = GlobalContext.get().get<ProjectIdResolver>()
             register(RateLimitName(name)) {
                 requestKey { call ->
                     val organizationId = if (allowLegacyDsn && eventService != null) {
-                        OtlpAuth.resolveOtlpIngestOrganizationId(call, otlpApiKeyService, eventService)
+                        OtlpAuth.resolveOtlpIngestOrganizationId(
+                            call,
+                            otlpApiKeyService,
+                            eventService,
+                            projectIdResolver
+                        )
                     } else {
                         OtlpAuth.extractOrgId(call, otlpApiKeyService)
                     }

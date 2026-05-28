@@ -22,6 +22,7 @@ import com.moneat.otlp.models.OtlpServiceMappingResponse
 import com.moneat.shared.models.OtelObservedServices
 import com.moneat.shared.models.OtelServiceProjectMappings
 import com.moneat.shared.models.Projects
+import com.moneat.shared.services.ProjectIdResolver
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -52,6 +53,7 @@ enum class OtlpSignalType {
 }
 
 class OtlpServiceRoutingService {
+    private val projectIdResolver = ProjectIdResolver()
 
     fun resolveProjectIds(
         organizationId: Int,
@@ -81,7 +83,7 @@ class OtlpServiceRoutingService {
             val projectsById = Projects
                 .selectAll()
                 .where { Projects.organization_id eq organizationId }
-                .associate { row -> row[Projects.id] to row[Projects.name] }
+                .associate { row -> row[Projects.id] to (row[Projects.name] to row[Projects.resource_id].toString()) }
 
             OtelObservedServices
                 .selectAll()
@@ -99,7 +101,8 @@ class OtlpServiceRoutingService {
                         serviceNamespace = identity.serviceNamespace,
                         serviceName = identity.serviceName,
                         projectId = mapping?.projectId,
-                        projectName = mapping?.projectId?.let { projectsById[it] },
+                        projectResourceId = mapping?.projectId?.let { projectsById[it]?.second },
+                        projectName = mapping?.projectId?.let { projectsById[it]?.first },
                         seenLogs = row[OtelObservedServices.seen_logs],
                         seenTraces = row[OtelObservedServices.seen_traces],
                         seenMetrics = row[OtelObservedServices.seen_metrics],
@@ -116,22 +119,24 @@ class OtlpServiceRoutingService {
     ): OtlpServiceMappingResponse? {
         val identity = normalizeIdentity(request.serviceNamespace, request.serviceName) ?: return null
         val now = Clock.System.now()
+        val projectId = request.projectResourceId?.let(projectIdResolver::resolve) ?: request.projectId ?: return null
         return transaction {
-            val projectName = Projects
+            val projectRow = Projects
                 .selectAll()
                 .where {
-                    (Projects.id eq request.projectId) and
+                    (Projects.id eq projectId) and
                         (Projects.organization_id eq organizationId)
                 }
                 .firstOrNull()
-                ?.get(Projects.name)
                 ?: return@transaction null
+            val projectName = projectRow[Projects.name]
+            val projectResourceId = projectRow[Projects.resource_id].toString()
 
             OtelServiceProjectMappings.insertIgnore {
                 it[OtelServiceProjectMappings.organization_id] = organizationId
                 it[OtelServiceProjectMappings.service_namespace] = identity.serviceNamespace
                 it[OtelServiceProjectMappings.service_name] = identity.serviceName
-                it[OtelServiceProjectMappings.project_id] = request.projectId
+                it[OtelServiceProjectMappings.project_id] = projectId
                 it[OtelServiceProjectMappings.created_at] = now
                 it[OtelServiceProjectMappings.updated_at] = now
             }
@@ -140,7 +145,7 @@ class OtlpServiceRoutingService {
                     (OtelServiceProjectMappings.service_namespace eq identity.serviceNamespace) and
                     (OtelServiceProjectMappings.service_name eq identity.serviceName)
             }) {
-                it[OtelServiceProjectMappings.project_id] = request.projectId
+                it[OtelServiceProjectMappings.project_id] = projectId
                 it[OtelServiceProjectMappings.updated_at] = now
             }
             val id = OtelServiceProjectMappings
@@ -156,7 +161,8 @@ class OtlpServiceRoutingService {
                 id = id,
                 serviceNamespace = identity.serviceNamespace,
                 serviceName = identity.serviceName,
-                projectId = request.projectId,
+                projectId = projectId,
+                projectResourceId = projectResourceId,
                 projectName = projectName,
                 updatedAt = now.toString(),
             )

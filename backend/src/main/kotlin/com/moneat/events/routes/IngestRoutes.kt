@@ -27,6 +27,7 @@ import com.moneat.events.services.EventService
 import com.moneat.events.services.IngestionWorker
 import com.moneat.logs.models.LogIngestEntry
 import com.moneat.logs.services.LogService
+import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.utils.DetailedErrorResponse
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.suspendRunCatching
@@ -58,6 +59,7 @@ fun Route.ingestRoutes(
     eventService: EventService = GlobalContext.get().get(),
     quotaService: BillingQuotaService = GlobalContext.get().get(),
     logService: LogService = GlobalContext.get().get(),
+    projectIdResolver: ProjectIdResolver = ProjectIdResolver(),
     enqueueEnvelope: (queueKey: String, message: String) -> Unit = { queueKey, message ->
         RedisConfig.sync().lpush(queueKey, message)
     },
@@ -76,7 +78,7 @@ fun Route.ingestRoutes(
                 call.application.environment.config
                     .property("ingest.queueKey")
                     .getString()
-            val projectId = call.parameters["projectId"]?.toLongOrNull()
+            val projectId = call.parameters["projectId"]?.let(projectIdResolver::resolve)
             if (projectId == null) {
                 call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                 return@post
@@ -162,7 +164,7 @@ fun Route.ingestRoutes(
 
         // Structured logs endpoint
         post("/logs/") {
-            val projectId = call.parameters["projectId"]?.toLongOrNull()
+            val projectId = call.parameters["projectId"]?.let(projectIdResolver::resolve)
             if (projectId == null) {
                 call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                 return@post
@@ -240,7 +242,7 @@ fun Route.ingestRoutes(
 
         // Legacy store endpoint
         post("/store/") {
-            val projectId = call.parameters["projectId"]?.toLongOrNull()
+            val projectId = call.parameters["projectId"]?.let(projectIdResolver::resolve)
             if (projectId == null) {
                 call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                 return@post
@@ -318,7 +320,7 @@ fun extractPublicKey(
 fun extractPublicKeyFromDsn(dsnLikeHeader: String?): String? {
     if (dsnLikeHeader.isNullOrBlank()) return null
     val cleaned = dsnLikeHeader.removePrefix("DSN ").trim()
-    val regex = "https?://([a-zA-Z0-9_-]+)@[^/]+/[0-9]+".toRegex(RegexOption.IGNORE_CASE)
+    val regex = "https?://([a-zA-Z0-9_-]+)@[^/]+/([0-9]+|[0-9a-f-]{36})".toRegex(RegexOption.IGNORE_CASE)
     return regex.find(cleaned)?.groupValues?.getOrNull(1)
 }
 

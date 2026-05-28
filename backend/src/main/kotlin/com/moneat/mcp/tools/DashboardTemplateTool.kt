@@ -153,7 +153,7 @@ class ExecuteDashboardQueryTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "project_id" to schemaNumber("Project ID"),
+                "project_id" to schemaProjectId(),
                 "query_config" to schemaObject(
                     "Query DSL config (QueryDsl JSON)"
                 ),
@@ -170,8 +170,7 @@ class ExecuteDashboardQueryTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val projectId = args["project_id"]?.jsonPrimitive
-            ?.content?.toLongOrNull()
+        val projectId = args.projectIdArg()
             ?: return errorResult("project_id is required")
         val queryConfigJson = args["query_config"] as? JsonObject
             ?: return errorResult("query_config must be an object")

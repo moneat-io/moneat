@@ -23,6 +23,7 @@ export interface NotificationPreference {
 
 export interface ProjectNotificationPreference extends NotificationPreference {
   projectId: number
+  projectResourceId: string
   projectName: string
 }
 

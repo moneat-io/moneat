@@ -71,6 +71,7 @@ function mapOtlpObservedService(service: Record<string, unknown>): OtlpObservedS
     serviceNamespace: (service.serviceNamespace ?? service.service_namespace ?? '') as string,
     serviceName: (service.serviceName ?? service.service_name ?? '') as string,
     projectId: (service.projectId ?? service.project_id) as number | null | undefined,
+    projectResourceId: (service.projectResourceId ?? service.project_resource_id) as string | null | undefined,
     projectName: (service.projectName ?? service.project_name) as string | null | undefined,
     seenLogs: (service.seenLogs ?? service.seen_logs ?? false) as boolean,
     seenTraces: (service.seenTraces ?? service.seen_traces ?? false) as boolean,
@@ -87,6 +88,7 @@ function mapOtlpServiceMapping(mapping: Record<string, unknown>): OtlpServiceMap
     serviceNamespace: (mapping.serviceNamespace ?? mapping.service_namespace ?? '') as string,
     serviceName: (mapping.serviceName ?? mapping.service_name ?? '') as string,
     projectId: (mapping.projectId ?? mapping.project_id) as number,
+    projectResourceId: (mapping.projectResourceId ?? mapping.project_resource_id) as string,
     projectName: (mapping.projectName ?? mapping.project_name ?? '') as string,
     updatedAt: (mapping.updatedAt ?? mapping.updated_at) as string,
   }
@@ -251,15 +253,19 @@ export function logsMethods(core: ApiClientCore) {
 
     upsertOtlpServiceMapping: async (
       serviceName: string,
-      projectId: number,
+      projectId: string | number,
       serviceNamespace = ''
     ): Promise<OtlpServiceMapping> => {
+      const projectField =
+        typeof projectId === 'number'
+          ? { project_id: projectId }
+          : { project_resource_id: projectId }
       const response = await core.request<Record<string, unknown>>(`${base}/otlp/service-mappings`, {
         method: 'POST',
         body: JSON.stringify({
           service_name: serviceName,
           service_namespace: serviceNamespace,
-          project_id: projectId,
+          ...projectField,
         }),
       })
       return mapOtlpServiceMapping(response)

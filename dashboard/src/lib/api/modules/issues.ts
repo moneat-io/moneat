@@ -27,7 +27,7 @@ export function issuesMethods(core: ApiClientCore) {
 
   return {
     getIssues: (
-      projectId: number,
+      projectId: string | number,
       page = 1,
       limit = 25,
       status?: string
@@ -42,12 +42,12 @@ export function issuesMethods(core: ApiClientCore) {
       )
     },
 
-    getIssue: (issueId: string, projectId?: number | null) => {
+    getIssue: (issueId: string, projectId?: string | number | null) => {
       const params = projectId == null ? '' : `?projectId=${projectId}`
       return core.request<IssueDetail>(`${base}/issues/${encodeURIComponent(issueId)}${params}`)
     },
 
-    getIssueEvents: (issueId: string, limit = 50, projectId?: number | null) => {
+    getIssueEvents: (issueId: string, limit = 50, projectId?: string | number | null) => {
       const params = new URLSearchParams({ limit: String(limit) })
       if (projectId != null) params.set('projectId', String(projectId))
       return core.request<Event[]>(
@@ -55,7 +55,7 @@ export function issuesMethods(core: ApiClientCore) {
       )
     },
 
-    getIssueTransactions: (issueId: string, limit = 20, projectId?: number | null) => {
+    getIssueTransactions: (issueId: string, limit = 20, projectId?: string | number | null) => {
       const params = new URLSearchParams({ limit: String(limit) })
       if (projectId != null) params.set('projectId', String(projectId))
       return core.request<IssueTransaction[]>(
@@ -70,7 +70,7 @@ export function issuesMethods(core: ApiClientCore) {
         substatus?: string
         statusDetail?: Record<string, string>
       },
-      projectId?: number | null
+      projectId?: string | number | null
     ) => {
       const params = projectId == null ? '' : `?projectId=${projectId}`
       return core.request(`${base}/issues/${encodeURIComponent(issueId)}${params}`, {

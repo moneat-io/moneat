@@ -127,24 +127,32 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
     enabled: api.isAuthenticated(),
   })
 
-  const activeProject = projects?.find((project) => project.id === selectedProjectId) ?? projects?.[0] ?? null
-  const activeProjectId = activeProject?.id ?? null
+  const activeProject = projects?.find((project) =>
+    project.resourceId === selectedProjectId || String(project.id) === selectedProjectId
+  ) ?? projects?.[0] ?? null
+  const activeProjectId = activeProject?.resourceId ?? null
+
+  useEffect(() => {
+    if (activeProject && selectedProjectId !== activeProject.resourceId) {
+      setSelectedProjectId(activeProject.resourceId)
+    }
+  }, [activeProject, selectedProjectId, setSelectedProjectId])
 
   const createProjectMutation = useMutation({
     mutationFn: (data: ProjectSetupSubmission) =>
       api.createProject(data.name, data.framework, data.targets),
     onSuccess: (project, submission) => {
-      storeTelemetrySourceIdsForProject(project.id, submission.sourceIds)
+      storeTelemetrySourceIdsForProject(project.resourceId, submission.sourceIds)
       trackEvent('Project Create', {
         framework: project.framework || 'none',
         sources: serializeTelemetrySourceIds(submission.sourceIds),
       })
       queryClient.invalidateQueries({ queryKey: ['projects'] })
-      setSelectedProjectId(project.id)
+      setSelectedProjectId(project.resourceId)
       resetCreateForm()
       navigate({
         to: '/projects/$projectId',
-        params: { projectId: String(project.id) },
+        params: { projectId: project.resourceId },
         search: { sources: serializeTelemetrySourceIds(submission.sourceIds) },
       })
     },
@@ -377,7 +385,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
                   return (
                     <DropdownMenuItem
                       key={project.id}
-                      onClick={() => setSelectedProjectId(project.id)}
+                      onClick={() => setSelectedProjectId(project.resourceId)}
                       className={cn(
                         'flex items-center gap-2',
                         project.id === activeProject?.id && 'bg-accent'
@@ -427,7 +435,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
                   return (
                     <DropdownMenuItem
                       key={project.id}
-                      onClick={() => setSelectedProjectId(project.id)}
+                      onClick={() => setSelectedProjectId(project.resourceId)}
                       className={cn(
                         'flex items-center gap-2',
                         project.id === activeProject?.id && 'bg-accent'

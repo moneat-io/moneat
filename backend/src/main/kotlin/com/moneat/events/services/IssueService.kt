@@ -22,18 +22,19 @@ import com.moneat.events.models.IssueResponse
 import com.moneat.events.models.IssueTransactionResponse
 import com.moneat.events.models.IssueUpdateRequest
 import com.moneat.events.repositories.IssueRepository
+import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.utils.ClickHouseQueryUtils
+import com.moneat.utils.suspendRunCatching
 import io.ktor.server.plugins.BadRequestException
 import mu.KotlinLogging
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
 class IssueService(
     private val issueRepository: IssueRepository,
-    private val queryHelper: DashboardQueryHelper
+    private val queryHelper: DashboardQueryHelper,
+    private val projectIdResolver: ProjectIdResolver = ProjectIdResolver(),
 ) {
-
     companion object {
         private const val ISSUE_OVERFETCH_MULTIPLIER = 5
     }
@@ -55,6 +56,7 @@ class IssueService(
             queryHelper.timestampRetentionClause("timestamp", retentionDays, demoEpochMs)
 
         val pgOverrides = issueRepository.getIssueStatusOverrides(projectId)
+        val projectResourceId = projectResourceId(projectId)
 
         val overfetch = if (status != null) (limit + offset) * ISSUE_OVERFETCH_MULTIPLIER else limit + offset
         val rows = issueRepository.getIssuesRaw(
@@ -82,6 +84,7 @@ class IssueService(
                     IssueResponse(
                         id = row.issueId,
                         projectId = row.projectId,
+                        projectResourceId = projectResourceId,
                         title = row.title,
                         culprit = row.culprit,
                         level = row.level,
@@ -126,12 +129,14 @@ class IssueService(
         val pgStatus = issueRepository.getIssueStatus(issueId, projectId)
         val projectName = issueRepository.getProjectName(projectId)
         val effectiveStatus = pgStatus ?: obj.status
+        val projectResourceId = projectResourceId(projectId)
 
         val latestEvent = getIssueEvents(issueId, 1, demoEpochMs, projectId).firstOrNull()
 
         return IssueDetailResponse(
             id = obj.issueId,
             projectId = obj.projectId,
+            projectResourceId = projectResourceId,
             projectName = projectName ?: "Unknown",
             title = obj.title,
             culprit = obj.culprit,
@@ -169,6 +174,9 @@ class IssueService(
             projectIdClause = projectIdClause
         )
     }
+
+    private fun projectResourceId(projectId: Long): String =
+        projectIdResolver.resourceIdFor(projectId) ?: projectId.toString()
 
     suspend fun getIssueTransactions(
         issueId: String,

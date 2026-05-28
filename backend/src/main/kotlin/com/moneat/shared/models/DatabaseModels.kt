@@ -23,6 +23,7 @@ import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.datetime.date
 import org.jetbrains.exposed.v1.datetime.timestamp
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import kotlin.uuid.Uuid
 
 class JsonbColumnType : ColumnType<String>() {
     private fun isH2(): Boolean =
@@ -193,6 +194,7 @@ object SidebarPreferenceEvents : Table("sidebar_preference_events") {
 
 object Projects : Table("projects") {
     val id = long("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val organization_id = integer("organization_id")
     val name = varchar("name", 255)
     val slug = varchar("slug", 255)

@@ -27,7 +27,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.long
 
 private val dashboardService = DashboardService.create()
 
@@ -51,7 +50,7 @@ class ListIssuesTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "project_id" to schemaNumber("Project ID"),
+                "project_id" to schemaProjectId(),
                 "status" to schemaEnum(
                     "Filter by status",
                     ALLOWED_ISSUE_STATUSES
@@ -67,7 +66,7 @@ class ListIssuesTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val projectId = args["project_id"]?.jsonPrimitive?.long
+        val projectId = args.projectIdArg()
             ?: return errorResult("project_id is required")
         val status = args["status"]?.jsonPrimitive?.content
         val page = args["page"]?.jsonPrimitive?.intOrNull ?: DEFAULT_PAGE

@@ -27,7 +27,7 @@ export function replaysMethods(core: ApiClientCore) {
 
   return {
     getReplays: (
-      projectId: number,
+      projectId: string | number,
       options: {
         page?: number
         limit?: number
@@ -67,7 +67,7 @@ export function replaysMethods(core: ApiClientCore) {
       }
     },
 
-    getReplaysForIssue: (issueId: string, limit = 10, projectId?: number | null) => {
+    getReplaysForIssue: (issueId: string, limit = 10, projectId?: string | number | null) => {
       const params = new URLSearchParams({ limit: String(limit) })
       if (projectId != null) params.set('projectId', String(projectId))
       return core.request<Replay[]>(

@@ -67,6 +67,7 @@ const sourceIcons: Record<TelemetrySourceId, ComponentType<{className?: string}>
 
 const DATADOG_AGENT_CONFIG_PATH = '/etc/datadog-agent/datadog.yaml'
 const DATADOG_AGENT_SETUP_DOCS_HREF = '/docs/datadog-agent/agent-setup'
+const COPY_RESET_MS = 2000
 
 const datadogSetupSteps = [
   {
@@ -112,7 +113,7 @@ function statusVariant(state: TelemetrySourceStatusState): 'default' | 'secondar
   return 'outline'
 }
 
-function getInitialSourceIds(projectId: number, selectedSourcesParam?: string): TelemetrySourceId[] {
+function getInitialSourceIds(projectId: string | number, selectedSourcesParam?: string): TelemetrySourceId[] {
   const sourceIdsFromSearch = parseTelemetrySourceIds(selectedSourcesParam)
   if (sourceIdsFromSearch.length > 0) return sourceIdsFromSearch
 
@@ -281,7 +282,7 @@ function TargetPlatformSection({
   const [showAddPlatform, setShowAddPlatform] = useState(false)
 
   const addTargetMutation = useMutation({
-    mutationFn: (target: string) => api.addProjectTarget(project.id, target),
+    mutationFn: (target: string) => api.addProjectTarget(project.resourceId, target),
     onSuccess: (_key, target) => {
       queryClient.invalidateQueries({queryKey: ['projects']})
       router.invalidate()
@@ -396,7 +397,7 @@ function DsnSection({
   const handleCopyDsn = async (dsn: string, target: string) => {
     await navigator.clipboard.writeText(dsn)
     setCopiedTarget(target)
-    setTimeout(() => setCopiedTarget(null), 2000)
+    setTimeout(() => setCopiedTarget(null), COPY_RESET_MS)
   }
 
   if (project.keys.length > 1) {
@@ -757,7 +758,7 @@ export function ProjectTelemetrySetupHub({
     [selectedSourcesParam]
   )
   const [storedSourceIds, setStoredSourceIds] = useState<TelemetrySourceId[]>(
-    () => getInitialSourceIds(project.id)
+    () => getInitialSourceIds(project.resourceId)
   )
   const selectedSourceIds = sourceIdsFromSearch.length > 0 ? sourceIdsFromSearch : storedSourceIds
   const [requestedActiveSourceId, setRequestedActiveSourceId] = useState<TelemetrySourceId>(selectedSourceIds[0])
@@ -767,12 +768,19 @@ export function ProjectTelemetrySetupHub({
   const [selectedTarget, setSelectedTarget] = useState<string | null>(
     () => project.keys[0]?.platformTarget ?? 'default'
   )
+  const [copiedResourceId, setCopiedResourceId] = useState(false)
   const [createdOtlpKey, setCreatedOtlpKey] = useState<string | null>(null)
   const [createdAgentKey, setCreatedAgentKey] = useState<string | null>(null)
 
+  const copyResourceId = async () => {
+    await navigator.clipboard.writeText(project.resourceId)
+    setCopiedResourceId(true)
+    setTimeout(() => setCopiedResourceId(false), COPY_RESET_MS)
+  }
+
   useEffect(() => {
-    storeTelemetrySourceIdsForProject(project.id, selectedSourceIds)
-  }, [project.id, selectedSourceIds])
+    storeTelemetrySourceIdsForProject(project.resourceId, selectedSourceIds)
+  }, [project.resourceId, selectedSourceIds])
 
   const {data: sdkVersionsResponse} = useQuery({
     queryKey: ['sdk-versions'],
@@ -785,8 +793,8 @@ export function ProjectTelemetrySetupHub({
     staleTime: 30 * 60 * 1000,
   })
   const {data: projectStats} = useQuery({
-    queryKey: ['projectStats', project.id, '24h'],
-    queryFn: () => api.getProjectStats(project.id, '24h'),
+    queryKey: ['projectStats', project.resourceId, '24h'],
+    queryFn: () => api.getProjectStats(project.resourceId, '24h'),
   })
   const {data: otlpKeyResponse} = useQuery({
     queryKey: ['otlpApiKeys'],
@@ -846,7 +854,7 @@ export function ProjectTelemetrySetupHub({
 
   const updateSelectedSources = (sourceIds: TelemetrySourceId[]) => {
     setStoredSourceIds(sourceIds)
-    storeTelemetrySourceIdsForProject(project.id, sourceIds)
+    storeTelemetrySourceIdsForProject(project.resourceId, sourceIds)
     navigate({
       search: (previous) => ({
         ...previous,
@@ -880,10 +888,25 @@ export function ProjectTelemetrySetupHub({
               <Badge variant={statusVariant(activeStatus.state)}>{activeStatus.label}</Badge>
             </div>
             <h1 className="text-3xl font-bold">{project.name}</h1>
-            <p className="mt-1 text-muted-foreground">Telemetry source setup</p>
+            <div className="mt-1 flex max-w-full items-center gap-2 text-xs text-muted-foreground">
+              <span>Project ID</span>
+              <code className="max-w-[min(28rem,70vw)] truncate rounded bg-muted px-1.5 py-0.5 font-mono text-foreground">
+                {project.resourceId}
+              </code>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0"
+                aria-label="Copy project ID"
+                onClick={copyResourceId}
+              >
+                {copiedResourceId ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              </Button>
+            </div>
           </div>
           <Button asChild variant="outline" size="icon" aria-label="Project settings">
-            <Link to="/projects/$projectId/settings" params={{projectId: String(project.id)}}>
+            <Link to="/projects/$projectId/settings" params={{projectId: project.resourceId}}>
               <Settings className="h-4 w-4" />
             </Link>
           </Button>
