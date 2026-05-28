@@ -56,8 +56,10 @@ import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -147,6 +149,31 @@ class McpRoutesTest {
         assertEquals(HttpStatusCode.OK, response.status)
         val body = response.bodyAsText()
         assertTrue(body.contains("authorized_read"), body)
+    }
+
+    @Test
+    fun `POST v1 mcp handles batched json rpc requests`() = testApplication {
+        setupApp()
+        val sessionId = initializeSession()
+
+        val response = client.post("/v1/mcp") {
+            mcpHeaders()
+            header("mcp-session-id", sessionId)
+            setBody(
+                """
+                [
+                  {"jsonrpc":"2.0","id":2,"method":"tools/list"},
+                  {"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"moneat://test-resource"}}
+                ]
+                """.trimIndent()
+            )
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = Json.parseToJsonElement(response.bodyAsText()).jsonArray
+        assertEquals(2, body.size)
+        assertTrue(body.anyJsonObjectContains("authorized_read"))
+        assertTrue(body.anyJsonObjectContains("resource ok"))
     }
 
     @Test
@@ -396,6 +423,9 @@ class McpRoutesTest {
             .token ?: error("Generated token was missing")
     }
 }
+
+private fun JsonArray.anyJsonObjectContains(value: String): Boolean =
+    any { element -> element.toString().contains(value) }
 
 private class AuthorizedReadTool : McpTool {
     override val name: String = "authorized_read"

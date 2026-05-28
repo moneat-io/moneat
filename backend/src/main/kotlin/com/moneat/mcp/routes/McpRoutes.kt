@@ -298,7 +298,7 @@ private fun JsonElement.withoutNullFields(): JsonElement =
     when (this) {
         is JsonObject -> buildJsonObject {
             for ((key, value) in this@withoutNullFields) {
-                if (value !is JsonNull || shouldKeepNullJsonField(key, this@withoutNullFields)) {
+                if (value !is JsonNull) {
                     put(key, value.withoutNullFields())
                 }
             }
@@ -310,9 +310,6 @@ private fun JsonElement.withoutNullFields(): JsonElement =
         }
         else -> this
     }
-
-private fun shouldKeepNullJsonField(key: String, parent: JsonObject): Boolean =
-    key == "id" && "error" in parent
 
 private fun JsonElement.withJsonRpcNullErrorId(message: JSONRPCMessage): JsonElement {
     if (message !is JSONRPCError || message.id != null || this !is JsonObject) return this
