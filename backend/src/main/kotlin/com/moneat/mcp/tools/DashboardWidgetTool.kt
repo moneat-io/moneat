@@ -142,7 +142,7 @@ private fun JsonObject.optionalStringArg(name: String): String? {
     if (!containsKey(name)) return null
     val value = this[name] as? JsonPrimitive
         ?: throw IllegalArgumentException("$name must be a string")
-    if (!value.isString) throw IllegalArgumentException("$name must be a string")
+    require(value.isString) { "$name must be a string" }
     return value.content
 }
 
@@ -182,7 +182,7 @@ private fun JsonObject.optionalVariables(): Map<String, String> {
     return value.mapValues { (name, entry) ->
         val primitive = entry as? JsonPrimitive
             ?: throw IllegalArgumentException("variables.$name must be a string")
-        if (!primitive.isString) throw IllegalArgumentException("variables.$name must be a string")
+        require(primitive.isString) { "variables.$name must be a string" }
         primitive.content
     }
 }
