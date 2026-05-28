@@ -56,6 +56,9 @@ object ClickHouseClient {
     private const val NANOS_PER_SECOND = 1_000_000_000.0
     private const val READ_QUERY_MAX_EXECUTION_SECONDS = 10
     private const val SLOW_QUERY_THRESHOLD_SECONDS = 3.0
+    private const val CLICKHOUSE_TIMEOUT_ERROR_CODE = "159"
+    private const val CLICKHOUSE_TIMEOUT_ERROR_NAME = "TIMEOUT_EXCEEDED"
+    private const val CLICKHOUSE_TIMEOUT_MESSAGE = "timeout exceeded"
 
     @Volatile
     private var httpClient: HttpClient? = null
@@ -198,11 +201,17 @@ object ClickHouseClient {
             val detail = "ClickHouse query failed (${response.status.value}): ${body.take(ERROR_BODY_MAX_LEN)}"
             logger.error { "$detail | query: ${query.take(QUERY_LOG_MAX_LEN)}" }
             throw ClickHouseQueryException(
-                isTimeout = "TIMEOUT_EXCEEDED" in body || errorCode == "159",
+                isTimeout = isClickHouseTimeout(body, errorCode),
                 internalDetail = detail,
             )
         }
         return body
+    }
+
+    private fun isClickHouseTimeout(body: String, errorCode: String): Boolean {
+        return errorCode == CLICKHOUSE_TIMEOUT_ERROR_CODE ||
+            body.contains(CLICKHOUSE_TIMEOUT_ERROR_NAME, ignoreCase = true) ||
+            body.contains(CLICKHOUSE_TIMEOUT_MESSAGE, ignoreCase = true)
     }
 
     /**
