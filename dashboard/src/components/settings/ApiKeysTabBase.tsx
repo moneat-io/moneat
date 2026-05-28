@@ -30,6 +30,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
 import {useToast} from '@/hooks/useToast'
 import {useTimezone} from '@/hooks/useTimezone'
 import {formatDate as formatDateUtil} from '@/lib/date-format'
@@ -242,18 +243,42 @@ export function ApiKeysTabBase<T extends ApiKeyRow>(config: Readonly<ApiKeysTabC
             </CardTitle>
             <CardDescription>{cardDescription}</CardDescription>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" asChild>
-              <a href={docsHref} target="_blank" rel="noopener noreferrer">
-                <BookOpen className="h-4 w-4" />
-                Docs
-              </a>
-            </Button>
-            <Button onClick={() => setCreateOpen(true)} disabled={!!createdKey}>
-              <Plus className="h-4 w-4 mr-2" />
-              New Key
-            </Button>
-          </div>
+          <TooltipProvider>
+            <div className="flex shrink-0 items-center gap-2">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="icon" asChild>
+                    <a
+                      href={docsHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`${cardTitle} docs`}
+                      title="Docs"
+                    >
+                      <BookOpen className="h-4 w-4" />
+                      <span className="sr-only">Docs</span>
+                    </a>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Docs</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon"
+                    onClick={() => setCreateOpen(true)}
+                    disabled={!!createdKey}
+                    aria-label="New Key"
+                    title="New key"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span className="sr-only">New Key</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>New key</TooltipContent>
+              </Tooltip>
+            </div>
+          </TooltipProvider>
         </CardHeader>
         <CardContent>{keysBody}</CardContent>
       </Card>

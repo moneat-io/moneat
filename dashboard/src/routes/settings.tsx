@@ -26,6 +26,7 @@ import {
 import {OtlpApiKeysTab} from '@/components/settings/OtlpApiKeysTab'
 import {AgentApiKeysTab} from '@/components/settings/AgentApiKeysTab'
 import {ApmSpanUsageBreakdown} from '@/components/settings/ApmSpanUsageBreakdown'
+import {McpApiKeysTab} from '@/components/settings/McpApiKeysTab'
 import {trackEvent} from '@/lib/analytics'
 import {buildPricingCardModel} from '@/lib/pricing-display'
 import {Button} from '@/components/ui/button'
@@ -44,6 +45,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {Switch} from '@/components/ui/switch'
 import {useToast} from '@/hooks/useToast'
@@ -348,20 +350,24 @@ function SettingsPage() {
 function ApiKeysTab() {
   const hasDatadog = true // Datadog module is always available (OSS)
   return (
-    <Tabs defaultValue="logs">
+    <Tabs defaultValue="opentelemetry">
       <TabsList className="mb-4">
-        <TabsTrigger value="logs">OpenTelemetry</TabsTrigger>
+        <TabsTrigger value="opentelemetry">OpenTelemetry</TabsTrigger>
+        <TabsTrigger value="datadog" disabled={!hasDatadog}>Datadog</TabsTrigger>
         <TabsTrigger value="sentry">Sentry</TabsTrigger>
-        <TabsTrigger value="datadog" disabled={!hasDatadog}>Datadog Agent</TabsTrigger>
+        <TabsTrigger value="mcp">MCP</TabsTrigger>
       </TabsList>
-      <TabsContent value="logs" className="space-y-8 mt-0">
+      <TabsContent value="opentelemetry" className="space-y-8 mt-0">
         <OtlpApiKeysTab />
+      </TabsContent>
+      <TabsContent value="datadog" className="space-y-8 mt-0">
+        {hasDatadog && <AgentApiKeysTab />}
       </TabsContent>
       <TabsContent value="sentry" className="space-y-8 mt-0">
         <AuthTokensSection />
       </TabsContent>
-      <TabsContent value="datadog" className="space-y-8 mt-0">
-        {hasDatadog && <AgentApiKeysTab />}
+      <TabsContent value="mcp" className="space-y-8 mt-0">
+        <McpApiKeysTab />
       </TabsContent>
     </Tabs>
   )
@@ -449,18 +455,42 @@ function AuthTokensSection() {
               Create tokens for sentry-cli, source maps, releases, and Sentry-compatible API access.
             </CardDescription>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" asChild>
-              <a href="/docs/api-tokens" target="_blank" rel="noopener noreferrer">
-                <BookOpen className="h-4 w-4" />
-                Docs
-              </a>
-            </Button>
-            <Button onClick={() => setCreateOpen(true)} disabled={!!createdTokenValue}>
-              <Plus className="h-4 w-4 mr-2" />
-              New Token
-            </Button>
-          </div>
+          <TooltipProvider>
+            <div className="flex shrink-0 items-center gap-2">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="icon" asChild>
+                    <a
+                      href="/docs/api-tokens"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="Sentry API token docs"
+                      title="Docs"
+                    >
+                      <BookOpen className="h-4 w-4" />
+                      <span className="sr-only">Docs</span>
+                    </a>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Docs</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon"
+                    onClick={() => setCreateOpen(true)}
+                    disabled={!!createdTokenValue}
+                    aria-label="New token"
+                    title="New token"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span className="sr-only">New Token</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>New token</TooltipContent>
+              </Tooltip>
+            </div>
+          </TooltipProvider>
         </CardHeader>
         <CardContent>
           {isLoading ? (

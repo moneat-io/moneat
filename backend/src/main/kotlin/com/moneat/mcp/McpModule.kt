@@ -27,6 +27,7 @@ import com.moneat.mcp.resources.OrgOverviewResource
 import com.moneat.mcp.resources.ProjectsListResource
 import com.moneat.mcp.resources.StatusPagesResource
 import com.moneat.mcp.resources.UptimeSummaryResource
+import com.moneat.mcp.routes.mcpApiKeyRoutes
 import com.moneat.mcp.routes.mcpRoutes
 import io.ktor.server.routing.Route
 import mu.KotlinLogging
@@ -67,6 +68,7 @@ object McpModule {
     }
 
     fun registerRoutes(route: Route) {
+        route.mcpApiKeyRoutes(toolRegistry, resourceRegistry)
         route.mcpRoutes(toolRegistry, resourceRegistry)
     }
 }

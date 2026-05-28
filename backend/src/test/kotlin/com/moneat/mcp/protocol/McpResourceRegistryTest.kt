@@ -94,6 +94,28 @@ class McpResourceRegistryTest {
     }
 
     @Test
+    fun `listResources filters to allowed resources`() {
+        registerNamedResource("test://first")
+        registerNamedResource("test://second")
+
+        val resources = registry.listResources(setOf("test://second"))
+
+        assertEquals(1, resources.size)
+        assertEquals("test://second", resources[0].uri)
+    }
+
+    @Test
+    fun `readResource rejects disabled resource`() = runBlocking {
+        registerNamedResource("test://first")
+        val restrictedContext = testContext.copy(allowedResources = setOf("test://other"))
+
+        val result = registry.readResource("test://first", restrictedContext)
+
+        assertEquals(1, result.contents.size)
+        assertTrue(result.contents[0].text!!.contains("not enabled"))
+    }
+
+    @Test
     fun `readResource returns content from provider`() = runBlocking {
         val resource = object : McpResource {
             override val uri = "test://data"
@@ -114,6 +136,20 @@ class McpResourceRegistryTest {
 
         assertEquals(1, result.contents.size)
         assertTrue(result.contents[0].text!!.contains("\"orgId\": 1"))
+    }
+
+    private fun registerNamedResource(uri: String) {
+        val resource = object : McpResource {
+            override val uri = uri
+            override val name = "Resource"
+            override val description = "A test resource"
+            override suspend fun read(
+                context: McpContext
+            ): ResourceContent {
+                return ResourceContent(uri = uri, text = "{}")
+            }
+        }
+        registry.register(resource)
     }
 
     @Test

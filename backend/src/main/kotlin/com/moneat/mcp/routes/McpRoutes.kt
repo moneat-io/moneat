@@ -118,6 +118,9 @@ private suspend fun resolveOrCreateSession(
             tokenId = auth.tokenId,
             scopes = auth.scopes,
             sessionId = "pending:${auth.tokenId}",
+            mcpApiKeyId = auth.mcpApiKeyId,
+            allowedTools = auth.allowedTools,
+            allowedResources = auth.allowedResources,
         ),
     )
     val server = createMcpServer({ session.context }, toolRegistry, resourceRegistry)
@@ -187,7 +190,7 @@ private fun createMcpServer(
         ),
     )
 
-    toolRegistry.listTools().forEach { tool ->
+    toolRegistry.listTools(contextProvider().allowedTools).forEach { tool ->
         server.addTool(
             name = tool.name,
             description = tool.description,
@@ -211,7 +214,7 @@ private fun createMcpServer(
         }
     }
 
-    resourceRegistry.listResources().forEach { resource ->
+    resourceRegistry.listResources(contextProvider().allowedResources).forEach { resource ->
         server.addResource(
             uri = resource.uri,
             name = resource.name,

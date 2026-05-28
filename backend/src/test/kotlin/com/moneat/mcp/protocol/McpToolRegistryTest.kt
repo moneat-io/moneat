@@ -168,6 +168,32 @@ class McpToolRegistryTest {
     }
 
     @Test
+    fun `listTools filters to allowed tools`() {
+        registerNamedTool("first_tool")
+        registerNamedTool("second_tool")
+
+        val tools = registry.listTools(setOf("second_tool"))
+
+        assertEquals(1, tools.size)
+        assertEquals("second_tool", tools[0].name)
+    }
+
+    @Test
+    fun `callTool rejects disabled tool`() = runBlocking {
+        registerNamedTool("first_tool")
+        val restrictedContext = testContext.copy(allowedTools = setOf("other_tool"))
+
+        val result = registry.callTool(
+            "first_tool",
+            JsonObject(emptyMap()),
+            restrictedContext
+        )
+
+        assertTrue(result.isError)
+        assertTrue(result.content[0].text!!.contains("not enabled"))
+    }
+
+    @Test
     fun `callTool dispatches to registered tool`() = runBlocking {
         val tool = object : McpTool {
             override val name = "echo"
@@ -199,6 +225,22 @@ class McpToolRegistryTest {
 
         assertFalse(result.isError)
         assertEquals("hello", result.content[0].text)
+    }
+
+    private fun registerNamedTool(name: String) {
+        val tool = object : McpTool {
+            override val name = name
+            override val description = "A test tool"
+            override val inputSchema = InputSchema()
+            override val requiredScopes = fakeReadScopes
+            override suspend fun execute(
+                args: JsonObject,
+                context: McpContext
+            ): ToolCallResult {
+                return ToolCallResult(content = listOf(ToolContent(text = "ok")))
+            }
+        }
+        registry.register(tool)
     }
 
     @Test

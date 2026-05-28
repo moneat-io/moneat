@@ -72,16 +72,18 @@ class McpToolRegistry(
         logger.debug { "Registered MCP tool: ${tool.name}" }
     }
 
-    fun listTools(): List<ToolDefinition> {
-        return tools.values.map { tool ->
-            ToolDefinition(
-                name = tool.name,
-                description = tool.description,
-                inputSchema = tool.inputSchema,
-                readOnly = tool.readOnly,
-                requiredScopes = tool.requiredScopes,
-            )
-        }
+    fun listTools(allowedTools: Set<String>? = null): List<ToolDefinition> {
+        return tools.values
+            .filter { tool -> allowedTools?.contains(tool.name) ?: true }
+            .map { tool ->
+                ToolDefinition(
+                    name = tool.name,
+                    description = tool.description,
+                    inputSchema = tool.inputSchema,
+                    readOnly = tool.readOnly,
+                    requiredScopes = tool.requiredScopes,
+                )
+            }
     }
 
     suspend fun callTool(
@@ -94,6 +96,13 @@ class McpToolRegistry(
                 content = listOf(ToolContent(text = "Unknown tool: $name")),
                 isError = true
             )
+
+        if (!context.canUseTool(name)) {
+            return ToolCallResult(
+                content = listOf(ToolContent(text = "Tool is not enabled for this MCP key: $name")),
+                isError = true
+            )
+        }
 
         val timeoutMs = toolTimeouts[name] ?: defaultTimeoutMs
         return try {

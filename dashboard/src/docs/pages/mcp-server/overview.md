@@ -24,8 +24,8 @@ Since the module runs inside the application process, MCP tools call existing se
 
 ## Quick Start
 
-1. [Generate an API token](/docs/api-tokens) in Moneat
-2. Configure your MCP client to connect to `https://your-moneat-instance/v1/mcp` with `Authorization: Bearer YOUR_TOKEN`
+1. Generate an MCP key from **Settings → API Keys → MCP** in Moneat
+2. Configure your MCP client to connect to `https://your-moneat-instance/v1/mcp` with `Authorization: Bearer YOUR_MCP_KEY`
 3. Start using tools like `list_issues`, `query_logs`, `list_hosts`, etc.
 
 See [Setup Guide](./setup) for detailed instructions.
