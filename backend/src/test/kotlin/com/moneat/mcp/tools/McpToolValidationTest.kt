@@ -274,6 +274,48 @@ class McpToolValidationTest {
             case("update_dashboard_fields", UpdateDashboardTool(), obj("dashboard_id" to 1), "At least one"),
             case("delete_dashboard_id", DeleteDashboardTool(), obj(), "dashboard_id is required"),
             case(
+                "create_dashboard_widget_type",
+                CreateDashboardWidgetTool(),
+                obj("dashboard_id" to 1),
+                "widget_type is required",
+            ),
+            case(
+                "create_dashboard_widget_unknown_type",
+                CreateDashboardWidgetTool(),
+                obj("dashboard_id" to 1, "widget_type" to "bad"),
+                "Unknown widget_type",
+            ),
+            case(
+                "update_dashboard_widget_id",
+                UpdateDashboardWidgetTool(),
+                obj("dashboard_id" to 1),
+                "widget_id is required",
+            ),
+            case(
+                "update_dashboard_widget_fields",
+                UpdateDashboardWidgetTool(),
+                obj("dashboard_id" to 1, "widget_id" to 2),
+                "At least one widget field",
+            ),
+            case(
+                "delete_dashboard_widget_id",
+                DeleteDashboardWidgetTool(),
+                obj("dashboard_id" to 1),
+                "widget_id is required",
+            ),
+            case(
+                "preview_dashboard_widget_query_config",
+                PreviewDashboardWidgetQueryTool(),
+                obj("dashboard_id" to 1),
+                "query_config must be an object",
+            ),
+            case(
+                "replace_dashboard_widgets_expected",
+                ReplaceDashboardWidgetsTool(),
+                obj("dashboard_id" to 1, "widgets" to emptyList<String>()),
+                "expected_widget_count is required",
+            ),
+            case(
                 "create_dashboard_alert_widget",
                 CreateDashboardAlertTool(),
                 obj("dashboard_id" to 1),

@@ -79,7 +79,6 @@ import org.koin.core.context.GlobalContext
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
 
-private const val QUERY_PREVIEW_LENGTH = 80
 private const val DEFAULT_RETENTION_DAYS = 90
 private const val MAX_QUERIES_PER_REQUEST = 10
 
@@ -124,28 +123,6 @@ private fun getDashboardScope(dashboardId: Long, orgId: Long): DashboardScope? {
                 )
             }
     }
-}
-
-private fun resolvePrometheusDataSource(
-    dsl: QueryDsl,
-    orgId: Long,
-    dataSourceService: CustomDataSourceService,
-): QueryDsl {
-    if (dsl.dataSource != "__prometheus") return dsl
-    val sources = dataSourceService.listDataSources(orgId)
-    val promSource = sources.firstOrNull { it.sourceType.equals("prometheus", ignoreCase = true) }
-    if (promSource == null) {
-        logger.warn {
-            val sourcesList = sources.map { "${it.id}:${it.sourceType}" }
-            val shortQuery = dsl.rawQuery?.take(QUERY_PREVIEW_LENGTH) ?: ""
-            "No Prometheus datasource found for org $orgId (${sources.size} sources: $sourcesList), " +
-                "cannot resolve __prometheus for rawQuery=$shortQuery"
-        }
-        return dsl
-    }
-    val rawQueryPreview = dsl.rawQuery?.take(QUERY_PREVIEW_LENGTH)
-    logger.debug { "Resolved __prometheus -> custom:${promSource.id} for rawQuery=$rawQueryPreview" }
-    return dsl.copy(dataSource = "custom:${promSource.id}")
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleListDashboards(
@@ -351,7 +328,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDashboardQuery(
     } else {
         request.queryConfig
     }
-    val effectiveQuery = resolvePrometheusDataSource(
+    val effectiveQuery = queryEngine.resolvePrometheusDataSource(
         queryEngine.applyVariables(withTimeRange, request.variables),
         orgId,
         dataSourceService
@@ -472,7 +449,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleBatchDashboardQu
         } else {
             query
         }
-        val effectiveQuery = resolvePrometheusDataSource(
+        val effectiveQuery = queryEngine.resolvePrometheusDataSource(
             queryEngine.applyVariables(withTimeRange, request.variables),
             orgId,
             dataSourceService
