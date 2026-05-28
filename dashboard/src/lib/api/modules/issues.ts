@@ -21,13 +21,14 @@ import type {
   IssueDetail,
   IssueTransaction,
 } from '../types'
+import { urlWithQuery } from '../utils'
 
 export function issuesMethods(core: ApiClientCore) {
   const base = core.API_BASE
 
   return {
     getIssues: (
-      projectId: number,
+      projectId: string | number,
       page = 1,
       limit = 25,
       status?: string
@@ -37,17 +38,20 @@ export function issuesMethods(core: ApiClientCore) {
         limit: String(limit),
       })
       if (status) params.set('status', status)
+      const path = `${base}/projects/${encodeURIComponent(String(projectId))}/issues`
       return core.request<Issue[]>(
-        `${base}/projects/${projectId}/issues?${params.toString()}`
+        urlWithQuery(path, params.toString())
       )
     },
 
-    getIssue: (issueId: string, projectId?: number | null) => {
-      const params = projectId == null ? '' : `?projectId=${projectId}`
-      return core.request<IssueDetail>(`${base}/issues/${encodeURIComponent(issueId)}${params}`)
+    getIssue: (issueId: string, projectId?: string | number | null) => {
+      const params = new URLSearchParams()
+      if (projectId != null) params.set('projectId', String(projectId))
+      const path = `${base}/issues/${encodeURIComponent(issueId)}`
+      return core.request<IssueDetail>(urlWithQuery(path, params.toString()))
     },
 
-    getIssueEvents: (issueId: string, limit = 50, projectId?: number | null) => {
+    getIssueEvents: (issueId: string, limit = 50, projectId?: string | number | null) => {
       const params = new URLSearchParams({ limit: String(limit) })
       if (projectId != null) params.set('projectId', String(projectId))
       return core.request<Event[]>(
@@ -55,7 +59,7 @@ export function issuesMethods(core: ApiClientCore) {
       )
     },
 
-    getIssueTransactions: (issueId: string, limit = 20, projectId?: number | null) => {
+    getIssueTransactions: (issueId: string, limit = 20, projectId?: string | number | null) => {
       const params = new URLSearchParams({ limit: String(limit) })
       if (projectId != null) params.set('projectId', String(projectId))
       return core.request<IssueTransaction[]>(
@@ -70,10 +74,12 @@ export function issuesMethods(core: ApiClientCore) {
         substatus?: string
         statusDetail?: Record<string, string>
       },
-      projectId?: number | null
+      projectId?: string | number | null
     ) => {
-      const params = projectId == null ? '' : `?projectId=${projectId}`
-      return core.request(`${base}/issues/${encodeURIComponent(issueId)}${params}`, {
+      const params = new URLSearchParams()
+      if (projectId != null) params.set('projectId', String(projectId))
+      const path = `${base}/issues/${encodeURIComponent(issueId)}`
+      return core.request(urlWithQuery(path, params.toString()), {
         method: 'PATCH',
         body: JSON.stringify(updates),
       })

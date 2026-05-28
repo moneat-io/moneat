@@ -39,7 +39,7 @@ export function notificationsMethods(core: ApiClientCore) {
       }),
 
     updateProjectNotificationPreferences: (
-      projectId: number,
+      projectId: string | number,
       preferences: Partial<NotificationPreference>
     ) =>
       core.request<void>(`${base}/notification-preferences/${projectId}`, {
@@ -47,7 +47,7 @@ export function notificationsMethods(core: ApiClientCore) {
         body: JSON.stringify(preferences),
       }),
 
-    deleteProjectNotificationPreferences: (projectId: number) =>
+    deleteProjectNotificationPreferences: (projectId: string | number) =>
       core.request<void>(`${base}/notification-preferences/${projectId}`, {
         method: 'DELETE',
       }),

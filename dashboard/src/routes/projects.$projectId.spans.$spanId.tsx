@@ -32,7 +32,7 @@ function SpanDetailPage() {
   
   const { data: spanDetail, isLoading, error } = useQuery({
     queryKey: ['span', projectId, spanId],
-    queryFn: () => api.getSpanDetails(parseInt(projectId), spanId),
+    queryFn: () => api.getSpanDetails(projectId, spanId),
   })
 
   if (isLoading) {

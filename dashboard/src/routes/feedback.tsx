@@ -40,7 +40,7 @@ import {
   Search,
   Video,
 } from 'lucide-react'
-import {useMemo, useState} from 'react'
+import {useEffect, useMemo, useState} from 'react'
 import {useToast} from '@/hooks/useToast'
 
 export const Route = createFileRoute('/feedback')({
@@ -130,11 +130,13 @@ function FeedbackPage() {
     queryFn: () => api.getProjects(),
   })
 
-  const projectId = selectedProjectId || projects?.[0]?.id
+  const projectId = selectedProjectId || projects?.[0]?.resourceId
 
-  if (!selectedProjectId && projects && projects.length > 0 && projects[0]?.id) {
-    setSelectedProjectId(projects[0].id)
-  }
+  useEffect(() => {
+    if (!selectedProjectId && projects?.[0]?.resourceId) {
+      setSelectedProjectId(projects[0].resourceId)
+    }
+  }, [selectedProjectId, projects, setSelectedProjectId])
 
   // Fetch all feedback for stats (unfiltered)
   const { data: allFeedback = [] } = useQuery({

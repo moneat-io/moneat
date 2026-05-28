@@ -23,6 +23,8 @@ import {clearAuthStorage, renderWithQueryClient} from '@/test/utils'
 import {OtlpApiKeysTab} from '../OtlpApiKeysTab'
 
 const API_BASE = 'http://localhost:8080'
+const WEB_APP_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174030'
+const WORKER_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174031'
 
 function mockBaseResponses() {
   server.use(
@@ -50,8 +52,24 @@ function mockBaseResponses() {
     }),
     http.get(`${API_BASE}/v1/projects`, () => {
       return HttpResponse.json([
-        {id: 30, name: 'Web App', slug: 'web-app', framework: 'react', keys: [], dsn: ''},
-        {id: 31, name: 'Worker', slug: 'worker', framework: 'kotlin', keys: [], dsn: ''},
+        {
+          id: 30,
+          resourceId: WEB_APP_RESOURCE_ID,
+          name: 'Web App',
+          slug: 'web-app',
+          framework: 'react',
+          keys: [],
+          dsn: '',
+        },
+        {
+          id: 31,
+          resourceId: WORKER_RESOURCE_ID,
+          name: 'Worker',
+          slug: 'worker',
+          framework: 'kotlin',
+          keys: [],
+          dsn: '',
+        },
       ])
     }),
     http.get(`${API_BASE}/v1/otlp/services`, () => {
@@ -63,6 +81,7 @@ function mockBaseResponses() {
             service_namespace: 'checkout',
             service_name: 'api',
             project_id: 30,
+            project_resource_id: WEB_APP_RESOURCE_ID,
             project_name: 'Web App',
             seen_logs: true,
             seen_traces: true,
@@ -181,7 +200,7 @@ describe('OtlpApiKeysTab', () => {
       expect(capturedBody).toEqual({
         service_name: 'worker',
         service_namespace: '',
-        project_id: 31,
+        project_resource_id: WORKER_RESOURCE_ID,
       })
     })
   })

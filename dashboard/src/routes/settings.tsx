@@ -2497,7 +2497,7 @@ function NotificationsTab() {
 
   const updateProjectMutation = useMutation({
     mutationFn: ({ projectId, prefs }: {
-      projectId: number
+      projectId: string
       prefs: Partial<{
         issueAlerts: boolean
         errorAlerts: boolean
@@ -2519,7 +2519,7 @@ function NotificationsTab() {
   })
 
   const deleteProjectMutation = useMutation({
-    mutationFn: (projectId: number) => api.deleteProjectNotificationPreferences(projectId),
+    mutationFn: (projectId: string) => api.deleteProjectNotificationPreferences(projectId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notificationPreferences'] })
       toast({ title: 'Project override removed', description: 'Using global preferences for this project.' })
@@ -2701,14 +2701,14 @@ function NotificationsTab() {
               </TableHeader>
               <TableBody>
                 {projects.map((project) => (
-                  <TableRow key={project.projectId}>
+                  <TableRow key={project.projectResourceId}>
                     <TableCell className="font-medium">{project.projectName}</TableCell>
                     <TableCell className="text-center">
                       <Checkbox
                         checked={project.issueAlerts}
                         onCheckedChange={(checked) =>
                           updateProjectMutation.mutate({
-                            projectId: project.projectId,
+                            projectId: project.projectResourceId,
                             prefs: { issueAlerts: checked === true },
                           })
                         }
@@ -2719,7 +2719,7 @@ function NotificationsTab() {
                         checked={project.errorAlerts}
                         onCheckedChange={(checked) =>
                           updateProjectMutation.mutate({
-                            projectId: project.projectId,
+                            projectId: project.projectResourceId,
                             prefs: { errorAlerts: checked === true },
                           })
                         }
@@ -2730,7 +2730,7 @@ function NotificationsTab() {
                         checked={project.weeklySummary}
                         onCheckedChange={(checked) =>
                           updateProjectMutation.mutate({
-                            projectId: project.projectId,
+                            projectId: project.projectResourceId,
                             prefs: { weeklySummary: checked === true },
                           })
                         }
@@ -2745,7 +2745,7 @@ function NotificationsTab() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => deleteProjectMutation.mutate(project.projectId)}
+                        onClick={() => deleteProjectMutation.mutate(project.projectResourceId)}
                       >
                         Reset
                       </Button>

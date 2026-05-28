@@ -43,7 +43,7 @@ function ReleaseDetailPage() {
     queryFn: () => api.getProjects(),
   })
 
-  const projectId = selectedProjectId || projects?.[0]?.id
+  const projectId = selectedProjectId || projects?.[0]?.resourceId
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ['releaseStats', projectId, releaseVersion],

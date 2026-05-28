@@ -20,6 +20,7 @@ import com.moneat.events.routes.extractPublicKey
 import com.moneat.events.routes.extractPublicKeyFromDsn
 import com.moneat.events.services.EventService
 import com.moneat.otlp.services.OtlpApiKeyService
+import com.moneat.shared.services.ProjectIdResolver
 import io.ktor.http.HttpHeaders
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.header
@@ -30,9 +31,12 @@ import io.ktor.server.request.header
  */
 object OtlpAuth {
     private const val BEARER_PREFIX = "Bearer "
+    private const val PROJECT_ID_SEGMENT_PATTERN =
+        "([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9]+)"
 
     private val projectIdFromDsnRegex =
-        "https?://[^@]+@[^/]+/([0-9]+)".toRegex(RegexOption.IGNORE_CASE)
+        "https?://[^@]+@[^/]+/$PROJECT_ID_SEGMENT_PATTERN(?:[/?#]|$)"
+            .toRegex(RegexOption.IGNORE_CASE)
 
     fun extractBearerToken(authorizationHeader: String?): String? {
         if (authorizationHeader == null) return null
@@ -55,20 +59,22 @@ object OtlpAuth {
         call: ApplicationCall,
         otlpApiKeyService: OtlpApiKeyService,
         eventService: EventService,
+        projectIdResolver: ProjectIdResolver,
     ): Int? =
         extractOrgId(call, otlpApiKeyService)
-            ?: extractOrgIdFromLegacyDsn(call, eventService)
+            ?: extractOrgIdFromLegacyDsn(call, eventService, projectIdResolver)
 
     private fun extractOrgIdFromLegacyDsn(
         call: ApplicationCall,
         eventService: EventService,
+        projectIdResolver: ProjectIdResolver,
     ): Int? {
         val dsnLikeHeader =
             call.request.header("x-moneat-dsn")
                 ?: call.request.header(HttpHeaders.Authorization)
         val projectId =
-            extractProjectIdFromDsn(dsnLikeHeader)
-                ?: call.request.queryParameters["projectId"]?.toLongOrNull()
+            extractProjectIdFromDsn(dsnLikeHeader, projectIdResolver)
+                ?: call.request.queryParameters["projectId"]?.let(projectIdResolver::resolve)
                 ?: return null
         val publicKey =
             extractPublicKey(
@@ -82,9 +88,13 @@ object OtlpAuth {
         return eventService.getOrganizationIdForProject(projectId)
     }
 
-    private fun extractProjectIdFromDsn(dsnLike: String?): Long? {
+    private fun extractProjectIdFromDsn(dsnLike: String?, projectIdResolver: ProjectIdResolver): Long? {
         if (dsnLike.isNullOrBlank()) return null
         val cleaned = dsnLike.removePrefix("DSN ").trim()
-        return projectIdFromDsnRegex.find(cleaned)?.groupValues?.getOrNull(1)?.toLongOrNull()
+        return projectIdFromDsnRegex
+            .find(cleaned)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.let(projectIdResolver::resolve)
     }
 }

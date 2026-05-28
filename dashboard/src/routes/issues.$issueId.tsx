@@ -392,7 +392,7 @@ function IssueDetailPage() {
                   </CardHeader>
                   <CardContent className="px-0 pb-0">
                     <EmbeddedLogs
-                      projectId={issue.projectId}
+                      projectId={issue.projectResourceId}
                       centerTimestamp={latestEvent.timestamp}
                       contextMinutes={5}
                       environment={latestEvent.environment}

@@ -197,6 +197,7 @@ class ProjectRepositoryImpl(
                 .map { row ->
                     ProjectRow(
                         projectId = row[Projects.id],
+                        resourceId = row[Projects.resource_id].toString(),
                         name = row[Projects.name],
                         slug = row[Projects.slug],
                         framework = row[Projects.framework],
@@ -267,6 +268,7 @@ class ProjectRepositoryImpl(
         val firstDsn = keys.firstOrNull { it.platformTarget == null }?.dsn ?: keys.firstOrNull()?.dsn ?: ""
         return ProjectRow(
             projectId = row[Projects.id],
+            resourceId = row[Projects.resource_id].toString(),
             name = row[Projects.name],
             slug = row[Projects.slug],
             framework = row[Projects.framework],

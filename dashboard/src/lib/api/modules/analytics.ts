@@ -142,7 +142,7 @@ export function analyticsMethods(core: ApiClientCore) {
 
   return {
     getAnalyticsOverview: async (
-      projectId: number,
+      projectId: string | number,
       params?: AnalyticsParams
     ) => {
       const response = await core.request<AnalyticsOverviewApiResponse>(
@@ -152,7 +152,7 @@ export function analyticsMethods(core: ApiClientCore) {
     },
 
     getAnalyticsTimeseries: async (
-      projectId: number,
+      projectId: string | number,
       params?: AnalyticsParams
     ) => {
       const response = await core.request<AnalyticsTimeseriesApiPoint[]>(
@@ -161,28 +161,28 @@ export function analyticsMethods(core: ApiClientCore) {
       return normalizeAnalyticsTimeseries(response)
     },
 
-    getAnalyticsPages: (projectId: number, params?: AnalyticsParams) =>
+    getAnalyticsPages: (projectId: string | number, params?: AnalyticsParams) =>
       fetchAnalyticsBreakdown(
         `${base}/analytics/${projectId}/pages${buildAnalyticsQuery(params)}`
       ),
 
-    getAnalyticsEntryPages: (projectId: number, params?: AnalyticsParams) =>
+    getAnalyticsEntryPages: (projectId: string | number, params?: AnalyticsParams) =>
       fetchAnalyticsBreakdown(
         `${base}/analytics/${projectId}/entry-pages${buildAnalyticsQuery(params)}`
       ),
 
-    getAnalyticsExitPages: (projectId: number, params?: AnalyticsParams) =>
+    getAnalyticsExitPages: (projectId: string | number, params?: AnalyticsParams) =>
       fetchAnalyticsBreakdown(
         `${base}/analytics/${projectId}/exit-pages${buildAnalyticsQuery(params)}`
       ),
 
-    getAnalyticsSources: (projectId: number, params?: AnalyticsParams) =>
+    getAnalyticsSources: (projectId: string | number, params?: AnalyticsParams) =>
       fetchAnalyticsBreakdown(
         `${base}/analytics/${projectId}/sources${buildAnalyticsQuery(params)}`
       ),
 
     getAnalyticsUtm: (
-      projectId: number,
+      projectId: string | number,
       utmParam: string,
       params?: AnalyticsParams
     ) =>
@@ -190,13 +190,13 @@ export function analyticsMethods(core: ApiClientCore) {
         `${base}/analytics/${projectId}/utm/${encodeURIComponent(utmParam)}${buildAnalyticsQuery(params)}`
       ),
 
-    getAnalyticsLocations: (projectId: number, params?: AnalyticsParams) =>
+    getAnalyticsLocations: (projectId: string | number, params?: AnalyticsParams) =>
       fetchAnalyticsBreakdown(
         `${base}/analytics/${projectId}/locations${buildAnalyticsQuery(params)}`
       ),
 
     getAnalyticsDevices: (
-      projectId: number,
+      projectId: string | number,
       type: 'browser' | 'os' | 'device',
       params?: AnalyticsParams
     ) => {
@@ -207,7 +207,7 @@ export function analyticsMethods(core: ApiClientCore) {
     },
 
     getAnalyticsEvents: (
-      projectId: number,
+      projectId: string | number,
       params?: AnalyticsParams,
       options?: AnalyticsEventQueryOptions
     ) =>
@@ -215,7 +215,7 @@ export function analyticsMethods(core: ApiClientCore) {
         `${base}/analytics/${projectId}/events${buildAnalyticsQuery(params, options)}`
       ),
 
-    getAnalyticsRealtime: async (projectId: number) => {
+    getAnalyticsRealtime: async (projectId: string | number) => {
       const response = await core.request<AnalyticsRealtimeApiResponse>(
         `${base}/analytics/${projectId}/realtime`
       )
@@ -225,7 +225,7 @@ export function analyticsMethods(core: ApiClientCore) {
     },
 
     getAnalyticsFunnel: (
-      projectId: number,
+      projectId: string | number,
       steps: string[],
       params?: AnalyticsParams,
       options?: AnalyticsEventQueryOptions
@@ -241,7 +241,7 @@ export function analyticsMethods(core: ApiClientCore) {
     },
 
     getAnalyticsRetention: (
-      projectId: number,
+      projectId: string | number,
       params: AnalyticsRetentionQuery
     ) =>
       core.request<AnalyticsRetentionResponse>(

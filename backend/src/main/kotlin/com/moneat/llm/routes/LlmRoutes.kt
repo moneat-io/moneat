@@ -20,6 +20,7 @@ import com.moneat.events.services.DashboardService
 import com.moneat.llm.services.LlmDashboardService
 import com.moneat.plugins.getDemoEpochMs
 import com.moneat.plugins.isDemoUser
+import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
@@ -38,16 +39,17 @@ private const val DEFAULT_PAGE_SIZE = 25
 fun Route.llmRoutes(
     dashboardService: DashboardService = GlobalContext.get().get(),
     llmService: LlmDashboardService = GlobalContext.get().get(),
+    projectIdResolver: ProjectIdResolver = ProjectIdResolver(),
 ) {
     authenticate("auth-jwt") {
         rateLimit(RateLimitName("api")) {
             route("/v1/llm") {
-                get("/overview") { handleLlmOverview(dashboardService, llmService) }
-                get("/generations") { handleLlmGenerations(dashboardService, llmService) }
-                get("/generations/{id}") { handleLlmGenerationDetail(dashboardService, llmService) }
-                get("/traces/{traceId}") { handleLlmTrace(dashboardService, llmService) }
-                get("/models") { handleLlmModels(dashboardService, llmService) }
-                get("/costs") { handleLlmCosts(dashboardService, llmService) }
+                get("/overview") { handleLlmOverview(dashboardService, llmService, projectIdResolver) }
+                get("/generations") { handleLlmGenerations(dashboardService, llmService, projectIdResolver) }
+                get("/generations/{id}") { handleLlmGenerationDetail(dashboardService, llmService, projectIdResolver) }
+                get("/traces/{traceId}") { handleLlmTrace(dashboardService, llmService, projectIdResolver) }
+                get("/models") { handleLlmModels(dashboardService, llmService, projectIdResolver) }
+                get("/costs") { handleLlmCosts(dashboardService, llmService, projectIdResolver) }
             }
         }
     }
@@ -55,11 +57,12 @@ fun Route.llmRoutes(
 
 private suspend fun io.ktor.server.routing.RoutingContext.requireLlmProjectAccess(
     dashboardService: DashboardService,
+    projectIdResolver: ProjectIdResolver,
 ): Long? {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val isDemo = call.isDemoUser()
-    val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
+    val projectId = call.request.queryParameters["projectId"]?.let(projectIdResolver::resolve)
     if (projectId == null) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse("projectId is required"))
         return null
@@ -74,8 +77,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.requireLlmProjectAcces
 private suspend fun io.ktor.server.routing.RoutingContext.handleLlmOverview(
     dashboardService: DashboardService,
     llmService: LlmDashboardService,
+    projectIdResolver: ProjectIdResolver,
 ) {
-    val projectId = requireLlmProjectAccess(dashboardService) ?: return
+    val projectId = requireLlmProjectAccess(dashboardService, projectIdResolver) ?: return
     val range = call.request.queryParameters["range"] ?: "24h"
     val demoEpochMs = call.getDemoEpochMs()
     call.respond(llmService.getOverview(projectId, range, demoEpochMs))
@@ -84,8 +88,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleLlmOverview(
 private suspend fun io.ktor.server.routing.RoutingContext.handleLlmGenerations(
     dashboardService: DashboardService,
     llmService: LlmDashboardService,
+    projectIdResolver: ProjectIdResolver,
 ) {
-    val projectId = requireLlmProjectAccess(dashboardService) ?: return
+    val projectId = requireLlmProjectAccess(dashboardService, projectIdResolver) ?: return
     val range = call.request.queryParameters["range"] ?: "24h"
     val model = call.request.queryParameters["model"]
     val provider = call.request.queryParameters["provider"]
@@ -102,8 +107,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleLlmGenerations(
 private suspend fun io.ktor.server.routing.RoutingContext.handleLlmGenerationDetail(
     dashboardService: DashboardService,
     llmService: LlmDashboardService,
+    projectIdResolver: ProjectIdResolver,
 ) {
-    val projectId = requireLlmProjectAccess(dashboardService) ?: return
+    val projectId = requireLlmProjectAccess(dashboardService, projectIdResolver) ?: return
     val generationId =
         call.parameters["id"] ?: run {
             call.respond(HttpStatusCode.BadRequest, ErrorResponse("generation id is required"))
@@ -120,8 +126,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleLlmGenerationDet
 private suspend fun io.ktor.server.routing.RoutingContext.handleLlmTrace(
     dashboardService: DashboardService,
     llmService: LlmDashboardService,
+    projectIdResolver: ProjectIdResolver,
 ) {
-    val projectId = requireLlmProjectAccess(dashboardService) ?: return
+    val projectId = requireLlmProjectAccess(dashboardService, projectIdResolver) ?: return
     val traceId =
         call.parameters["traceId"] ?: run {
             call.respond(HttpStatusCode.BadRequest, ErrorResponse("traceId is required"))
@@ -138,8 +145,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleLlmTrace(
 private suspend fun io.ktor.server.routing.RoutingContext.handleLlmModels(
     dashboardService: DashboardService,
     llmService: LlmDashboardService,
+    projectIdResolver: ProjectIdResolver,
 ) {
-    val projectId = requireLlmProjectAccess(dashboardService) ?: return
+    val projectId = requireLlmProjectAccess(dashboardService, projectIdResolver) ?: return
     val range = call.request.queryParameters["range"] ?: "24h"
     val demoEpochMs = call.getDemoEpochMs()
     call.respond(llmService.getModels(projectId, range, demoEpochMs))
@@ -148,8 +156,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleLlmModels(
 private suspend fun io.ktor.server.routing.RoutingContext.handleLlmCosts(
     dashboardService: DashboardService,
     llmService: LlmDashboardService,
+    projectIdResolver: ProjectIdResolver,
 ) {
-    val projectId = requireLlmProjectAccess(dashboardService) ?: return
+    val projectId = requireLlmProjectAccess(dashboardService, projectIdResolver) ?: return
     val range = call.request.queryParameters["range"] ?: "24h"
     val demoEpochMs = call.getDemoEpochMs()
     call.respond(llmService.getCosts(projectId, range, demoEpochMs))

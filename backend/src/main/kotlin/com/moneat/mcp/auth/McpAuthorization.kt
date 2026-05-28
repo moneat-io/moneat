@@ -25,6 +25,7 @@ import com.moneat.events.services.TransactionService
 import com.moneat.mcp.models.McpContext
 import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Projects
+import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.statuspage.models.StatusPages
 import com.moneat.uptime.models.UptimeMonitors
 import kotlinx.serialization.json.JsonObject
@@ -45,6 +46,7 @@ object McpAuthorization {
     private val queryHelper = DashboardQueryHelper()
     private val issueService = IssueService(IssueRepositoryImpl(queryHelper), queryHelper)
     private val transactionService = TransactionService(queryHelper)
+    private val projectIdResolver = ProjectIdResolver()
 
     fun requireScopes(context: McpContext, requiredScopes: Set<String>) {
         val missingScopes = requiredScopes.filterNot { it in context.scopes }
@@ -55,7 +57,7 @@ object McpAuthorization {
     }
 
     suspend fun requireObjectAccess(args: JsonObject, context: McpContext) {
-        args.longValue("project_id")?.let { requireProjectAccess(it, context) }
+        args.projectIdValue("project_id")?.let { requireProjectAccess(it, context) }
         args.stringValue("issue_id")?.let { requireIssueAccess(it, context) }
         args.stringValue("event_id")?.let { requireTransactionAccess(it, context) }
         args.stringValue("host_id")?.toIntOrNull()?.let { requireHostAccess(it, context) }
@@ -78,6 +80,8 @@ object McpAuthorization {
         }
         ensureAuthorized(hasAccess, "$AUTHORIZATION_ERROR: project not found")
     }
+
+    fun resolveProjectId(value: String): Long? = projectIdResolver.resolve(value)
 
     private suspend fun requireIssueAccess(issueId: String, context: McpContext) {
         val projectId = issueService.getProjectIdForIssue(issueId)
@@ -171,6 +175,9 @@ private fun JsonObject.longValue(name: String): Long? {
         else -> null
     }
 }
+
+private fun JsonObject.projectIdValue(name: String): Long? =
+    stringValue(name)?.let(McpAuthorization::resolveProjectId)
 
 private fun JsonObject.uuidValue(name: String): UUID? =
     stringValue(name)?.let { runCatching { UUID.fromString(it) }.getOrNull() }

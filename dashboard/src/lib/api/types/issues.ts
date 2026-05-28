@@ -36,6 +36,7 @@ export interface Event {
 export interface Issue {
   id: string
   projectId: number
+  projectResourceId: string
   title: string
   culprit: string
   level: string

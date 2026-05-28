@@ -32,7 +32,7 @@ interface DashboardGridProps {
   widgets: DashboardWidget[]
   isEditing: boolean
   dashboardId: number
-  projectId?: number
+  projectId?: string | number
   timeRange: TimeRangeDef
   autoRefresh: boolean
   variableValues?: Record<string, string>
@@ -333,7 +333,7 @@ function WidgetCard({
   widget: DashboardWidget
   isEditing: boolean
   dashboardId: number
-  projectId?: number
+  projectId?: string | number
   timeRange: TimeRangeDef
   autoRefresh: boolean
   variableValues?: Record<string, string>

@@ -24,6 +24,7 @@ import com.moneat.config.RedisConfig
 import com.moneat.otlp.OtlpAuth
 import com.moneat.otlp.services.OtlpApiKeyService
 import com.moneat.shared.models.Projects
+import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -48,6 +49,7 @@ private const val MAX_SERVER_ANALYTICS_EVENTS = 500
 
 fun Route.analyticsServerIngestRoutes(
     otlpApiKeyService: OtlpApiKeyService = GlobalContext.get().get(),
+    projectIdResolver: ProjectIdResolver = ProjectIdResolver(),
     enqueueEvents: (List<String>) -> Unit = { messages ->
         if (messages.isNotEmpty()) {
             RedisConfig.sync().lpush(AnalyticsIngestionWorker.QUEUE_KEY, *messages.toTypedArray())
@@ -56,7 +58,7 @@ fun Route.analyticsServerIngestRoutes(
 ) {
     route("/v1/analytics/{projectId}") {
         post("/events") {
-            val projectId = call.parameters["projectId"]?.toLongOrNull()
+            val projectId = call.parameters["projectId"]?.let(projectIdResolver::resolve)
             if (projectId == null) {
                 call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                 return@post

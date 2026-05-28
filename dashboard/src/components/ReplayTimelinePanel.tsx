@@ -49,7 +49,8 @@ export type TimelineItem = BaseTimelineItem & {
 export interface ReplayTimelinePanelProps {
   readonly items: TimelineItem[]
   readonly currentOffsetMs: number
-  readonly projectId?: number
+  /** Project resource ID for replay links; legacy numeric IDs are accepted during migration. */
+  readonly projectId?: string | number
   readonly onSeek: (offsetMs: number) => void
 }
 
@@ -295,7 +296,7 @@ function WaterfallPanel({
   projectId,
 }: {
   readonly item: TimelineItem
-  readonly projectId?: number
+  readonly projectId?: string | number
 }) {
   const colors = typeColorClasses(item.type)
 
@@ -398,7 +399,7 @@ function ExpandedItemPanel({
   projectId,
 }: {
   readonly item: TimelineItem
-  readonly projectId?: number
+  readonly projectId?: string | number
 }) {
   if (canFetchSpans(item)) {
     return <WaterfallPanel item={item} projectId={projectId} />
@@ -542,7 +543,7 @@ interface TimelineListProps {
   readonly items: TimelineItem[]
   readonly activeIndex: number
   readonly expandedId: string | null
-  readonly projectId?: number
+  readonly projectId?: string | number
   readonly onItemClick: (item: TimelineItem) => void
 }
 

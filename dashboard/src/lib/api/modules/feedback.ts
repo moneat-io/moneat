@@ -22,7 +22,7 @@ export function feedbackMethods(core: ApiClientCore) {
 
   return {
     getFeedback: (
-      projectId: number,
+      projectId: string | number,
       options: { page?: number; limit?: number; status?: string } = {}
     ) => {
       const params = new URLSearchParams()

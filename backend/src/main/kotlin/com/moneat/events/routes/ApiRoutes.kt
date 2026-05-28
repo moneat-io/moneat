@@ -49,10 +49,12 @@ import com.moneat.shared.models.OnCallPhoneConsentEvents
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Users
+import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.shared.services.SdkVersionService
 import com.moneat.shared.services.SidebarPreferenceService
 import com.moneat.utils.DetailedErrorResponse
 import com.moneat.utils.ErrorResponse
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
@@ -80,7 +82,6 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import org.koin.core.context.GlobalContext
 import kotlin.time.Clock
-import com.moneat.utils.suspendRunCatching
 
 private const val DEFAULT_PAGE_LIMIT = 25
 private const val DEFAULT_EVENTS_LIMIT = 50
@@ -93,6 +94,7 @@ private const val ERROR_NO_ORGANIZATION_ACCESS = "No organization access"
 fun Route.apiRoutes() {
     val koin = GlobalContext.get()
     val dashboardService = koin.get<DashboardService>()
+    val projectIdResolver = koin.get<ProjectIdResolver>()
 
     // Public routes (no auth required)
     route("/v1") {
@@ -481,7 +483,7 @@ fun Route.apiRoutes() {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                         return@get
@@ -504,7 +506,7 @@ fun Route.apiRoutes() {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                         return@post
@@ -528,7 +530,7 @@ fun Route.apiRoutes() {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                         return@put
@@ -548,7 +550,7 @@ fun Route.apiRoutes() {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                         return@delete
@@ -570,7 +572,7 @@ fun Route.apiRoutes() {
                     val isDemo = call.isDemoUser()
                     val demoEpochMs = call.getDemoEpochMs()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest)
                         return@get
@@ -601,7 +603,7 @@ fun Route.apiRoutes() {
                         return@get
                     }
 
-                    val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectQueryId(projectIdResolver)
 
                     if (!isDemo) {
                         if (projectId != null) {
@@ -631,7 +633,7 @@ fun Route.apiRoutes() {
 
                     val issueId = call.parameters["issueId"]
                     val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_EVENTS_LIMIT
-                    val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectQueryId(projectIdResolver)
 
                     if (issueId == null) {
                         call.respond(HttpStatusCode.BadRequest)
@@ -662,7 +664,7 @@ fun Route.apiRoutes() {
 
                     val issueId = call.parameters["issueId"]
                     val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_TRANSACTIONS_LIMIT
-                    val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectQueryId(projectIdResolver)
 
                     if (issueId == null) {
                         call.respond(HttpStatusCode.BadRequest)
@@ -695,7 +697,7 @@ fun Route.apiRoutes() {
                         return@patch
                     }
 
-                    val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectQueryId(projectIdResolver)
                     val hasAccess = if (projectId != null) {
                         dashboardService.hasProjectAccess(userId, projectId)
                     } else {
@@ -718,7 +720,7 @@ fun Route.apiRoutes() {
                     val isDemo = call.isDemoUser()
                     val demoEpochMs = call.getDemoEpochMs()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest)
                         return@get
@@ -746,7 +748,7 @@ fun Route.apiRoutes() {
                     val isDemo = call.isDemoUser()
                     val demoEpochMs = call.getDemoEpochMs()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest)
                         return@get
@@ -777,7 +779,7 @@ fun Route.apiRoutes() {
                     val isDemo = call.isDemoUser()
                     val demoEpochMs = call.getDemoEpochMs()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest)
                         return@get
@@ -873,7 +875,7 @@ fun Route.apiRoutes() {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     val traceId = call.parameters["traceId"]
 
                     if (projectId == null || traceId == null) {
@@ -899,7 +901,7 @@ fun Route.apiRoutes() {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     val spanId = call.parameters["spanId"]
 
                     if (projectId == null || spanId == null) {
@@ -927,7 +929,7 @@ fun Route.apiRoutes() {
                     val isDemo = call.isDemoUser()
                     val demoEpochMs = call.getDemoEpochMs()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest)
                         return@get
@@ -1023,7 +1025,7 @@ fun Route.apiRoutes() {
                     val isDemo = call.isDemoUser()
                     val demoEpochMs = call.getDemoEpochMs()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest)
                         return@get
@@ -1120,7 +1122,7 @@ fun Route.apiRoutes() {
                         return@get
                     }
 
-                    val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectQueryId(projectIdResolver)
                     val hasAccess = if (projectId != null) {
                         dashboardService.hasProjectAccess(userId, projectId)
                     } else {
@@ -1142,7 +1144,7 @@ fun Route.apiRoutes() {
                     val userId = principal!!.payload.getClaim("userId").asInt()
                     val isDemo = call.isDemoUser()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest)
                         return@get
@@ -1161,7 +1163,7 @@ fun Route.apiRoutes() {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     val version = call.parameters["version"]
                     if (projectId == null || version == null) {
                         call.respond(HttpStatusCode.BadRequest)
@@ -1223,15 +1225,18 @@ fun Route.apiRoutes() {
                                             (NotificationPreferences.project_id.isNotNull())
                                     }.map { pref ->
                                         val projectId = pref[NotificationPreferences.project_id]!!
-                                        val projectName =
+                                        val projectRow =
                                             Projects
                                                 .selectAll()
                                                 .where { Projects.id eq projectId }
                                                 .firstOrNull()
-                                                ?.get(Projects.name) ?: "Unknown"
+                                        val projectName = projectRow?.get(Projects.name) ?: "Unknown"
+                                        val projectResourceId =
+                                            projectRow?.get(Projects.resource_id)?.toString() ?: projectId.toString()
 
                                         ProjectNotificationPreferences(
                                             projectId = projectId,
+                                            projectResourceId = projectResourceId,
                                             projectName = projectName,
                                             issueAlerts = pref[NotificationPreferences.issue_alerts],
                                             errorAlerts = pref[NotificationPreferences.error_alerts],
@@ -1311,7 +1316,7 @@ fun Route.apiRoutes() {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                         return@put
@@ -1455,7 +1460,7 @@ fun Route.apiRoutes() {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                         return@delete
@@ -1487,6 +1492,12 @@ fun Route.apiRoutes() {
         integrationCallbackRoutes()
     }
 }
+
+private fun ApplicationCall.resolveProjectPathId(projectIdResolver: ProjectIdResolver): Long? =
+    parameters["projectId"]?.let(projectIdResolver::resolve)
+
+private fun ApplicationCall.resolveProjectQueryId(projectIdResolver: ProjectIdResolver): Long? =
+    request.queryParameters["projectId"]?.let(projectIdResolver::resolve)
 
 private suspend fun ApplicationCall.resolveSubscriptionOrganizationId(userId: Int): Int? {
     val orgId = principal<JWTPrincipal>()?.payload?.getClaim("orgId")?.asInt()

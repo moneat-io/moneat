@@ -70,6 +70,7 @@ data class ProjectKeyResponse(
 @Serializable
 data class ProjectResponse(
     val id: Long,
+    val resourceId: String = id.toString(),
     val name: String,
     val slug: String,
     val framework: String?,
@@ -82,6 +83,7 @@ data class ProjectResponse(
 data class IssueResponse(
     val id: String,
     val projectId: Long,
+    val projectResourceId: String = projectId.toString(),
     val title: String,
     val culprit: String,
     val level: String,
@@ -99,6 +101,7 @@ data class IssueResponse(
 data class IssueDetailResponse(
     val id: String,
     val projectId: Long,
+    val projectResourceId: String = projectId.toString(),
     val projectName: String,
     val title: String,
     val culprit: String,
@@ -232,6 +235,7 @@ data class TransactionWithSpansResponse(
 data class TraceDetailResponse(
     val traceId: String,
     val projectId: Long,
+    val projectResourceId: String = projectId.toString(),
     val spans: List<SpanResponse>,
     val startTimestamp: Double,
     val endTimestamp: Double,
@@ -243,6 +247,7 @@ data class EventTraceResponse(
     val eventId: String?,
     val eventType: String?,
     val projectId: Long,
+    val projectResourceId: String = projectId.toString(),
     val traceId: String,
     val transaction: TransactionDetailResponse? = null,
     val spans: List<SpanResponse> = emptyList()
@@ -455,6 +460,7 @@ data class ReleaseMarker(
 data class ReplayListItem(
     val replayId: String,
     val projectId: Long,
+    val projectResourceId: String = projectId.toString(),
     val startedAt: String,
     val finishedAt: String,
     val durationMs: Double,
@@ -472,6 +478,7 @@ data class ReplayListItem(
 data class ReplayDetailResponse(
     val replayId: String,
     val projectId: Long,
+    val projectResourceId: String = projectId.toString(),
     val startedAt: String,
     val finishedAt: String,
     val durationMs: Double,
@@ -607,6 +614,7 @@ data class NotificationPreferencesData(
 @Serializable
 data class ProjectNotificationPreferences(
     val projectId: Long,
+    val projectResourceId: String = projectId.toString(),
     val projectName: String,
     val issueAlerts: Boolean,
     val errorAlerts: Boolean,

@@ -24,6 +24,8 @@ import com.moneat.events.services.EventService
 import com.moneat.llm.models.LlmIngestPayload
 import com.moneat.llm.services.LlmIngestionWorker
 import com.moneat.utils.ErrorResponse
+import com.moneat.shared.services.ProjectIdResolver
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.header
 import io.ktor.server.request.receive
@@ -34,7 +36,6 @@ import io.ktor.server.routing.route
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import org.koin.core.context.GlobalContext
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -42,6 +43,7 @@ private val json = Json { ignoreUnknownKeys = true }
 fun Route.llmIngestRoutes() {
     val eventService = GlobalContext.get().get<EventService>()
     val quotaService = GlobalContext.get().get<BillingQuotaService>()
+    val projectIdResolver = GlobalContext.get().get<ProjectIdResolver>()
 
     route("/api/{projectId}") {
         post("/llm/") {
@@ -50,7 +52,7 @@ fun Route.llmIngestRoutes() {
                     .propertyOrNull("llm.queueKey")
                     ?.getString()
                     ?: "moneat:llm:queue"
-            val projectId = call.parameters["projectId"]?.toLongOrNull()
+            val projectId = call.parameters["projectId"]?.let(projectIdResolver::resolve)
             if (projectId == null) {
                 call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                 return@post

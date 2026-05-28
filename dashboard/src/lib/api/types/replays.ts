@@ -17,6 +17,7 @@
 export interface Replay {
   replayId: string
   projectId: number
+  projectResourceId: string
   startedAt: string
   finishedAt: string
   durationMs: number

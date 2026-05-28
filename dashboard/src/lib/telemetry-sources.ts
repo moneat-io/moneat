@@ -141,17 +141,17 @@ export function toggleTelemetrySourceId(
   return [...selectedSourceIds, sourceId]
 }
 
-export function telemetrySourcesStorageKey(projectId: number): string {
+export function telemetrySourcesStorageKey(projectId: string | number): string {
   return `moneat:project:${projectId}:telemetry-sources`
 }
 
-export function loadTelemetrySourceIdsForProject(projectId: number): TelemetrySourceId[] {
+export function loadTelemetrySourceIdsForProject(projectId: string | number): TelemetrySourceId[] {
   const rawValue = globalThis.localStorage?.getItem(telemetrySourcesStorageKey(projectId))
   return parseTelemetrySourceIds(rawValue)
 }
 
 export function storeTelemetrySourceIdsForProject(
-  projectId: number,
+  projectId: string | number,
   sourceIds: TelemetrySourceId[]
 ): void {
   globalThis.localStorage?.setItem(telemetrySourcesStorageKey(projectId), serializeTelemetrySourceIds(sourceIds))

@@ -564,6 +564,20 @@ class DashboardCrudToolTest {
     }
 
     @Test
+    fun `preview dashboard widget query schema accepts resource IDs and legacy numeric IDs`() {
+        val projectIdSchema = PreviewDashboardWidgetQueryTool()
+            .inputSchema
+            .properties["project_id"]!!
+            .jsonObject
+        val typeValues = projectIdSchema["type"] as JsonArray
+
+        assertEquals(
+            listOf("string", "number"),
+            typeValues.jsonArray.map { it.jsonPrimitive.content }
+        )
+    }
+
+    @Test
     fun `preview dashboard widget query requires project id for unscoped dashboards`() = runBlocking {
         val dashboardId = seedDashboard(projectId = null)
 

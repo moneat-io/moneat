@@ -351,11 +351,13 @@ function DashboardPage() {
     queryFn: () => api.getProjects(),
   })
 
-  const projectId = selectedProjectId || projects?.[0]?.id
+  const projectId = selectedProjectId || projects?.[0]?.resourceId
 
-  if (!selectedProjectId && projects && projects.length > 0 && projects[0]?.id) {
-    setSelectedProjectId(projects[0].id)
-  }
+  useEffect(() => {
+    if (!selectedProjectId && projects?.[0]?.resourceId) {
+      setSelectedProjectId(projects[0].resourceId)
+    }
+  }, [selectedProjectId, projects, setSelectedProjectId])
 
   const {data: stats, isLoading: isLoadingStats} = useQuery({
     queryKey: ['stats', projectId],

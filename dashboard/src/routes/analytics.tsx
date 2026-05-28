@@ -21,9 +21,9 @@ function AnalyticsLayoutInner() {
     queryFn: () => api.getProjects(),
   })
 
-  const hasSelectedProject = selectedProjectId != null && projects?.some(p => p.id === selectedProjectId)
-  const projectId = (hasSelectedProject ? selectedProjectId : null) || projects?.[0]?.id
-  const project = projects?.find(p => p.id === projectId)
+  const hasSelectedProject = selectedProjectId != null && projects?.some(p => p.resourceId === selectedProjectId)
+  const projectId = (hasSelectedProject ? selectedProjectId : null) || projects?.[0]?.resourceId
+  const project = projects?.find(p => p.resourceId === projectId)
 
   return (
     <div className="p-3 space-y-2">

@@ -41,7 +41,7 @@ class ListDashboardsTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "project_id" to schemaNumber("Optional project ID filter")
+                "project_id" to schemaProjectId("Optional project resource ID filter")
             )
         )
     )
@@ -50,8 +50,7 @@ class ListDashboardsTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val projectId = args["project_id"]?.jsonPrimitive
-            ?.content?.toLongOrNull()
+        val projectId = args.projectIdArg()
         val dashboards = dashboardService.listDashboards(
             orgId = context.organizationId.toLong(),
             projectId = projectId,

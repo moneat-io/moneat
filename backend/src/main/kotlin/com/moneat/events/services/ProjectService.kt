@@ -47,19 +47,20 @@ class ProjectService(
 
         val projects = projectRepository.getProjectsForOrganizations(orgIds)
 
-        return projects.map { (projectId, name, slug, framework, keys, dsn) ->
+        return projects.map { row ->
             val issueCount = projectRepository.getIssueCountForProject(
-                projectId,
-                queryHelper.getProjectRetentionDays(projectId),
+                row.projectId,
+                queryHelper.getProjectRetentionDays(row.projectId),
                 demoEpochMs
             )
             ProjectResponse(
-                id = projectId,
-                name = name,
-                slug = slug,
-                framework = framework,
-                keys = keys,
-                dsn = dsn,
+                id = row.projectId,
+                resourceId = row.resourceId,
+                name = row.name,
+                slug = row.slug,
+                framework = row.framework,
+                keys = row.keys,
+                dsn = row.dsn,
                 issueCount = issueCount
             )
         }
@@ -74,6 +75,7 @@ class ProjectService(
         )
         return ProjectResponse(
             id = row.projectId,
+            resourceId = row.resourceId,
             name = row.name,
             slug = row.slug,
             framework = row.framework,

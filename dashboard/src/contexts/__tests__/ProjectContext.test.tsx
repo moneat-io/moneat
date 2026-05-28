@@ -19,7 +19,7 @@ describe('ProjectProvider', () => {
     const { result } = renderHook(() => useProject(), {
       wrapper: ProjectProvider,
     })
-    expect(result.current.selectedProjectId).toBe(42)
+    expect(result.current.selectedProjectId).toBe('42')
   })
 
   it('updates selectedProjectId', () => {
@@ -28,10 +28,10 @@ describe('ProjectProvider', () => {
     })
 
     act(() => {
-      result.current.setSelectedProjectId(5)
+      result.current.setSelectedProjectId('5')
     })
 
-    expect(result.current.selectedProjectId).toBe(5)
+    expect(result.current.selectedProjectId).toBe('5')
   })
 
   it('persists to localStorage when project selected', () => {
@@ -40,7 +40,7 @@ describe('ProjectProvider', () => {
     })
 
     act(() => {
-      result.current.setSelectedProjectId(10)
+      result.current.setSelectedProjectId('10')
     })
 
     expect(localStorage.getItem('selectedProjectId')).toBe('10')

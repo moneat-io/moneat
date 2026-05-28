@@ -48,6 +48,7 @@ import com.moneat.dashboards.translation.GrafanaTranslator
 import com.moneat.plugins.getDemoEpochMs
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Projects
+import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.suspendRunCatching
@@ -126,12 +127,13 @@ private fun getDashboardScope(dashboardId: Long, orgId: Long): DashboardScope? {
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleListDashboards(
     dashboardService: CustomDashboardService,
+    projectIdResolver: ProjectIdResolver,
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
-    val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
+    val projectId = call.request.queryParameters["projectId"]?.let(projectIdResolver::resolve)
     val dashboards = dashboardService.listDashboards(orgId, projectId, userId)
     call.respond(dashboards)
 }
@@ -282,6 +284,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDashboardQuery(
     retentionPolicyService: RetentionPolicyService,
     dataSourceService: CustomDataSourceService,
     dataSourceExecutor: CustomDataSourceExecutor,
+    projectIdResolver: ProjectIdResolver,
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
@@ -300,7 +303,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDashboardQuery(
     val projectId: Long = if (isDemoUser) {
         -1L // Queries against all 3 demo projects via ClickHouseQueryUtils.projectIdClause
     } else {
-        call.request.queryParameters["projectId"]?.toLongOrNull()
+        call.request.queryParameters["projectId"]?.let(projectIdResolver::resolve)
             ?: return call.respond(
                 HttpStatusCode.BadRequest, ErrorResponse("projectId query parameter required")
             )
@@ -394,6 +397,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleBatchDashboardQu
     retentionPolicyService: RetentionPolicyService,
     dataSourceService: CustomDataSourceService,
     dataSourceExecutor: CustomDataSourceExecutor,
+    projectIdResolver: ProjectIdResolver,
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
@@ -411,7 +415,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleBatchDashboardQu
     val projectId: Long = if (isDemoUser) {
         -1L
     } else {
-        call.request.queryParameters["projectId"]?.toLongOrNull()
+        call.request.queryParameters["projectId"]?.let(projectIdResolver::resolve)
             ?: return call.respond(
                 HttpStatusCode.BadRequest, ErrorResponse("projectId query parameter required")
             )
@@ -880,6 +884,7 @@ fun Route.customDashboardRoutes(
     dashboardService: CustomDashboardService = GlobalContext.get().get(),
     queryEngine: DashboardQueryEngine = GlobalContext.get().get(),
     retentionPolicyService: RetentionPolicyService = GlobalContext.get().get(),
+    projectIdResolver: ProjectIdResolver = ProjectIdResolver(),
     translators: DashboardTranslators = DashboardTranslators(),
     dataSourceService: CustomDataSourceService = GlobalContext.get().get(),
     dataSourceExecutor: CustomDataSourceExecutor = GlobalContext.get().get(),
@@ -887,7 +892,7 @@ fun Route.customDashboardRoutes(
 ) {
     route("/v1/dashboards") {
         authenticate(AUTH_JWT) {
-            get { handleListDashboards(dashboardService) }
+            get { handleListDashboards(dashboardService, projectIdResolver) }
             post { handleCreateDashboard(dashboardService) }
             route("/folders") {
                 get { handleListFolders(dashboardService) }
@@ -901,10 +906,22 @@ fun Route.customDashboardRoutes(
             put("/{id}") { handleUpdateDashboard(dashboardService) }
             delete("/{id}") { handleDeleteDashboard(dashboardService) }
             post("/{id}/query") {
-                handleDashboardQuery(queryEngine, retentionPolicyService, dataSourceService, dataSourceExecutor)
+                handleDashboardQuery(
+                    queryEngine,
+                    retentionPolicyService,
+                    dataSourceService,
+                    dataSourceExecutor,
+                    projectIdResolver
+                )
             }
             post("/{id}/query/batch") {
-                handleBatchDashboardQuery(queryEngine, retentionPolicyService, dataSourceService, dataSourceExecutor)
+                handleBatchDashboardQuery(
+                    queryEngine,
+                    retentionPolicyService,
+                    dataSourceService,
+                    dataSourceExecutor,
+                    projectIdResolver
+                )
             }
             post("/{id}/variables/resolve") {
                 handleVariablesResolve(dashboardService, dataSourceService, dataSourceExecutor)

@@ -220,6 +220,7 @@ export interface SearchResponse {
 
 export interface SearchProjectResponse {
   id: number
+  resourceId: string
   name: string
 }
 

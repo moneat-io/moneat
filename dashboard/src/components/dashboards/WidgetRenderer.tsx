@@ -126,7 +126,7 @@ function DebouncedChartContainer({children, debounceMs = 150}: {
 interface WidgetRendererProps {
   widget: DashboardWidget
   dashboardId: number
-  projectId?: number
+  projectId?: string | number
   timeRange: TimeRangeDef
   autoRefresh: boolean
   variables?: Record<string, string>

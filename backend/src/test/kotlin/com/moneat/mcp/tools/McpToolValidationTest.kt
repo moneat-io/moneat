@@ -29,14 +29,18 @@ import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -158,6 +162,17 @@ class McpToolValidationTest {
             assertFalse(result.isError)
             assertTrue(result.content.first().text.orEmpty().contains(TRACE_ID))
         }
+    }
+
+    @Test
+    fun `project id schemas accept resource IDs and legacy numeric IDs`() {
+        val projectIdSchema = projectIdInputSchema().properties["project_id"] as JsonObject
+        val typeValues = projectIdSchema["type"] as JsonArray
+
+        assertEquals(
+            listOf("string", "number"),
+            typeValues.jsonArray.map { it.jsonPrimitive.content }
+        )
     }
 
     @Test
@@ -408,6 +423,7 @@ class McpToolValidationTest {
             ),
             case("create_uptime_name", CreateUptimeMonitorTool(), obj(), "name is required"),
             case("create_uptime_url", CreateUptimeMonitorTool(), obj("name" to "API"), "url is required"),
+            case("list_transactions_project_id", ListTransactionsTool(), obj(), "project_id is required"),
             case("get_trace_lookup", GetTraceTool(), obj(), "event_id or trace_id is required"),
             case(
                 "get_trace_project_id",
@@ -415,6 +431,14 @@ class McpToolValidationTest {
                 obj("trace_id" to TRACE_ID),
                 "project_id is required when trace_id is used without event_id",
             ),
+            case("transaction_stats_project_id", GetTransactionStatsTool(), obj(), "project_id is required"),
+            case("list_issues_project_id", ListIssuesTool(), obj(), "project_id is required"),
+            case("list_releases_project_id", ListReleasesTool(), obj(), "project_id is required"),
+            case("release_stats_project_id", GetReleaseStatsTool(), obj(), "project_id is required"),
+            case("get_project_project_id", GetProjectTool(), obj(), "project_id is required"),
+            case("get_project_stats_project_id", GetProjectStatsTool(), obj(), "project_id is required"),
+            case("list_feedback_project_id", ListFeedbackTool(), obj(), "project_id is required"),
+            case("execute_dashboard_query_project_id", ExecuteDashboardQueryTool(), obj(), "project_id is required"),
             case("create_datasource_name", CreateDataSourceTool(), obj(), "name is required"),
             case(
                 "create_datasource_type",

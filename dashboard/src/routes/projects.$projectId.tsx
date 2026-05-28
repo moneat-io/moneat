@@ -28,7 +28,7 @@ export const Route = createFileRoute('/projects/$projectId')({
     }
   },
   loader: async ({ params }) => {
-    const project = await api.getProject(Number(params.projectId))
+    const project = await api.getProject(params.projectId)
     return { project }
   },
   component: SetupPage,

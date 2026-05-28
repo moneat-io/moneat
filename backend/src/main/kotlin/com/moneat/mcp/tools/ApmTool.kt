@@ -24,8 +24,6 @@ import com.moneat.events.services.DashboardService
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.long
-import kotlinx.serialization.json.longOrNull
 
 private val dashboardService = DashboardService.create()
 
@@ -36,7 +34,7 @@ class ListTransactionsTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "project_id" to schemaNumber("Project ID"),
+                "project_id" to schemaProjectId(),
                 "period" to schemaEnum(
                     "Time period",
                     listOf("1h", "6h", "24h", "7d", "30d")
@@ -51,9 +49,7 @@ class ListTransactionsTool : McpTool {
     override suspend fun execute(
         args: JsonObject,
         context: McpContext
-    ): ToolCallResult {
-        val projectId = args["project_id"]?.jsonPrimitive?.long
-            ?: return errorResult("project_id is required")
+    ): ToolCallResult = withRequiredProjectId(args) { projectId ->
         val period = args["period"]?.jsonPrimitive?.content ?: "7d"
         val env = args["environment"]?.jsonPrimitive?.content
         val op = args["operation"]?.jsonPrimitive?.content
@@ -63,7 +59,7 @@ class ListTransactionsTool : McpTool {
             env,
             op
         )
-        return jsonResult(txns)
+        jsonResult(txns)
     }
 }
 
@@ -76,7 +72,7 @@ class GetTraceTool : McpTool {
             mapOf(
                 "event_id" to schemaString("Transaction or error event ID"),
                 "trace_id" to schemaString("Trace ID"),
-                "project_id" to schemaNumber("Project ID for trace_id lookups")
+                "project_id" to schemaProjectId("Project resource ID for trace_id lookups")
             )
         )
     )
@@ -87,7 +83,7 @@ class GetTraceTool : McpTool {
     ): ToolCallResult {
         val eventId = args["event_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
         val traceId = args["trace_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
-        val projectId = args["project_id"]?.jsonPrimitive?.longOrNull
+        val projectId = args.projectIdArg()
 
         if (eventId == null && traceId == null) {
             return errorResult("event_id or trace_id is required")

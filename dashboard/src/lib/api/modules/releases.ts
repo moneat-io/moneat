@@ -21,10 +21,10 @@ export function releasesMethods(core: ApiClientCore) {
   const base = core.API_BASE
 
   return {
-    getReleases: (projectId: number) =>
+    getReleases: (projectId: string | number) =>
       core.request<Release[]>(`${base}/projects/${projectId}/releases`),
 
-    getReleaseStats: (projectId: number, version: string) =>
+    getReleaseStats: (projectId: string | number, version: string) =>
       core.request<ReleaseStats>(
         `${base}/projects/${projectId}/releases/${encodeURIComponent(version)}/stats`
       ),

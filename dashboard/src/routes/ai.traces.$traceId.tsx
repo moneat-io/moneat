@@ -28,15 +28,8 @@ import { cn } from '@/lib/utils'
 export const Route = createFileRoute('/ai/traces/$traceId')({
   validateSearch: (search: Record<string, unknown>) => {
     const rawProjectId = search.projectId
-    const parsedProjectId =
-      typeof rawProjectId === 'number'
-        ? rawProjectId
-        : typeof rawProjectId === 'string'
-          ? Number(rawProjectId)
-          : undefined
-
     return {
-      projectId: Number.isFinite(parsedProjectId) ? parsedProjectId : undefined,
+      projectId: typeof rawProjectId === 'string' && rawProjectId.length > 0 ? rawProjectId : undefined,
     }
   },
   component: TraceDetailPage,
