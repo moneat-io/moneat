@@ -11,6 +11,7 @@ import {cn} from '@/lib/utils'
 import {useState, useMemo, useCallback} from 'react'
 import {Badge} from '@/components/ui/badge'
 import {SourceBadge} from '@/components/apm/SourceBadge'
+import {AttributeTable} from '@/components/AttributeTable'
 import {Link} from '@tanstack/react-router'
 import {
   ChevronDown,
@@ -27,6 +28,7 @@ import {
 
 interface Props {
   spans: ApmSpanResponse[]
+  highlightSpanId?: string
 }
 
 interface SpanNode {
@@ -49,19 +51,6 @@ const SERVICE_COLORS: Record<string, string> = {
   CONSUMER: 'bg-pink-500',
 }
 
-const SERVICE_COLORS_BORDER: Record<string, string> = {
-  web: 'border-emerald-500',
-  http: 'border-blue-500',
-  db: 'border-amber-500',
-  cache: 'border-violet-500',
-  grpc: 'border-cyan-500',
-  custom: 'border-gray-500',
-  SERVER: 'border-blue-500',
-  CLIENT: 'border-emerald-500',
-  INTERNAL: 'border-gray-500',
-  PRODUCER: 'border-orange-500',
-  CONSUMER: 'border-pink-500',
-}
 
 function getSpanColorKey(span: ApmSpanResponse): string {
   return span.type || span.kind || 'custom'
@@ -71,9 +60,6 @@ function getSpanColor(key: string): string {
   return SERVICE_COLORS[key] || SERVICE_COLORS.custom
 }
 
-function getSpanBorderColor(key: string): string {
-  return SERVICE_COLORS_BORDER[key] || SERVICE_COLORS_BORDER.custom
-}
 
 function formatDuration(ns: number): string {
   if (ns < 1000) return `${ns}ns`
@@ -119,18 +105,22 @@ function flattenTree(nodes: SpanNode[]): SpanNode[] {
 function CopyButton({text}: {text: string}) {
   const [copied, setCopied] = useState(false)
 
-  const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(text).then(() => {
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(text)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
-    })
+    } catch {
+      // Ignore clipboard errors
+    }
   }, [text])
 
   return (
     <button
       onClick={handleCopy}
-      className="p-0.5 hover:bg-muted rounded transition-colors"
+      className="p-0.5 hover:bg-muted rounded transition-colors cursor-pointer"
       title="Copy to clipboard"
+      aria-label="Copy to clipboard"
     >
       {copied ? (
         <Check className="h-3 w-3 text-green-500" />
@@ -141,9 +131,14 @@ function CopyButton({text}: {text: string}) {
   )
 }
 
-export function SpanWaterfall({spans}: Props) {
+export function SpanWaterfall({spans, highlightSpanId}: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
-  const [selectedSpanId, setSelectedSpanId] = useState<string | null>(null)
+  const [manualSelection, setManualSelection] = useState<{
+    spanId: string | null
+    highlightSpanId?: string
+  }>({spanId: null, highlightSpanId})
+  const manualSelectedSpanId = manualSelection.highlightSpanId === highlightSpanId ? manualSelection.spanId : null
+  const selectedSpanId = manualSelectedSpanId ?? highlightSpanId ?? null
 
   const {flatSpans, traceStart, traceDuration} = useMemo(() => {
     const tree = buildTree(spans)
@@ -262,7 +257,6 @@ export function SpanWaterfall({spans}: Props) {
             const hasChildren = node.children.length > 0
             const isCollapsed = collapsed.has(span.spanId)
             const isSelected = selectedSpanId === span.spanId
-
             return (
               <div
                 key={span.spanId}
@@ -273,9 +267,10 @@ export function SpanWaterfall({spans}: Props) {
                     : 'hover:bg-muted/30'
                 )}
                 onClick={() =>
-                  setSelectedSpanId(
-                    selectedSpanId === span.spanId ? null : span.spanId
-                  )
+                  setManualSelection({
+                    spanId: selectedSpanId === span.spanId ? null : span.spanId,
+                    highlightSpanId,
+                  })
                 }
               >
                 {/* Operation name */}
@@ -328,7 +323,7 @@ export function SpanWaterfall({spans}: Props) {
                         ? 'bg-red-500/70'
                         : getSpanColor(getSpanColorKey(span)),
                       span.error === 0 && 'opacity-70',
-                      isSelected && 'opacity-100 ring-1 ring-primary'
+                      isSelected && 'opacity-100'
                     )}
                     style={{
                       left: `${left}%`,
@@ -354,7 +349,7 @@ export function SpanWaterfall({spans}: Props) {
         <SpanDetailPanel
           span={selectedSpan}
           traceStart={traceStart}
-          onClose={() => setSelectedSpanId(null)}
+          onClose={() => setManualSelection({spanId: null, highlightSpanId})}
         />
       )}
     </div>
@@ -373,18 +368,52 @@ interface SpanLink {
   attributes?: Record<string, string>
 }
 
+function normalizeOtlpAttributes(raw: unknown): Record<string, string> {
+  if (!raw) return {}
+  if (Array.isArray(raw)) {
+    const result: Record<string, string> = {}
+    for (const item of raw) {
+      if (item && typeof item === 'object' && 'key' in item && 'value' in item) {
+        const v = item.value
+        result[String(item.key)] =
+          typeof v === 'string' ? v
+          : v && typeof v === 'object' && 'stringValue' in v ? String(v.stringValue)
+          : v && typeof v === 'object' && 'intValue' in v ? String(v.intValue)
+          : v && typeof v === 'object' && 'doubleValue' in v ? String(v.doubleValue)
+          : v && typeof v === 'object' && 'boolValue' in v ? String(v.boolValue)
+          : String(v ?? '')
+      }
+    }
+    return result
+  }
+  if (typeof raw === 'object') {
+    const result: Record<string, string> = {}
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      result[k] = typeof v === 'string' ? v : String(v ?? '')
+    }
+    return result
+  }
+  return {}
+}
+
 function parseSpanEvents(eventsJson?: string): SpanEvent[] {
   if (!eventsJson || eventsJson === '[]') return []
   try {
     const parsed: unknown = JSON.parse(eventsJson)
     if (!Array.isArray(parsed)) return []
-    return parsed.filter(
-      (item): item is SpanEvent =>
-        item != null &&
-        typeof item === 'object' &&
-        'name' in item &&
-        typeof (item as SpanEvent).name === 'string'
-    )
+    return parsed
+      .filter(
+        (item): item is Record<string, unknown> =>
+          item != null &&
+          typeof item === 'object' &&
+          'name' in item &&
+          typeof (item as { name: unknown }).name === 'string'
+      )
+      .map((item) => ({
+        name: item.name as string,
+        timeUnixNano: item.timeUnixNano as string | undefined,
+        attributes: normalizeOtlpAttributes(item.attributes),
+      }))
   } catch {
     return []
   }
@@ -395,15 +424,21 @@ function parseSpanLinks(linksJson?: string): SpanLink[] {
   try {
     const parsed: unknown = JSON.parse(linksJson)
     if (!Array.isArray(parsed)) return []
-    return parsed.filter(
-      (item): item is SpanLink =>
-        item != null &&
-        typeof item === 'object' &&
-        'traceId' in item &&
-        'spanId' in item &&
-        typeof (item as SpanLink).traceId === 'string' &&
-        typeof (item as SpanLink).spanId === 'string'
-    )
+    return parsed
+      .filter(
+        (item): item is Record<string, unknown> =>
+          item != null &&
+          typeof item === 'object' &&
+          'traceId' in item &&
+          'spanId' in item &&
+          typeof (item as { traceId: unknown }).traceId === 'string' &&
+          typeof (item as { spanId: unknown }).spanId === 'string'
+      )
+      .map((item) => ({
+        traceId: item.traceId as string,
+        spanId: item.spanId as string,
+        attributes: normalizeOtlpAttributes(item.attributes),
+      }))
   } catch {
     return []
   }
@@ -442,10 +477,7 @@ function SpanDetailPanel({
     <div className="w-[360px] shrink-0 border rounded-lg overflow-hidden">
       {/* Panel header */}
       <div
-        className={cn(
-          'flex items-center justify-between px-3 py-2 border-b border-l-2',
-          getSpanBorderColor(colorKey)
-        )}
+        className="flex items-center justify-between px-3 py-2 border-b"
       >
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
@@ -509,11 +541,9 @@ function SpanDetailPanel({
 
         {/* Error indicator */}
         {span.error > 0 && (
-          <div className="mx-3 mt-3 rounded-md bg-red-500/10 border border-red-500/20 px-3 py-2 flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
-            <span className="text-sm text-red-500 font-medium">
-              This span has an error
-            </span>
+          <div className="mx-3 mt-3 flex items-center gap-1.5 text-xs text-red-500/90">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            <span>Span errored</span>
           </div>
         )}
 
@@ -523,9 +553,11 @@ function SpanDetailPanel({
             <div className="text-[11px] text-muted-foreground uppercase font-medium tracking-wider mb-1">
               Resource
             </div>
-            <div className="bg-muted/50 rounded px-2 py-1.5 text-xs font-mono break-all flex items-start gap-1">
-              <span className="flex-1">{span.resource}</span>
-              <CopyButton text={span.resource} />
+            <div className="bg-muted/50 rounded px-2 py-1.5 text-xs font-mono break-all group relative">
+              {span.resource}
+              <span className="opacity-0 group-hover:opacity-100 transition-opacity absolute right-1 top-1 bg-background/90 backdrop-blur-sm rounded">
+                <CopyButton text={span.resource} />
+              </span>
             </div>
           </div>
         )}
@@ -575,16 +607,38 @@ function SpanDetailPanel({
                       </Badge>
                     )}
                   </div>
-                  {evt.attributes && Object.keys(evt.attributes).length > 0 && (
-                    <div className="mt-1 space-y-0.5">
-                      {Object.entries(evt.attributes).map(([k, v]) => (
-                        <div key={k} className="flex items-start gap-2 text-xs">
-                          <span className="text-muted-foreground font-mono shrink-0 min-w-[80px]">{k}</span>
-                          <span className="break-all flex-1 text-[11px]">{v}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  {evt.attributes && Object.keys(evt.attributes).length > 0 && (() => {
+                    const entries = Object.entries(evt.attributes!)
+                    const stackEntries = entries.filter(([k]) => k.includes('stacktrace') || k.includes('stack_trace'))
+                    const otherEntries = entries.filter(([k]) => !k.includes('stacktrace') && !k.includes('stack_trace'))
+                    return (
+                      <div className="mt-1.5 space-y-1.5">
+                        {otherEntries.length > 0 && (
+                          <table className="w-full text-xs">
+                            <tbody>
+                              {otherEntries.map(([k, v]) => (
+                                <tr key={k} className="group">
+                                  <td className="text-muted-foreground font-mono text-[11px] py-0.5 pr-3 whitespace-nowrap align-top">{k}</td>
+                                  <td className="break-all py-0.5 align-top text-[11px]">{v}</td>
+                                  <td className="align-top py-0.5">
+                                    <span className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <CopyButton text={v} />
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                        {stackEntries.map(([k, v]) => (
+                          <div key={k}>
+                            <div className="text-muted-foreground font-mono text-[10px] mb-0.5">{k}</div>
+                            <pre className="text-[11px] font-mono bg-muted/50 rounded px-2 py-1.5 overflow-auto max-h-[200px] whitespace-pre-wrap break-words leading-relaxed">{v}</pre>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })()}
                 </div>
               ))}
             </div>
@@ -623,50 +677,14 @@ function SpanDetailPanel({
         {/* Resource Attributes (OTLP) */}
         {hasResourceAttrs && (
           <div className="px-3 pt-3">
-            <div className="text-[11px] text-muted-foreground uppercase font-medium tracking-wider mb-1.5">
-              Resource Attributes ({Object.keys(span.resourceAttributes!).length})
-            </div>
-            <div className="space-y-0.5 max-h-[200px] overflow-y-auto">
-              {Object.entries(span.resourceAttributes!).map(([k, v]) => (
-                <div
-                  key={k}
-                  className="flex items-start gap-2 text-xs py-0.5 group"
-                >
-                  <span className="text-muted-foreground font-mono shrink-0 min-w-[100px]">
-                    {k}
-                  </span>
-                  <span className="break-all flex-1">{v}</span>
-                  <span className="opacity-0 group-hover:opacity-100 transition-opacity">
-                    <CopyButton text={v} />
-                  </span>
-                </div>
-              ))}
-            </div>
+            <AttributeTable label="Resource Attributes" attributes={span.resourceAttributes!} scroll />
           </div>
         )}
 
         {/* Meta tags */}
         {span.meta && Object.keys(span.meta).length > 0 && (
           <div className="px-3 pt-3">
-            <div className="text-[11px] text-muted-foreground uppercase font-medium tracking-wider mb-1.5">
-              Tags ({Object.keys(span.meta).length})
-            </div>
-            <div className="space-y-0.5 max-h-[200px] overflow-y-auto">
-              {Object.entries(span.meta).map(([k, v]) => (
-                <div
-                  key={k}
-                  className="flex items-start gap-2 text-xs py-0.5 group"
-                >
-                  <span className="text-muted-foreground font-mono shrink-0 min-w-[100px]">
-                    {k}
-                  </span>
-                  <span className="break-all flex-1">{v}</span>
-                  <span className="opacity-0 group-hover:opacity-100 transition-opacity">
-                    <CopyButton text={v} />
-                  </span>
-                </div>
-              ))}
-            </div>
+            <AttributeTable label="Tags" attributes={span.meta} scroll />
           </div>
         )}
 
@@ -715,10 +733,12 @@ function InfoCell({
 
 function IdRow({label, value}: {label: string; value: string}) {
   return (
-    <div className="flex items-center gap-2 text-xs">
+    <div className="flex items-center gap-1 text-xs group">
       <span className="text-muted-foreground w-16 shrink-0">{label}</span>
-      <span className="font-mono text-[11px] truncate flex-1">{value}</span>
-      <CopyButton text={value} />
+      <span className="flex-1 min-w-0 truncate font-mono text-[11px] text-right">{value}</span>
+      <span className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+        <CopyButton text={value} />
+      </span>
     </div>
   )
 }

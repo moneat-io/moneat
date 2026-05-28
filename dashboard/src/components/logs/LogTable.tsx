@@ -51,6 +51,8 @@ const levelBorderColors: Record<string, string> = {
   fatal: 'border-l-rose-500/90',
 }
 
+const STACK_TRACE_TAG_KEYS = ['exception.stacktrace', 'exception.stack_trace']
+
 function formatTimestamp(value: string, timezone: string): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
@@ -76,13 +78,39 @@ function formatRelativeTime(value: string): string {
   return `${Math.floor(diffMs / 86_400_000)}d ago`
 }
 
+function hasStackTraceTag(tags: Record<string, string>): boolean {
+  return STACK_TRACE_TAG_KEYS.some((key) => Boolean(tags[key]?.trim()))
+}
+
+function getLogText(log: LogEntry): string {
+  return stripAnsi(log.message || log.body || '').trim()
+}
+
+function getStackTraceLine(log: LogEntry): string {
+  return stripAnsi(log.message || log.body || '').trimEnd()
+}
+
+function getGroupedStackTrace(group: LogGroup): string {
+  return group.logs
+    .slice(1)
+    .map((log) => getStackTraceLine(log))
+    .filter((line) => line.trim())
+    .join('\n')
+}
+
 function toDisplayLog(group: LogGroup): LogEntry {
   const first = group.logs[0]!
   if (group.logs.length === 1) return first
+  const stackTrace = getGroupedStackTrace(group)
+  if (!stackTrace || hasStackTraceTag(first.tags)) return first
+
   return {
     ...first,
-    message: group.mergedMessage,
-    body: '',
+    message: first.message || first.body,
+    tags: {
+      ...first.tags,
+      'exception.stacktrace': stackTrace,
+    },
   }
 }
 
@@ -92,7 +120,9 @@ export function LogTable({logs, selectedLogId, onSelectLog, compact = true, grou
     return null // Empty state is handled by parent
   }
 
-  const groups = groupExceptions ? groupExceptionLogs(logs) : logs.map((log) => ({logs: [log], mergedMessage: (log.message || log.body || '').trim()}))
+  const groups = groupExceptions
+    ? groupExceptionLogs(logs)
+    : logs.map((log) => ({logs: [log], mergedMessage: getLogText(log)}))
 
   return (
     <div className="min-w-0 max-w-full bg-card/80">

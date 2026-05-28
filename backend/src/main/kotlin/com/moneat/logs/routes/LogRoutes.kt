@@ -270,6 +270,7 @@ private suspend fun ApplicationCall.queryLogs(logService: LogService) {
             from = range.from,
             to = range.to,
             tags = parseTagQueryParams(this),
+            traceId = request.queryParameters["traceId"],
             excludeService = request.queryParameters["excludeService"],
             excludeEnvironment = request.queryParameters["excludeEnvironment"],
             excludeContainerName = request.queryParameters["excludeContainerName"],
