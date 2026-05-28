@@ -1,0 +1,225 @@
+---
+title: Kubernetes / Helm
+description: Install Moneat on Kubernetes with the public Helm chart.
+---
+
+# Kubernetes / Helm
+
+The Moneat Helm chart is published at `https://charts.moneat.io`. It installs the backend, dashboard, optional in-cluster Postgres, optional in-cluster ClickHouse, optional in-cluster Redis, persistent backend storage, Kubernetes Secrets, Ingress, optional TLS, and an optional Datadog Agent integration.
+
+## Prerequisites
+
+- Kubernetes 1.27+
+- Helm 3.13+
+- A default StorageClass or explicit `*.persistence.storageClass` values
+- An Ingress controller when `ingress.enabled=true`
+- cert-manager when using the TLS examples below
+
+## Quick Install
+
+```bash
+helm repo add moneat https://charts.moneat.io
+helm repo update
+
+helm upgrade --install moneat moneat/moneat \
+  --namespace moneat \
+  --create-namespace \
+  --set app.frontendUrl=https://moneat.example.com \
+  --set app.backendUrl=https://api.moneat.example.com
+```
+
+The default chart creates random critical secrets on first install and keeps those values on later upgrades with Helm's `lookup` function. For production, provide your own Secret or ExternalSecret.
+
+Published chart packages are tied to a Moneat release tag. For example, the `v1.0.1` app release publishes chart version `1.0.1`, sets `appVersion` to `v1.0.1`, and defaults `image.tag` to `v1.0.1`. This keeps installs reproducible instead of pulling `latest`.
+
+## Secrets
+
+The generated Secret contains these keys:
+
+| Key | Purpose |
+|-----|---------|
+| `JWT_SECRET` | JWT signing secret. |
+| `DATA_SOURCE_ENCRYPTION_KEY` | Encryption key for custom data source credentials. |
+| `DATABASE_PASSWORD` | Postgres password. |
+| `CLICKHOUSE_PASSWORD` | ClickHouse password. |
+| `REDIS_PASSWORD` | Redis password. |
+| `MONEAT_LICENSE_KEY` | Optional enterprise license key. |
+| `DD_API_KEY` | Optional Datadog Agent API key created in Moneat. |
+
+To bring your own Secret:
+
+```yaml
+secrets:
+  create: false
+  existingSecret: moneat-env
+```
+
+The existing Secret must be in the release namespace and contain the keys above that your enabled services need.
+
+## Ingress and TLS
+
+The chart does not install nginx or certbot containers. Kubernetes should provide routing and certificate automation through an Ingress controller and cert-manager:
+
+```yaml
+app:
+  frontendUrl: https://moneat.example.com
+  backendUrl: https://api.moneat.example.com
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: moneat.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: dashboard
+    - host: api.moneat.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: backend
+  tls:
+    - secretName: moneat-tls
+      hosts:
+        - moneat.example.com
+        - api.moneat.example.com
+```
+
+## Persistence
+
+The default install creates retained PVCs for Postgres, ClickHouse, Redis, and backend storage. The backend mounts `/app/storage` and sets `PROFILE_STORAGE_PATH=/app/storage/profiles`, so profiles, source maps, chunks, and artifact bundles are persistent.
+
+For production-style split backend storage:
+
+```yaml
+backend:
+  persistence:
+    split:
+      enabled: true
+      profiles:
+        size: 50Gi
+      sourcemaps:
+        size: 100Gi
+      chunks:
+        size: 100Gi
+      artifactBundles:
+        size: 100Gi
+```
+
+PVCs are retained by default through `helm.sh/resource-policy: keep` and StatefulSet `persistentVolumeClaimRetentionPolicy: Retain`.
+
+## ClickHouse
+
+The bundled ClickHouse mode is intentionally single-node and persistence-focused. It includes:
+
+- A StatefulSet with a data PVC mounted at `/var/lib/clickhouse`
+- File logs redirected to `/var/lib/clickhouse/log`
+- Log rotation settings
+- `system.*_log` TTL settings
+- `system.text_log` disabled by default
+- A small init script that creates the database
+
+The backend still runs ClickHouse schema migrations on startup under a PostgreSQL advisory lock. For larger production installs, run ClickHouse separately and use external mode:
+
+```yaml
+clickhouse:
+  enabled: false
+externalClickHouse:
+  url: https://clickhouse.internal:8123
+  database: moneat
+  username: moneat
+```
+
+## External Database Mode
+
+Disable bundled data services and point Moneat at managed or separately operated services:
+
+```yaml
+postgresql:
+  enabled: false
+externalPostgresql:
+  host: postgres.internal
+  port: 5432
+  database: moneat
+  username: moneat
+
+clickhouse:
+  enabled: false
+externalClickHouse:
+  url: https://clickhouse.internal:8123
+  database: moneat
+  username: moneat
+
+redis:
+  enabled: false
+externalRedis:
+  host: redis.internal
+  port: 6379
+
+secrets:
+  create: false
+  existingSecret: moneat-env
+```
+
+## Optional Datadog Agent
+
+The Helm chart can deploy a Datadog Agent DaemonSet that sends telemetry to the Moneat backend. It is disabled by default.
+
+Create an Agent API key in Moneat, store it as `DD_API_KEY` in the Helm Secret, then enable:
+
+```yaml
+datadog:
+  enabled: true
+```
+
+This is separate from [Kubernetes Monitoring](/docs/datadog-agent/kubernetes), which explains how Moneat displays Kubernetes resources collected by the Datadog Agent.
+
+## Upgrade and Rollback
+
+Upgrade to a new image tag:
+
+```bash
+helm repo update
+
+helm upgrade moneat moneat/moneat \
+  --namespace moneat \
+  --reuse-values \
+  --set image.tag=v1.0.1
+```
+
+Rollback:
+
+```bash
+helm rollback moneat 1 --namespace moneat
+```
+
+Database migrations run on backend startup. Back up persistent data before upgrades.
+
+## Backup and Restore
+
+Back up these stores before upgrades or migrations:
+
+| Store | Contents |
+|-------|----------|
+| Postgres | Users, organizations, projects, auth tokens, billing state, release metadata. |
+| ClickHouse | Events, logs, traces, metrics, profiles metadata, analytics, monitoring data. |
+| Redis | Queues, cache, rate-limit state. |
+| Backend storage | Profiles, source maps, chunks, artifact bundles. |
+
+Use `pg_dump` or your managed Postgres backup tooling, ClickHouse backups or snapshots for ClickHouse, Redis RDB/AOF snapshots, and CSI snapshots or object storage backups for PVCs.
+
+## Uninstall
+
+```bash
+helm uninstall moneat --namespace moneat
+```
+
+By default, data PVCs are retained. Delete PVCs manually only after confirming backups:
+
+```bash
+kubectl get pvc -n moneat
+kubectl delete pvc -n moneat <claim-name>
+```

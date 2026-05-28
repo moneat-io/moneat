@@ -1,0 +1,6 @@
+{{- if and (not .Values.secrets.create) (not .Values.secrets.existingSecret) -}}
+{{- fail "secrets.existingSecret is required when secrets.create=false" -}}
+{{- end -}}
+{{- if and .Values.datadog.enabled .Values.secrets.create (not .Values.secrets.values.ddApiKey) -}}
+{{- fail "datadog.enabled=true requires secrets.values.ddApiKey, or set secrets.existingSecret to a Secret containing DD_API_KEY" -}}
+{{- end -}}

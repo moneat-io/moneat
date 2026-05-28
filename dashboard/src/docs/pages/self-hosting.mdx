@@ -1,11 +1,20 @@
 ---
 title: Self-Hosting
-description: Deploy Moneat on your own infrastructure with Docker Compose.
+description: Deploy Moneat on your own infrastructure with Docker Compose or Helm.
 ---
 
 # Self-Hosting
 
-Moneat can be self-hosted using Docker Compose. The self-hosted edition includes all core features with no event limits. Enterprise features (On-Call, SSO) require a license.
+Moneat can be self-hosted with Docker Compose or Helm. The self-hosted edition includes all core features with no event limits. Enterprise features such as On-Call and SAML SSO require a license.
+
+## Choose an Install Path
+
+| Path | Best for | Notes |
+|------|----------|-------|
+| Docker Compose | Single-server installs and quick evaluation | Fastest path. Includes Postgres, ClickHouse, Redis, backend, and dashboard. |
+| Helm | Kubernetes installs | Use bundled single-node data services for simple installs, or point Moneat at externally managed Postgres, ClickHouse, and Redis. |
+
+For Kubernetes, see [Kubernetes / Helm](/docs/kubernetes-helm).
 
 ## Requirements
 
@@ -13,7 +22,7 @@ Moneat can be self-hosted using Docker Compose. The self-hosted edition includes
 - 2 CPU cores and 2 GB RAM minimum (4 GB recommended)
 - A Linux server (Ubuntu 22.04+, Debian 12+, or similar)
 
-## Install
+## Docker Compose Install
 
 The interactive installer handles version selection, secrets, port allocation, and Docker setup:
 
@@ -56,7 +65,7 @@ Then start:
 docker compose up -d
 ```
 
-## Upgrading
+## Docker Compose Upgrading
 
 ```bash
 docker compose pull
@@ -64,6 +73,23 @@ docker compose up -d
 ```
 
 Database migrations run automatically on backend startup.
+
+## Kubernetes / Helm
+
+The Helm chart is published at `https://charts.moneat.io`:
+
+```bash
+helm repo add moneat https://charts.moneat.io
+helm repo update
+
+helm upgrade --install moneat moneat/moneat \
+  --namespace moneat \
+  --create-namespace \
+  --set app.frontendUrl=https://moneat.example.com \
+  --set app.backendUrl=https://api.moneat.example.com
+```
+
+Use the Helm path when you already operate Kubernetes, need Ingress/cert-manager integration, or want external managed databases. Continue with [Kubernetes / Helm](/docs/kubernetes-helm).
 
 ## Telemetry
 

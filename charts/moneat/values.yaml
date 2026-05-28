@@ -1,0 +1,311 @@
+# Default values for the Moneat Helm chart.
+
+nameOverride: ""
+fullnameOverride: ""
+
+global:
+  imagePullSecrets: []
+  commonLabels: {}
+
+image:
+  tag: ""
+  pullPolicy: IfNotPresent
+
+backend:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/moneat-io/moneat-backend
+    tag: ""
+    pullPolicy: ""
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext:
+    fsGroup: 999
+  securityContext: {}
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  service:
+    type: ClusterIP
+    port: 8080
+    annotations: {}
+  env:
+    SELF_HOSTED: "true"
+    STRIPE_ENABLED: "false"
+    BILLING_BACKGROUND_JOBS_ENABLED: "true"
+    TELEMETRY_ENABLED: "true"
+    PROFILE_STORAGE_PATH: /app/storage/profiles
+  extraEnv: []
+  extraEnvFrom: []
+  persistence:
+    enabled: true
+    keepPvc: true
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 20Gi
+    existingClaim: ""
+    split:
+      enabled: false
+      profiles:
+        size: 20Gi
+        storageClass: ""
+        accessModes:
+          - ReadWriteOnce
+        existingClaim: ""
+      sourcemaps:
+        size: 20Gi
+        storageClass: ""
+        accessModes:
+          - ReadWriteOnce
+        existingClaim: ""
+      chunks:
+        size: 50Gi
+        storageClass: ""
+        accessModes:
+          - ReadWriteOnce
+        existingClaim: ""
+      artifactBundles:
+        size: 50Gi
+        storageClass: ""
+        accessModes:
+          - ReadWriteOnce
+        existingClaim: ""
+
+dashboard:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/moneat-io/moneat-dashboard
+    tag: ""
+    pullPolicy: ""
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext: {}
+  securityContext: {}
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  service:
+    type: ClusterIP
+    port: 80
+    annotations: {}
+  env:
+    VITE_ANALYTICS_KEY: ""
+    VITE_SENTRY_DSN: ""
+    VITE_SENTRY_ENVIRONMENT: production
+    VITE_SENTRY_TRACES_SAMPLE_RATE: "0.1"
+  extraEnv: []
+  extraEnvFrom: []
+
+app:
+  frontendUrl: http://localhost:3000
+  backendUrl: http://localhost:8080
+  allowedOrigins: ""
+  trustedProxies: ""
+
+secrets:
+  create: true
+  existingSecret: ""
+  annotations: {}
+  values:
+    jwtSecret: ""
+    dataSourceEncryptionKey: ""
+    databasePassword: ""
+    clickhousePassword: ""
+    redisPassword: ""
+    moneatLicenseKey: ""
+    ddApiKey: ""
+    ddPostgresPassword: ""
+  extraEnv: {}
+
+postgresql:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "18-alpine"
+    pullPolicy: IfNotPresent
+  auth:
+    database: moneat
+    username: moneat
+  service:
+    port: 5432
+    annotations: {}
+  persistence:
+    enabled: true
+    keepPvc: true
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 20Gi
+    existingClaim: ""
+    retention:
+      whenDeleted: Retain
+      whenScaled: Retain
+  initdb:
+    enabled: true
+    sql: |
+      -- Moneat runs Flyway migrations on backend startup.
+      CREATE EXTENSION IF NOT EXISTS pgcrypto;
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext: {}
+  securityContext: {}
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+externalPostgresql:
+  url: ""
+  host: ""
+  port: 5432
+  database: moneat
+  username: moneat
+
+clickhouse:
+  enabled: true
+  image:
+    repository: clickhouse/clickhouse-server
+    tag: "26.2-alpine"
+    pullPolicy: IfNotPresent
+  auth:
+    database: moneat
+    username: moneat
+  service:
+    httpPort: 8123
+    nativePort: 9000
+    annotations: {}
+  persistence:
+    enabled: true
+    keepPvc: true
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 100Gi
+    existingClaim: ""
+    retention:
+      whenDeleted: Retain
+      whenScaled: Retain
+  config:
+    loggerLevel: warning
+    logSize: 100M
+    logCount: 10
+    systemLogsTtlDays: 3
+    removeTextLog: true
+  initdb:
+    enabled: true
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext: {}
+  securityContext: {}
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+externalClickHouse:
+  url: ""
+  database: moneat
+  username: moneat
+
+redis:
+  enabled: true
+  image:
+    repository: redis
+    tag: "8-alpine"
+    pullPolicy: IfNotPresent
+  service:
+    port: 6379
+    annotations: {}
+  persistence:
+    enabled: true
+    keepPvc: true
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 10Gi
+    existingClaim: ""
+    retention:
+      whenDeleted: Retain
+      whenScaled: Retain
+  appendOnly: true
+  maxMemory: ""
+  maxMemoryPolicy: allkeys-lru
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext: {}
+  securityContext: {}
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+externalRedis:
+  url: ""
+  host: ""
+  port: 6379
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: moneat.local
+      paths:
+        - path: /
+          pathType: Prefix
+          service: dashboard
+    - host: api.moneat.local
+      paths:
+        - path: /
+          pathType: Prefix
+          service: backend
+  tls: []
+
+datadog:
+  enabled: false
+  image:
+    repository: datadog/agent
+    tag: "7"
+    pullPolicy: IfNotPresent
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+  rbac:
+    create: true
+  service:
+    enabled: true
+    annotations: {}
+    apmPort: 8126
+    dogstatsdPort: 8125
+  endpointUrl: ""
+  env:
+    DD_APM_ENABLED: "true"
+    DD_APM_NON_LOCAL_TRAFFIC: "true"
+    DD_PROCESS_AGENT_ENABLED: "true"
+    DD_LOGS_ENABLED: "true"
+    DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL: "true"
+    DD_LEADER_ELECTION: "true"
+    DD_COLLECT_KUBERNETES_EVENTS: "true"
+  backendEnv:
+    DD_SERVICE: moneat-backend
+    DD_ENV: production
+    DD_PROFILING_ENABLED: "true"
+    DD_TRACE_ENABLED: "true"
+    DD_LOGS_INJECTION: "true"
+    DD_RUNTIME_METRICS_ENABLED: "true"
+  podAnnotations: {}
+  podLabels: {}
+  podSecurityContext: {}
+  securityContext: {}
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  hostPaths:
+    proc: /proc
+    cgroup: /sys/fs/cgroup
+    dockerSocket: ""

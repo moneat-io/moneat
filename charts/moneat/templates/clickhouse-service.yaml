@@ -1,0 +1,25 @@
+{{- if .Values.clickhouse.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "moneat.fullname" . }}-clickhouse
+  labels:
+    {{- include "moneat.labels" (dict "root" . "component" "clickhouse") | nindent 4 }}
+  {{- with .Values.clickhouse.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: {{ .Values.clickhouse.service.httpPort }}
+      targetPort: http
+      protocol: TCP
+    - name: native
+      port: {{ .Values.clickhouse.service.nativePort }}
+      targetPort: native
+      protocol: TCP
+  selector:
+    {{- include "moneat.selectorLabels" (dict "root" . "component" "clickhouse") | nindent 4 }}
+{{- end }}

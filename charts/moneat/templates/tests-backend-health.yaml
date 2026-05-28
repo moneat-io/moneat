@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "moneat.fullname" . }}-backend-health-test
+  labels:
+    {{- include "moneat.labels" (dict "root" . "component" "test") | nindent 4 }}
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  containers:
+    - name: wget
+      image: busybox:1.36
+      command:
+        - sh
+        - -c
+        - wget -q -O - http://{{ include "moneat.fullname" . }}-backend:{{ .Values.backend.service.port }}/health/ready

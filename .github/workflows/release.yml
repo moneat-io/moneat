@@ -15,14 +15,49 @@ permissions:
 env:
   JAVA_VERSION: '21'
   NODE_VERSION: '24'
+  HELM_VERSION: '3.15.4'
   REGISTRY: ghcr.io
+  CHART_REPOSITORY_URL: https://charts.moneat.io
 
 jobs:
+  validate-tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
+        with:
+          fetch-depth: 0
+
+      - name: Validate target branch
+        env:
+          TARGET_BRANCH: ${{ contains(github.ref_name, '-') && 'develop' || 'main' }}
+        run: |
+          git fetch origin "$TARGET_BRANCH"
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" "origin/$TARGET_BRANCH"; then
+            echo "::error::Tag ${{ github.ref_name }} does not point to a commit on $TARGET_BRANCH"
+            exit 1
+          fi
+
+          echo "Validated ${{ github.ref_name }} against $TARGET_BRANCH"
+
   test:
+    needs: validate-tag
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
+
+      - name: Install Helm
+        run: |
+          curl -fsSL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" -o helm.tar.gz
+          tar -xzf helm.tar.gz
+          sudo mv linux-amd64/helm /usr/local/bin/helm
+          helm version
+
+      - name: Validate Helm chart source
+        run: |
+          helm lint --strict charts/moneat
+          helm template moneat charts/moneat --namespace moneat >/tmp/moneat-chart-rendered.yaml
 
       - name: Set up JDK
         uses: actions/setup-java@1d018f9b8b9b505bb578a83b230fabcce01af93b
@@ -100,6 +135,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/moneat-backend
           tags: |
+            type=raw,value=${{ github.ref_name }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
@@ -148,6 +184,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/moneat-dashboard
           tags: |
+            type=raw,value=${{ github.ref_name }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
@@ -165,8 +202,116 @@ jobs:
           cache-from: type=gha,scope=dashboard
           cache-to: type=gha,mode=max,scope=dashboard
 
-  release:
+  publish-chart:
     needs: [build-backend, build-dashboard]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      packages: read
+    steps:
+      - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98
+        with:
+          fetch-depth: 0
+
+      - name: Install Helm
+        run: |
+          curl -fsSL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" -o helm.tar.gz
+          tar -xzf helm.tar.gz
+          sudo mv linux-amd64/helm /usr/local/bin/helm
+          helm version
+
+      - name: Package Helm chart
+        id: chart
+        run: |
+          set -euo pipefail
+
+          chart_version="${GITHUB_REF_NAME#v}"
+          app_version="${GITHUB_REF_NAME}"
+          image_tag="${GITHUB_REF_NAME}"
+
+          chart_dir="$(mktemp -d)"
+          package_dir="$(mktemp -d)"
+          cp -R charts/moneat "${chart_dir}/moneat"
+
+          sed -i "s/^version:.*/version: ${chart_version}/" "${chart_dir}/moneat/Chart.yaml"
+          sed -i "s/^appVersion:.*/appVersion: \"${app_version}\"/" "${chart_dir}/moneat/Chart.yaml"
+          awk -v image_tag="${image_tag}" '
+            $0 == "image:" && !patched {
+              in_image = 1
+              print
+              next
+            }
+            in_image && $1 == "tag:" && !patched {
+              print "  tag: \"" image_tag "\""
+              patched = 1
+              in_image = 0
+              next
+            }
+            { print }
+          ' "${chart_dir}/moneat/values.yaml" > "${chart_dir}/moneat/values.yaml.tmp"
+          mv "${chart_dir}/moneat/values.yaml.tmp" "${chart_dir}/moneat/values.yaml"
+
+          if grep -q 'tag: "latest"' "${chart_dir}/moneat/values.yaml"; then
+            echo "::error::Packaged public chart must not default to image.tag=latest"
+            exit 1
+          fi
+
+          helm lint --strict "${chart_dir}/moneat"
+          helm template moneat "${chart_dir}/moneat" --namespace moneat >/tmp/moneat-chart-rendered.yaml
+          helm package "${chart_dir}/moneat" --destination "${package_dir}"
+
+          package_path="$(find "${package_dir}" -name 'moneat-*.tgz' -print -quit)"
+          if [ -z "${package_path}" ]; then
+            echo "::error::Helm package was not created"
+            exit 1
+          fi
+
+          echo "package_path=${package_path}" >> "$GITHUB_OUTPUT"
+          echo "chart_version=${chart_version}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish Helm chart repository
+        env:
+          PACKAGE_PATH: ${{ steps.chart.outputs.package_path }}
+        run: |
+          set -euo pipefail
+
+          publish_dir="$(mktemp -d)"
+          rm -rf "${publish_dir}"
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git fetch origin gh-pages
+            git worktree add --detach "${publish_dir}" FETCH_HEAD
+          else
+            git worktree add --detach "${publish_dir}"
+            git -C "${publish_dir}" checkout --orphan gh-pages
+            git -C "${publish_dir}" rm -rf . >/dev/null 2>&1 || true
+          fi
+
+          cp "${PACKAGE_PATH}" "${publish_dir}/"
+          if [ -f "${publish_dir}/index.yaml" ]; then
+            helm repo index "${publish_dir}" --url "${CHART_REPOSITORY_URL}" --merge "${publish_dir}/index.yaml"
+          else
+            helm repo index "${publish_dir}" --url "${CHART_REPOSITORY_URL}"
+          fi
+
+          if [ ! -f "${publish_dir}/CNAME" ]; then
+            printf '%s\n' "${CHART_REPOSITORY_URL#https://}" > "${publish_dir}/CNAME"
+          fi
+
+          git -C "${publish_dir}" config user.name "github-actions[bot]"
+          git -C "${publish_dir}" config user.email "github-actions[bot]@users.noreply.github.com"
+          git -C "${publish_dir}" add .
+
+          if git -C "${publish_dir}" diff --cached --quiet; then
+            echo "No Helm chart repository changes to publish"
+            exit 0
+          fi
+
+          git -C "${publish_dir}" commit -m "publish moneat chart ${GITHUB_REF_NAME}"
+          git -C "${publish_dir}" push origin HEAD:gh-pages
+
+  release:
+    needs: [build-backend, build-dashboard, publish-chart]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -223,15 +368,3 @@ jobs:
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Validate target branch
-        env:
-          TARGET_BRANCH: ${{ contains(github.ref_name, '-') && 'develop' || 'main' }}
-        run: |
-          git fetch origin "$TARGET_BRANCH"
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" "origin/$TARGET_BRANCH"; then
-            echo "::error::Tag ${{ github.ref_name }} does not point to a commit on $TARGET_BRANCH"
-            exit 1
-          fi
-
-          echo "Validated ${{ github.ref_name }} against $TARGET_BRANCH"

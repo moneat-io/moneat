@@ -30,6 +30,13 @@
 
 ## Self-Hosting
 
+Moneat supports two self-hosting paths:
+
+- **Docker Compose** - quickest path for a single server.
+- **Helm** - Kubernetes install with optional in-cluster Postgres, ClickHouse, and Redis, or external services.
+
+### Docker Compose
+
 The interactive installer handles version selection, secrets, port allocation, and Docker setup. No need to clone the repo.
 
 **curl:**
@@ -57,6 +64,23 @@ docker compose up -d
 ```
 
 </details>
+
+### Kubernetes / Helm
+
+The public Helm chart is available at `https://charts.moneat.io`:
+
+```bash
+helm repo add moneat https://charts.moneat.io
+helm repo update
+
+helm upgrade --install moneat moneat/moneat \
+  --namespace moneat \
+  --create-namespace \
+  --set app.frontendUrl=https://moneat.example.com \
+  --set app.backendUrl=https://api.moneat.example.com
+```
+
+For production, create a Kubernetes Secret or ExternalSecret and set `secrets.existingSecret`. The chart can run a single-node persistent ClickHouse StatefulSet for simple installs, but production environments with existing ClickHouse operations can set `clickhouse.enabled=false` and provide `externalClickHouse.url`.
 
 <details>
 <summary><b>Local Development</b></summary>

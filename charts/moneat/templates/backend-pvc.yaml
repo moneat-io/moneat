@@ -1,0 +1,49 @@
+{{- if and .Values.backend.persistence.enabled (not .Values.backend.persistence.split.enabled) (not .Values.backend.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "moneat.backendPvcName" . }}
+  labels:
+    {{- include "moneat.labels" (dict "root" . "component" "backend") | nindent 4 }}
+  {{- if .Values.backend.persistence.keepPvc }}
+  annotations:
+    helm.sh/resource-policy: keep
+  {{- end }}
+spec:
+  accessModes:
+    {{- toYaml .Values.backend.persistence.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.backend.persistence.size | quote }}
+  {{- if .Values.backend.persistence.storageClass }}
+  storageClassName: {{ .Values.backend.persistence.storageClass | quote }}
+  {{- end }}
+{{- end }}
+{{- if and .Values.backend.persistence.enabled .Values.backend.persistence.split.enabled }}
+{{- $root := . }}
+{{- $volumes := dict "profiles" .Values.backend.persistence.split.profiles "sourcemaps" .Values.backend.persistence.split.sourcemaps "chunks" .Values.backend.persistence.split.chunks "artifact-bundles" .Values.backend.persistence.split.artifactBundles }}
+{{- range $name, $cfg := $volumes }}
+{{- if not $cfg.existingClaim }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "moneat.backendSplitPvcName" (dict "root" $root "name" $name) }}
+  labels:
+    {{- include "moneat.labels" (dict "root" $root "component" "backend") | nindent 4 }}
+  {{- if $root.Values.backend.persistence.keepPvc }}
+  annotations:
+    helm.sh/resource-policy: keep
+  {{- end }}
+spec:
+  accessModes:
+    {{- toYaml $cfg.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ $cfg.size | quote }}
+  {{- if $cfg.storageClass }}
+  storageClassName: {{ $cfg.storageClass | quote }}
+  {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

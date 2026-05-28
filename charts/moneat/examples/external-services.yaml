@@ -1,0 +1,50 @@
+app:
+  frontendUrl: https://moneat.example.com
+  backendUrl: https://api.moneat.example.com
+
+postgresql:
+  enabled: false
+externalPostgresql:
+  host: postgres.example.internal
+  port: 5432
+  database: moneat
+  username: moneat
+
+clickhouse:
+  enabled: false
+externalClickHouse:
+  url: https://clickhouse.example.internal:8123
+  database: moneat
+  username: moneat
+
+redis:
+  enabled: false
+externalRedis:
+  host: redis.example.internal
+  port: 6379
+
+secrets:
+  create: false
+  existingSecret: moneat-env
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: moneat.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: dashboard
+    - host: api.moneat.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: backend
+  tls:
+    - secretName: moneat-tls
+      hosts:
+        - moneat.example.com
+        - api.moneat.example.com

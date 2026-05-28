@@ -87,7 +87,7 @@ export const docsSidebar: SidebarCategory[] = [
   {
     label: 'Self-Hosting',
     collapsed: false,
-    items: ['self-hosting'],
+    items: ['self-hosting', 'kubernetes-helm'],
   },
   {
     label: 'Account',

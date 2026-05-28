@@ -1,0 +1,141 @@
+{{- if .Values.redis.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "moneat.fullname" . }}-redis
+  labels:
+    {{- include "moneat.labels" (dict "root" . "component" "redis") | nindent 4 }}
+spec:
+  serviceName: {{ include "moneat.fullname" . }}-redis
+  replicas: 1
+  {{- if and .Values.redis.persistence.enabled (not .Values.redis.persistence.existingClaim) }}
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: {{ .Values.redis.persistence.retention.whenDeleted }}
+    whenScaled: {{ .Values.redis.persistence.retention.whenScaled }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "moneat.selectorLabels" (dict "root" . "component" "redis") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "moneat.selectorLabels" (dict "root" . "component" "redis") | nindent 8 }}
+        {{- with .Values.redis.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.redis.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.redis.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: redis
+          image: {{ printf "%s:%s" .Values.redis.image.repository .Values.redis.image.tag | quote }}
+          imagePullPolicy: {{ .Values.redis.image.pullPolicy }}
+          {{- with .Values.redis.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: redis
+              containerPort: 6379
+              protocol: TCP
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "moneat.secretName" . }}
+                  key: REDIS_PASSWORD
+          command:
+            - redis-server
+          args:
+            - --appendonly
+            - {{ ternary "yes" "no" .Values.redis.appendOnly | quote }}
+            - --requirepass
+            - $(REDIS_PASSWORD)
+            {{- if .Values.redis.maxMemory }}
+            - --maxmemory
+            - {{ .Values.redis.maxMemory | quote }}
+            {{- end }}
+            {{- if .Values.redis.maxMemoryPolicy }}
+            - --maxmemory-policy
+            - {{ .Values.redis.maxMemoryPolicy | quote }}
+            {{- end }}
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - redis-cli -a "$REDIS_PASSWORD" --no-auth-warning ping
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - redis-cli -a "$REDIS_PASSWORD" --no-auth-warning ping
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          {{- with .Values.redis.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      {{- if or (not .Values.redis.persistence.enabled) .Values.redis.persistence.existingClaim }}
+      volumes:
+        {{- if not .Values.redis.persistence.enabled }}
+        - name: data
+          emptyDir: {}
+        {{- else }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Values.redis.persistence.existingClaim }}
+        {{- end }}
+      {{- end }}
+      {{- with .Values.redis.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.redis.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.redis.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  {{- if and .Values.redis.persistence.enabled (not .Values.redis.persistence.existingClaim) }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "moneat.labels" (dict "root" . "component" "redis") | nindent 10 }}
+        {{- if .Values.redis.persistence.keepPvc }}
+        annotations:
+          helm.sh/resource-policy: keep
+        {{- end }}
+      spec:
+        accessModes:
+          {{- toYaml .Values.redis.persistence.accessModes | nindent 10 }}
+        resources:
+          requests:
+            storage: {{ .Values.redis.persistence.size | quote }}
+        {{- if .Values.redis.persistence.storageClass }}
+        storageClassName: {{ .Values.redis.persistence.storageClass | quote }}
+        {{- end }}
+  {{- end }}
+{{- end }}
