@@ -304,106 +304,12 @@ class LogService(private val logRepository: LogRepository) {
         request: LogQueryRequest
     ): LogQueryResponse {
         val limit = request.limit.coerceIn(1, MAX_LOG_QUERY_LIMIT)
-        val conditions = mutableListOf<String>()
-
-        val totalCountFilter =
-            buildScopeFilter(organizationId, request.systemId, request.hostId) ?: return LogQueryResponse(
-                logs = emptyList(),
-                nextCursor = null,
-                hasMore = false,
-                totalCount = 0L
-            )
-
-        // Support filtering by either system_id or organization_id
-        conditions += totalCountFilter
-
-        val fromMs = parseTimeToMillis(request.from)
-        if (fromMs != null) {
-            conditions += "timestamp >= fromUnixTimestamp64Milli($fromMs)"
-        }
-
-        val toMs = parseTimeToMillis(request.to)
-        if (toMs != null) {
-            conditions += "timestamp <= fromUnixTimestamp64Milli($toMs)"
-        }
-
-        if (!request.service.isNullOrBlank()) {
-            conditions += "service = '${escapeSql(request.service)}'"
-        }
-
-        if (!request.environment.isNullOrBlank()) {
-            conditions += "environment = '${escapeSql(request.environment)}'"
-        }
-
-        if (!request.containerName.isNullOrBlank()) {
-            conditions += "container_name = '${escapeSql(request.containerName)}'"
-        }
-
-        val normalizedLevels =
-            request.levels
-                .map { normalizeLevel(it) }
-                .filter { it.isNotBlank() }
-                .distinct()
-        if (normalizedLevels.isNotEmpty()) {
-            val inClause = normalizedLevels.joinToString(",") { "'${escapeSql(it)}'" }
-            conditions += "level IN ($inClause)"
-        }
-
-        if (!request.query.isNullOrBlank()) {
-            // Use Datadog-compatible query parser
-            suspendRunCatching {
-                val parsed = queryParser.parse(request.query)
-                if (parsed.rootNode != null) {
-                    val queryCondition = queryParser.toClickHouseSql(parsed.rootNode, ::escapeSql)
-                    if (queryCondition.isNotBlank() && queryCondition != "1=1") {
-                        logger.info { "Generated query condition from '${request.query}': $queryCondition" }
-                        conditions += "($queryCondition)"
-                    }
-                }
-            }.getOrElse { e ->
-                val q = request.query.orEmpty()
-                logger.error(e) {
-                    "Failed to parse query (query_fp=${utf8Fingerprint(q)}), falling back to simple search"
-                }
-                // Fallback: treat as simple full-text search
-                conditions += buildSimpleSearchCondition(request.query)
-            }
-        }
-
-        request.tags.forEach { (key, value) ->
-            val condition = buildTagCondition(key, value)
-            if (condition.isNotBlank()) {
-                conditions += condition
-            }
-        }
-
-        // Add exclude filters
-        if (!request.excludeService.isNullOrBlank()) {
-            conditions += "service != '${escapeSql(request.excludeService)}'"
-        }
-
-        if (!request.excludeEnvironment.isNullOrBlank()) {
-            conditions += "environment != '${escapeSql(request.excludeEnvironment)}'"
-        }
-
-        if (!request.excludeContainerName.isNullOrBlank()) {
-            conditions += "container_name != '${escapeSql(request.excludeContainerName)}'"
-        }
-
-        request.excludeTags.forEach { (key, value) ->
-            val condition = buildTagCondition(key, value)
-            if (condition.isNotBlank()) {
-                // Negate the condition by wrapping in NOT
-                conditions += "NOT ($condition)"
-            }
-        }
-
-        decodeCursor(request.cursor)?.let { (cursorTs, cursorLogId) ->
-            conditions +=
-                "(timestamp < fromUnixTimestamp64Milli($cursorTs) OR " +
-                "(timestamp = fromUnixTimestamp64Milli($cursorTs) AND " +
-                "toString(log_id) < '${escapeSql(cursorLogId)}'))"
-        }
+        val conditions = buildLogQueryConditions(organizationId, request) ?: return LogQueryResponse(
+            logs = emptyList(),
+            nextCursor = null,
+            hasMore = false,
+            totalCount = 0L
+        )
 
         val whereClause = conditions.joinToString(" AND ")
 
@@ -462,6 +368,102 @@ class LogService(private val logRepository: LogRepository) {
             hasMore = hasMore,
             totalCount = null
         )
+    }
+
+    private suspend fun buildLogQueryConditions(
+        organizationId: Long,
+        request: LogQueryRequest
+    ): List<String>? {
+        val scopeFilter = buildScopeFilter(organizationId, request.systemId, request.hostId) ?: return null
+        return buildList {
+            add(scopeFilter)
+            addLogTimeFilters(request)
+            addLogIncludeFilters(request)
+            addLogQueryFilter(request.query)
+            addTagFilters(request.tags)
+            addLogTraceFilter(request.traceId)
+            addLogExcludeFilters(request)
+            addTagFilters(request.excludeTags, exclude = true)
+            addLogCursorFilter(request.cursor)
+        }
+    }
+
+    private fun MutableList<String>.addLogTimeFilters(request: LogQueryRequest) {
+        parseTimeToMillis(request.from)?.let { fromMs ->
+            add("timestamp >= fromUnixTimestamp64Milli($fromMs)")
+        }
+        parseTimeToMillis(request.to)?.let { toMs ->
+            add("timestamp <= fromUnixTimestamp64Milli($toMs)")
+        }
+    }
+
+    private fun MutableList<String>.addLogIncludeFilters(request: LogQueryRequest) {
+        addIfPresent(request.service) { "service = '${escapeSql(it)}'" }
+        addIfPresent(request.environment) { "environment = '${escapeSql(it)}'" }
+        addIfPresent(request.containerName) { "container_name = '${escapeSql(it)}'" }
+        addLevelFilter(request.levels)
+    }
+
+    private fun MutableList<String>.addLevelFilter(levels: List<String>) {
+        val normalizedLevels = levels.map { normalizeLevel(it) }.filter { it.isNotBlank() }.distinct()
+        if (normalizedLevels.isEmpty()) return
+
+        val inClause = normalizedLevels.joinToString(",") { "'${escapeSql(it)}'" }
+        add("level IN ($inClause)")
+    }
+
+    private suspend fun MutableList<String>.addLogQueryFilter(query: String?) {
+        if (query.isNullOrBlank()) return
+
+        suspendRunCatching {
+            queryParser.parse(query).rootNode?.let { rootNode ->
+                val queryCondition = queryParser.toClickHouseSql(rootNode, ::escapeSql)
+                if (queryCondition.isNotBlank() && queryCondition != "1=1") {
+                    logger.info { "Generated query condition from '$query': $queryCondition" }
+                    add("($queryCondition)")
+                }
+            }
+        }.getOrElse { e ->
+            logger.error(e) {
+                "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
+            }
+            add(buildSimpleSearchCondition(query))
+        }
+    }
+
+    private fun MutableList<String>.addTagFilters(tags: Map<String, String>, exclude: Boolean = false) {
+        tags.forEach { (key, value) ->
+            val condition = buildTagCondition(key, value, exclude = exclude)
+            if (condition.isNotBlank()) {
+                add(condition)
+            }
+        }
+    }
+
+    private fun MutableList<String>.addLogTraceFilter(traceId: String?) {
+        addIfPresent(traceId) { "trace_id = '${escapeSql(it)}'" }
+    }
+
+    private fun MutableList<String>.addLogExcludeFilters(request: LogQueryRequest) {
+        addIfPresent(request.excludeService) { "service != '${escapeSql(it)}'" }
+        addIfPresent(request.excludeEnvironment) { "environment != '${escapeSql(it)}'" }
+        addIfPresent(request.excludeContainerName) { "container_name != '${escapeSql(it)}'" }
+    }
+
+    private fun MutableList<String>.addLogCursorFilter(cursor: String?) {
+        decodeCursor(cursor)?.let { (cursorTs, cursorLogId) ->
+            add(
+                "(timestamp < fromUnixTimestamp64Milli($cursorTs) OR " +
+                    "(timestamp = fromUnixTimestamp64Milli($cursorTs) AND " +
+                    "toString(log_id) < '${escapeSql(cursorLogId)}'))"
+            )
+        }
+    }
+
+    private fun MutableList<String>.addIfPresent(value: String?, condition: (String) -> String) {
+        if (!value.isNullOrBlank()) {
+            add(condition(value))
+        }
     }
 
     fun autoInterval(

@@ -164,6 +164,7 @@ data class LogQueryRequest(
     val systemId: String? = null,
     val hostId: Int? = null,
     val containerName: String? = null,
+    val traceId: String? = null,
     val excludeService: String? = null,
     val excludeEnvironment: String? = null,
     val excludeContainerName: String? = null,

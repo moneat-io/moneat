@@ -143,6 +143,128 @@ describe('APM API', () => {
     expect(result).toEqual(mockDetail)
   })
 
+  it('normalizes trace detail span attributes from array payloads', async () => {
+    const mockDetail = {
+      traceId: 'trace-arrays',
+      spans: [
+        {
+          spanId: 'span-1',
+          traceId: 'trace-arrays',
+          parentId: '',
+          name: 'GET /checkout',
+          service: 'checkout-api',
+          resource: 'GET /checkout',
+          type: 'web',
+          startNs: 1,
+          durationNs: 2,
+          error: 0,
+          meta: [
+            {key: 'http.method', value: 'GET'},
+            {key: 'http.status_code', value: 200},
+            {other: 'ignored'},
+          ],
+          metrics: [
+            {key: 'db.rows', value: '12'},
+            {key: 'cache.hit', value: true},
+            {key: 'bad.metric', value: 'NaN'},
+            {other: 'ignored'},
+          ],
+          resourceAttributes: [
+            {key: 'service.namespace', value: 'payments'},
+          ],
+          host: 'localhost',
+          env: 'dev',
+          version: '1.0.0',
+          source: 'otlp',
+        },
+      ],
+      duration: 150,
+    }
+
+    server.use(
+      http.get(`${API_BASE}/v1/traces/trace-arrays`, () => {
+        return HttpResponse.json(mockDetail)
+      })
+    )
+
+    const result = await api.getApmTraceDetail('trace-arrays')
+    expect(result).toMatchObject({
+      traceId: 'trace-arrays',
+      duration: 150,
+      spans: [
+        {
+          meta: {'http.method': 'GET', 'http.status_code': '200'},
+          metrics: {'db.rows': 12, 'cache.hit': 1, 'bad.metric': 0},
+          resourceAttributes: {'service.namespace': 'payments'},
+        },
+      ],
+    })
+  })
+
+  it('normalizes trace detail span attributes from object and empty payloads', async () => {
+    const mockDetail = {
+      traceId: 'trace-objects',
+      spans: [
+        {
+          spanId: 'span-1',
+          traceId: 'trace-objects',
+          parentId: '',
+          name: 'POST /orders',
+          service: 'orders-api',
+          resource: 'POST /orders',
+          type: 'web',
+          startNs: 1,
+          durationNs: 2,
+          error: 1,
+          meta: {'error.type': 'Error', retry: 2, nullable: null},
+          metrics: {attempts: '3', failed: true, empty: null, infinite: 'Infinity'},
+          resourceAttributes: undefined,
+          host: 'localhost',
+          env: 'dev',
+          version: '1.0.0',
+          source: 'otlp',
+        },
+        {
+          spanId: 'span-2',
+          traceId: 'trace-objects',
+          parentId: 'span-1',
+          name: 'queue.publish',
+          service: 'orders-api',
+          resource: 'queue.publish',
+          type: 'queue',
+          startNs: 3,
+          durationNs: 4,
+          error: 0,
+          meta: 'invalid',
+          metrics: 'invalid',
+          resourceAttributes: 'invalid',
+          host: 'localhost',
+          env: 'dev',
+          version: '1.0.0',
+          source: 'otlp',
+        },
+      ],
+    }
+
+    server.use(
+      http.get(`${API_BASE}/v1/traces/trace-objects`, () => {
+        return HttpResponse.json(mockDetail)
+      })
+    )
+
+    const result = await api.getApmTraceDetail('trace-objects')
+    expect(result.spans[0]).toMatchObject({
+      meta: {'error.type': 'Error', retry: '2', nullable: ''},
+      metrics: {attempts: 3, failed: 1, empty: 0, infinite: 0},
+      resourceAttributes: {},
+    })
+    expect(result.spans[1]).toMatchObject({
+      meta: {},
+      metrics: {},
+      resourceAttributes: {},
+    })
+  })
+
   // ──── getApmServiceMap ────
 
   it('fetches APM service map', async () => {

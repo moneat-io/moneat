@@ -14,4 +14,31 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-export {LogDetailPanel as LogDetail} from '@/components/logs/LogDetailPanel'
+import type {LogEntry} from '@/lib/api'
+
+export function logEntry(
+  logId: string,
+  timestamp: string,
+  message: string,
+  overrides: Partial<LogEntry> = {}
+): LogEntry {
+  return {
+    logId,
+    timestamp,
+    level: 'error',
+    message,
+    body: message,
+    service: 'moneat-backend',
+    environment: 'production',
+    host: 'ubuntu1',
+    source: 'agent_stderr',
+    containerName: 'moneat-backend',
+    containerId: '',
+    containerImage: '',
+    traceId: '',
+    spanId: '',
+    tags: {},
+    resourceAttributes: {},
+    ...overrides,
+  }
+}

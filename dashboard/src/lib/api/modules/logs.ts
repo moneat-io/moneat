@@ -156,6 +156,7 @@ export function logsMethods(core: ApiClientCore) {
         from?: string
         to?: string
         tags?: Record<string, string>
+        traceId?: string
         excludeService?: string
         excludeEnvironment?: string
         excludeContainerName?: string
@@ -166,6 +167,7 @@ export function logsMethods(core: ApiClientCore) {
       if (options.cursor) params.set('cursor', options.cursor)
       params.set('limit', String(options.limit ?? 100))
       if (options.containerName) params.set('containerName', options.containerName)
+      if (options.traceId) params.set('traceId', options.traceId)
       const response = await core.request<RawLogResponse>(`${base}/logs?${params.toString()}`)
       return mapRawLogResponse(response)
     },
