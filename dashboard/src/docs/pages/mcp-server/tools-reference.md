@@ -336,7 +336,7 @@ Preview a widget query with dashboard variable substitution and datasource resol
 |-----------|------|----------|-------------|
 | `dashboard_id` | number | Yes | Dashboard ID |
 | `query_config` | object | Yes | QueryDsl config |
-| `project_id` | number | No | Project ID when the dashboard is not project-scoped |
+| `project_id` | string or number | No | Project resource ID or legacy numeric project ID when unscoped |
 | `variables` | object | No | Variable values |
 | `time_range` | object | No | Time range override |
 

@@ -31,7 +31,7 @@ interface LogDetailProps {
   open: boolean
   onClose: () => void
   onViewInContext?: (log: LogEntry) => void
-  /** Optional project ID for trace/span links (traces are project-scoped) */
+  /** Optional project resource ID for trace/span links; legacy numeric IDs are accepted during migration. */
   projectId?: string | number
 }
 
@@ -269,7 +269,10 @@ export function LogDetail({log, open, onClose, onViewInContext, projectId}: LogD
                   <LinkableField
                     label="Span ID"
                     value={log.spanId}
-                    to={`/projects/${projectId}/spans/${log.spanId}`}
+                    to={
+                      `/projects/${encodeURIComponent(String(projectId))}` +
+                      `/spans/${encodeURIComponent(log.spanId)}`
+                    }
                   />
                 )}
               </div>

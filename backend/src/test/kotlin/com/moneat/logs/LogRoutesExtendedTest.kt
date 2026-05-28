@@ -681,8 +681,12 @@ class LogRoutesExtendedTest {
             }
 
             assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(response.bodyAsText().contains("checkout"))
-            assertTrue(response.bodyAsText().contains("Backend"))
+            val responseBody = response.bodyAsText()
+            assertTrue(responseBody.contains("checkout"))
+            assertTrue(responseBody.contains("Backend"))
+            assertTrue(
+                responseBody.contains(""""project_resource_id":"11111111-1111-1111-1111-111111111111"""")
+            )
         }
 
     @Test
@@ -717,7 +721,11 @@ class LogRoutesExtendedTest {
             }
 
             assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(response.bodyAsText().contains("Backend"))
+            val responseBody = response.bodyAsText()
+            assertTrue(responseBody.contains("Backend"))
+            assertTrue(
+                responseBody.contains(""""project_resource_id":"11111111-1111-1111-1111-111111111111"""")
+            )
         }
 
     @Test

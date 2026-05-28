@@ -430,7 +430,7 @@ class PreviewDashboardWidgetQueryTool : McpTool {
         properties = schemaProperties(
             dashboardIdProperty(),
             "query_config" to schemaObject("QueryDsl config"),
-            "project_id" to schemaNumber("Project ID"),
+            "project_id" to schemaProjectId("Project resource ID or legacy numeric project ID"),
             "variables" to schemaObject("Variable values"),
             "time_range" to schemaObject("Time range override")
         ),
@@ -445,7 +445,7 @@ class PreviewDashboardWidgetQueryTool : McpTool {
         val queryConfig = args.requiredQueryConfig()
         val timeRange = args.optionalTimeRange()
         val variables = args.optionalVariables()
-        val requestedProjectId = args.longArg("project_id")
+        val requestedProjectId = args.projectIdArg("project_id")
         val orgId = context.organizationId.toLong()
         val dashboard = dashboardWidgetCrudService.getDashboard(dashboardId, orgId, context.userId)
             ?: return errorResult("Dashboard not found: $dashboardId")
