@@ -83,9 +83,7 @@ class ListFeedbackTool : McpTool {
     override suspend fun execute(
         args: JsonObject,
         context: McpContext
-    ): ToolCallResult {
-        val projectId = args.projectIdArg()
-            ?: return errorResult("project_id is required")
+    ): ToolCallResult = withRequiredProjectId(args) { projectId ->
         val limit = (
             args["limit"]?.jsonPrimitive?.intOrNull
                 ?: DEFAULT_FEEDBACK_LIMIT
@@ -94,6 +92,6 @@ class ListFeedbackTool : McpTool {
             projectId = projectId,
             limit = limit
         )
-        return jsonResult(feedback)
+        jsonResult(feedback)
     }
 }

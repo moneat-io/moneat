@@ -16,6 +16,7 @@
 
 package com.moneat.mcp.tools
 
+import com.moneat.mcp.protocol.InputSchema
 import com.moneat.mcp.protocol.ToolCallResult
 import com.moneat.mcp.protocol.ToolContent
 import com.moneat.shared.services.ProjectIdResolver
@@ -53,9 +54,25 @@ inline fun <reified T> jsonResult(data: T): ToolCallResult {
 fun JsonObject.projectIdArg(name: String = "project_id"): Long? =
     this[name]?.jsonPrimitive?.contentOrNull?.let(projectIdResolver::resolve)
 
+suspend fun withRequiredProjectId(
+    args: JsonObject,
+    block: suspend (Long) -> ToolCallResult,
+): ToolCallResult {
+    val projectId = args.projectIdArg() ?: return errorResult("project_id is required")
+    return block(projectId)
+}
+
 fun schemaProjectId(description: String = "Project resource ID or legacy numeric project ID"): JsonObject = JsonObject(
     mapOf(
         "type" to JsonPrimitive("string"),
         "description" to JsonPrimitive(description)
     )
 )
+
+fun projectIdInputSchema(description: String = "Project resource ID or legacy numeric project ID"): InputSchema =
+    InputSchema(
+        properties = JsonObject(
+            mapOf("project_id" to schemaProjectId(description))
+        ),
+        required = listOf("project_id")
+    )

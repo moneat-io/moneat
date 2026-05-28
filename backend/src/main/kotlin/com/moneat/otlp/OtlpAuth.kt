@@ -31,9 +31,12 @@ import io.ktor.server.request.header
  */
 object OtlpAuth {
     private const val BEARER_PREFIX = "Bearer "
+    private const val PROJECT_ID_SEGMENT_PATTERN =
+        "([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9]+)"
 
     private val projectIdFromDsnRegex =
-        "https?://[^@]+@[^/]+/([0-9]+|[0-9a-f-]{36})".toRegex(RegexOption.IGNORE_CASE)
+        "https?://[^@]+@[^/]+/$PROJECT_ID_SEGMENT_PATTERN(?:[/?#]|$)"
+            .toRegex(RegexOption.IGNORE_CASE)
 
     fun extractBearerToken(authorizationHeader: String?): String? {
         if (authorizationHeader == null) return null

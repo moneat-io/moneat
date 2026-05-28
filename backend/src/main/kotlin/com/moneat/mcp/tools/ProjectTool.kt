@@ -84,22 +84,15 @@ class GetProjectTool : McpTool {
     override val name = "get_project"
     override val description =
         "Get project details including DSN and settings"
-    override val inputSchema = InputSchema(
-        properties = JsonObject(
-            mapOf("project_id" to schemaProjectId())
-        ),
-        required = listOf("project_id")
-    )
+    override val inputSchema = projectIdInputSchema()
 
     override suspend fun execute(
         args: JsonObject,
         context: McpContext
-    ): ToolCallResult {
-        val projectId = args.projectIdArg()
-            ?: return errorResult("project_id is required")
+    ): ToolCallResult = withRequiredProjectId(args) { projectId ->
         val project = projectDashboardService.getProject(projectId)
-            ?: return errorResult("Project not found: $projectId")
-        return jsonResult(project)
+            ?: return@withRequiredProjectId errorResult("Project not found: $projectId")
+        jsonResult(project)
     }
 }
 
@@ -123,14 +116,12 @@ class GetProjectStatsTool : McpTool {
     override suspend fun execute(
         args: JsonObject,
         context: McpContext
-    ): ToolCallResult {
-        val projectId = args.projectIdArg()
-            ?: return errorResult("project_id is required")
+    ): ToolCallResult = withRequiredProjectId(args) { projectId ->
         val period = args["period"]?.jsonPrimitive?.content ?: "7d"
         val stats = projectDashboardService.getProjectStats(
             projectId,
             period
         )
-        return jsonResult(stats)
+        jsonResult(stats)
     }
 }

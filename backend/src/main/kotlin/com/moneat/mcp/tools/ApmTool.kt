@@ -49,9 +49,7 @@ class ListTransactionsTool : McpTool {
     override suspend fun execute(
         args: JsonObject,
         context: McpContext
-    ): ToolCallResult {
-        val projectId = args.projectIdArg()
-            ?: return errorResult("project_id is required")
+    ): ToolCallResult = withRequiredProjectId(args) { projectId ->
         val period = args["period"]?.jsonPrimitive?.content ?: "7d"
         val env = args["environment"]?.jsonPrimitive?.content
         val op = args["operation"]?.jsonPrimitive?.content
@@ -61,7 +59,7 @@ class ListTransactionsTool : McpTool {
             env,
             op
         )
-        return jsonResult(txns)
+        jsonResult(txns)
     }
 }
 

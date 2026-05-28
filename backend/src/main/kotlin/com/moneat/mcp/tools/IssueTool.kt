@@ -65,15 +65,13 @@ class ListIssuesTool : McpTool {
     override suspend fun execute(
         args: JsonObject,
         context: McpContext
-    ): ToolCallResult {
-        val projectId = args.projectIdArg()
-            ?: return errorResult("project_id is required")
+    ): ToolCallResult = withRequiredProjectId(args) { projectId ->
         val status = args["status"]?.jsonPrimitive?.content
         val page = args["page"]?.jsonPrimitive?.intOrNull ?: DEFAULT_PAGE
         val limit = (args["limit"]?.jsonPrimitive?.intOrNull ?: DEFAULT_LIMIT).coerceIn(1, MAX_LIMIT)
 
         val issues = dashboardService.getIssues(projectId, page, limit, status)
-        return jsonResult(issues)
+        jsonResult(issues)
     }
 }
 

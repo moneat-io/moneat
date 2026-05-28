@@ -366,6 +366,7 @@ class McpToolValidationTest {
             ),
             case("create_uptime_name", CreateUptimeMonitorTool(), obj(), "name is required"),
             case("create_uptime_url", CreateUptimeMonitorTool(), obj("name" to "API"), "url is required"),
+            case("list_transactions_project_id", ListTransactionsTool(), obj(), "project_id is required"),
             case("get_trace_lookup", GetTraceTool(), obj(), "event_id or trace_id is required"),
             case(
                 "get_trace_project_id",
@@ -373,6 +374,14 @@ class McpToolValidationTest {
                 obj("trace_id" to TRACE_ID),
                 "project_id is required when trace_id is used without event_id",
             ),
+            case("transaction_stats_project_id", GetTransactionStatsTool(), obj(), "project_id is required"),
+            case("list_issues_project_id", ListIssuesTool(), obj(), "project_id is required"),
+            case("list_releases_project_id", ListReleasesTool(), obj(), "project_id is required"),
+            case("release_stats_project_id", GetReleaseStatsTool(), obj(), "project_id is required"),
+            case("get_project_project_id", GetProjectTool(), obj(), "project_id is required"),
+            case("get_project_stats_project_id", GetProjectStatsTool(), obj(), "project_id is required"),
+            case("list_feedback_project_id", ListFeedbackTool(), obj(), "project_id is required"),
+            case("execute_dashboard_query_project_id", ExecuteDashboardQueryTool(), obj(), "project_id is required"),
             case("create_datasource_name", CreateDataSourceTool(), obj(), "name is required"),
             case(
                 "create_datasource_type",

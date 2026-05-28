@@ -52,9 +52,7 @@ class GetTransactionStatsTool : McpTool {
     override suspend fun execute(
         args: JsonObject,
         context: McpContext
-    ): ToolCallResult {
-        val projectId = args.projectIdArg()
-            ?: return errorResult("project_id is required")
+    ): ToolCallResult = withRequiredProjectId(args) { projectId ->
         val period = args["period"]?.jsonPrimitive?.content
             ?: "24h"
         val environment = args["environment"]
@@ -68,7 +66,7 @@ class GetTransactionStatsTool : McpTool {
             environment,
             operation
         )
-        return jsonResult(stats)
+        jsonResult(stats)
     }
 }
 

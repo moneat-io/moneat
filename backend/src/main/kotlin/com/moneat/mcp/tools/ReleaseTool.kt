@@ -17,7 +17,6 @@
 package com.moneat.mcp.tools
 
 import com.moneat.mcp.models.McpContext
-import com.moneat.mcp.protocol.InputSchema
 import com.moneat.mcp.protocol.McpTool
 import com.moneat.mcp.protocol.ToolCallResult
 import com.moneat.events.services.DashboardService
@@ -30,21 +29,14 @@ private val dashboardService = DashboardService.create()
 class ListReleasesTool : McpTool {
     override val name = "list_releases"
     override val description = "List releases for a project"
-    override val inputSchema = InputSchema(
-        properties = JsonObject(
-            mapOf("project_id" to schemaProjectId())
-        ),
-        required = listOf("project_id")
-    )
+    override val inputSchema = projectIdInputSchema()
 
     override suspend fun execute(
         args: JsonObject,
         context: McpContext
-    ): ToolCallResult {
-        val projectId = args.projectIdArg()
-            ?: return errorResult("project_id is required")
+    ): ToolCallResult = withRequiredProjectId(args) { projectId ->
         val releases = releaseService.listReleases(projectId)
-        return jsonResult(releases)
+        jsonResult(releases)
     }
 }
 
@@ -52,20 +44,13 @@ class GetReleaseStatsTool : McpTool {
     override val name = "get_release_stats"
     override val description =
         "Get release list with error/performance stats"
-    override val inputSchema = InputSchema(
-        properties = JsonObject(
-            mapOf("project_id" to schemaProjectId())
-        ),
-        required = listOf("project_id")
-    )
+    override val inputSchema = projectIdInputSchema()
 
     override suspend fun execute(
         args: JsonObject,
         context: McpContext
-    ): ToolCallResult {
-        val projectId = args.projectIdArg()
-            ?: return errorResult("project_id is required")
+    ): ToolCallResult = withRequiredProjectId(args) { projectId ->
         val releases = dashboardService.getReleases(projectId)
-        return jsonResult(releases)
+        jsonResult(releases)
     }
 }

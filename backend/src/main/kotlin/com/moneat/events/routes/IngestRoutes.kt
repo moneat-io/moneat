@@ -49,6 +49,8 @@ import java.security.MessageDigest
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
 private const val SHA256_HEX_PREFIX_CHARS = 16
+private const val PROJECT_ID_DSN_SEGMENT_PATTERN =
+    "([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9]+)"
 
 private fun sha256HexPrefix(bytes: ByteArray, maxHexChars: Int): String {
     val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
@@ -320,7 +322,8 @@ fun extractPublicKey(
 fun extractPublicKeyFromDsn(dsnLikeHeader: String?): String? {
     if (dsnLikeHeader.isNullOrBlank()) return null
     val cleaned = dsnLikeHeader.removePrefix("DSN ").trim()
-    val regex = "https?://([a-zA-Z0-9_-]+)@[^/]+/([0-9]+|[0-9a-f-]{36})".toRegex(RegexOption.IGNORE_CASE)
+    val regex = "https?://([a-zA-Z0-9_-]+)@[^/]+/$PROJECT_ID_DSN_SEGMENT_PATTERN(?:[/?#]|$)"
+        .toRegex(RegexOption.IGNORE_CASE)
     return regex.find(cleaned)?.groupValues?.getOrNull(1)
 }
 

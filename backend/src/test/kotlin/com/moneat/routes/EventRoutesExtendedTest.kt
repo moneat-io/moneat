@@ -74,8 +74,10 @@ import io.mockk.mockk
 import io.mockk.runs
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.loadKoinModules
@@ -187,6 +189,14 @@ class EventRoutesExtendedTest {
             } get Projects.id
         }
         return Pair(userId, projectId)
+    }
+
+    private fun projectResourceId(projectId: Long): String = transaction {
+        Projects
+            .selectAll()
+            .where { Projects.id eq projectId }
+            .first()[Projects.resource_id]
+            .toString()
     }
 
     // ──── GET /v1/projects ────
@@ -907,6 +917,29 @@ class EventRoutesExtendedTest {
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("issueAlerts"))
+    }
+
+    @Test
+    fun `GET notification-preferences returns project resource IDs`() = testApplication {
+        val (userId, projectId) = seedUserWithProject()
+        val resourceId = projectResourceId(projectId)
+        transaction {
+            NotificationPreferences.insert {
+                it[user_id] = userId
+                it[project_id] = projectId
+                it[issue_alerts] = false
+            }
+        }
+
+        application { installTestApp() }
+        val response = client.get("/v1/notification-preferences") {
+            withAuth(token(userId))
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = response.bodyAsText()
+        assertTrue(body.contains(resourceId))
+        assertTrue(body.contains("Ext Test Project"))
     }
 
     @Test
