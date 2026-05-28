@@ -125,7 +125,7 @@ val sharedModule = module {
     single { EntitlementService(get()) }
     single { RetentionPolicyService(get()) }
     single { RetentionBackgroundService(get()) }
-    single { TraceFinalizerBackgroundService() }
+    single { TraceFinalizerBackgroundService.fromConfig() }
     single { ProjectIdResolver() }
 
     single { AttributionAnalyticsService() }

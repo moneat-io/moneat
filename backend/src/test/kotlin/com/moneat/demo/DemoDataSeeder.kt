@@ -3535,7 +3535,7 @@ object DemoDataSeeder {
         ClickHouseClient.execute(spanBatch)
         // Finalize the freshly seeded spans into apm_traces_final (the dashboard read source) so the
         // traces UI has data immediately, without waiting for the scheduled finalizer.
-        TraceFinalizerBackgroundService().finalizeRecent(emitHours = DEMO_TRACE_FINALIZE_WINDOW_HOURS)
+        TraceFinalizerBackgroundService.fromConfig().finalizeRecent(emitHours = DEMO_TRACE_FINALIZE_WINDOW_HOURS)
         println("✅ Seeded $traceCount traces (${spanRows.size} spans)")
 
         // ── Profiles ──

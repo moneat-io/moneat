@@ -49,27 +49,15 @@ private const val DEFAULT_MAX_EXECUTION_SECONDS = 540
  * wider window so history (and any gap from downtime) is covered. The heavy argMinMerge aggregation
  * runs here, off the dashboard read path.
  */
-class TraceFinalizerBackgroundService {
+class TraceFinalizerBackgroundService(
+    private val enabled: Boolean,
+    private val intervalSeconds: Long,
+    private val refreshWindowHours: Int,
+    private val backfillWindowHours: Int,
+    private val lookbackHours: Int,
+    private val maxExecutionSeconds: Int,
+) {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
-    private val config = ApplicationConfig("application.conf")
-
-    private val enabled =
-        config.propertyOrNull("traceFinalizer.enabled")?.getString()?.toBooleanStrictOrNull() ?: true
-    private val intervalSeconds =
-        config.propertyOrNull("traceFinalizer.intervalSeconds")?.getString()?.toLongOrNull()
-            ?: DEFAULT_INTERVAL_SECONDS
-    private val refreshWindowHours =
-        config.propertyOrNull("traceFinalizer.refreshWindowHours")?.getString()?.toIntOrNull()
-            ?: DEFAULT_REFRESH_WINDOW_HOURS
-    private val backfillWindowHours =
-        config.propertyOrNull("traceFinalizer.backfillWindowHours")?.getString()?.toIntOrNull()
-            ?: DEFAULT_BACKFILL_WINDOW_HOURS
-    private val lookbackHours =
-        config.propertyOrNull("traceFinalizer.lookbackHours")?.getString()?.toIntOrNull()
-            ?: DEFAULT_LOOKBACK_HOURS
-    private val maxExecutionSeconds =
-        config.propertyOrNull("traceFinalizer.maxExecutionSeconds")?.getString()?.toIntOrNull()
-            ?: DEFAULT_MAX_EXECUTION_SECONDS
 
     init {
         // Fail fast on misconfiguration rather than letting the loop spin (delay(0)) or emit
@@ -125,7 +113,7 @@ class TraceFinalizerBackgroundService {
      */
     suspend fun finalizeRecent(emitHours: Int) = finalizeWindow(emitHours)
 
-    private suspend fun runOnce() {
+    internal suspend fun runOnce() {
         if (!ClickHouseClient.isInitialized()) {
             logger.debug { "Trace finalization skipped: ClickHouse is not initialized" }
             return
@@ -183,5 +171,29 @@ class TraceFinalizerBackgroundService {
             SETTINGS max_execution_time = $maxExecutionSeconds
         """.trimIndent()
         ClickHouseClient.executeLongRunning(sql, operation = "trace_finalize")
+    }
+
+    companion object {
+        /**
+         * Build the service from application config, applying defaults for any missing keys. Used by
+         * production wiring; tests construct the class directly with explicit values.
+         */
+        fun fromConfig(
+            config: ApplicationConfig = ApplicationConfig("application.conf"),
+        ): TraceFinalizerBackgroundService =
+            TraceFinalizerBackgroundService(
+                enabled = config.propertyOrNull("traceFinalizer.enabled")
+                    ?.getString()?.toBooleanStrictOrNull() ?: true,
+                intervalSeconds = config.propertyOrNull("traceFinalizer.intervalSeconds")
+                    ?.getString()?.toLongOrNull() ?: DEFAULT_INTERVAL_SECONDS,
+                refreshWindowHours = config.propertyOrNull("traceFinalizer.refreshWindowHours")
+                    ?.getString()?.toIntOrNull() ?: DEFAULT_REFRESH_WINDOW_HOURS,
+                backfillWindowHours = config.propertyOrNull("traceFinalizer.backfillWindowHours")
+                    ?.getString()?.toIntOrNull() ?: DEFAULT_BACKFILL_WINDOW_HOURS,
+                lookbackHours = config.propertyOrNull("traceFinalizer.lookbackHours")
+                    ?.getString()?.toIntOrNull() ?: DEFAULT_LOOKBACK_HOURS,
+                maxExecutionSeconds = config.propertyOrNull("traceFinalizer.maxExecutionSeconds")
+                    ?.getString()?.toIntOrNull() ?: DEFAULT_MAX_EXECUTION_SECONDS,
+            )
     }
 }
