@@ -31,9 +31,18 @@ import io.ktor.server.application.*
 import io.sentry.ISpan
 import io.sentry.Sentry
 import kotlinx.coroutines.CancellationException
+import mu.KotlinLogging
 import java.util.Locale
 
 private val CLICKHOUSE_ERROR_CODE = Regex("""^Code:\s*(\d+)""")
+private val logger = KotlinLogging.logger {}
+
+class ClickHouseQueryException(
+    val isTimeout: Boolean,
+    internalDetail: String,
+) : RuntimeException(if (isTimeout) "Query timed out" else "Query failed") {
+    val detail: String = internalDetail
+}
 
 object ClickHouseClient {
     private const val MIGRATION_TIMEOUT_MS = 600_000L
@@ -42,10 +51,14 @@ object ClickHouseClient {
     private const val CONNECT_TIMEOUT_MS = 10_000L
     private const val SOCKET_TIMEOUT_MS = 30_000L
     private const val MIGRATION_MAX_CONNECTIONS = 4
-    private const val QUERY_LOG_MAX_LEN = 200
+    private const val QUERY_LOG_MAX_LEN = 8192
     private const val ERROR_BODY_MAX_LEN = 500
     private const val NANOS_PER_SECOND = 1_000_000_000.0
     private const val READ_QUERY_MAX_EXECUTION_SECONDS = 10
+    private const val SLOW_QUERY_THRESHOLD_SECONDS = 3.0
+    private const val CLICKHOUSE_TIMEOUT_ERROR_CODE = "159"
+    private const val CLICKHOUSE_TIMEOUT_ERROR_NAME = "TIMEOUT_EXCEEDED"
+    private const val CLICKHOUSE_TIMEOUT_MESSAGE = "timeout exceeded"
 
     @Volatile
     private var httpClient: HttpClient? = null
@@ -135,8 +148,14 @@ object ClickHouseClient {
                 contentType(ContentType.Text.Plain)
                 setBody(query)
             }
+            val elapsed = elapsedSeconds(startedAt)
             val status = if (response.status.isSuccess()) "success" else "http_${response.status.value}"
-            OperationalMetrics.recordClickHouseRequest(operation, status, elapsedSeconds(startedAt))
+            OperationalMetrics.recordClickHouseRequest(operation, status, elapsed)
+            if (elapsed >= SLOW_QUERY_THRESHOLD_SECONDS) {
+                val elapsedText = String.format("%.1f", elapsed)
+                val truncatedQuery = query.take(QUERY_LOG_MAX_LEN)
+                logger.warn { "Slow ClickHouse query (${elapsedText}s): $truncatedQuery" }
+            }
             return response
         } catch (e: HttpRequestTimeoutException) {
             OperationalMetrics.recordClickHouseRequestFailure(operation, e, elapsedSeconds(startedAt))
@@ -177,12 +196,22 @@ object ClickHouseClient {
         val body = response.bodyAsText()
         val isError = response.isClickHouseError(body)
         if (isError) {
-            OperationalMetrics.recordClickHouseQueryError("execute", clickHouseErrorCode(body))
-        }
-        check(!isError) {
-            "ClickHouse query failed (${response.status.value}): ${body.take(ERROR_BODY_MAX_LEN)}"
+            val errorCode = clickHouseErrorCode(body)
+            OperationalMetrics.recordClickHouseQueryError("execute", errorCode)
+            val detail = "ClickHouse query failed (${response.status.value}): ${body.take(ERROR_BODY_MAX_LEN)}"
+            logger.error { "$detail | query: ${query.take(QUERY_LOG_MAX_LEN)}" }
+            throw ClickHouseQueryException(
+                isTimeout = isClickHouseTimeout(body, errorCode),
+                internalDetail = detail,
+            )
         }
         return body
+    }
+
+    private fun isClickHouseTimeout(body: String, errorCode: String): Boolean {
+        return errorCode == CLICKHOUSE_TIMEOUT_ERROR_CODE ||
+            body.contains(CLICKHOUSE_TIMEOUT_ERROR_NAME, ignoreCase = true) ||
+            body.contains(CLICKHOUSE_TIMEOUT_MESSAGE, ignoreCase = true)
     }
 
     /**

@@ -107,15 +107,34 @@ class ClickHouseClientTest {
                 "text/plain"
             )
         }) {
-            assertFailsWith<IllegalStateException> {
+            val ex = assertFailsWith<ClickHouseQueryException> {
                 ClickHouseClient.executeWithFormat("SELECT 1", "TabSeparated")
             }
+            assertEquals(true, ex.isTimeout)
+            assertEquals("Query timed out", ex.message)
         }
 
         val rendered = OperationalMetrics.scrape()
         assertContains(rendered, "moneat_clickhouse_query_errors_total")
         assertContains(rendered, "operation=\"execute\"")
         assertContains(rendered, "code=\"159\"")
+    }
+
+    @Test
+    fun `executeWithFormat detects timeout messages case insensitively`() = runBlocking {
+        withClickHouseMockServer({ exchange ->
+            exchange.respond(
+                200,
+                "Code: 999. DB::Exception: Timeout exceeded while reading",
+                "text/plain"
+            )
+        }) {
+            val ex = assertFailsWith<ClickHouseQueryException> {
+                ClickHouseClient.executeWithFormat("SELECT 1", "TabSeparated")
+            }
+            assertEquals(true, ex.isTimeout)
+            assertEquals("Query timed out", ex.message)
+        }
     }
 
     private fun parseQueryParams(rawQuery: String?): Map<String, String> {
