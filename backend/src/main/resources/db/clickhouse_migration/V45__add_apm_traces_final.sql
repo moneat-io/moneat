@@ -31,7 +31,9 @@ CREATE TABLE IF NOT EXISTS apm_traces_final (
     span_count UInt32,
     error_count UInt32,
     has_error UInt8,
-    finalized_at DateTime DEFAULT now()
+    -- Sub-second resolution so re-finalizations of the same trace within one second still produce a
+    -- deterministic "latest wins" for ReplacingMergeTree dedup.
+    finalized_at DateTime64(3, 'UTC') DEFAULT now64(3)
 ) ENGINE = ReplacingMergeTree(finalized_at)
 PARTITION BY toYYYYMM(trace_bucket)
 ORDER BY (organization_id, trace_bucket, trace_id_canonical)

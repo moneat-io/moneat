@@ -61,6 +61,10 @@ import kotlin.time.Duration.Companion.days
  */
 object DemoDataSeeder {
 
+    // Demo APM spans span the last 48h; finalize a slightly wider window so they all land in
+    // apm_traces_final for the traces dashboard.
+    private const val DEMO_TRACE_FINALIZE_WINDOW_HOURS = 72
+
     private fun hashPassword(password: String): String {
         return BCrypt.hashpw(password, BCrypt.gensalt())
     }
@@ -3530,9 +3534,8 @@ object DemoDataSeeder {
             """.trimIndent()
         ClickHouseClient.execute(spanBatch)
         // Finalize the freshly seeded spans into apm_traces_final (the dashboard read source) so the
-        // traces UI has data immediately, without waiting for the scheduled finalizer. Demo spans span
-        // the last 48h; finalize a slightly wider window to cover them all.
-        TraceFinalizerBackgroundService().finalizeRecent(emitHours = 72)
+        // traces UI has data immediately, without waiting for the scheduled finalizer.
+        TraceFinalizerBackgroundService().finalizeRecent(emitHours = DEMO_TRACE_FINALIZE_WINDOW_HOURS)
         println("✅ Seeded $traceCount traces (${spanRows.size} spans)")
 
         // ── Profiles ──

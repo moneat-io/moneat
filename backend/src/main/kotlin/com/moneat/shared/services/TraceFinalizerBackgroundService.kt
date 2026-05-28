@@ -33,6 +33,12 @@ private val logger = KotlinLogging.logger {}
 private const val APM_TRACES_FINAL_TABLE = "apm_traces_final"
 private const val APM_TRACE_SUMMARIES_TABLE = "apm_trace_summaries"
 
+private const val DEFAULT_INTERVAL_SECONDS = 600L
+private const val DEFAULT_REFRESH_WINDOW_HOURS = 2
+private const val DEFAULT_BACKFILL_WINDOW_HOURS = 50
+private const val DEFAULT_LOOKBACK_HOURS = 2
+private const val DEFAULT_MAX_EXECUTION_SECONDS = 540
+
 /**
  * Periodically finalizes per-trace rows from apm_trace_summaries into apm_traces_final so the APM
  * dashboard can read one finalized row per trace (plain columns) instead of re-aggregating with
@@ -50,15 +56,37 @@ class TraceFinalizerBackgroundService {
     private val enabled =
         config.propertyOrNull("traceFinalizer.enabled")?.getString()?.toBooleanStrictOrNull() ?: true
     private val intervalSeconds =
-        config.propertyOrNull("traceFinalizer.intervalSeconds")?.getString()?.toLongOrNull() ?: 600L
+        config.propertyOrNull("traceFinalizer.intervalSeconds")?.getString()?.toLongOrNull()
+            ?: DEFAULT_INTERVAL_SECONDS
     private val refreshWindowHours =
-        config.propertyOrNull("traceFinalizer.refreshWindowHours")?.getString()?.toIntOrNull() ?: 2
+        config.propertyOrNull("traceFinalizer.refreshWindowHours")?.getString()?.toIntOrNull()
+            ?: DEFAULT_REFRESH_WINDOW_HOURS
     private val backfillWindowHours =
-        config.propertyOrNull("traceFinalizer.backfillWindowHours")?.getString()?.toIntOrNull() ?: 50
+        config.propertyOrNull("traceFinalizer.backfillWindowHours")?.getString()?.toIntOrNull()
+            ?: DEFAULT_BACKFILL_WINDOW_HOURS
     private val lookbackHours =
-        config.propertyOrNull("traceFinalizer.lookbackHours")?.getString()?.toIntOrNull() ?: 2
+        config.propertyOrNull("traceFinalizer.lookbackHours")?.getString()?.toIntOrNull()
+            ?: DEFAULT_LOOKBACK_HOURS
     private val maxExecutionSeconds =
-        config.propertyOrNull("traceFinalizer.maxExecutionSeconds")?.getString()?.toIntOrNull() ?: 540
+        config.propertyOrNull("traceFinalizer.maxExecutionSeconds")?.getString()?.toIntOrNull()
+            ?: DEFAULT_MAX_EXECUTION_SECONDS
+
+    init {
+        // Fail fast on misconfiguration rather than letting the loop spin (delay(0)) or emit
+        // nonsensical windows.
+        require(intervalSeconds > 0) { "traceFinalizer.intervalSeconds must be > 0, got $intervalSeconds" }
+        require(refreshWindowHours > 0) {
+            "traceFinalizer.refreshWindowHours must be > 0, got $refreshWindowHours"
+        }
+        require(backfillWindowHours >= refreshWindowHours) {
+            "traceFinalizer.backfillWindowHours ($backfillWindowHours) must be >= refreshWindowHours " +
+                "($refreshWindowHours)"
+        }
+        require(lookbackHours >= 0) { "traceFinalizer.lookbackHours must be >= 0, got $lookbackHours" }
+        require(maxExecutionSeconds > 0) {
+            "traceFinalizer.maxExecutionSeconds must be > 0, got $maxExecutionSeconds"
+        }
+    }
 
     private var finalizeJob: Job? = null
 
@@ -68,6 +96,10 @@ class TraceFinalizerBackgroundService {
     fun start(scope: CoroutineScope) {
         if (!enabled) {
             logger.info { "Trace finalizer background job is disabled by config" }
+            return
+        }
+        if (finalizeJob?.isActive == true) {
+            logger.warn { "Trace finalizer already running; ignoring duplicate start()" }
             return
         }
         finalizeJob =
