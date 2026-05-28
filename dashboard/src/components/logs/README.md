@@ -36,7 +36,7 @@ All viewer state is encoded in URL query parameters, enabling:
 | `from` | `string` | Custom range start (ISO) | `?from=2024-01-15T10:00:00Z` |
 | `to` | `string` | Custom range end (ISO) | `?to=2024-01-15T11:00:00Z` |
 | `viz` | `string` | Visualization mode | `?viz=table` |
-| `groupBy` | `string` | Group by field (table viz) | `?groupBy=service` |
+| `groupBy` | `string` | Group by field; omitted defaults to level, `none` disables grouping | `?groupBy=service` |
 | `topField` | `string` | Top field (toplist/pie) | `?topField=environment` |
 | `cursor` | `string` | Pagination cursor | `?cursor=abc123` |
 | `logId` | `string` | Selected log ID | `?logId=xyz789` |

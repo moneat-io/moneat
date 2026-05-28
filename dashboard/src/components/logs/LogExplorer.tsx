@@ -36,6 +36,7 @@ import {
   type LogViewSearch,
   parseFacetFiltersFromUrl,
   parseLevelsFromUrl,
+  resolveLogGroupBy,
   serializeLogViewState,
 } from '@/components/logs/logViewUrlState'
 import {logIntervalToMs} from '@/components/logs/logInterval'
@@ -124,7 +125,7 @@ export function LogExplorer({
         customFrom: urlSearch.from || '',
         customTo: urlSearch.to || '',
         vizMode: urlSearch.viz || 'timeseries' as LogVizMode,
-        groupBy: urlSearch.groupBy || '',
+        groupBy: resolveLogGroupBy(urlSearch.groupBy),
         topField: urlSearch.topField || 'service',
         cursor: urlSearch.cursor || null,
         selectedLogId: urlSearch.logId || null,
@@ -138,7 +139,7 @@ export function LogExplorer({
       customFrom: '',
       customTo: '',
       vizMode: 'timeseries' as LogVizMode,
-      groupBy: '',
+      groupBy: resolveLogGroupBy(undefined),
       topField: 'service',
       cursor: null,
       selectedLogId: null,
@@ -221,7 +222,7 @@ export function LogExplorer({
       setCustomFrom(urlSearch.from || '')
       setCustomTo(urlSearch.to || '')
       setVizMode(urlSearch.viz || 'timeseries')
-      setGroupBy(urlSearch.groupBy || '')
+      setGroupBy(resolveLogGroupBy(urlSearch.groupBy))
       setTopField(urlSearch.topField || 'service')
       setCursor(urlSearch.cursor || null)
     })

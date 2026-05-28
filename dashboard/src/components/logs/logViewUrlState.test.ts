@@ -16,10 +16,12 @@
 
 import {describe, it, expect} from 'vitest'
 import {
+  NO_LOG_GROUP_BY_URL_VALUE,
   parseLogViewSearch,
-  serializeLogViewState,
   parseFacetFiltersFromUrl,
   parseLevelsFromUrl,
+  resolveLogGroupBy,
+  serializeLogViewState,
 } from './logViewUrlState'
 import type {FacetFilter} from './LogSearchBar'
 
@@ -104,6 +106,16 @@ describe('logViewUrlState', () => {
       const result = parseLogViewSearch({groupBy: 'service', topField: 'level'})
       expect(result.groupBy).toBe('service')
       expect(result.topField).toBe('level')
+    })
+
+    it('should parse explicit no-grouping state', () => {
+      const result = parseLogViewSearch({groupBy: NO_LOG_GROUP_BY_URL_VALUE})
+      expect(result.groupBy).toBe(NO_LOG_GROUP_BY_URL_VALUE)
+    })
+
+    it('should ignore invalid groupBy values', () => {
+      const result = parseLogViewSearch({groupBy: 'message'})
+      expect(result.groupBy).toBeUndefined()
     })
 
     it('should parse cursor and logId', () => {
@@ -220,6 +232,21 @@ describe('logViewUrlState', () => {
       expect(result.topField).toBe('level')
     })
 
+    it('should omit default level grouping', () => {
+      const result = serializeLogViewState({groupBy: 'level'})
+      expect(result.groupBy).toBeUndefined()
+    })
+
+    it('should serialize explicit no-grouping state', () => {
+      const result = serializeLogViewState({groupBy: ''})
+      expect(result.groupBy).toBe(NO_LOG_GROUP_BY_URL_VALUE)
+    })
+
+    it('should include non-default groupBy', () => {
+      const result = serializeLogViewState({groupBy: 'service'})
+      expect(result.groupBy).toBe('service')
+    })
+
     it('should include cursor', () => {
       const result = serializeLogViewState({cursor: 'abc123'})
       expect(result.cursor).toBe('abc123')
@@ -283,6 +310,20 @@ describe('logViewUrlState', () => {
 
     it('should handle single level', () => {
       expect(parseLevelsFromUrl('error')).toEqual(['error'])
+    })
+  })
+
+  describe('resolveLogGroupBy', () => {
+    it('should default missing groupBy to level', () => {
+      expect(resolveLogGroupBy(undefined)).toBe('level')
+    })
+
+    it('should preserve explicit no-grouping state', () => {
+      expect(resolveLogGroupBy(NO_LOG_GROUP_BY_URL_VALUE)).toBe('')
+    })
+
+    it('should preserve valid grouping fields', () => {
+      expect(resolveLogGroupBy('environment')).toBe('environment')
     })
   })
 
