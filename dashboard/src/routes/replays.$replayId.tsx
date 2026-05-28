@@ -665,7 +665,7 @@ function ReplayDetailPage() {
               <ReplayTimelinePanel
                 items={timelineItems}
                 currentOffsetMs={currentOffsetMs}
-                projectId={replay.projectResourceId}
+                projectId={replay.projectResourceId ?? replay.projectId}
                 onSeek={handleSeek}
               />
             ) : (
