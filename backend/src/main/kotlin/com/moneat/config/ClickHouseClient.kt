@@ -59,6 +59,7 @@ object ClickHouseClient {
     private const val CLICKHOUSE_TIMEOUT_ERROR_CODE = "159"
     private const val CLICKHOUSE_TIMEOUT_ERROR_NAME = "TIMEOUT_EXCEEDED"
     private const val CLICKHOUSE_TIMEOUT_MESSAGE = "timeout exceeded"
+    private const val NOT_INITIALIZED_MESSAGE = "ClickHouseClient is not initialized. Call init() first."
 
     @Volatile
     private var httpClient: HttpClient? = null
@@ -114,7 +115,7 @@ object ClickHouseClient {
         query: String,
         span: ISpan? = null
     ): HttpResponse {
-        val client = checkNotNull(httpClient) { "ClickHouseClient is not initialized. Call init() first." }
+        val client = checkNotNull(httpClient) { NOT_INITIALIZED_MESSAGE }
         return if (span != null && Sentry.isEnabled()) {
             SentryUtils.withSpan(span, "db.clickhouse", "ClickHouse query") { childSpan ->
                 childSpan?.setData("db.system", "clickhouse")
@@ -219,7 +220,7 @@ object ClickHouseClient {
      * Use for DDL and data-copy statements that may run for minutes.
      */
     suspend fun executeMigration(query: String): HttpResponse {
-        val client = checkNotNull(migrationClient) { "ClickHouseClient is not initialized. Call init() first." }
+        val client = checkNotNull(migrationClient) { NOT_INITIALIZED_MESSAGE }
         return executePost(client, query, "migration")
     }
 
@@ -229,7 +230,7 @@ object ClickHouseClient {
      * The normal [execute] path uses a 30s socket timeout, which is too short for these.
      */
     suspend fun executeLongRunning(query: String, operation: String = "finalize") {
-        val client = checkNotNull(migrationClient) { "ClickHouseClient is not initialized. Call init() first." }
+        val client = checkNotNull(migrationClient) { NOT_INITIALIZED_MESSAGE }
         val response = executePost(client, query, operation)
         val body = response.bodyAsText()
         if (response.isClickHouseError(body)) {
