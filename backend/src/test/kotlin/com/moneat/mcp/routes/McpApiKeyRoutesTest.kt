@@ -109,12 +109,7 @@ class McpApiKeyRoutesTest {
         resourceRegistry = McpResourceRegistry().also {
             it.register(RouteResource("moneat://org"))
         }
-        token = JWT.create()
-            .withIssuer("moneat")
-            .withAudience("moneat-users")
-            .withClaim("userId", userId)
-            .withClaim("orgId", organizationId)
-            .sign(Algorithm.HMAC256("test-secret"))
+        token = signedRouteToken()
     }
 
     @Test
@@ -199,6 +194,26 @@ class McpApiKeyRoutesTest {
         val blankName = postKey("""{"name":"   ","enabledTools":["search_logs"]}""")
         assertEquals(HttpStatusCode.BadRequest, blankName.status)
         assertTrue(blankName.bodyAsText().contains("Name is required"))
+    }
+
+    @Test
+    fun `api key routes reject tokens with missing claims`() = testApplication {
+        setupApp()
+
+        val listResponse = client.get("/v1/mcp/api-keys") {
+            authHeader(signedRouteToken(includeOrgId = false))
+        }
+
+        assertEquals(HttpStatusCode.Unauthorized, listResponse.status)
+        assertTrue(listResponse.bodyAsText().contains("Invalid token claims"))
+
+        val createResponse = client.post("/v1/mcp/api-keys") {
+            jsonBody(signedRouteToken(includeUserId = false))
+            setBody("""{"name":"missing user","enabledTools":["search_logs"]}""")
+        }
+
+        assertEquals(HttpStatusCode.Unauthorized, createResponse.status)
+        assertTrue(createResponse.bodyAsText().contains("Invalid token claims"))
     }
 
     @Test
@@ -295,12 +310,28 @@ class McpApiKeyRoutesTest {
             setBody(body)
         }
 
-    private fun io.ktor.client.request.HttpRequestBuilder.authHeader() {
-        header(HttpHeaders.Authorization, "Bearer $token")
+    private fun signedRouteToken(
+        includeOrgId: Boolean = true,
+        includeUserId: Boolean = true,
+    ): String {
+        val builder = JWT.create()
+            .withIssuer("moneat")
+            .withAudience("moneat-users")
+        if (includeUserId) {
+            builder.withClaim("userId", userId)
+        }
+        if (includeOrgId) {
+            builder.withClaim("orgId", organizationId)
+        }
+        return builder.sign(Algorithm.HMAC256("test-secret"))
     }
 
-    private fun io.ktor.client.request.HttpRequestBuilder.jsonBody() {
-        authHeader()
+    private fun io.ktor.client.request.HttpRequestBuilder.authHeader(tokenValue: String = token) {
+        header(HttpHeaders.Authorization, "Bearer $tokenValue")
+    }
+
+    private fun io.ktor.client.request.HttpRequestBuilder.jsonBody(tokenValue: String = token) {
+        authHeader(tokenValue)
         contentType(ContentType.Application.Json)
     }
 }

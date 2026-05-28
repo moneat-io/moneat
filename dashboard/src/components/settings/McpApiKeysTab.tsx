@@ -297,8 +297,16 @@ export function McpApiKeysTab() {
         createdKey={createdKey}
         onClose={() => setCreatedKey(null)}
         onCopy={async (value) => {
-          await navigator.clipboard.writeText(value)
-          toast({title: 'Copied', description: 'MCP key copied to clipboard.'})
+          try {
+            await navigator.clipboard.writeText(value)
+            toast({title: 'Copied', description: 'MCP key copied to clipboard.'})
+          } catch {
+            toast({
+              title: 'Copy failed',
+              description: 'Could not copy to clipboard. Please copy it manually.',
+              variant: 'destructive',
+            })
+          }
         }}
       />
 
@@ -335,6 +343,10 @@ function McpKeyDialog({
 }: McpKeyDialogProps) {
   const defaultTools = useMemo(() => readOnlyToolNames(catalog), [catalog])
   const defaultResources = useMemo(() => allResourceUris(catalog), [catalog])
+  const effectiveResources = useMemo(
+    () => existingKey?.enabledResources ?? defaultResources,
+    [existingKey?.enabledResources, defaultResources]
+  )
   const everyTool = useMemo(() => allToolNames(catalog), [catalog])
   const [name, setName] = useState(existingKey?.name ?? '')
   const [selectedTools, setSelectedTools] = useState<Set<string>>(
@@ -379,7 +391,7 @@ function McpKeyDialog({
     onSubmit({
       name: name.trim(),
       enabledTools: Array.from(selectedTools).sort(),
-      enabledResources: defaultResources,
+      enabledResources: Array.from(effectiveResources).sort(),
     })
   }
 

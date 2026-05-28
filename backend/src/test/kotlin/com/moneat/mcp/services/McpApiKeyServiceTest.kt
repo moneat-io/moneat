@@ -201,10 +201,18 @@ class McpApiKeyServiceTest {
             service.updateKey(organizationId, created.id, "   ", null, null)
         }
         assertFailsWith<IllegalArgumentException> {
+            service.updateKey(organizationId, created.id, "a".repeat(256), null, null)
+        }.also {
+            assertEquals("Name must be at most 255 characters", it.message)
+        }
+        assertFailsWith<IllegalArgumentException> {
             service.updateKey(organizationId, created.id, null, null, null, expiresInDays = 0)
         }
         assertFailsWith<IllegalArgumentException> {
             service.createKey(organizationId, userId, "   ", listOf("search_logs"), emptyList())
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.createKey(organizationId, userId, "a".repeat(256), listOf("search_logs"), emptyList())
         }
     }
 }

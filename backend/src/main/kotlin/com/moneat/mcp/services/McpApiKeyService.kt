@@ -37,6 +37,7 @@ private const val KEY_PREFIX = "mmcp_"
 private const val KEY_RANDOM_BYTES = 32
 private const val DISPLAY_PREFIX_LENGTH = 12
 private const val SECONDS_PER_DAY = 86_400
+private const val KEY_NAME_MAX_LENGTH = 255
 
 class McpApiKeyService {
 
@@ -191,7 +192,11 @@ class McpApiKeyService {
     }
 
     private fun validateName(name: String) {
-        require(name.isNotBlank()) { "Name is required" }
+        val trimmed = name.trim()
+        require(trimmed.isNotEmpty()) { "Name is required" }
+        require(trimmed.length <= KEY_NAME_MAX_LENGTH) {
+            "Name must be at most $KEY_NAME_MAX_LENGTH characters"
+        }
     }
 
     private fun calculateExpiresAt(expiresInDays: Int?): kotlin.time.Instant? {

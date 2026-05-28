@@ -38,6 +38,8 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 
+private const val INVALID_TOKEN_CLAIMS = "Invalid token claims"
+
 fun Route.mcpApiKeyRoutes(
     toolRegistry: McpToolRegistry,
     resourceRegistry: McpResourceRegistry,
@@ -81,9 +83,11 @@ private suspend fun ApplicationCall.respondToolCatalog(
 }
 
 private suspend fun ApplicationCall.respondMcpApiKeys(mcpApiKeyService: McpApiKeyService) {
+    val orgId = requireMcpOrgId() ?: return
+
     respond(
         HttpStatusCode.OK,
-        McpApiKeysResponse(mcpApiKeyService.listKeys(mcpOrgId)),
+        McpApiKeysResponse(mcpApiKeyService.listKeys(orgId)),
     )
 }
 
@@ -92,6 +96,7 @@ private suspend fun ApplicationCall.createMcpApiKey(
     toolRegistry: McpToolRegistry,
     resourceRegistry: McpResourceRegistry,
 ) {
+    val claims = requireMcpClaims() ?: return
     val request = receive<CreateMcpApiKeyRequest>()
     val validationError = validateToolSelection(
         request.enabledTools,
@@ -106,8 +111,8 @@ private suspend fun ApplicationCall.createMcpApiKey(
 
     try {
         val response = mcpApiKeyService.createKey(
-            organizationId = mcpOrgId,
-            userId = mcpUserId,
+            organizationId = claims.organizationId,
+            userId = claims.userId,
             name = request.name,
             enabledTools = request.enabledTools,
             enabledResources = request.enabledResources,
@@ -124,6 +129,7 @@ private suspend fun ApplicationCall.updateMcpApiKey(
     toolRegistry: McpToolRegistry,
     resourceRegistry: McpResourceRegistry,
 ) {
+    val orgId = requireMcpOrgId() ?: return
     val keyId = callKeyId() ?: return
     val request = receive<UpdateMcpApiKeyRequest>()
     val validationError = validateToolSelection(
@@ -139,7 +145,7 @@ private suspend fun ApplicationCall.updateMcpApiKey(
 
     try {
         val updated = mcpApiKeyService.updateKey(
-            organizationId = mcpOrgId,
+            organizationId = orgId,
             keyId = keyId,
             name = request.name,
             enabledTools = request.enabledTools,
@@ -153,8 +159,9 @@ private suspend fun ApplicationCall.updateMcpApiKey(
 }
 
 private suspend fun ApplicationCall.deleteMcpApiKey(mcpApiKeyService: McpApiKeyService) {
+    val orgId = requireMcpOrgId() ?: return
     val keyId = callKeyId() ?: return
-    val deleted = mcpApiKeyService.revokeKey(mcpOrgId, keyId)
+    val deleted = mcpApiKeyService.revokeKey(orgId, keyId)
     if (deleted) {
         respond(HttpStatusCode.NoContent)
     } else {
@@ -178,11 +185,31 @@ private suspend fun ApplicationCall.respondUpdateResult(updated: Boolean) {
     }
 }
 
-private val ApplicationCall.mcpOrgId: Int
-    get() = principal<JWTPrincipal>()!!.payload.getClaim("orgId").asInt()
+private data class McpClaims(
+    val organizationId: Int,
+    val userId: Int,
+)
 
-private val ApplicationCall.mcpUserId: Int
-    get() = principal<JWTPrincipal>()!!.payload.getClaim("userId").asInt()
+private suspend fun ApplicationCall.requireMcpOrgId(): Int? {
+    val orgId = claimIntOrNull("orgId")
+    if (orgId == null) {
+        respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_CLAIMS))
+    }
+    return orgId
+}
+
+private suspend fun ApplicationCall.requireMcpClaims(): McpClaims? {
+    val orgId = claimIntOrNull("orgId")
+    val userId = claimIntOrNull("userId")
+    if (orgId == null || userId == null) {
+        respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_CLAIMS))
+        return null
+    }
+    return McpClaims(organizationId = orgId, userId = userId)
+}
+
+private fun ApplicationCall.claimIntOrNull(name: String): Int? =
+    runCatching { principal<JWTPrincipal>()?.payload?.getClaim(name)?.asInt() }.getOrNull()
 
 private fun validateToolSelection(
     tools: List<String>?,
