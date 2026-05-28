@@ -72,6 +72,8 @@ const TRACE_PAGE_SIZE = 25
 const RESOURCE_PAGE_SIZE = 25
 const DURATION_BAR_MAX_NS = 1_000_000_000
 const SEARCH_DEBOUNCE_MS = 300
+const KPI_CARD_COUNT = 6
+const SKELETON_TABLE_ROWS = 4
 
 const TIME_RANGE_OPTIONS: Array<{value: ApmTimeRange; label: string}> = [
   {value: '1h', label: 'Last hour'},
@@ -127,6 +129,53 @@ interface ResourceListParams extends OverviewParams {
   limit: number
   offset: number
 }
+
+interface SkeletonCellSpec {
+  cellClassName?: string
+  blockClassName: string
+  leadingDot?: boolean
+}
+
+const SERVICE_HEALTH_SKELETON_CELLS: SkeletonCellSpec[] = [
+  {cellClassName: 'pl-4', blockClassName: 'h-4 w-28', leadingDot: true},
+  {cellClassName: 'text-right', blockClassName: 'ml-auto h-4 w-12'},
+  {cellClassName: 'text-right', blockClassName: 'ml-auto h-4 w-20'},
+  {cellClassName: 'pr-4 text-right', blockClassName: 'ml-auto h-4 w-24'},
+]
+
+const RESOURCE_HOTSPOT_SKELETON_CELLS: SkeletonCellSpec[] = [
+  {cellClassName: 'pl-4', blockClassName: 'h-4 w-36'},
+  {blockClassName: 'h-4 w-28'},
+  {cellClassName: 'text-right', blockClassName: 'ml-auto h-4 w-20'},
+  {cellClassName: 'pr-4 text-right', blockClassName: 'ml-auto h-4 w-12'},
+]
+
+const ERROR_GROUP_SKELETON_CELLS: SkeletonCellSpec[] = [
+  {cellClassName: 'pl-4', blockClassName: 'h-4 w-36'},
+  {blockClassName: 'h-4 w-28'},
+  {cellClassName: 'text-right', blockClassName: 'ml-auto h-4 w-12'},
+  {cellClassName: 'pr-4 text-right', blockClassName: 'ml-auto h-4 w-14'},
+]
+
+const ALL_ERRORING_RESOURCE_SKELETON_CELLS: SkeletonCellSpec[] = [
+  {cellClassName: 'pl-4', blockClassName: 'h-4 w-40'},
+  {blockClassName: 'h-4 w-28'},
+  {cellClassName: 'text-right', blockClassName: 'ml-auto h-4 w-12'},
+  {cellClassName: 'text-right', blockClassName: 'ml-auto h-4 w-12'},
+  {cellClassName: 'text-right', blockClassName: 'ml-auto h-4 w-20'},
+  {cellClassName: 'pr-4 text-right', blockClassName: 'ml-auto h-4 w-24'},
+]
+
+const RECENT_TRACE_SKELETON_CELLS: SkeletonCellSpec[] = [
+  {cellClassName: 'pl-4', blockClassName: 'h-4 w-16'},
+  {blockClassName: 'h-4 w-28', leadingDot: true},
+  {blockClassName: 'h-5 w-14'},
+  {blockClassName: 'h-4 w-40'},
+  {cellClassName: 'text-right', blockClassName: 'ml-auto h-4 w-8'},
+  {cellClassName: 'text-right', blockClassName: 'ml-auto h-4 w-24'},
+  {cellClassName: 'text-center', blockClassName: 'mx-auto h-5 w-14'},
+  {cellClassName: 'pr-4', blockClassName: 'h-4 w-36'},
+]
 
 function PerformanceTracesPage() {
   const [timeRange, setTimeRange] = useState<ApmTimeRange>('24h')
@@ -288,63 +337,72 @@ function PerformanceTracesPage() {
       />
 
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-        <KpiCard
-          title="Total Traces"
-          value={formatCount(overview.stats.totalTraces)}
-          previous={overview.stats.previous.totalTraces}
-          current={overview.stats.totalTraces}
-          icon={<Layers className="h-4 w-4" />}
-        />
-        <KpiCard
-          title="Error Rate"
-          value={formatPercent(overview.stats.errorRate)}
-          previous={overview.stats.previous.errorRate}
-          current={overview.stats.errorRate}
-          icon={<AlertTriangle className="h-4 w-4" />}
-          inverted
-        />
-        <KpiCard
-          title="p50 Latency"
-          value={formatDuration(overview.stats.p50DurationNs)}
-          previous={overview.stats.previous.p50DurationNs}
-          current={overview.stats.p50DurationNs}
-          icon={<Clock className="h-4 w-4" />}
-          series={overview.latencySeries.map((point) => point.p50DurationNs)}
-          inverted
-        />
-        <KpiCard
-          title="p95 Latency"
-          value={formatDuration(overview.stats.p95DurationNs)}
-          previous={overview.stats.previous.p95DurationNs}
-          current={overview.stats.p95DurationNs}
-          icon={<Gauge className="h-4 w-4" />}
-          series={overview.latencySeries.map((point) => point.p95DurationNs)}
-          inverted
-        />
-        <KpiCard
-          title="p99 Latency"
-          value={formatDuration(overview.stats.p99DurationNs)}
-          previous={overview.stats.previous.p99DurationNs}
-          current={overview.stats.p99DurationNs}
-          icon={<Gauge className="h-4 w-4" />}
-          series={overview.latencySeries.map((point) => point.p99DurationNs)}
-          inverted
-        />
-        <KpiCard
-          title="Avg Spans / Trace"
-          value={overview.stats.avgSpansPerTrace.toFixed(1)}
-          previous={overview.stats.previous.avgSpansPerTrace}
-          current={overview.stats.avgSpansPerTrace}
-          icon={<Hash className="h-4 w-4" />}
-          inverted
-        />
+        {overviewQuery.isLoading ? (
+          Array.from({length: KPI_CARD_COUNT}, (_, index) => (
+            <KpiCardSkeleton key={`kpi-card-skeleton-${index}`} />
+          ))
+        ) : (
+          <>
+            <KpiCard
+              title="Total Traces"
+              value={formatCount(overview.stats.totalTraces)}
+              previous={overview.stats.previous.totalTraces}
+              current={overview.stats.totalTraces}
+              icon={<Layers className="h-4 w-4" />}
+            />
+            <KpiCard
+              title="Error Rate"
+              value={formatPercent(overview.stats.errorRate)}
+              previous={overview.stats.previous.errorRate}
+              current={overview.stats.errorRate}
+              icon={<AlertTriangle className="h-4 w-4" />}
+              inverted
+            />
+            <KpiCard
+              title="p50 Latency"
+              value={formatDuration(overview.stats.p50DurationNs)}
+              previous={overview.stats.previous.p50DurationNs}
+              current={overview.stats.p50DurationNs}
+              icon={<Clock className="h-4 w-4" />}
+              series={overview.latencySeries.map((point) => point.p50DurationNs)}
+              inverted
+            />
+            <KpiCard
+              title="p95 Latency"
+              value={formatDuration(overview.stats.p95DurationNs)}
+              previous={overview.stats.previous.p95DurationNs}
+              current={overview.stats.p95DurationNs}
+              icon={<Gauge className="h-4 w-4" />}
+              series={overview.latencySeries.map((point) => point.p95DurationNs)}
+              inverted
+            />
+            <KpiCard
+              title="p99 Latency"
+              value={formatDuration(overview.stats.p99DurationNs)}
+              previous={overview.stats.previous.p99DurationNs}
+              current={overview.stats.p99DurationNs}
+              icon={<Gauge className="h-4 w-4" />}
+              series={overview.latencySeries.map((point) => point.p99DurationNs)}
+              inverted
+            />
+            <KpiCard
+              title="Avg Spans / Trace"
+              value={overview.stats.avgSpansPerTrace.toFixed(1)}
+              previous={overview.stats.previous.avgSpansPerTrace}
+              current={overview.stats.avgSpansPerTrace}
+              icon={<Hash className="h-4 w-4" />}
+              inverted
+            />
+          </>
+        )}
       </div>
 
       <div className="mt-4 grid min-w-0 gap-3 xl:grid-cols-2 2xl:grid-cols-[1fr_1fr_1fr]">
-        <ServiceHealthPanel overview={overview} />
-        <LatencyPanel overview={overview} />
+        <ServiceHealthPanel overview={overview} isLoading={overviewQuery.isLoading} />
+        <LatencyPanel overview={overview} isLoading={overviewQuery.isLoading} />
         <ErrorsResourcesPanel
           overview={overview}
+          isLoading={overviewQuery.isLoading}
           isShowingAllErroringResources={showErroringResources}
           onViewAllErroringResources={viewAllErroringResources}
         />
@@ -515,7 +573,36 @@ function KpiCard({
   )
 }
 
-function ServiceHealthPanel({overview}: {overview: ApmOverviewResponse}) {
+function KpiCardSkeleton() {
+  return (
+    <Card
+      className="min-w-0 overflow-hidden rounded-lg"
+      aria-busy="true"
+      data-testid="performance-kpi-skeleton"
+    >
+      <CardContent className="flex min-h-[96px] items-center justify-between gap-3 p-4">
+        <div className="min-w-0 flex-1 space-y-3">
+          <div className="flex items-center gap-1.5">
+            <SkeletonBlock className="h-4 w-4 rounded" />
+            <SkeletonBlock className="h-3 w-24" />
+            <SkeletonBlock className="h-3 w-3 rounded-full" />
+          </div>
+          <SkeletonBlock className="h-7 w-20" />
+          <SkeletonBlock className="h-3 w-28" />
+        </div>
+        <SkeletonBlock className="h-10 w-20" />
+      </CardContent>
+    </Card>
+  )
+}
+
+function ServiceHealthPanel({
+  overview,
+  isLoading,
+}: {
+  overview: ApmOverviewResponse
+  isLoading: boolean
+}) {
   return (
     <Card className="min-w-0 overflow-hidden rounded-lg">
       <CardHeader className="px-4 py-3">
@@ -536,7 +623,9 @@ function ServiceHealthPanel({overview}: {overview: ApmOverviewResponse}) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {overview.serviceHealth.length === 0 ? (
+              {isLoading ? (
+                <SkeletonTableRows rowKey="service-health" cells={SERVICE_HEALTH_SKELETON_CELLS} />
+              ) : overview.serviceHealth.length === 0 ? (
                 <EmptyTableRow colSpan={4} label="No service health data" />
               ) : overview.serviceHealth.map((service, index) => (
                 <TableRow key={`${service.service}-${service.source}-${index}`}>
@@ -570,7 +659,13 @@ function ServiceHealthPanel({overview}: {overview: ApmOverviewResponse}) {
   )
 }
 
-function LatencyPanel({overview}: {overview: ApmOverviewResponse}) {
+function LatencyPanel({
+  overview,
+  isLoading,
+}: {
+  overview: ApmOverviewResponse
+  isLoading: boolean
+}) {
   const chartData = overview.latencySeries.map((point) => ({
     time: formatShortTime(point.timestamp),
     p50: nsToMs(point.p50DurationNs),
@@ -592,7 +687,9 @@ function LatencyPanel({overview}: {overview: ApmOverviewResponse}) {
         </div>
       </CardHeader>
       <CardContent className="h-[242px] px-3 pb-3 pt-0">
-        {chartData.length === 0 ? (
+        {isLoading ? (
+          <LatencyChartSkeleton />
+        ) : chartData.length === 0 ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             No latency samples in this window.
           </div>
@@ -623,10 +720,12 @@ function LatencyPanel({overview}: {overview: ApmOverviewResponse}) {
 
 function ErrorsResourcesPanel({
   overview,
+  isLoading,
   isShowingAllErroringResources,
   onViewAllErroringResources,
 }: {
   overview: ApmOverviewResponse
+  isLoading: boolean
   isShowingAllErroringResources: boolean
   onViewAllErroringResources: () => void
 }) {
@@ -655,10 +754,10 @@ function ErrorsResourcesPanel({
             </TabsTrigger>
           </TabsList>
           <TabsContent value="error-rate" className="m-0">
-            <ResourceHotspotTable resources={overview.resourceHotspots} mode="rate" />
+            <ResourceHotspotTable resources={overview.resourceHotspots} mode="rate" isLoading={isLoading} />
           </TabsContent>
           <TabsContent value="error-count" className="m-0">
-            <ErrorGroupTable errors={overview.errors} />
+            <ErrorGroupTable errors={overview.errors} isLoading={isLoading} />
           </TabsContent>
         </Tabs>
         <button
@@ -799,7 +898,7 @@ function AllErroringResourcesPanel({
             </TableHeader>
             <TableBody>
               {resourcesQuery.isLoading ? (
-                <EmptyTableRow colSpan={6} label="Loading erroring resources..." />
+                <SkeletonTableRows rowKey="all-erroring-resource" cells={ALL_ERRORING_RESOURCE_SKELETON_CELLS} />
               ) : resources.length === 0 ? (
                 <EmptyTableRow colSpan={6} label="No erroring resources match the current filters." />
               ) : resources.map((resource) => (
@@ -817,30 +916,40 @@ function AllErroringResourcesPanel({
             'sm:flex-row sm:items-center sm:justify-between',
           )}
         >
-          <span>
-            Showing {resources.length === 0 ? 0 : page * RESOURCE_PAGE_SIZE + 1}-
-            {Math.min((page * RESOURCE_PAGE_SIZE) + resources.length, totalResources)} of{' '}
-            {formatCount(totalResources)} resources
-          </span>
+          {resourcesQuery.isLoading ? (
+            <SkeletonBlock className="h-4 w-44" />
+          ) : (
+            <span>
+              Showing {resources.length === 0 ? 0 : page * RESOURCE_PAGE_SIZE + 1}-
+              {Math.min((page * RESOURCE_PAGE_SIZE) + resources.length, totalResources)} of{' '}
+              {formatCount(totalResources)} resources
+            </span>
+          )}
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              disabled={page === 0}
+              disabled={resourcesQuery.isLoading || page === 0}
               onClick={() => updateResourcePage((currentPage) => Math.max(0, currentPage - 1))}
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <Badge variant="secondary" className="h-8 px-3">
-              {page + 1}
-            </Badge>
-            <span>of {totalPages}</span>
+            {resourcesQuery.isLoading ? (
+              <SkeletonBlock className="h-8 w-16" />
+            ) : (
+              <>
+                <Badge variant="secondary" className="h-8 px-3">
+                  {page + 1}
+                </Badge>
+                <span>of {totalPages}</span>
+              </>
+            )}
             <Button
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              disabled={page >= totalPages - 1}
+              disabled={resourcesQuery.isLoading || page >= totalPages - 1}
               onClick={() => updateResourcePage((currentPage) => Math.min(totalPages - 1, currentPage + 1))}
             >
               <ChevronRight className="h-4 w-4" />
@@ -878,9 +987,11 @@ function AllErroringResourceRow({resource}: {resource: ApmResourceStatsItem}) {
 function ResourceHotspotTable({
   resources,
   mode,
+  isLoading,
 }: {
   resources: ApmOverviewResponse['resourceHotspots']
   mode: 'rate' | 'count'
+  isLoading: boolean
 }) {
   const sorted = [...resources].sort((a, b) => (
     mode === 'rate'
@@ -900,7 +1011,9 @@ function ResourceHotspotTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {sorted.length === 0 ? (
+          {isLoading ? (
+            <SkeletonTableRows rowKey="resource-hotspot" cells={RESOURCE_HOTSPOT_SKELETON_CELLS} />
+          ) : sorted.length === 0 ? (
             <EmptyTableRow colSpan={4} label="No resource hotspots" />
           ) : sorted.map((resource, index) => (
             <TableRow key={`${resource.service}-${resource.resource}-${resource.source}-${index}`}>
@@ -924,7 +1037,13 @@ function ResourceHotspotTable({
   )
 }
 
-function ErrorGroupTable({errors}: {errors: ApmOverviewResponse['errors']}) {
+function ErrorGroupTable({
+  errors,
+  isLoading,
+}: {
+  errors: ApmOverviewResponse['errors']
+  isLoading: boolean
+}) {
   return (
     <div className="overflow-x-auto">
       <Table>
@@ -937,7 +1056,9 @@ function ErrorGroupTable({errors}: {errors: ApmOverviewResponse['errors']}) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {errors.length === 0 ? (
+          {isLoading ? (
+            <SkeletonTableRows rowKey="error-group" cells={ERROR_GROUP_SKELETON_CELLS} />
+          ) : errors.length === 0 ? (
             <EmptyTableRow colSpan={4} label="No trace errors" />
           ) : errors.map((error) => (
             <TableRow key={error.id}>
@@ -1037,7 +1158,11 @@ function RecentTracesPanel({
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <EmptyTableRow colSpan={8} label="Loading traces..." />
+                <SkeletonTableRows
+                  rowKey="recent-trace"
+                  cells={RECENT_TRACE_SKELETON_CELLS}
+                  rowTestId="recent-trace-skeleton-row"
+                />
               ) : traces.length === 0 ? (
                 <EmptyTableRow colSpan={8} label="No traces match the current filters." />
               ) : traces.map((trace) => (
@@ -1088,29 +1213,39 @@ function RecentTracesPanel({
             'sm:flex-row sm:items-center sm:justify-between',
           )}
         >
-          <span>
-            Showing {traces.length === 0 ? 0 : page * TRACE_PAGE_SIZE + 1}-
-            {Math.min((page * TRACE_PAGE_SIZE) + traces.length, totalTraces)} of {formatCount(totalTraces)} traces
-          </span>
+          {isLoading ? (
+            <SkeletonBlock className="h-4 w-40" />
+          ) : (
+            <span>
+              Showing {traces.length === 0 ? 0 : page * TRACE_PAGE_SIZE + 1}-
+              {Math.min((page * TRACE_PAGE_SIZE) + traces.length, totalTraces)} of {formatCount(totalTraces)} traces
+            </span>
+          )}
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              disabled={page === 0}
+              disabled={isLoading || page === 0}
               onClick={() => onPageChange(Math.max(0, page - 1))}
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <Badge variant="secondary" className="h-8 px-3">
-              {page + 1}
-            </Badge>
-            <span>of {totalPages}</span>
+            {isLoading ? (
+              <SkeletonBlock className="h-8 w-16" />
+            ) : (
+              <>
+                <Badge variant="secondary" className="h-8 px-3">
+                  {page + 1}
+                </Badge>
+                <span>of {totalPages}</span>
+              </>
+            )}
             <Button
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              disabled={page >= totalPages - 1}
+              disabled={isLoading || page >= totalPages - 1}
               onClick={() => onPageChange(Math.min(totalPages - 1, page + 1))}
             >
               <ChevronRight className="h-4 w-4" />
@@ -1120,6 +1255,56 @@ function RecentTracesPanel({
       </CardContent>
     </Card>
   )
+}
+
+function LatencyChartSkeleton() {
+  return (
+    <div className="flex h-full flex-col justify-end gap-4" aria-busy="true">
+      <div className="grid flex-1 grid-cols-8 items-end gap-3 px-1 pt-4">
+        {Array.from({length: 8}, (_, index) => (
+          <div key={`latency-chart-skeleton-${index}`} className="flex h-full items-end">
+            <SkeletonBlock className={cn('w-full', index % 3 === 0 ? 'h-3/4' : 'h-1/2')} />
+          </div>
+        ))}
+      </div>
+      <SkeletonBlock className="h-3 w-full" />
+    </div>
+  )
+}
+
+function SkeletonTableRows({
+  rowKey,
+  cells,
+  rowTestId,
+}: {
+  rowKey: string
+  cells: SkeletonCellSpec[]
+  rowTestId?: string
+}) {
+  return (
+    <>
+      {Array.from({length: SKELETON_TABLE_ROWS}, (_, rowIndex) => (
+        <TableRow key={`${rowKey}-skeleton-${rowIndex}`} aria-busy="true" data-testid={rowTestId}>
+          {cells.map((cell, cellIndex) => (
+            <TableCell key={`${rowKey}-skeleton-cell-${cellIndex}`} className={cell.cellClassName}>
+              {cell.leadingDot ? (
+                <div className="flex items-center gap-2">
+                  <SkeletonBlock className="h-2 w-2 rounded-full" />
+                  <SkeletonBlock className={cell.blockClassName} />
+                </div>
+              ) : (
+                <SkeletonBlock className={cell.blockClassName} />
+              )}
+            </TableCell>
+          ))}
+        </TableRow>
+      ))}
+    </>
+  )
+}
+
+function SkeletonBlock({className}: {className?: string}) {
+  return <span className={cn('block animate-pulse rounded bg-muted', className)} aria-hidden="true" />
 }
 
 function ErrorMeter({rate}: {rate: number}) {
