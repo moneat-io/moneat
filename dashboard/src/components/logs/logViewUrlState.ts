@@ -44,8 +44,12 @@ export interface LogViewSearch {
   logId?: string
 }
 
+export const DEFAULT_LOG_GROUP_BY = 'level'
+export const NO_LOG_GROUP_BY_URL_VALUE = 'none'
+
 const VALID_VIZ_MODES: LogVizMode[] = ['timeseries', 'table', 'toplist', 'pie']
 const VALID_TIME_PRESETS = ['5m', '15m', '30m', '1h', '4h', '12h', '24h', '3d', '7d', '14d', '30d', 'custom']
+const VALID_GROUP_BY_VALUES = [DEFAULT_LOG_GROUP_BY, 'service', 'environment', NO_LOG_GROUP_BY_URL_VALUE]
 
 /**
  * Parse URL search params into normalized log view state.
@@ -107,8 +111,11 @@ export function parseLogViewSearch(search: Record<string, unknown>): LogViewSear
   }
   
   // Group by / top field
-  if (typeof search.groupBy === 'string' && search.groupBy.trim()) {
-    result.groupBy = search.groupBy.trim()
+  if (typeof search.groupBy === 'string') {
+    const groupBy = search.groupBy.trim()
+    if (VALID_GROUP_BY_VALUES.includes(groupBy)) {
+      result.groupBy = groupBy
+    }
   }
   if (typeof search.topField === 'string' && search.topField.trim()) {
     result.topField = search.topField.trim()
@@ -186,7 +193,9 @@ export function serializeLogViewState(state: {
   }
   
   // Group by / top field
-  if (state.groupBy && state.groupBy.trim()) {
+  if (state.groupBy === '') {
+    result.groupBy = NO_LOG_GROUP_BY_URL_VALUE
+  } else if (state.groupBy && state.groupBy.trim() && state.groupBy !== DEFAULT_LOG_GROUP_BY) {
     result.groupBy = state.groupBy.trim()
   }
   if (state.topField && state.topField.trim() && state.topField !== 'service') {
@@ -204,6 +213,12 @@ export function serializeLogViewState(state: {
   }
   
   return result
+}
+
+export function resolveLogGroupBy(groupBy: string | undefined): string {
+  if (groupBy === NO_LOG_GROUP_BY_URL_VALUE) return ''
+  if (groupBy && VALID_GROUP_BY_VALUES.includes(groupBy)) return groupBy
+  return DEFAULT_LOG_GROUP_BY
 }
 
 /**
