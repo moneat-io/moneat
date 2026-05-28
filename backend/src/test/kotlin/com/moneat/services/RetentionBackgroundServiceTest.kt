@@ -271,6 +271,7 @@ class RetentionBackgroundServiceTest {
                 "apm_spans",
                 "trace_stats",
                 "apm_trace_summaries",
+                "apm_traces_final",
                 "apm_error_groups_hourly",
                 "apm_resource_stats_hourly"
             ).forEach {
@@ -359,7 +360,7 @@ class RetentionBackgroundServiceTest {
                     it.contains("organization_id")
                 }
                 assertEquals(
-                    7,
+                    8,
                     orgQ.size,
                     "Org-scoped queries for metrics + containers + APM trace tables"
                 )
