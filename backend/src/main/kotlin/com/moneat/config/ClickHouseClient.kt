@@ -223,6 +223,27 @@ object ClickHouseClient {
         return executePost(client, query, "migration")
     }
 
+    /**
+     * Execute a long-running write statement (e.g. a background rollup/finalization INSERT...SELECT)
+     * on the extended-timeout migration client, throwing [ClickHouseQueryException] on failure.
+     * The normal [execute] path uses a 30s socket timeout, which is too short for these.
+     */
+    suspend fun executeLongRunning(query: String, operation: String = "finalize") {
+        val client = checkNotNull(migrationClient) { "ClickHouseClient is not initialized. Call init() first." }
+        val response = executePost(client, query, operation)
+        val body = response.bodyAsText()
+        if (response.isClickHouseError(body)) {
+            val errorCode = clickHouseErrorCode(body)
+            OperationalMetrics.recordClickHouseQueryError(operation, errorCode)
+            val detail = "ClickHouse $operation failed (${response.status.value}): ${body.take(ERROR_BODY_MAX_LEN)}"
+            logger.error { "$detail | query: ${query.take(QUERY_LOG_MAX_LEN)}" }
+            throw ClickHouseQueryException(
+                isTimeout = isClickHouseTimeout(body, errorCode),
+                internalDetail = detail,
+            )
+        }
+    }
+
     suspend fun ping(): Boolean {
         return suspendRunCatching {
             val response = httpClient!!.get("$baseUrl/ping")

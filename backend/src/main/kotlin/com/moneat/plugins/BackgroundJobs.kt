@@ -33,6 +33,7 @@ import com.moneat.shared.services.ArtifactCleanupService
 import com.moneat.shared.services.PulseService
 import com.moneat.shared.services.RetentionBackgroundService
 import com.moneat.shared.services.TaskLock
+import com.moneat.shared.services.TraceFinalizerBackgroundService
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.uptime.services.UptimeScheduler
 import io.ktor.server.application.Application
@@ -71,6 +72,7 @@ fun Application.configureBackgroundJobs() {
     val dashboardAlertService = koin.get<DashboardAlertService>()
     val billingBackgroundService = koin.get<BillingBackgroundService>()
     val retentionBackgroundService = koin.get<RetentionBackgroundService>()
+    val traceFinalizerBackgroundService = koin.get<TraceFinalizerBackgroundService>()
     val refreshTokenCleanupService = koin.get<RefreshTokenCleanupService>()
     val artifactCleanupService = koin.get<ArtifactCleanupService>()
     val uptimeScheduler = koin.get<UptimeScheduler>()
@@ -140,6 +142,7 @@ fun Application.configureBackgroundJobs() {
     dashboardAlertService.start(jobScope)
     billingBackgroundService.start(jobScope)
     retentionBackgroundService.start(jobScope)
+    traceFinalizerBackgroundService.start(jobScope)
     refreshTokenCleanupService.start(jobScope)
     artifactCleanupService.start(jobScope)
     uptimeScheduler.start()
@@ -182,6 +185,7 @@ fun Application.configureBackgroundJobs() {
         dashboardAlertService.stop()
         billingBackgroundService.stop()
         retentionBackgroundService.stop()
+        traceFinalizerBackgroundService.stop()
         refreshTokenCleanupService.stop()
         artifactCleanupService.stop()
         uptimeScheduler.stop()

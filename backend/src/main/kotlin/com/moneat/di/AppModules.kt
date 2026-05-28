@@ -96,6 +96,7 @@ import com.moneat.shared.services.AttributionAnalyticsService
 import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.shared.services.RetentionBackgroundService
 import com.moneat.shared.services.RetentionPolicyService
+import com.moneat.shared.services.TraceFinalizerBackgroundService
 import com.moneat.statuspage.services.StatusPageService
 import com.moneat.summary.services.SummaryService
 import com.moneat.synthetics.routes.SyntheticsService
@@ -124,6 +125,7 @@ val sharedModule = module {
     single { EntitlementService(get()) }
     single { RetentionPolicyService(get()) }
     single { RetentionBackgroundService(get()) }
+    single { TraceFinalizerBackgroundService() }
     single { ProjectIdResolver() }
 
     single { AttributionAnalyticsService() }
