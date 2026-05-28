@@ -71,6 +71,12 @@ private val queryDslListSerializer = ListSerializer(QueryDsl.serializer())
 private val updateWidgetListSerializer = ListSerializer(UpdateWidgetRequest.serializer())
 private val displayConfigSerializer = MapSerializer(String.serializer(), String.serializer())
 
+private const val DASHBOARD_ID_ARG = "dashboard_id"
+private const val DASHBOARD_ID_LABEL = "Dashboard ID"
+private const val WIDGET_ID_ARG = "widget_id"
+private const val WIDGET_ID_LABEL = "Widget ID"
+private const val INVALID_WIDGET_REQUEST_MESSAGE = "Invalid dashboard widget request"
+private const val INVALID_QUERY_REQUEST_MESSAGE = "Invalid dashboard query request"
 private const val DEFAULT_WIDGET_X = 0
 private const val DEFAULT_WIDGET_WIDTH = 6
 private const val DEFAULT_WIDGET_HEIGHT = 4
@@ -147,9 +153,7 @@ private fun JsonObject.requiredWidgetType(): String {
 }
 
 private fun validateWidgetType(widgetType: String) {
-    if (widgetType !in dashboardWidgetTypeSet) {
-        throw IllegalArgumentException("Unknown widget_type: $widgetType")
-    }
+    require(widgetType in dashboardWidgetTypeSet) { "Unknown widget_type: $widgetType" }
 }
 
 private fun JsonObject.optionalQueryConfigs(): List<QueryDsl>? {
@@ -266,31 +270,51 @@ private fun hasWidgetUpdateFields(args: JsonObject): Boolean =
 private fun schemaProperties(vararg pairs: Pair<String, JsonObject>): JsonObject =
     JsonObject(mapOf(*pairs))
 
+private fun dashboardIdProperty(): Pair<String, JsonObject> =
+    DASHBOARD_ID_ARG to schemaNumber(DASHBOARD_ID_LABEL)
+
+private fun widgetIdProperty(): Pair<String, JsonObject> =
+    WIDGET_ID_ARG to schemaNumber(WIDGET_ID_LABEL)
+
+private fun widgetMutationProperties(includeWidgetId: Boolean): JsonObject {
+    val properties = mutableListOf(dashboardIdProperty())
+    if (includeWidgetId) {
+        properties += widgetIdProperty()
+    }
+    properties += listOf(
+        "title" to schemaString("Widget title"),
+        "widget_type" to schemaEnum("Widget type", dashboardWidgetTypes),
+        "grid_x" to schemaInteger("Grid x position"),
+        "grid_y" to schemaInteger("Grid y position"),
+        "grid_w" to schemaInteger("Grid width"),
+        "grid_h" to schemaInteger("Grid height"),
+        "query_configs" to schemaArray("QueryDsl array"),
+        "display_config" to schemaObject("Display config"),
+        "sort_order" to schemaInteger("Sort order")
+    )
+    return schemaProperties(*properties.toTypedArray())
+}
+
+private fun widgetTargetProperties(): JsonObject =
+    schemaProperties(dashboardIdProperty(), widgetIdProperty())
+
+private fun invalidWidgetRequestResult(e: IllegalArgumentException): ToolCallResult =
+    errorResult(e.message ?: INVALID_WIDGET_REQUEST_MESSAGE)
+
 class CreateDashboardWidgetTool : McpTool {
     override val name = "create_dashboard_widget"
     override val description = "Create a dashboard widget"
     override val readOnly = false
     override val inputSchema = InputSchema(
-        properties = schemaProperties(
-            "dashboard_id" to schemaNumber("Dashboard ID"),
-            "title" to schemaString("Widget title"),
-            "widget_type" to schemaEnum("Widget type", dashboardWidgetTypes),
-            "grid_x" to schemaInteger("Grid x position"),
-            "grid_y" to schemaInteger("Grid y position"),
-            "grid_w" to schemaInteger("Grid width"),
-            "grid_h" to schemaInteger("Grid height"),
-            "query_configs" to schemaArray("QueryDsl array"),
-            "display_config" to schemaObject("Display config"),
-            "sort_order" to schemaInteger("Sort order")
-        ),
-        required = listOf("dashboard_id", "widget_type")
+        properties = widgetMutationProperties(includeWidgetId = false),
+        required = listOf(DASHBOARD_ID_ARG, "widget_type")
     )
 
     override suspend fun execute(
         args: JsonObject,
         context: McpContext
     ): ToolCallResult = try {
-        val dashboardId = args.requiredLongArg("dashboard_id")
+        val dashboardId = args.requiredLongArg(DASHBOARD_ID_ARG)
         val widgetType = args.requiredWidgetType()
         val title = args.optionalStringArg("title")
         val gridX = args.optionalIntArg("grid_x")
@@ -321,7 +345,7 @@ class CreateDashboardWidgetTool : McpTool {
             ?: return errorResult("Dashboard not found: $dashboardId")
         jsonResult(dashboard)
     } catch (e: IllegalArgumentException) {
-        errorResult(e.message ?: "Invalid dashboard widget request")
+        invalidWidgetRequestResult(e)
     }
 }
 
@@ -330,28 +354,16 @@ class UpdateDashboardWidgetTool : McpTool {
     override val description = "Update a dashboard widget"
     override val readOnly = false
     override val inputSchema = InputSchema(
-        properties = schemaProperties(
-            "dashboard_id" to schemaNumber("Dashboard ID"),
-            "widget_id" to schemaNumber("Widget ID"),
-            "title" to schemaString("Widget title"),
-            "widget_type" to schemaEnum("Widget type", dashboardWidgetTypes),
-            "grid_x" to schemaInteger("Grid x position"),
-            "grid_y" to schemaInteger("Grid y position"),
-            "grid_w" to schemaInteger("Grid width"),
-            "grid_h" to schemaInteger("Grid height"),
-            "query_configs" to schemaArray("QueryDsl array"),
-            "display_config" to schemaObject("Display config"),
-            "sort_order" to schemaInteger("Sort order")
-        ),
-        required = listOf("dashboard_id", "widget_id")
+        properties = widgetMutationProperties(includeWidgetId = true),
+        required = listOf(DASHBOARD_ID_ARG, WIDGET_ID_ARG)
     )
 
     override suspend fun execute(
         args: JsonObject,
         context: McpContext
     ): ToolCallResult = try {
-        val dashboardId = args.requiredLongArg("dashboard_id")
-        val widgetId = args.requiredLongArg("widget_id")
+        val dashboardId = args.requiredLongArg(DASHBOARD_ID_ARG)
+        val widgetId = args.requiredLongArg(WIDGET_ID_ARG)
         if (!hasWidgetUpdateFields(args)) {
             return errorResult("At least one widget field must be provided to update")
         }
@@ -373,7 +385,7 @@ class UpdateDashboardWidgetTool : McpTool {
         ) ?: return errorResult("Dashboard not found: $dashboardId")
         jsonResult(updated)
     } catch (e: IllegalArgumentException) {
-        errorResult(e.message ?: "Invalid dashboard widget request")
+        invalidWidgetRequestResult(e)
     }
 }
 
@@ -382,19 +394,16 @@ class DeleteDashboardWidgetTool : McpTool {
     override val description = "Delete a dashboard widget"
     override val readOnly = false
     override val inputSchema = InputSchema(
-        properties = schemaProperties(
-            "dashboard_id" to schemaNumber("Dashboard ID"),
-            "widget_id" to schemaNumber("Widget ID")
-        ),
-        required = listOf("dashboard_id", "widget_id")
+        properties = widgetTargetProperties(),
+        required = listOf(DASHBOARD_ID_ARG, WIDGET_ID_ARG)
     )
 
     override suspend fun execute(
         args: JsonObject,
         context: McpContext
     ): ToolCallResult = try {
-        val dashboardId = args.requiredLongArg("dashboard_id")
-        val widgetId = args.requiredLongArg("widget_id")
+        val dashboardId = args.requiredLongArg(DASHBOARD_ID_ARG)
+        val widgetId = args.requiredLongArg(WIDGET_ID_ARG)
         val orgId = context.organizationId.toLong()
         val dashboard = dashboardWidgetCrudService.getDashboard(dashboardId, orgId, context.userId)
             ?: return errorResult("Dashboard not found: $dashboardId")
@@ -408,7 +417,7 @@ class DeleteDashboardWidgetTool : McpTool {
             ?: return errorResult("Dashboard not found: $dashboardId")
         jsonResult(updated)
     } catch (e: IllegalArgumentException) {
-        errorResult(e.message ?: "Invalid dashboard widget request")
+        invalidWidgetRequestResult(e)
     }
 }
 
@@ -417,20 +426,20 @@ class PreviewDashboardWidgetQueryTool : McpTool {
     override val description = "Preview a dashboard widget query using dashboard resolution rules"
     override val inputSchema = InputSchema(
         properties = schemaProperties(
-            "dashboard_id" to schemaNumber("Dashboard ID"),
+            dashboardIdProperty(),
             "query_config" to schemaObject("QueryDsl config"),
             "project_id" to schemaNumber("Project ID"),
             "variables" to schemaObject("Variable values"),
             "time_range" to schemaObject("Time range override")
         ),
-        required = listOf("dashboard_id", "query_config")
+        required = listOf(DASHBOARD_ID_ARG, "query_config")
     )
 
     override suspend fun execute(
         args: JsonObject,
         context: McpContext
     ): ToolCallResult = try {
-        val dashboardId = args.requiredLongArg("dashboard_id")
+        val dashboardId = args.requiredLongArg(DASHBOARD_ID_ARG)
         val queryConfig = args.requiredQueryConfig()
         val timeRange = args.optionalTimeRange()
         val variables = args.optionalVariables()
@@ -455,7 +464,7 @@ class PreviewDashboardWidgetQueryTool : McpTool {
     } catch (e: CancellationException) {
         throw e
     } catch (e: IllegalArgumentException) {
-        errorResult(e.message ?: "Invalid dashboard query request")
+        errorResult(e.message ?: INVALID_QUERY_REQUEST_MESSAGE)
     }
 
     private suspend fun executePreviewQuery(
@@ -464,8 +473,12 @@ class PreviewDashboardWidgetQueryTool : McpTool {
         projectId: Long,
     ): List<Map<String, JsonElement>> {
         if (!dashboardWidgetQueryEngine.isCustomDataSource(effectiveQuery.dataSource)) {
-            val retentionDays = dashboardWidgetRetentionPolicyService.getRetentionDaysForProject(projectId)
-                ?: DASHBOARD_WIDGET_DEFAULT_RETENTION_DAYS
+            val retentionDays = if (effectiveQuery.rawQuery == null) {
+                dashboardWidgetRetentionPolicyService.getRetentionDaysForProject(projectId)
+                    ?: DASHBOARD_WIDGET_DEFAULT_RETENTION_DAYS
+            } else {
+                DASHBOARD_WIDGET_DEFAULT_RETENTION_DAYS
+            }
             return dashboardWidgetQueryEngine.executeQuery(
                 dsl = effectiveQuery,
                 projectId = projectId,
@@ -503,18 +516,18 @@ class ReplaceDashboardWidgetsTool : McpTool {
     override val readOnly = false
     override val inputSchema = InputSchema(
         properties = schemaProperties(
-            "dashboard_id" to schemaNumber("Dashboard ID"),
+            dashboardIdProperty(),
             "widgets" to schemaArray("Replacement dashboard widget objects"),
             "expected_widget_count" to schemaInteger("Current widget count expected by caller")
         ),
-        required = listOf("dashboard_id", "widgets", "expected_widget_count")
+        required = listOf(DASHBOARD_ID_ARG, "widgets", "expected_widget_count")
     )
 
     override suspend fun execute(
         args: JsonObject,
         context: McpContext
     ): ToolCallResult = try {
-        val dashboardId = args.requiredLongArg("dashboard_id")
+        val dashboardId = args.requiredLongArg(DASHBOARD_ID_ARG)
         val expectedWidgetCount = args.requiredIntArg("expected_widget_count")
         val orgId = context.organizationId.toLong()
         val dashboard = dashboardWidgetCrudService.getDashboard(dashboardId, orgId, context.userId)
@@ -534,6 +547,6 @@ class ReplaceDashboardWidgetsTool : McpTool {
         ) ?: return errorResult("Dashboard not found: $dashboardId")
         jsonResult(updated)
     } catch (e: IllegalArgumentException) {
-        errorResult(e.message ?: "Invalid dashboard widget request")
+        invalidWidgetRequestResult(e)
     }
 }
