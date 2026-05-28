@@ -132,7 +132,9 @@ fun Application.configureRateLimiting() {
             val projectIdResolver = GlobalContext.get().get<ProjectIdResolver>()
             requestKey { call ->
                 val rawProjectId = call.parameters["projectId"]
-                val projectId = rawProjectId?.let(projectIdResolver::resolve)?.toString() ?: rawProjectId ?: "unknown"
+                val projectId = rawProjectId
+                    ?.let { projectIdResolver.resolve(it)?.toString() ?: it }
+                    ?: "unknown"
                 val auth = call.request.headers.get("X-Sentry-Auth")
                 val sentryKey = call.request.queryParameters["sentry_key"]
                 val key = extractPublicKey(auth, sentryKey) ?: "anon"
