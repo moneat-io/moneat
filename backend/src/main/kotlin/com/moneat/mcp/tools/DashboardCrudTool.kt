@@ -71,7 +71,7 @@ private fun dashboardAlertSeverity(input: String?): String? {
 class UpdateDashboardTool : McpTool {
     override val name = "update_dashboard"
     override val description =
-        "Update a dashboard (title, description, widgets)"
+        "Update a dashboard's title and description"
     override val readOnly = false
     override val inputSchema = InputSchema(
         properties = JsonObject(

@@ -27,6 +27,7 @@ interface DashboardWidgetRepository {
     fun listByDashboardId(dashboardId: Long): List<WidgetData>
     fun bulkUpsert(dashboardId: Long, widgets: List<UpdateWidgetRequest>, now: Instant): Set<Long>
     fun deleteNotIn(dashboardId: Long, keepIds: Set<Long>)
+    fun deleteById(dashboardId: Long, widgetId: Long): Boolean
     fun insert(dashboardId: Long, widget: CreateWidgetRequest, sortOrder: Int, now: Instant): Long
 }
 

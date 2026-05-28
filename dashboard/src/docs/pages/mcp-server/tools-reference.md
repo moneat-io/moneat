@@ -280,7 +280,7 @@ Create a new dashboard.
 | `description` | string | No | Description |
 
 ### ✏️ `update_dashboard`
-Update a dashboard (title, description, widgets).
+Update a dashboard's title and description.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -294,6 +294,60 @@ Delete a dashboard.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `dashboard_id` | number | Yes | Dashboard ID |
+
+### ✏️ `create_dashboard_widget`
+Create a widget on a dashboard and append it to the bottom of the grid when `grid_y` is omitted.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dashboard_id` | number | Yes | Dashboard ID |
+| `widget_type` | string | Yes | Widget type |
+| `title` | string | No | Widget title |
+| `grid_x`, `grid_y`, `grid_w`, `grid_h` | integer | No | Grid position and size |
+| `query_configs` | array | No | QueryDsl array |
+| `display_config` | object | No | Display config |
+| `sort_order` | integer | No | Sort order |
+
+### ✏️ `update_dashboard_widget`
+Update one widget while preserving the rest of the dashboard.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dashboard_id` | number | Yes | Dashboard ID |
+| `widget_id` | number | Yes | Widget ID |
+| `title`, `widget_type` | string | No | Widget title or type |
+| `grid_x`, `grid_y`, `grid_w`, `grid_h` | integer | No | Grid position and size |
+| `query_configs` | array | No | QueryDsl array |
+| `display_config` | object | No | Display config |
+| `sort_order` | integer | No | Sort order |
+
+### ✏️ `delete_dashboard_widget`
+Delete one widget from a dashboard.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dashboard_id` | number | Yes | Dashboard ID |
+| `widget_id` | number | Yes | Widget ID |
+
+### `preview_dashboard_widget_query`
+Preview a widget query with dashboard variable substitution and datasource resolution.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dashboard_id` | number | Yes | Dashboard ID |
+| `query_config` | object | Yes | QueryDsl config |
+| `project_id` | number | No | Project ID when the dashboard is not project-scoped |
+| `variables` | object | No | Variable values |
+| `time_range` | object | No | Time range override |
+
+### ✏️ `replace_dashboard_widgets`
+Replace every widget on a dashboard after verifying the current widget count.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `dashboard_id` | number | Yes | Dashboard ID |
+| `widgets` | array | Yes | Replacement widget objects |
+| `expected_widget_count` | integer | Yes | Current widget count expected by caller |
 
 ### ✏️ `create_dashboard_alert`
 Create an alert on a dashboard widget.
