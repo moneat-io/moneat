@@ -1624,12 +1624,12 @@ class LogService(private val logRepository: LogRepository) {
 
     private fun buildSimpleSearchCondition(term: String): String {
         val escaped = ClickHouseSqlUtils.escapeLikePattern(term)
-        val hasSeparators = term.any { it == '-' || it == '.' || it == '/' || it == ':' || it == ' ' }
-        return if (hasSeparators) {
-            "(message ILIKE '%$escaped%' OR body ILIKE '%$escaped%')"
-        } else {
+        val isSimpleToken = term.all { it.isLetterOrDigit() }
+        return if (isSimpleToken) {
             val tokenEscaped = ClickHouseSqlUtils.escapeSql(term)
             "(hasTokenCaseInsensitive(message, '$tokenEscaped') OR hasTokenCaseInsensitive(body, '$tokenEscaped'))"
+        } else {
+            "(message ILIKE '%$escaped%' OR body ILIKE '%$escaped%')"
         }
     }
 

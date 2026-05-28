@@ -205,7 +205,7 @@ class TraceIngestionServiceTest {
     @Test
     fun `getApmOverview aggregates filtered trace summaries`() = runBlocking {
         mockkObject(ClickHouseClient)
-        val queries = mutableListOf<String>()
+        val queries = java.util.Collections.synchronizedList(mutableListOf<String>())
         try {
             every { ClickHouseClient.getDatabase() } returns "moneat"
             coEvery { ClickHouseClient.executeWithFormat(any(), any()) } answers {
@@ -233,22 +233,20 @@ class TraceIngestionServiceTest {
                             "\"service\":\"checkout-service\",\"resource\":\"POST /checkout\"," +
                             "\"source\":\"otlp\",\"trace_count\":1234,\"error_count\":154," +
                             "\"error_rate\":0.1248,\"p95_duration_ns\":612000000}"
-                    "GROUP BY root_service" in query ->
+                    "GROUP BY root_service" in query && "UNION ALL" !in query ->
                         "{" +
                             "\"service\":\"checkout-service\",\"source\":\"otlp\",\"trace_count\":5642," +
                             "\"error_count\":326,\"error_rate\":0.0578,\"p95_duration_ns\":612000000," +
                             "\"avg_spans_per_trace\":22.4}"
-                    "avg_spans_per_trace" in query ->
+                    "avg_spans_per_trace" in query && "service_count" !in query ->
                         "{" +
                             "\"total_traces\":10,\"error_rate\":0.10,\"p50_duration_ns\":50000000," +
                             "\"p95_duration_ns\":400000000,\"p99_duration_ns\":900000000," +
                             "\"avg_spans_per_trace\":15.2}"
-                    "GROUP BY value" in query && "root_service as value" in query ->
-                        "{\"value\":\"checkout-service\",\"count\":5642}"
-                    "GROUP BY value" in query && "source as value" in query ->
-                        "{\"value\":\"otlp\",\"count\":5000}"
-                    "GROUP BY value" in query && "env as value" in query ->
-                        "{\"value\":\"production\",\"count\":5000}"
+                    "UNION ALL" in query && "facet_type" in query ->
+                        "{\"facet_type\":\"service\",\"value\":\"checkout-service\",\"count\":5642}\n" +
+                            "{\"facet_type\":\"source\",\"value\":\"otlp\",\"count\":5000}\n" +
+                            "{\"facet_type\":\"env\",\"value\":\"production\",\"count\":5000}"
                     else -> ""
                 }
             }
