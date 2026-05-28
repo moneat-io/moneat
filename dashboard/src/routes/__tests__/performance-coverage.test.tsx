@@ -125,6 +125,10 @@ function renderWithQueryClient(Component: React.ComponentType) {
   )
 }
 
+function neverResolve<T>(): Promise<T> {
+  return new Promise<T>(() => {})
+}
+
 describe('Performance routes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -190,6 +194,18 @@ describe('Performance routes', () => {
         offset: 0,
       }))
     })
+  })
+
+  it('renders skeleton cards while the traces dashboard loads', () => {
+    const Component = (PerformanceTracesRoute as unknown as {component: React.ComponentType}).component
+    mockApi.getApmOverview.mockReturnValue(neverResolve())
+    mockApi.getApmTraces.mockReturnValue(neverResolve())
+
+    renderWithQueryClient(Component)
+
+    expect(screen.getAllByTestId('performance-kpi-skeleton')).toHaveLength(6)
+    expect(screen.getAllByTestId('recent-trace-skeleton-row')).toHaveLength(4)
+    expect(screen.queryByText('Loading traces...')).not.toBeInTheDocument()
   })
 
   it('opens a real paged erroring resources view', async () => {
