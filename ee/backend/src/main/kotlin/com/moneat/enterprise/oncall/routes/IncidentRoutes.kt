@@ -25,6 +25,14 @@ private const val DEFAULT_INCIDENT_LIMIT = 50
 private const val MIN_INCIDENT_LIMIT = 1
 private const val MAX_INCIDENT_LIMIT = 200
 
+private fun parseStatusFilters(rawStatuses: List<String>?): List<String> =
+    rawStatuses
+        .orEmpty()
+        .flatMap { it.split(",") }
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .distinct()
+
 @Serializable
 data class DeclareIncidentRequest(
     val title: String,
@@ -62,7 +70,7 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                     return@get
                 }
 
-                val status = call.request.queryParameters["status"]
+                val statuses = parseStatusFilters(call.request.queryParameters.getAll("status"))
                 val priorityLevel = call.request.queryParameters["priority"]
                 val rawLimit = call.request.queryParameters["limit"]?.toIntOrNull()
                 val limit =
@@ -78,7 +86,7 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 val incidents =
                     incidentService.listIncidents(
                         organizationId = organizationId,
-                        status = status,
+                        statuses = statuses.ifEmpty { null },
                         priorityLevel = priorityLevel,
                         limit = limit,
                         offset = offset,

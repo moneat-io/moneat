@@ -108,6 +108,8 @@ export interface EscalationPolicy {
   steps: EscalationStep[]
 }
 
+export type IncidentStatus = 'TRIGGERED' | 'ACKNOWLEDGED' | 'RESOLVED'
+
 export interface Incident {
   id: number
   organizationId: number
@@ -115,7 +117,7 @@ export interface Incident {
   title: string
   description?: string
   priorityLevel: string
-  status: 'TRIGGERED' | 'ACKNOWLEDGED' | 'RESOLVED'
+  status: IncidentStatus
   alertSource: string
   deduplicationKey?: string
   triggeredAt: string
@@ -265,7 +267,7 @@ export interface RegisterDeviceRequest {
 }
 
 export interface IncidentListFilters {
-  status?: 'TRIGGERED' | 'ACKNOWLEDGED' | 'RESOLVED'
+  status?: IncidentStatus | IncidentStatus[]
   priorityLevel?: string
   fromDate?: string
   toDate?: string

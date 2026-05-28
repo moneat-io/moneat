@@ -34,6 +34,8 @@ export const Route = createFileRoute('/on-call/declared-incidents')({
   component: DeclaredIncidents,
 })
 
+const DEFAULT_DECLARED_INCIDENT_STATUS_FILTER = 'OPEN'
+
 const getPriorityConfig = (priority: string) => {
   if (priority.startsWith('P0')) return {color: 'bg-red-500/15 text-red-400 border-red-500/30', dot: 'bg-red-500', label: 'Critical'}
   if (priority.startsWith('P1')) return {color: 'bg-orange-500/15 text-orange-400 border-orange-500/30', dot: 'bg-orange-500', label: 'High'}
@@ -62,7 +64,7 @@ function timeAgo(date: string) {
 
 function DeclaredIncidents() {
   const pathname = useRouterState({select: state => state.location.pathname})
-  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [statusFilter, setStatusFilter] = useState<string>(DEFAULT_DECLARED_INCIDENT_STATUS_FILTER)
   const [priorityFilter, setPriorityFilter] = useState<string>('all')
   const isDetailRoute = pathname.startsWith('/on-call/declared-incidents/')
 

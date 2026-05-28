@@ -40,6 +40,16 @@ import type {
   IncidentListFilters,
 } from '../types'
 
+function appendIncidentStatusFilters(
+  params: URLSearchParams,
+  status?: IncidentListFilters['status']
+) {
+  if (!status) return
+
+  const statuses = Array.isArray(status) ? status : [status]
+  statuses.forEach((value) => params.append('status', value))
+}
+
 export function onCallMethods(core: ApiClientCore) {
   const base = core.API_BASE
 
@@ -140,7 +150,7 @@ export function onCallMethods(core: ApiClientCore) {
 
     getIncidents: (filters?: IncidentListFilters) => {
       const params = new URLSearchParams()
-      if (filters?.status) params.append('status', filters.status)
+      appendIncidentStatusFilters(params, filters?.status)
       if (filters?.priorityLevel) params.append('priority', filters.priorityLevel)
       if (filters?.fromDate) params.append('fromDate', filters.fromDate)
       if (filters?.toDate) params.append('toDate', filters.toDate)

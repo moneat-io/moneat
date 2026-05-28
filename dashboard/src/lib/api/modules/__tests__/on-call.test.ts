@@ -303,6 +303,26 @@ describe('onCallMethods', () => {
       })
       expect(result).toEqual(mock)
     })
+
+    it('fetches incidents with multiple statuses', async () => {
+      const mock = [
+        { id: 1, title: 'Server Down', status: 'TRIGGERED' },
+        { id: 2, title: 'High CPU', status: 'ACKNOWLEDGED' },
+      ]
+      server.use(
+        http.get(`${API_BASE}/incidents`, ({ request }) => {
+          const url = new URL(request.url)
+          expect(url.searchParams.getAll('status')).toEqual(['TRIGGERED', 'ACKNOWLEDGED'])
+          expect(url.searchParams.get('priority')).toBe('P0')
+          return HttpResponse.json(mock)
+        })
+      )
+      const result = await api.getIncidents({
+        status: ['TRIGGERED', 'ACKNOWLEDGED'],
+        priorityLevel: 'P0',
+      })
+      expect(result).toEqual(mock)
+    })
   })
 
   describe('getIncident', () => {

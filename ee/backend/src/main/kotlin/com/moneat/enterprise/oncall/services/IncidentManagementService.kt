@@ -15,6 +15,7 @@ import org.jetbrains.exposed.v1.core.JoinType
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.andWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
@@ -76,6 +77,7 @@ class IncidentManagementService(
     fun listIncidents(
         organizationId: Int,
         status: String? = null,
+        statuses: List<String>? = null,
         priorityLevel: String? = null,
         limit: Int = 50,
         offset: Int = 0,
@@ -105,8 +107,15 @@ class IncidentManagementService(
                     .selectAll()
                     .where { Incidents.organizationId eq organizationId }
 
-            if (status != null) {
-                query = query.andWhere { Incidents.status eq status }
+            val statusFilters = statuses?.ifEmpty { null } ?: status?.let(::listOf)
+            if (!statusFilters.isNullOrEmpty()) {
+                val singleStatus = statusFilters.singleOrNull()
+                query =
+                    if (singleStatus != null) {
+                        query.andWhere { Incidents.status eq singleStatus }
+                    } else {
+                        query.andWhere { Incidents.status inList statusFilters }
+                    }
             }
 
             if (priorityLevel != null) {

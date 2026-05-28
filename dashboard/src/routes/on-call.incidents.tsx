@@ -16,7 +16,7 @@
 
 import {createFileRoute, Link, Outlet, useRouterState} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
-import {api, type IncidentListFilters} from '@/lib/api'
+import {api, type IncidentListFilters, type IncidentStatus} from '@/lib/api'
 import {Card, CardContent} from '@/components/ui/card'
 import {Badge} from '@/components/ui/badge'
 import {
@@ -33,6 +33,11 @@ import {cn} from '@/lib/utils'
 export const Route = createFileRoute('/on-call/incidents')({
   component: Incidents,
 })
+
+type AlertStatusFilter = IncidentStatus | 'active' | 'all'
+
+const DEFAULT_ALERT_STATUS_FILTER: AlertStatusFilter = 'active'
+const ACTIVE_ALERT_STATUSES: IncidentStatus[] = ['TRIGGERED', 'ACKNOWLEDGED']
 
 const getPriorityConfig = (priority: string) => {
   if (priority.startsWith('P0')) return {color: 'bg-red-500/15 text-red-400 border-red-500/30', dot: 'bg-red-500', label: 'Critical'}
@@ -66,9 +71,36 @@ function isEscalatingSoon(nextEscalationAt?: string): boolean {
   return diff > 0 && diff <= 2 * 60 * 1000
 }
 
+function toIncidentStatusFilter(statusFilter: AlertStatusFilter): IncidentListFilters['status'] | undefined {
+  if (statusFilter === 'active') return ACTIVE_ALERT_STATUSES
+  if (statusFilter === 'all') return undefined
+  return statusFilter
+}
+
+function toAlertStatusFilter(value: string): AlertStatusFilter {
+  if (
+    value === 'active' ||
+    value === 'all' ||
+    value === 'TRIGGERED' ||
+    value === 'ACKNOWLEDGED' ||
+    value === 'RESOLVED'
+  ) {
+    return value
+  }
+  return DEFAULT_ALERT_STATUS_FILTER
+}
+
+function nextAlertStatusFilter(current: AlertStatusFilter, status: IncidentStatus): AlertStatusFilter {
+  return current === status ? DEFAULT_ALERT_STATUS_FILTER : status
+}
+
+function isAlertStatusActive(current: AlertStatusFilter, status: IncidentStatus): boolean {
+  return current === status || (current === 'active' && ACTIVE_ALERT_STATUSES.includes(status))
+}
+
 function Incidents() {
   const pathname = useRouterState({select: state => state.location.pathname})
-  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [statusFilter, setStatusFilter] = useState<AlertStatusFilter>(DEFAULT_ALERT_STATUS_FILTER)
   const [priorityFilter, setPriorityFilter] = useState<string>('all')
   const [, setTick] = useState(0)
   const isIncidentDetailRoute = pathname.startsWith('/on-call/incidents/')
@@ -83,7 +115,8 @@ function Incidents() {
     queryKey: ['incidents', statusFilter, priorityFilter],
     queryFn: () => {
       const filters: IncidentListFilters = {}
-      if (statusFilter !== 'all') filters.status = statusFilter as IncidentListFilters['status']
+      const status = toIncidentStatusFilter(statusFilter)
+      if (status) filters.status = status
       if (priorityFilter !== 'all') filters.priorityLevel = priorityFilter
       return api.getIncidents(filters)
     },
@@ -111,10 +144,10 @@ function Incidents() {
       {!isLoading && incidents && incidents.length > 0 && (
         <div className="flex gap-1.5">
           <button
-            onClick={() => setStatusFilter(statusFilter === 'TRIGGERED' ? 'all' : 'TRIGGERED')}
+            onClick={() => setStatusFilter(nextAlertStatusFilter(statusFilter, 'TRIGGERED'))}
             className={cn(
               'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all',
-              statusFilter === 'TRIGGERED'
+              isAlertStatusActive(statusFilter, 'TRIGGERED')
                 ? 'bg-red-500/15 border-red-500/40 text-red-400'
                 : 'hover:bg-muted/60'
             )}
@@ -123,10 +156,10 @@ function Incidents() {
             <span>{triggeredCount} Triggered</span>
           </button>
           <button
-            onClick={() => setStatusFilter(statusFilter === 'ACKNOWLEDGED' ? 'all' : 'ACKNOWLEDGED')}
+            onClick={() => setStatusFilter(nextAlertStatusFilter(statusFilter, 'ACKNOWLEDGED'))}
             className={cn(
               'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all',
-              statusFilter === 'ACKNOWLEDGED'
+              isAlertStatusActive(statusFilter, 'ACKNOWLEDGED')
                 ? 'bg-amber-500/15 border-amber-500/40 text-amber-400'
                 : 'hover:bg-muted/60'
             )}
@@ -135,10 +168,10 @@ function Incidents() {
             <span>{acknowledgedCount} Acknowledged</span>
           </button>
           <button
-            onClick={() => setStatusFilter(statusFilter === 'RESOLVED' ? 'all' : 'RESOLVED')}
+            onClick={() => setStatusFilter(nextAlertStatusFilter(statusFilter, 'RESOLVED'))}
             className={cn(
               'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all',
-              statusFilter === 'RESOLVED'
+              isAlertStatusActive(statusFilter, 'RESOLVED')
                 ? 'bg-green-500/15 border-green-500/40 text-green-400'
                 : 'hover:bg-muted/60'
             )}
@@ -156,11 +189,12 @@ function Incidents() {
           <span>Filter:</span>
         </div>
         <div className="w-44">
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select value={statusFilter} onValueChange={(value) => setStatusFilter(toAlertStatusFilter(value))}>
             <SelectTrigger className="h-8">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="active">Open</SelectItem>
               <SelectItem value="all">All Statuses</SelectItem>
               <SelectItem value="TRIGGERED">Triggered</SelectItem>
               <SelectItem value="ACKNOWLEDGED">Acknowledged</SelectItem>
