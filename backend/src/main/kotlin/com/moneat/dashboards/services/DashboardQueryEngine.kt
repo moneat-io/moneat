@@ -89,6 +89,7 @@ class DashboardQueryEngine {
         private const val MAX_QUERY_RESULT_LIMIT = 10000
         private const val EPOCH_MS_TO_SECONDS_DIVISOR = 1000.0
         private const val DATETIME64_MILLIS_PRECISION = 3
+        private const val QUERY_PREVIEW_LENGTH = 80
 
         fun resolveTimeInterval(from: String, to: String): String {
             val rangeMs = parseRelativeTime(to) - parseRelativeTime(from)
@@ -161,6 +162,28 @@ class DashboardQueryEngine {
             },
             rawQuery = substituteVars(dsl.rawQuery)
         )
+    }
+
+    fun resolvePrometheusDataSource(
+        dsl: QueryDsl,
+        orgId: Long,
+        dataSourceService: CustomDataSourceService,
+    ): QueryDsl {
+        if (dsl.dataSource != "__prometheus") return dsl
+        val sources = dataSourceService.listDataSources(orgId)
+        val promSource = sources.firstOrNull { it.sourceType.equals("prometheus", ignoreCase = true) }
+        if (promSource == null) {
+            logger.warn {
+                val sourcesList = sources.map { "${it.id}:${it.sourceType}" }
+                val shortQuery = dsl.rawQuery?.take(QUERY_PREVIEW_LENGTH) ?: ""
+                "No Prometheus datasource found for org $orgId (${sources.size} sources: $sourcesList), " +
+                    "cannot resolve __prometheus for rawQuery=$shortQuery"
+            }
+            return dsl
+        }
+        val rawQueryPreview = dsl.rawQuery?.take(QUERY_PREVIEW_LENGTH)
+        logger.debug { "Resolved __prometheus -> custom:${promSource.id} for rawQuery=$rawQueryPreview" }
+        return dsl.copy(dataSource = "custom:${promSource.id}")
     }
 
     fun buildQuery(

@@ -17,6 +17,7 @@
 package com.moneat.mcp.tools
 
 import com.moneat.dashboards.models.DashboardAlertResponse
+import com.moneat.dashboards.models.DashboardResponse
 import com.moneat.dashboards.models.DashboardWidgetAlerts
 import com.moneat.dashboards.models.DashboardWidgets
 import com.moneat.mcp.models.McpContext
@@ -67,6 +68,7 @@ class DashboardCrudToolTest {
         transaction {
             exec("DROP TABLE IF EXISTS dashboard_widget_alerts")
             exec("DROP TABLE IF EXISTS dashboard_widgets")
+            exec("DROP TABLE IF EXISTS dashboard_favorites")
             exec("DROP TABLE IF EXISTS dashboards")
             patchJsonbForH2(DashboardWidgets, DashboardWidgetAlerts)
             exec(
@@ -84,6 +86,16 @@ class DashboardCrudToolTest {
                     created_by BIGINT NOT NULL,
                     created_at TIMESTAMP NOT NULL,
                     updated_at TIMESTAMP NOT NULL
+                )
+                """.trimIndent()
+            )
+            exec(
+                """
+                CREATE TABLE dashboard_favorites (
+                    user_id INT NOT NULL,
+                    dashboard_id BIGINT NOT NULL,
+                    created_at TIMESTAMP NOT NULL,
+                    PRIMARY KEY (user_id, dashboard_id)
                 )
                 """.trimIndent()
             )
@@ -360,6 +372,112 @@ class DashboardCrudToolTest {
         }
     }
 
+    @Test
+    fun `create dashboard widget appends below existing widgets`() = runBlocking {
+        val dashboardId = seedDashboard()
+        seedWidget(dashboardId)
+
+        val result = CreateDashboardWidgetTool().execute(
+            JsonObject(
+                mapOf(
+                    "dashboard_id" to JsonPrimitive(dashboardId),
+                    "title" to JsonPrimitive("Memory"),
+                    "widget_type" to JsonPrimitive("stat"),
+                    "query_configs" to JsonArray(listOf(queryDslJson("metrics"))),
+                    "display_config" to JsonObject(mapOf("unit" to JsonPrimitive("bytes"))),
+                )
+            ),
+            context
+        )
+
+        val dashboard = decodeDashboard(result.content.first().text!!)
+        val created = dashboard.widgets.single { it.title == "Memory" }
+        assertFalse(result.isError)
+        assertEquals(2, dashboard.widgets.size)
+        assertEquals("stat", created.widgetType)
+        assertEquals(4, created.gridY)
+        assertEquals("bytes", created.displayConfig["unit"])
+        assertEquals("metrics", created.queryConfigs.single().dataSource)
+    }
+
+    @Test
+    fun `update dashboard widget patches target and preserves sibling widgets`() = runBlocking {
+        val dashboardId = seedDashboard()
+        val firstWidgetId = seedWidget(dashboardId, title = "CPU")
+        val secondWidgetId = seedWidget(dashboardId, widgetId = WIDGET_ID + 1, title = "Latency", sortOrder = 1)
+
+        val result = UpdateDashboardWidgetTool().execute(
+            JsonObject(
+                mapOf(
+                    "dashboard_id" to JsonPrimitive(dashboardId),
+                    "widget_id" to JsonPrimitive(firstWidgetId),
+                    "title" to JsonPrimitive("CPU load"),
+                    "widget_type" to JsonPrimitive("gauge"),
+                    "grid_w" to JsonPrimitive(3),
+                    "query_configs" to JsonArray(listOf(queryDslJson("spans"))),
+                )
+            ),
+            context
+        )
+
+        val dashboard = decodeDashboard(result.content.first().text!!)
+        val updated = dashboard.widgets.single { it.id == firstWidgetId }
+        val untouched = dashboard.widgets.single { it.id == secondWidgetId }
+        assertFalse(result.isError)
+        assertEquals("CPU load", updated.title)
+        assertEquals("gauge", updated.widgetType)
+        assertEquals(3, updated.gridW)
+        assertEquals("spans", updated.queryConfigs.single().dataSource)
+        assertEquals("Latency", untouched.title)
+        assertEquals("timeseries", untouched.widgetType)
+    }
+
+    @Test
+    fun `delete dashboard widget removes only the target widget`() = runBlocking {
+        val dashboardId = seedDashboard()
+        val firstWidgetId = seedWidget(dashboardId, title = "CPU")
+        val secondWidgetId = seedWidget(dashboardId, widgetId = WIDGET_ID + 1, title = "Latency", sortOrder = 1)
+
+        val result = DeleteDashboardWidgetTool().execute(
+            JsonObject(
+                mapOf(
+                    "dashboard_id" to JsonPrimitive(dashboardId),
+                    "widget_id" to JsonPrimitive(firstWidgetId),
+                )
+            ),
+            context
+        )
+
+        val dashboard = decodeDashboard(result.content.first().text!!)
+        assertFalse(result.isError)
+        assertEquals(listOf(secondWidgetId), dashboard.widgets.map { it.id })
+        assertEquals("Latency", dashboard.widgets.single().title)
+    }
+
+    @Test
+    fun `replace dashboard widgets rejects stale expected widget count`() = runBlocking {
+        val dashboardId = seedDashboard()
+        seedWidget(dashboardId)
+
+        val result = ReplaceDashboardWidgetsTool().execute(
+            JsonObject(
+                mapOf(
+                    "dashboard_id" to JsonPrimitive(dashboardId),
+                    "expected_widget_count" to JsonPrimitive(2),
+                    "widgets" to JsonArray(emptyList()),
+                )
+            ),
+            context
+        )
+
+        assertTrue(result.isError)
+        assertEquals(
+            "Dashboard has 1 widgets but expected_widget_count is 2. " +
+                "Read the dashboard first to get current state.",
+            result.content.first().text,
+        )
+    }
+
     // ──── Helpers ────
 
     private fun seedDashboard(): Long = transaction {
@@ -376,23 +494,38 @@ class DashboardCrudToolTest {
         DASHBOARD_ID
     }
 
-    private fun seedWidget(dashboardId: Long): Long = transaction {
+    private fun seedWidget(
+        dashboardId: Long,
+        widgetId: Long = WIDGET_ID,
+        title: String = "Test Widget",
+        widgetType: String = "timeseries",
+        gridY: Int = 0,
+        gridH: Int = 4,
+        sortOrder: Int = 0,
+    ): Long = transaction {
         exec(
             """
             INSERT INTO dashboard_widgets (
                 id, dashboard_id, title, widget_type, query_config, query_configs, display_config,
-                created_at, updated_at
+                grid_y, grid_h, sort_order, created_at, updated_at
             ) VALUES (
-                $WIDGET_ID, $dashboardId, 'Test Widget', 'timeseries', '{}', '[]', '{}',
+                $widgetId, $dashboardId, '$title', '$widgetType', '{}', '[]', '{}',
+                $gridY, $gridH, $sortOrder,
                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             )
             """.trimIndent()
         )
-        WIDGET_ID
+        widgetId
     }
 
     private fun decodeAlert(text: String): DashboardAlertResponse =
         json.decodeFromString<DashboardAlertResponse>(text)
+
+    private fun decodeDashboard(text: String): DashboardResponse =
+        json.decodeFromString<DashboardResponse>(text)
+
+    private fun queryDslJson(dataSource: String): JsonObject =
+        JsonObject(mapOf("dataSource" to JsonPrimitive(dataSource)))
 
     private fun enumValues(properties: JsonObject, property: String): List<String> {
         val values = properties[property]!!.jsonObject["enum"] as JsonArray

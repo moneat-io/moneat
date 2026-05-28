@@ -73,6 +73,7 @@ object McpScopes {
         "list_silence_periods",
         "list_status_pages",
         "list_uptime_monitors",
+        "preview_dashboard_widget_query",
     ).associateWith { setOf(PROJECT_READ) }
 
     private val releaseReadTools = listOf(
@@ -97,6 +98,7 @@ object McpScopes {
         "create_alert",
         "create_dashboard",
         "create_dashboard_alert",
+        "create_dashboard_widget",
         "create_datasource",
         "create_feature_flag",
         "create_project",
@@ -107,6 +109,7 @@ object McpScopes {
         "delete_alert",
         "delete_dashboard",
         "delete_dashboard_alert",
+        "delete_dashboard_widget",
         "delete_host",
         "delete_silence_period",
         "delete_uptime_monitor",
@@ -120,11 +123,13 @@ object McpScopes {
         "update_alert_notification_channels",
         "update_dashboard",
         "update_dashboard_alert",
+        "update_dashboard_widget",
         "update_issue_status",
         "update_notification_preferences",
         "update_status_page",
         "update_status_page_incident",
         "update_uptime_monitor",
+        "replace_dashboard_widgets",
     ).associateWith { setOf(PROJECT_WRITE) }
 
     private val readScopesByTool = telemetryReadTools + projectReadTools + releaseReadTools + orgReadTools

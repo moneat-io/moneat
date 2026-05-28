@@ -22,6 +22,7 @@ import com.moneat.mcp.tools.AggregateLogsTool
 import com.moneat.mcp.tools.CreateAlertTool
 import com.moneat.mcp.tools.CreateDashboardAlertTool
 import com.moneat.mcp.tools.CreateDashboardTool
+import com.moneat.mcp.tools.CreateDashboardWidgetTool
 import com.moneat.mcp.tools.CreateDataSourceTool
 import com.moneat.mcp.tools.CreateFeatureFlagTool
 import com.moneat.mcp.tools.CreateAgentKeyTool
@@ -33,6 +34,7 @@ import com.moneat.mcp.tools.CreateUptimeMonitorTool
 import com.moneat.mcp.tools.DeleteAlertTool
 import com.moneat.mcp.tools.DeleteDashboardAlertTool
 import com.moneat.mcp.tools.DeleteDashboardTool
+import com.moneat.mcp.tools.DeleteDashboardWidgetTool
 import com.moneat.mcp.tools.DeleteHostTool
 import com.moneat.mcp.tools.DeleteSilencePeriodTool
 import com.moneat.mcp.tools.DeleteUptimeMonitorTool
@@ -89,12 +91,15 @@ import com.moneat.mcp.tools.ListTransactionsTool
 import com.moneat.mcp.tools.ListUptimeMonitorsTool
 import com.moneat.mcp.tools.PauseUptimeMonitorTool
 import com.moneat.mcp.tools.PostIncidentUpdateTool
+import com.moneat.mcp.tools.PreviewDashboardWidgetQueryTool
 import com.moneat.mcp.tools.QueryLogsTool
+import com.moneat.mcp.tools.ReplaceDashboardWidgetsTool
 import com.moneat.mcp.tools.ResumeUptimeMonitorTool
 import com.moneat.mcp.tools.UpdateAlertNotificationChannelsTool
 import com.moneat.mcp.tools.UpdateAlertTool
 import com.moneat.mcp.tools.UpdateDashboardAlertTool
 import com.moneat.mcp.tools.UpdateDashboardTool
+import com.moneat.mcp.tools.UpdateDashboardWidgetTool
 import com.moneat.mcp.tools.UpdateIssueStatusTool
 import com.moneat.mcp.tools.UpdateNotificationPreferencesTool
 import com.moneat.mcp.tools.UpdateStatusPageIncidentTool
@@ -130,6 +135,11 @@ object McpToolRegistrar {
         toolRegistry.register(CreateDashboardTool())
         toolRegistry.register(UpdateDashboardTool())
         toolRegistry.register(DeleteDashboardTool())
+        toolRegistry.register(CreateDashboardWidgetTool())
+        toolRegistry.register(UpdateDashboardWidgetTool())
+        toolRegistry.register(DeleteDashboardWidgetTool())
+        toolRegistry.register(PreviewDashboardWidgetQueryTool())
+        toolRegistry.register(ReplaceDashboardWidgetsTool())
 
         // Alert tools
         toolRegistry.register(ListAlertsTool())
