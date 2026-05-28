@@ -172,69 +172,86 @@ private fun spanStatusFor(statusCode: Int): SpanStatus {
 private fun Application.installErrorHandling() {
     install(StatusPages) {
         exception<BadRequestException> { call, cause ->
-            if (!call.response.isCommitted) {
-                call.respond(
-                    HttpStatusCode.BadRequest,
-                    ErrorResponse(cause.message ?: "Bad request"),
-                )
-            }
+            handleBadRequest(call, cause)
         }
         exception<ClickHouseQueryException> { call, cause ->
-            logger.error { "ClickHouse query error on ${call.request.path()}: ${cause.detail}" }
-            if (SentryConfig.isEnabled()) {
-                Sentry.captureException(cause) { scope ->
-                    scope.setTag(HTTP_METHOD_TAG, call.request.httpMethod.value)
-                    scope.setTag(HTTP_PATH_TAG, call.request.path())
-                    scope.setTag("clickhouse.timeout", cause.isTimeout.toString())
-                    scope.setExtra("clickhouse.detail", cause.detail)
-                }
-            }
-            if (!call.response.isCommitted) {
-                val status = if (cause.isTimeout) HttpStatusCode.GatewayTimeout else HttpStatusCode.InternalServerError
-                val message = if (cause.isTimeout) "Query timed out" else "Data unavailable"
-                call.respond(status, mapOf("error" to message))
-            }
+            handleClickHouseQueryException(call, cause)
         }
         exception<Throwable> { call, cause ->
-            logger.error(cause) { "Unhandled exception: ${cause.message}" }
-
-            // Send to Sentry if enabled
-            if (SentryConfig.isEnabled()) {
-                Sentry.captureException(cause) { scope ->
-                    scope.setTag(HTTP_METHOD_TAG, call.request.httpMethod.value)
-                    scope.setTag(HTTP_PATH_TAG, call.request.path())
-                    scope.setTag(HTTP_STATUS_CODE_TAG, SENTRY_INTERNAL_ERROR_STATUS)
-
-                    val userAgent = call.request.headers["User-Agent"] ?: "unknown"
-                    scope.setExtra("user_agent", userAgent)
-                    scope.setExtra("remote_host", call.request.local.remoteHost)
-                    scope.setExtra("query_string", call.request.queryString())
-
-                    // Add request headers as extra context (excluding sensitive ones)
-                    val safeHeaders =
-                        call.request.headers
-                            .entries()
-                            .filter { (key, _) ->
-                                !key.equals("Authorization", ignoreCase = true) &&
-                                    !key.equals("Cookie", ignoreCase = true)
-                            }.associate { (key, values) -> key to values.joinToString(", ") }
-                    scope.setExtra("request_headers", safeHeaders.toString())
-                }
-            }
-
-            cause.printStackTrace()
-            if (!call.response.isCommitted) {
-                call.respond(
-                    HttpStatusCode.InternalServerError,
-                    mapOf("error" to "Internal server error")
-                )
-            } else {
-                logger.debug {
-                    "Skipping error response because response is already committed for ${call.request.path()}"
-                }
-            }
+            handleUnhandledException(call, cause)
         }
     }
+}
+
+private suspend fun handleBadRequest(call: ApplicationCall, cause: BadRequestException) {
+    if (!call.response.isCommitted) {
+        call.respond(
+            HttpStatusCode.BadRequest,
+            ErrorResponse(cause.message ?: "Bad request"),
+        )
+    }
+}
+
+private suspend fun handleClickHouseQueryException(call: ApplicationCall, cause: ClickHouseQueryException) {
+    logger.error { "ClickHouse query error on ${call.request.path()}: ${cause.detail}" }
+    captureClickHouseQueryException(call, cause)
+    if (!call.response.isCommitted) {
+        val status = if (cause.isTimeout) HttpStatusCode.GatewayTimeout else HttpStatusCode.InternalServerError
+        val message = if (cause.isTimeout) "Query timed out" else "Data unavailable"
+        call.respond(status, mapOf("error" to message))
+    }
+}
+
+private fun captureClickHouseQueryException(call: ApplicationCall, cause: ClickHouseQueryException) {
+    if (!SentryConfig.isEnabled()) {
+        return
+    }
+    Sentry.captureException(cause) { scope ->
+        scope.setTag(HTTP_METHOD_TAG, call.request.httpMethod.value)
+        scope.setTag(HTTP_PATH_TAG, call.request.path())
+        scope.setTag("clickhouse.timeout", cause.isTimeout.toString())
+        scope.setExtra("clickhouse.detail", cause.detail)
+    }
+}
+
+private suspend fun handleUnhandledException(call: ApplicationCall, cause: Throwable) {
+    logger.error(cause) { "Unhandled exception: ${cause.message}" }
+    captureUnhandledException(call, cause)
+    cause.printStackTrace()
+    if (!call.response.isCommitted) {
+        call.respond(
+            HttpStatusCode.InternalServerError,
+            mapOf("error" to "Internal server error")
+        )
+    } else {
+        logger.debug {
+            "Skipping error response because response is already committed for ${call.request.path()}"
+        }
+    }
+}
+
+private fun captureUnhandledException(call: ApplicationCall, cause: Throwable) {
+    if (!SentryConfig.isEnabled()) {
+        return
+    }
+    Sentry.captureException(cause) { scope ->
+        scope.setTag(HTTP_METHOD_TAG, call.request.httpMethod.value)
+        scope.setTag(HTTP_PATH_TAG, call.request.path())
+        scope.setTag(HTTP_STATUS_CODE_TAG, SENTRY_INTERNAL_ERROR_STATUS)
+        scope.setExtra("user_agent", call.request.headers["User-Agent"] ?: "unknown")
+        scope.setExtra("remote_host", call.request.local.remoteHost)
+        scope.setExtra("query_string", call.request.queryString())
+        scope.setExtra("request_headers", call.safeRequestHeaders().toString())
+    }
+}
+
+private fun ApplicationCall.safeRequestHeaders(): Map<String, String> {
+    return request.headers
+        .entries()
+        .filter { (key, _) ->
+            !key.equals("Authorization", ignoreCase = true) &&
+                !key.equals("Cookie", ignoreCase = true)
+        }.associate { (key, values) -> key to values.joinToString(", ") }
 }
 
 private fun Application.installRequestLogging() {
