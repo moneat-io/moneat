@@ -19,6 +19,7 @@ package com.moneat.plugins
 import kotlinx.serialization.SerializationException
 import java.io.IOException
 
+import com.moneat.config.ClickHouseQueryException
 import com.moneat.config.SentryConfig
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.ErrorResponse
@@ -174,6 +175,22 @@ fun Application.configureMonitoring() {
                 )
             }
         }
+        exception<ClickHouseQueryException> { call, cause ->
+            logger.error { "ClickHouse query error on ${call.request.path()}: ${cause.detail}" }
+            if (SentryConfig.isEnabled()) {
+                Sentry.captureException(cause) { scope ->
+                    scope.setTag("http.method", call.request.httpMethod.value)
+                    scope.setTag("http.path", call.request.path())
+                    scope.setTag("clickhouse.timeout", cause.isTimeout.toString())
+                    scope.setExtra("clickhouse.detail", cause.detail)
+                }
+            }
+            if (!call.response.isCommitted) {
+                val status = if (cause.isTimeout) HttpStatusCode.GatewayTimeout else HttpStatusCode.InternalServerError
+                val message = if (cause.isTimeout) "Query timed out" else "Data unavailable"
+                call.respond(status, mapOf("error" to message))
+            }
+        }
         exception<Throwable> { call, cause ->
             logger.error(cause) { "Unhandled exception: ${cause.message}" }
 
@@ -205,7 +222,7 @@ fun Application.configureMonitoring() {
             if (!call.response.isCommitted) {
                 call.respond(
                     HttpStatusCode.InternalServerError,
-                    mapOf("error" to "Internal server error", "message" to (cause.message ?: "Unknown error"))
+                    mapOf("error" to "Internal server error")
                 )
             } else {
                 logger.debug {

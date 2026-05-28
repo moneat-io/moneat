@@ -107,9 +107,11 @@ class ClickHouseClientTest {
                 "text/plain"
             )
         }) {
-            assertFailsWith<IllegalStateException> {
+            val ex = assertFailsWith<ClickHouseQueryException> {
                 ClickHouseClient.executeWithFormat("SELECT 1", "TabSeparated")
             }
+            assertEquals(true, ex.isTimeout)
+            assertEquals("Query timed out", ex.message)
         }
 
         val rendered = OperationalMetrics.scrape()
