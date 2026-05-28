@@ -137,6 +137,40 @@ class ClickHouseClientTest {
         }
     }
 
+    @Test
+    fun `executeLongRunning completes for a successful response`() = runBlocking {
+        val requestQueries = mutableListOf<String?>()
+        withClickHouseMockServer({ exchange ->
+            requestQueries.add(exchange.requestURI.rawQuery)
+            exchange.respond(200, "", "text/plain")
+        }) {
+            // Should not throw on success.
+            ClickHouseClient.executeLongRunning("INSERT INTO apm_traces_final SELECT 1")
+        }
+        // Uses the migration client path, so no read-query timeout settings are attached.
+        val params = parseQueryParams(requestQueries.single())
+        assertFalse(params.containsKey("max_execution_time"))
+    }
+
+    @Test
+    fun `executeLongRunning throws and records the operation on a ClickHouse error`() = runBlocking {
+        OperationalMetrics.resetForTest()
+        withClickHouseMockServer({ exchange ->
+            exchange.respond(200, "Code: 159. DB::Exception: Timeout exceeded", "text/plain")
+        }) {
+            val ex = assertFailsWith<ClickHouseQueryException> {
+                ClickHouseClient.executeLongRunning(
+                    "INSERT INTO apm_traces_final SELECT 1",
+                    operation = "trace_finalize",
+                )
+            }
+            assertEquals(true, ex.isTimeout)
+        }
+        val rendered = OperationalMetrics.scrape()
+        assertContains(rendered, "operation=\"trace_finalize\"")
+        assertContains(rendered, "code=\"159\"")
+    }
+
     private fun parseQueryParams(rawQuery: String?): Map<String, String> {
         if (rawQuery.isNullOrBlank()) return emptyMap()
         return rawQuery.split("&").associate { part ->

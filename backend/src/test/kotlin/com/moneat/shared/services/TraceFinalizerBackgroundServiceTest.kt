@@ -26,11 +26,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class TraceFinalizerBackgroundServiceTest {
@@ -82,6 +85,42 @@ class TraceFinalizerBackgroundServiceTest {
             // The first pass after startup finalizes the wider backfill window.
             val sql = withTimeout(5_000) { firstRun.await() }
             assertTrue(sql.contains("apm_traces_final"))
+        } finally {
+            service.stop()
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `start ignores a duplicate call while already running`() = runBlocking {
+        coEvery { ClickHouseClient.executeLongRunning(any(), any()) } coAnswers { }
+
+        val service = TraceFinalizerBackgroundService()
+        val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        try {
+            service.start(scope)
+            // Second call must hit the "already running" guard and not launch a second loop.
+            service.start(scope)
+        } finally {
+            service.stop()
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `runOnce skips finalization when ClickHouse is not initialized`() = runBlocking {
+        every { ClickHouseClient.isInitialized() } returns false
+        val calls = AtomicInteger(0)
+        coEvery { ClickHouseClient.executeLongRunning(any(), any()) } coAnswers { calls.incrementAndGet() }
+
+        val service = TraceFinalizerBackgroundService()
+        val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        try {
+            service.start(scope)
+            // The first pass runs immediately; with ClickHouse uninitialized it must skip without
+            // issuing any finalize query.
+            delay(300)
+            assertEquals(0, calls.get())
         } finally {
             service.stop()
             scope.cancel()
