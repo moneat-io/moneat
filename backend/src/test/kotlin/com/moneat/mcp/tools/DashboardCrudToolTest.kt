@@ -644,6 +644,25 @@ class DashboardCrudToolTest {
     }
 
     @Test
+    fun `preview dashboard widget query ignores disabled prometheus alias target`() = runBlocking {
+        val dashboardId = seedDashboard()
+        seedCustomDataSource(sourceType = "prometheus", enabled = false)
+
+        val result = PreviewDashboardWidgetQueryTool().execute(
+            JsonObject(
+                mapOf(
+                    "dashboard_id" to JsonPrimitive(dashboardId),
+                    "query_config" to queryDslJson("__prometheus", rawQuery = "up"),
+                )
+            ),
+            context
+        )
+
+        assertFalse(result.isError)
+        assertEquals("[]", result.content.first().text)
+    }
+
+    @Test
     fun `preview dashboard widget query skips built in raw query execution`() = runBlocking {
         val dashboardId = seedDashboard()
 
@@ -732,6 +751,11 @@ class DashboardCrudToolTest {
             ),
             ToolCase(
                 CreateDashboardWidgetTool(),
+                JsonObject(baseCreateArgs + ("title" to JsonPrimitive(123))),
+                "title must be a string",
+            ),
+            ToolCase(
+                CreateDashboardWidgetTool(),
                 JsonObject(baseCreateArgs + ("query_configs" to JsonObject(emptyMap()))),
                 "query_configs must be an array",
             ),
@@ -768,6 +792,17 @@ class DashboardCrudToolTest {
                         "dashboard_id" to JsonPrimitive(dashboardId),
                         "query_config" to queryDslJson("metrics"),
                         "variables" to JsonObject(mapOf("service" to JsonObject(emptyMap()))),
+                    )
+                ),
+                "variables.service must be a string",
+            ),
+            ToolCase(
+                PreviewDashboardWidgetQueryTool(),
+                JsonObject(
+                    mapOf(
+                        "dashboard_id" to JsonPrimitive(dashboardId),
+                        "query_config" to queryDslJson("metrics"),
+                        "variables" to JsonObject(mapOf("service" to JsonPrimitive(123))),
                     )
                 ),
                 "variables.service must be a string",
@@ -874,7 +909,9 @@ class DashboardCrudToolTest {
     private fun seedCustomDataSource(
         sourceId: Long = DATA_SOURCE_ID,
         sourceType: String,
+        enabled: Boolean = true,
     ): Long = transaction {
+        val enabledValue = if (enabled) "TRUE" else "FALSE"
         exec(
             """
             INSERT INTO custom_data_sources (
@@ -882,7 +919,7 @@ class DashboardCrudToolTest {
                 enabled, created_by, created_at, updated_at
             ) VALUES (
                 $sourceId, $ORG_ID, 'Prometheus', '$sourceType', 'prometheus.local',
-                'not-encrypted', '{}', TRUE, $CREATED_BY, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                'not-encrypted', '{}', $enabledValue, $CREATED_BY, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             )
             """.trimIndent()
         )

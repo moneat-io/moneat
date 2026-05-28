@@ -171,12 +171,14 @@ class DashboardQueryEngine {
     ): QueryDsl {
         if (dsl.dataSource != "__prometheus") return dsl
         val sources = dataSourceService.listDataSources(orgId)
-        val promSource = sources.firstOrNull { it.sourceType.equals("prometheus", ignoreCase = true) }
+        val promSource = sources.firstOrNull {
+            it.enabled && it.sourceType.equals("prometheus", ignoreCase = true)
+        }
         if (promSource == null) {
             logger.warn {
                 val sourcesList = sources.map { "${it.id}:${it.sourceType}" }
                 val shortQuery = dsl.rawQuery?.take(QUERY_PREVIEW_LENGTH) ?: ""
-                "No Prometheus datasource found for org $orgId (${sources.size} sources: $sourcesList), " +
+                "No enabled Prometheus datasource found for org $orgId (${sources.size} sources: $sourcesList), " +
                     "cannot resolve __prometheus for rawQuery=$shortQuery"
             }
             return dsl
