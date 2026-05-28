@@ -23,6 +23,12 @@ import type {
   LlmModelStats,
   LlmCostsResponse,
 } from '../types'
+import { urlWithQuery } from '../utils'
+
+function projectQuery(projectId: string | number, params: Record<string, string> = {}): string {
+  const searchParams = new URLSearchParams({projectId: String(projectId), ...params})
+  return searchParams.toString()
+}
 
 export function llmMethods(core: ApiClientCore) {
   const base = core.API_BASE
@@ -30,7 +36,7 @@ export function llmMethods(core: ApiClientCore) {
   return {
     getLlmOverview: (projectId: string | number, range = '24h') =>
       core.request<LlmOverviewResponse>(
-        `${base}/llm/overview?projectId=${projectId}&range=${encodeURIComponent(range)}`
+        urlWithQuery(`${base}/llm/overview`, projectQuery(projectId, {range}))
       ),
 
     getLlmGenerations: (
@@ -60,22 +66,22 @@ export function llmMethods(core: ApiClientCore) {
 
     getLlmGenerationDetail: (projectId: string | number, generationId: string) =>
       core.request<LlmGenerationDetail>(
-        `${base}/llm/generations/${encodeURIComponent(generationId)}?projectId=${projectId}`
+        urlWithQuery(`${base}/llm/generations/${encodeURIComponent(generationId)}`, projectQuery(projectId))
       ),
 
     getLlmTrace: (projectId: string | number, traceId: string) =>
       core.request<LlmTraceResponse>(
-        `${base}/llm/traces/${encodeURIComponent(traceId)}?projectId=${projectId}`
+        urlWithQuery(`${base}/llm/traces/${encodeURIComponent(traceId)}`, projectQuery(projectId))
       ),
 
     getLlmModels: (projectId: string | number, range = '24h') =>
       core.request<LlmModelStats[]>(
-        `${base}/llm/models?projectId=${projectId}&range=${encodeURIComponent(range)}`
+        urlWithQuery(`${base}/llm/models`, projectQuery(projectId, {range}))
       ),
 
     getLlmCosts: (projectId: string | number, range = '24h') =>
       core.request<LlmCostsResponse>(
-        `${base}/llm/costs?projectId=${projectId}&range=${encodeURIComponent(range)}`
+        urlWithQuery(`${base}/llm/costs`, projectQuery(projectId, {range}))
       ),
   }
 }

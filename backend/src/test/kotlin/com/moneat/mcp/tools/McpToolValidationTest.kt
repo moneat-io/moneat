@@ -29,14 +29,18 @@ import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -158,6 +162,17 @@ class McpToolValidationTest {
             assertFalse(result.isError)
             assertTrue(result.content.first().text.orEmpty().contains(TRACE_ID))
         }
+    }
+
+    @Test
+    fun `project id schemas accept resource IDs and legacy numeric IDs`() {
+        val projectIdSchema = projectIdInputSchema().properties["project_id"] as JsonObject
+        val typeValues = projectIdSchema["type"] as JsonArray
+
+        assertEquals(
+            listOf("string", "number"),
+            typeValues.jsonArray.map { it.jsonPrimitive.content }
+        )
     }
 
     @Test

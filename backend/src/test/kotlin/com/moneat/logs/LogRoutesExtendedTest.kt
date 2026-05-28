@@ -653,6 +653,7 @@ class LogRoutesExtendedTest {
                     serviceNamespace = "checkout",
                     serviceName = "api",
                     projectId = 30,
+                    projectResourceId = "11111111-1111-1111-1111-111111111111",
                     projectName = "Backend",
                     seenLogs = true,
                     seenTraces = false,
@@ -692,6 +693,7 @@ class LogRoutesExtendedTest {
                 serviceNamespace = "checkout",
                 serviceName = "api",
                 projectId = 30,
+                projectResourceId = "11111111-1111-1111-1111-111111111111",
                 projectName = "Backend",
                 updatedAt = "2026-01-01T00:00:00Z"
             )

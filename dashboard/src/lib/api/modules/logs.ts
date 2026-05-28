@@ -94,6 +94,14 @@ function mapOtlpServiceMapping(mapping: Record<string, unknown>): OtlpServiceMap
   }
 }
 
+function projectMappingField(projectId: string | number): {project_id: number} | {project_resource_id: string} {
+  const projectIdValue = String(projectId)
+  if (typeof projectId === 'number' || /^\d+$/.test(projectIdValue)) {
+    return {project_id: Number(projectIdValue)}
+  }
+  return {project_resource_id: projectIdValue}
+}
+
 function buildLogFilterParams(options: {
   query?: string
   levels?: string[]
@@ -256,10 +264,7 @@ export function logsMethods(core: ApiClientCore) {
       projectId: string | number,
       serviceNamespace = ''
     ): Promise<OtlpServiceMapping> => {
-      const projectField =
-        typeof projectId === 'number'
-          ? { project_id: projectId }
-          : { project_resource_id: projectId }
+      const projectField = projectMappingField(projectId)
       const response = await core.request<Record<string, unknown>>(`${base}/otlp/service-mappings`, {
         method: 'POST',
         body: JSON.stringify({

@@ -23,6 +23,7 @@ import com.moneat.shared.models.OtelObservedServices
 import com.moneat.shared.models.OtelServiceProjectMappings
 import com.moneat.shared.models.Projects
 import com.moneat.shared.services.ProjectIdResolver
+import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -83,7 +84,7 @@ class OtlpServiceRoutingService {
             val projectsById = Projects
                 .selectAll()
                 .where { Projects.organization_id eq organizationId }
-                .associate { row -> row[Projects.id] to (row[Projects.name] to row[Projects.resource_id].toString()) }
+                .associate { row -> row[Projects.id] to (row[Projects.name] to projectResourceId(row)) }
 
             OtelObservedServices
                 .selectAll()
@@ -130,7 +131,7 @@ class OtlpServiceRoutingService {
                 .firstOrNull()
                 ?: return@transaction null
             val projectName = projectRow[Projects.name]
-            val projectResourceId = projectRow[Projects.resource_id].toString()
+            val projectResourceId = projectResourceId(projectRow)
 
             OtelServiceProjectMappings.insertIgnore {
                 it[OtelServiceProjectMappings.organization_id] = organizationId
@@ -252,6 +253,11 @@ class OtlpServiceRoutingService {
                     projectId = row[OtelServiceProjectMappings.project_id],
                 )
             }
+
+    private fun projectResourceId(row: ResultRow): String {
+        val resourceId = row[Projects.resource_id].toString()
+        return resourceId.takeUnless { it == "null" } ?: row[Projects.id].toString()
+    }
 
     private data class MappingRow(
         val id: Int,

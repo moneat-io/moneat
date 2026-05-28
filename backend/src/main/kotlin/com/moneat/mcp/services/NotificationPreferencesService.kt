@@ -22,6 +22,7 @@ import com.moneat.events.models.ProjectNotificationPreferences
 import com.moneat.shared.models.NotificationPreferences
 import com.moneat.shared.models.Projects
 import kotlin.time.Clock
+import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
@@ -77,8 +78,8 @@ class NotificationPreferencesService {
             Projects
                 .selectAll()
                 .where { Projects.id inList projectIds }
-                .associate {
-                    it[Projects.id] to (it[Projects.name] to it[Projects.resource_id].toString())
+                .associate { row ->
+                    row[Projects.id] to (row[Projects.name] to projectResourceId(row))
                 }
         }
 
@@ -97,6 +98,11 @@ class NotificationPreferencesService {
         }
 
         NotificationPreferencesResponse(global = globalPrefs, projects = projects)
+    }
+
+    private fun projectResourceId(row: ResultRow): String {
+        val resourceId = row[Projects.resource_id].toString()
+        return resourceId.takeUnless { it == "null" } ?: row[Projects.id].toString()
     }
 
     fun updatePreferences(

@@ -773,9 +773,18 @@ export function ProjectTelemetrySetupHub({
   const [createdAgentKey, setCreatedAgentKey] = useState<string | null>(null)
 
   const copyResourceId = async () => {
-    await navigator.clipboard.writeText(project.resourceId)
-    setCopiedResourceId(true)
-    setTimeout(() => setCopiedResourceId(false), COPY_RESET_MS)
+    try {
+      await navigator.clipboard.writeText(project.resourceId)
+      setCopiedResourceId(true)
+      setTimeout(() => setCopiedResourceId(false), COPY_RESET_MS)
+    } catch (error) {
+      console.error('Failed to copy project resource ID:', error)
+      toast({
+        title: 'Could not copy resource ID',
+        description: 'Check browser clipboard permissions and try again.',
+        variant: 'destructive',
+      })
+    }
   }
 
   useEffect(() => {

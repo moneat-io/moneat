@@ -33,7 +33,7 @@ data class OtlpServiceMappingResponse(
     @SerialName("service_namespace") val serviceNamespace: String,
     @SerialName("service_name") val serviceName: String,
     @SerialName("project_id") val projectId: Long,
-    @SerialName("project_resource_id") val projectResourceId: String = projectId.toString(),
+    @SerialName("project_resource_id") val projectResourceId: String,
     @SerialName("project_name") val projectName: String,
     @SerialName("updated_at") val updatedAt: String,
 )
@@ -45,7 +45,7 @@ data class OtlpObservedServiceResponse(
     @SerialName("service_namespace") val serviceNamespace: String,
     @SerialName("service_name") val serviceName: String,
     @SerialName("project_id") val projectId: Long? = null,
-    @SerialName("project_resource_id") val projectResourceId: String? = projectId?.toString(),
+    @SerialName("project_resource_id") val projectResourceId: String? = null,
     @SerialName("project_name") val projectName: String? = null,
     @SerialName("seen_logs") val seenLogs: Boolean,
     @SerialName("seen_traces") val seenTraces: Boolean,
