@@ -63,6 +63,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import mu.KotlinLogging
 import org.msgpack.core.MessagePack
 import org.msgpack.core.MessageUnpacker
@@ -401,14 +403,8 @@ object TraceIngestionService {
             SELECT count()
             FROM ($subquery)
         """.trimIndent()
-        val countResult = executeDashboardQuery(
-            countQuery,
-            "TabSeparated",
-            parentSpan,
-        )
-        val totalCount = countResult.trim().toLongOrNull() ?: 0
 
-        val query = """
+        val dataQuery = """
             SELECT
                 trace_id_canonical,
                 root_service,
@@ -425,40 +421,48 @@ object TraceIngestionService {
             FORMAT JSONEachRow
         """.trimIndent()
 
-        val result = executeDashboardQuery(query, "", parentSpan)
-        val traces = if (result.isBlank()) {
-            emptyList()
-        } else {
-            result.trim().lines()
-                .filter { it.isNotBlank() }
-                .map { line ->
-                    val obj = json.parseToJsonElement(line).jsonObject
-                    DdTraceListItem(
-                        traceId = obj["trace_id_canonical"]!!
-                            .jsonPrimitive.content,
-                        rootService = obj["root_service"]!!
-                            .jsonPrimitive.content,
-                        rootResource = obj["root_resource"]!!
-                            .jsonPrimitive.content,
-                        rootName = obj["root_name"]!!
-                            .jsonPrimitive.content,
-                        spanCount = obj["span_count"]!!
-                            .jsonPrimitive.int,
-                        durationNs = obj["duration_ns"]!!
-                            .jsonPrimitive.long,
-                        startNs = obj["start_ns"]?.jsonPrimitive?.long
-                            ?: 0,
-                        hasError = (
-                            obj["has_error"]
-                                ?.jsonPrimitive?.int ?: 0
-                            ) > 0,
-                        source = obj["source"]
-                            ?.jsonPrimitive?.content ?: "datadog",
-                    )
+        return coroutineScope {
+            val countDeferred = async {
+                val countResult = executeDashboardQuery(countQuery, "TabSeparated", parentSpan)
+                countResult.trim().toLongOrNull() ?: 0
+            }
+            val dataDeferred = async {
+                val result = executeDashboardQuery(dataQuery, "", parentSpan)
+                if (result.isBlank()) {
+                    emptyList()
+                } else {
+                    result.trim().lines()
+                        .filter { it.isNotBlank() }
+                        .map { line ->
+                            val obj = json.parseToJsonElement(line).jsonObject
+                            DdTraceListItem(
+                                traceId = obj["trace_id_canonical"]!!
+                                    .jsonPrimitive.content,
+                                rootService = obj["root_service"]!!
+                                    .jsonPrimitive.content,
+                                rootResource = obj["root_resource"]!!
+                                    .jsonPrimitive.content,
+                                rootName = obj["root_name"]!!
+                                    .jsonPrimitive.content,
+                                spanCount = obj["span_count"]!!
+                                    .jsonPrimitive.int,
+                                durationNs = obj["duration_ns"]!!
+                                    .jsonPrimitive.long,
+                                startNs = obj["start_ns"]?.jsonPrimitive?.long
+                                    ?: 0,
+                                hasError = (
+                                    obj["has_error"]
+                                        ?.jsonPrimitive?.int ?: 0
+                                    ) > 0,
+                                source = obj["source"]
+                                    ?.jsonPrimitive?.content ?: "datadog",
+                            )
+                        }
                 }
-        }
+            }
 
-        return DdTraceListResponse(traces = traces, totalCount = totalCount)
+            DdTraceListResponse(traces = dataDeferred.await(), totalCount = countDeferred.await())
+        }
     }
 
     suspend fun getApmOverview(
@@ -475,16 +479,26 @@ object TraceIngestionService {
             query = query,
             previousWindow = true,
         )
-        val previousStats = getOverviewPreviousStats(previousSubquery, parentSpan)
 
-        return DdApmOverviewResponse(
-            stats = getOverviewStats(currentSubquery, previousStats, parentSpan),
-            latencySeries = getLatencySeries(currentSubquery, parentSpan),
-            serviceHealth = getServiceHealth(currentSubquery, parentSpan),
-            resourceHotspots = getResourceHotspots(currentSubquery, parentSpan),
-            errors = getOverviewErrors(currentSubquery, parentSpan),
-            facets = getOverviewFacets(currentSubquery, parentSpan),
-        )
+        return coroutineScope {
+            val previousStatsDeferred = async { getOverviewPreviousStats(previousSubquery, parentSpan) }
+            val statsDeferred = async { getOverviewStats(currentSubquery, emptyOverviewPreviousStats(), parentSpan) }
+            val latencyDeferred = async { getLatencySeries(currentSubquery, parentSpan) }
+            val serviceHealthDeferred = async { getServiceHealth(currentSubquery, parentSpan) }
+            val resourceHotspotsDeferred = async { getResourceHotspots(currentSubquery, parentSpan) }
+            val errorsDeferred = async { getOverviewErrors(currentSubquery, parentSpan) }
+            val facetsDeferred = async { getOverviewFacetsCombined(currentSubquery, parentSpan) }
+
+            val stats = statsDeferred.await()
+            DdApmOverviewResponse(
+                stats = stats.copy(previous = previousStatsDeferred.await()),
+                latencySeries = latencyDeferred.await(),
+                serviceHealth = serviceHealthDeferred.await(),
+                resourceHotspots = resourceHotspotsDeferred.await(),
+                errors = errorsDeferred.await(),
+                facets = facetsDeferred.await(),
+            )
+        }
     }
 
     private suspend fun getOverviewStats(
@@ -676,39 +690,45 @@ object TraceIngestionService {
         }
     }
 
-    private suspend fun getOverviewFacets(
+    private suspend fun getOverviewFacetsCombined(
         subquery: String,
         parentSpan: ISpan?,
-    ): DdApmOverviewFacets =
-        DdApmOverviewFacets(
-            services = getFacetItems(subquery, "root_service", parentSpan),
-            sources = getFacetItems(subquery, "source", parentSpan),
-            environments = getFacetItems(subquery, "env", parentSpan),
-        )
-
-    private suspend fun getFacetItems(
-        subquery: String,
-        field: String,
-        parentSpan: ISpan?,
-    ): List<DdApmFacetItem> {
+    ): DdApmOverviewFacets {
         val query = """
-            SELECT
-                $field as value,
-                count() as count
-            FROM ($subquery)
-            WHERE $field != ''
-            GROUP BY value
-            ORDER BY count DESC, value ASC
-            LIMIT $MAX_FILTER_FACETS
+            SELECT 'service' as facet_type, root_service as value, count() as count
+            FROM ($subquery) WHERE root_service != ''
+            GROUP BY root_service ORDER BY count DESC, value ASC LIMIT $MAX_FILTER_FACETS
+            UNION ALL
+            SELECT 'source' as facet_type, source as value, count() as count
+            FROM ($subquery) WHERE source != ''
+            GROUP BY source ORDER BY count DESC, value ASC LIMIT $MAX_FILTER_FACETS
+            UNION ALL
+            SELECT 'env' as facet_type, env as value, count() as count
+            FROM ($subquery) WHERE env != ''
+            GROUP BY env ORDER BY count DESC, value ASC LIMIT $MAX_FILTER_FACETS
             FORMAT JSONEachRow
         """.trimIndent()
 
-        return jsonRows(query, parentSpan).map { obj ->
-            DdApmFacetItem(
+        val rows = jsonRows(query, parentSpan)
+        val services = mutableListOf<DdApmFacetItem>()
+        val sources = mutableListOf<DdApmFacetItem>()
+        val environments = mutableListOf<DdApmFacetItem>()
+        for (obj in rows) {
+            val item = DdApmFacetItem(
                 value = obj.stringValue("value"),
                 count = obj.longValue("count"),
             )
+            when (obj.stringValue("facet_type")) {
+                "service" -> services.add(item)
+                "source" -> sources.add(item)
+                "env" -> environments.add(item)
+            }
         }
+        return DdApmOverviewFacets(
+            services = services,
+            sources = sources,
+            environments = environments,
+        )
     }
 
     private suspend fun firstJsonRow(

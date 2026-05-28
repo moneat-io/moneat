@@ -318,7 +318,7 @@ class CustomDashboardService(
                     QueryDsl(
                         dataSource = "events",
                         metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count")),
-                        groupBy = listOf(GroupByDef("transaction", GroupByType.FIELD)),
+                        groupBy = listOf(GroupByDef("transaction_name", GroupByType.FIELD)),
                         filters = listOf(FilterDef("level", FilterOp.EQ, "error")),
                         orderBy = OrderByDef("count", "desc"),
                         limit = 10
