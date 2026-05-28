@@ -55,7 +55,10 @@ import io.ktor.server.plugins.ratelimit.RateLimit
 import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
@@ -63,6 +66,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
@@ -99,6 +103,34 @@ class McpRoutesTest {
         val body = response.bodyAsText()
         assertTrue(body.contains("moneat-mcp-server"), body)
         assertTrue(response.headers["mcp-session-id"]?.isNotBlank() == true)
+    }
+
+    @Test
+    fun `POST v1 mcp initialize response omits optional null fields`() = testApplication {
+        setupApp()
+
+        val response = client.post("/v1/mcp") {
+            mcpHeaders()
+            setBody(initializeRequest())
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val responseBody = response.bodyAsText()
+        val body = Json.parseToJsonElement(responseBody).jsonObject
+        val result = body.getValue("result").jsonObject
+        val capabilities = result.getValue("capabilities").jsonObject
+        val serverInfo = result.getValue("serverInfo").jsonObject
+
+        assertFalse("_meta" in result, responseBody)
+        assertFalse("instructions" in result, responseBody)
+        assertFalse("prompts" in capabilities, responseBody)
+        assertFalse("logging" in capabilities, responseBody)
+        assertFalse("completions" in capabilities, responseBody)
+        assertFalse("experimental" in capabilities, responseBody)
+        assertFalse("extensions" in capabilities, responseBody)
+        assertFalse("title" in serverInfo, responseBody)
+        assertFalse("websiteUrl" in serverInfo, responseBody)
+        assertFalse("icons" in serverInfo, responseBody)
     }
 
     @Test
@@ -167,6 +199,21 @@ class McpRoutesTest {
 
         assertEquals(HttpStatusCode.Unauthorized, response.status)
         assertTrue(response.bodyAsText().contains("Invalid or missing bearer token"))
+    }
+
+    @Test
+    fun `POST v1 mcp parse error keeps null json rpc id`() = testApplication {
+        setupApp()
+
+        val response = client.post("/v1/mcp") {
+            mcpHeaders()
+            setBody("{")
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        assertEquals(JsonNull, body["id"])
+        assertTrue("error" in body)
     }
 
     @Test
