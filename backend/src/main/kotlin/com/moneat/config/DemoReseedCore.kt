@@ -16,6 +16,7 @@
 
 package com.moneat.config
 
+import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import mu.KotlinLogging
@@ -53,15 +54,15 @@ private fun demoIssueInsertSql(envExpr: String, spec: DemoIssueInsertSpec): Stri
             stack_trace, environment, release, user_id, user_email,
             device_model, os_name, os_version, fingerprint
         )
-        SELECT generateUUIDv4(), $project, '$issueId',
+        SELECT generateUUIDv4(), $project, '${escapeSql(issueId)}',
             now() - INTERVAL (number % $hours) HOUR, now() - INTERVAL (number % $hours) HOUR,
-            'error', '$platform', '$level',
-            '$message', '$exType', '$exValue', '$stack',
-            $envExpr, '$release',
+            'error', '${escapeSql(platform)}', '${escapeSql(level)}',
+            '${escapeSql(message)}', '${escapeSql(exType)}', '${escapeSql(exValue)}', '${escapeSql(stack)}',
+            $envExpr, $release,
             toString($userBase + (number % $userMod)),
             concat('user', toString(number % $userMod), '@acmemobile.com'),
-            $devices, '$osName', $osVersions,
-            ['$exType']
+            $devices, '${escapeSql(osName)}', $osVersions,
+            ['${escapeSql(exType)}']
         FROM numbers($events)
         """.trimIndent()
     }

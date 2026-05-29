@@ -93,6 +93,7 @@ import com.moneat.shared.repositories.OrganizationRepository
 import com.moneat.shared.repositories.OrganizationRepositoryImpl
 import com.moneat.shared.services.ArtifactCleanupService
 import com.moneat.shared.services.AttributionAnalyticsService
+import com.moneat.shared.services.DemoLivenessBackgroundService
 import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.shared.services.RetentionBackgroundService
 import com.moneat.shared.services.RetentionPolicyService
@@ -129,6 +130,7 @@ val sharedModule = module {
     single { ProjectIdResolver() }
 
     single { AttributionAnalyticsService() }
+    single { DemoLivenessBackgroundService() }
 }
 
 /** Authentication, token management, and account lifecycle. */
