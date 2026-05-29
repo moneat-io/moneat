@@ -28,6 +28,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import java.lang.reflect.Method
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ProfileIngestionServiceTest {
@@ -313,6 +314,82 @@ class ProfileIngestionServiceTest {
     }
 
     @Test
+    fun `listProfiles and profile lookups handle empty ClickHouse results`() = runBlocking {
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "testdb"
+            coEvery { ClickHouseClient.executeWithFormat(any(), any()) } answers {
+                val sql = firstArg<String>()
+                if (sql.contains("SELECT count()")) {
+                    "not-a-number"
+                } else {
+                    "\n"
+                }
+            }
+
+            val response = ProfileIngestionService.listProfiles(
+                organizationId = 42,
+                query = DdProfileListQuery(limit = 999),
+            )
+            val profile = ProfileIngestionService.getProfile(
+                organizationId = 42,
+                profileId = "missing-profile",
+            )
+            val storageKey = ProfileIngestionService.getProfileStorageKey(
+                organizationId = 42,
+                profileId = "missing-profile",
+            )
+            val meta = ProfileIngestionService.getProfileMeta(
+                organizationId = 42,
+                profileId = "missing-profile",
+            )
+
+            assertEquals(0, response.totalCount)
+            assertTrue(response.profiles.isEmpty())
+            assertNull(profile)
+            assertNull(storageKey)
+            assertNull(meta)
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
+    fun `listProfiles maps optional defaults and service tag fallback`() = runBlocking {
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "testdb"
+            coEvery { ClickHouseClient.executeWithFormat(any(), any()) } answers {
+                val sql = firstArg<String>()
+                if (sql.contains("SELECT count()")) {
+                    "1"
+                } else {
+                    compactJson(
+                        """{"profile_id":"profile-2","service":"","profile_type":"cpu",""",
+                        """"start_time":"2026-01-01 00:00:00","end_time":"2026-01-01 00:00:01",""",
+                        """"duration_ns":42,"size_bytes":7,"tags":{"service.name":"fallback-api"}}""",
+                    )
+                }
+            }
+
+            val profile = ProfileIngestionService.listProfiles(
+                organizationId = 42,
+                query = DdProfileListQuery(),
+            ).profiles.single()
+
+            assertEquals("fallback-api", profile.service)
+            assertEquals("", profile.host)
+            assertEquals("", profile.env)
+            assertEquals("", profile.version)
+            assertEquals("", profile.runtime)
+            assertEquals("", profile.language)
+            assertEquals("datadog", profile.source)
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
     fun `listServices maps rollups type counts and sparkline series`() = runBlocking {
         mockkObject(ClickHouseClient)
         try {
@@ -341,6 +418,52 @@ class ProfileIngestionServiceTest {
             assertEquals(3, service.profileCount)
             assertEquals(2, service.series.single().count)
             assertEquals(3, response.totalProfiles)
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
+    fun `listServices maps sparse rows and default lookback sparkline`() = runBlocking {
+        val queries = mutableListOf<String>()
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "testdb"
+            coEvery { ClickHouseClient.executeWithFormat(any(), any()) } answers {
+                val sql = firstArg<String>()
+                queries.add(sql)
+                when {
+                    sql.contains("profile_type AS profileType") ->
+                        """{"service":"","count":1}"""
+                    sql.contains("GROUP BY service, ts") ->
+                        """{"service":"","count":2}"""
+                    else ->
+                        """{"service":"","languages":["","kotlin"]}"""
+                }
+            }
+
+            val response = ProfileIngestionService.listServices(
+                organizationId = 42,
+                fromMs = null,
+                toMs = null,
+            )
+
+            val service = response.services.single()
+            assertEquals("", service.service)
+            assertEquals(listOf("kotlin"), service.languages)
+            assertTrue(service.runtimes.isEmpty())
+            assertTrue(service.environments.isEmpty())
+            assertEquals("", service.types.single().profileType)
+            assertEquals(1, service.types.single().count)
+            assertEquals(0, service.hostCount)
+            assertEquals(0, service.profileCount)
+            assertEquals(0, service.totalSizeBytes)
+            assertEquals("", service.firstSeen)
+            assertEquals("", service.lastSeen)
+            assertEquals(0, service.avgDurationNs)
+            assertEquals(0, service.series.single().ts)
+            assertEquals(2, service.series.single().count)
+            assertTrue(queries.any { it.contains("now() - INTERVAL") })
         } finally {
             unmockkObject(ClickHouseClient)
         }
@@ -382,6 +505,32 @@ class ProfileIngestionServiceTest {
     }
 
     @Test
+    fun `timeseries maps sparse rows and clamps invalid bucket count`() = runBlocking {
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "testdb"
+            coEvery { ClickHouseClient.executeWithFormat(any(), any()) } returns "{}"
+
+            val response = ProfileIngestionService.timeseries(
+                ProfileTimeseriesQuery(
+                    organizationId = 42,
+                    filters = ProfileQueryFilters(),
+                    window = ProfileTimeWindow(fromMs = 0, toMs = 500),
+                    buckets = 0,
+                ),
+            )
+
+            val point = response.points.single()
+            assertEquals(60, response.bucketSeconds)
+            assertEquals(0, point.ts)
+            assertEquals(0, point.count)
+            assertEquals(0, point.sizeBytes)
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
     fun `selectProfilesForMerge caps candidates and defaults missing source`() = runBlocking {
         val queries = mutableListOf<String>()
         mockkObject(ClickHouseClient)
@@ -415,6 +564,52 @@ class ProfileIngestionServiceTest {
     }
 
     @Test
+    fun `selectProfilesForMerge handles blank and sparse candidate rows`() = runBlocking {
+        val queries = mutableListOf<String>()
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "testdb"
+            coEvery { ClickHouseClient.executeWithFormat(any(), any()) } answers {
+                firstArg<String>().also { queries.add(it) }
+                if (queries.size == 1) {
+                    "\n"
+                } else {
+                    """{"storage_key":"key-1"}"""
+                }
+            }
+
+            val emptySelection = ProfileIngestionService.selectProfilesForMerge(
+                ProfileMergeSelectionQuery(
+                    organizationId = 42,
+                    filters = ProfileQueryFilters(),
+                    window = ProfileTimeWindow(fromMs = 1000, toMs = 2000),
+                    maxProfiles = 0,
+                ),
+            )
+            val sparseSelection = ProfileIngestionService.selectProfilesForMerge(
+                ProfileMergeSelectionQuery(
+                    organizationId = 42,
+                    filters = ProfileQueryFilters(),
+                    window = ProfileTimeWindow(fromMs = 1000, toMs = 2000),
+                    maxProfiles = 1,
+                ),
+            )
+
+            val candidate = sparseSelection.candidates.single()
+            assertEquals(0, emptySelection.totalInWindow)
+            assertTrue(emptySelection.candidates.isEmpty())
+            assertEquals(0, sparseSelection.totalInWindow)
+            assertEquals("", candidate.profileId)
+            assertEquals("key-1", candidate.storageKey)
+            assertEquals("", candidate.profileType)
+            assertEquals("datadog", candidate.source)
+            assertTrue(queries.first().contains("LIMIT 1"))
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
     fun `getProfile and getProfileMeta map ClickHouse rows`() = runBlocking {
         mockkObject(ClickHouseClient)
         try {
@@ -434,6 +629,23 @@ class ProfileIngestionServiceTest {
             assertEquals("profile-1", profile?.profileId)
             assertEquals("key-1", meta?.storageKey)
             assertEquals("cpu", meta?.profileType)
+            assertEquals("datadog", meta?.source)
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
+    fun `getProfileMeta defaults source for legacy tab separated rows`() = runBlocking {
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "testdb"
+            coEvery { ClickHouseClient.executeWithFormat(any(), any()) } returns "key-legacy\tjfr"
+
+            val meta = ProfileIngestionService.getProfileMeta(organizationId = 42, profileId = "profile-legacy")
+
+            assertEquals("key-legacy", meta?.storageKey)
+            assertEquals("jfr", meta?.profileType)
             assertEquals("datadog", meta?.source)
         } finally {
             unmockkObject(ClickHouseClient)

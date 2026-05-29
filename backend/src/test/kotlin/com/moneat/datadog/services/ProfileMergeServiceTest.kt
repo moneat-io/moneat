@@ -104,14 +104,68 @@ class ProfileMergeServiceTest {
         put("totalSamples", 10)
     }
 
+    private fun sparseProfileFlamegraph(): JsonObject = buildJsonObject {
+        put(
+            "frames",
+            buildJsonArray {
+                add(buildJsonObject {})
+                add(
+                    buildJsonObject {
+                        put("name", "worker")
+                        put(
+                            "children",
+                            buildJsonArray {
+                                add(
+                                    buildJsonObject {
+                                        put("name", "leaf")
+                                    },
+                                )
+                            },
+                        )
+                    },
+                )
+            },
+        )
+        put(
+            "sampleTypes",
+            buildJsonArray {
+                add(buildJsonObject {})
+                add(
+                    buildJsonObject {
+                        put("key", "wall")
+                        put("label", "Wall")
+                    },
+                )
+            },
+        )
+        put(
+            "threads",
+            buildJsonArray {
+                add(buildJsonObject {})
+                add(
+                    buildJsonObject {
+                        put("id", "all")
+                    },
+                )
+                add(
+                    buildJsonObject {
+                        put("id", "t1")
+                        put("samples", 7)
+                    },
+                )
+            },
+        )
+    }
+
     private fun mergeQuery(
         sampleType: String? = null,
+        thread: String? = null,
     ) = ProfileMergeFlamegraphQuery(
         organizationId = 1,
         filters = ProfileQueryFilters(service = "api", profileType = "jfr"),
         window = ProfileTimeWindow(fromMs = 0, toMs = 1000),
         sampleType = sampleType,
-        thread = null,
+        thread = thread,
         maxProfiles = 25,
     )
 
@@ -166,5 +220,70 @@ class ProfileMergeServiceTest {
 
         assertTrue(out["frames"]!!.jsonArray.isEmpty())
         assertEquals(0, out["mergedCount"]!!.jsonPrimitive.int)
+    }
+
+    @Test
+    fun `mergeFlamegraph skips unreadable and failed profile parses`() {
+        coEvery {
+            ProfileIngestionService.selectProfilesForMerge(any())
+        } returns ProfileMergeSelection(
+            totalInWindow = 3,
+            candidates = listOf(
+                ProfileMergeCandidate("p1", "missing", "jfr", "datadog"),
+                ProfileMergeCandidate("p2", "bad", "jfr", "datadog"),
+                ProfileMergeCandidate("p3", "good", "jfr", "datadog"),
+            ),
+        )
+        every { ProfileStorageService.read("missing") } returns null
+        every { ProfileStorageService.read("bad") } returns "bad".toByteArray()
+        every { ProfileStorageService.read("good") } returns "good".toByteArray()
+        every {
+            ProfileFlamegraphParser.parse(any(), any(), match { it.decodeToString() == "bad" }, any(), any())
+        } throws IllegalArgumentException("bad profile")
+        every {
+            ProfileFlamegraphParser.parse(any(), any(), match { it.decodeToString() == "good" }, any(), any())
+        } returns sparseProfileFlamegraph()
+
+        val out = runBlocking {
+            ProfileMergeService.mergeFlamegraph(mergeQuery(thread = "t1"))
+        }
+
+        assertEquals(1, out["mergedCount"]!!.jsonPrimitive.int)
+        assertEquals(3, out["totalCount"]!!.jsonPrimitive.int)
+        assertEquals("t1", out["selectedThread"]!!.jsonPrimitive.content)
+        assertEquals("samples", out["unit"]!!.jsonPrimitive.content)
+        assertEquals(0, out["totalSamples"]!!.jsonPrimitive.int)
+
+        val frame = out["frames"]!!.jsonArray.single().jsonObject
+        assertEquals("worker", frame["name"]!!.jsonPrimitive.content)
+        assertEquals(0, frame["value"]!!.jsonPrimitive.int)
+        assertEquals("leaf", frame["children"]!!.jsonArray.single().jsonObject["name"]!!.jsonPrimitive.content)
+
+        val sampleType = out["sampleTypes"]!!.jsonArray.single().jsonObject
+        assertEquals("wall", sampleType["key"]!!.jsonPrimitive.content)
+        val threads = out["threads"]!!.jsonArray
+        assertEquals("t1", threads[0].jsonObject["label"]!!.jsonPrimitive.content)
+        assertEquals("all", threads[1].jsonObject["label"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `mergeFlamegraph omits selectedThread for all thread selection`() {
+        coEvery {
+            ProfileIngestionService.selectProfilesForMerge(any())
+        } returns ProfileMergeSelection(
+            totalInWindow = 1,
+            candidates = listOf(ProfileMergeCandidate("p1", "key1", "jfr", "datadog")),
+        )
+        every { ProfileStorageService.read("key1") } returns "payload".toByteArray()
+        every {
+            ProfileFlamegraphParser.parse(any(), any(), any(), any(), any())
+        } returns singleProfileFlamegraph()
+
+        val out = runBlocking {
+            ProfileMergeService.mergeFlamegraph(mergeQuery(thread = "all"))
+        }
+
+        assertEquals(null, out["selectedThread"])
+        assertEquals(1, out["mergedCount"]!!.jsonPrimitive.int)
     }
 }
