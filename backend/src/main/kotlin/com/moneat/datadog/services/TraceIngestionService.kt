@@ -469,8 +469,8 @@ object TraceIngestionService {
                 } else {
                     result.trim().lines()
                         .filter { it.isNotBlank() }
-                        .map { line ->
-                            val obj = json.parseToJsonElement(line).jsonObject
+                        .mapNotNull { line ->
+                            val obj = parseRowOrNull(line) ?: return@mapNotNull null
                             DdTraceListItem(
                                 traceId = obj["trace_id_canonical"]!!
                                     .jsonPrimitive.content,
@@ -777,11 +777,31 @@ object TraceIngestionService {
         query: String,
         parentSpan: ISpan?,
     ): List<JsonObject> {
-        val result = executeDashboardQuery(query, "", parentSpan)
-        if (result.isBlank()) return emptyList()
-        return result.trim().lines()
+        val lines = executeDashboardQuery(query, "", parentSpan)
+            .lines()
             .filter { it.isNotBlank() }
-            .map { line -> json.parseToJsonElement(line).jsonObject }
+        val rows = lines.mapNotNull(::parseRowOrNull)
+        if (rows.size != lines.size) {
+            logger.warn {
+                "Dropped ${lines.size - rows.size} non-object line(s) from ClickHouse JSONEachRow response"
+            }
+        }
+        return rows
+    }
+
+    /**
+     * Safely parse one line of a ClickHouse `FORMAT JSONEachRow` response into a [JsonObject].
+     *
+     * Every well-formed row is a JSON object, so a line that parses to a non-object — or fails
+     * to parse at all — is not row data. Such lines appear when ClickHouse streams an error
+     * *after* it has already sent a 200 (e.g. a mid-stream query timeout): the trailing
+     * exception text is appended past the point [ClickHouseClient.executeWithFormat] inspects
+     * for errors. Returning null lets callers skip the line instead of throwing, so a single
+     * malformed line cannot turn a partial result into an unhandled 500.
+     */
+    private fun parseRowOrNull(line: String): JsonObject? {
+        if (line.isBlank()) return null
+        return runCatching { json.parseToJsonElement(line) }.getOrNull() as? JsonObject
     }
 
     private fun emptyOverviewStats(previousStats: DdApmOverviewPreviousStats): DdApmOverviewStats =
@@ -859,8 +879,8 @@ object TraceIngestionService {
 
         val spans = result.trim().lines()
             .filter { it.isNotBlank() }
-            .map { line ->
-                val obj = json.parseToJsonElement(line).jsonObject
+            .mapNotNull { line ->
+                val obj = parseRowOrNull(line) ?: return@mapNotNull null
                 DdSpanResponse(
                     spanId = obj["span_id_out"]!!.jsonPrimitive.content,
                     traceId = obj["trace_id_out"]!!.jsonPrimitive.content,
@@ -916,8 +936,8 @@ object TraceIngestionService {
         } else {
             result.trim().lines()
                 .filter { it.isNotBlank() }
-                .map { line ->
-                    val obj = json.parseToJsonElement(line).jsonObject
+                .mapNotNull { line ->
+                    val obj = parseRowOrNull(line) ?: return@mapNotNull null
                     DdServiceMapEntry(
                         service = obj["service"]!!
                             .jsonPrimitive.content,
@@ -956,7 +976,7 @@ object TraceIngestionService {
             callsResult.trim().lines()
                 .filter { it.isNotBlank() }
                 .forEach { line ->
-                    val obj = json.parseToJsonElement(line).jsonObject
+                    val obj = parseRowOrNull(line) ?: return@forEach
                     val from = obj["from_service"]!!
                         .jsonPrimitive.content
                     val to = obj["to_service"]!!
@@ -1032,8 +1052,8 @@ object TraceIngestionService {
         } else {
             result.trim().lines()
                 .filter { it.isNotBlank() }
-                .mapIndexed { index, line ->
-                    val obj = json.parseToJsonElement(line).jsonObject
+                .mapIndexedNotNull { index, line ->
+                    val obj = parseRowOrNull(line) ?: return@mapIndexedNotNull null
                     val svc = obj["service"]!!
                         .jsonPrimitive.content
                     val res = obj["resource"]!!
@@ -1074,8 +1094,8 @@ object TraceIngestionService {
         } else {
             serviceFacetsResult.trim().lines()
                 .filter { it.isNotBlank() }
-                .map { line ->
-                    val obj = json.parseToJsonElement(line).jsonObject
+                .mapNotNull { line ->
+                    val obj = parseRowOrNull(line) ?: return@mapNotNull null
                     DdApmServiceFacet(
                         service = obj["service"]!!
                             .jsonPrimitive.content,
@@ -1168,8 +1188,8 @@ object TraceIngestionService {
         } else {
             result.trim().lines()
                 .filter { it.isNotBlank() }
-                .map { line ->
-                    val obj = json.parseToJsonElement(line).jsonObject
+                .mapNotNull { line ->
+                    val obj = parseRowOrNull(line) ?: return@mapNotNull null
                     val totalHits = obj["total_hits"]!!.jsonPrimitive.long
                     val totalErrors = obj["total_errors"]!!
                         .jsonPrimitive.long
