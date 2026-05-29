@@ -29,12 +29,14 @@ import com.moneat.datadog.services.DatadogHostService
 import com.moneat.datadog.services.DdResourceStatsQuery
 import com.moneat.datadog.services.DdTraceListQuery
 import com.moneat.datadog.services.ProfileIngestionService
+import com.moneat.datadog.services.ProfileStorageService
 import com.moneat.datadog.services.TraceIngestionService
 import com.moneat.testsupport.RouteTestSupport
 import com.moneat.testsupport.RouteTestSupport.installJwtAuth
 import com.moneat.testsupport.RouteTestSupport.withAuth
 import com.moneat.testsupport.startTestKoin
 import com.moneat.testsupport.stopTestKoin
+import io.ktor.client.statement.bodyAsText
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.http.HttpStatusCode
@@ -49,6 +51,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class DatadogQueryRoutesTest {
 
@@ -58,6 +61,7 @@ class DatadogQueryRoutesTest {
         mockkObject(DatadogHostService)
         mockkObject(TraceIngestionService)
         mockkObject(ProfileIngestionService)
+        mockkObject(ProfileStorageService)
 
         every { DatadogHostService.listHosts(any<Int>()) } returns emptyList()
         every { DatadogHostService.getHost(any<Int>(), any<Int>()) } returns null
@@ -78,10 +82,12 @@ class DatadogQueryRoutesTest {
         coEvery { ProfileIngestionService.listProfiles(any(), any(), any(), any(), any(), any()) } returns
             DdProfileListResponse(emptyList(), 0L)
         coEvery { ProfileIngestionService.getProfileMeta(any(), any()) } returns null
+        every { ProfileStorageService.read(any()) } returns null
     }
 
     @AfterTest
     fun teardown() {
+        unmockkObject(ProfileStorageService)
         unmockkObject(ProfileIngestionService)
         unmockkObject(TraceIngestionService)
         unmockkObject(DatadogHostService)
@@ -494,5 +500,39 @@ class DatadogQueryRoutesTest {
         val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
         val resp = client.get("/v1/profiles/unknown-id/flamegraph") { withAuth(token) }
         assertEquals(HttpStatusCode.NotFound, resp.status)
+    }
+
+    @Test
+    fun `profile flamegraph forwards datadog pprof selectors`() = testApplication {
+        installProfileRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        coEvery {
+            ProfileIngestionService.getProfileMeta(10, "profile-pprof")
+        } returns ProfileIngestionService.ProfileMeta("profile-key", "cpu", "datadog")
+        every { ProfileStorageService.read("profile-key") } returns "not-a-pprof".toByteArray()
+
+        val resp = client.get("/v1/profiles/profile-pprof/flamegraph?sampleType=cpu&thread=all") {
+            withAuth(token)
+        }
+
+        assertEquals(HttpStatusCode.OK, resp.status)
+        assertTrue(resp.bodyAsText().contains("\"frames\""))
+    }
+
+    @Test
+    fun `profile flamegraph forwards datadog jfr selectors`() = testApplication {
+        installProfileRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        coEvery {
+            ProfileIngestionService.getProfileMeta(10, "profile-jfr")
+        } returns ProfileIngestionService.ProfileMeta("jfr-key", "jfr", "datadog")
+        every { ProfileStorageService.read("jfr-key") } returns "not-a-jfr".toByteArray()
+
+        val resp = client.get("/v1/profiles/profile-jfr/flamegraph?sampleType=cpu&thread=all") {
+            withAuth(token)
+        }
+
+        assertEquals(HttpStatusCode.OK, resp.status)
+        assertTrue(resp.bodyAsText().contains("\"frames\""))
     }
 }
