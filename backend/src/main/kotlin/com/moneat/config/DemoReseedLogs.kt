@@ -170,7 +170,9 @@ internal suspend fun reseedLogs() {
                 ELSE 'worker-prod-2'
             END AS host,
             'sdk' AS source,
-            -- Link ~80% of logs to a real demo APM trace so the log -> trace viewer resolves.
+            -- Link most logs to a real demo APM trace so the log -> trace viewer resolves. The "no trace"
+            -- selector below uses % 7 (coprime with the % 20 trace bucket) so unlinked logs spread across
+            -- all 20 traces instead of starving buckets 0/5/10/15.
             -- The demo root spans (DemoReseedDatadog) use trace_id = reinterpretAsUInt64(sipHash64(n, 0))
             -- and root span_id = reinterpretAsUInt64(sipHash64(n, 1)) for n in 0..19. trace_id_canonical
             -- falls back to toString(trace_id), and getTraceDetail parses it via toULongOrNull, so the
@@ -178,9 +180,9 @@ internal suspend fun reseedLogs() {
             -- context (empty), which the UI renders as "no trace" rather than a broken link.
             -- toUInt64(...) is required: the demo root spans hash a UInt64 `number`, and `number % 20`
             -- would otherwise carry a narrower integer type, changing the sipHash result (verified).
-            CASE WHEN number % 5 = 0 THEN ''
+            CASE WHEN number % 7 = 0 THEN ''
                  ELSE toString(reinterpretAsUInt64(sipHash64(toUInt64(number % 20), 0))) END AS trace_id,
-            CASE WHEN number % 5 = 0 THEN ''
+            CASE WHEN number % 7 = 0 THEN ''
                  ELSE toString(reinterpretAsUInt64(sipHash64(toUInt64(number % 20), 1))) END AS span_id,
             map(
                 'service', $tagsServiceCase,

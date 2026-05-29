@@ -200,6 +200,7 @@ fun Application.configureBackgroundJobs() {
             otlpMetricsIngestionWorker.stop()
         }
         workflowExecutionWorker.stop()
+        demoLivenessBackgroundService.stop()
         pulseService?.stop()
         FeatureRegistry.stopBackgroundJobs()
 

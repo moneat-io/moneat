@@ -62,8 +62,8 @@ internal suspend fun purgeFeedbackDemoData() {
 internal suspend fun reseedFeedback() {
     suspendRunCatching {
         requireClickHouse2xx(ClickHouseClient.execute(buildFeedbackInsertSql()), "Reseed user_feedback")
+        logger.info { "User feedback demo data reseed complete" }
     }.onFailure { logger.warn { "Reseed user_feedback failed (non-fatal): ${it.message}" } }
-    logger.info { "User feedback demo data reseed complete" }
 }
 
 private fun buildFeedbackInsertSql(): String =
