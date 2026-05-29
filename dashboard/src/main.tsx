@@ -24,6 +24,7 @@ import {TooltipProvider} from './components/ui/tooltip'
 import {HelmetProvider} from 'react-helmet-async'
 import * as Sentry from '@sentry/react'
 import {initAnalytics} from './lib/analytics'
+import {shouldRetryQuery} from './lib/query-retry'
 import './index.css'
 
 // Initialize Sentry (error monitoring)
@@ -71,7 +72,11 @@ if (import.meta.env.VITE_DD_APPLICATION_ID && import.meta.env.VITE_DD_CLIENT_TOK
   })
 }
 
-const queryClient = new QueryClient()
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {retry: shouldRetryQuery},
+  },
+})
 
 const router = createRouter({
   routeTree,
