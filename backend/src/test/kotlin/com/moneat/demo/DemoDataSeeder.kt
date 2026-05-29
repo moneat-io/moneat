@@ -26,6 +26,7 @@ import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Releases
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
+import com.moneat.shared.services.TraceFinalizerBackgroundService
 import com.moneat.statuspage.models.StatusPageIncidentUpdates
 import com.moneat.statuspage.models.StatusPageIncidents
 import com.moneat.statuspage.models.StatusPageMonitors
@@ -59,6 +60,10 @@ import kotlin.time.Duration.Companion.days
  * - Release tracking
  */
 object DemoDataSeeder {
+
+    // Demo APM spans span the last 48h; finalize a slightly wider window so they all land in
+    // apm_traces_final for the traces dashboard.
+    private const val DEMO_TRACE_FINALIZE_WINDOW_HOURS = 72
 
     private fun hashPassword(password: String): String {
         return BCrypt.hashpw(password, BCrypt.gensalt())
@@ -3528,6 +3533,9 @@ object DemoDataSeeder {
             ) VALUES ${spanRows.joinToString(",\n")}
             """.trimIndent()
         ClickHouseClient.execute(spanBatch)
+        // Finalize the freshly seeded spans into apm_traces_final (the dashboard read source) so the
+        // traces UI has data immediately, without waiting for the scheduled finalizer.
+        TraceFinalizerBackgroundService.fromConfig().finalizeRecent(emitHours = DEMO_TRACE_FINALIZE_WINDOW_HOURS)
         println("✅ Seeded $traceCount traces (${spanRows.size} spans)")
 
         // ── Profiles ──
@@ -3932,6 +3940,7 @@ object DemoDataSeeder {
             listOf(
                 datadogDeleteQuery("apm_spans", orgId),
                 datadogDeleteQuery("apm_trace_summaries", orgId),
+                datadogDeleteQuery("apm_traces_final", orgId),
                 datadogDeleteQuery("apm_error_groups_hourly", orgId),
                 datadogDeleteQuery("apm_resource_stats_hourly", orgId),
                 datadogDeleteQuery("trace_stats", orgId),

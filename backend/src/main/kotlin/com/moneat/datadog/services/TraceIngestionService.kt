@@ -71,7 +71,7 @@ import org.msgpack.core.MessageUnpacker
 
 private val logger = KotlinLogging.logger {}
 
-private const val APM_TRACE_SUMMARIES_TABLE = "apm_trace_summaries"
+private const val APM_TRACES_FINAL_TABLE = "apm_traces_final"
 private const val APM_ERROR_GROUPS_TABLE = "apm_error_groups_hourly"
 private const val APM_RESOURCE_STATS_TABLE = "apm_resource_stats_hourly"
 private const val APM_SERVICE_STATS_TABLE = "apm_service_stats_hourly"
@@ -332,60 +332,52 @@ object TraceIngestionService {
         query: DdTraceListQuery,
         previousWindow: Boolean = false,
     ): String {
+        // apm_traces_final holds one finalized row per trace with plain columns, so the dashboard
+        // reads it directly with a (organization_id, trace_bucket) key-prefix filter -- no per-trace
+        // re-aggregation. FINAL collapses any superseded rows from re-finalization (see
+        // TraceFinalizerBackgroundService). service/env/source/status/search filter plain columns, so
+        // they all go in WHERE.
         val filters = mutableListOf(
             ClickHouseQueryUtils.orgIdClause(organizationId.toLong()),
             if (previousWindow) {
-                query.timeRange.previousBucketStartClause()
+                query.timeRange.previousBucketStartClause("trace_bucket")
             } else {
-                query.timeRange.bucketStartClause()
+                query.timeRange.bucketStartClause("trace_bucket")
             }
         )
         query.service?.let {
-            filters.add("service = '${escapeSql(it)}'")
+            filters.add("root_service = '${escapeSql(it)}'")
         }
         query.env?.let {
             filters.add("env = '${escapeSql(it)}'")
         }
-
-        val havingFilters = mutableListOf<String>()
         query.source?.let {
-            havingFilters.add("source = '${escapeSql(it)}'")
+            filters.add("source = '${escapeSql(it)}'")
         }
         when (query.status) {
-            STATUS_ERROR -> havingFilters.add("has_error = 1")
-            STATUS_OK -> havingFilters.add("has_error = 0")
+            STATUS_ERROR -> filters.add("has_error = 1")
+            STATUS_OK -> filters.add("has_error = 0")
         }
         query.search?.trim()?.takeIf { it.isNotEmpty() }?.let {
-            havingFilters.add(traceSearchClause(it))
-        }
-        val havingClause = if (havingFilters.isEmpty()) {
-            ""
-        } else {
-            "HAVING ${havingFilters.joinToString(" AND ")}"
+            filters.add(traceSearchClause(it))
         }
 
         return """
             SELECT
                 trace_id_canonical,
-                argMinMerge(root_service_state) as root_service,
-                argMinMerge(root_resource_state) as root_resource,
-                argMinMerge(root_name_state) as root_name,
-                any(env) as env,
-                toUInt32(sumMerge(span_count_state)) as span_count,
-                toUInt64(greatest(
-                    0,
-                    toUnixTimestamp64Nano(maxMerge(trace_end_state)) -
-                        toUnixTimestamp64Nano(minMerge(trace_start_state))
-                )) as duration_ns,
-                minMerge(trace_start_state) as trace_start,
-                toInt64(toUnixTimestamp64Nano(minMerge(trace_start_state))) as start_ns,
-                toUInt8(sumMerge(error_count_state) > 0) as has_error,
-                toUInt64(sumMerge(error_count_state)) as error_count,
-                argMinMerge(source_state) as source
-            FROM `$clickhouseDb`.$APM_TRACE_SUMMARIES_TABLE
+                root_service,
+                root_resource,
+                root_name,
+                env,
+                span_count,
+                duration_ns,
+                trace_start,
+                toInt64(toUnixTimestamp64Nano(trace_start)) as start_ns,
+                has_error,
+                error_count,
+                source
+            FROM `$clickhouseDb`.$APM_TRACES_FINAL_TABLE FINAL
             WHERE ${filters.joinToString(" AND ")}
-            GROUP BY trace_id_canonical
-            $havingClause
         """.trimIndent()
     }
 

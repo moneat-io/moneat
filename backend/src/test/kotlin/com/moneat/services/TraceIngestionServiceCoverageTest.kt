@@ -475,6 +475,27 @@ class TraceIngestionServiceCoverageTest {
         assertTrue(capturedQueries.any { it.contains("checkout\\'s") })
     }
 
+    @Test
+    fun `APM overview reads finalized table without per-trace re-aggregation`() = runBlocking {
+        val capturedQueries = mutableListOf<String>()
+        coEvery { ClickHouseClient.executeWithFormat(any(), any()) } coAnswers {
+            capturedQueries.add(firstArg())
+            if (secondArg<String>() == "TabSeparated") "0" else ""
+        }
+
+        TraceIngestionService.getApmOverview(
+            organizationId = 1,
+            query = DdTraceListQuery(limit = 10, offset = 0),
+        )
+
+        // Reads must hit the finalized one-row-per-trace table with FINAL and must NOT re-introduce
+        // the per-trace argMin aggregation that caused the dashboard ClickHouse timeouts.
+        assertTrue(capturedQueries.isNotEmpty())
+        assertTrue(capturedQueries.all { it.contains("apm_traces_final FINAL") })
+        assertFalse(capturedQueries.any { it.contains("argMinMerge") })
+        assertFalse(capturedQueries.any { it.contains("GROUP BY organization_id, trace_id_canonical") })
+    }
+
     // ===================== getTraceDetail =====================
 
     @Test
@@ -720,8 +741,8 @@ class TraceIngestionServiceCoverageTest {
         assertEquals(20L, result.resources.first().totalHits)
         assertEquals(5L, result.resources.first().totalErrors)
         assertEquals(0.25, result.resources.first().errorRate)
-        assertTrue(capturedQueries.all { it.contains("apm_trace_summaries") })
-        assertTrue(capturedQueries.any { it.contains("service = 'api'") })
+        assertTrue(capturedQueries.all { it.contains("apm_traces_final") })
+        assertTrue(capturedQueries.any { it.contains("root_service = 'api'") })
         assertTrue(capturedQueries.any { it.contains("env = 'production'") })
         assertTrue(capturedQueries.any { it.contains("source = 'otlp'") })
         assertTrue(capturedQueries.any { it.contains("HAVING total_errors > 0") })
@@ -765,13 +786,18 @@ class TraceIngestionServiceCoverageTest {
             timeRange = timeRange
         )
 
-        val traceQueries = capturedQueries.filter { it.contains("apm_trace_summaries") }
+        val traceQueries = capturedQueries.filter { it.contains("apm_traces_final") }
         val errorQueries = capturedQueries.filter { it.contains("apm_error_groups_hourly") }
         val resourceQueries = capturedQueries.filter { it.contains("apm_resource_stats_hourly") }
         assertEquals(2, traceQueries.size)
         assertEquals(3, errorQueries.size)
         assertEquals(2, resourceQueries.size)
-        assertTrue(capturedQueries.all { it.contains("bucket_start >= toStartOfHour(now() - INTERVAL 90 DAY)") })
+        // Finalized per-trace reads filter on trace_bucket; the hourly rollups still filter bucket_start.
+        assertTrue(traceQueries.all { it.contains("trace_bucket >= toStartOfHour(now() - INTERVAL 90 DAY)") })
+        assertTrue(
+            (errorQueries + resourceQueries)
+                .all { it.contains("bucket_start >= toStartOfHour(now() - INTERVAL 90 DAY)") }
+        )
         assertTrue(capturedQueries.none { it.contains("FROM `test_db`.apm_spans") })
         assertTrue(capturedQueries.none { it.contains("FROM `test_db`.trace_stats") })
 

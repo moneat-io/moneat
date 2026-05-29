@@ -218,6 +218,7 @@ class RetentionBackgroundService(
             "apm_spans" to "start",
             "trace_stats" to "start",
             "apm_trace_summaries" to "bucket_start",
+            "apm_traces_final" to "trace_bucket",
             "apm_error_groups_hourly" to "bucket_start",
             "apm_resource_stats_hourly" to "bucket_start"
         )
