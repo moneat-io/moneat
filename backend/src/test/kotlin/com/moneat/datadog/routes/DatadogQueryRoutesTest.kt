@@ -22,6 +22,9 @@ import com.moneat.datadog.models.DdApmOverviewPreviousStats
 import com.moneat.datadog.models.DdApmOverviewResponse
 import com.moneat.datadog.models.DdApmOverviewStats
 import com.moneat.datadog.models.DdProfileListResponse
+import com.moneat.datadog.models.DdProfileResponse
+import com.moneat.datadog.models.DdProfileServicesResponse
+import com.moneat.datadog.models.DdProfileTimeseriesResponse
 import com.moneat.datadog.models.DdResourceStatsResponse
 import com.moneat.datadog.models.DdServiceMapResponse
 import com.moneat.datadog.models.DdTraceListResponse
@@ -31,6 +34,7 @@ import com.moneat.datadog.services.DatadogPprofFlamegraphService
 import com.moneat.datadog.services.DdResourceStatsQuery
 import com.moneat.datadog.services.DdTraceListQuery
 import com.moneat.datadog.services.ProfileIngestionService
+import com.moneat.datadog.services.ProfileMergeService
 import com.moneat.datadog.services.ProfileStorageService
 import com.moneat.datadog.services.TraceIngestionService
 import com.moneat.testsupport.RouteTestSupport
@@ -38,9 +42,9 @@ import com.moneat.testsupport.RouteTestSupport.installJwtAuth
 import com.moneat.testsupport.RouteTestSupport.withAuth
 import com.moneat.testsupport.startTestKoin
 import com.moneat.testsupport.stopTestKoin
-import io.ktor.client.statement.bodyAsText
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
@@ -50,14 +54,14 @@ import io.mockk.every
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import io.mockk.verify
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 class DatadogQueryRoutesTest {
 
@@ -67,6 +71,7 @@ class DatadogQueryRoutesTest {
         mockkObject(DatadogHostService)
         mockkObject(TraceIngestionService)
         mockkObject(ProfileIngestionService)
+        mockkObject(ProfileMergeService)
         mockkObject(ProfileStorageService)
 
         every { DatadogHostService.listHosts(any<Int>()) } returns emptyList()
@@ -85,14 +90,22 @@ class DatadogQueryRoutesTest {
             DdServiceMapResponse(emptyList())
         coEvery { TraceIngestionService.getApmErrors(any(), any(), any(), any(), any(), any()) } returns
             DdApmErrorsResponse(emptyList(), 0L)
-        coEvery { ProfileIngestionService.listProfiles(any(), any(), any(), any(), any(), any()) } returns
+        coEvery { ProfileIngestionService.listProfiles(any(), any()) } returns
             DdProfileListResponse(emptyList(), 0L)
         coEvery { ProfileIngestionService.getProfileMeta(any(), any()) } returns null
         every { ProfileStorageService.read(any()) } returns null
+        coEvery { ProfileIngestionService.getProfile(any(), any()) } returns null
+        coEvery { ProfileIngestionService.listServices(any(), any(), any()) } returns
+            DdProfileServicesResponse(emptyList(), 0L, 0L, 0, 0L, 0)
+        coEvery { ProfileIngestionService.timeseries(any()) } returns DdProfileTimeseriesResponse(emptyList(), 60L)
+        coEvery { ProfileMergeService.mergeFlamegraph(any()) } returns buildJsonObject {
+            put("frames", buildJsonArray {})
+        }
     }
 
     @AfterTest
     fun teardown() {
+        unmockkObject(ProfileMergeService)
         unmockkObject(ProfileStorageService)
         unmockkObject(ProfileIngestionService)
         unmockkObject(TraceIngestionService)
@@ -493,11 +506,87 @@ class DatadogQueryRoutesTest {
     }
 
     @Test
+    fun `profiles list returns ok with jwt and clamps limit`() = testApplication {
+        installProfileRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get(
+            "/v1/profiles?service=api&type=cpu&source=datadog&env=prod&host=h1&version=v1" +
+                "&from=100&to=200&limit=500&offset=3",
+        ) {
+            withAuth(token)
+        }
+
+        assertEquals(HttpStatusCode.OK, resp.status)
+        coVerify {
+            ProfileIngestionService.listProfiles(
+                10,
+                match {
+                    it.service == "api" &&
+                        it.profileType == "cpu" &&
+                        it.source == "datadog" &&
+                        it.env == "prod" &&
+                        it.host == "h1" &&
+                        it.version == "v1" &&
+                        it.fromMs == 100L &&
+                        it.toMs == 200L &&
+                        it.limit == 200 &&
+                        it.offset == 3
+                },
+            )
+        }
+    }
+
+    @Test
+    fun `profiles list normalizes invalid paging values`() = testApplication {
+        installProfileRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get("/v1/profiles?limit=0&offset=-10") { withAuth(token) }
+
+        assertEquals(HttpStatusCode.OK, resp.status)
+        coVerify {
+            ProfileIngestionService.listProfiles(
+                10,
+                match {
+                    it.limit == 1 && it.offset == 0
+                },
+            )
+        }
+    }
+
+    @Test
     fun `profile download returns not found for unknown profile`() = testApplication {
         installProfileRoutes()()
         val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
         val resp = client.get("/v1/profiles/unknown-id/download") { withAuth(token) }
         assertEquals(HttpStatusCode.NotFound, resp.status)
+    }
+
+    @Test
+    fun `profile download returns raw profile bytes when found`() = testApplication {
+        installProfileRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        coEvery {
+            ProfileIngestionService.getProfileMeta(10, "profile-download")
+        } returns ProfileIngestionService.ProfileMeta("profile-key", "cpu", "datadog")
+        every { ProfileStorageService.read("profile-key") } returns "raw-profile".toByteArray()
+
+        val resp = client.get("/v1/profiles/profile-download/download") { withAuth(token) }
+
+        assertEquals(HttpStatusCode.OK, resp.status)
+        assertEquals("raw-profile", resp.bodyAsText())
+    }
+
+    @Test
+    fun `profile download returns generic error when metadata lookup fails`() = testApplication {
+        installProfileRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        coEvery {
+            ProfileIngestionService.getProfileMeta(10, "profile-error")
+        } throws IllegalStateException("metadata failed")
+
+        val resp = client.get("/v1/profiles/profile-error/download") { withAuth(token) }
+
+        assertEquals(HttpStatusCode.InternalServerError, resp.status)
     }
 
     @Test
@@ -581,4 +670,130 @@ class DatadogQueryRoutesTest {
         put("selectedSampleType", sampleType)
         put("selectedThread", thread)
     }
+
+    // ──── Profile aggregation routes ────
+
+    @Test
+    fun `profile services returns 401 without jwt`() = testApplication {
+        installProfileRoutes()()
+        assertEquals(HttpStatusCode.Unauthorized, client.get("/v1/profiles/services").status)
+    }
+
+    @Test
+    fun `profile services returns ok with jwt`() = testApplication {
+        installProfileRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get("/v1/profiles/services") { withAuth(token) }
+        assertEquals(HttpStatusCode.OK, resp.status)
+    }
+
+    @Test
+    fun `profile timeseries returns 401 without jwt`() = testApplication {
+        installProfileRoutes()()
+        assertEquals(HttpStatusCode.Unauthorized, client.get("/v1/profiles/timeseries").status)
+    }
+
+    @Test
+    fun `profile timeseries rejects inverted range`() = testApplication {
+        installProfileRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get("/v1/profiles/timeseries?from=200&to=100") { withAuth(token) }
+        assertEquals(HttpStatusCode.BadRequest, resp.status)
+    }
+
+    @Test
+    fun `profile timeseries returns ok with jwt and forwards filters`() = testApplication {
+        installProfileRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get(
+            "/v1/profiles/timeseries?service=api&type=cpu&env=prod&host=h1&from=1000&to=61000&buckets=10",
+        ) {
+            withAuth(token)
+        }
+
+        assertEquals(HttpStatusCode.OK, resp.status)
+        coVerify {
+            ProfileIngestionService.timeseries(
+                match {
+                    it.organizationId == 10 &&
+                        it.filters.service == "api" &&
+                        it.filters.profileType == "cpu" &&
+                        it.filters.env == "prod" &&
+                        it.filters.host == "h1" &&
+                        it.window.fromMs == 1000L &&
+                        it.window.toMs == 61000L &&
+                        it.buckets == 10
+                },
+            )
+        }
+    }
+
+    @Test
+    fun `merged flamegraph returns 401 without jwt`() = testApplication {
+        installProfileRoutes()()
+        assertEquals(
+            HttpStatusCode.Unauthorized,
+            client.get("/v1/profiles/merged-flamegraph").status,
+        )
+    }
+
+    @Test
+    fun `merged flamegraph returns ok with jwt`() = testApplication {
+        installProfileRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get("/v1/profiles/merged-flamegraph?service=api") { withAuth(token) }
+        assertEquals(HttpStatusCode.OK, resp.status)
+    }
+
+    @Test
+    fun `merged flamegraph rejects inverted range`() = testApplication {
+        installProfileRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get("/v1/profiles/merged-flamegraph?from=200&to=100") { withAuth(token) }
+
+        assertEquals(HttpStatusCode.BadRequest, resp.status)
+        coVerify(exactly = 0) {
+            ProfileMergeService.mergeFlamegraph(any())
+        }
+    }
+
+    @Test
+    fun `profile metadata returns 401 without jwt`() = testApplication {
+        installProfileRoutes()()
+        assertEquals(HttpStatusCode.Unauthorized, client.get("/v1/profiles/some-id").status)
+    }
+
+    @Test
+    fun `profile metadata returns not found for unknown profile`() = testApplication {
+        installProfileRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get("/v1/profiles/unknown-id") { withAuth(token) }
+        assertEquals(HttpStatusCode.NotFound, resp.status)
+    }
+
+    @Test
+    fun `profile metadata returns profile when found`() = testApplication {
+        coEvery { ProfileIngestionService.getProfile(any(), any()) } returns sampleProfile()
+        installProfileRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get("/v1/profiles/known-id") { withAuth(token) }
+        assertEquals(HttpStatusCode.OK, resp.status)
+    }
+
+    private fun sampleProfile(): DdProfileResponse = DdProfileResponse(
+        profileId = "known-id",
+        host = "h1",
+        service = "api",
+        env = "prod",
+        version = "1.0.0",
+        runtime = "jvm",
+        language = "jvm",
+        profileType = "jfr",
+        startTime = "2026-05-28 12:00:00.000",
+        endTime = "2026-05-28 12:01:00.000",
+        durationNs = 60_000_000_000L,
+        sizeBytes = 2_000_000L,
+        tags = emptyMap(),
+        source = "datadog",
+    )
 }
