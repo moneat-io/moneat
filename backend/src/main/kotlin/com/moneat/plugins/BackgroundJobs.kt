@@ -36,6 +36,12 @@ import com.moneat.shared.services.TaskLock
 import com.moneat.shared.services.TraceFinalizerBackgroundService
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.uptime.services.UptimeScheduler
+import com.moneat.utils.suspendRunCatching
+import com.moneat.workflows.engine.temporal.ExecuteActionActivityImpl
+import com.moneat.workflows.engine.temporal.PersistRunActivityImpl
+import com.moneat.workflows.engine.temporal.TemporalClientProvider
+import com.moneat.workflows.engine.temporal.WORKFLOW_TASK_QUEUE
+import com.moneat.workflows.engine.temporal.WorkflowInterpreterWorkflowImpl
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopping
 import kotlinx.coroutines.CoroutineScope
@@ -46,8 +52,6 @@ import mu.KotlinLogging
 import net.javacrumbs.shedlock.provider.exposed.ExposedLockProvider
 import org.koin.core.context.GlobalContext
 import kotlin.time.Duration.Companion.hours
-import com.moneat.utils.suspendRunCatching
-import com.moneat.workflows.services.WorkflowExecutionWorker
 
 private val logger = KotlinLogging.logger {}
 private const val DEFAULT_WORKER_THREADS = 4
@@ -131,7 +135,14 @@ fun Application.configureBackgroundJobs() {
         otlpMetricsDlqKey,
         otlpMetricsWorkerCount
     )
-    val workflowExecutionWorker = WorkflowExecutionWorker(workflowService = koin.get())
+    val temporalClientProvider = koin.get<TemporalClientProvider>()
+    val workflowWorkerFactory = temporalClientProvider.newWorkerFactory()
+    val workflowWorker = workflowWorkerFactory.newWorker(WORKFLOW_TASK_QUEUE)
+    workflowWorker.registerWorkflowImplementationTypes(WorkflowInterpreterWorkflowImpl::class.java)
+    workflowWorker.registerActivitiesImplementations(
+        koin.get<ExecuteActionActivityImpl>(),
+        koin.get<PersistRunActivityImpl>()
+    )
 
     // Create a coroutine scope for background jobs
     val jobScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -151,7 +162,7 @@ fun Application.configureBackgroundJobs() {
     llmIngestionWorker.start()
     otlpTraceIngestionWorker.start()
     otlpMetricsIngestionWorker.start()
-    workflowExecutionWorker.start()
+    workflowWorkerFactory.start()
 
     // Start enterprise background jobs (SSO, On-Call, etc.) if modules are present
     FeatureRegistry.startBackgroundJobs(this)
@@ -196,7 +207,8 @@ fun Application.configureBackgroundJobs() {
             otlpTraceIngestionWorker.stop()
             otlpMetricsIngestionWorker.stop()
         }
-        workflowExecutionWorker.stop()
+        workflowWorkerFactory.shutdown()
+        temporalClientProvider.close()
         pulseService?.stop()
         FeatureRegistry.stopBackgroundJobs()
 

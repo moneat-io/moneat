@@ -20,7 +20,6 @@ import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.alerts.models.AlertSeverity
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertStatus
-import com.moneat.config.RedisConfig
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.SlackService
@@ -29,6 +28,9 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.workflows.engine.WorkflowCatalog
+import com.moneat.workflows.engine.temporal.WorkflowExecutionEngine
+import com.moneat.workflows.engine.temporal.WorkflowStartRequest
+import com.moneat.workflows.engine.temporal.WorkflowStartResult
 import com.moneat.workflows.models.CreateWorkflowRequest
 import com.moneat.workflows.models.UpdateWorkflowRequest
 import com.moneat.workflows.models.WorkflowConditionConfig
@@ -38,17 +40,13 @@ import com.moneat.workflows.models.WorkflowStepConfig
 import com.moneat.workflows.models.WorkflowVersions
 import com.moneat.workflows.models.Workflows
 import com.moneat.workflows.services.WorkflowService
-import io.lettuce.core.RedisException
-import io.lettuce.core.api.sync.RedisCommands
 import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
-import io.mockk.mockkObject
 import io.mockk.runs
-import io.mockk.unmockkObject
 import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonPrimitive
@@ -59,7 +57,6 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -77,7 +74,7 @@ class WorkflowServiceTest {
     private val emailService = mockk<EmailService>(relaxed = true)
     private val slackService = mockk<SlackService>()
     private val discordService = mockk<DiscordService>()
-    private val redis = mockk<RedisCommands<String, String>>(relaxed = true)
+    private lateinit var workflowEngine: FakeWorkflowExecutionEngine
     private lateinit var service: WorkflowService
     private var orgId: Int = 0
 
@@ -91,22 +88,15 @@ class WorkflowServiceTest {
         }
         TransactionManager.defaultDatabase = db
         resetWorkflowSchema()
-        clearMocks(emailService, slackService, discordService, redis)
-        mockkObject(RedisConfig)
-        every { RedisConfig.sync() } returns redis
-        every { redis.lpush(any(), any<String>()) } returns 1L
+        workflowEngine = FakeWorkflowExecutionEngine()
+        clearMocks(emailService, slackService, discordService)
         every { emailService.sendEmail(any(), any(), any(), any(), any()) } just runs
         coEvery { slackService.sendWorkflowMessage(any(), any(), any()) } returns true
         coEvery { slackService.sendWorkflowAlertMessage(any(), any(), any()) } returns true
         coEvery { discordService.sendWorkflowMessage(any(), any(), any(), any()) } returns true
         coEvery { discordService.sendWorkflowAlertMessage(any(), any(), any()) } returns true
-        service = WorkflowService(emailService, slackService, discordService)
+        service = WorkflowService(emailService, slackService, discordService, executionEngine = workflowEngine)
         orgId = seedOrganizationWithMembers()
-    }
-
-    @AfterTest
-    fun teardown() {
-        unmockkObject(RedisConfig)
     }
 
     private fun resetWorkflowSchema() {
@@ -160,6 +150,8 @@ class WorkflowServiceTest {
                     ),
                     progress TEXT NOT NULL DEFAULT '[]',
                     error_message TEXT,
+                    temporal_workflow_id VARCHAR(255),
+                    temporal_run_id VARCHAR(255),
                     created_at TIMESTAMP NOT NULL,
                     completed_at TIMESTAMP,
                     failed_at TIMESTAMP,
@@ -843,20 +835,20 @@ class WorkflowServiceTest {
         }
 
     @Test
-    fun `publish marks run failed when enqueue fails`() =
+    fun `publish marks run failed when Temporal start fails`() =
         runBlocking {
-            every { redis.lpush(any(), any<String>()) } throws RedisException("redis unavailable")
+            workflowEngine.error = IllegalStateException("temporal unavailable")
             val workflow =
                 service.createWorkflow(
                     orgId,
-                    validRequest(name = "Redis unavailable workflow")
+                    validRequest(name = "Temporal unavailable workflow")
                 )
 
             service.publishAlertTriggered(alertEvent())
 
             val run = service.listRuns(orgId, workflow.id).single()
             assertEquals("failed", run.status)
-            assertTrue(run.errorMessage?.contains("redis unavailable") == true)
+            assertTrue(run.errorMessage?.contains("temporal unavailable") == true)
         }
 
     private fun seedOrganizationWithMembers(): Int {
@@ -955,4 +947,18 @@ class WorkflowServiceTest {
             organizationId = orgId,
             moneatUrl = "https://moneat.io/hosts/1"
         )
+}
+
+private class FakeWorkflowExecutionEngine : WorkflowExecutionEngine {
+    val requests = mutableListOf<WorkflowStartRequest>()
+    var error: Throwable? = null
+
+    override suspend fun start(request: WorkflowStartRequest): WorkflowStartResult {
+        error?.let { throw it }
+        requests += request
+        return WorkflowStartResult(
+            temporalWorkflowId = request.temporalWorkflowId,
+            temporalRunId = "temporal-run-${request.runId}"
+        )
+    }
 }

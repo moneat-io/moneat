@@ -223,6 +223,8 @@ allocate_ports() {
   CLICKHOUSE_HTTP_PORT=$(find_free_port 8123)
   CLICKHOUSE_NATIVE_PORT=$(find_free_port 9000)
   REDIS_PORT=$(find_free_port 6379)
+  TEMPORAL_GRPC_PORT=$(find_free_port 7233)
+  TEMPORAL_UI_PORT=$(find_free_port 8233)
 
   success "Backend API        → :${BACKEND_PORT}"
   success "Frontend Dashboard → :${FRONTEND_PORT}"
@@ -230,6 +232,8 @@ allocate_ports() {
   success "ClickHouse HTTP    → :${CLICKHOUSE_HTTP_PORT}"
   success "ClickHouse Native  → :${CLICKHOUSE_NATIVE_PORT}"
   success "Redis              → :${REDIS_PORT}"
+  success "Temporal gRPC      → :${TEMPORAL_GRPC_PORT}"
+  success "Temporal UI        → :${TEMPORAL_UI_PORT}"
 }
 
 # ── Prerequisites ──
@@ -356,6 +360,18 @@ generate_secrets() {
 
   DATA_SOURCE_ENCRYPTION_KEY=$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 32)
   success "DATA_SOURCE_ENCRYPTION_KEY (32 chars, alphanumeric)"
+
+  TEMPORAL_DB_PASSWORD=$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 32)
+  success "TEMPORAL_DB_PASSWORD (32 chars, alphanumeric)"
+
+  WORKFLOWS_CONNECTION_KEK=$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 32)
+  success "WORKFLOWS_CONNECTION_KEK (32 chars, alphanumeric)"
+
+  WORKFLOWS_SIGNING_KEY=$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 32)
+  success "WORKFLOWS_SIGNING_KEY (32 chars, alphanumeric)"
+
+  WORKFLOWS_TEMPORAL_PAYLOAD_KEY=$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 32)
+  success "WORKFLOWS_TEMPORAL_PAYLOAD_KEY (32 chars, alphanumeric)"
 }
 
 # ── Write .env files ──
@@ -398,6 +414,15 @@ CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
 # Redis
 REDIS_URL=redis://:${REDIS_PASSWORD}@localhost:${REDIS_PORT}
 
+# Workflow runtime
+TEMPORAL_TARGET=temporal:7233
+TEMPORAL_NAMESPACE=default
+TEMPORAL_DB_USER=temporal
+TEMPORAL_DB_PASSWORD=${TEMPORAL_DB_PASSWORD}
+WORKFLOWS_CONNECTION_KEK=${WORKFLOWS_CONNECTION_KEK}
+WORKFLOWS_SIGNING_KEY=${WORKFLOWS_SIGNING_KEY}
+WORKFLOWS_TEMPORAL_PAYLOAD_KEY=${WORKFLOWS_TEMPORAL_PAYLOAD_KEY}
+
 # JWT
 JWT_SECRET=${JWT_SECRET}
 
@@ -431,6 +456,8 @@ POSTGRES_PORT=${POSTGRES_PORT}
 CLICKHOUSE_HTTP_PORT=${CLICKHOUSE_HTTP_PORT}
 CLICKHOUSE_NATIVE_PORT=${CLICKHOUSE_NATIVE_PORT}
 REDIS_PORT=${REDIS_PORT}
+TEMPORAL_GRPC_PORT=${TEMPORAL_GRPC_PORT}
+TEMPORAL_UI_PORT=${TEMPORAL_UI_PORT}
 ENVFILE
 
   success "Created .env"
@@ -445,19 +472,19 @@ build_and_start() {
     docker compose pull --quiet
 
   info "Starting databases..."
-  run_cmd "Starting PostgreSQL, ClickHouse, Redis..." "Databases started" \
-    docker compose up -d postgres clickhouse redis
+  run_cmd "Starting PostgreSQL, ClickHouse, Redis, and Temporal..." "Databases started" \
+    docker compose up -d postgres clickhouse redis temporal-bootstrap temporal temporal-ui
 
   info "Waiting for databases to be healthy..."
   local retries=30
   while [[ $retries -gt 0 ]]; do
     local healthy=0
-    for svc in moneat-postgres moneat-clickhouse moneat-redis; do
+    for svc in moneat-postgres moneat-clickhouse moneat-redis moneat-temporal; do
       if docker inspect --format='{{.State.Health.Status}}' "$svc" 2>/dev/null | grep -q healthy; then
         healthy=$((healthy + 1))
       fi
     done
-    [[ $healthy -ge 3 ]] && break
+    [[ $healthy -ge 4 ]] && break
     sleep 2
     retries=$((retries - 1))
   done
@@ -513,6 +540,7 @@ print_summary() {
   printf "  ${BOLD}Directory:${RESET}  %s\n" "${INSTALL_DIR}"
   printf "  ${BOLD}Dashboard:${RESET}  %s\n" "${FRONTEND_URL}"
   printf "  ${BOLD}API:${RESET}        %s\n" "${BACKEND_URL}"
+  printf "  ${BOLD}Temporal UI:${RESET} http://localhost:%s\n" "${TEMPORAL_UI_PORT}"
   echo
 
   if [[ "$SMTP_CONFIGURED" == false ]]; then

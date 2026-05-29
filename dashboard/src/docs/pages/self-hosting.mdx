@@ -10,7 +10,7 @@ Moneat can be self-hosted using Docker Compose. The self-hosted edition includes
 ## Requirements
 
 - Docker v20.10+ and Docker Compose v2.0+
-- 2 CPU cores and 2 GB RAM minimum (4 GB recommended)
+- 2 CPU cores and 3 GB RAM minimum (4 GB recommended)
 - A Linux server (Ubuntu 22.04+, Debian 12+, or similar)
 
 ## Install
@@ -46,6 +46,11 @@ Edit `.env` and set these required values:
 | `DATABASE_PASSWORD` | PostgreSQL password. Must match `POSTGRES_PASSWORD` in the compose file. |
 | `CLICKHOUSE_PASSWORD` | ClickHouse password. Must match the compose file. |
 | `REDIS_PASSWORD` | Redis password. The compose file passes this to Redis via `--requirepass` and includes it in the backend connection string automatically. |
+| `TEMPORAL_TARGET` | Workflow runtime address. Use `temporal:7233` for Docker Compose. |
+| `TEMPORAL_NAMESPACE` | Workflow runtime namespace. Use `default` unless you operate a custom Temporal cluster. |
+| `WORKFLOWS_CONNECTION_KEK` | Dedicated workflow connection key. Must differ from all other secrets. |
+| `WORKFLOWS_SIGNING_KEY` | Dedicated workflow token signing key. Must differ from all other secrets. |
+| `WORKFLOWS_TEMPORAL_PAYLOAD_KEY` | Dedicated key for encrypted workflow payloads in Temporal history. |
 | `FRONTEND_URL` | Public URL of the dashboard (e.g. `https://moneat.example.com`). |
 | `BACKEND_URL` | Public URL of the API (e.g. `https://api.moneat.example.com`). |
 | `SELF_HOSTED` | Set to `true`. |
