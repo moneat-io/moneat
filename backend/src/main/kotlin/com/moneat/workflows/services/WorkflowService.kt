@@ -18,7 +18,11 @@ package com.moneat.workflows.services
 
 import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertStatus
+import com.moneat.config.EnvConfig
+import com.moneat.datadog.security.QueuedSecurityBatch
+import com.moneat.datadog.security.QueuedSecurityEventEntry
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.SlackService
@@ -43,6 +47,8 @@ import com.moneat.workflows.models.WorkflowGraphConfig
 import com.moneat.workflows.models.WorkflowPreviewRequest
 import com.moneat.workflows.models.WorkflowPreviewResponse
 import com.moneat.workflows.models.WorkflowResponse
+import com.moneat.workflows.models.WorkflowRunCancelResponse
+import com.moneat.workflows.models.WorkflowRunInstanceRequest
 import com.moneat.workflows.models.WorkflowRunResponse
 import com.moneat.workflows.models.WorkflowRunStepResponse
 import com.moneat.workflows.models.WorkflowRunStepProgress
@@ -52,6 +58,7 @@ import com.moneat.workflows.models.WorkflowStepConfig
 import com.moneat.workflows.models.WorkflowTestMessageResponse
 import com.moneat.workflows.models.WorkflowTriggerEvent
 import com.moneat.workflows.models.WorkflowVersions
+import com.moneat.workflows.models.WorkflowWebhookSigningResponse
 import com.moneat.workflows.models.Workflows
 import com.moneat.workflows.models.typedWorkflowScope
 import com.moneat.workflows.models.workflowJson
@@ -76,6 +83,8 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import java.security.MessageDigest
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 import java.util.UUID
 import kotlin.time.Clock
 
@@ -83,6 +92,24 @@ private val logger = KotlinLogging.logger {}
 private const val UNIQUE_VIOLATION_SQL_STATE = "23505"
 private const val TEMPORAL_WORKFLOW_ID_HASH_LENGTH = 32
 private const val UNSIGNED_BYTE_MASK = 0xff
+private const val HMAC_ALGORITHM = "HmacSHA256"
+private const val WORKFLOW_WEBHOOK_SECRET_CONTEXT = "workflow-webhook"
+private const val WORKFLOW_WEBHOOK_SIGNATURE_HEADER = "X-Moneat-Workflow-Signature"
+private const val WEBHOOK_SIGNATURE_PREFIX = "sha256="
+private const val WEBHOOK_PAYLOAD_MAX_CHARS = 32_000
+private const val WORKFLOW_INPUT_REFERENCE = "workflow.input"
+private const val WORKFLOW_ACTOR_ID_REFERENCE = "workflow.actor_id"
+private const val WORKFLOW_CALLER_REFERENCE = "workflow.caller"
+private const val WEBHOOK_PAYLOAD_REFERENCE = "webhook.payload"
+private const val WEBHOOK_EVENT_ID_REFERENCE = "webhook.event_id"
+private const val INCIDENT_ID_REFERENCE = "incident.id"
+private const val INCIDENT_TITLE_REFERENCE = "incident.title"
+private const val INCIDENT_STATUS_REFERENCE = "incident.status"
+private const val INCIDENT_SEVERITY_REFERENCE = "incident.severity"
+private const val SECURITY_RULE_ID_REFERENCE = "security.rule_id"
+private const val SECURITY_RULE_NAME_REFERENCE = "security.rule_name"
+private const val SECURITY_SEVERITY_REFERENCE = "security.severity"
+private const val SECURITY_RESOURCE_REFERENCE = "security.resource"
 private const val DEFAULT_WORKFLOW_READ_ONLY_MESSAGE = "Default workflows cannot be modified"
 private val ALERT_CHANNEL_REFERENCES =
     setOf(ALERT_CHANNEL_EMAIL_REFERENCE, ALERT_CHANNEL_SLACK_REFERENCE, ALERT_CHANNEL_DISCORD_REFERENCE)
@@ -378,31 +405,77 @@ class WorkflowService(
     suspend fun runWorkflow(
         organizationId: Int,
         workflowId: Int,
-        request: ManualWorkflowRunRequest = ManualWorkflowRunRequest()
+        request: ManualWorkflowRunRequest = ManualWorkflowRunRequest(),
+        actorUserId: Int? = null
     ): WorkflowRunResponse? {
-        val run =
-            transaction {
-                val workflowRow =
-                    Workflows
-                        .selectAll()
-                        .where { (Workflows.id eq workflowId) and (Workflows.organizationId eq organizationId) }
-                        .firstOrNull() ?: return@transaction null
-                val version = latestVersion(workflowId) ?: return@transaction null
-                val triggerScope = stepRenderer.sampleScopeForTrigger(workflowRow[Workflows.triggerName])
-                    .typedWorkflowScope()
-                val event =
-                    WorkflowTriggerEvent(
-                        triggerName = workflowRow[Workflows.triggerName],
-                        organizationId = organizationId,
-                        scope = triggerScope + request.scope
-                    )
-                createRun(event, WorkflowCandidate(workflowId, version), manualOnceFor(), force = true)
-            } ?: return null
+        val manualScope =
+            mapOf(
+                WORKFLOW_INPUT_REFERENCE to json.encodeToString(request.scope),
+                WORKFLOW_ACTOR_ID_REFERENCE to actorUserId?.toString().orEmpty(),
+                ORGANIZATION_ID_REFERENCE to organizationId.toString()
+            ).typedWorkflowScope()
+        val run = createRunForWorkflow(
+            organizationId = organizationId,
+            workflowId = workflowId,
+            scope = manualScope + request.scope,
+            onceFor = manualOnceFor(),
+            force = true
+        ) ?: return null
         startTemporalExecution(run)
         return getRun(organizationId, workflowId, run.runId)
     }
 
-    private fun getRun(
+    suspend fun createWorkflowInstance(
+        organizationId: Int,
+        workflowId: Int,
+        request: WorkflowRunInstanceRequest,
+        callerUserId: Int
+    ): WorkflowRunResponse? {
+        val apiScope =
+            mapOf(
+                WORKFLOW_INPUT_REFERENCE to json.encodeToString(request.scope),
+                WORKFLOW_CALLER_REFERENCE to callerUserId.toString(),
+                ORGANIZATION_ID_REFERENCE to organizationId.toString()
+            ).typedWorkflowScope()
+        val run = createRunForWorkflow(
+            organizationId = organizationId,
+            workflowId = workflowId,
+            scope = apiScope + request.scope,
+            onceFor = apiOnceFor(),
+            force = true,
+            requiredTriggerName = API_TRIGGER
+        ) ?: return null
+        startTemporalExecution(run)
+        return getRun(organizationId, workflowId, run.runId)
+    }
+
+    suspend fun createWebhookRun(
+        workflowId: Int,
+        payload: String,
+        eventId: String?
+    ): WorkflowRunResponse? {
+        val sanitizedPayload = payload.take(WEBHOOK_PAYLOAD_MAX_CHARS)
+        val workflowRef = workflowReference(workflowId) ?: return null
+        val webhookScope =
+            mapOf(
+                WEBHOOK_PAYLOAD_REFERENCE to sanitizedPayload,
+                WEBHOOK_EVENT_ID_REFERENCE to (eventId ?: webhookOnceFor()),
+                ORGANIZATION_ID_REFERENCE to workflowRef.organizationId.toString()
+            ).typedWorkflowScope()
+        val run = createRunForWorkflow(
+            organizationId = workflowRef.organizationId,
+            workflowId = workflowId,
+            scope = webhookScope,
+            onceFor = webhookScope[WEBHOOK_EVENT_ID_REFERENCE]?.workflowStringValue().orEmpty(),
+            force = false,
+            requiredTriggerName = WEBHOOK_TRIGGER,
+            requirePublished = true
+        ) ?: return null
+        startTemporalExecution(run)
+        return getRun(workflowRef.organizationId, workflowId, run.runId)
+    }
+
+    fun getRun(
         organizationId: Int,
         workflowId: Int,
         runId: Int
@@ -417,6 +490,44 @@ class WorkflowService(
                 }.firstOrNull()
                 ?.let { row -> runResponse(row) }
         }
+
+    suspend fun cancelRun(
+        organizationId: Int,
+        workflowId: Int,
+        runId: Int
+    ): WorkflowRunCancelResponse? {
+        val candidate =
+            transaction {
+                val row =
+                    WorkflowRuns
+                        .selectAll()
+                        .where {
+                            (WorkflowRuns.id eq runId) and
+                                (WorkflowRuns.workflowId eq workflowId) and
+                                (WorkflowRuns.organizationId eq organizationId)
+                        }.firstOrNull() ?: return@transaction null
+                WorkflowRunCancelCandidate(row[WorkflowRuns.status], row[WorkflowRuns.temporalWorkflowId].orEmpty())
+            } ?: return null
+        if (candidate.status in TERMINAL_RUN_STATUSES) {
+            return WorkflowRunCancelResponse(runId, candidate.status)
+        }
+        val temporalWorkflowId = candidate.temporalWorkflowId
+        if (temporalWorkflowId.isNotBlank()) {
+            suspendRunCatching {
+                executionEngine.cancel(temporalWorkflowId)
+            }.onFailure { error ->
+                logger.warn(error) { "Failed to cancel Temporal workflow $temporalWorkflowId" }
+            }
+        }
+        transaction {
+            WorkflowRuns.update({ WorkflowRuns.id eq runId }) {
+                it[status] = STATUS_CANCELED
+                it[completedAt] = Clock.System.now()
+                it[errorMessage] = null
+            }
+        }
+        return WorkflowRunCancelResponse(runId, STATUS_CANCELED)
+    }
 
     fun listRuns(
         organizationId: Int,
@@ -440,6 +551,36 @@ class WorkflowService(
                 .map { runResponse(it) }
         }
 
+    fun webhookSigningInfo(
+        organizationId: Int,
+        workflowId: Int
+    ): WorkflowWebhookSigningResponse? {
+        workflowReference(workflowId)
+            ?.takeIf { it.organizationId == organizationId && it.triggerName == WEBHOOK_TRIGGER }
+            ?: return null
+        val backendUrl = EnvConfig.get("BACKEND_URL", "https://api.moneat.io").trimEnd('/')
+        return WorkflowWebhookSigningResponse(
+            workflowId = workflowId,
+            webhookUrl = "$backendUrl/v1/workflows/$workflowId/webhook",
+            signingSecret = webhookSecret(workflowId),
+            signatureHeader = WORKFLOW_WEBHOOK_SIGNATURE_HEADER,
+            signatureFormat = "$WEBHOOK_SIGNATURE_PREFIX<hex HMAC-SHA256 of raw body>"
+        )
+    }
+
+    fun verifyWebhookSignature(
+        workflowId: Int,
+        payload: String,
+        signatureHeader: String?
+    ): Boolean {
+        workflowReference(workflowId)
+            ?.takeIf { it.triggerName == WEBHOOK_TRIGGER }
+            ?: return false
+        val provided = signatureHeader?.trim()?.removePrefix(WEBHOOK_SIGNATURE_PREFIX) ?: return false
+        val expected = hmacSha256(webhookSecret(workflowId), payload)
+        return MessageDigest.isEqual(provided.encodeToByteArray(), expected.encodeToByteArray())
+    }
+
     suspend fun publishAlertTriggered(event: AlertLifecycleEvent) {
         val triggerName =
             if (event.status == AlertStatus.RESOLVED) {
@@ -447,13 +588,17 @@ class WorkflowService(
             } else {
                 ALERT_TRIGGERED_TRIGGER
             }
-        publishTrigger(
-            WorkflowTriggerEvent(
-                triggerName = triggerName,
-                organizationId = event.organizationId,
-                scope = alertScope(event)
+        val scope = alertScope(event)
+        publishTrigger(WorkflowTriggerEvent(triggerName, event.organizationId, scope))
+        sourceSpecificAlertTrigger(event)?.let { specificTriggerName ->
+            publishTrigger(
+                WorkflowTriggerEvent(
+                    triggerName = specificTriggerName,
+                    organizationId = event.organizationId,
+                    scope = scope
+                )
             )
-        )
+        }
     }
 
     suspend fun publishAlertResolved(
@@ -465,23 +610,102 @@ class WorkflowService(
         moneatUrl: String = "",
         severity: AlertSeverity? = null
     ) {
+        val scope =
+            mapOf(
+                ALERT_TITLE_REFERENCE to title,
+                ALERT_DESCRIPTION_REFERENCE to description,
+                ALERT_SEVERITY_REFERENCE to severity?.name.orEmpty(),
+                ALERT_PRIORITY_REFERENCE to stepRenderer.priorityLabelForSeverity(severity?.name),
+                ALERT_STATUS_REFERENCE to AlertStatus.RESOLVED.name,
+                ALERT_SOURCE_REFERENCE to source,
+                ALERT_DEDUPLICATION_KEY_REFERENCE to deduplicationKey,
+                ALERT_URL_REFERENCE to moneatUrl,
+                ORGANIZATION_ID_REFERENCE to organizationId.toString()
+            ).typedWorkflowScope()
         publishTrigger(
             WorkflowTriggerEvent(
                 triggerName = ALERT_RESOLVED_TRIGGER,
                 organizationId = organizationId,
-                scope = mapOf(
-                    ALERT_TITLE_REFERENCE to title,
-                    ALERT_DESCRIPTION_REFERENCE to description,
-                    ALERT_SEVERITY_REFERENCE to severity?.name.orEmpty(),
-                    ALERT_PRIORITY_REFERENCE to stepRenderer.priorityLabelForSeverity(severity?.name),
-                    ALERT_STATUS_REFERENCE to AlertStatus.RESOLVED.name,
-                    ALERT_SOURCE_REFERENCE to source,
-                    ALERT_DEDUPLICATION_KEY_REFERENCE to deduplicationKey,
-                    ALERT_URL_REFERENCE to moneatUrl,
-                    ORGANIZATION_ID_REFERENCE to organizationId.toString()
-                ).typedWorkflowScope()
+                scope = scope
             )
         )
+        AlertSource.entries.firstOrNull { it.name == source }?.let { alertSource ->
+            specificResolvedAlertTrigger(alertSource)?.let { triggerName ->
+                publishTrigger(
+                    WorkflowTriggerEvent(
+                        triggerName = triggerName,
+                        organizationId = organizationId,
+                        scope = scope
+                    )
+                )
+            }
+        }
+    }
+
+    suspend fun publishIncidentCreated(event: AlertLifecycleEvent) {
+        publishTrigger(
+            WorkflowTriggerEvent(
+                triggerName = INCIDENT_CREATED_TRIGGER,
+                organizationId = event.organizationId,
+                scope = incidentScope(
+                    organizationId = event.organizationId,
+                    status = INCIDENT_STATUS_CREATED,
+                    title = event.title,
+                    severity = event.severity.name,
+                    deduplicationKey = event.deduplicationKey
+                )
+            )
+        )
+    }
+
+    suspend fun publishIncidentResolved(
+        organizationId: Int,
+        deduplicationKey: String,
+        title: String,
+        severity: AlertSeverity? = null
+    ) {
+        publishTrigger(
+            WorkflowTriggerEvent(
+                triggerName = INCIDENT_RESOLVED_TRIGGER,
+                organizationId = organizationId,
+                scope = incidentScope(
+                    organizationId = organizationId,
+                    status = INCIDENT_STATUS_RESOLVED,
+                    title = title,
+                    severity = severity?.name.orEmpty(),
+                    deduplicationKey = deduplicationKey
+                )
+            )
+        )
+    }
+
+    suspend fun publishSecuritySignals(batch: QueuedSecurityBatch) {
+        batch.events.forEach { event ->
+            publishTrigger(
+                WorkflowTriggerEvent(
+                    triggerName = SECURITY_SIGNAL_TRIGGER,
+                    organizationId = batch.organizationId,
+                    scope = securityEventScope(batch.organizationId, event)
+                )
+            )
+        }
+        batch.findings
+            .filter { finding -> finding.status != "passed" }
+            .forEach { finding ->
+                publishTrigger(
+                    WorkflowTriggerEvent(
+                        triggerName = SECURITY_SIGNAL_TRIGGER,
+                        organizationId = batch.organizationId,
+                        scope = mapOf(
+                            SECURITY_RULE_ID_REFERENCE to finding.ruleId,
+                            SECURITY_RULE_NAME_REFERENCE to finding.ruleName,
+                            SECURITY_SEVERITY_REFERENCE to finding.status,
+                            SECURITY_RESOURCE_REFERENCE to finding.resourceName.ifBlank { finding.resourceId },
+                            ORGANIZATION_ID_REFERENCE to batch.organizationId.toString()
+                        ).typedWorkflowScope()
+                    )
+                )
+            }
     }
 
     suspend fun publishTrigger(event: WorkflowTriggerEvent) {
@@ -518,6 +742,37 @@ class WorkflowService(
     suspend fun executeRun(runId: Int) {
         directRunExecutor.executeRun(runId)
     }
+
+    private fun createRunForWorkflow(
+        organizationId: Int,
+        workflowId: Int,
+        scope: Map<String, JsonElement>,
+        onceFor: String,
+        force: Boolean,
+        requiredTriggerName: String? = null,
+        requirePublished: Boolean = false
+    ): WorkflowStartRequest? =
+        transaction {
+            val workflowRow =
+                Workflows
+                    .selectAll()
+                    .where { (Workflows.id eq workflowId) and (Workflows.organizationId eq organizationId) }
+                    .firstOrNull() ?: return@transaction null
+            if (requiredTriggerName != null && workflowRow[Workflows.triggerName] != requiredTriggerName) {
+                return@transaction null
+            }
+            val version = latestVersion(workflowId) ?: return@transaction null
+            if (requirePublished && !version.published) return@transaction null
+            val triggerScope = stepRenderer.sampleScopeForTrigger(workflowRow[Workflows.triggerName])
+                .typedWorkflowScope()
+            val event =
+                WorkflowTriggerEvent(
+                    triggerName = workflowRow[Workflows.triggerName],
+                    organizationId = organizationId,
+                    scope = triggerScope + scope
+                )
+            createRun(event, WorkflowCandidate(workflowId, version), onceFor, force)
+        }
 
     private fun createRun(
         event: WorkflowTriggerEvent,
@@ -595,6 +850,12 @@ class WorkflowService(
     private fun manualOnceFor(): String =
         "manual:${UUID.randomUUID()}"
 
+    private fun apiOnceFor(): String =
+        "api:${UUID.randomUUID()}"
+
+    private fun webhookOnceFor(): String =
+        "webhook:${UUID.randomUUID()}"
+
     private suspend fun startTemporalExecution(request: WorkflowStartRequest) {
         suspendRunCatching {
             executionEngine.start(request)
@@ -621,6 +882,40 @@ class WorkflowService(
             .getInstance("SHA-256")
             .digest(value.toByteArray())
             .joinToString("") { byte -> "%02x".format(byte.toInt() and UNSIGNED_BYTE_MASK) }
+
+    private fun webhookSecret(workflowId: Int): String =
+        hmacSha256(workflowSigningKey(), "$WORKFLOW_WEBHOOK_SECRET_CONTEXT:$workflowId")
+
+    private fun workflowSigningKey(): String =
+        EnvConfig.get("WORKFLOWS_SIGNING_KEY")
+            ?: System.getProperty("WORKFLOWS_SIGNING_KEY")
+            ?: throw IllegalStateException("WORKFLOWS_SIGNING_KEY is required for workflow webhook signing")
+
+    private fun hmacSha256(
+        key: String,
+        value: String
+    ): String {
+        val mac = Mac.getInstance(HMAC_ALGORITHM)
+        mac.init(SecretKeySpec(key.encodeToByteArray(), HMAC_ALGORITHM))
+        return mac
+            .doFinal(value.encodeToByteArray())
+            .joinToString("") { byte -> "%02x".format(byte.toInt() and UNSIGNED_BYTE_MASK) }
+    }
+
+    private fun workflowReference(workflowId: Int): WorkflowReference? =
+        transaction {
+            Workflows
+                .selectAll()
+                .where { Workflows.id eq workflowId }
+                .firstOrNull()
+                ?.let { row ->
+                    WorkflowReference(
+                        id = row[Workflows.id].value,
+                        organizationId = row[Workflows.organizationId],
+                        triggerName = row[Workflows.triggerName]
+                    )
+                }
+        }
 
     private fun latestVersion(workflowId: Int): WorkflowVersionRecord? =
         WorkflowVersions
@@ -736,6 +1031,8 @@ class WorkflowService(
             progress = decodeProgress(row[WorkflowRuns.progress]),
             steps = runSteps(row[WorkflowRuns.id].value),
             errorMessage = row[WorkflowRuns.errorMessage],
+            temporalWorkflowId = row[WorkflowRuns.temporalWorkflowId],
+            temporalRunId = row[WorkflowRuns.temporalRunId],
             createdAt = row[WorkflowRuns.createdAt].toString(),
             completedAt = row[WorkflowRuns.completedAt]?.toString(),
             failedAt = row[WorkflowRuns.failedAt]?.toString()
@@ -810,7 +1107,7 @@ class WorkflowService(
                 steps.flatMap { it.params.values } +
                 graph.nodes.flatMap { node -> node.params.values.map { value -> value.workflowStringValue() } }
             )
-            .filter { it.startsWith("alert.") || it.startsWith("organization.") }
+            .filter { reference -> WORKFLOW_ENGINE_CONFIG_PREFIXES.any { prefix -> reference.startsWith(prefix) } }
             .distinct()
 
     private fun alertScope(event: AlertLifecycleEvent): Map<String, JsonElement> {
@@ -836,6 +1133,61 @@ class WorkflowService(
                 value.workflowScopeValue()?.let { reference to JsonPrimitive(it) }
             }.toMap()
 
+    private fun incidentScope(
+        organizationId: Int,
+        status: String,
+        title: String,
+        severity: String,
+        deduplicationKey: String
+    ): Map<String, JsonElement> =
+        mapOf(
+            INCIDENT_ID_REFERENCE to deduplicationKey,
+            INCIDENT_TITLE_REFERENCE to title,
+            INCIDENT_STATUS_REFERENCE to status,
+            INCIDENT_SEVERITY_REFERENCE to severity,
+            ALERT_DEDUPLICATION_KEY_REFERENCE to deduplicationKey,
+            ORGANIZATION_ID_REFERENCE to organizationId.toString()
+        ).typedWorkflowScope()
+
+    private fun securityEventScope(
+        organizationId: Int,
+        event: QueuedSecurityEventEntry
+    ): Map<String, JsonElement> =
+        mapOf(
+            SECURITY_RULE_ID_REFERENCE to event.ruleId,
+            SECURITY_RULE_NAME_REFERENCE to event.ruleName,
+            SECURITY_SEVERITY_REFERENCE to event.severity,
+            SECURITY_RESOURCE_REFERENCE to event.filePath.ifBlank { event.processName.ifBlank { event.host } },
+            ORGANIZATION_ID_REFERENCE to organizationId.toString()
+        ).typedWorkflowScope()
+
+    private fun sourceSpecificAlertTrigger(event: AlertLifecycleEvent): String? =
+        if (event.status == AlertStatus.RESOLVED) {
+            specificResolvedAlertTrigger(event.source)
+        } else {
+            specificFiringAlertTrigger(event.source)
+        }
+
+    private fun specificFiringAlertTrigger(source: AlertSource): String? =
+        when (source) {
+            AlertSource.HOST_ALERT,
+            AlertSource.HOST_DOWN,
+            AlertSource.DASHBOARD_ALERT -> MONITOR_ALERTED_TRIGGER
+            AlertSource.UPTIME_MONITOR -> UPTIME_DOWN_TRIGGER
+            AlertSource.SYNTHETIC_TEST -> SYNTHETIC_FAILED_TRIGGER
+            AlertSource.ERROR_ALERT -> null
+        }
+
+    private fun specificResolvedAlertTrigger(source: AlertSource): String? =
+        when (source) {
+            AlertSource.HOST_ALERT,
+            AlertSource.HOST_DOWN,
+            AlertSource.DASHBOARD_ALERT -> MONITOR_RECOVERED_TRIGGER
+            AlertSource.UPTIME_MONITOR -> UPTIME_UP_TRIGGER
+            AlertSource.SYNTHETIC_TEST -> SYNTHETIC_PASSED_TRIGGER
+            AlertSource.ERROR_ALERT -> null
+        }
+
     private fun JsonElement.workflowScopeValue(): String? {
         val primitive = this as? JsonPrimitive ?: return null
         return primitive.booleanOrNull?.toString() ?: primitive.contentOrNull
@@ -844,6 +1196,33 @@ class WorkflowService(
     companion object {
         private const val ALERT_TRIGGERED_TRIGGER = "alert.triggered"
         private const val ALERT_RESOLVED_TRIGGER = "alert.resolved"
+        private const val MONITOR_ALERTED_TRIGGER = "monitor.alerted"
+        private const val MONITOR_RECOVERED_TRIGGER = "monitor.recovered"
+        private const val UPTIME_DOWN_TRIGGER = "uptime.down"
+        private const val UPTIME_UP_TRIGGER = "uptime.up"
+        private const val SYNTHETIC_FAILED_TRIGGER = "synthetic.failed"
+        private const val SYNTHETIC_PASSED_TRIGGER = "synthetic.passed"
+        private const val INCIDENT_CREATED_TRIGGER = "incident.created"
+        private const val INCIDENT_RESOLVED_TRIGGER = "incident.resolved"
+        private const val SECURITY_SIGNAL_TRIGGER = "security.signal"
+        private const val API_TRIGGER = "api"
+        private const val WEBHOOK_TRIGGER = "webhook"
+        private const val STATUS_CANCELED = "canceled"
+        private const val INCIDENT_STATUS_CREATED = "created"
+        private const val INCIDENT_STATUS_RESOLVED = "resolved"
+        private val TERMINAL_RUN_STATUSES = setOf("complete", "failed", STATUS_CANCELED)
+        private val WORKFLOW_ENGINE_CONFIG_PREFIXES =
+            listOf(
+                "alert.",
+                "organization.",
+                "workflow.",
+                "webhook.",
+                "schedule.",
+                "incident.",
+                "security.",
+                "oncall.",
+                "steps."
+            )
         private val DEFAULT_WORKFLOWS =
             listOf(
                 DefaultWorkflowDefinition(
@@ -962,6 +1341,17 @@ private data class WorkflowVersionRecord(
 private data class WorkflowCandidate(
     val workflowId: Int,
     val version: WorkflowVersionRecord
+)
+
+private data class WorkflowReference(
+    val id: Int,
+    val organizationId: Int,
+    val triggerName: String
+)
+
+private data class WorkflowRunCancelCandidate(
+    val status: String,
+    val temporalWorkflowId: String
 )
 
 private data class WorkflowRunStats(

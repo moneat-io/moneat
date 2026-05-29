@@ -35,7 +35,8 @@ class WorkflowActionExecutor(
     private val emailService: EmailService,
     private val slackService: SlackService,
     private val discordService: DiscordService,
-    private val renderer: WorkflowStepRenderer
+    private val renderer: WorkflowStepRenderer,
+    private val trustedActions: WorkflowTrustedActionExecutor? = null
 ) {
     suspend fun executeStep(
         organizationId: Int,
@@ -59,7 +60,11 @@ class WorkflowActionExecutor(
             )
             SLACK_STEP -> executeSlackStep(organizationId, step, stringScope)
             DISCORD_STEP -> executeDiscordStep(organizationId, step, stringScope)
-            else -> throw IllegalArgumentException("Unknown workflow step ${step.name}")
+            else -> if (trustedActions?.supports(step.name) == true) {
+                trustedActions.execute(organizationId, step.name, step.params)
+            } else {
+                throw IllegalArgumentException("Unknown workflow step ${step.name}")
+            }
         }
     }
 

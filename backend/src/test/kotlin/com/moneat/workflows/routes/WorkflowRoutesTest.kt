@@ -35,14 +35,18 @@ import com.moneat.workflows.models.WorkflowConditionConfig
 import com.moneat.workflows.models.WorkflowPreviewRequest
 import com.moneat.workflows.models.WorkflowPreviewResponse
 import com.moneat.workflows.models.WorkflowResponse
+import com.moneat.workflows.models.WorkflowRunCancelResponse
+import com.moneat.workflows.models.WorkflowRunInstanceRequest
 import com.moneat.workflows.models.WorkflowRunResponse
 import com.moneat.workflows.models.WorkflowStepConfig
 import com.moneat.workflows.models.WorkflowStepPreview
 import com.moneat.workflows.models.WorkflowTestMessageResponse
 import com.moneat.workflows.models.WorkflowTestMessageResult
+import com.moneat.workflows.models.WorkflowWebhookSigningResponse
 import com.moneat.workflows.services.WorkflowService
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
@@ -437,6 +441,127 @@ class WorkflowRoutesTest {
             assertTrue(defaultLimit.bodyAsText().contains("pending"))
             assertEquals(HttpStatusCode.OK, upperBound.status)
             assertTrue(upperBound.bodyAsText().contains("failed"))
+        }
+
+    @Test
+    fun `instance routes create list get and cancel workflow runs`() =
+        testApplication {
+            setupApp()
+            val request = WorkflowRunInstanceRequest()
+            every { workflowService.listRuns(organizationId, WORKFLOW_ID, 50) } returns listOf(runResponse())
+            every { workflowService.getRun(organizationId, WORKFLOW_ID, 7) } returns runResponse()
+            coEvery {
+                workflowService.createWorkflowInstance(organizationId, WORKFLOW_ID, request, userId)
+            } returns runResponse(status = "pending")
+            coEvery {
+                workflowService.cancelRun(organizationId, WORKFLOW_ID, 7)
+            } returns WorkflowRunCancelResponse(7, "canceled")
+
+            val list = client.get("/v1/workflows/$WORKFLOW_ID/instances") {
+                withAuth(token())
+            }
+            val detail = client.get("/v1/workflows/$WORKFLOW_ID/instances/7") {
+                withAuth(token())
+            }
+            val created = client.post("/v1/workflows/$WORKFLOW_ID/instances") {
+                withAuth(token())
+                contentType(ContentType.Application.Json)
+                setBody(json.encodeToString(request))
+            }
+            val canceled = client.put("/v1/workflows/$WORKFLOW_ID/instances/7/cancel") {
+                withAuth(token())
+            }
+
+            assertEquals(HttpStatusCode.OK, list.status)
+            assertTrue(list.bodyAsText().contains("complete"))
+            assertEquals(HttpStatusCode.OK, detail.status)
+            assertTrue(detail.bodyAsText().contains("host-1"))
+            assertEquals(HttpStatusCode.Accepted, created.status)
+            assertTrue(created.bodyAsText().contains("pending"))
+            assertEquals(HttpStatusCode.OK, canceled.status)
+            assertTrue(canceled.bodyAsText().contains("canceled"))
+        }
+
+    @Test
+    fun `instance routes validate identifiers and map missing runs`() =
+        testApplication {
+            setupApp()
+            every { workflowService.getRun(organizationId, WORKFLOW_ID, 8) } returns null
+            coEvery { workflowService.cancelRun(organizationId, WORKFLOW_ID, 8) } returns null
+
+            val invalidWorkflow = client.get("/v1/workflows/nope/instances/7") {
+                withAuth(token())
+            }
+            val invalidInstance = client.get("/v1/workflows/$WORKFLOW_ID/instances/nope") {
+                withAuth(token())
+            }
+            val missingDetail = client.get("/v1/workflows/$WORKFLOW_ID/instances/8") {
+                withAuth(token())
+            }
+            val missingCancel = client.put("/v1/workflows/$WORKFLOW_ID/instances/8/cancel") {
+                withAuth(token())
+            }
+
+            assertEquals(HttpStatusCode.BadRequest, invalidWorkflow.status)
+            assertEquals(HttpStatusCode.BadRequest, invalidInstance.status)
+            assertEquals(HttpStatusCode.NotFound, missingDetail.status)
+            assertEquals(HttpStatusCode.NotFound, missingCancel.status)
+        }
+
+    @Test
+    fun `webhook signing route requires admin role and returns signing metadata`() =
+        testApplication {
+            setupApp()
+            val memberToken = RouteTestSupport.createToken(userId = memberUserId, orgId = organizationId)
+            every {
+                workflowService.webhookSigningInfo(organizationId, WORKFLOW_ID)
+            } returns WorkflowWebhookSigningResponse(
+                workflowId = WORKFLOW_ID,
+                webhookUrl = "https://api.moneat.io/v1/workflows/$WORKFLOW_ID/webhook",
+                signingSecret = "secret",
+                signatureHeader = "X-Moneat-Workflow-Signature",
+                signatureFormat = "sha256=<hex HMAC-SHA256 of raw body>"
+            )
+
+            val forbidden = client.get("/v1/workflows/$WORKFLOW_ID/webhook-signing") {
+                withAuth(memberToken)
+            }
+            val response = client.get("/v1/workflows/$WORKFLOW_ID/webhook-signing") {
+                withAuth(token())
+            }
+
+            assertEquals(HttpStatusCode.Forbidden, forbidden.status)
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertTrue(response.bodyAsText().contains("X-Moneat-Workflow-Signature"))
+        }
+
+    @Test
+    fun `signed webhook route validates signature before creating a run`() =
+        testApplication {
+            setupApp()
+            every { workflowService.verifyWebhookSignature(WORKFLOW_ID, "{}", null) } returns false
+            every {
+                workflowService.verifyWebhookSignature(WORKFLOW_ID, "{}", "sha256=valid")
+            } returns true
+            coEvery {
+                workflowService.createWebhookRun(WORKFLOW_ID, "{}", "event-1")
+            } returns runResponse(status = "pending")
+
+            val unsigned = client.post("/v1/workflows/$WORKFLOW_ID/webhook") {
+                contentType(ContentType.Application.Json)
+                setBody("{}")
+            }
+            val signed = client.post("/v1/workflows/$WORKFLOW_ID/webhook") {
+                header("X-Moneat-Workflow-Signature", "sha256=valid")
+                header("X-Moneat-Webhook-Event", "event-1")
+                contentType(ContentType.Application.Json)
+                setBody("{}")
+            }
+
+            assertEquals(HttpStatusCode.Unauthorized, unsigned.status)
+            assertEquals(HttpStatusCode.Accepted, signed.status)
+            assertTrue(signed.bodyAsText().contains("pending"))
+            coVerify { workflowService.createWebhookRun(WORKFLOW_ID, "{}", "event-1") }
         }
 
     private fun ApplicationTestBuilder.setupApp() {

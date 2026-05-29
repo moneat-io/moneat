@@ -85,6 +85,7 @@ class IncidentService(
         if (publishWorkflow) {
             suspendRunCatching {
                 workflowService.publishAlertTriggered(event)
+                workflowService.publishIncidentCreated(event)
             }.getOrElse { e ->
                 logger.error("Error publishing alert workflow", e)
             }
@@ -158,6 +159,11 @@ class IncidentService(
                     title = title,
                     description = description,
                     moneatUrl = moneatUrl
+                )
+                workflowService.publishIncidentResolved(
+                    organizationId = organizationId,
+                    deduplicationKey = deduplicationKey,
+                    title = title
                 )
             }.getOrElse { e ->
                 logger.error("Error publishing resolved alert workflow", e)

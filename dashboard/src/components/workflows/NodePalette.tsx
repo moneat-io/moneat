@@ -32,7 +32,7 @@ export function NodePalette({catalog, onAddNode}: NodePaletteProps) {
     <div className="space-y-3 rounded-md border bg-muted/20 p-3">
       <div>
         <h3 className="text-sm font-semibold">Node palette</h3>
-        <p className="text-xs text-muted-foreground">Add branches, waits, and notification actions.</p>
+        <p className="text-xs text-muted-foreground">Add branches, waits, and workflow actions.</p>
       </div>
       <div className="grid gap-2">
         <PaletteButton

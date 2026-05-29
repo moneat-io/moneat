@@ -21,6 +21,7 @@ import type {
   WorkflowGraphNode,
   WorkflowOperationDefinition,
   WorkflowScopeReferenceDefinition,
+  WorkflowStepParamDefinition,
   WorkflowSwitchCaseConfig,
 } from '@/lib/api'
 import {Button} from '@/components/ui/button'
@@ -137,21 +138,7 @@ function ActionFields({
         </Select>
       </div>
       {definition?.params.map((param) => (
-        <div key={param.name} className="space-y-1.5">
-          <Label>{param.label}</Label>
-          {param.type === 'Text' ? (
-            <Textarea
-              value={String(node.params?.[param.name] ?? '')}
-              onChange={(event) => updateParam(node, param.name, event.target.value, onChange)}
-              className="min-h-24"
-            />
-          ) : (
-            <Input
-              value={String(node.params?.[param.name] ?? '')}
-              onChange={(event) => updateParam(node, param.name, event.target.value, onChange)}
-            />
-          )}
-        </div>
+        <ParamField key={param.name} node={node} param={param} onChange={onChange} />
       ))}
       <div className="flex items-center gap-2">
         <Switch
@@ -161,6 +148,52 @@ function ActionFields({
         <Label>Continue on error</Label>
       </div>
       <RetryFields node={node} onChange={onChange} />
+    </div>
+  )
+}
+
+function ParamField({
+  node,
+  param,
+  onChange,
+}: {
+  node: WorkflowGraphNode
+  param: WorkflowStepParamDefinition
+  onChange: (node: WorkflowGraphNode) => void
+}) {
+  const value = node.params?.[param.name]
+  return (
+    <div className="space-y-1.5">
+      <Label>{param.label}</Label>
+      {param.type === 'Text' && (
+        <Textarea
+          value={String(value ?? '')}
+          onChange={(event) => updateParam(node, param.name, event.target.value, onChange)}
+          className="min-h-24"
+        />
+      )}
+      {param.type === 'Number' && (
+        <Input
+          type="number"
+          value={String(value ?? '')}
+          onChange={(event) => updateNumberParam(node, param.name, event.target.value, onChange)}
+        />
+      )}
+      {param.type === 'Boolean' && (
+        <div className="flex h-10 items-center gap-2">
+          <Switch
+            checked={booleanParamChecked(value)}
+            onCheckedChange={(checked) => updateParamValue(node, param.name, checked, onChange)}
+          />
+          <span className="text-sm text-muted-foreground">{booleanParamChecked(value) ? 'True' : 'False'}</span>
+        </div>
+      )}
+      {param.type !== 'Text' && param.type !== 'Number' && param.type !== 'Boolean' && (
+        <Input
+          value={String(value ?? '')}
+          onChange={(event) => updateParam(node, param.name, event.target.value, onChange)}
+        />
+      )}
     </div>
   )
 }
@@ -508,7 +541,29 @@ function updateParam(
   value: string,
   onChange: (node: WorkflowGraphNode) => void
 ) {
+  updateParamValue(node, name, value, onChange)
+}
+
+function updateNumberParam(
+  node: WorkflowGraphNode,
+  name: string,
+  value: string,
+  onChange: (node: WorkflowGraphNode) => void
+) {
+  updateParamValue(node, name, value === '' ? '' : Number(value), onChange)
+}
+
+function updateParamValue(
+  node: WorkflowGraphNode,
+  name: string,
+  value: string | number | boolean,
+  onChange: (node: WorkflowGraphNode) => void
+) {
   onChange({...node, params: {...node.params, [name]: value}})
+}
+
+function booleanParamChecked(value: unknown): boolean {
+  return value === true || value === 'true'
 }
 
 function nodeForConditionKind(

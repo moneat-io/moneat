@@ -21,10 +21,13 @@ import type {
   WorkflowPreviewRequest,
   WorkflowPreviewResponse,
   WorkflowRequest,
+  WorkflowRunCancelResponse,
+  WorkflowRunInstanceRequest,
   WorkflowResponse,
   WorkflowRunResponse,
   WorkflowTestMessageResponse,
   WorkflowUpdateRequest,
+  WorkflowWebhookSigningResponse,
 } from '../types'
 
 export function workflowsMethods(core: ApiClientCore) {
@@ -84,5 +87,28 @@ export function workflowsMethods(core: ApiClientCore) {
 
     getWorkflowRuns: (id: number) =>
       core.request<WorkflowRunResponse[]>(`${base}/workflows/${id}/runs`),
+
+    getWorkflowInstances: (id: number) =>
+      core.request<WorkflowRunResponse[]>(`${base}/workflows/${id}/instances`),
+
+    getWorkflowRun: (id: number, runId: number) =>
+      core.request<WorkflowRunResponse>(`${base}/workflows/${id}/instances/${runId}`),
+
+    createWorkflowInstance: (
+      id: number,
+      request: WorkflowRunInstanceRequest = {scope: {}}
+    ) =>
+      core.request<WorkflowRunResponse>(`${base}/workflows/${id}/instances`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }),
+
+    cancelWorkflowRun: (id: number, runId: number) =>
+      core.request<WorkflowRunCancelResponse>(`${base}/workflows/${id}/instances/${runId}/cancel`, {
+        method: 'PUT',
+      }),
+
+    getWorkflowWebhookSigning: (id: number) =>
+      core.request<WorkflowWebhookSigningResponse>(`${base}/workflows/${id}/webhook-signing`),
   }
 }

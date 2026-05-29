@@ -227,6 +227,26 @@ data class ManualWorkflowRunRequest(
 )
 
 @Serializable
+data class WorkflowRunInstanceRequest(
+    val scope: Map<String, JsonElement> = emptyMap()
+)
+
+@Serializable
+data class WorkflowRunCancelResponse(
+    val id: Int,
+    val status: String
+)
+
+@Serializable
+data class WorkflowWebhookSigningResponse(
+    @SerialName("workflow_id") val workflowId: Int,
+    @SerialName("webhook_url") val webhookUrl: String,
+    @SerialName("signing_secret") val signingSecret: String,
+    @SerialName("signature_header") val signatureHeader: String,
+    @SerialName("signature_format") val signatureFormat: String
+)
+
+@Serializable
 data class WorkflowResponse(
     val id: Int,
     val name: String,
@@ -271,6 +291,8 @@ data class WorkflowRunResponse(
     val progress: List<WorkflowRunStepProgress>,
     val steps: List<WorkflowRunStepResponse> = emptyList(),
     @SerialName("error_message") val errorMessage: String? = null,
+    @SerialName("temporal_workflow_id") val temporalWorkflowId: String? = null,
+    @SerialName("temporal_run_id") val temporalRunId: String? = null,
     @SerialName("created_at") val createdAt: String,
     @SerialName("completed_at") val completedAt: String? = null,
     @SerialName("failed_at") val failedAt: String? = null

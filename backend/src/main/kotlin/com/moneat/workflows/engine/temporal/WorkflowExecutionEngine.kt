@@ -18,4 +18,6 @@ package com.moneat.workflows.engine.temporal
 
 interface WorkflowExecutionEngine {
     suspend fun start(request: WorkflowStartRequest): WorkflowStartResult
+
+    suspend fun cancel(temporalWorkflowId: String)
 }

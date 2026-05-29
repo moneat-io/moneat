@@ -20,6 +20,7 @@ import type {
   WorkflowGraphConfig,
   WorkflowGraphEdge,
   WorkflowGraphNode,
+  WorkflowJsonValue,
   WorkflowRequest,
   WorkflowResponse,
   WorkflowStepConfig,
@@ -234,7 +235,7 @@ export function statusClass(status: string): string {
   return 'border-amber-500/30 bg-amber-500/10 text-amber-600'
 }
 
-export function defaultParamsForStep(step: WorkflowStepDefinition): Record<string, string> {
+export function defaultParamsForStep(step: WorkflowStepDefinition): Record<string, WorkflowJsonValue> {
   return Object.fromEntries(step.params.map((param) => [param.name, defaultParamValue(param.name, param.type)]))
 }
 
@@ -292,10 +293,11 @@ function withNodeDefaults(node: WorkflowGraphNode): WorkflowGraphNode {
 function defaultParamValue(
   name: string,
   type: string
-): string {
+): WorkflowJsonValue {
   if (name === 'subject') return 'Moneat workflow: {{alert.title}}'
   if (name === 'title') return 'Moneat workflow'
-  if (type === 'Number') return '100'
+  if (type === 'Number') return 100
+  if (type === 'Boolean') return false
   return [
     '{{alert.display_title}}',
     '',
