@@ -150,18 +150,23 @@ class EnvironmentValidator {
 
     private fun validateWorkflowRuntimeConfig(errors: MutableList<String>) {
         val workflowsEnabledRaw = getConfigValue("WORKFLOWS_ENABLED")
-        val workflowsEnabled =
-            if (workflowsEnabledRaw == null) {
-                true
-            } else {
-                workflowsEnabledRaw.toBooleanStrictOrNull()
-            }
+        if (workflowsEnabledRaw == null) {
+            validateEnabledWorkflowRuntimeConfig(errors)
+            return
+        }
+
+        val workflowsEnabled = workflowsEnabledRaw.toBooleanStrictOrNull()
         if (workflowsEnabled == null) {
             errors.add("REQUIRED: WORKFLOWS_ENABLED must be either 'true' or 'false' when set.")
             return
         }
-        if (!workflowsEnabled) return
 
+        if (workflowsEnabled) {
+            validateEnabledWorkflowRuntimeConfig(errors)
+        }
+    }
+
+    private fun validateEnabledWorkflowRuntimeConfig(errors: MutableList<String>) {
         validateRequired("TEMPORAL_TARGET", "workflows are enabled", errors)
         validateRequired("TEMPORAL_NAMESPACE", "workflows are enabled", errors)
         validateWorkflowSecret("WORKFLOWS_CONNECTION_KEK", errors)
