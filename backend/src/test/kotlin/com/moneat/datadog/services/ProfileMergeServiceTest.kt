@@ -104,12 +104,21 @@ class ProfileMergeServiceTest {
         put("totalSamples", 10)
     }
 
+    private fun mergeQuery(
+        sampleType: String? = null,
+    ) = ProfileMergeFlamegraphQuery(
+        organizationId = 1,
+        filters = ProfileQueryFilters(service = "api", profileType = "jfr"),
+        window = ProfileTimeWindow(fromMs = 0, toMs = 1000),
+        sampleType = sampleType,
+        thread = null,
+        maxProfiles = 25,
+    )
+
     @Test
     fun `mergeFlamegraph sums frame values and unions dimensions across profiles`() {
         coEvery {
-            ProfileIngestionService.selectProfilesForMerge(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(),
-            )
+            ProfileIngestionService.selectProfilesForMerge(any())
         } returns ProfileMergeSelection(
             totalInWindow = 2,
             candidates = listOf(
@@ -123,19 +132,7 @@ class ProfileMergeServiceTest {
         } returns singleProfileFlamegraph()
 
         val out = runBlocking {
-            ProfileMergeService.mergeFlamegraph(
-                organizationId = 1,
-                service = "api",
-                profileType = "jfr",
-                env = null,
-                host = null,
-                version = null,
-                fromMs = 0,
-                toMs = 1000,
-                sampleType = "cpu",
-                thread = null,
-                maxProfiles = 25,
-            )
+            ProfileMergeService.mergeFlamegraph(mergeQuery(sampleType = "cpu"))
         }
 
         assertEquals(2, out["mergedCount"]!!.jsonPrimitive.int)
@@ -160,25 +157,11 @@ class ProfileMergeServiceTest {
     @Test
     fun `mergeFlamegraph returns empty result when no profiles match`() {
         coEvery {
-            ProfileIngestionService.selectProfilesForMerge(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(),
-            )
+            ProfileIngestionService.selectProfilesForMerge(any())
         } returns ProfileMergeSelection(totalInWindow = 0, candidates = emptyList())
 
         val out = runBlocking {
-            ProfileMergeService.mergeFlamegraph(
-                organizationId = 1,
-                service = "api",
-                profileType = "jfr",
-                env = null,
-                host = null,
-                version = null,
-                fromMs = 0,
-                toMs = 1000,
-                sampleType = null,
-                thread = null,
-                maxProfiles = 25,
-            )
+            ProfileMergeService.mergeFlamegraph(mergeQuery())
         }
 
         assertTrue(out["frames"]!!.jsonArray.isEmpty())

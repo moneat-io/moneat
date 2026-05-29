@@ -16,6 +16,7 @@
 
 package com.moneat.datadog.services
 
+import com.moneat.utils.suspendRunCatching
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -34,6 +35,16 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import java.util.concurrent.atomic.AtomicLong
+
+/** Request for an aggregated flamegraph across a profile query window. */
+data class ProfileMergeFlamegraphQuery(
+    val organizationId: Int,
+    val filters: ProfileQueryFilters,
+    val window: ProfileTimeWindow,
+    val sampleType: String?,
+    val thread: String?,
+    val maxProfiles: Int,
+)
 
 /**
  * Aggregates the individual profiles in a service/time window into a single
@@ -55,29 +66,14 @@ object ProfileMergeService {
         val children: LinkedHashMap<String, MutableFrame> = LinkedHashMap(),
     )
 
-    suspend fun mergeFlamegraph(
-        organizationId: Int,
-        service: String?,
-        profileType: String?,
-        env: String?,
-        host: String?,
-        version: String?,
-        fromMs: Long,
-        toMs: Long,
-        sampleType: String?,
-        thread: String?,
-        maxProfiles: Int,
-    ): JsonObject {
+    suspend fun mergeFlamegraph(query: ProfileMergeFlamegraphQuery): JsonObject {
         val selection = ProfileIngestionService.selectProfilesForMerge(
-            organizationId = organizationId,
-            service = service,
-            profileType = profileType,
-            env = env,
-            host = host,
-            version = version,
-            fromMs = fromMs,
-            toMs = toMs,
-            maxProfiles = maxProfiles,
+            ProfileMergeSelectionQuery(
+                organizationId = query.organizationId,
+                filters = query.filters,
+                window = query.window,
+                maxProfiles = query.maxProfiles,
+            ),
         )
         if (selection.candidates.isEmpty()) {
             return emptyMerged(mergedCount = 0, total = selection.totalInWindow)
@@ -94,13 +90,13 @@ object ProfileMergeService {
                         if (totalBytes.addAndGet(data.size.toLong()) > MAX_TOTAL_BYTES) {
                             return@withPermit null
                         }
-                        runCatching {
+                        suspendRunCatching {
                             ProfileFlamegraphParser.parse(
                                 source = candidate.source,
                                 profileType = candidate.profileType,
                                 data = data,
-                                sampleType = sampleType,
-                                thread = thread,
+                                sampleType = query.sampleType,
+                                thread = query.thread,
                             )
                         }.getOrNull()
                     }
@@ -108,7 +104,7 @@ object ProfileMergeService {
             }.awaitAll().filterNotNull()
         }
 
-        return mergeParsed(parsed, thread, selection.totalInWindow)
+        return mergeParsed(parsed, query.thread, selection.totalInWindow)
     }
 
     private fun mergeParsed(

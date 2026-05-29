@@ -29,6 +29,7 @@ import com.moneat.datadog.models.DdProfileTypeCount
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -43,7 +44,6 @@ import java.time.format.DateTimeParseException
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -61,6 +61,46 @@ data class DdProfileListQuery(
     val offset: Int = 0,
 )
 
+/** Shared dimensions used by profile dashboard queries. */
+data class ProfileQueryFilters(
+    val service: String? = null,
+    val profileType: String? = null,
+    val source: String? = null,
+    val env: String? = null,
+    val host: String? = null,
+    val version: String? = null,
+)
+
+/** Optional lower/upper time bounds for ClickHouse profile filters. */
+data class ProfileTimeFilter(
+    val fromMs: Long? = null,
+    val toMs: Long? = null,
+)
+
+/** Required time window for dashboard aggregations. */
+data class ProfileTimeWindow(
+    val fromMs: Long,
+    val toMs: Long,
+) {
+    fun toFilter(): ProfileTimeFilter = ProfileTimeFilter(fromMs, toMs)
+}
+
+/** Profile-volume time-series query shape. */
+data class ProfileTimeseriesQuery(
+    val organizationId: Int,
+    val filters: ProfileQueryFilters,
+    val window: ProfileTimeWindow,
+    val buckets: Int,
+)
+
+/** Candidate sampling query shape for merged flamegraphs. */
+data class ProfileMergeSelectionQuery(
+    val organizationId: Int,
+    val filters: ProfileQueryFilters,
+    val window: ProfileTimeWindow,
+    val maxProfiles: Int,
+)
+
 /** A profile selected for inclusion in a merged flamegraph. */
 data class ProfileMergeCandidate(
     val profileId: String,
@@ -74,6 +114,16 @@ data class ProfileMergeSelection(
     val totalInWindow: Long,
     val candidates: List<ProfileMergeCandidate>,
 )
+
+private fun DdProfileListQuery.toFilters(): ProfileQueryFilters =
+    ProfileQueryFilters(
+        service = service,
+        profileType = profileType,
+        source = source,
+        env = env,
+        host = host,
+        version = version,
+    )
 
 object ProfileIngestionService {
     private val clickhouseDb by lazy { ClickHouseClient.getDatabase() }
@@ -261,15 +311,9 @@ object ProfileIngestionService {
         query: DdProfileListQuery,
     ): DdProfileListResponse {
         val whereClause = buildProfileFilters(
-            organizationId,
-            service = query.service,
-            profileType = query.profileType,
-            source = query.source,
-            env = query.env,
-            host = query.host,
-            version = query.version,
-            fromMs = query.fromMs,
-            toMs = query.toMs,
+            organizationId = organizationId,
+            filters = query.toFilters(),
+            timeFilter = ProfileTimeFilter(query.fromMs, query.toMs),
         )
         val limit = query.limit
         val offset = query.offset
@@ -285,7 +329,7 @@ object ProfileIngestionService {
         )
         val totalCount = countResult.trim().toLongOrNull() ?: 0
 
-        val query = """
+        val listQuery = """
             SELECT
                 toString(profile_id) as profile_id,
                 host, service, env, version,
@@ -301,7 +345,7 @@ object ProfileIngestionService {
             FORMAT JSONEachRow
         """.trimIndent()
 
-        val result = ClickHouseClient.executeWithFormat(query, "")
+        val result = ClickHouseClient.executeWithFormat(listQuery, "")
         val profiles = if (result.isBlank()) {
             emptyList()
         } else {
@@ -353,9 +397,8 @@ object ProfileIngestionService {
         toMs: Long?,
     ): DdProfileServicesResponse {
         val whereClause = buildProfileFilters(
-            organizationId,
-            fromMs = fromMs,
-            toMs = toMs,
+            organizationId = organizationId,
+            timeFilter = ProfileTimeFilter(fromMs, toMs),
         )
 
         val rollupQuery = """
@@ -460,29 +503,18 @@ object ProfileIngestionService {
     }
 
     /** Profile-volume time series for a service over a window. */
-    suspend fun timeseries(
-        organizationId: Int,
-        service: String?,
-        profileType: String?,
-        env: String?,
-        host: String?,
-        fromMs: Long,
-        toMs: Long,
-        buckets: Int,
-    ): DdProfileTimeseriesResponse {
-        val safeBuckets = buckets.coerceIn(1, MAX_TIMESERIES_BUCKETS)
+    suspend fun timeseries(query: ProfileTimeseriesQuery): DdProfileTimeseriesResponse {
+        val safeBuckets = query.buckets.coerceIn(1, MAX_TIMESERIES_BUCKETS)
+        val fromMs = query.window.fromMs
+        val toMs = query.window.toMs
         val windowSec = ((toMs - fromMs) / MILLIS_PER_SECOND_L).coerceAtLeast(1)
         val stepSeconds = (windowSec / safeBuckets).coerceAtLeast(MIN_BUCKET_SECONDS)
         val whereClause = buildProfileFilters(
-            organizationId,
-            service = service,
-            profileType = profileType,
-            env = env,
-            host = host,
-            fromMs = fromMs,
-            toMs = toMs,
+            organizationId = query.organizationId,
+            filters = query.filters,
+            timeFilter = query.window.toFilter(),
         )
-        val query = """
+        val sql = """
             SELECT
                 toUnixTimestamp64Milli(
                     toStartOfInterval(start_time, INTERVAL $stepSeconds SECOND)
@@ -495,7 +527,7 @@ object ProfileIngestionService {
             ORDER BY ts
             FORMAT JSONEachRow
         """.trimIndent()
-        val points = parseJsonRows(ClickHouseClient.executeWithFormat(query, "")).map { obj ->
+        val points = parseJsonRows(ClickHouseClient.executeWithFormat(sql, "")).map { obj ->
             DdProfileTimeseriesPoint(
                 ts = obj["ts"]?.jsonPrimitive?.long ?: 0,
                 count = obj["count"]?.jsonPrimitive?.long ?: 0,
@@ -509,29 +541,14 @@ object ProfileIngestionService {
      * Evenly sample up to [maxProfiles] profiles across the window so a wide
      * window stays representative without reading every stored blob.
      */
-    suspend fun selectProfilesForMerge(
-        organizationId: Int,
-        service: String?,
-        profileType: String?,
-        env: String?,
-        host: String?,
-        version: String?,
-        fromMs: Long,
-        toMs: Long,
-        maxProfiles: Int,
-    ): ProfileMergeSelection {
-        val cap = maxProfiles.coerceIn(1, MERGE_MAX_PROFILES)
+    suspend fun selectProfilesForMerge(query: ProfileMergeSelectionQuery): ProfileMergeSelection {
+        val cap = query.maxProfiles.coerceIn(1, MERGE_MAX_PROFILES)
         val whereClause = buildProfileFilters(
-            organizationId,
-            service = service,
-            profileType = profileType,
-            env = env,
-            host = host,
-            version = version,
-            fromMs = fromMs,
-            toMs = toMs,
+            organizationId = query.organizationId,
+            filters = query.filters,
+            timeFilter = query.window.toFilter(),
         )
-        val query = """
+        val sql = """
             WITH
                 (SELECT count() FROM `$clickhouseDb`.profiles WHERE $whereClause) AS total,
                 greatest(intDiv(total + $cap - 1, $cap), 1) AS stride
@@ -548,7 +565,7 @@ object ProfileIngestionService {
             LIMIT $cap
             FORMAT JSONEachRow
         """.trimIndent()
-        val rows = parseJsonRows(ClickHouseClient.executeWithFormat(query, ""))
+        val rows = parseJsonRows(ClickHouseClient.executeWithFormat(sql, ""))
         val total = rows.firstOrNull()?.get("total")?.jsonPrimitive?.long ?: 0
         val candidates = rows.map { obj ->
             ProfileMergeCandidate(
@@ -616,39 +633,33 @@ object ProfileIngestionService {
 
     private fun buildProfileFilters(
         organizationId: Int,
-        service: String? = null,
-        profileType: String? = null,
-        source: String? = null,
-        env: String? = null,
-        host: String? = null,
-        version: String? = null,
-        fromMs: Long? = null,
-        toMs: Long? = null,
+        filters: ProfileQueryFilters = ProfileQueryFilters(),
+        timeFilter: ProfileTimeFilter = ProfileTimeFilter(),
     ): String {
-        val filters = mutableListOf(
+        val clauses = mutableListOf(
             ClickHouseQueryUtils.orgIdClause(organizationId.toLong())
         )
-        service?.takeIf { it.isNotBlank() }?.let {
-            filters.add("service = '${escapeSql(it)}'")
+        filters.service?.takeIf { it.isNotBlank() }?.let {
+            clauses.add("service = '${escapeSql(it)}'")
         }
-        profileType?.takeIf { it.isNotBlank() }?.let {
-            filters.add("profile_type = '${escapeSql(it)}'")
+        filters.profileType?.takeIf { it.isNotBlank() }?.let {
+            clauses.add("profile_type = '${escapeSql(it)}'")
         }
-        source?.takeIf { it.isNotBlank() }?.let {
-            filters.add("source = '${escapeSql(it)}'")
+        filters.source?.takeIf { it.isNotBlank() }?.let {
+            clauses.add("source = '${escapeSql(it)}'")
         }
-        env?.takeIf { it.isNotBlank() }?.let {
-            filters.add("env = '${escapeSql(it)}'")
+        filters.env?.takeIf { it.isNotBlank() }?.let {
+            clauses.add("env = '${escapeSql(it)}'")
         }
-        host?.takeIf { it.isNotBlank() }?.let {
-            filters.add("host = '${escapeSql(it)}'")
+        filters.host?.takeIf { it.isNotBlank() }?.let {
+            clauses.add("host = '${escapeSql(it)}'")
         }
-        version?.takeIf { it.isNotBlank() }?.let {
-            filters.add("version = '${escapeSql(it)}'")
+        filters.version?.takeIf { it.isNotBlank() }?.let {
+            clauses.add("version = '${escapeSql(it)}'")
         }
-        fromMs?.let { filters.add("start_time >= fromUnixTimestamp64Milli($it)") }
-        toMs?.let { filters.add("start_time < fromUnixTimestamp64Milli($it)") }
-        return filters.joinToString(" AND ")
+        timeFilter.fromMs?.let { clauses.add("start_time >= fromUnixTimestamp64Milli($it)") }
+        timeFilter.toMs?.let { clauses.add("start_time < fromUnixTimestamp64Milli($it)") }
+        return clauses.joinToString(" AND ")
     }
 
     private fun parseProfileRow(line: String): DdProfileResponse {

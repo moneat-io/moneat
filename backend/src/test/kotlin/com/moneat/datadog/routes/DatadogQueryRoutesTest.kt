@@ -97,16 +97,10 @@ class DatadogQueryRoutesTest {
         coEvery { ProfileIngestionService.getProfile(any(), any()) } returns null
         coEvery { ProfileIngestionService.listServices(any(), any(), any()) } returns
             DdProfileServicesResponse(emptyList(), 0L, 0L, 0, 0L, 0)
-        coEvery {
-            ProfileIngestionService.timeseries(
-                any(), any(), any(), any(), any(), any(), any(), any(),
-            )
-        } returns DdProfileTimeseriesResponse(emptyList(), 60L)
-        coEvery {
-            ProfileMergeService.mergeFlamegraph(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
-            )
-        } returns buildJsonObject { put("frames", buildJsonArray {}) }
+        coEvery { ProfileIngestionService.timeseries(any()) } returns DdProfileTimeseriesResponse(emptyList(), 60L)
+        coEvery { ProfileMergeService.mergeFlamegraph(any()) } returns buildJsonObject {
+            put("frames", buildJsonArray {})
+        }
     }
 
     @AfterTest
@@ -512,11 +506,57 @@ class DatadogQueryRoutesTest {
     }
 
     @Test
+    fun `profiles list returns ok with jwt and clamps limit`() = testApplication {
+        installProfileRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get(
+            "/v1/profiles?service=api&type=cpu&source=datadog&env=prod&host=h1&version=v1" +
+                "&from=100&to=200&limit=500&offset=3",
+        ) {
+            withAuth(token)
+        }
+
+        assertEquals(HttpStatusCode.OK, resp.status)
+        coVerify {
+            ProfileIngestionService.listProfiles(
+                10,
+                match {
+                    it.service == "api" &&
+                        it.profileType == "cpu" &&
+                        it.source == "datadog" &&
+                        it.env == "prod" &&
+                        it.host == "h1" &&
+                        it.version == "v1" &&
+                        it.fromMs == 100L &&
+                        it.toMs == 200L &&
+                        it.limit == 200 &&
+                        it.offset == 3
+                },
+            )
+        }
+    }
+
+    @Test
     fun `profile download returns not found for unknown profile`() = testApplication {
         installProfileRoutes()()
         val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
         val resp = client.get("/v1/profiles/unknown-id/download") { withAuth(token) }
         assertEquals(HttpStatusCode.NotFound, resp.status)
+    }
+
+    @Test
+    fun `profile download returns raw profile bytes when found`() = testApplication {
+        installProfileRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        coEvery {
+            ProfileIngestionService.getProfileMeta(10, "profile-download")
+        } returns ProfileIngestionService.ProfileMeta("profile-key", "cpu", "datadog")
+        every { ProfileStorageService.read("profile-key") } returns "raw-profile".toByteArray()
+
+        val resp = client.get("/v1/profiles/profile-download/download") { withAuth(token) }
+
+        assertEquals(HttpStatusCode.OK, resp.status)
+        assertEquals("raw-profile", resp.bodyAsText())
     }
 
     @Test
@@ -629,6 +669,33 @@ class DatadogQueryRoutesTest {
         val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
         val resp = client.get("/v1/profiles/timeseries?from=200&to=100") { withAuth(token) }
         assertEquals(HttpStatusCode.BadRequest, resp.status)
+    }
+
+    @Test
+    fun `profile timeseries returns ok with jwt and forwards filters`() = testApplication {
+        installProfileRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get(
+            "/v1/profiles/timeseries?service=api&type=cpu&env=prod&host=h1&from=1000&to=61000&buckets=10",
+        ) {
+            withAuth(token)
+        }
+
+        assertEquals(HttpStatusCode.OK, resp.status)
+        coVerify {
+            ProfileIngestionService.timeseries(
+                match {
+                    it.organizationId == 10 &&
+                        it.filters.service == "api" &&
+                        it.filters.profileType == "cpu" &&
+                        it.filters.env == "prod" &&
+                        it.filters.host == "h1" &&
+                        it.window.fromMs == 1000L &&
+                        it.window.toMs == 61000L &&
+                        it.buckets == 10
+                },
+            )
+        }
     }
 
     @Test

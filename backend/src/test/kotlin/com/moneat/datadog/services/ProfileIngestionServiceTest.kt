@@ -16,9 +16,15 @@
 
 package com.moneat.datadog.services
 
+import com.moneat.config.ClickHouseClient
 import com.moneat.datadog.models.DdProfileEndpoint
 import com.moneat.datadog.models.DdProfileEvent
 import com.moneat.utils.ClickHouseSqlUtils
+import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import java.lang.reflect.Method
 import kotlin.test.assertEquals
@@ -260,4 +266,195 @@ class ProfileIngestionServiceTest {
             "Should escape quotes in map entries"
         )
     }
+
+    // ──── Dashboard query tests ────
+
+    @Test
+    fun `listProfiles applies filters and maps rows`() = runBlocking {
+        val queries = mutableListOf<String>()
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "testdb"
+            coEvery { ClickHouseClient.executeWithFormat(any(), any()) } answers {
+                val sql = firstArg<String>()
+                queries.add(sql)
+                if (sql.contains("SELECT count()")) {
+                    "1"
+                } else {
+                    profileJsonRow()
+                }
+            }
+
+            val response = ProfileIngestionService.listProfiles(
+                organizationId = 42,
+                query = DdProfileListQuery(
+                    service = "api",
+                    profileType = "cpu",
+                    source = "datadog",
+                    env = "prod",
+                    host = "host-a",
+                    version = "v1",
+                    fromMs = 1000,
+                    toMs = 2000,
+                    limit = 5,
+                    offset = 2,
+                ),
+            )
+
+            assertEquals(1, response.totalCount)
+            assertEquals("profile-1", response.profiles.single().profileId)
+            assertEquals("api", response.profiles.single().service)
+            assertTrue(queries.any { it.contains("service = 'api'") })
+            assertTrue(queries.any { it.contains("start_time >= fromUnixTimestamp64Milli(1000)") })
+            assertTrue(queries.any { it.contains("LIMIT 5 OFFSET 2") })
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
+    fun `listServices maps rollups type counts and sparkline series`() = runBlocking {
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "testdb"
+            coEvery { ClickHouseClient.executeWithFormat(any(), any()) } answers {
+                val sql = firstArg<String>()
+                when {
+                    sql.contains("profile_type AS profileType") ->
+                        """{"service":"api","profileType":"cpu","count":3}"""
+                    sql.contains("GROUP BY service, ts") ->
+                        """{"service":"api","ts":1000,"count":2}"""
+                    else -> profileServiceRollupJson()
+                }
+            }
+
+            val response = ProfileIngestionService.listServices(
+                organizationId = 42,
+                fromMs = 1000,
+                toMs = 2000,
+            )
+
+            val service = response.services.single()
+            assertEquals("api", service.service)
+            assertEquals(listOf("java"), service.languages)
+            assertEquals("cpu", service.types.single().profileType)
+            assertEquals(3, service.profileCount)
+            assertEquals(2, service.series.single().count)
+            assertEquals(3, response.totalProfiles)
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
+    fun `timeseries maps buckets and applies query filters`() = runBlocking {
+        val queries = mutableListOf<String>()
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "testdb"
+            coEvery { ClickHouseClient.executeWithFormat(any(), any()) } answers {
+                firstArg<String>().also { queries.add(it) }
+                """{"ts":60000,"count":4,"sizeBytes":4096}"""
+            }
+
+            val response = ProfileIngestionService.timeseries(
+                ProfileTimeseriesQuery(
+                    organizationId = 42,
+                    filters = ProfileQueryFilters(
+                        service = "api",
+                        profileType = "cpu",
+                        env = "prod",
+                        host = "host-a",
+                    ),
+                    window = ProfileTimeWindow(fromMs = 0, toMs = 120_000),
+                    buckets = 2,
+                ),
+            )
+
+            assertEquals(60, response.bucketSeconds)
+            assertEquals(4, response.points.single().count)
+            assertEquals(4096, response.points.single().sizeBytes)
+            assertTrue(queries.single().contains("profile_type = 'cpu'"))
+            assertTrue(queries.single().contains("host = 'host-a'"))
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
+    fun `selectProfilesForMerge caps candidates and defaults missing source`() = runBlocking {
+        val queries = mutableListOf<String>()
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "testdb"
+            coEvery { ClickHouseClient.executeWithFormat(any(), any()) } answers {
+                firstArg<String>().also { queries.add(it) }
+                """
+                    {"profile_id":"profile-1","storage_key":"key-1","profileType":"jfr","total":7}
+                    {"profile_id":"profile-2","storage_key":"","profileType":"cpu","source":"sentry","total":7}
+                """.trimIndent()
+            }
+
+            val selection = ProfileIngestionService.selectProfilesForMerge(
+                ProfileMergeSelectionQuery(
+                    organizationId = 42,
+                    filters = ProfileQueryFilters(service = "api", version = "v1"),
+                    window = ProfileTimeWindow(fromMs = 1000, toMs = 2000),
+                    maxProfiles = 500,
+                ),
+            )
+
+            assertEquals(7, selection.totalInWindow)
+            assertEquals("profile-1", selection.candidates.single().profileId)
+            assertEquals("datadog", selection.candidates.single().source)
+            assertTrue(queries.single().contains("LIMIT 50"))
+            assertTrue(queries.single().contains("version = 'v1'"))
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
+    fun `getProfile and getProfileMeta map ClickHouse rows`() = runBlocking {
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "testdb"
+            coEvery { ClickHouseClient.executeWithFormat(any(), any()) } answers {
+                val sql = firstArg<String>()
+                if (sql.contains("FORMAT JSONEachRow")) {
+                    profileJsonRow()
+                } else {
+                    "key-1\tcpu"
+                }
+            }
+
+            val profile = ProfileIngestionService.getProfile(organizationId = 42, profileId = "profile-1")
+            val meta = ProfileIngestionService.getProfileMeta(organizationId = 42, profileId = "profile-1")
+
+            assertEquals("profile-1", profile?.profileId)
+            assertEquals("key-1", meta?.storageKey)
+            assertEquals("cpu", meta?.profileType)
+            assertEquals("datadog", meta?.source)
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    private fun profileJsonRow(): String = compactJson(
+        """{"profile_id":"profile-1",""",
+        """"host":"host-a","service":"api","env":"prod","version":"v1",""",
+        """"runtime":"jvm","language":"java","profile_type":"cpu",""",
+        """"start_time":"2026-01-01 00:00:00","end_time":"2026-01-01 00:00:01",""",
+        """"duration_ns":1000,"storage_key":"key-1","tags":{"service":"api"},""",
+        """"size_bytes":123,"source":"datadog"}""",
+    )
+
+    private fun profileServiceRollupJson(): String = compactJson(
+        """{"service":"api","languages":["java"],"runtimes":["jvm"],"environments":["prod"],""",
+        """"hostCount":2,"profileCount":3,"totalSizeBytes":900,""",
+        """"firstSeen":"2026-01-01 00:00:00","lastSeen":"2026-01-01 00:10:00",""",
+        """"avgDurationNs":123}""",
+    )
+
+    private fun compactJson(vararg parts: String): String = parts.joinToString("")
 }

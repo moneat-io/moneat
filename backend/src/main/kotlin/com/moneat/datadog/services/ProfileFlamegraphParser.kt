@@ -16,8 +16,8 @@
 
 package com.moneat.datadog.services
 
-import com.moneat.utils.suspendRunCatching
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -37,7 +37,20 @@ import kotlinx.serialization.json.put
 object ProfileFlamegraphParser {
     private const val SENTRY_SOURCE = "sentry"
     private const val DATADOG_SOURCE = "datadog"
+    private const val JFR_PROFILE_TYPE = "jfr"
     private val json = Json { ignoreUnknownKeys = true }
+
+    private data class SentryProfileData(
+        val frames: JsonArray,
+        val stacks: JsonArray,
+        val samples: JsonArray,
+    )
+
+    private data class MutableFrame(
+        val name: String,
+        var value: Int = 0,
+        val children: MutableMap<String, MutableFrame> = mutableMapOf(),
+    )
 
     fun emptyFlamegraph(): JsonObject = buildJsonObject {
         put("frames", buildJsonArray {})
@@ -53,7 +66,7 @@ object ProfileFlamegraphParser {
         return when (source) {
             SENTRY_SOURCE -> parseSentryProfileToFrames(data)
             DATADOG_SOURCE -> {
-                val isJfrType = profileType.equals("jfr", ignoreCase = true)
+                val isJfrType = profileType.lowercase() == JFR_PROFILE_TYPE
                 val isJfrPayload = DatadogPprofFlamegraphService.isLikelyJfrPayload(data)
                 if (isJfrType || isJfrPayload) {
                     DatadogJfrFlamegraphService.parseToFrames(data, sampleType, thread)
@@ -70,64 +83,59 @@ object ProfileFlamegraphParser {
      * into the flamegraph tree format.
      */
     private fun parseSentryProfileToFrames(data: ByteArray): JsonObject {
-        return suspendRunCatching {
+        val sentryData = parseSentryData(data) ?: return emptyFlamegraph()
+        val rootFrame = MutableFrame("(root)")
+        sentryData.samples.forEach { sample ->
+            addSampleToFrameTree(sample.jsonObject, sentryData.stacks, sentryData.frames, rootFrame)
+        }
+        return buildJsonObject {
+            put("frames", childrenToJson(rootFrame))
+        }
+    }
+
+    private fun parseSentryData(data: ByteArray): SentryProfileData? {
+        return runCatching {
             val root = json.parseToJsonElement(String(data)).jsonObject
-            val profileObj = root["profile"]?.jsonObject ?: return emptyFlamegraph()
-            val frames = profileObj["frames"]?.jsonArray ?: return emptyFlamegraph()
-            val stacks = profileObj["stacks"]?.jsonArray ?: return emptyFlamegraph()
-            val samples = profileObj["samples"]?.jsonArray ?: return emptyFlamegraph()
-
-            data class MutableFrame(
-                val name: String,
-                var value: Int = 0,
-                val children: MutableMap<String, MutableFrame> = mutableMapOf(),
+            val profileObj = root["profile"]?.jsonObject ?: return null
+            SentryProfileData(
+                frames = profileObj["frames"]?.jsonArray ?: return null,
+                stacks = profileObj["stacks"]?.jsonArray ?: return null,
+                samples = profileObj["samples"]?.jsonArray ?: return null,
             )
+        }.getOrNull()
+    }
 
-            val rootFrame = MutableFrame("(root)")
+    private fun addSampleToFrameTree(
+        sample: JsonObject,
+        stacks: JsonArray,
+        frames: JsonArray,
+        rootFrame: MutableFrame,
+    ) {
+        val stackIdx = sample["stack_id"]?.jsonPrimitive?.int ?: return
+        val stack = stacks.getOrNull(stackIdx)?.jsonArray ?: return
+        var current = rootFrame
+        for (i in stack.size - 1 downTo 0) {
+            val frameIdx = stack[i].jsonPrimitive.int
+            val frameObj = frames.getOrNull(frameIdx)?.jsonObject ?: continue
+            val name = sentryFrameName(frameObj)
+            current = current.children.getOrPut(name) { MutableFrame(name) }
+            current.value++
+        }
+    }
 
-            for (sample in samples) {
-                val stackIdx = sample.jsonObject["stack_id"]
-                    ?.jsonPrimitive?.int ?: continue
-                if (stackIdx >= stacks.size) continue
-                val stack = stacks[stackIdx].jsonArray
+    private fun sentryFrameName(frameObj: JsonObject): String {
+        val function = frameObj["function"]?.jsonPrimitive?.content ?: "unknown"
+        val module = frameObj["module"]?.jsonPrimitive?.content
+        return if (module != null) "$module.$function" else function
+    }
 
-                // Walk from bottom (root) to top (leaf)
-                var current = rootFrame
-                for (i in stack.size - 1 downTo 0) {
-                    val frameIdx = stack[i].jsonPrimitive.int
-                    if (frameIdx >= frames.size) continue
-                    val frameObj = frames[frameIdx].jsonObject
-                    val fn = frameObj["function"]?.jsonPrimitive?.content ?: "unknown"
-                    val module = frameObj["module"]?.jsonPrimitive?.content
-                    val name = if (module != null) "$module.$fn" else fn
-                    current = current.children.getOrPut(name) { MutableFrame(name) }
-                    current.value++
-                }
-            }
+    private fun childrenToJson(parent: MutableFrame): JsonArray = buildJsonArray {
+        parent.children.values.sortedByDescending { it.value }.forEach { add(frameToJson(it)) }
+    }
 
-            fun toJson(f: MutableFrame): JsonObject = buildJsonObject {
-                put("name", f.name)
-                put("value", f.value)
-                put(
-                    "children",
-                    buildJsonArray {
-                        for (child in f.children.values.sortedByDescending { it.value }) {
-                            add(toJson(child))
-                        }
-                    },
-                )
-            }
-
-            buildJsonObject {
-                put(
-                    "frames",
-                    buildJsonArray {
-                        for (child in rootFrame.children.values.sortedByDescending { it.value }) {
-                            add(toJson(child))
-                        }
-                    },
-                )
-            }
-        }.getOrElse { emptyFlamegraph() }
+    private fun frameToJson(frame: MutableFrame): JsonObject = buildJsonObject {
+        put("name", frame.name)
+        put("value", frame.value)
+        put("children", childrenToJson(frame))
     }
 }
