@@ -71,7 +71,16 @@ export function profilesMethods(core: ApiClientCore) {
       }
     },
 
-    getProfileFlamegraph: (profileId: string) =>
-      core.request<FlamegraphResponse>(`${base}/profiles/${profileId}/flamegraph`),
+    getProfileFlamegraph: (
+      profileId: string,
+      params: {sampleType?: string | null; thread?: string | null} = {}
+    ) => {
+      const searchParams = new URLSearchParams()
+      if (params.sampleType) searchParams.set('sampleType', params.sampleType)
+      if (params.thread) searchParams.set('thread', params.thread)
+      return core.request<FlamegraphResponse>(
+        urlWithQuery(`${base}/profiles/${profileId}/flamegraph`, searchParams.toString())
+      )
+    },
   }
 }

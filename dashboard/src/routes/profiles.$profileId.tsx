@@ -6,11 +6,11 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
+import {useState, useMemo} from 'react'
 import {createFileRoute, Link} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {Flamegraph} from '@/components/profiling/Flamegraph'
-import {Card, CardContent} from '@/components/ui/card'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {
@@ -87,13 +87,47 @@ function ProfileDetailPage() {
     (p) => p.profileId === profileId,
   )
 
+  const [sampleType, setSampleType] = useState<string | null>(null)
+  const [thread, setThread] = useState<string | null>(null)
+  const [compareId, setCompareId] = useState<string | null>(null)
+
   const {data: flamegraphData, isLoading: isFlamegraphLoading} = useQuery({
-    queryKey: ['profileFlamegraph', profileId],
-    queryFn: () => api.getProfileFlamegraph(profileId),
+    queryKey: ['profileFlamegraph', profileId, sampleType, thread],
+    queryFn: () => api.getProfileFlamegraph(profileId, {sampleType, thread}),
     enabled: api.isAuthenticated() && !!profileId,
   })
 
   const frames = flamegraphData?.frames
+
+  const compareProfiles = useMemo(() => {
+    if (!profile || !profilesData?.profiles) return []
+    return profilesData.profiles
+      .filter(
+        (p) =>
+          p.profileId !== profileId &&
+          p.service === profile.service &&
+          p.profileType === profile.profileType,
+      )
+      .map((p) => ({
+        profileId: p.profileId,
+        label: `${formatTime(p.startTime)} · ${p.host || p.version || p.profileId.slice(0, 8)}`,
+      }))
+  }, [profilesData, profile, profileId])
+
+  const {data: baselineData, isLoading: baselineLoading} = useQuery({
+    queryKey: ['profileFlamegraph', compareId, sampleType, thread],
+    queryFn: () => api.getProfileFlamegraph(compareId as string, {sampleType, thread}),
+    enabled: api.isAuthenticated() && !!compareId,
+  })
+
+  // Reset selectors and comparison when navigating to another profile.
+  const [activeProfileId, setActiveProfileId] = useState(profileId)
+  if (profileId !== activeProfileId) {
+    setActiveProfileId(profileId)
+    setSampleType(null)
+    setThread(null)
+    setCompareId(null)
+  }
 
   if (isLoading) {
     return (
@@ -113,6 +147,61 @@ function ProfileDetailPage() {
   }
 
   const tagEntries = profile ? Object.entries(profile.tags) : []
+
+  const sidebarMeta = (
+    <div className="rounded-lg border p-2.5 space-y-2 shrink-0">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+        <MetaItem icon={Server} label="Service" value={profile.service || '—'} />
+        <MetaItem icon={Globe} label="Environment" value={profile.env || '—'} />
+        <MetaItem icon={HardDrive} label="Host" value={profile.host || '—'} mono />
+        <MetaItem icon={Timer} label="Duration" value={formatDuration(profile.durationNs)} mono />
+        <MetaItem icon={Layers} label="Size" value={formatBytes(profile.sizeBytes)} mono />
+        <MetaItem
+          icon={Code2}
+          label="Runtime"
+          value={
+            profile.runtime
+              ? `${profile.language} / ${profile.runtime}`
+              : profile.language || '—'
+          }
+        />
+      </div>
+      {(profile.startTime || profile.version) && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-2 border-t text-[11px] text-muted-foreground">
+          {profile.startTime && (
+            <span className="flex items-center gap-1.5">
+              <Clock className="h-3 w-3" />
+              {formatTime(profile.startTime)}
+              {profile.endTime && <> — {formatTime(profile.endTime)}</>}
+            </span>
+          )}
+          {profile.version && (
+            <span className="flex items-center gap-1.5">
+              <Tag className="h-3 w-3" />
+              v{profile.version}
+            </span>
+          )}
+        </div>
+      )}
+      {tagEntries.length > 0 && (
+        <div className="pt-2 border-t space-y-1">
+          {tagEntries.map(([k, v]) => (
+            <div
+              key={k}
+              className="grid grid-cols-[minmax(0,7rem)_1fr] gap-2 text-[10px] font-mono leading-tight"
+            >
+              <span className="text-muted-foreground truncate" title={k}>
+                {k}
+              </span>
+              <span className="truncate" title={v}>
+                {v}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 
   return (
     <div
@@ -170,91 +259,7 @@ function ProfileDetailPage() {
         </Button>
       </div>
 
-      {/* Metadata grid */}
-      {profile && (
-        <Card>
-          <CardContent className="py-2 px-3">
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-4 gap-y-2">
-              <MetaItem
-                icon={Server}
-                label="Service"
-                value={profile.service || '—'}
-              />
-              <MetaItem
-                icon={Globe}
-                label="Environment"
-                value={profile.env || '—'}
-              />
-              <MetaItem
-                icon={HardDrive}
-                label="Host"
-                value={profile.host || '—'}
-                mono
-              />
-              <MetaItem
-                icon={Timer}
-                label="Duration"
-                value={formatDuration(profile.durationNs)}
-                mono
-              />
-              <MetaItem
-                icon={Layers}
-                label="Size"
-                value={formatBytes(profile.sizeBytes)}
-                mono
-              />
-              <MetaItem
-                icon={Code2}
-                label="Runtime"
-                value={
-                  profile.runtime
-                    ? `${profile.language} / ${profile.runtime}`
-                    : profile.language || '—'
-                }
-              />
-            </div>
-            {(profile.startTime || profile.version) && (
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 pt-2 border-t text-[11px] text-muted-foreground">
-                {profile.startTime && (
-                  <span className="flex items-center gap-1.5">
-                    <Clock className="h-3 w-3" />
-                    {formatTime(profile.startTime)}
-                    {profile.endTime && (
-                      <> — {formatTime(profile.endTime)}</>
-                    )}
-                  </span>
-                )}
-                {profile.version && (
-                  <span className="flex items-center gap-1.5">
-                    <Tag className="h-3 w-3" />
-                    v{profile.version}
-                  </span>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Tags */}
-      {tagEntries.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1">
-          <span className="text-[11px] font-medium text-muted-foreground mr-0.5">
-            Tags
-          </span>
-          {tagEntries.map(([k, v]) => (
-            <Badge
-              key={k}
-              variant="outline"
-              className="text-[10px] font-mono py-0 h-4"
-            >
-              {k}
-              <span className="text-muted-foreground mx-0.5">=</span>
-              {v}
-            </Badge>
-          ))}
-        </div>
-      )}
+      {/* Metadata + tags now live in the flamegraph sidebar (meta prop). */}
 
       {/* Flamegraph */}
       <div className="flex flex-col flex-1 min-h-0">
@@ -268,6 +273,21 @@ function ProfileDetailPage() {
         </div>
         <Flamegraph
           frames={frames}
+          language={profile.language || profile.runtime}
+          service={profile.service}
+          meta={sidebarMeta}
+          compareProfiles={compareProfiles}
+          compareId={compareId}
+          onCompareChange={setCompareId}
+          baselineFrames={baselineData?.frames}
+          baselineLoading={baselineLoading}
+          sampleTypes={flamegraphData?.sampleTypes}
+          threads={flamegraphData?.threads}
+          selectedSampleType={flamegraphData?.selectedSampleType}
+          selectedThread={flamegraphData?.selectedThread ?? null}
+          unit={flamegraphData?.unit}
+          onSampleTypeChange={setSampleType}
+          onThreadChange={setThread}
           emptyMessage={
             isFlamegraphLoading
               ? 'Loading flamegraph data…'

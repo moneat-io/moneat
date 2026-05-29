@@ -180,6 +180,9 @@ fun Route.profileDashboardRoutes() {
                     return@get
                 }
 
+                val sampleType = call.parameters["sampleType"]
+                val thread = call.parameters["thread"]
+
                 val frames = when (meta.source) {
                     "sentry" -> parseSentryProfileToFrames(data)
                     "datadog" -> {
@@ -187,9 +190,9 @@ fun Route.profileDashboardRoutes() {
                         val isJfrPayload =
                             DatadogPprofFlamegraphService.isLikelyJfrPayload(data)
                         if (isJfrType || isJfrPayload) {
-                            DatadogJfrFlamegraphService.parseToFrames(data)
+                            DatadogJfrFlamegraphService.parseToFrames(data, sampleType, thread)
                         } else {
-                            DatadogPprofFlamegraphService.parseToFrames(data)
+                            DatadogPprofFlamegraphService.parseToFrames(data, sampleType, thread)
                         }
                     }
                     else -> emptyFlamegraph()
