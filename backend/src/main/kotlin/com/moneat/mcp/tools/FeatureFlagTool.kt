@@ -41,6 +41,13 @@ import kotlinx.serialization.json.decodeFromJsonElement
 private val featureFlagService = FeatureFlagService()
 private val featureFlagValueTypes = FeatureFlagValueType.entries.map { it.name }
 private val featureFlagSdkKeyTypes = listOf("server", "client")
+private const val KEY_FIELD = "key"
+private const val NAME_FIELD = "name"
+private const val FLAG_KEY_FIELD = "flag_key"
+private const val FEATURE_FLAG_KEY_DESCRIPTION = "Feature flag key"
+private const val KEY_REQUIRED_ERROR = "key is required"
+private const val NAME_REQUIRED_ERROR = "name is required"
+private const val FLAG_KEY_REQUIRED_ERROR = "flag_key is required"
 private const val TAGS_ARRAY_ERROR = "tags must be an array of strings"
 private const val VARIANTS_ARRAY_ERROR = "variants must be an array of objects with key and value"
 private const val DEFAULT_AUDIT_LIMIT = 50
@@ -96,12 +103,12 @@ class CreateFeatureFlagEnvironmentTool(
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "key" to schemaString("Stable environment key, for example production or staging"),
-                "name" to schemaString("Human-readable environment name"),
+                KEY_FIELD to schemaString("Stable environment key, for example production or staging"),
+                NAME_FIELD to schemaString("Human-readable environment name"),
                 "description" to schemaString("Optional environment description"),
             )
         ),
-        required = listOf("key", "name")
+        required = listOf(KEY_FIELD, NAME_FIELD)
     )
 
     override suspend fun execute(
@@ -129,8 +136,8 @@ class CreateFeatureFlagTool(
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "key" to schemaString("Stable flag key, for example checkout.enabled"),
-                "name" to schemaString("Human-readable flag name"),
+                KEY_FIELD to schemaString("Stable flag key, for example checkout.enabled"),
+                NAME_FIELD to schemaString("Human-readable flag name"),
                 "description" to schemaString("Optional internal description"),
                 "value_type" to schemaEnum("Variant value type", featureFlagValueTypes),
                 "client_visible" to schemaBoolean("Allow client SDK keys to evaluate this flag"),
@@ -140,7 +147,7 @@ class CreateFeatureFlagTool(
                 "off_variant_key" to schemaString("Variant key returned while the flag is disabled"),
             )
         ),
-        required = listOf("key", "name", "value_type", "variants")
+        required = listOf(KEY_FIELD, NAME_FIELD, "value_type", "variants")
     )
 
     override suspend fun execute(
@@ -167,18 +174,18 @@ class GetFeatureFlagTool(
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "flag_key" to schemaString("Feature flag key"),
+                FLAG_KEY_FIELD to schemaString(FEATURE_FLAG_KEY_DESCRIPTION),
                 "environment" to schemaString("Optional environment key"),
             )
         ),
-        required = listOf("flag_key")
+        required = listOf(FLAG_KEY_FIELD)
     )
 
     override suspend fun execute(
         args: JsonObject,
         context: McpContext,
     ): ToolCallResult {
-        val flagKey = args.stringArg("flag_key") ?: return errorResult("flag_key is required")
+        val flagKey = args.stringArg(FLAG_KEY_FIELD) ?: return errorResult(FLAG_KEY_REQUIRED_ERROR)
         val flag = service.getFlag(context.organizationId, flagKey, args.stringArg("environment"))
             ?: return errorResult("Feature flag not found: $flagKey")
         return jsonResult(flag)
@@ -194,15 +201,15 @@ class UpdateFeatureFlagTool(
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "flag_key" to schemaString("Feature flag key"),
-                "name" to schemaString("Updated display name"),
+                FLAG_KEY_FIELD to schemaString(FEATURE_FLAG_KEY_DESCRIPTION),
+                NAME_FIELD to schemaString("Updated display name"),
                 "description" to schemaString("Updated internal description"),
                 "client_visible" to schemaBoolean("Allow client SDK keys to evaluate this flag"),
                 "tags" to schemaStringArray("Replacement grouping tags"),
                 "variants" to schemaVariantArray(),
             )
         ),
-        required = listOf("flag_key")
+        required = listOf(FLAG_KEY_FIELD)
     )
 
     override suspend fun execute(
@@ -234,15 +241,15 @@ class DeleteFeatureFlagTool(
     override val description = "Archive a feature flag by key"
     override val readOnly = false
     override val inputSchema = InputSchema(
-        properties = JsonObject(mapOf("flag_key" to schemaString("Feature flag key"))),
-        required = listOf("flag_key")
+        properties = JsonObject(mapOf(FLAG_KEY_FIELD to schemaString(FEATURE_FLAG_KEY_DESCRIPTION))),
+        required = listOf(FLAG_KEY_FIELD)
     )
 
     override suspend fun execute(
         args: JsonObject,
         context: McpContext,
     ): ToolCallResult {
-        val flagKey = args.stringArg("flag_key") ?: return errorResult("flag_key is required")
+        val flagKey = args.stringArg(FLAG_KEY_FIELD) ?: return errorResult(FLAG_KEY_REQUIRED_ERROR)
         val deleted = service.archiveFlag(context.organizationId, context.userId, flagKey)
         return if (deleted) {
             textResult("Feature flag archived: $flagKey")
@@ -261,7 +268,7 @@ class UpdateFeatureFlagConfigTool(
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "flag_key" to schemaString("Feature flag key"),
+                FLAG_KEY_FIELD to schemaString(FEATURE_FLAG_KEY_DESCRIPTION),
                 "environment" to schemaString("Environment key"),
                 "enabled" to schemaBoolean("Enable or disable this flag in the environment"),
                 "default_variant_key" to schemaString("Variant key returned when no rule matches"),
@@ -269,7 +276,7 @@ class UpdateFeatureFlagConfigTool(
                 "rules" to schemaObject("Rules JSON object, for example {\"rules\": []}"),
             )
         ),
-        required = listOf("flag_key", "environment")
+        required = listOf(FLAG_KEY_FIELD, "environment")
     )
 
     override suspend fun execute(
@@ -319,13 +326,13 @@ class UpsertFeatureFlagSegmentTool(
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "key" to schemaString("Stable segment key"),
-                "name" to schemaString("Human-readable segment name"),
+                KEY_FIELD to schemaString("Stable segment key"),
+                NAME_FIELD to schemaString("Human-readable segment name"),
                 "description" to schemaString("Optional segment description"),
                 "conditions" to schemaObject("Targeting conditions JSON object, for example {\"all\": []}"),
             )
         ),
-        required = listOf("key", "name")
+        required = listOf(KEY_FIELD, NAME_FIELD)
     )
 
     override suspend fun execute(
@@ -394,11 +401,11 @@ class CreateFeatureFlagSdkKeyTool(
         properties = JsonObject(
             mapOf(
                 "environment_key" to schemaString("Environment key for this SDK key"),
-                "name" to schemaString("Human-readable SDK key name"),
+                NAME_FIELD to schemaString("Human-readable SDK key name"),
                 "key_type" to schemaEnum("SDK key type", featureFlagSdkKeyTypes),
             )
         ),
-        required = listOf("environment_key", "name", "key_type")
+        required = listOf("environment_key", NAME_FIELD, "key_type")
     )
 
     override suspend fun execute(
@@ -509,8 +516,8 @@ private data class UpdateFeatureFlagConfigArgs(
 )
 
 private fun parseCreateEnvironmentRequest(args: JsonObject): ParseResult<CreateFeatureFlagEnvironmentRequest> {
-    val key = args.stringArg("key") ?: return ParseResult.Failure("key is required")
-    val name = args.stringArg("name") ?: return ParseResult.Failure("name is required")
+    val key = args.stringArg(KEY_FIELD) ?: return ParseResult.Failure(KEY_REQUIRED_ERROR)
+    val name = args.stringArg(NAME_FIELD) ?: return ParseResult.Failure(NAME_REQUIRED_ERROR)
     val description = when (val result = args.optionalStringArg("description")) {
         is ParseResult.Failure -> return result
         is ParseResult.Success -> result.value
@@ -525,8 +532,8 @@ private fun parseCreateEnvironmentRequest(args: JsonObject): ParseResult<CreateF
 }
 
 private fun parseCreateFeatureFlagRequest(args: JsonObject): ParseResult<CreateFeatureFlagRequest> {
-    val key = args.stringArg("key") ?: return ParseResult.Failure("key is required")
-    val name = args.stringArg("name") ?: return ParseResult.Failure("name is required")
+    val key = args.stringArg(KEY_FIELD) ?: return ParseResult.Failure(KEY_REQUIRED_ERROR)
+    val name = args.stringArg(NAME_FIELD) ?: return ParseResult.Failure(NAME_REQUIRED_ERROR)
     val valueType = args.valueTypeArg() ?: return ParseResult.Failure(
         "value_type must be one of ${featureFlagValueTypes.joinToString(", ")}"
     )
@@ -559,7 +566,7 @@ private fun parseCreateFeatureFlagRequest(args: JsonObject): ParseResult<CreateF
 }
 
 private fun parseUpdateFeatureFlagArgs(args: JsonObject): ParseResult<UpdateFeatureFlagArgs> {
-    val flagKey = args.stringArg("flag_key") ?: return ParseResult.Failure("flag_key is required")
+    val flagKey = args.stringArg(FLAG_KEY_FIELD) ?: return ParseResult.Failure(FLAG_KEY_REQUIRED_ERROR)
     val clientVisible = when (val result = args.optionalBooleanArg("client_visible")) {
         is ParseResult.Failure -> return result
         is ParseResult.Success -> result.value
@@ -572,7 +579,7 @@ private fun parseUpdateFeatureFlagArgs(args: JsonObject): ParseResult<UpdateFeat
         is ParseResult.Failure -> return result
         is ParseResult.Success -> result.value
     }
-    val name = when (val result = args.optionalStringArg("name")) {
+    val name = when (val result = args.optionalStringArg(NAME_FIELD)) {
         is ParseResult.Failure -> return result
         is ParseResult.Success -> result.value
     }
@@ -595,7 +602,7 @@ private fun parseUpdateFeatureFlagArgs(args: JsonObject): ParseResult<UpdateFeat
 }
 
 private fun parseUpdateConfigArgs(args: JsonObject): ParseResult<UpdateFeatureFlagConfigArgs> {
-    val flagKey = args.stringArg("flag_key") ?: return ParseResult.Failure("flag_key is required")
+    val flagKey = args.stringArg(FLAG_KEY_FIELD) ?: return ParseResult.Failure(FLAG_KEY_REQUIRED_ERROR)
     val environmentKey = args.stringArg("environment") ?: return ParseResult.Failure("environment is required")
     val enabled = when (val result = args.optionalBooleanArg("enabled")) {
         is ParseResult.Failure -> return result
@@ -620,8 +627,8 @@ private fun parseUpdateConfigArgs(args: JsonObject): ParseResult<UpdateFeatureFl
 }
 
 private fun parseSegmentRequest(args: JsonObject): ParseResult<FeatureFlagSegmentRequest> {
-    val key = args.stringArg("key") ?: return ParseResult.Failure("key is required")
-    val name = args.stringArg("name") ?: return ParseResult.Failure("name is required")
+    val key = args.stringArg(KEY_FIELD) ?: return ParseResult.Failure(KEY_REQUIRED_ERROR)
+    val name = args.stringArg(NAME_FIELD) ?: return ParseResult.Failure(NAME_REQUIRED_ERROR)
     val description = when (val result = args.optionalStringArg("description")) {
         is ParseResult.Failure -> return result
         is ParseResult.Success -> result.value
@@ -643,7 +650,7 @@ private fun parseSegmentRequest(args: JsonObject): ParseResult<FeatureFlagSegmen
 private fun parseSdkKeyRequest(args: JsonObject): ParseResult<FeatureFlagSdkKeyRequest> {
     val environmentKey = args.stringArg("environment_key")
         ?: return ParseResult.Failure("environment_key is required")
-    val name = args.stringArg("name") ?: return ParseResult.Failure("name is required")
+    val name = args.stringArg(NAME_FIELD) ?: return ParseResult.Failure(NAME_REQUIRED_ERROR)
     val keyType = args.stringArg("key_type")?.lowercase()
         ?: return ParseResult.Failure("key_type must be one of ${featureFlagSdkKeyTypes.joinToString(", ")}")
     if (keyType !in featureFlagSdkKeyTypes) {
@@ -776,12 +783,12 @@ private fun schemaVariantArray(): JsonObject {
                 "type" to JsonPrimitive("object"),
                 "properties" to JsonObject(
                     mapOf(
-                        "key" to schemaString("Variant key"),
-                        "name" to schemaString("Optional variant display name"),
+                        KEY_FIELD to schemaString("Variant key"),
+                        NAME_FIELD to schemaString("Optional variant display name"),
                         "value" to schemaJsonValue("Variant JSON value"),
                     )
                 ),
-                "required" to JsonArray(listOf(JsonPrimitive("key"), JsonPrimitive("value"))),
+                "required" to JsonArray(listOf(JsonPrimitive(KEY_FIELD), JsonPrimitive("value"))),
             )
         )
     )
