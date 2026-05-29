@@ -476,7 +476,7 @@ class TraceIngestionServiceCoverageTest {
     }
 
     @Test
-    fun `APM overview reads finalized table without per-trace re-aggregation`() = runBlocking {
+    fun `APM overview reads finalized table for closed buckets and summaries for the live window`() = runBlocking {
         val capturedQueries = mutableListOf<String>()
         coEvery { ClickHouseClient.executeWithFormat(any(), any()) } coAnswers {
             capturedQueries.add(firstArg())
@@ -488,12 +488,17 @@ class TraceIngestionServiceCoverageTest {
             query = DdTraceListQuery(limit = 10, offset = 0),
         )
 
-        // Reads must hit the finalized one-row-per-trace table with FINAL and must NOT re-introduce
-        // the per-trace argMin aggregation that caused the dashboard ClickHouse timeouts.
+        // Hybrid read: finalized one-row-per-trace records from apm_traces_final (read plainly, NOT with
+        // the slow FINAL) UNION the still-filling recent buckets aggregated live from apm_trace_summaries.
         assertTrue(capturedQueries.isNotEmpty())
-        assertTrue(capturedQueries.all { it.contains("apm_traces_final FINAL") })
-        assertFalse(capturedQueries.any { it.contains("argMinMerge") })
-        assertFalse(capturedQueries.any { it.contains("GROUP BY organization_id, trace_id_canonical") })
+        assertTrue(capturedQueries.all { it.contains("apm_traces_final") })
+        // Never the slow FINAL.
+        assertFalse(capturedQueries.any { it.contains("apm_traces_final FINAL") })
+        // Current-window reads are hybrid: finalized (no FINAL) UNION the live summaries window. The
+        // previous-comparison window is entirely finalized, so it has neither UNION nor summaries.
+        assertTrue(capturedQueries.any { it.contains("UNION ALL") && it.contains("apm_trace_summaries") })
+        assertTrue(capturedQueries.any { it.contains("trace_bucket < toStartOfHour(now() - INTERVAL 2 HOUR)") })
+        assertTrue(capturedQueries.any { it.contains("bucket_start >= toStartOfHour(now() - INTERVAL 2 HOUR)") })
     }
 
     // ===================== getTraceDetail =====================

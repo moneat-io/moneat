@@ -34,25 +34,27 @@ private const val APM_TRACES_FINAL_TABLE = "apm_traces_final"
 private const val APM_TRACE_SUMMARIES_TABLE = "apm_trace_summaries"
 
 private const val DEFAULT_INTERVAL_SECONDS = 600L
-private const val DEFAULT_REFRESH_WINDOW_HOURS = 2
+private const val DEFAULT_LIVE_WINDOW_HOURS = 2
 private const val DEFAULT_BACKFILL_WINDOW_HOURS = 50
 private const val DEFAULT_LOOKBACK_HOURS = 2
 private const val DEFAULT_MAX_EXECUTION_SECONDS = 540
 
 /**
- * Periodically finalizes per-trace rows from apm_trace_summaries into apm_traces_final so the APM
- * dashboard can read one finalized row per trace (plain columns) instead of re-aggregating with
+ * Finalizes per-trace rows from apm_trace_summaries into apm_traces_final so the APM dashboard can read
+ * one finalized row per trace (plain columns) for closed buckets, instead of re-aggregating with
  * argMinMerge on every request. See V45__add_apm_traces_final.sql.
  *
- * Each run re-finalizes a small recent window (idempotent via ReplacingMergeTree(finalized_at)), which
- * keeps the leading edge fresh and absorbs late-arriving spans. On process start it first finalizes a
- * wider window so history (and any gap from downtime) is covered. The heavy argMinMerge aggregation
- * runs here, off the dashboard read path.
+ * Finalization is **exactly-once and forward-only**: each run finalizes only buckets that are now frozen
+ * (older than [liveWindowHours]) and newer than the highest already-finalized bucket. Because a bucket is
+ * written exactly once, apm_traces_final has no duplicate versions, so dashboard reads need no FINAL
+ * (FINAL over these columns was ~5-8s; plain reads are ~0.15s). The still-filling recent buckets are read
+ * live from apm_trace_summaries by the dashboard. [backfillWindowHours] bounds how far back a cold start
+ * (or downtime gap) will catch up. The heavy argMinMerge aggregation runs here, off the read path.
  */
 class TraceFinalizerBackgroundService(
     private val enabled: Boolean,
     private val intervalSeconds: Long,
-    private val refreshWindowHours: Int,
+    private val liveWindowHours: Int,
     private val backfillWindowHours: Int,
     private val lookbackHours: Int,
     private val maxExecutionSeconds: Int,
@@ -63,12 +65,10 @@ class TraceFinalizerBackgroundService(
         // Fail fast on misconfiguration rather than letting the loop spin (delay(0)) or emit
         // nonsensical windows.
         require(intervalSeconds > 0) { "traceFinalizer.intervalSeconds must be > 0, got $intervalSeconds" }
-        require(refreshWindowHours > 0) {
-            "traceFinalizer.refreshWindowHours must be > 0, got $refreshWindowHours"
-        }
-        require(backfillWindowHours >= refreshWindowHours) {
-            "traceFinalizer.backfillWindowHours ($backfillWindowHours) must be >= refreshWindowHours " +
-                "($refreshWindowHours)"
+        require(liveWindowHours > 0) { "traceFinalizer.liveWindowHours must be > 0, got $liveWindowHours" }
+        require(backfillWindowHours >= liveWindowHours) {
+            "traceFinalizer.backfillWindowHours ($backfillWindowHours) must be >= liveWindowHours " +
+                "($liveWindowHours)"
         }
         require(lookbackHours >= 0) { "traceFinalizer.lookbackHours must be >= 0, got $lookbackHours" }
         require(maxExecutionSeconds > 0) {
@@ -77,9 +77,6 @@ class TraceFinalizerBackgroundService(
     }
 
     private var finalizeJob: Job? = null
-
-    @Volatile
-    private var startupBackfillDone = false
 
     fun start(scope: CoroutineScope) {
         if (!enabled) {
@@ -108,33 +105,30 @@ class TraceFinalizerBackgroundService(
     }
 
     /**
-     * One-shot finalization of the last [emitHours] from apm_trace_summaries into apm_traces_final.
-     * Used by demo seeding so the traces dashboard has data without waiting for the scheduled run.
+     * Run a single finalization pass now. Used by demo seeding so the traces dashboard has data without
+     * waiting for the scheduled loop.
      */
-    suspend fun finalizeRecent(emitHours: Int) = finalizeWindow(emitHours)
+    suspend fun finalizeNow() = runOnce()
 
     internal suspend fun runOnce() {
         if (!ClickHouseClient.isInitialized()) {
             logger.debug { "Trace finalization skipped: ClickHouse is not initialized" }
             return
         }
-        // First run after startup covers history + heals any gap from downtime; later runs only
-        // refresh the recent window (cheap, keeps the leading edge fresh, absorbs late spans).
-        val windowHours = if (!startupBackfillDone) backfillWindowHours else refreshWindowHours
-        finalizeWindow(windowHours)
-        if (!startupBackfillDone) {
-            startupBackfillDone = true
-            logger.info { "Trace finalizer startup backfill complete (${backfillWindowHours}h)" }
-        }
+        finalizeFrozenBuckets()
     }
 
     /**
-     * Finalize traces whose start falls within the last [emitHours]. Summaries are scanned a little
-     * further back ([lookbackHours]) so a trace straddling the lower edge resolves its true start and
-     * is correctly excluded (rather than re-finalized with a partial, newer-versioned row).
+     * Finalize every frozen bucket (older than [liveWindowHours]) that is newer than the highest
+     * already-finalized bucket, exactly once. The forward-only `trace_bucket > max(...)` guard keeps the
+     * pass idempotent (no duplicate versions, so reads need no FINAL); [backfillWindowHours] clamps how
+     * far a cold start or downtime gap reaches back. Summaries are scanned [lookbackHours] beyond the
+     * window so traces straddling a bucket boundary still resolve their full start/end.
      */
-    private suspend fun finalizeWindow(emitHours: Int) {
-        val scanHours = emitHours + lookbackHours
+    private suspend fun finalizeFrozenBuckets() {
+        val frozenBefore = "toStartOfHour(now() - INTERVAL $liveWindowHours HOUR)"
+        val backfillFloor = "toStartOfHour(now() - INTERVAL $backfillWindowHours HOUR)"
+        val watermark = "(SELECT max(trace_bucket) FROM `$clickhouseDb`.$APM_TRACES_FINAL_TABLE)"
         val sql = """
             INSERT INTO `$clickhouseDb`.$APM_TRACES_FINAL_TABLE
                 (organization_id, trace_bucket, trace_id_canonical, root_service, root_resource,
@@ -164,10 +158,14 @@ class TraceFinalizerBackgroundService(
                     toUInt32(sumMerge(error_count_state)) AS error_count,
                     toUInt8(sumMerge(error_count_state) > 0) AS has_error
                 FROM `$clickhouseDb`.$APM_TRACE_SUMMARIES_TABLE
-                WHERE bucket_start >= toStartOfHour(now() - INTERVAL $scanHours HOUR)
+                WHERE bucket_start > $watermark - INTERVAL $lookbackHours HOUR
+                  AND bucket_start >= $backfillFloor
+                  AND bucket_start < $frozenBefore + INTERVAL $lookbackHours HOUR
                 GROUP BY organization_id, trace_id_canonical
             )
-            WHERE toStartOfHour(trace_start) >= toStartOfHour(now() - INTERVAL $emitHours HOUR)
+            WHERE toStartOfHour(trace_start) > $watermark
+              AND toStartOfHour(trace_start) >= $backfillFloor
+              AND toStartOfHour(trace_start) < $frozenBefore
             SETTINGS max_execution_time = $maxExecutionSeconds
         """.trimIndent()
         ClickHouseClient.executeLongRunning(sql, operation = "trace_finalize")
@@ -186,8 +184,8 @@ class TraceFinalizerBackgroundService(
                     ?.getString()?.toBooleanStrictOrNull() ?: true,
                 intervalSeconds = config.propertyOrNull("traceFinalizer.intervalSeconds")
                     ?.getString()?.toLongOrNull() ?: DEFAULT_INTERVAL_SECONDS,
-                refreshWindowHours = config.propertyOrNull("traceFinalizer.refreshWindowHours")
-                    ?.getString()?.toIntOrNull() ?: DEFAULT_REFRESH_WINDOW_HOURS,
+                liveWindowHours = config.propertyOrNull("traceFinalizer.liveWindowHours")
+                    ?.getString()?.toIntOrNull() ?: DEFAULT_LIVE_WINDOW_HOURS,
                 backfillWindowHours = config.propertyOrNull("traceFinalizer.backfillWindowHours")
                     ?.getString()?.toIntOrNull() ?: DEFAULT_BACKFILL_WINDOW_HOURS,
                 lookbackHours = config.propertyOrNull("traceFinalizer.lookbackHours")

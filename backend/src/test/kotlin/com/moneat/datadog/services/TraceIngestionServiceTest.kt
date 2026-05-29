@@ -233,7 +233,7 @@ class TraceIngestionServiceTest {
                             "\"service\":\"checkout-service\",\"resource\":\"POST /checkout\"," +
                             "\"source\":\"otlp\",\"trace_count\":1234,\"error_count\":154," +
                             "\"error_rate\":0.1248,\"p95_duration_ns\":612000000}"
-                    "GROUP BY root_service" in query && "UNION ALL" !in query ->
+                    "GROUP BY root_service" in query && "facet_type" !in query ->
                         "{" +
                             "\"service\":\"checkout-service\",\"source\":\"otlp\",\"trace_count\":5642," +
                             "\"error_count\":326,\"error_rate\":0.0578,\"p95_duration_ns\":612000000," +
