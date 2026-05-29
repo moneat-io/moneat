@@ -43,11 +43,14 @@ import io.ktor.server.application.install
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
-import io.mockk.unmockkObject
+import io.mockk.unmockkAll
+import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.BeforeAll
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -60,6 +63,28 @@ class DatadogIngestRoutesTest {
         private const val DD_API_KEY_HEADER = "DD-API-KEY"
         private const val VALID_KEY = "dd-ingest-test-key"
         private const val ORG_ID = 5
+
+        @JvmStatic
+        @BeforeAll
+        fun installObjectMocks() {
+            mockkObject(
+                DatadogService,
+                DatadogMetricService,
+                DatadogLogService,
+                DatadogEventService,
+                DatadogHostService,
+                MiscIngestionService,
+                DbmIngestionService,
+                DebuggerIngestionService,
+                OrchestratorIngestionService,
+            )
+        }
+
+        @JvmStatic
+        @AfterAll
+        fun removeObjectMocks() {
+            unmockkAll()
+        }
     }
 
     private val quotaService = mockk<BillingQuotaService> {
@@ -70,15 +95,17 @@ class DatadogIngestRoutesTest {
     fun setup() {
         startTestKoin()
         DatadogAuthMiddleware.clearCache()
-        mockkObject(DatadogService)
-        mockkObject(DatadogMetricService)
-        mockkObject(DatadogLogService)
-        mockkObject(DatadogEventService)
-        mockkObject(DatadogHostService)
-        mockkObject(MiscIngestionService)
-        mockkObject(DbmIngestionService)
-        mockkObject(DebuggerIngestionService)
-        mockkObject(OrchestratorIngestionService)
+        clearMocks(
+            DatadogService,
+            DatadogMetricService,
+            DatadogLogService,
+            DatadogEventService,
+            DatadogHostService,
+            MiscIngestionService,
+            DbmIngestionService,
+            DebuggerIngestionService,
+            OrchestratorIngestionService,
+        )
 
         coEvery { DatadogMetricService.enqueueMetrics(any(), any()) } returns 0
         coEvery { DatadogLogService.enqueueLogs(any(), any()) } returns 0
@@ -107,15 +134,6 @@ class DatadogIngestRoutesTest {
 
     @AfterTest
     fun teardown() {
-        unmockkObject(OrchestratorIngestionService)
-        unmockkObject(DebuggerIngestionService)
-        unmockkObject(DbmIngestionService)
-        unmockkObject(MiscIngestionService)
-        unmockkObject(DatadogHostService)
-        unmockkObject(DatadogEventService)
-        unmockkObject(DatadogLogService)
-        unmockkObject(DatadogMetricService)
-        unmockkObject(DatadogService)
         DatadogAuthMiddleware.clearCache()
         stopTestKoin()
     }

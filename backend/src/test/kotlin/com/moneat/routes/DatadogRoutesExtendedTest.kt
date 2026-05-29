@@ -84,19 +84,21 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.Runs
+import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.mockkObject
-import io.mockk.unmockkObject
+import io.mockk.unmockkAll
 import io.mockk.verify
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import kotlin.test.AfterTest
+import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.BeforeAll
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -114,6 +116,33 @@ class DatadogRoutesExtendedTest {
         private const val EMPTY_ROWS_JSON = """{"rows":[]}"""
         private const val AGENT_API_KEYS_PATH = "/v1/agent-api-keys"
         private var db: Database? = null
+
+        @JvmStatic
+        @BeforeAll
+        fun installObjectMocks() {
+            mockkObject(
+                DatadogAuthMiddleware,
+                DatadogHostService,
+                DatadogMetricService,
+                DatadogEventService,
+                DatadogLogService,
+                DatadogInfraService,
+                MiscIngestionService,
+                DbmIngestionService,
+                OrchestratorIngestionService,
+                DebuggerIngestionService,
+                TelemetryProxyService,
+                DatadogService,
+                TraceIngestionService,
+                ClickHouseClient,
+            )
+        }
+
+        @JvmStatic
+        @AfterAll
+        fun removeObjectMocks() {
+            unmockkAll()
+        }
     }
 
     private val allowingQuotaService = mockk<BillingQuotaService> {
@@ -138,20 +167,22 @@ class DatadogRoutesExtendedTest {
         )
         DatadogAuthMiddleware.clearCache()
 
-        mockkObject(DatadogAuthMiddleware)
-        mockkObject(DatadogHostService)
-        mockkObject(DatadogMetricService)
-        mockkObject(DatadogEventService)
-        mockkObject(DatadogLogService)
-        mockkObject(DatadogInfraService)
-        mockkObject(MiscIngestionService)
-        mockkObject(DbmIngestionService)
-        mockkObject(OrchestratorIngestionService)
-        mockkObject(DebuggerIngestionService)
-        mockkObject(TelemetryProxyService)
-        mockkObject(DatadogService)
-        mockkObject(TraceIngestionService)
-        mockkObject(ClickHouseClient)
+        clearMocks(
+            DatadogAuthMiddleware,
+            DatadogHostService,
+            DatadogMetricService,
+            DatadogEventService,
+            DatadogLogService,
+            DatadogInfraService,
+            MiscIngestionService,
+            DbmIngestionService,
+            OrchestratorIngestionService,
+            DebuggerIngestionService,
+            TelemetryProxyService,
+            DatadogService,
+            TraceIngestionService,
+            ClickHouseClient,
+        )
 
         coEvery {
             DatadogAuthMiddleware.authenticate(any())
@@ -187,24 +218,6 @@ class DatadogRoutesExtendedTest {
         every { DebuggerIngestionService.enqueueDebuggerLogs(any(), any()) } returns 1
         every { DebuggerIngestionService.enqueueDiagnostics(any(), any()) } returns 1
         every { TelemetryProxyService.acknowledge(any(), any(), any()) } just Runs
-    }
-
-    @AfterTest
-    fun teardown() {
-        unmockkObject(DatadogAuthMiddleware)
-        unmockkObject(DatadogHostService)
-        unmockkObject(DatadogMetricService)
-        unmockkObject(DatadogEventService)
-        unmockkObject(DatadogLogService)
-        unmockkObject(DatadogInfraService)
-        unmockkObject(MiscIngestionService)
-        unmockkObject(DbmIngestionService)
-        unmockkObject(OrchestratorIngestionService)
-        unmockkObject(DebuggerIngestionService)
-        unmockkObject(TelemetryProxyService)
-        unmockkObject(DatadogService)
-        unmockkObject(TraceIngestionService)
-        unmockkObject(ClickHouseClient)
     }
 
     private fun Application.installAuth() {
