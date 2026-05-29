@@ -33,6 +33,7 @@ private val logger = KotlinLogging.logger {}
 
 private const val DEFAULT_INTERVAL_SECONDS = 60L
 private const val DEMO_ORG_ID = -1L
+private const val DEFAULT_DOWN_HOST = "prod-worker-01"
 
 /**
  * Keeps demo infrastructure looking alive. Demo data is only seeded relative to now() at startup, but
@@ -41,16 +42,20 @@ private const val DEMO_ORG_ID = -1L
  * host falls to DOWN a few minutes after boot. This demo-only job re-stamps `last_seen_at` (and the
  * agent `status`) on a short interval so the demo stays realistic, leaving [downHostname] stale on
  * purpose so the fleet shows one DOWN host. Only runs when DEMO_ENABLED=true.
+ *
+ * The demo gate and the DB write are injected so the loop logic is unit-testable without a database.
  */
 class DemoLivenessBackgroundService(
     private val intervalSeconds: Long = DEFAULT_INTERVAL_SECONDS,
     /** One host intentionally left DOWN for a realistic fleet. Matches the demo host seeded by DemoReseedDatadog. */
-    private val downHostname: String = "prod-worker-01",
+    private val downHostname: String = DEFAULT_DOWN_HOST,
+    private val demoEnabled: () -> Boolean = { EnvConfig.Demo.enabled },
+    private val refresh: suspend (downHostname: String) -> Unit = { host -> defaultRefresh(host) },
 ) {
     private var job: Job? = null
 
     fun start(scope: CoroutineScope) {
-        if (!EnvConfig.Demo.enabled) {
+        if (!demoEnabled()) {
             logger.debug { "Demo liveness job disabled (DEMO_ENABLED=false)" }
             return
         }
@@ -62,10 +67,7 @@ class DemoLivenessBackgroundService(
         job =
             scope.launch {
                 while (isActive) {
-                    suspendRunCatching { refreshDemoHosts() }
-                        .onFailure { e ->
-                            logger.warn { "Demo host heartbeat refresh failed (non-fatal): ${e.message}" }
-                        }
+                    refreshOnce()
                     delay(intervalSeconds * MILLIS_PER_SECOND_LONG)
                 }
             }
@@ -75,16 +77,26 @@ class DemoLivenessBackgroundService(
         job?.cancel()
     }
 
-    private suspend fun refreshDemoHosts() {
-        withContext(Dispatchers.IO) {
-            transaction {
-                exec(
-                    """
-                    UPDATE hosts
-                    SET last_seen_at = NOW(), status = 'up'
-                    WHERE organization_id = $DEMO_ORG_ID AND hostname <> '$downHostname'
-                    """.trimIndent()
-                )
+    /** Run a single heartbeat refresh. Exposed for tests and for the loop body. */
+    internal suspend fun refreshOnce() {
+        suspendRunCatching { refresh(downHostname) }
+            .onFailure { e ->
+                logger.warn { "Demo host heartbeat refresh failed (non-fatal): ${e.message}" }
+            }
+    }
+
+    companion object {
+        /** UPDATE that re-stamps every demo host except the one intentionally left DOWN. */
+        internal fun heartbeatSql(downHostname: String): String =
+            """
+            UPDATE hosts
+            SET last_seen_at = NOW(), status = 'up'
+            WHERE organization_id = $DEMO_ORG_ID AND hostname <> '$downHostname'
+            """.trimIndent()
+
+        private suspend fun defaultRefresh(downHostname: String) {
+            withContext(Dispatchers.IO) {
+                transaction { exec(heartbeatSql(downHostname)) }
             }
         }
     }

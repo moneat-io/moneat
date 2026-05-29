@@ -1222,7 +1222,7 @@ class FeatureFlagService {
         return "feature_flags:snapshot:$organizationId:$environmentKey"
     }
 
-    private fun analyticsWhere(organizationId: Int, environmentKey: String?, hours: Int): String {
+    internal fun analyticsWhere(organizationId: Int, environmentKey: String?, hours: Int): String {
         // organization_id is UInt32, so a negative demo org (-1) is stored wrapped (4294967295) by the
         // ingest path. Match it via toInt32(...) for negative orgs; keep the plain (index-friendly) form
         // for real positive orgs so the primary-key prefix on organization_id stays usable.

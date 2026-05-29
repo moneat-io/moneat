@@ -283,6 +283,20 @@ class FeatureFlagServiceTest {
         }
     }
 
+    @Test
+    fun `analyticsWhere matches the wrapped UInt32 org for negative demo orgs only`() {
+        // Demo org (-1) is stored wrapped in the UInt32 column, so it must be matched via toInt32(...).
+        val demo = service.analyticsWhere(-1, "production", 24)
+        assertTrue(demo.contains("toInt32(organization_id) = -1"))
+        assertTrue(demo.contains("environment = 'production'"))
+
+        // Real positive orgs keep the plain, index-friendly predicate.
+        val real = service.analyticsWhere(SERVICE_TEST_ORG_ID, null, 24)
+        assertTrue(real.contains("organization_id = $SERVICE_TEST_ORG_ID"))
+        assertFalse(real.contains("toInt32("))
+        assertFalse(real.contains("environment ="))
+    }
+
     private fun createSchema() {
         transaction {
             SchemaUtils.create(Users, Organizations)
