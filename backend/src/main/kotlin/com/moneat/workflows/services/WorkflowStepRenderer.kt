@@ -47,6 +47,12 @@ internal const val ALERT_LIFECYCLE_FORMAT = "alert_lifecycle"
 internal const val DEFAULT_WORKFLOW_TITLE = "Moneat workflow"
 internal const val ALERT_TRIGGERED_TRIGGER = "alert.triggered"
 internal const val ALERT_RESOLVED_TRIGGER = "alert.resolved"
+internal const val MANUAL_TRIGGER = "manual"
+internal const val API_TRIGGER = "api"
+internal const val WEBHOOK_TRIGGER = "webhook"
+internal const val INCIDENT_CREATED_TRIGGER = "incident.created"
+internal const val INCIDENT_RESOLVED_TRIGGER = "incident.resolved"
+internal const val SECURITY_SIGNAL_TRIGGER = "security.signal"
 internal const val ALERT_DESCRIPTION_TEMPLATE_BLOCK = "{{alert.description}}\n\n"
 internal const val ALERT_PRIORITY_TEMPLATE_LINE = "Priority: {{alert.priority}}\n"
 internal const val ALERT_SOURCE_TEMPLATE_LINE = "Source: {{alert.source}}\n"
@@ -63,10 +69,23 @@ private const val ALERT_COLOR_RED = "#E01E5A"
 private const val ALERT_COLOR_GREEN = "#2EB67D"
 private const val ALERT_COLOR_YELLOW = "#ECB22E"
 private const val ALERT_COLOR_PURPLE = "#6366F1"
+private val RESOLVED_ALERT_TRIGGERS =
+    setOf(ALERT_RESOLVED_TRIGGER, "monitor.recovered", "uptime.up", "synthetic.passed")
 
 class WorkflowStepRenderer {
-    fun sampleScopeForTrigger(triggerName: String): Map<String, String> {
-        val resolved = triggerName == ALERT_RESOLVED_TRIGGER
+    fun sampleScopeForTrigger(triggerName: String): Map<String, String> =
+        when (triggerName) {
+            MANUAL_TRIGGER -> manualSampleScope()
+            API_TRIGGER -> apiSampleScope()
+            WEBHOOK_TRIGGER -> webhookSampleScope()
+            INCIDENT_CREATED_TRIGGER,
+            INCIDENT_RESOLVED_TRIGGER -> incidentSampleScope(triggerName)
+            SECURITY_SIGNAL_TRIGGER -> securitySampleScope()
+            else -> alertSampleScope(triggerName)
+        }
+
+    private fun alertSampleScope(triggerName: String): Map<String, String> {
+        val resolved = triggerName in RESOLVED_ALERT_TRIGGERS
         val status = if (resolved) AlertStatus.RESOLVED.name else AlertStatus.FIRING.name
         val severity = if (resolved) AlertSeverity.LOW.name else AlertSeverity.HIGH.name
         val title = if (resolved) {
@@ -102,6 +121,51 @@ class WorkflowStepRenderer {
         )
     }
 
+    private fun manualSampleScope(): Map<String, String> =
+        mapOf(
+            "workflow.actor_id" to "1",
+            "workflow.input" to """{"reason":"Preview run"}""",
+            ORGANIZATION_ID_REFERENCE to "1"
+        )
+
+    private fun apiSampleScope(): Map<String, String> =
+        mapOf(
+            "workflow.caller" to "1",
+            "workflow.input" to """{"service":"checkout"}""",
+            ORGANIZATION_ID_REFERENCE to "1"
+        )
+
+    private fun webhookSampleScope(): Map<String, String> =
+        mapOf(
+            "webhook.payload" to """{"event":"deploy.finished","service":"checkout"}""",
+            "webhook.event_id" to "deploy-evt-123",
+            ORGANIZATION_ID_REFERENCE to "1"
+        )
+
+    private fun incidentSampleScope(triggerName: String): Map<String, String> {
+        val status = when (triggerName) {
+            INCIDENT_RESOLVED_TRIGGER -> "resolved"
+            else -> "created"
+        }
+        return mapOf(
+            "incident.id" to "incident-123",
+            "incident.title" to "Checkout latency incident",
+            "incident.status" to status,
+            "incident.severity" to AlertSeverity.HIGH.name,
+            ALERT_DEDUPLICATION_KEY_REFERENCE to "incident-checkout-latency",
+            ORGANIZATION_ID_REFERENCE to "1"
+        )
+    }
+
+    private fun securitySampleScope(): Map<String, String> =
+        mapOf(
+            "security.rule_id" to "runtime.file.modified",
+            "security.rule_name" to "Sensitive file modified",
+            "security.severity" to "high",
+            "security.resource" to "/etc/app/config.yml",
+            ORGANIZATION_ID_REFERENCE to "1"
+        )
+
     fun renderStepPreview(
         step: WorkflowStepConfig,
         scope: Map<String, String>
@@ -117,7 +181,7 @@ class WorkflowStepRenderer {
             EMAIL_ORG_STEP -> EMAIL_CHANNEL
             SLACK_STEP -> SLACK_CHANNEL
             DISCORD_STEP -> DISCORD_CHANNEL
-            else -> throw IllegalArgumentException("Unknown workflow step $stepName")
+            else -> "workflow"
         }
 
     fun priorityLabelForSeverity(severity: String?): String =
@@ -175,7 +239,15 @@ class WorkflowStepRenderer {
                     fallbackText = "$title: $body"
                 )
             }
-            else -> throw IllegalArgumentException("Unknown workflow step ${step.name}")
+            else -> WorkflowStepPreview(
+                step = step.name,
+                channel = "workflow",
+                title = step.name,
+                body = "This action reads or updates Moneat data when the workflow runs.",
+                textBody = "This action reads or updates Moneat data when the workflow runs.",
+                color = ALERT_COLOR_PURPLE,
+                fallbackText = step.name
+            )
         }
 
     private fun renderAlertLifecyclePreview(

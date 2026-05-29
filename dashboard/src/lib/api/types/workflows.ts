@@ -182,9 +182,28 @@ export interface WorkflowRunResponse {
   progress: WorkflowRunStepProgress[]
   steps: WorkflowRunStepResponse[]
   error_message?: string | null
+  temporal_workflow_id?: string | null
+  temporal_run_id?: string | null
   created_at: string
   completed_at?: string | null
   failed_at?: string | null
+}
+
+export interface WorkflowRunInstanceRequest {
+  scope: Record<string, WorkflowJsonValue>
+}
+
+export interface WorkflowRunCancelResponse {
+  id: number
+  status: string
+}
+
+export interface WorkflowWebhookSigningResponse {
+  workflow_id: number
+  webhook_url: string
+  signing_secret: string
+  signature_header: string
+  signature_format: string
 }
 
 export interface WorkflowFieldConfig {

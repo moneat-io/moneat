@@ -113,6 +113,7 @@ import com.moneat.workflows.engine.temporal.WorkflowExecutionEngine
 import com.moneat.workflows.services.WorkflowActionExecutor
 import com.moneat.workflows.services.WorkflowService
 import com.moneat.workflows.services.WorkflowStepRenderer
+import com.moneat.workflows.services.WorkflowTrustedActionExecutor
 import org.koin.dsl.module
 
 /** Shared cross-domain singletons: notification channels, pricing, retention, shared repositories. */
@@ -125,7 +126,16 @@ val sharedModule = module {
     single { DiscordService() }
     single { AlertNotificationPreferencesService() }
     single { WorkflowStepRenderer() }
-    single { WorkflowActionExecutor(get(), get(), get(), get()) }
+    single {
+        WorkflowTrustedActionExecutor(
+            logService = get(),
+            dashboardService = get(),
+            monitorService = get(),
+            monitorAlertServiceProvider = { get<MonitorAlertService>() },
+            statusPageService = get(),
+        )
+    }
+    single { WorkflowActionExecutor(get(), get(), get(), get(), get()) }
     single { PersistRunActivityImpl() }
     single { ExecuteActionActivityImpl(get()) }
     single { TemporalClientProvider() }

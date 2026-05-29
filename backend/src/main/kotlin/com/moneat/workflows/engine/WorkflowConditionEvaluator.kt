@@ -21,11 +21,13 @@ import com.moneat.workflows.models.workflowStringValue
 import com.moneat.workflows.models.workflowValue
 import kotlinx.serialization.json.JsonElement
 
-private const val SEVERITY_CRITICAL_RANK = 4
-private const val SEVERITY_HIGH_RANK = 3
-private const val SEVERITY_MEDIUM_RANK = 2
-private const val SEVERITY_LOW_RANK = 1
+private const val SEVERITY_CRITICAL_RANK = 5
+private const val SEVERITY_HIGH_RANK = 4
+private const val SEVERITY_MEDIUM_RANK = 3
+private const val SEVERITY_LOW_RANK = 2
+private const val SEVERITY_INFO_RANK = 1
 private const val SEVERITY_UNKNOWN_RANK = 0
+private val SEVERITY_RESOURCE_TYPES = setOf("AlertSeverity", "SecuritySeverity")
 
 object WorkflowConditionEvaluator {
     fun matchesAll(
@@ -66,7 +68,9 @@ object WorkflowConditionEvaluator {
             "gt", "gte", "lt", "lte" -> compareNumbers(actual, expected, operation)
             "at_least" -> {
                 val expectedRank = severityRank(expected)
-                resourceType == "AlertSeverity" && expectedRank > 0 && severityRank(actual) >= expectedRank
+                resourceType in SEVERITY_RESOURCE_TYPES &&
+                    expectedRank > 0 &&
+                    severityRank(actual) >= expectedRank
             }
             else -> false
         }
@@ -99,6 +103,7 @@ object WorkflowConditionEvaluator {
             "HIGH" -> SEVERITY_HIGH_RANK
             "MEDIUM" -> SEVERITY_MEDIUM_RANK
             "LOW" -> SEVERITY_LOW_RANK
+            "INFO" -> SEVERITY_INFO_RANK
             else -> SEVERITY_UNKNOWN_RANK
         }
 }

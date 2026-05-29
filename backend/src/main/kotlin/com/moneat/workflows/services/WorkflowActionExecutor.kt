@@ -31,11 +31,15 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
+private const val WORKFLOW_ACTOR_ID_SCOPE = "workflow.actor_id"
+private const val WORKFLOW_CALLER_SCOPE = "workflow.caller"
+
 class WorkflowActionExecutor(
     private val emailService: EmailService,
     private val slackService: SlackService,
     private val discordService: DiscordService,
-    private val renderer: WorkflowStepRenderer
+    private val renderer: WorkflowStepRenderer,
+    private val trustedActions: WorkflowTrustedActionExecutor? = null
 ) {
     suspend fun executeStep(
         organizationId: Int,
@@ -59,9 +63,21 @@ class WorkflowActionExecutor(
             )
             SLACK_STEP -> executeSlackStep(organizationId, step, stringScope)
             DISCORD_STEP -> executeDiscordStep(organizationId, step, stringScope)
-            else -> throw IllegalArgumentException("Unknown workflow step ${step.name}")
+            else -> if (trustedActions?.supports(step.name) == true) {
+                trustedActions.execute(
+                    organizationId = organizationId,
+                    stepName = step.name,
+                    params = step.params.mapValues { (_, value) -> interpolate(value, stringScope) },
+                    actorUserId = callerUserIdFromScope(stringScope)
+                )
+            } else {
+                throw IllegalArgumentException("Unknown workflow step ${step.name}")
+            }
         }
     }
+
+    private fun callerUserIdFromScope(scope: Map<String, String>): Int? =
+        scope[WORKFLOW_ACTOR_ID_SCOPE]?.toIntOrNull() ?: scope[WORKFLOW_CALLER_SCOPE]?.toIntOrNull()
 
     suspend fun sendTestMessageStep(
         organizationId: Int,

@@ -45,6 +45,10 @@ class TemporalWorkflowExecutionEngine(
         return WorkflowStartResult(execution.workflowId, execution.runId)
     }
 
+    override suspend fun cancel(temporalWorkflowId: String) {
+        clientProvider.client.newUntypedWorkflowStub(temporalWorkflowId).cancel()
+    }
+
     private fun workflowOptions(request: WorkflowStartRequest): WorkflowOptions =
         WorkflowOptions
             .newBuilder()
