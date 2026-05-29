@@ -404,6 +404,16 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Tailwind v4's Preflight no longer sets `cursor: pointer` on buttons, so raw
+     <button>/<select> controls show the default arrow. Restore the pointer for
+     interactive elements globally instead of adding `cursor-pointer` per control. */
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  label[for],
+  select:not(:disabled),
+  summary {
+    cursor: pointer;
+  }
   /* Prevent Radix scroll lock from hiding the scrollbar (causes layout shift). Radix has no prop to disable this. */
   body[data-scroll-locked] {
     overflow: visible !important;

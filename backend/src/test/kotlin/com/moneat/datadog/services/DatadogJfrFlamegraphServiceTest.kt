@@ -22,10 +22,14 @@ import jdk.jfr.Name
 import jdk.jfr.Recording
 import jdk.jfr.StackTrace
 import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import org.junit.jupiter.api.Test
 import java.io.ByteArrayOutputStream
 import java.nio.file.Files
 import java.util.zip.GZIPOutputStream
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class DatadogJfrFlamegraphServiceTest {
@@ -51,6 +55,32 @@ class DatadogJfrFlamegraphServiceTest {
     fun `parseToFrames returns empty for invalid payload`() {
         val result = DatadogJfrFlamegraphService.parseToFrames("not-a-jfr".toByteArray())
         assertTrue(result["frames"]!!.jsonArray.isEmpty())
+    }
+
+    @Test
+    fun `parseToFrames reports sample types and threads`() {
+        val jfr = buildJfrWithDatadogSample()
+        val result = DatadogJfrFlamegraphService.parseToFrames(jfr)
+
+        val sampleTypes = result["sampleTypes"]!!.jsonArray
+        assertTrue(
+            sampleTypes.any { it.jsonObject["key"]!!.jsonPrimitive.content == "cpu" },
+        )
+        assertTrue(result["threads"]!!.jsonArray.isNotEmpty())
+        assertTrue(result["totalSamples"]!!.jsonPrimitive.long > 0)
+        assertEquals("cpu", result["selectedSampleType"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `parseToFrames filters by thread`() {
+        val jfr = buildJfrWithDatadogSample()
+        val all = DatadogJfrFlamegraphService.parseToFrames(jfr)
+        val threadId = all["threads"]!!.jsonArray
+            .first().jsonObject["id"]!!.jsonPrimitive.content
+
+        val filtered = DatadogJfrFlamegraphService.parseToFrames(jfr, thread = threadId)
+        assertTrue(filtered["frames"]!!.jsonArray.isNotEmpty())
+        assertEquals(threadId, filtered["selectedThread"]!!.jsonPrimitive.content)
     }
 
     @Name("datadog.TestSample")

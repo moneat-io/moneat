@@ -40,8 +40,27 @@ export interface FlamegraphFrame {
   name: string
   value: number
   children: FlamegraphFrame[]
+  self?: number
+}
+
+export interface SampleTypeInfo {
+  key: string
+  label: string
+  unit: string
+}
+
+export interface ThreadInfo {
+  id: string
+  label: string
+  samples: number
 }
 
 export interface FlamegraphResponse {
   frames: FlamegraphFrame[]
+  sampleTypes?: SampleTypeInfo[]
+  threads?: ThreadInfo[]
+  selectedSampleType?: string
+  selectedThread?: string | null
+  unit?: string
+  totalSamples?: number
 }

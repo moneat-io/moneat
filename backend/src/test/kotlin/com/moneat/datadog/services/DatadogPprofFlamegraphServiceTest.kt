@@ -70,6 +70,47 @@ class DatadogPprofFlamegraphServiceTest {
     }
 
     @Test
+    fun `parseToFrames lists sample types and threads`() {
+        val result = DatadogPprofFlamegraphService.parseToFrames(buildMultiTypeProfile())
+
+        val typeKeys = result["sampleTypes"]!!.jsonArray
+            .map { it.jsonObject["key"]!!.jsonPrimitive.content }
+        assertTrue(typeKeys.containsAll(listOf("samples", "cpu")))
+
+        val threadIds = result["threads"]!!.jsonArray
+            .map { it.jsonObject["id"]!!.jsonPrimitive.content }
+        assertTrue(threadIds.containsAll(listOf("worker-1", "worker-2")))
+
+        assertEquals("samples", result["selectedSampleType"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `parseToFrames switches sample type`() {
+        val result = DatadogPprofFlamegraphService.parseToFrames(
+            buildMultiTypeProfile(),
+            sampleType = "cpu",
+        )
+
+        assertEquals("cpu", result["selectedSampleType"]!!.jsonPrimitive.content)
+        assertEquals("nanoseconds", result["unit"]!!.jsonPrimitive.content)
+        val main = result["frames"]!!.jsonArray[0].jsonObject
+        assertEquals(1000L, main["value"]!!.jsonPrimitive.long)
+    }
+
+    @Test
+    fun `parseToFrames filters by thread`() {
+        val result = DatadogPprofFlamegraphService.parseToFrames(
+            buildMultiTypeProfile(),
+            thread = "worker-1",
+        )
+
+        assertEquals("worker-1", result["selectedThread"]!!.jsonPrimitive.content)
+        val main = result["frames"]!!.jsonArray[0].jsonObject
+        assertEquals("main", main["name"]!!.jsonPrimitive.content)
+        assertEquals(60L, main["value"]!!.jsonPrimitive.long)
+    }
+
+    @Test
     fun `parseToFrames returns empty frames for invalid payload`() {
         val result = DatadogPprofFlamegraphService.parseToFrames(
             "not-a-pprof".toByteArray()
@@ -239,6 +280,97 @@ class DatadogPprofFlamegraphServiceTest {
             profile.writeString(6, "handler")
             profile.writeString(6, "db.query")
             profile.writeString(6, "app.go")
+
+            // default_sample_type = "samples"
+            profile.writeInt64(14, 1)
+        }
+    }
+
+    private fun buildMultiTypeProfile(): ByteArray {
+        return encodeMessage { profile ->
+            // sample_type = [{samples,count}, {cpu,nanoseconds}]
+            listOf(1L to 2L, 7L to 8L).forEach { (typeIdx, unitIdx) ->
+                profile.writeMessageField(
+                    1,
+                    encodeMessage { vt ->
+                        vt.writeInt64(1, typeIdx)
+                        vt.writeInt64(2, unitIdx)
+                    },
+                )
+            }
+
+            // sample #1: main -> handler -> db.query; values [60, 600]; thread worker-1
+            profile.writeMessageField(
+                2,
+                encodeMessage { sample ->
+                    sample.writeUInt64(1, 3)
+                    sample.writeUInt64(1, 2)
+                    sample.writeUInt64(1, 1)
+                    sample.writeInt64(2, 60)
+                    sample.writeInt64(2, 600)
+                    sample.writeMessageField(
+                        3,
+                        encodeMessage { label ->
+                            label.writeInt64(1, 9)
+                            label.writeInt64(2, 10)
+                        },
+                    )
+                },
+            )
+
+            // sample #2: main -> handler; values [40, 400]; thread worker-2
+            profile.writeMessageField(
+                2,
+                encodeMessage { sample ->
+                    sample.writeUInt64(1, 2)
+                    sample.writeUInt64(1, 1)
+                    sample.writeInt64(2, 40)
+                    sample.writeInt64(2, 400)
+                    sample.writeMessageField(
+                        3,
+                        encodeMessage { label ->
+                            label.writeInt64(1, 9)
+                            label.writeInt64(2, 11)
+                        },
+                    )
+                },
+            )
+
+            // locations 1..3 -> functions 1..3 (function id == location id)
+            (1L..3L).forEach { id ->
+                profile.writeMessageField(
+                    4,
+                    encodeMessage { loc ->
+                        loc.writeUInt64(1, id)
+                        loc.writeMessageField(
+                            4,
+                            encodeMessage { line ->
+                                line.writeUInt64(1, id)
+                                line.writeInt64(2, id * 10)
+                            },
+                        )
+                    },
+                )
+            }
+
+            // functions: name string indices 3=main, 4=handler, 5=db.query
+            listOf(1L to 3L, 2L to 4L, 3L to 5L).forEach { (id, nameIdx) ->
+                profile.writeMessageField(
+                    5,
+                    encodeMessage { fn ->
+                        fn.writeUInt64(1, id)
+                        fn.writeInt64(2, nameIdx)
+                        fn.writeInt64(3, nameIdx)
+                        fn.writeInt64(4, 6)
+                    },
+                )
+            }
+
+            // string_table
+            listOf(
+                "", "samples", "count", "main", "handler", "db.query", "app.go",
+                "cpu", "nanoseconds", "thread name", "worker-1", "worker-2",
+            ).forEach { profile.writeString(6, it) }
 
             // default_sample_type = "samples"
             profile.writeInt64(14, 1)
