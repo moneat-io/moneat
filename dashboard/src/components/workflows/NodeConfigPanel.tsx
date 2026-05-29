@@ -176,7 +176,8 @@ function ParamField({
         <Input
           type="number"
           value={String(value ?? '')}
-          onChange={(event) => updateNumberParam(node, param.name, event.target.value, onChange)}
+          onChange={(event) => updateParamValue(node, param.name, event.target.value, onChange)}
+          onBlur={(event) => commitNumberParam(node, param.name, event.target.value, onChange)}
         />
       )}
       {param.type === 'Boolean' && (
@@ -544,13 +545,19 @@ function updateParam(
   updateParamValue(node, name, value, onChange)
 }
 
-function updateNumberParam(
+function commitNumberParam(
   node: WorkflowGraphNode,
   name: string,
   value: string,
   onChange: (node: WorkflowGraphNode) => void
 ) {
-  updateParamValue(node, name, value === '' ? '' : Number(value), onChange)
+  const trimmed = value.trim()
+  if (trimmed === '') {
+    updateParamValue(node, name, '', onChange)
+    return
+  }
+  const parsed = Number(trimmed)
+  updateParamValue(node, name, Number.isFinite(parsed) ? parsed : trimmed, onChange)
 }
 
 function updateParamValue(

@@ -68,7 +68,8 @@ class WorkflowTrustedActionExecutor(
     suspend fun execute(
         organizationId: Int,
         stepName: String,
-        params: Map<String, String>
+        params: Map<String, String>,
+        actorUserId: Int? = null
     ): Map<String, JsonElement> =
         when (stepName) {
             LOGS_SEARCH_STEP -> executeLogSearch(organizationId, params)
@@ -80,7 +81,7 @@ class WorkflowTrustedActionExecutor(
             ISSUES_GET_STEP -> executeIssueGet(organizationId, params)
             STATUS_PAGE_UPDATE_STEP -> executeStatusPageUpdate(organizationId, params)
             STATUS_PAGE_INCIDENT_CREATE_STEP -> executeStatusPageIncidentCreate(organizationId, params)
-            ALERT_SILENCE_STEP -> executeAlertSilence(organizationId, params)
+            ALERT_SILENCE_STEP -> executeAlertSilence(organizationId, params, actorUserId)
             ON_CALL_PAGE_STEP -> executeOnCallPage(organizationId, params)
             else -> throw IllegalArgumentException("Unknown workflow step $stepName")
         }
@@ -235,7 +236,8 @@ class WorkflowTrustedActionExecutor(
 
     private fun executeAlertSilence(
         organizationId: Int,
-        params: Map<String, String>
+        params: Map<String, String>,
+        actorUserId: Int?
     ): Map<String, JsonElement> {
         val now = System.currentTimeMillis()
         val startsAt = params.optional("starts_at")?.toLongOrNull() ?: now
@@ -245,7 +247,7 @@ class WorkflowTrustedActionExecutor(
         val period =
             monitorAlertServiceProvider().createSilencePeriod(
                 organizationId = organizationId,
-                userId = workflowActorUserId(organizationId),
+                userId = actorUserId ?: workflowActorUserId(organizationId),
                 request = CreateSilencePeriodRequest(
                     reason = params.optional("reason") ?: "Workflow automation",
                     startsAt = startsAt,
@@ -293,6 +295,8 @@ class WorkflowTrustedActionExecutor(
         require(hasAccess) { "Project not found for organization" }
     }
 
+    // Deterministic fallback for event-driven runs (alert/incident/security) that have no
+    // human actor. Manual and API runs thread their real caller id in via [execute].
     private fun workflowActorUserId(organizationId: Int): Int =
         transaction {
             Memberships

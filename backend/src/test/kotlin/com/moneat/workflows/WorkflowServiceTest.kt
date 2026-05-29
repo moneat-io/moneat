@@ -840,8 +840,60 @@ class WorkflowServiceTest {
         }
 
     @Test
+    fun `API workflow instances honor configured conditions`() =
+        runBlocking {
+            val request = WorkflowRunInstanceRequest(scope = mapOf("service" to JsonPrimitive("checkout")))
+            val matching =
+                service.createWorkflow(
+                    orgId,
+                    validRequest(
+                        name = "Conditional API trigger",
+                        triggerName = "api",
+                        conditions = listOf(WorkflowConditionConfig("workflow.input", "contains", "checkout")),
+                        steps = emptyList(),
+                        onceForTemplate = emptyList()
+                    )
+                )
+
+            val matched =
+                service.createWorkflowInstance(
+                    organizationId = orgId,
+                    workflowId = matching.id,
+                    request = request,
+                    callerUserId = 7
+                )
+
+            assertNotNull(matched)
+            assertEquals(1, workflowEngine.requests.size)
+
+            val mismatch =
+                service.createWorkflow(
+                    orgId,
+                    validRequest(
+                        name = "Non-matching API trigger",
+                        triggerName = "api",
+                        conditions = listOf(WorkflowConditionConfig("workflow.input", "contains", "database")),
+                        steps = emptyList(),
+                        onceForTemplate = emptyList()
+                    )
+                )
+            val skipped =
+                service.createWorkflowInstance(
+                    organizationId = orgId,
+                    workflowId = mismatch.id,
+                    request = request,
+                    callerUserId = 7
+                )
+
+            assertNull(skipped)
+            assertEquals(1, workflowEngine.requests.size)
+            assertTrue(service.listRuns(orgId, mismatch.id).isEmpty())
+        }
+
+    @Test
     fun `signed webhook trigger requires valid signature and published webhook workflow`() =
         runBlocking {
+            val previousSigningKey = System.getProperty("WORKFLOWS_SIGNING_KEY")
             System.setProperty("WORKFLOWS_SIGNING_KEY", "test-workflow-signing-key")
             try {
                 val workflow =
@@ -874,7 +926,11 @@ class WorkflowServiceTest {
                 assertEquals("deploy-1", run.onceFor)
                 assertEquals(1, workflowEngine.requests.size)
             } finally {
-                System.clearProperty("WORKFLOWS_SIGNING_KEY")
+                if (previousSigningKey == null) {
+                    System.clearProperty("WORKFLOWS_SIGNING_KEY")
+                } else {
+                    System.setProperty("WORKFLOWS_SIGNING_KEY", previousSigningKey)
+                }
             }
         }
 

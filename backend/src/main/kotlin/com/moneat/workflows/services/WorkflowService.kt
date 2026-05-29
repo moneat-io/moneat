@@ -75,6 +75,7 @@ import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.notInList
 import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.Query
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
@@ -417,7 +418,7 @@ class WorkflowService(
         val run = createRunForWorkflow(
             organizationId = organizationId,
             workflowId = workflowId,
-            scope = manualScope + request.scope,
+            scope = manualScope + (request.scope - manualScope.keys),
             onceFor = manualOnceFor(),
             force = true
         ) ?: return null
@@ -440,10 +441,11 @@ class WorkflowService(
         val run = createRunForWorkflow(
             organizationId = organizationId,
             workflowId = workflowId,
-            scope = apiScope + request.scope,
+            scope = apiScope + (request.scope - apiScope.keys),
             onceFor = apiOnceFor(),
             force = true,
-            requiredTriggerName = API_TRIGGER
+            requiredTriggerName = API_TRIGGER,
+            applyConditions = true
         ) ?: return null
         startTemporalExecution(run)
         return getRun(organizationId, workflowId, run.runId)
@@ -469,7 +471,8 @@ class WorkflowService(
             onceFor = webhookScope[WEBHOOK_EVENT_ID_REFERENCE]?.workflowStringValue().orEmpty(),
             force = false,
             requiredTriggerName = WEBHOOK_TRIGGER,
-            requirePublished = true
+            requirePublished = true,
+            applyConditions = true
         ) ?: return null
         startTemporalExecution(run)
         return getRun(workflowRef.organizationId, workflowId, run.runId)
@@ -519,14 +522,31 @@ class WorkflowService(
                 logger.warn(error) { "Failed to cancel Temporal workflow $temporalWorkflowId" }
             }
         }
-        transaction {
-            WorkflowRuns.update({ WorkflowRuns.id eq runId }) {
-                it[status] = STATUS_CANCELED
-                it[completedAt] = Clock.System.now()
-                it[errorMessage] = null
+        val updated =
+            transaction {
+                WorkflowRuns.update(
+                    {
+                        (WorkflowRuns.id eq runId) and (WorkflowRuns.status notInList TERMINAL_RUN_STATUSES)
+                    }
+                ) {
+                    it[status] = STATUS_CANCELED
+                    it[completedAt] = Clock.System.now()
+                    it[errorMessage] = null
+                }
             }
+        if (updated > 0) {
+            return WorkflowRunCancelResponse(runId, STATUS_CANCELED)
         }
-        return WorkflowRunCancelResponse(runId, STATUS_CANCELED)
+        // The run reached a terminal state between the initial read and this write; report its real status.
+        val currentStatus =
+            transaction {
+                WorkflowRuns
+                    .selectAll()
+                    .where { WorkflowRuns.id eq runId }
+                    .firstOrNull()
+                    ?.get(WorkflowRuns.status)
+            }
+        return WorkflowRunCancelResponse(runId, currentStatus ?: STATUS_CANCELED)
     }
 
     fun listRuns(
@@ -750,7 +770,8 @@ class WorkflowService(
         onceFor: String,
         force: Boolean,
         requiredTriggerName: String? = null,
-        requirePublished: Boolean = false
+        requirePublished: Boolean = false,
+        applyConditions: Boolean = false
     ): WorkflowStartRequest? =
         transaction {
             val workflowRow =
@@ -771,6 +792,11 @@ class WorkflowService(
                     organizationId = organizationId,
                     scope = triggerScope + scope
                 )
+            // Manual runs intentionally bypass conditions (they run against synthetic sample
+            // scope); API and signed-webhook runs carry real input and honor configured conditions.
+            if (applyConditions && !conditionsMatch(event.triggerName, version.conditions, event.scope)) {
+                return@transaction null
+            }
             createRun(event, WorkflowCandidate(workflowId, version), onceFor, force)
         }
 
