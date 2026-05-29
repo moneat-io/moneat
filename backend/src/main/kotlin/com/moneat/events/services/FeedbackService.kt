@@ -45,7 +45,9 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
             FORMAT JSONEachRow
             """.trimIndent()
         val projectId = queryHelper.executeProjectIdQuery(query, "Feedback", feedbackId)
-        if (projectId == null || projectId <= 0L) {
+        // Negative ids are the demo-project convention (handled by ClickHouseQueryUtils.projectIdClause);
+        // only null or 0 is genuinely invalid.
+        if (projectId == null || projectId == 0L) {
             logger.warn { "Invalid project_id for feedback $feedbackId: $projectId" }
             return null
         }
@@ -134,7 +136,7 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
                 name,
                 url,
                 status,
-                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as timestamp,
+                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as timestamp_iso,
                 environment,
                 release,
                 platform,
@@ -163,7 +165,7 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
             name = obj["name"]?.jsonPrimitive?.content ?: "",
             url = obj["url"]?.jsonPrimitive?.content ?: "",
             status = obj["status"]?.jsonPrimitive?.content ?: "unresolved",
-            timestamp = obj["timestamp"]?.jsonPrimitive?.content ?: "",
+            timestamp = obj["timestamp_iso"]?.jsonPrimitive?.content ?: "",
             environment = obj["environment"]?.jsonPrimitive?.content ?: "",
             release = obj["release"]?.jsonPrimitive?.content ?: "",
             platform = obj["platform"]?.jsonPrimitive?.content ?: "",
