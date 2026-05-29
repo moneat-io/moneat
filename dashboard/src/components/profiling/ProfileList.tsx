@@ -212,6 +212,7 @@ export function ProfileList({
                 <Button
                   variant="ghost"
                   size="icon"
+                  aria-label={`Download profile ${profile.profileId}`}
                   className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                   onClick={(e) => {
                     e.stopPropagation()
