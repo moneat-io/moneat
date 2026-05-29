@@ -19,6 +19,8 @@ package com.moneat.mcp.protocol
 import com.moneat.mcp.McpToolRegistrar
 import com.moneat.mcp.auth.McpScopes
 import com.moneat.mcp.models.McpContext
+import com.moneat.mcp.tools.GetFeatureFlagAnalyticsTool
+import com.moneat.mcp.tools.GetFeatureFlagTool
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -31,7 +33,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-private const val EXPECTED_CORE_MCP_TOOL_COUNT = 88
+private const val EXPECTED_CORE_MCP_TOOL_COUNT = 102
 
 class McpToolRegistryTest {
 
@@ -165,6 +167,14 @@ class McpToolRegistryTest {
         assertTrue(denied.content[0].text!!.contains("releases:read"))
         assertFalse(allowed.isError)
         assertEquals("releases", allowed.content[0].text)
+    }
+
+    @Test
+    fun `feature flag retrieval and analytics use event read scope`() {
+        val expectedScope = setOf(McpScopes.EVENT_READ)
+
+        assertEquals(expectedScope, McpScopes.requiredScopesFor(GetFeatureFlagTool()))
+        assertEquals(expectedScope, McpScopes.requiredScopesFor(GetFeatureFlagAnalyticsTool()))
     }
 
     @Test
@@ -361,7 +371,15 @@ class McpToolRegistryTest {
             "update_notification_preferences",
             "create_datasource",
             "execute_datasource_query",
+            "create_feature_flag_environment",
+            "create_feature_flag_sdk_key",
             "create_feature_flag",
+            "delete_feature_flag",
+            "delete_feature_flag_segment",
+            "revoke_feature_flag_sdk_key",
+            "update_feature_flag",
+            "update_feature_flag_config",
+            "upsert_feature_flag_segment",
             "create_project",
         )
 
