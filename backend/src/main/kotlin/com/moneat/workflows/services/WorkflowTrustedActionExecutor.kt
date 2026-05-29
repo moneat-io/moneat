@@ -208,7 +208,7 @@ class WorkflowTrustedActionExecutor(
                 request = UpdateStatusPageRequest(
                     name = params.optional("name"),
                     description = params.optional("description"),
-                    isPublic = params.optional("is_public")?.toBooleanStrictOrNull()
+                    isPublic = params.optionalBoolean("is_public")
                 )
             ) ?: throw IllegalArgumentException("Status page not found")
         return result("status_page", response)
@@ -240,8 +240,8 @@ class WorkflowTrustedActionExecutor(
         actorUserId: Int?
     ): Map<String, JsonElement> {
         val now = System.currentTimeMillis()
-        val startsAt = params.optional("starts_at")?.toLongOrNull() ?: now
-        val endsAt = params.optional("ends_at")?.toLongOrNull()
+        val startsAt = params.optionalLong("starts_at") ?: now
+        val endsAt = params.optionalLong("ends_at")
             ?: now + DEFAULT_SILENCE_MINUTES * MILLIS_PER_MINUTE
         require(startsAt < endsAt) { "Silence starts_at must be before ends_at" }
         val period =
@@ -325,6 +325,16 @@ class WorkflowTrustedActionExecutor(
     private fun Map<String, String>.optional(name: String): String? =
         this[name]?.trim()?.takeIf { it.isNotEmpty() }
 
+    private fun Map<String, String>.optionalBoolean(name: String): Boolean? =
+        optional(name)?.let {
+            it.toBooleanStrictOrNull() ?: throw IllegalArgumentException("Parameter $name must be true or false")
+        }
+
+    private fun Map<String, String>.optionalLong(name: String): Long? =
+        optional(name)?.let {
+            it.toLongOrNull() ?: throw IllegalArgumentException("Parameter $name must be a number")
+        }
+
     private fun intParam(
         params: Map<String, String>,
         name: String,
@@ -332,7 +342,12 @@ class WorkflowTrustedActionExecutor(
         min: Int,
         max: Int
     ): Int =
-        params.optional(name)?.toIntOrNull()?.coerceIn(min, max) ?: defaultValue
+        params.optional(name)
+            ?.let { value ->
+                (value.toIntOrNull() ?: throw IllegalArgumentException("Parameter $name must be an integer"))
+                    .coerceIn(min, max)
+            }
+            ?: defaultValue
 
     private fun csvParam(
         params: Map<String, String>,
