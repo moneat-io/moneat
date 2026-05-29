@@ -64,3 +64,58 @@ data class DdProfileListResponse(
     val profiles: List<DdProfileResponse>,
     val totalCount: Long,
 )
+
+/** A profile type and how many profiles of that type a service has. */
+@Serializable
+data class DdProfileTypeCount(
+    val profileType: String,
+    val count: Long,
+)
+
+/** A single bucket in a per-service activity sparkline (ts = epoch millis). */
+@Serializable
+data class DdProfileSeriesPoint(
+    val ts: Long,
+    val count: Long,
+)
+
+/** Per-service rollup powering the Profiles overview cards. */
+@Serializable
+data class DdProfileServiceSummary(
+    val service: String,
+    val languages: List<String>,
+    val runtimes: List<String>,
+    val environments: List<String>,
+    val types: List<DdProfileTypeCount>,
+    val hostCount: Long,
+    val profileCount: Long,
+    val totalSizeBytes: Long,
+    val firstSeen: String,
+    val lastSeen: String,
+    val avgDurationNs: Long,
+    val series: List<DdProfileSeriesPoint>,
+)
+
+@Serializable
+data class DdProfileServicesResponse(
+    val services: List<DdProfileServiceSummary>,
+    val totalProfiles: Long,
+    val totalSizeBytes: Long,
+    val serviceCount: Int,
+    val hostCount: Long,
+    val typeCount: Int,
+)
+
+/** A bucket in a service/window profile-volume time series (ts = epoch millis). */
+@Serializable
+data class DdProfileTimeseriesPoint(
+    val ts: Long,
+    val count: Long,
+    val sizeBytes: Long,
+)
+
+@Serializable
+data class DdProfileTimeseriesResponse(
+    val points: List<DdProfileTimeseriesPoint>,
+    val bucketSeconds: Long,
+)

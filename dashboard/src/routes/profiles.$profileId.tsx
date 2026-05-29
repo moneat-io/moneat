@@ -77,15 +77,12 @@ function profileTypeBadgeClass(type: string): string {
 function ProfileDetailPage() {
   const {profileId} = Route.useParams()
 
-  const {data: profilesData, isLoading} = useQuery({
-    queryKey: ['profiles', {limit: 200}],
-    queryFn: () => api.getProfiles({limit: 200}),
-    enabled: api.isAuthenticated(),
+  const {data: profile, isLoading} = useQuery({
+    queryKey: ['profile', profileId],
+    queryFn: () => api.getProfile(profileId),
+    enabled: api.isAuthenticated() && !!profileId,
+    retry: false,
   })
-
-  const profile = profilesData?.profiles?.find(
-    (p) => p.profileId === profileId,
-  )
 
   const [sampleType, setSampleType] = useState<string | null>(null)
   const [thread, setThread] = useState<string | null>(null)
@@ -99,20 +96,26 @@ function ProfileDetailPage() {
 
   const frames = flamegraphData?.frames
 
+  const {data: comparableData} = useQuery({
+    queryKey: ['profilesCompare', profile?.service, profile?.profileType],
+    queryFn: () =>
+      api.getProfiles({
+        service: profile?.service || undefined,
+        type: profile?.profileType || undefined,
+        limit: 50,
+      }),
+    enabled: api.isAuthenticated() && !!profile,
+  })
+
   const compareProfiles = useMemo(() => {
-    if (!profile || !profilesData?.profiles) return []
-    return profilesData.profiles
-      .filter(
-        (p) =>
-          p.profileId !== profileId &&
-          p.service === profile.service &&
-          p.profileType === profile.profileType,
-      )
+    const list = comparableData?.profiles ?? []
+    return list
+      .filter((p) => p.profileId !== profileId)
       .map((p) => ({
         profileId: p.profileId,
         label: `${formatTime(p.startTime)} · ${p.host || p.version || p.profileId.slice(0, 8)}`,
       }))
-  }, [profilesData, profile, profileId])
+  }, [comparableData, profileId])
 
   const {data: baselineData, isLoading: baselineLoading} = useQuery({
     queryKey: ['profileFlamegraph', compareId, sampleType, thread],
@@ -217,7 +220,7 @@ function ProfileDetailPage() {
             className="h-7 w-7 mt-0.5 shrink-0"
             asChild
           >
-            <Link to="/profiles" search={{tab: 'sentry'}}>
+            <Link to="/profiles">
               <ArrowLeft className="h-3.5 w-3.5" />
             </Link>
           </Button>

@@ -22,6 +22,9 @@ import com.moneat.datadog.models.DdApmOverviewPreviousStats
 import com.moneat.datadog.models.DdApmOverviewResponse
 import com.moneat.datadog.models.DdApmOverviewStats
 import com.moneat.datadog.models.DdProfileListResponse
+import com.moneat.datadog.models.DdProfileResponse
+import com.moneat.datadog.models.DdProfileServicesResponse
+import com.moneat.datadog.models.DdProfileTimeseriesResponse
 import com.moneat.datadog.models.DdResourceStatsResponse
 import com.moneat.datadog.models.DdServiceMapResponse
 import com.moneat.datadog.models.DdTraceListResponse
@@ -31,6 +34,7 @@ import com.moneat.datadog.services.DatadogPprofFlamegraphService
 import com.moneat.datadog.services.DdResourceStatsQuery
 import com.moneat.datadog.services.DdTraceListQuery
 import com.moneat.datadog.services.ProfileIngestionService
+import com.moneat.datadog.services.ProfileMergeService
 import com.moneat.datadog.services.ProfileStorageService
 import com.moneat.datadog.services.TraceIngestionService
 import com.moneat.testsupport.RouteTestSupport
@@ -38,9 +42,9 @@ import com.moneat.testsupport.RouteTestSupport.installJwtAuth
 import com.moneat.testsupport.RouteTestSupport.withAuth
 import com.moneat.testsupport.startTestKoin
 import com.moneat.testsupport.stopTestKoin
-import io.ktor.client.statement.bodyAsText
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
@@ -50,14 +54,14 @@ import io.mockk.every
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import io.mockk.verify
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 class DatadogQueryRoutesTest {
 
@@ -67,6 +71,7 @@ class DatadogQueryRoutesTest {
         mockkObject(DatadogHostService)
         mockkObject(TraceIngestionService)
         mockkObject(ProfileIngestionService)
+        mockkObject(ProfileMergeService)
         mockkObject(ProfileStorageService)
 
         every { DatadogHostService.listHosts(any<Int>()) } returns emptyList()
@@ -85,14 +90,28 @@ class DatadogQueryRoutesTest {
             DdServiceMapResponse(emptyList())
         coEvery { TraceIngestionService.getApmErrors(any(), any(), any(), any(), any(), any()) } returns
             DdApmErrorsResponse(emptyList(), 0L)
-        coEvery { ProfileIngestionService.listProfiles(any(), any(), any(), any(), any(), any()) } returns
+        coEvery { ProfileIngestionService.listProfiles(any(), any()) } returns
             DdProfileListResponse(emptyList(), 0L)
         coEvery { ProfileIngestionService.getProfileMeta(any(), any()) } returns null
         every { ProfileStorageService.read(any()) } returns null
+        coEvery { ProfileIngestionService.getProfile(any(), any()) } returns null
+        coEvery { ProfileIngestionService.listServices(any(), any(), any()) } returns
+            DdProfileServicesResponse(emptyList(), 0L, 0L, 0, 0L, 0)
+        coEvery {
+            ProfileIngestionService.timeseries(
+                any(), any(), any(), any(), any(), any(), any(), any(),
+            )
+        } returns DdProfileTimeseriesResponse(emptyList(), 60L)
+        coEvery {
+            ProfileMergeService.mergeFlamegraph(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
+            )
+        } returns buildJsonObject { put("frames", buildJsonArray {}) }
     }
 
     @AfterTest
     fun teardown() {
+        unmockkObject(ProfileMergeService)
         unmockkObject(ProfileStorageService)
         unmockkObject(ProfileIngestionService)
         unmockkObject(TraceIngestionService)
@@ -581,4 +600,91 @@ class DatadogQueryRoutesTest {
         put("selectedSampleType", sampleType)
         put("selectedThread", thread)
     }
+
+    // ──── Profile aggregation routes ────
+
+    @Test
+    fun `profile services returns 401 without jwt`() = testApplication {
+        installProfileRoutes()()
+        assertEquals(HttpStatusCode.Unauthorized, client.get("/v1/profiles/services").status)
+    }
+
+    @Test
+    fun `profile services returns ok with jwt`() = testApplication {
+        installProfileRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get("/v1/profiles/services") { withAuth(token) }
+        assertEquals(HttpStatusCode.OK, resp.status)
+    }
+
+    @Test
+    fun `profile timeseries returns 401 without jwt`() = testApplication {
+        installProfileRoutes()()
+        assertEquals(HttpStatusCode.Unauthorized, client.get("/v1/profiles/timeseries").status)
+    }
+
+    @Test
+    fun `profile timeseries rejects inverted range`() = testApplication {
+        installProfileRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get("/v1/profiles/timeseries?from=200&to=100") { withAuth(token) }
+        assertEquals(HttpStatusCode.BadRequest, resp.status)
+    }
+
+    @Test
+    fun `merged flamegraph returns 401 without jwt`() = testApplication {
+        installProfileRoutes()()
+        assertEquals(
+            HttpStatusCode.Unauthorized,
+            client.get("/v1/profiles/merged-flamegraph").status,
+        )
+    }
+
+    @Test
+    fun `merged flamegraph returns ok with jwt`() = testApplication {
+        installProfileRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get("/v1/profiles/merged-flamegraph?service=api") { withAuth(token) }
+        assertEquals(HttpStatusCode.OK, resp.status)
+    }
+
+    @Test
+    fun `profile metadata returns 401 without jwt`() = testApplication {
+        installProfileRoutes()()
+        assertEquals(HttpStatusCode.Unauthorized, client.get("/v1/profiles/some-id").status)
+    }
+
+    @Test
+    fun `profile metadata returns not found for unknown profile`() = testApplication {
+        installProfileRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get("/v1/profiles/unknown-id") { withAuth(token) }
+        assertEquals(HttpStatusCode.NotFound, resp.status)
+    }
+
+    @Test
+    fun `profile metadata returns profile when found`() = testApplication {
+        coEvery { ProfileIngestionService.getProfile(any(), any()) } returns sampleProfile()
+        installProfileRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get("/v1/profiles/known-id") { withAuth(token) }
+        assertEquals(HttpStatusCode.OK, resp.status)
+    }
+
+    private fun sampleProfile(): DdProfileResponse = DdProfileResponse(
+        profileId = "known-id",
+        host = "h1",
+        service = "api",
+        env = "prod",
+        version = "1.0.0",
+        runtime = "jvm",
+        language = "jvm",
+        profileType = "jfr",
+        startTime = "2026-05-28 12:00:00.000",
+        endTime = "2026-05-28 12:01:00.000",
+        durationNs = 60_000_000_000L,
+        sizeBytes = 2_000_000L,
+        tags = emptyMap(),
+        source = "datadog",
+    )
 }

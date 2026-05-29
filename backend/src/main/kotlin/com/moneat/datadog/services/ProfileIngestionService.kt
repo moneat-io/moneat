@@ -20,6 +20,12 @@ import com.moneat.config.ClickHouseClient
 import com.moneat.datadog.models.DdProfileEvent
 import com.moneat.datadog.models.DdProfileListResponse
 import com.moneat.datadog.models.DdProfileResponse
+import com.moneat.datadog.models.DdProfileSeriesPoint
+import com.moneat.datadog.models.DdProfileServiceSummary
+import com.moneat.datadog.models.DdProfileServicesResponse
+import com.moneat.datadog.models.DdProfileTimeseriesPoint
+import com.moneat.datadog.models.DdProfileTimeseriesResponse
+import com.moneat.datadog.models.DdProfileTypeCount
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
@@ -27,6 +33,7 @@ import io.ktor.http.isSuccess
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
@@ -40,6 +47,34 @@ import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
+/** Server-side filters/paging for the profile list endpoint. */
+data class DdProfileListQuery(
+    val service: String? = null,
+    val profileType: String? = null,
+    val source: String? = null,
+    val env: String? = null,
+    val host: String? = null,
+    val version: String? = null,
+    val fromMs: Long? = null,
+    val toMs: Long? = null,
+    val limit: Int = 50,
+    val offset: Int = 0,
+)
+
+/** A profile selected for inclusion in a merged flamegraph. */
+data class ProfileMergeCandidate(
+    val profileId: String,
+    val storageKey: String,
+    val profileType: String,
+    val source: String,
+)
+
+/** Sampled merge candidates plus the total profiles in the window. */
+data class ProfileMergeSelection(
+    val totalInWindow: Long,
+    val candidates: List<ProfileMergeCandidate>,
+)
+
 object ProfileIngestionService {
     private val clickhouseDb by lazy { ClickHouseClient.getDatabase() }
     private val json = Json { ignoreUnknownKeys = true }
@@ -47,6 +82,14 @@ object ProfileIngestionService {
 
     private const val NANOS_PER_MILLI = 1_000_000L
     private const val MIN_PROFILE_PARTS = 3
+    private const val DEFAULT_SOURCE = "datadog"
+    private const val MILLIS_PER_SECOND_L = 1000L
+    private const val DEFAULT_SERVICES_LIMIT = 200
+    private const val SPARKLINE_LOOKBACK_SECONDS = 86_400L
+    private const val SPARKLINE_BUCKETS = 24
+    private const val MIN_BUCKET_SECONDS = 60L
+    private const val MAX_TIMESERIES_BUCKETS = 500
+    private const val MERGE_MAX_PROFILES = 50
 
     private data class LockEntry(val mutex: Mutex = Mutex(), val refs: AtomicInteger = AtomicInteger(0))
     private val sessionLocks = ConcurrentHashMap<String, LockEntry>()
@@ -191,7 +234,7 @@ object ProfileIngestionService {
                 '${escapeSql(storageKey)}',
                 ${mapToSqlMap(tags)},
                 ${fileParts.sumOf { it.second.size.toLong() }},
-                'datadog'
+                '$DEFAULT_SOURCE'
             )
         """.trimIndent()
 
@@ -215,25 +258,21 @@ object ProfileIngestionService {
 
     suspend fun listProfiles(
         organizationId: Int,
-        service: String?,
-        profileType: String?,
-        source: String?,
-        limit: Int,
-        offset: Int,
+        query: DdProfileListQuery,
     ): DdProfileListResponse {
-        val filters = mutableListOf(
-            ClickHouseQueryUtils.orgIdClause(organizationId.toLong())
+        val whereClause = buildProfileFilters(
+            organizationId,
+            service = query.service,
+            profileType = query.profileType,
+            source = query.source,
+            env = query.env,
+            host = query.host,
+            version = query.version,
+            fromMs = query.fromMs,
+            toMs = query.toMs,
         )
-        service?.let {
-            filters.add("service = '${escapeSql(it)}'")
-        }
-        profileType?.let {
-            filters.add("profile_type = '${escapeSql(it)}'")
-        }
-        source?.let {
-            filters.add("source = '${escapeSql(it)}'")
-        }
-        val whereClause = filters.joinToString(" AND ")
+        val limit = query.limit
+        val offset = query.offset
 
         val countQuery = """
             SELECT count()
@@ -268,56 +307,258 @@ object ProfileIngestionService {
         } else {
             result.trim().lines()
                 .filter { it.isNotBlank() }
-                .map { line ->
-                    val obj = json.parseToJsonElement(line).jsonObject
-                    val tagsMap = parseJsonStringMap(obj["tags"])
-                    val serviceFromColumn =
-                        obj["service"]?.jsonPrimitive?.content ?: ""
-                    val service = if (serviceFromColumn.isNotBlank()) {
-                        serviceFromColumn
-                    } else {
-                        firstNonBlankTag(
-                            tagsMap,
-                            "service",
-                            "service.name",
-                            "service_name"
-                        )
-                    }
-                    DdProfileResponse(
-                        profileId = obj["profile_id"]!!
-                            .jsonPrimitive.content,
-                        host = obj["host"]?.jsonPrimitive?.content
-                            ?: "",
-                        service = service,
-                        env = obj["env"]?.jsonPrimitive?.content
-                            ?: "",
-                        version = obj["version"]?.jsonPrimitive?.content
-                            ?: "",
-                        runtime = obj["runtime"]?.jsonPrimitive?.content
-                            ?: "",
-                        language = obj["language"]?.jsonPrimitive?.content
-                            ?: "",
-                        profileType = obj["profile_type"]!!
-                            .jsonPrimitive.content,
-                        startTime = obj["start_time"]!!
-                            .jsonPrimitive.content,
-                        endTime = obj["end_time"]!!
-                            .jsonPrimitive.content,
-                        durationNs = obj["duration_ns"]!!
-                            .jsonPrimitive.long,
-                        sizeBytes = obj["size_bytes"]!!
-                            .jsonPrimitive.long,
-                        tags = tagsMap,
-                        source = obj["source"]?.jsonPrimitive?.content
-                            ?: "datadog",
-                    )
-                }
+                .map { parseProfileRow(it) }
         }
 
         return DdProfileListResponse(
             profiles = profiles,
             totalCount = totalCount
         )
+    }
+
+    /** Fetch a single profile's metadata by id (null when not found). */
+    suspend fun getProfile(
+        organizationId: Int,
+        profileId: String,
+    ): DdProfileResponse? {
+        val query = """
+            SELECT
+                toString(profile_id) as profile_id,
+                host, service, env, version,
+                runtime, language, profile_type,
+                toString(start_time) as start_time,
+                toString(end_time) as end_time,
+                duration_ns, storage_key,
+                tags, size_bytes, source
+            FROM `$clickhouseDb`.profiles
+            WHERE ${ClickHouseQueryUtils.orgIdClause(organizationId.toLong())}
+              AND toString(profile_id) = '${escapeSql(profileId)}'
+            LIMIT 1
+            FORMAT JSONEachRow
+        """.trimIndent()
+        val result = ClickHouseClient.executeWithFormat(query, "")
+        val line = result.trim().lines().firstOrNull { it.isNotBlank() }
+            ?: return null
+        return parseProfileRow(line)
+    }
+
+    /**
+     * Per-service rollup powering the Profiles overview. Counts/sizes/hosts
+     * are over the full window (or all retained data when [fromMs]/[toMs] are
+     * null); each service carries a small activity sparkline.
+     */
+    suspend fun listServices(
+        organizationId: Int,
+        fromMs: Long?,
+        toMs: Long?,
+    ): DdProfileServicesResponse {
+        val whereClause = buildProfileFilters(
+            organizationId,
+            fromMs = fromMs,
+            toMs = toMs,
+        )
+
+        val rollupQuery = """
+            SELECT
+                service,
+                count() AS profileCount,
+                uniqExact(host) AS hostCount,
+                sum(size_bytes) AS totalSizeBytes,
+                toString(min(start_time)) AS firstSeen,
+                toString(max(start_time)) AS lastSeen,
+                toUInt64(round(avg(duration_ns))) AS avgDurationNs,
+                arrayFilter(x -> x != '', groupUniqArray(env)) AS environments,
+                arrayFilter(x -> x != '', groupUniqArray(language)) AS languages,
+                arrayFilter(x -> x != '', groupUniqArray(runtime)) AS runtimes
+            FROM `$clickhouseDb`.profiles
+            WHERE $whereClause
+            GROUP BY service
+            ORDER BY profileCount DESC
+            LIMIT $DEFAULT_SERVICES_LIMIT
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        val typesQuery = """
+            SELECT service, profile_type AS profileType, count() AS count
+            FROM `$clickhouseDb`.profiles
+            WHERE $whereClause
+            GROUP BY service, profile_type
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        val sparkStep = sparklineStepSeconds(fromMs, toMs)
+        val sparkWhere = if (fromMs != null && toMs != null) {
+            whereClause
+        } else {
+            "$whereClause AND start_time >= now() - INTERVAL $SPARKLINE_LOOKBACK_SECONDS SECOND"
+        }
+        val sparkQuery = """
+            SELECT
+                service,
+                toUnixTimestamp64Milli(
+                    toStartOfInterval(start_time, INTERVAL $sparkStep SECOND)
+                ) AS ts,
+                count() AS count
+            FROM `$clickhouseDb`.profiles
+            WHERE $sparkWhere
+            GROUP BY service, ts
+            ORDER BY ts
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        val typeCounts = mutableMapOf<String, MutableList<DdProfileTypeCount>>()
+        parseJsonRows(ClickHouseClient.executeWithFormat(typesQuery, "")).forEach { obj ->
+            val svc = obj["service"]?.jsonPrimitive?.content ?: ""
+            typeCounts.getOrPut(svc) { mutableListOf() }.add(
+                DdProfileTypeCount(
+                    profileType = obj["profileType"]?.jsonPrimitive?.content ?: "",
+                    count = obj["count"]?.jsonPrimitive?.long ?: 0,
+                )
+            )
+        }
+
+        val series = mutableMapOf<String, MutableList<DdProfileSeriesPoint>>()
+        parseJsonRows(ClickHouseClient.executeWithFormat(sparkQuery, "")).forEach { obj ->
+            val svc = obj["service"]?.jsonPrimitive?.content ?: ""
+            series.getOrPut(svc) { mutableListOf() }.add(
+                DdProfileSeriesPoint(
+                    ts = obj["ts"]?.jsonPrimitive?.long ?: 0,
+                    count = obj["count"]?.jsonPrimitive?.long ?: 0,
+                )
+            )
+        }
+
+        val services = parseJsonRows(
+            ClickHouseClient.executeWithFormat(rollupQuery, "")
+        ).map { obj ->
+            val svc = obj["service"]?.jsonPrimitive?.content ?: ""
+            DdProfileServiceSummary(
+                service = svc,
+                languages = stringArray(obj["languages"]),
+                runtimes = stringArray(obj["runtimes"]),
+                environments = stringArray(obj["environments"]),
+                types = typeCounts[svc]?.sortedByDescending { it.count } ?: emptyList(),
+                hostCount = obj["hostCount"]?.jsonPrimitive?.long ?: 0,
+                profileCount = obj["profileCount"]?.jsonPrimitive?.long ?: 0,
+                totalSizeBytes = obj["totalSizeBytes"]?.jsonPrimitive?.long ?: 0,
+                firstSeen = obj["firstSeen"]?.jsonPrimitive?.content ?: "",
+                lastSeen = obj["lastSeen"]?.jsonPrimitive?.content ?: "",
+                avgDurationNs = obj["avgDurationNs"]?.jsonPrimitive?.long ?: 0,
+                series = series[svc] ?: emptyList(),
+            )
+        }
+
+        return DdProfileServicesResponse(
+            services = services,
+            totalProfiles = services.sumOf { it.profileCount },
+            totalSizeBytes = services.sumOf { it.totalSizeBytes },
+            serviceCount = services.size,
+            hostCount = services.sumOf { it.hostCount },
+            typeCount = services.flatMap { s -> s.types.map { it.profileType } }
+                .toSet().size,
+        )
+    }
+
+    /** Profile-volume time series for a service over a window. */
+    suspend fun timeseries(
+        organizationId: Int,
+        service: String?,
+        profileType: String?,
+        env: String?,
+        host: String?,
+        fromMs: Long,
+        toMs: Long,
+        buckets: Int,
+    ): DdProfileTimeseriesResponse {
+        val safeBuckets = buckets.coerceIn(1, MAX_TIMESERIES_BUCKETS)
+        val windowSec = ((toMs - fromMs) / MILLIS_PER_SECOND_L).coerceAtLeast(1)
+        val stepSeconds = (windowSec / safeBuckets).coerceAtLeast(MIN_BUCKET_SECONDS)
+        val whereClause = buildProfileFilters(
+            organizationId,
+            service = service,
+            profileType = profileType,
+            env = env,
+            host = host,
+            fromMs = fromMs,
+            toMs = toMs,
+        )
+        val query = """
+            SELECT
+                toUnixTimestamp64Milli(
+                    toStartOfInterval(start_time, INTERVAL $stepSeconds SECOND)
+                ) AS ts,
+                count() AS count,
+                sum(size_bytes) AS sizeBytes
+            FROM `$clickhouseDb`.profiles
+            WHERE $whereClause
+            GROUP BY ts
+            ORDER BY ts
+            FORMAT JSONEachRow
+        """.trimIndent()
+        val points = parseJsonRows(ClickHouseClient.executeWithFormat(query, "")).map { obj ->
+            DdProfileTimeseriesPoint(
+                ts = obj["ts"]?.jsonPrimitive?.long ?: 0,
+                count = obj["count"]?.jsonPrimitive?.long ?: 0,
+                sizeBytes = obj["sizeBytes"]?.jsonPrimitive?.long ?: 0,
+            )
+        }
+        return DdProfileTimeseriesResponse(points = points, bucketSeconds = stepSeconds)
+    }
+
+    /**
+     * Evenly sample up to [maxProfiles] profiles across the window so a wide
+     * window stays representative without reading every stored blob.
+     */
+    suspend fun selectProfilesForMerge(
+        organizationId: Int,
+        service: String?,
+        profileType: String?,
+        env: String?,
+        host: String?,
+        version: String?,
+        fromMs: Long,
+        toMs: Long,
+        maxProfiles: Int,
+    ): ProfileMergeSelection {
+        val cap = maxProfiles.coerceIn(1, MERGE_MAX_PROFILES)
+        val whereClause = buildProfileFilters(
+            organizationId,
+            service = service,
+            profileType = profileType,
+            env = env,
+            host = host,
+            version = version,
+            fromMs = fromMs,
+            toMs = toMs,
+        )
+        val query = """
+            WITH
+                (SELECT count() FROM `$clickhouseDb`.profiles WHERE $whereClause) AS total,
+                greatest(intDiv(total + $cap - 1, $cap), 1) AS stride
+            SELECT toString(profile_id) AS profile_id, storage_key,
+                   profile_type AS profileType, source, total
+            FROM (
+                SELECT profile_id, storage_key, profile_type, source, start_time,
+                       row_number() OVER (ORDER BY start_time) AS rn
+                FROM `$clickhouseDb`.profiles
+                WHERE $whereClause
+            )
+            WHERE (rn - 1) % stride = 0
+            ORDER BY start_time
+            LIMIT $cap
+            FORMAT JSONEachRow
+        """.trimIndent()
+        val rows = parseJsonRows(ClickHouseClient.executeWithFormat(query, ""))
+        val total = rows.firstOrNull()?.get("total")?.jsonPrimitive?.long ?: 0
+        val candidates = rows.map { obj ->
+            ProfileMergeCandidate(
+                profileId = obj["profile_id"]?.jsonPrimitive?.content ?: "",
+                storageKey = obj["storage_key"]?.jsonPrimitive?.content ?: "",
+                profileType = obj["profileType"]?.jsonPrimitive?.content ?: "",
+                source = obj["source"]?.jsonPrimitive?.content ?: DEFAULT_SOURCE,
+            )
+        }.filter { it.storageKey.isNotBlank() }
+        return ProfileMergeSelection(totalInWindow = total, candidates = candidates)
     }
 
     suspend fun getProfileStorageKey(
@@ -365,13 +606,98 @@ object ProfileIngestionService {
         return if (parts.size >= MIN_PROFILE_PARTS) {
             ProfileMeta(parts[0], parts[1], parts[2])
         } else if (parts.size >= 2) {
-            ProfileMeta(parts[0], parts[1], "datadog")
+            ProfileMeta(parts[0], parts[1], DEFAULT_SOURCE)
         } else {
             null
         }
     }
 
     // --- Internal helpers ---
+
+    private fun buildProfileFilters(
+        organizationId: Int,
+        service: String? = null,
+        profileType: String? = null,
+        source: String? = null,
+        env: String? = null,
+        host: String? = null,
+        version: String? = null,
+        fromMs: Long? = null,
+        toMs: Long? = null,
+    ): String {
+        val filters = mutableListOf(
+            ClickHouseQueryUtils.orgIdClause(organizationId.toLong())
+        )
+        service?.takeIf { it.isNotBlank() }?.let {
+            filters.add("service = '${escapeSql(it)}'")
+        }
+        profileType?.takeIf { it.isNotBlank() }?.let {
+            filters.add("profile_type = '${escapeSql(it)}'")
+        }
+        source?.takeIf { it.isNotBlank() }?.let {
+            filters.add("source = '${escapeSql(it)}'")
+        }
+        env?.takeIf { it.isNotBlank() }?.let {
+            filters.add("env = '${escapeSql(it)}'")
+        }
+        host?.takeIf { it.isNotBlank() }?.let {
+            filters.add("host = '${escapeSql(it)}'")
+        }
+        version?.takeIf { it.isNotBlank() }?.let {
+            filters.add("version = '${escapeSql(it)}'")
+        }
+        fromMs?.let { filters.add("start_time >= fromUnixTimestamp64Milli($it)") }
+        toMs?.let { filters.add("start_time < fromUnixTimestamp64Milli($it)") }
+        return filters.joinToString(" AND ")
+    }
+
+    private fun parseProfileRow(line: String): DdProfileResponse {
+        val obj = json.parseToJsonElement(line).jsonObject
+        val tagsMap = parseJsonStringMap(obj["tags"])
+        val serviceFromColumn = obj["service"]?.jsonPrimitive?.content ?: ""
+        val service = serviceFromColumn.ifBlank {
+            firstNonBlankTag(tagsMap, "service", "service.name", "service_name")
+        }
+        return DdProfileResponse(
+            profileId = obj["profile_id"]!!.jsonPrimitive.content,
+            host = obj["host"]?.jsonPrimitive?.content ?: "",
+            service = service,
+            env = obj["env"]?.jsonPrimitive?.content ?: "",
+            version = obj["version"]?.jsonPrimitive?.content ?: "",
+            runtime = obj["runtime"]?.jsonPrimitive?.content ?: "",
+            language = obj["language"]?.jsonPrimitive?.content ?: "",
+            profileType = obj["profile_type"]!!.jsonPrimitive.content,
+            startTime = obj["start_time"]!!.jsonPrimitive.content,
+            endTime = obj["end_time"]!!.jsonPrimitive.content,
+            durationNs = obj["duration_ns"]!!.jsonPrimitive.long,
+            sizeBytes = obj["size_bytes"]!!.jsonPrimitive.long,
+            tags = tagsMap,
+            source = obj["source"]?.jsonPrimitive?.content ?: DEFAULT_SOURCE,
+        )
+    }
+
+    private fun parseJsonRows(raw: String): List<kotlinx.serialization.json.JsonObject> {
+        if (raw.isBlank()) return emptyList()
+        return raw.trim().lines()
+            .filter { it.isNotBlank() }
+            .map { json.parseToJsonElement(it).jsonObject }
+    }
+
+    private fun stringArray(
+        element: kotlinx.serialization.json.JsonElement?,
+    ): List<String> {
+        return element?.jsonArray
+            ?.mapNotNull { it.jsonPrimitive.content.takeIf { c -> c.isNotBlank() } }
+            ?: emptyList()
+    }
+
+    private fun sparklineStepSeconds(fromMs: Long?, toMs: Long?): Long {
+        if (fromMs == null || toMs == null || toMs <= fromMs) {
+            return SPARKLINE_LOOKBACK_SECONDS / SPARKLINE_BUCKETS
+        }
+        val windowSec = (toMs - fromMs) / MILLIS_PER_SECOND_L
+        return (windowSec / SPARKLINE_BUCKETS).coerceAtLeast(MIN_BUCKET_SECONDS)
+    }
 
     private data class ExistingSession(
         val profileId: String,
