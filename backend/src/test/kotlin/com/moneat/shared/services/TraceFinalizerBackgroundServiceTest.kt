@@ -57,22 +57,22 @@ class TraceFinalizerBackgroundServiceTest {
     private fun service(
         enabled: Boolean = true,
         intervalSeconds: Long = 600,
-        refreshWindowHours: Int = 2,
+        liveWindowHours: Int = 2,
         backfillWindowHours: Int = 50,
         lookbackHours: Int = 2,
         maxExecutionSeconds: Int = 540,
     ) = TraceFinalizerBackgroundService(
         enabled = enabled,
         intervalSeconds = intervalSeconds,
-        refreshWindowHours = refreshWindowHours,
+        liveWindowHours = liveWindowHours,
         backfillWindowHours = backfillWindowHours,
         lookbackHours = lookbackHours,
         maxExecutionSeconds = maxExecutionSeconds,
     )
 
     @Test
-    fun `finalizeRecent finalizes summaries into apm_traces_final off the read path`() = runBlocking {
-        service().finalizeRecent(emitHours = 2)
+    fun `runOnce finalizes only frozen buckets, forward-only, off the read path`() = runBlocking {
+        service().runOnce()
 
         assertEquals(1, captured.size, "expected one finalize INSERT")
         val sql = captured.single()
@@ -80,24 +80,26 @@ class TraceFinalizerBackgroundServiceTest {
         assertTrue(sql.contains("`test_db`.apm_trace_summaries"))
         // The heavy argMin aggregation runs here (off the dashboard read path).
         assertTrue(sql.contains("argMinMerge(root_service_state)"))
-        // emit window = 2h, scan window = emit + lookback (2 + 2 = 4h).
-        assertTrue(sql.contains("toStartOfHour(trace_start) >= toStartOfHour(now() - INTERVAL 2 HOUR)"))
-        assertTrue(sql.contains("bucket_start >= toStartOfHour(now() - INTERVAL 4 HOUR)"))
         assertTrue(sql.contains("GROUP BY organization_id, trace_id_canonical"))
+        // Forward-only: never re-finalize a bucket at/below the current max.
+        assertTrue(
+            sql.contains("toStartOfHour(trace_start) > (SELECT max(trace_bucket) FROM `test_db`.apm_traces_final)"),
+        )
+        // Only frozen buckets (older than the 2h live window); newest buckets stay live in summaries.
+        assertTrue(sql.contains("toStartOfHour(trace_start) < toStartOfHour(now() - INTERVAL 2 HOUR)"))
+        // Cold-start / gap catch-up is clamped to the 50h backfill floor.
+        assertTrue(sql.contains("toStartOfHour(trace_start) >= toStartOfHour(now() - INTERVAL 50 HOUR)"))
     }
 
     @Test
-    fun `runOnce backfills the wide window first then refreshes the recent window`() = runBlocking {
-        val svc = service(refreshWindowHours = 2, backfillWindowHours = 50, lookbackHours = 2)
-
+    fun `repeated runs stay forward-only (no re-finalization window)`() = runBlocking {
+        val svc = service()
         svc.runOnce()
         svc.runOnce()
 
         assertEquals(2, captured.size)
-        // First pass: wider backfill window (covers history + downtime gaps).
-        assertTrue(captured[0].contains("toStartOfHour(trace_start) >= toStartOfHour(now() - INTERVAL 50 HOUR)"))
-        // Subsequent passes: only the recent refresh window.
-        assertTrue(captured[1].contains("toStartOfHour(trace_start) >= toStartOfHour(now() - INTERVAL 2 HOUR)"))
+        // Both passes use the same forward-only guard; neither re-finalizes a recent window.
+        assertTrue(captured.all { it.contains("> (SELECT max(trace_bucket) FROM `test_db`.apm_traces_final)") })
     }
 
     @Test
@@ -159,8 +161,9 @@ class TraceFinalizerBackgroundServiceTest {
     @Test
     fun `constructor rejects invalid configuration`() {
         assertFailsWith<IllegalArgumentException> { service(intervalSeconds = 0) }
-        assertFailsWith<IllegalArgumentException> { service(refreshWindowHours = 0) }
-        assertFailsWith<IllegalArgumentException> { service(backfillWindowHours = 1, refreshWindowHours = 2) }
+        assertFailsWith<IllegalArgumentException> { service(liveWindowHours = 0) }
+        assertFailsWith<IllegalArgumentException> { service(backfillWindowHours = 1, liveWindowHours = 2) }
+        assertFailsWith<IllegalArgumentException> { service(backfillWindowHours = 2, liveWindowHours = 2) }
         assertFailsWith<IllegalArgumentException> { service(lookbackHours = -1) }
         assertFailsWith<IllegalArgumentException> { service(maxExecutionSeconds = 0) }
     }
@@ -169,8 +172,10 @@ class TraceFinalizerBackgroundServiceTest {
     fun `fromConfig applies defaults when keys are absent`() = runBlocking {
         val svc = TraceFinalizerBackgroundService.fromConfig(MapApplicationConfig())
 
-        svc.runOnce() // first pass uses the default 50h backfill window
+        svc.runOnce()
         assertEquals(1, captured.size)
+        // Defaults: 2h live window (frozen boundary) and 50h backfill floor.
+        assertTrue(captured.single().contains("toStartOfHour(now() - INTERVAL 2 HOUR)"))
         assertTrue(captured.single().contains("toStartOfHour(now() - INTERVAL 50 HOUR)"))
     }
 
@@ -180,15 +185,16 @@ class TraceFinalizerBackgroundServiceTest {
             MapApplicationConfig(
                 "traceFinalizer.enabled" to "true",
                 "traceFinalizer.intervalSeconds" to "300",
-                "traceFinalizer.refreshWindowHours" to "1",
+                "traceFinalizer.liveWindowHours" to "1",
                 "traceFinalizer.backfillWindowHours" to "10",
                 "traceFinalizer.lookbackHours" to "3",
                 "traceFinalizer.maxExecutionSeconds" to "120",
             ),
         )
 
-        svc.runOnce() // first pass uses the configured 10h backfill window
+        svc.runOnce()
         assertEquals(1, captured.size)
+        assertTrue(captured.single().contains("toStartOfHour(now() - INTERVAL 1 HOUR)"))
         assertTrue(captured.single().contains("toStartOfHour(now() - INTERVAL 10 HOUR)"))
     }
 }

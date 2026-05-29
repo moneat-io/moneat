@@ -54,6 +54,7 @@ import com.moneat.utils.ClickHouseSqlUtils.doubleMapToSqlMap
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import com.moneat.utils.ClickHouseSqlUtils.mapToSqlMap
 import io.ktor.http.isSuccess
+import io.ktor.server.config.ApplicationConfig
 import io.sentry.ISpan
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -72,6 +73,16 @@ import org.msgpack.core.MessageUnpacker
 private val logger = KotlinLogging.logger {}
 
 private const val APM_TRACES_FINAL_TABLE = "apm_traces_final"
+private const val APM_TRACE_SUMMARIES_TABLE = "apm_trace_summaries"
+
+// Buckets older than this are read from apm_traces_final as finalized one-row-per-trace records (no
+// FINAL needed -- the finalizer writes each bucket exactly once). The most recent buckets are still
+// filling, so they are read live from apm_trace_summaries instead. Must match the finalizer's
+// liveWindowHours so the two ranges meet without a gap or overlap.
+private val LIVE_WINDOW_HOURS: Int =
+    ApplicationConfig("application.conf")
+        .propertyOrNull("traceFinalizer.liveWindowHours")
+        ?.getString()?.toIntOrNull() ?: 2
 private const val APM_ERROR_GROUPS_TABLE = "apm_error_groups_hourly"
 private const val APM_RESOURCE_STATS_TABLE = "apm_resource_stats_hourly"
 private const val APM_SERVICE_STATS_TABLE = "apm_service_stats_hourly"
@@ -332,53 +343,86 @@ object TraceIngestionService {
         query: DdTraceListQuery,
         previousWindow: Boolean = false,
     ): String {
-        // apm_traces_final holds one finalized row per trace with plain columns, so the dashboard
-        // reads it directly with a (organization_id, trace_bucket) key-prefix filter -- no per-trace
-        // re-aggregation. FINAL collapses any superseded rows from re-finalization (see
-        // TraceFinalizerBackgroundService). service/env/source/status/search filter plain columns, so
-        // they all go in WHERE.
-        val filters = mutableListOf(
-            ClickHouseQueryUtils.orgIdClause(organizationId.toLong()),
-            if (previousWindow) {
-                query.timeRange.previousBucketStartClause("trace_bucket")
-            } else {
-                query.timeRange.bucketStartClause("trace_bucket")
-            }
-        )
-        query.service?.let {
-            filters.add("root_service = '${escapeSql(it)}'")
-        }
-        query.env?.let {
-            filters.add("env = '${escapeSql(it)}'")
-        }
-        query.source?.let {
-            filters.add("source = '${escapeSql(it)}'")
-        }
-        when (query.status) {
-            STATUS_ERROR -> filters.add("has_error = 1")
-            STATUS_OK -> filters.add("has_error = 0")
-        }
-        query.search?.trim()?.takeIf { it.isNotEmpty() }?.let {
-            filters.add(traceSearchClause(it))
-        }
+        // Hybrid read: closed buckets come from apm_traces_final as finalized one-row-per-trace records
+        // (no FINAL -- the finalizer writes each bucket once, so there are no duplicate versions to
+        // merge), while the most recent still-filling buckets are aggregated live from
+        // apm_trace_summaries. This avoids both the slow read-time FINAL and the per-trace re-aggregation
+        // over the whole window, while keeping the leading edge fresh.
+        val orgClause = ClickHouseQueryUtils.orgIdClause(organizationId.toLong())
+        val liveBoundary = "toStartOfHour(now() - INTERVAL $LIVE_WINDOW_HOURS HOUR)"
 
-        return """
+        // --- finalized part: plain rows from apm_traces_final, no FINAL ---
+        val finalizedFilters = mutableListOf(orgClause)
+        if (previousWindow) {
+            // The previous window is entirely older than the live boundary, so it is fully finalized.
+            finalizedFilters.add(query.timeRange.previousBucketStartClause("trace_bucket"))
+        } else {
+            finalizedFilters.add(query.timeRange.bucketStartClause("trace_bucket"))
+            finalizedFilters.add("trace_bucket < $liveBoundary")
+        }
+        query.service?.let { finalizedFilters.add("root_service = '${escapeSql(it)}'") }
+        query.env?.let { finalizedFilters.add("env = '${escapeSql(it)}'") }
+        query.source?.let { finalizedFilters.add("source = '${escapeSql(it)}'") }
+        when (query.status) {
+            STATUS_ERROR -> finalizedFilters.add("has_error = 1")
+            STATUS_OK -> finalizedFilters.add("has_error = 0")
+        }
+        query.search?.trim()?.takeIf { it.isNotEmpty() }?.let { finalizedFilters.add(traceSearchClause(it)) }
+
+        val finalizedPart = """
+            SELECT
+                trace_id_canonical, root_service, root_resource, root_name, env, span_count, duration_ns,
+                trace_start, toInt64(toUnixTimestamp64Nano(trace_start)) as start_ns,
+                has_error, error_count, source
+            FROM `$clickhouseDb`.$APM_TRACES_FINAL_TABLE
+            WHERE ${finalizedFilters.joinToString(" AND ")}
+        """.trimIndent()
+
+        // The previous-comparison window never overlaps the live boundary, so finalized rows suffice.
+        if (previousWindow) return finalizedPart
+
+        // --- live part: recent still-filling buckets, aggregated per-trace from the summaries rollup ---
+        val liveWhere = mutableListOf(
+            orgClause,
+            query.timeRange.bucketStartClause("bucket_start"),
+            "bucket_start >= $liveBoundary",
+        )
+        val liveHaving = mutableListOf<String>()
+        query.service?.let { liveHaving.add("root_service = '${escapeSql(it)}'") }
+        query.env?.let { liveHaving.add("env = '${escapeSql(it)}'") }
+        query.source?.let { liveHaving.add("source = '${escapeSql(it)}'") }
+        when (query.status) {
+            STATUS_ERROR -> liveHaving.add("has_error = 1")
+            STATUS_OK -> liveHaving.add("has_error = 0")
+        }
+        query.search?.trim()?.takeIf { it.isNotEmpty() }?.let { liveHaving.add(traceSearchClause(it)) }
+        val liveHavingClause = if (liveHaving.isEmpty()) "" else "HAVING ${liveHaving.joinToString(" AND ")}"
+
+        val livePart = """
             SELECT
                 trace_id_canonical,
-                root_service,
-                root_resource,
-                root_name,
-                env,
-                span_count,
-                duration_ns,
-                trace_start,
-                toInt64(toUnixTimestamp64Nano(trace_start)) as start_ns,
-                has_error,
-                error_count,
-                source
-            FROM `$clickhouseDb`.$APM_TRACES_FINAL_TABLE FINAL
-            WHERE ${filters.joinToString(" AND ")}
+                argMinMerge(root_service_state) as root_service,
+                argMinMerge(root_resource_state) as root_resource,
+                argMinMerge(root_name_state) as root_name,
+                any(env) as env,
+                toUInt32(sumMerge(span_count_state)) as span_count,
+                toUInt64(greatest(
+                    0,
+                    toUnixTimestamp64Nano(maxMerge(trace_end_state)) -
+                        toUnixTimestamp64Nano(minMerge(trace_start_state))
+                )) as duration_ns,
+                minMerge(trace_start_state) as trace_start,
+                toInt64(toUnixTimestamp64Nano(minMerge(trace_start_state))) as start_ns,
+                toUInt8(sumMerge(error_count_state) > 0) as has_error,
+                toUInt32(sumMerge(error_count_state)) as error_count,
+                argMinMerge(source_state) as source
+            FROM `$clickhouseDb`.$APM_TRACE_SUMMARIES_TABLE
+            WHERE ${liveWhere.joinToString(" AND ")}
+            GROUP BY organization_id, trace_id_canonical
+            $liveHavingClause
         """.trimIndent()
+
+        return "$finalizedPart\nUNION ALL\n$livePart"
     }
 
     suspend fun listTraces(
