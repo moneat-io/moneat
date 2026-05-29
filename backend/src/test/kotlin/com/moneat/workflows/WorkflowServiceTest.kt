@@ -36,9 +36,11 @@ import com.moneat.workflows.models.UpdateWorkflowRequest
 import com.moneat.workflows.models.WorkflowConditionConfig
 import com.moneat.workflows.models.WorkflowPreviewRequest
 import com.moneat.workflows.models.WorkflowRuns
+import com.moneat.workflows.models.WorkflowRunSteps
 import com.moneat.workflows.models.WorkflowStepConfig
 import com.moneat.workflows.models.WorkflowVersions
 import com.moneat.workflows.models.Workflows
+import com.moneat.workflows.models.typedWorkflowScope
 import com.moneat.workflows.services.WorkflowService
 import io.mockk.clearMocks
 import io.mockk.coEvery
@@ -106,7 +108,8 @@ class WorkflowServiceTest {
             Memberships,
             Workflows,
             WorkflowVersions,
-            WorkflowRuns
+            WorkflowRuns,
+            WorkflowRunSteps
         )
         transaction {
             SchemaUtils.create(Users, Organizations, Memberships, Workflows)
@@ -120,6 +123,10 @@ class WorkflowServiceTest {
                     version INT NOT NULL,
                     conditions TEXT NOT NULL DEFAULT '[]',
                     steps TEXT NOT NULL DEFAULT '[]',
+                    graph TEXT NOT NULL DEFAULT '{"nodes":[],"edges":[]}',
+                    published BOOLEAN NOT NULL DEFAULT FALSE,
+                    input_schema TEXT NOT NULL DEFAULT '{}',
+                    tags TEXT NOT NULL DEFAULT '[]',
                     once_for_template TEXT NOT NULL DEFAULT '[]',
                     engine_config TEXT NOT NULL DEFAULT '{}',
                     most_recent BOOLEAN NOT NULL DEFAULT TRUE,
@@ -171,6 +178,31 @@ class WorkflowServiceTest {
                 """.trimIndent()
             )
             exec("CREATE INDEX idx_workflow_runs_workflow_created ON workflow_runs (workflow_id, created_at DESC)")
+            exec(
+                """
+                CREATE TABLE workflow_run_steps (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    run_id INT NOT NULL,
+                    node_id VARCHAR(120) NOT NULL,
+                    type VARCHAR(64) NOT NULL,
+                    status VARCHAR(32) NOT NULL,
+                    started_at TIMESTAMP,
+                    completed_at TIMESTAMP,
+                    input TEXT NOT NULL DEFAULT '{}',
+                    output TEXT NOT NULL DEFAULT '{}',
+                    error_message TEXT,
+                    attempt INT NOT NULL DEFAULT 1,
+                    CONSTRAINT fk_workflow_run_steps_run_id
+                        FOREIGN KEY (run_id) REFERENCES workflow_runs(id) ON DELETE CASCADE
+                )
+                """.trimIndent()
+            )
+            exec(
+                """
+                CREATE UNIQUE INDEX idx_workflow_run_steps_attempt
+                    ON workflow_run_steps (run_id, node_id, attempt)
+                """.trimIndent()
+            )
         }
     }
 
@@ -423,7 +455,7 @@ class WorkflowServiceTest {
                                 )
                             )
                         ),
-                        scope = mapOf("alert.channels.slack" to "false")
+                        scope = mapOf("alert.channels.slack" to "false").typedWorkflowScope()
                     )
                 )
 
@@ -574,6 +606,7 @@ class WorkflowServiceTest {
                         onceForTemplate = listOf("alert.deduplication_key")
                     )
                 )
+            publish(workflow.id)
 
             service.publishAlertTriggered(alertEvent())
             val queuedRun = service.listRuns(orgId, workflow.id).single()
@@ -622,6 +655,7 @@ class WorkflowServiceTest {
                         onceForTemplate = listOf("alert.deduplication_key")
                     )
                 )
+            publish(workflow.id)
 
             service.publishAlertTriggered(alertEvent())
             service.publishAlertTriggered(alertEvent())
@@ -647,7 +681,7 @@ class WorkflowServiceTest {
 
             val completedRun = service.listRuns(orgId, workflow.id).single()
             assertEquals("complete", completedRun.status)
-            assertEquals(3, completedRun.progress.size)
+            assertEquals(4, completedRun.progress.size)
             assertTrue(completedRun.progress.all { it.status == "complete" })
             assertNotNull(service.getWorkflow(orgId, workflow.id)?.lastRunAt)
             assertEquals(1L, service.getWorkflow(orgId, workflow.id)?.runCount)
@@ -697,6 +731,7 @@ class WorkflowServiceTest {
                         steps = listOf(emailStep(), slackStep(), discordStep())
                     )
                 )
+            publish(workflow.id)
             val event =
                 alertEvent().copy(
                     source = AlertSource.DASHBOARD_ALERT,
@@ -742,6 +777,7 @@ class WorkflowServiceTest {
                         steps = listOf(emailStep(), slackStep(), discordStep())
                     )
                 )
+            publish(workflow.id)
 
             service.publishAlertTriggered(alertEvent())
             val queuedRun = service.listRuns(orgId, workflow.id).single()
@@ -789,6 +825,7 @@ class WorkflowServiceTest {
                         )
                     )
                 )
+            publish(workflow.id)
 
             service.publishAlertResolved(
                 organizationId = orgId,
@@ -802,10 +839,11 @@ class WorkflowServiceTest {
             service.executeRun(queuedRun.id)
 
             val failedRun = service.listRuns(orgId, workflow.id).single()
+            val actionProgress = failedRun.progress.filter { it.type == "action" }
             assertEquals("failed", failedRun.status)
             assertEquals("Slack workflow message was not sent", failedRun.errorMessage)
-            assertEquals("failed", failedRun.progress.single().status)
-            assertEquals("Slack workflow message was not sent", failedRun.progress.single().errorMessage)
+            assertEquals("failed", actionProgress.single().status)
+            assertEquals("Slack workflow message was not sent", actionProgress.single().errorMessage)
             coVerify(exactly = 1) {
                 slackService.sendWorkflowMessage(orgId, "Resolved uptime-1", false)
             }
@@ -831,6 +869,8 @@ class WorkflowServiceTest {
                         conditions = listOf(WorkflowConditionConfig("alert.description", "not_contains", "cpu"))
                     )
                 )
+            publish(disabled.id)
+            publish(nonMatching.id)
 
             service.publishAlertTriggered(alertEvent())
 
@@ -847,6 +887,7 @@ class WorkflowServiceTest {
                     orgId,
                     validRequest(name = "Temporal unavailable workflow")
                 )
+            publish(workflow.id)
 
             service.publishAlertTriggered(alertEvent())
 
@@ -911,6 +952,10 @@ class WorkflowServiceTest {
             steps = steps,
             onceForTemplate = onceForTemplate
         )
+
+    private fun publish(workflowId: Int) {
+        assertNotNull(service.publishWorkflow(orgId, workflowId))
+    }
 
     private fun emailStep(): WorkflowStepConfig =
         WorkflowStepConfig(

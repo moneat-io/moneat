@@ -21,6 +21,7 @@ import com.moneat.utils.suspendRunCatching
 import com.moneat.org.services.OrgMembershipService
 import com.moneat.org.services.OrgRole
 import com.moneat.workflows.models.CreateWorkflowRequest
+import com.moneat.workflows.models.ManualWorkflowRunRequest
 import com.moneat.workflows.models.UpdateWorkflowRequest
 import com.moneat.workflows.models.WorkflowPreviewRequest
 import com.moneat.workflows.services.WorkflowService
@@ -163,6 +164,43 @@ fun Route.workflowRoutes() {
                         ?.coerceIn(MIN_WORKFLOW_RUN_LIMIT, MAX_WORKFLOW_RUN_LIMIT)
                         ?: DEFAULT_WORKFLOW_RUN_LIMIT
                 call.respond(workflowService.listRuns(organizationId, workflowId, limit))
+            }
+
+            post("$WORKFLOW_ID_ROUTE/publish") {
+                val organizationId = currentOrganizationId() ?: return@post call.respond(HttpStatusCode.Forbidden)
+                ensureWorkflowAdmin(membershipService, organizationId) ?: return@post
+                val workflowId = workflowIdFromPath() ?: return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
+                )
+                val workflow = workflowService.publishWorkflow(organizationId, workflowId)
+                    ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse(WORKFLOW_NOT_FOUND_MESSAGE))
+                call.respond(workflow)
+            }
+
+            post("$WORKFLOW_ID_ROUTE/unpublish") {
+                val organizationId = currentOrganizationId() ?: return@post call.respond(HttpStatusCode.Forbidden)
+                ensureWorkflowAdmin(membershipService, organizationId) ?: return@post
+                val workflowId = workflowIdFromPath() ?: return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
+                )
+                val workflow = workflowService.unpublishWorkflow(organizationId, workflowId)
+                    ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse(WORKFLOW_NOT_FOUND_MESSAGE))
+                call.respond(workflow)
+            }
+
+            post("$WORKFLOW_ID_ROUTE/run") {
+                val organizationId = currentOrganizationId() ?: return@post call.respond(HttpStatusCode.Forbidden)
+                ensureWorkflowAdmin(membershipService, organizationId) ?: return@post
+                val workflowId = workflowIdFromPath() ?: return@post call.respond(
+                    HttpStatusCode.BadRequest,
+                    ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
+                )
+                val request = call.receive<ManualWorkflowRunRequest>()
+                val run = workflowService.runWorkflow(organizationId, workflowId, request)
+                    ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse(WORKFLOW_NOT_FOUND_MESSAGE))
+                call.respond(HttpStatusCode.Accepted, run)
             }
         }
     }

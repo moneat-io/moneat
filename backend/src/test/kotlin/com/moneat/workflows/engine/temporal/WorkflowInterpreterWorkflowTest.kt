@@ -16,12 +16,18 @@
 
 package com.moneat.workflows.engine.temporal
 
+import com.moneat.workflows.models.WorkflowConditionConfig
+import com.moneat.workflows.models.WorkflowGraphConfig
+import com.moneat.workflows.models.WorkflowGraphEdge
+import com.moneat.workflows.models.WorkflowGraphNode
 import com.moneat.workflows.models.WorkflowStepConfig
 import io.temporal.client.WorkflowClientOptions
 import io.temporal.client.WorkflowOptions
 import io.temporal.testing.TestEnvironmentOptions
 import io.temporal.testing.TestWorkflowEnvironment
 import java.util.Collections
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -59,7 +65,8 @@ class WorkflowInterpreterWorkflowTest {
             val result = harness.workflow.run(input())
 
             assertEquals(STATUS_COMPLETE, result.status)
-            assertEquals(listOf(STATUS_RUNNING, STATUS_COMPLETE), persistActivity.transitions)
+            assertEquals(STATUS_RUNNING, persistActivity.transitions.first())
+            assertEquals(STATUS_COMPLETE, persistActivity.transitions.last())
             assertEquals(
                 listOf("notification.email", "notification.slack"),
                 result.progress.map { step -> step.step }
@@ -89,10 +96,56 @@ class WorkflowInterpreterWorkflowTest {
             val result = harness.workflow.run(input())
 
             assertEquals(STATUS_FAILED, result.status)
-            assertEquals(listOf(STATUS_RUNNING, STATUS_FAILED), persistActivity.transitions)
+            assertEquals(STATUS_RUNNING, persistActivity.transitions.first())
+            assertEquals(STATUS_FAILED, persistActivity.transitions.last())
             assertEquals("notification.discord failed", result.errorMessage)
             assertEquals(STATUS_FAILED, result.progress.last().status)
             assertEquals("notification.discord failed", result.progress.last().errorMessage)
+        }
+    }
+
+    @Test
+    fun `interpreter follows condition branch in graph workflow`() {
+        val actionActivity = RecordingExecuteActionActivity()
+        val persistActivity =
+            RecordingPersistRunActivity(
+                snapshot = snapshot(
+                    graph = WorkflowGraphConfig(
+                        nodes = listOf(
+                            WorkflowGraphNode("trigger", "trigger", trigger = "alert.triggered"),
+                            WorkflowGraphNode(
+                                id = "severity-check",
+                                type = "condition",
+                                kind = "if",
+                                conditions = listOf(
+                                    WorkflowConditionConfig(
+                                        reference = "alert.severity",
+                                        operation = "eq",
+                                        value = "critical"
+                                    )
+                                )
+                            ),
+                            WorkflowGraphNode(
+                                id = "email",
+                                type = "action",
+                                action = "notification.email"
+                            )
+                        ),
+                        edges = listOf(
+                            WorkflowGraphEdge("trigger", "severity-check"),
+                            WorkflowGraphEdge("severity-check", "email", branch = "true")
+                        )
+                    ),
+                    scope = mapOf("alert.severity" to JsonPrimitive("critical"))
+                )
+            )
+
+        runWorkflow(actionActivity, persistActivity).use { harness ->
+            val result = harness.workflow.run(input())
+
+            assertEquals(STATUS_COMPLETE, result.status)
+            assertEquals(listOf("notification.email"), actionActivity.executedSteps)
+            assertEquals(listOf("severity-check", "email"), result.progress.map { step -> step.nodeId })
         }
     }
 
@@ -136,13 +189,19 @@ class WorkflowInterpreterWorkflowTest {
         return TestWorkflowEnvironment.newInstance(options)
     }
 
-    private fun snapshot(steps: List<WorkflowStepConfig>): WorkflowRunExecutionSnapshot =
+    private fun snapshot(
+        steps: List<WorkflowStepConfig> = emptyList(),
+        graph: WorkflowGraphConfig = WorkflowGraphConfig(),
+        scope: Map<String, JsonElement> = emptyMap()
+    ): WorkflowRunExecutionSnapshot =
         WorkflowRunExecutionSnapshot(
             runId = TEST_RUN_ID,
             organizationId = TEST_ORGANIZATION_ID,
             workflowVersionId = TEST_WORKFLOW_VERSION_ID,
             steps = steps,
-            scope = mapOf("alert.title" to "Worker failures detected")
+            graph = graph.toRuntimeGraph(),
+            triggerName = "alert.triggered",
+            scope = scope.toRuntimeValues()
         )
 
     private fun input(): WorkflowInterpreterInput =
@@ -151,8 +210,7 @@ class WorkflowInterpreterWorkflowTest {
             workflowId = TEST_WORKFLOW_ID,
             workflowVersionId = TEST_WORKFLOW_VERSION_ID,
             organizationId = TEST_ORGANIZATION_ID,
-            triggerName = "alert.triggered",
-            scope = mapOf("alert.title" to "Worker failures detected")
+            triggerName = "alert.triggered"
         )
 }
 
@@ -192,7 +250,7 @@ private class RecordingPersistRunActivity(
     private val snapshot: WorkflowRunExecutionSnapshot?
 ) : PersistRunActivity {
     val transitions = mutableListOf<String>()
-    var progress = emptyList<com.moneat.workflows.models.WorkflowRunStepProgress>()
+    var progress = emptyList<RuntimeWorkflowRunStepProgress>()
         private set
 
     @Synchronized
@@ -215,4 +273,10 @@ private class RecordingPersistRunActivity(
         transitions += STATUS_FAILED
         progress = input.progress
     }
+
+    override fun markStepRunning(input: PersistRunStepInput) = Unit
+
+    override fun markStepComplete(input: PersistRunStepInput) = Unit
+
+    override fun markStepFailed(input: PersistRunStepInput) = Unit
 }

@@ -25,10 +25,59 @@ export interface WorkflowStepConfig {
   params: Record<string, string>
 }
 
+export type WorkflowJsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | WorkflowJsonValue[]
+  | {[key: string]: WorkflowJsonValue}
+
+export interface WorkflowRetryConfig {
+  max_attempts: number
+  initial_interval: string
+  backoff_coefficient: number
+  maximum_interval?: string | null
+  non_retryable_error_types: string[]
+}
+
+export interface WorkflowSwitchCaseConfig {
+  name: string
+  label?: string | null
+  conditions: WorkflowConditionConfig[]
+}
+
+export interface WorkflowGraphNode {
+  id: string
+  type: 'trigger' | 'condition' | 'action' | 'control'
+  trigger?: string | null
+  kind?: string | null
+  action?: string | null
+  params?: Record<string, WorkflowJsonValue>
+  conditions?: WorkflowConditionConfig[]
+  cases?: WorkflowSwitchCaseConfig[]
+  retry?: WorkflowRetryConfig | null
+  continue_on_error?: boolean
+}
+
+export interface WorkflowGraphEdge {
+  from: string
+  to: string
+  branch?: string | null
+  on?: string | null
+}
+
+export interface WorkflowGraphConfig {
+  nodes: WorkflowGraphNode[]
+  edges: WorkflowGraphEdge[]
+}
+
 export interface WorkflowPreviewRequest {
   trigger_name: string
-  steps: WorkflowStepConfig[]
-  scope?: Record<string, string>
+  steps?: WorkflowStepConfig[]
+  scope?: Record<string, WorkflowJsonValue>
+  graph?: WorkflowGraphConfig | null
+  node_id?: string | null
 }
 
 export interface WorkflowPreviewField {
@@ -75,6 +124,7 @@ export interface WorkflowRequest {
   enabled: boolean
   conditions: WorkflowConditionConfig[]
   steps: WorkflowStepConfig[]
+  graph?: WorkflowGraphConfig | null
   once_for_template: string[]
 }
 
@@ -86,9 +136,11 @@ export interface WorkflowResponse {
   trigger_name: string
   enabled: boolean
   version: number
+  published: boolean
   system_key?: string | null
   conditions: WorkflowConditionConfig[]
   steps: WorkflowStepConfig[]
+  graph: WorkflowGraphConfig
   once_for_template: string[]
   created_at: string
   updated_at: string
@@ -99,8 +151,25 @@ export interface WorkflowResponse {
 export interface WorkflowRunStepProgress {
   step: string
   status: string
+  node_id?: string | null
+  type?: string | null
   completed_at?: string | null
+  output: Record<string, WorkflowJsonValue>
   error_message?: string | null
+}
+
+export interface WorkflowRunStepResponse {
+  id: number
+  run_id: number
+  node_id: string
+  type: string
+  status: string
+  started_at?: string | null
+  completed_at?: string | null
+  input: Record<string, WorkflowJsonValue>
+  output: Record<string, WorkflowJsonValue>
+  error_message?: string | null
+  attempt: number
 }
 
 export interface WorkflowRunResponse {
@@ -111,6 +180,7 @@ export interface WorkflowRunResponse {
   once_for: string
   status: string
   progress: WorkflowRunStepProgress[]
+  steps: WorkflowRunStepResponse[]
   error_message?: string | null
   created_at: string
   completed_at?: string | null
@@ -166,8 +236,19 @@ export interface WorkflowStepDefinition {
   params: WorkflowStepParamDefinition[]
 }
 
+export interface WorkflowNodeTypeDefinition {
+  type: string
+  kind?: string | null
+  name: string
+  label: string
+  description: string
+  params: WorkflowStepParamDefinition[]
+  branch_labels: string[]
+}
+
 export interface WorkflowCatalogResponse {
   resources: WorkflowResourceDefinition[]
   triggers: WorkflowTriggerDefinition[]
   steps: WorkflowStepDefinition[]
+  node_types: WorkflowNodeTypeDefinition[]
 }

@@ -28,6 +28,7 @@ import com.moneat.org.repositories.OrgMembershipRepository
 import com.moneat.org.repositories.OrgMembershipRepositoryImpl
 import com.moneat.org.services.OrgMembershipService
 import com.moneat.workflows.engine.WorkflowCatalog
+import com.moneat.workflows.engine.temporal.LinearGraphAdapter
 import com.moneat.workflows.models.CreateWorkflowRequest
 import com.moneat.workflows.models.UpdateWorkflowRequest
 import com.moneat.workflows.models.WorkflowConditionConfig
@@ -494,8 +495,14 @@ class WorkflowRoutesTest {
             triggerName = "alert.triggered",
             enabled = true,
             version = 1,
+            published = true,
             conditions = emptyList(),
             steps = listOf(WorkflowStepConfig("notification.email_org", mapOf("subject" to "Alert"))),
+            graph = LinearGraphAdapter.graphFromLegacy(
+                "alert.triggered",
+                emptyList(),
+                listOf(WorkflowStepConfig("notification.email_org", mapOf("subject" to "Alert")))
+            ),
             onceForTemplate = listOf("alert.deduplication_key"),
             createdAt = "2026-01-01T00:00:00Z",
             updatedAt = "2026-01-01T00:00:00Z"
