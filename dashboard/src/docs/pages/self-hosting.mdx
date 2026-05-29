@@ -48,6 +48,7 @@ Edit `.env` and set these required values:
 | `REDIS_PASSWORD` | Redis password. The compose file passes this to Redis via `--requirepass` and includes it in the backend connection string automatically. |
 | `TEMPORAL_TARGET` | Workflow runtime address. Use `temporal:7233` for Docker Compose. |
 | `TEMPORAL_NAMESPACE` | Workflow runtime namespace. Use `default` unless you operate a custom Temporal cluster. |
+| `TEMPORAL_DB_PASSWORD` | Workflow runtime database password. Do not leave the Docker Compose default in production. |
 | `WORKFLOWS_CONNECTION_KEK` | Dedicated workflow connection key. Must differ from all other secrets. |
 | `WORKFLOWS_SIGNING_KEY` | Dedicated workflow token signing key. Must differ from all other secrets. |
 | `WORKFLOWS_TEMPORAL_PAYLOAD_KEY` | Dedicated key for encrypted workflow payloads in Temporal history. |

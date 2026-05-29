@@ -15,8 +15,12 @@ Moneat validates critical runtime configuration on startup and fails fast when r
 
 ## Conditional
 
+Workflow runtime variables are required when `WORKFLOWS_ENABLED=true` (the default). Set
+`WORKFLOWS_ENABLED=false` to disable Temporal validation during rollout.
+
 | Variable | Required when | Purpose |
 | --- | --- | --- |
+| `WORKFLOWS_ENABLED` | Optional rollout override | Set to `false` to bypass workflow runtime validation while workflows are disabled. |
 | `TEMPORAL_TARGET` | Workflows are enabled | Temporal frontend address, for example `temporal:7233`. |
 | `TEMPORAL_NAMESPACE` | Workflows are enabled | Temporal namespace, normally `default`. |
 | `TEMPORAL_DB_USER`, `TEMPORAL_DB_PASSWORD` | Using bundled Temporal | Dedicated Postgres role for Temporal runtime databases. |

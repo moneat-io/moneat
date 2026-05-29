@@ -149,7 +149,17 @@ class EnvironmentValidator {
     }
 
     private fun validateWorkflowRuntimeConfig(errors: MutableList<String>) {
-        val workflowsEnabled = getConfigValue("WORKFLOWS_ENABLED")?.toBooleanStrictOrNull() ?: true
+        val workflowsEnabledRaw = getConfigValue("WORKFLOWS_ENABLED")
+        val workflowsEnabled =
+            if (workflowsEnabledRaw == null) {
+                true
+            } else {
+                workflowsEnabledRaw.toBooleanStrictOrNull()
+            }
+        if (workflowsEnabled == null) {
+            errors.add("REQUIRED: WORKFLOWS_ENABLED must be either 'true' or 'false' when set.")
+            return
+        }
         if (!workflowsEnabled) return
 
         validateRequired("TEMPORAL_TARGET", "workflows are enabled", errors)

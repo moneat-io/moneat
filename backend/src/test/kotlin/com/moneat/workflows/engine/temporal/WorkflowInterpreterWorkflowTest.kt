@@ -26,14 +26,19 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+// ──── Test Constants ────
+
 private const val STATUS_COMPLETE = "complete"
 private const val STATUS_FAILED = "failed"
 private const val STATUS_RUNNING = "running"
 private const val TEST_COMPLETED_AT = "2026-05-29T00:00:00Z"
 private const val TEST_PAYLOAD_KEY = "workflow-test-payload-key-32-bytes"
-private const val TEST_WORKFLOW_ID = 7
+private const val TEST_RUN_ID = 7
+private const val TEST_WORKFLOW_ID = 17
 private const val TEST_WORKFLOW_VERSION_ID = 11
 private const val TEST_ORGANIZATION_ID = 13
+
+// ──── Workflow Tests ────
 
 class WorkflowInterpreterWorkflowTest {
 
@@ -133,7 +138,7 @@ class WorkflowInterpreterWorkflowTest {
 
     private fun snapshot(steps: List<WorkflowStepConfig>): WorkflowRunExecutionSnapshot =
         WorkflowRunExecutionSnapshot(
-            runId = TEST_WORKFLOW_ID,
+            runId = TEST_RUN_ID,
             organizationId = TEST_ORGANIZATION_ID,
             workflowVersionId = TEST_WORKFLOW_VERSION_ID,
             steps = steps,
@@ -142,7 +147,7 @@ class WorkflowInterpreterWorkflowTest {
 
     private fun input(): WorkflowInterpreterInput =
         WorkflowInterpreterInput(
-            runId = TEST_WORKFLOW_ID,
+            runId = TEST_RUN_ID,
             workflowId = TEST_WORKFLOW_ID,
             workflowVersionId = TEST_WORKFLOW_VERSION_ID,
             organizationId = TEST_ORGANIZATION_ID,
@@ -150,6 +155,8 @@ class WorkflowInterpreterWorkflowTest {
             scope = mapOf("alert.title" to "Worker failures detected")
         )
 }
+
+// ──── Test Harness ────
 
 private class TestWorkflowHarness(
     private val environment: TestWorkflowEnvironment,
@@ -159,6 +166,8 @@ private class TestWorkflowHarness(
         environment.close()
     }
 }
+
+// ──── Recording Fakes ────
 
 private class RecordingExecuteActionActivity(
     private val failedSteps: Set<String> = emptySet()

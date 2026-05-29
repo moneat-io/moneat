@@ -102,6 +102,7 @@ class PersistRunActivityImpl : PersistRunActivity {
                 it[progress] = json.encodeToString(input.progress)
                 it[completedAt] = Clock.System.now()
                 it[errorMessage] = null
+                it[failedAt] = null
             }
         }
     }
@@ -138,6 +139,8 @@ class PersistRunActivityImpl : PersistRunActivity {
             WorkflowRuns.update({ WorkflowRuns.id eq runId }) {
                 it[WorkflowRuns.status] = status
                 it[WorkflowRuns.progress] = json.encodeToString(progress)
+                it[WorkflowRuns.errorMessage] = null
+                it[WorkflowRuns.failedAt] = null
             }
         }
     }

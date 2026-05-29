@@ -540,7 +540,7 @@ print_summary() {
   printf "  ${BOLD}Directory:${RESET}  %s\n" "${INSTALL_DIR}"
   printf "  ${BOLD}Dashboard:${RESET}  %s\n" "${FRONTEND_URL}"
   printf "  ${BOLD}API:${RESET}        %s\n" "${BACKEND_URL}"
-  printf "  ${BOLD}Temporal UI:${RESET} http://localhost:%s\n" "${TEMPORAL_UI_PORT}"
+  printf "  ${BOLD}Temporal UI:${RESET} http://%s:%s\n" "${DOMAIN:-localhost}" "${TEMPORAL_UI_PORT}"
   echo
 
   if [[ "$SMTP_CONFIGURED" == false ]]; then

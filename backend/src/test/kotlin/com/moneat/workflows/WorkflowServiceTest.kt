@@ -636,6 +636,10 @@ class WorkflowServiceTest {
             val queuedRun = service.listRuns(orgId, workflow.id).single()
             assertEquals("pending", queuedRun.status)
             assertEquals("alert.deduplication_key=host-1", queuedRun.onceFor)
+            val startRequest = workflowEngine.requests.single()
+            val temporalIds = persistedTemporalIds(queuedRun.id)
+            assertEquals(startRequest.temporalWorkflowId, temporalIds.workflowId)
+            assertEquals("temporal-run-${queuedRun.id}", temporalIds.runId)
 
             service.executeRun(queuedRun.id)
             service.executeRun(queuedRun.id)
@@ -947,7 +951,21 @@ class WorkflowServiceTest {
             organizationId = orgId,
             moneatUrl = "https://moneat.io/hosts/1"
         )
+
+    private fun persistedTemporalIds(runId: Int): PersistedTemporalIds =
+        transaction {
+            val run = WorkflowRuns.selectAll().where { WorkflowRuns.id eq runId }.single()
+            PersistedTemporalIds(
+                workflowId = run[WorkflowRuns.temporalWorkflowId],
+                runId = run[WorkflowRuns.temporalRunId]
+            )
+        }
 }
+
+private data class PersistedTemporalIds(
+    val workflowId: String?,
+    val runId: String?
+)
 
 private class FakeWorkflowExecutionEngine : WorkflowExecutionEngine {
     val requests = mutableListOf<WorkflowStartRequest>()
