@@ -28,6 +28,8 @@ object McpScopes {
 
     private val telemetryReadTools = listOf(
         "aggregate_logs",
+        "get_feature_flag",
+        "get_feature_flag_analytics",
         "get_issue",
         "get_issue_events",
         "get_issue_transactions",
@@ -52,8 +54,6 @@ object McpScopes {
         "get_dashboard_templates",
         "get_datasource_schema",
         "get_dbm_queries",
-        "get_feature_flag",
-        "get_feature_flag_analytics",
         "get_host_logs",
         "get_host_metrics",
         "get_host_status",

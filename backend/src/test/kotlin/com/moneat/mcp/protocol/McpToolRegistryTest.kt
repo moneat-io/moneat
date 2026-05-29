@@ -19,6 +19,8 @@ package com.moneat.mcp.protocol
 import com.moneat.mcp.McpToolRegistrar
 import com.moneat.mcp.auth.McpScopes
 import com.moneat.mcp.models.McpContext
+import com.moneat.mcp.tools.GetFeatureFlagAnalyticsTool
+import com.moneat.mcp.tools.GetFeatureFlagTool
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -165,6 +167,14 @@ class McpToolRegistryTest {
         assertTrue(denied.content[0].text!!.contains("releases:read"))
         assertFalse(allowed.isError)
         assertEquals("releases", allowed.content[0].text)
+    }
+
+    @Test
+    fun `feature flag retrieval and analytics use event read scope`() {
+        val expectedScope = setOf(McpScopes.EVENT_READ)
+
+        assertEquals(expectedScope, McpScopes.requiredScopesFor(GetFeatureFlagTool()))
+        assertEquals(expectedScope, McpScopes.requiredScopesFor(GetFeatureFlagAnalyticsTool()))
     }
 
     @Test

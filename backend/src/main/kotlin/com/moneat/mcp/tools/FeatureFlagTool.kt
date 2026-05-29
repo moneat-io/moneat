@@ -493,7 +493,11 @@ class GetFeatureFlagAnalyticsTool(
     ): ToolCallResult {
         val hours = when (val result = args.optionalIntegerArg("hours")) {
             is ParseResult.Failure -> return errorResult(result.message)
-            is ParseResult.Success -> result.value ?: DEFAULT_ANALYTICS_HOURS
+            is ParseResult.Success -> when {
+                result.value == null -> DEFAULT_ANALYTICS_HOURS
+                result.value <= 0 -> return errorResult("hours must be greater than 0")
+                else -> result.value
+            }
         }
         return jsonResult(service.analytics(context.organizationId, args.stringArg("environment"), hours))
     }

@@ -486,6 +486,12 @@ class McpToolValidationTest {
                 "key is required",
             ),
             case("get_feature_flag_key", GetFeatureFlagTool(), obj(), "flag_key is required"),
+            case(
+                "get_feature_flag_analytics_hours",
+                GetFeatureFlagAnalyticsTool(),
+                obj("hours" to 0),
+                "hours must be greater than 0",
+            ),
             case("update_feature_flag_key", UpdateFeatureFlagTool(), obj(), "flag_key is required"),
             case("delete_feature_flag_key", DeleteFeatureFlagTool(), obj(), "flag_key is required"),
             case(

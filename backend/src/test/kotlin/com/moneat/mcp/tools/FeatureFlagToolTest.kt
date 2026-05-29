@@ -64,7 +64,7 @@ class FeatureFlagToolTest {
         organizationId = TOOL_TEST_ORG_ID,
         userId = TOOL_TEST_USER_ID,
         tokenId = TOOL_TEST_TOKEN_ID,
-        scopes = setOf("project:read", "project:write"),
+        scopes = setOf("event:read", "project:read", "project:write"),
         sessionId = "feature-flag-tool-test",
     )
 
@@ -132,6 +132,8 @@ class FeatureFlagToolTest {
         assertEquals("checkout.enabled", flags.first().jsonObject["key"]!!.jsonPrimitive.content)
     }
 
+    // ──── Environments ────
+
     @Test
     fun `environment tools create and list custom environments`() = runBlocking {
         val registry = registry()
@@ -155,6 +157,8 @@ class FeatureFlagToolTest {
             .jsonArray
         assertEquals(DEFAULT_ENVIRONMENT_COUNT + 1, environments.size)
     }
+
+    // ──── Flags ────
 
     @Test
     fun `flag management tools get update configure and archive flags`() = runBlocking {
@@ -214,6 +218,8 @@ class FeatureFlagToolTest {
         assertEquals(0, flags.size)
     }
 
+    // ──── Segments ────
+
     @Test
     fun `segment tools upsert list and archive segments`() = runBlocking {
         val registry = registry()
@@ -241,6 +247,8 @@ class FeatureFlagToolTest {
         )
         assertFalse(delete.isError, delete.content.first().text.orEmpty())
     }
+
+    // ──── SDK Keys ────
 
     @Test
     fun `sdk key tools create list and revoke keys`() = runBlocking {
@@ -273,6 +281,8 @@ class FeatureFlagToolTest {
         )
         assertFalse(revoke.isError, revoke.content.first().text.orEmpty())
     }
+
+    // ──── Audit / Analytics ────
 
     @Test
     fun `audit and analytics tools return feature flag metadata`() = runBlocking {
