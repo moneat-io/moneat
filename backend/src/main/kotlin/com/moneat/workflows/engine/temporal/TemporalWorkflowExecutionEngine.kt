@@ -39,8 +39,7 @@ class TemporalWorkflowExecutionEngine(
                     workflowId = request.workflowId,
                     workflowVersionId = request.workflowVersionId,
                     organizationId = request.organizationId,
-                    triggerName = request.triggerName,
-                    scope = request.scope
+                    triggerName = request.triggerName
                 )
             )
         return WorkflowStartResult(execution.workflowId, execution.runId)

@@ -17,16 +17,21 @@
 package com.moneat.workflows.engine.temporal
 
 import com.moneat.utils.suspendRunCatching
+import com.moneat.workflows.models.WorkflowGraphConfig
+import com.moneat.workflows.models.WorkflowRunSteps
 import com.moneat.workflows.models.WorkflowRunStepProgress
 import com.moneat.workflows.models.WorkflowRuns
 import com.moneat.workflows.models.WorkflowStepConfig
 import com.moneat.workflows.models.WorkflowVersions
+import com.moneat.workflows.models.workflowJson
 import com.moneat.workflows.services.WorkflowActionExecutor
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
@@ -45,13 +50,14 @@ class ExecuteActionActivityImpl(
                 actionExecutor.executeStep(
                     organizationId = input.organizationId,
                     step = input.step,
-                    scope = input.scope
+                    scope = input.scope.toWorkflowValues()
                 )
             }.fold(
                 onSuccess = {
                     ExecuteActionResult(
                         status = STATUS_COMPLETE,
-                        completedAt = Clock.System.now().toString()
+                        completedAt = Clock.System.now().toString(),
+                        output = it.toRuntimeValues()
                     )
                 },
                 onFailure = { error ->
@@ -66,7 +72,7 @@ class ExecuteActionActivityImpl(
 }
 
 class PersistRunActivityImpl : PersistRunActivity {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = workflowJson
 
     override fun loadRun(input: LoadRunInput): WorkflowRunExecutionSnapshot? =
         transaction {
@@ -85,9 +91,11 @@ class PersistRunActivityImpl : PersistRunActivity {
                 runId = input.runId,
                 organizationId = runRow[WorkflowRuns.organizationId],
                 workflowVersionId = runRow[WorkflowRuns.workflowVersionId],
+                triggerName = runRow[WorkflowRuns.triggerName],
                 steps = decodeSteps(versionRow),
-                progress = decodeProgress(runRow[WorkflowRuns.progress]),
-                scope = decodeScope(runRow[WorkflowRuns.scope])
+                graph = decodeGraph(versionRow).toRuntimeGraph(),
+                progress = decodeProgress(runRow[WorkflowRuns.progress]).toRuntimeProgress(),
+                scope = decodeScope(runRow[WorkflowRuns.scope]).toRuntimeValues()
             )
         }
 
@@ -99,7 +107,7 @@ class PersistRunActivityImpl : PersistRunActivity {
         transaction {
             WorkflowRuns.update({ WorkflowRuns.id eq input.runId }) {
                 it[status] = STATUS_COMPLETE
-                it[progress] = json.encodeToString(input.progress)
+                it[progress] = json.encodeToString(input.progress.toWorkflowProgress())
                 it[completedAt] = Clock.System.now()
                 it[errorMessage] = null
                 it[failedAt] = null
@@ -111,11 +119,23 @@ class PersistRunActivityImpl : PersistRunActivity {
         transaction {
             WorkflowRuns.update({ WorkflowRuns.id eq input.runId }) {
                 it[status] = STATUS_FAILED
-                it[progress] = json.encodeToString(input.progress)
+                it[progress] = json.encodeToString(input.progress.toWorkflowProgress())
                 it[errorMessage] = input.errorMessage
                 it[failedAt] = Clock.System.now()
             }
         }
+    }
+
+    override fun markStepRunning(input: PersistRunStepInput) {
+        upsertStep(input.copy(status = STATUS_RUNNING))
+    }
+
+    override fun markStepComplete(input: PersistRunStepInput) {
+        upsertStep(input.copy(status = STATUS_COMPLETE))
+    }
+
+    override fun markStepFailed(input: PersistRunStepInput) {
+        upsertStep(input.copy(status = STATUS_FAILED))
     }
 
     fun updateTemporalRunId(
@@ -133,12 +153,12 @@ class PersistRunActivityImpl : PersistRunActivity {
     private fun updateRunProgress(
         runId: Int,
         status: String,
-        progress: List<WorkflowRunStepProgress>
+        progress: List<RuntimeWorkflowRunStepProgress>
     ) {
         transaction {
             WorkflowRuns.update({ WorkflowRuns.id eq runId }) {
                 it[WorkflowRuns.status] = status
-                it[WorkflowRuns.progress] = json.encodeToString(progress)
+                it[WorkflowRuns.progress] = json.encodeToString(progress.toWorkflowProgress())
                 it[WorkflowRuns.errorMessage] = null
                 it[WorkflowRuns.failedAt] = null
             }
@@ -148,11 +168,52 @@ class PersistRunActivityImpl : PersistRunActivity {
     private fun decodeSteps(row: ResultRow): List<WorkflowStepConfig> =
         row[WorkflowVersions.steps].takeIf { it.isNotBlank() }?.let { decode(it) } ?: emptyList()
 
+    private fun decodeGraph(row: ResultRow): WorkflowGraphConfig =
+        row[WorkflowVersions.graph].takeIf { it.isNotBlank() }?.let { decode(it) } ?: WorkflowGraphConfig()
+
     private fun decodeProgress(raw: String): List<WorkflowRunStepProgress> =
         raw.takeIf { it.isNotBlank() }?.let { decode(it) } ?: emptyList()
 
-    private fun decodeScope(raw: String): Map<String, String> =
+    private fun decodeScope(raw: String): Map<String, JsonElement> =
         raw.takeIf { it.isNotBlank() }?.let { decode(it) } ?: emptyMap()
+
+    private fun upsertStep(input: PersistRunStepInput) {
+        transaction {
+            val existing =
+                WorkflowRunSteps
+                    .selectAll()
+                    .where {
+                        (WorkflowRunSteps.runId eq input.runId) and
+                            (WorkflowRunSteps.nodeId eq input.nodeId) and
+                            (WorkflowRunSteps.attempt eq input.attempt)
+                    }.firstOrNull()
+            val now = Clock.System.now()
+            if (existing == null) {
+                WorkflowRunSteps.insert {
+                    it[runId] = input.runId
+                    it[nodeId] = input.nodeId
+                    it[type] = input.type
+                    it[status] = input.status
+                    it[startedAt] = now
+                    it[completedAt] = input.completedAtForStatus(now)
+                    it[WorkflowRunSteps.input] = json.encodeToString(input.input.toWorkflowValues())
+                    it[output] = json.encodeToString(input.output.toWorkflowValues())
+                    it[errorMessage] = input.errorMessage
+                    it[attempt] = input.attempt
+                }
+            } else {
+                WorkflowRunSteps.update({ WorkflowRunSteps.id eq existing[WorkflowRunSteps.id] }) {
+                    it[status] = input.status
+                    it[completedAt] = input.completedAtForStatus(now)
+                    it[output] = json.encodeToString(input.output.toWorkflowValues())
+                    it[errorMessage] = input.errorMessage
+                }
+            }
+        }
+    }
+
+    private fun PersistRunStepInput.completedAtForStatus(now: kotlin.time.Instant): kotlin.time.Instant? =
+        if (status == STATUS_COMPLETE || status == STATUS_FAILED) now else null
 
     private inline fun <reified T> decode(raw: String): T =
         json.decodeFromString(raw)

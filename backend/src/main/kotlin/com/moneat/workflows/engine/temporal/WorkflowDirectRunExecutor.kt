@@ -16,11 +16,11 @@
 
 package com.moneat.workflows.engine.temporal
 
+import com.moneat.workflows.models.WorkflowGraphConfig
+import com.moneat.workflows.models.WorkflowGraphNode
 import com.moneat.workflows.models.WorkflowRunStepProgress
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
+import com.moneat.workflows.models.WorkflowStepConfig
+import com.moneat.workflows.models.workflowStringValue
 
 private const val STATUS_COMPLETE = "complete"
 private const val STATUS_FAILED = "failed"
@@ -35,51 +35,118 @@ class WorkflowDirectRunExecutor(
         val snapshot = persistActivity.loadRun(LoadRunInput(runId)) ?: return WorkflowInterpreterResult(
             status = STATUS_COMPLETE
         )
-        val initialProgress = snapshot.progress.ifEmpty {
-            LinearGraphAdapter.fromSteps(snapshot.steps).map { node ->
-                WorkflowRunStepProgress(step = node.step.name, status = STATUS_PENDING)
-            }
-        }
-        persistActivity.markRunning(PersistRunProgressInput(runId, STATUS_RUNNING, initialProgress))
-        val stepResults =
-            coroutineScope {
-                LinearGraphAdapter.fromSteps(snapshot.steps).mapIndexed { index, node ->
-                    async(Dispatchers.IO) {
-                        val existing = initialProgress.getOrNull(index)
-                        if (existing?.status == STATUS_COMPLETE) return@async index to existing
-                        val result =
-                            actionActivity.execute(
-                                ExecuteActionInput(
-                                    organizationId = snapshot.organizationId,
-                                    step = node.step,
-                                    scope = snapshot.scope
-                                )
-                            )
-                        index to WorkflowRunStepProgress(
-                            step = node.step.name,
-                            status = result.status,
-                            completedAt = result.completedAt,
-                            errorMessage = result.errorMessage
-                        )
-                    }
-                }
-            }.awaitAll()
-        val progress = initialProgress.updateFrom(stepResults)
+        val graph = snapshot.graph.toWorkflowGraphConfig().normalized(snapshot.triggerName, snapshot.steps)
+        val initialProgress = snapshot.progress.toWorkflowProgress().ifEmpty { graph.initialProgress() }
+        persistActivity.markRunning(PersistRunProgressInput(runId, STATUS_RUNNING, initialProgress.toRuntimeProgress()))
+        val progress = executeActions(runId, snapshot, graph, initialProgress)
         val failedStep = progress.firstOrNull { step -> step.status == STATUS_FAILED }
         return if (failedStep == null) {
-            persistActivity.markComplete(PersistRunProgressInput(runId, STATUS_COMPLETE, progress))
-            WorkflowInterpreterResult(status = STATUS_COMPLETE, progress = progress)
+            val runtimeProgress = progress.toRuntimeProgress()
+            persistActivity.markComplete(PersistRunProgressInput(runId, STATUS_COMPLETE, runtimeProgress))
+            WorkflowInterpreterResult(status = STATUS_COMPLETE, progress = runtimeProgress)
         } else {
             val message = failedStep.errorMessage ?: "Unknown workflow step error"
-            persistActivity.markFailed(PersistRunFailureInput(runId, progress, message))
-            WorkflowInterpreterResult(status = STATUS_FAILED, progress = progress, errorMessage = message)
+            val runtimeProgress = progress.toRuntimeProgress()
+            persistActivity.markFailed(PersistRunFailureInput(runId, runtimeProgress, message))
+            WorkflowInterpreterResult(status = STATUS_FAILED, progress = runtimeProgress, errorMessage = message)
         }
     }
 
-    private fun List<WorkflowRunStepProgress>.updateFrom(
-        replacements: List<Pair<Int, WorkflowRunStepProgress>>
+    private fun executeActions(
+        runId: Int,
+        snapshot: WorkflowRunExecutionSnapshot,
+        graph: WorkflowGraphConfig,
+        initialProgress: List<WorkflowRunStepProgress>
     ): List<WorkflowRunStepProgress> {
-        val byIndex = replacements.toMap()
-        return mapIndexed { index, item -> byIndex[index] ?: item }
+        // Direct fallback runs execute actions only; Temporal-owned waits and loops are marked complete.
+        var progress = initialProgress.map { item ->
+            if (item.type == LinearGraphAdapter.NODE_TYPE_ACTION) item else item.copy(status = STATUS_COMPLETE)
+        }
+        graph.nodes
+            .filter { node -> node.type == LinearGraphAdapter.NODE_TYPE_ACTION }
+            .forEach { node ->
+                val result = executeActionNode(runId, snapshot, node)
+                progress = progress.map { item -> if (item.nodeId == node.id) result else item }
+            }
+        return progress
     }
+
+    private fun executeActionNode(
+        runId: Int,
+        snapshot: WorkflowRunExecutionSnapshot,
+        node: WorkflowGraphNode
+    ): WorkflowRunStepProgress {
+        val step = WorkflowStepConfig(
+            name = node.action.orEmpty(),
+            params = node.params.mapValues { (_, value) -> value.workflowStringValue() }
+        )
+        persistActivity.markStepRunning(
+            PersistRunStepInput(runId, node.id, node.type, STATUS_RUNNING, snapshot.scope)
+        )
+        val result =
+            actionActivity.execute(
+                ExecuteActionInput(
+                    organizationId = snapshot.organizationId,
+                    step = step,
+                    scope = snapshot.scope
+                )
+            )
+        val progress =
+            WorkflowRunStepProgress(
+                step = step.name,
+                status = result.status,
+                nodeId = node.id,
+                type = node.type,
+                completedAt = result.completedAt,
+                output = result.output.toWorkflowValues(),
+                errorMessage = result.errorMessage
+            )
+        persistStep(runId, node, result)
+        return progress
+    }
+
+    private fun persistStep(
+        runId: Int,
+        node: WorkflowGraphNode,
+        result: ExecuteActionResult
+    ) {
+        val input = emptyMap<String, String>()
+        val stepInput =
+            PersistRunStepInput(
+                runId = runId,
+                nodeId = node.id,
+                type = node.type,
+                status = result.status,
+                input = input,
+                output = result.output,
+                errorMessage = result.errorMessage
+            )
+        if (result.status == STATUS_FAILED) {
+            persistActivity.markStepFailed(stepInput)
+        } else {
+            persistActivity.markStepComplete(stepInput)
+        }
+    }
+
+    private fun WorkflowGraphConfig.normalized(
+        triggerName: String,
+        steps: List<WorkflowStepConfig>
+    ): WorkflowGraphConfig =
+        if (nodes.isEmpty()) {
+            LinearGraphAdapter.graphFromLegacy(triggerName, emptyList(), steps)
+        } else {
+            this
+        }
+
+    private fun WorkflowGraphConfig.initialProgress(): List<WorkflowRunStepProgress> =
+        nodes
+            .filter { node -> node.type != LinearGraphAdapter.NODE_TYPE_TRIGGER }
+            .map { node ->
+                WorkflowRunStepProgress(
+                    step = node.action ?: node.kind ?: node.id,
+                    status = STATUS_PENDING,
+                    nodeId = node.id,
+                    type = node.type
+                )
+            }
 }

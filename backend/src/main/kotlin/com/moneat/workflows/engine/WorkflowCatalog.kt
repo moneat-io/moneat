@@ -91,10 +91,22 @@ data class WorkflowStepDefinition(
 )
 
 @Serializable
+data class WorkflowNodeTypeDefinition(
+    val type: String,
+    val kind: String? = null,
+    val name: String,
+    val label: String,
+    val description: String,
+    val params: List<WorkflowStepParamDefinition> = emptyList(),
+    @SerialName("branch_labels") val branchLabels: List<String> = emptyList()
+)
+
+@Serializable
 data class WorkflowCatalogResponse(
     val resources: List<WorkflowResourceDefinition>,
     val triggers: List<WorkflowTriggerDefinition>,
-    val steps: List<WorkflowStepDefinition>
+    val steps: List<WorkflowStepDefinition>,
+    @SerialName("node_types") val nodeTypes: List<WorkflowNodeTypeDefinition> = emptyList()
 )
 
 object WorkflowCatalog {
@@ -242,8 +254,78 @@ object WorkflowCatalog {
         )
     )
 
+    val nodeTypes = listOf(
+        WorkflowNodeTypeDefinition(
+            type = "trigger",
+            name = "trigger",
+            label = "Trigger",
+            description = "Starts a workflow from a telemetry event."
+        ),
+        WorkflowNodeTypeDefinition(
+            type = "condition",
+            kind = "if",
+            name = "condition.if",
+            label = "If / else",
+            description = "Routes execution based on a set of conditions.",
+            branchLabels = listOf("true", "false")
+        ),
+        WorkflowNodeTypeDefinition(
+            type = "condition",
+            kind = "switch",
+            name = "condition.switch",
+            label = "Switch",
+            description = "Routes execution to the first matching case.",
+            branchLabels = listOf("case", "default")
+        ),
+        WorkflowNodeTypeDefinition(
+            type = "control",
+            kind = "sleep",
+            name = "control.sleep",
+            label = "Sleep",
+            description = "Pauses execution for a bounded duration.",
+            params = listOf(
+                WorkflowStepParamDefinition("duration", "Duration", "String", "ISO-8601 duration, for example PT5M")
+            )
+        ),
+        WorkflowNodeTypeDefinition(
+            type = "control",
+            kind = "wait_until",
+            name = "control.wait_until",
+            label = "Wait until",
+            description = "Waits until conditions match or a timeout is reached.",
+            params = listOf(
+                WorkflowStepParamDefinition("timeout", "Timeout", "String", "ISO-8601 duration, for example PT30M")
+            ),
+            branchLabels = listOf("true", "timeout")
+        ),
+        WorkflowNodeTypeDefinition(
+            type = "control",
+            kind = "for_each",
+            name = "control.for_each",
+            label = "For each",
+            description = "Runs a branch once per item from a scoped list.",
+            params = listOf(
+                WorkflowStepParamDefinition("items_reference", "Items reference", "String"),
+                WorkflowStepParamDefinition("item_variable", "Item variable", "String", required = false),
+                WorkflowStepParamDefinition("max_items", "Maximum items", "Number", required = false)
+            ),
+            branchLabels = listOf("body", "done")
+        ),
+        WorkflowNodeTypeDefinition(
+            type = "control",
+            kind = "while",
+            name = "control.while",
+            label = "While",
+            description = "Repeats a branch while conditions match, with a hard cap.",
+            params = listOf(
+                WorkflowStepParamDefinition("max_iterations", "Maximum iterations", "Number", required = false)
+            ),
+            branchLabels = listOf("body", "done")
+        )
+    )
+
     fun response(): WorkflowCatalogResponse =
-        WorkflowCatalogResponse(resources = resources, triggers = triggers, steps = steps)
+        WorkflowCatalogResponse(resources = resources, triggers = triggers, steps = steps, nodeTypes = nodeTypes)
 
     fun trigger(name: String): WorkflowTriggerDefinition? = triggers.firstOrNull { it.name == name }
 

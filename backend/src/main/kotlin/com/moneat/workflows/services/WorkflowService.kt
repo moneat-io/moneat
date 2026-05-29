@@ -25,7 +25,9 @@ import com.moneat.notifications.services.SlackService
 import com.moneat.shared.models.Organizations
 import com.moneat.utils.suspendRunCatching
 import com.moneat.workflows.engine.WorkflowCatalog
+import com.moneat.workflows.engine.WorkflowConditionEvaluator
 import com.moneat.workflows.engine.temporal.ExecuteActionActivityImpl
+import com.moneat.workflows.engine.temporal.LinearGraphAdapter
 import com.moneat.workflows.engine.temporal.PersistRunActivityImpl
 import com.moneat.workflows.engine.temporal.PersistRunFailureInput
 import com.moneat.workflows.engine.temporal.TemporalClientProvider
@@ -34,21 +36,29 @@ import com.moneat.workflows.engine.temporal.WorkflowDirectRunExecutor
 import com.moneat.workflows.engine.temporal.WorkflowExecutionEngine
 import com.moneat.workflows.engine.temporal.WorkflowStartRequest
 import com.moneat.workflows.models.CreateWorkflowRequest
+import com.moneat.workflows.models.ManualWorkflowRunRequest
 import com.moneat.workflows.models.UpdateWorkflowRequest
 import com.moneat.workflows.models.WorkflowConditionConfig
+import com.moneat.workflows.models.WorkflowGraphConfig
 import com.moneat.workflows.models.WorkflowPreviewRequest
 import com.moneat.workflows.models.WorkflowPreviewResponse
 import com.moneat.workflows.models.WorkflowResponse
 import com.moneat.workflows.models.WorkflowRunResponse
+import com.moneat.workflows.models.WorkflowRunStepResponse
 import com.moneat.workflows.models.WorkflowRunStepProgress
 import com.moneat.workflows.models.WorkflowRuns
+import com.moneat.workflows.models.WorkflowRunSteps
 import com.moneat.workflows.models.WorkflowStepConfig
 import com.moneat.workflows.models.WorkflowTestMessageResponse
 import com.moneat.workflows.models.WorkflowTriggerEvent
 import com.moneat.workflows.models.WorkflowVersions
 import com.moneat.workflows.models.Workflows
+import com.moneat.workflows.models.typedWorkflowScope
+import com.moneat.workflows.models.workflowJson
+import com.moneat.workflows.models.workflowObjectValue
+import com.moneat.workflows.models.workflowStringView
+import com.moneat.workflows.models.workflowStringValue
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -66,17 +76,13 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import java.security.MessageDigest
+import java.util.UUID
 import kotlin.time.Clock
 
 private val logger = KotlinLogging.logger {}
 private const val UNIQUE_VIOLATION_SQL_STATE = "23505"
 private const val TEMPORAL_WORKFLOW_ID_HASH_LENGTH = 32
 private const val UNSIGNED_BYTE_MASK = 0xff
-private const val SEVERITY_CRITICAL_RANK = 4
-private const val SEVERITY_HIGH_RANK = 3
-private const val SEVERITY_MEDIUM_RANK = 2
-private const val SEVERITY_LOW_RANK = 1
-private const val SEVERITY_UNKNOWN_RANK = 0
 private const val DEFAULT_WORKFLOW_READ_ONLY_MESSAGE = "Default workflows cannot be modified"
 private val ALERT_CHANNEL_REFERENCES =
     setOf(ALERT_CHANNEL_EMAIL_REFERENCE, ALERT_CHANNEL_SLACK_REFERENCE, ALERT_CHANNEL_DISCORD_REFERENCE)
@@ -105,7 +111,8 @@ class WorkflowService(
     private val runPersistence: PersistRunActivityImpl = PersistRunActivityImpl(),
     private val executionEngine: WorkflowExecutionEngine = TemporalWorkflowExecutionEngine(TemporalClientProvider())
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = workflowJson
+    private val graphValidator = WorkflowGraphValidator()
     private val directRunExecutor =
         WorkflowDirectRunExecutor(
             ExecuteActionActivityImpl(actionExecutor),
@@ -116,9 +123,16 @@ class WorkflowService(
 
     fun previewWorkflow(request: WorkflowPreviewRequest): WorkflowPreviewResponse {
         val scope = previewScopeForRequest(request)
+        val graph = request.graph ?: LinearGraphAdapter.graphFromLegacy(request.triggerName, emptyList(), request.steps)
+        val selectedSteps =
+            request.nodeId
+                ?.let { nodeId -> graph.nodes.filter { node -> node.id == nodeId } }
+                ?.filter { node -> node.type == LinearGraphAdapter.NODE_TYPE_ACTION }
+                ?.map { node -> WorkflowStepConfig(node.action.orEmpty(), node.params.stringParams()) }
+                ?: request.steps
         return WorkflowPreviewResponse(
-            scope = scope,
-            previews = request.steps.map { step -> stepRenderer.renderStepPreview(step, scope) }
+            scope = scope.workflowStringView(),
+            previews = selectedSteps.map { step -> stepRenderer.renderStepPreview(step, scope.workflowStringView()) }
         )
     }
 
@@ -127,21 +141,22 @@ class WorkflowService(
         request: WorkflowPreviewRequest
     ): WorkflowTestMessageResponse {
         val scope = previewScopeForRequest(request)
+        val stringScope = scope.workflowStringView()
         return WorkflowTestMessageResponse(
-            scope = scope,
+            scope = stringScope,
             results = request.steps.map { step ->
-                actionExecutor.sendTestMessageStep(organizationId, step, scope)
+                actionExecutor.sendTestMessageStep(organizationId, step, stringScope)
             }
         )
     }
 
-    private fun previewScopeForRequest(request: WorkflowPreviewRequest): Map<String, String> {
+    private fun previewScopeForRequest(request: WorkflowPreviewRequest): Map<String, JsonElement> {
         val trigger = WorkflowCatalog.trigger(request.triggerName)
             ?: throw IllegalArgumentException("Unknown workflow trigger ${request.triggerName}")
         request.steps.forEach { step ->
             WorkflowCatalog.step(step.name) ?: throw IllegalArgumentException("Unknown workflow step ${step.name}")
         }
-        return stepRenderer.sampleScopeForTrigger(trigger.name) + request.scope
+        return stepRenderer.sampleScopeForTrigger(trigger.name).typedWorkflowScope() + request.scope
     }
 
     fun ensureDefaultWorkflowsForOrganization(organizationId: Int) {
@@ -174,6 +189,12 @@ class WorkflowService(
                     version = 1,
                     conditions = emptyList(),
                     steps = definition.steps,
+                    graph = LinearGraphAdapter.graphFromLegacy(
+                        definition.triggerName,
+                        emptyList(),
+                        definition.steps
+                    ),
+                    published = true,
                     onceForTemplate = definition.onceForTemplate,
                     now = now
                 )
@@ -224,6 +245,11 @@ class WorkflowService(
     ): WorkflowResponse {
         validateCreateRequest(request)
         val now = Clock.System.now()
+        val graph = request.graph ?: LinearGraphAdapter.graphFromLegacy(
+            request.triggerName,
+            request.conditions,
+            request.steps
+        )
         val workflowId =
             transaction {
                 val id =
@@ -240,6 +266,8 @@ class WorkflowService(
                     version = 1,
                     conditions = request.conditions,
                     steps = request.steps,
+                    graph = graph,
+                    published = false,
                     onceForTemplate = request.onceForTemplate,
                     now = now
                 )
@@ -269,16 +297,25 @@ class WorkflowService(
             val triggerName = workflowRow[Workflows.triggerName]
             val conditions = request.conditions ?: currentVersion.conditions
             val steps = request.steps ?: currentVersion.steps
+            val graph = request.graph ?: if (request.conditions != null || request.steps != null) {
+                LinearGraphAdapter.graphFromLegacy(triggerName, conditions, steps)
+            } else {
+                currentVersion.graph
+            }
             val onceForTemplate = request.onceForTemplate ?: currentVersion.onceForTemplate
 
-            validateWorkflowConfig(triggerName, conditions, steps, onceForTemplate)
+            validateWorkflowConfig(triggerName, graph, onceForTemplate)
             Workflows.update({ (Workflows.id eq workflowId) and (Workflows.organizationId eq organizationId) }) {
                 trimmedName?.let { value -> it[name] = value }
                 request.enabled?.let { value -> it[enabled] = value }
                 it[updatedAt] = now
             }
 
-            val configChanged = request.conditions != null || request.steps != null || request.onceForTemplate != null
+            val configChanged =
+                request.conditions != null ||
+                    request.steps != null ||
+                    request.graph != null ||
+                    request.onceForTemplate != null
             if (configChanged) {
                 WorkflowVersions.update(
                     { (WorkflowVersions.workflowId eq workflowId) and (WorkflowVersions.mostRecent eq true) }
@@ -290,6 +327,8 @@ class WorkflowService(
                     version = currentVersion.version + 1,
                     conditions = conditions,
                     steps = steps,
+                    graph = graph,
+                    published = false,
                     onceForTemplate = onceForTemplate,
                     now = now
                 )
@@ -319,6 +358,65 @@ class WorkflowService(
             } > 0
         }
     }
+
+    fun publishWorkflow(
+        organizationId: Int,
+        workflowId: Int
+    ): WorkflowResponse? {
+        setWorkflowPublished(organizationId, workflowId, true)
+        return getWorkflow(organizationId, workflowId)
+    }
+
+    fun unpublishWorkflow(
+        organizationId: Int,
+        workflowId: Int
+    ): WorkflowResponse? {
+        setWorkflowPublished(organizationId, workflowId, false)
+        return getWorkflow(organizationId, workflowId)
+    }
+
+    suspend fun runWorkflow(
+        organizationId: Int,
+        workflowId: Int,
+        request: ManualWorkflowRunRequest = ManualWorkflowRunRequest()
+    ): WorkflowRunResponse? {
+        val run =
+            transaction {
+                val workflowRow =
+                    Workflows
+                        .selectAll()
+                        .where { (Workflows.id eq workflowId) and (Workflows.organizationId eq organizationId) }
+                        .firstOrNull() ?: return@transaction null
+                val version = latestVersion(workflowId) ?: return@transaction null
+                val triggerScope = stepRenderer.sampleScopeForTrigger(workflowRow[Workflows.triggerName])
+                    .typedWorkflowScope()
+                val event =
+                    WorkflowTriggerEvent(
+                        triggerName = workflowRow[Workflows.triggerName],
+                        organizationId = organizationId,
+                        scope = triggerScope + request.scope
+                    )
+                createRun(event, WorkflowCandidate(workflowId, version), manualOnceFor(), force = true)
+            } ?: return null
+        startTemporalExecution(run)
+        return getRun(organizationId, workflowId, run.runId)
+    }
+
+    private fun getRun(
+        organizationId: Int,
+        workflowId: Int,
+        runId: Int
+    ): WorkflowRunResponse? =
+        transaction {
+            WorkflowRuns
+                .selectAll()
+                .where {
+                    (WorkflowRuns.id eq runId) and
+                        (WorkflowRuns.workflowId eq workflowId) and
+                        (WorkflowRuns.organizationId eq organizationId)
+                }.firstOrNull()
+                ?.let { row -> runResponse(row) }
+        }
 
     fun listRuns(
         organizationId: Int,
@@ -381,7 +479,7 @@ class WorkflowService(
                     ALERT_DEDUPLICATION_KEY_REFERENCE to deduplicationKey,
                     ALERT_URL_REFERENCE to moneatUrl,
                     ORGANIZATION_ID_REFERENCE to organizationId.toString()
-                )
+                ).typedWorkflowScope()
             )
         )
     }
@@ -398,7 +496,11 @@ class WorkflowService(
                             (Workflows.enabled eq true)
                     }.mapNotNull { workflowRow ->
                         latestVersion(workflowRow[Workflows.id].value)?.let { version ->
-                            WorkflowCandidate(workflowRow[Workflows.id].value, version)
+                            if (version.published) {
+                                WorkflowCandidate(workflowRow[Workflows.id].value, version)
+                            } else {
+                                null
+                            }
                         }
                     }
             }
@@ -408,7 +510,7 @@ class WorkflowService(
             val onceForTemplate =
                 candidate.version.onceForTemplate.ifEmpty { trigger.defaultOnceForTemplate }
             val onceFor = buildOnceFor(onceForTemplate, event.scope)
-            val run = createRun(event, candidate, onceFor)
+            val run = createRun(event, candidate, onceFor, force = false)
             if (run != null) startTemporalExecution(run)
         }
     }
@@ -420,10 +522,11 @@ class WorkflowService(
     private fun createRun(
         event: WorkflowTriggerEvent,
         candidate: WorkflowCandidate,
-        onceFor: String
+        onceFor: String,
+        force: Boolean
     ): WorkflowStartRequest? =
         transaction {
-            if (workflowRunExists(candidate.workflowId, onceFor)) return@transaction null
+            if (!force && workflowRunExists(candidate.workflowId, onceFor)) return@transaction null
             val temporalWorkflowId = temporalWorkflowId(candidate.workflowId, onceFor)
             try {
                 val runId = WorkflowRuns.insertAndGetId {
@@ -469,6 +572,29 @@ class WorkflowService(
                     (WorkflowRuns.onceFor eq onceFor)
             }.count() > 0
 
+    private fun setWorkflowPublished(
+        organizationId: Int,
+        workflowId: Int,
+        published: Boolean
+    ) {
+        transaction {
+            val hasWorkflow =
+                Workflows
+                    .selectAll()
+                    .where { (Workflows.id eq workflowId) and (Workflows.organizationId eq organizationId) }
+                    .count() > 0
+            if (!hasWorkflow) return@transaction
+            WorkflowVersions.update(
+                { (WorkflowVersions.workflowId eq workflowId) and (WorkflowVersions.mostRecent eq true) }
+            ) {
+                it[WorkflowVersions.published] = published
+            }
+        }
+    }
+
+    private fun manualOnceFor(): String =
+        "manual:${UUID.randomUUID()}"
+
     private suspend fun startTemporalExecution(request: WorkflowStartRequest) {
         suspendRunCatching {
             executionEngine.start(request)
@@ -508,6 +634,8 @@ class WorkflowService(
         version: Int,
         conditions: List<WorkflowConditionConfig>,
         steps: List<WorkflowStepConfig>,
+        graph: WorkflowGraphConfig,
+        published: Boolean,
         onceForTemplate: List<String>,
         now: kotlin.time.Instant
     ) {
@@ -516,8 +644,12 @@ class WorkflowService(
             it[WorkflowVersions.version] = version
             it[WorkflowVersions.conditions] = json.encodeToString(conditions)
             it[WorkflowVersions.steps] = json.encodeToString(steps)
+            it[WorkflowVersions.graph] = json.encodeToString(graph)
+            it[WorkflowVersions.published] = published
+            it[WorkflowVersions.inputSchema] = "{}"
+            it[WorkflowVersions.tags] = "[]"
             it[WorkflowVersions.onceForTemplate] = json.encodeToString(onceForTemplate)
-            it[engineConfig] = json.encodeToString(buildEngineConfig(conditions, steps, onceForTemplate))
+            it[engineConfig] = json.encodeToString(buildEngineConfig(conditions, steps, graph, onceForTemplate))
             it[mostRecent] = true
             it[createdAt] = now
         }
@@ -525,120 +657,36 @@ class WorkflowService(
 
     private fun validateCreateRequest(request: CreateWorkflowRequest) {
         require(request.name.isNotBlank()) { "Workflow name is required" }
-        validateWorkflowConfig(request.triggerName, request.conditions, request.steps, request.onceForTemplate)
+        val graph = request.graph ?: LinearGraphAdapter.graphFromLegacy(
+            request.triggerName,
+            request.conditions,
+            request.steps
+        )
+        validateWorkflowConfig(request.triggerName, graph, request.onceForTemplate)
     }
 
     private fun validateWorkflowConfig(
         triggerName: String,
-        conditions: List<WorkflowConditionConfig>,
-        steps: List<WorkflowStepConfig>,
+        graph: WorkflowGraphConfig,
         onceForTemplate: List<String>
     ) {
-        val trigger = WorkflowCatalog.trigger(triggerName)
-            ?: throw IllegalArgumentException("Unknown workflow trigger $triggerName")
-        val scopeReferences = trigger.scope.map { it.name }.toSet()
-        conditions.forEach { condition ->
-            require(condition.reference in scopeReferences) {
-                "Unknown workflow condition reference ${condition.reference}"
-            }
-            val resourceType = checkNotNull(WorkflowCatalog.scopeType(triggerName, condition.reference))
-            val resource = checkNotNull(WorkflowCatalog.resources.firstOrNull { it.type == resourceType })
-            require(resource.operations.any { it.name == condition.operation }) {
-                "Unsupported operation ${condition.operation} for ${condition.reference}"
-            }
-            if (condition.operation.requiresConditionValue()) {
-                require(!condition.value.isNullOrBlank()) {
-                    "Missing value for ${condition.reference} ${condition.operation}"
-                }
-            }
-        }
-        onceForTemplate.forEach { reference ->
-            require(reference in scopeReferences) { "Unknown once-for reference $reference" }
-        }
-        steps.forEach { step ->
-            val definition = WorkflowCatalog.step(step.name)
-                ?: throw IllegalArgumentException("Unknown workflow step ${step.name}")
-            definition.params.filter { it.required }.forEach { param ->
-                require(!step.params[param.name].isNullOrBlank()) {
-                    "Missing required parameter ${param.name} for ${step.name}"
-                }
-            }
-        }
+        graphValidator.validate(triggerName, graph, onceForTemplate)
     }
 
     private fun conditionsMatch(
         triggerName: String,
         conditions: List<WorkflowConditionConfig>,
-        scope: Map<String, String>
+        scope: Map<String, JsonElement>
     ): Boolean =
-        conditions.all { condition ->
-            val actual = scope[condition.reference]
-            val resourceType = WorkflowCatalog.scopeType(triggerName, condition.reference)
-            evaluateCondition(resourceType, actual, condition.operation, condition.value)
-        }
-
-    private fun evaluateCondition(
-        resourceType: String?,
-        actual: String?,
-        operation: String,
-        expected: String?
-    ): Boolean =
-        when (operation) {
-            "is_set" -> !actual.isNullOrBlank()
-            "is_not_set" -> actual.isNullOrBlank()
-            "eq" -> equalsIgnoringCase(actual, expected)
-            "neq" -> !equalsIgnoringCase(actual, expected)
-            "contains" -> actual?.contains(expected.orEmpty(), ignoreCase = true) == true
-            "not_contains" -> actual?.contains(expected.orEmpty(), ignoreCase = true) != true
-            "gt", "gte", "lt", "lte" -> compareNumbers(actual, expected, operation)
-            "at_least" -> {
-                val expectedRank = severityRank(expected)
-                resourceType == "AlertSeverity" && expectedRank > 0 && severityRank(actual) >= expectedRank
-            }
-            else -> false
-        }
-
-    private fun compareNumbers(
-        actual: String?,
-        expected: String?,
-        operation: String
-    ): Boolean {
-        val actualNumber = actual?.toDoubleOrNull() ?: return false
-        val expectedNumber = expected?.toDoubleOrNull() ?: return false
-        return when (operation) {
-            "gt" -> actualNumber > expectedNumber
-            "gte" -> actualNumber >= expectedNumber
-            "lt" -> actualNumber < expectedNumber
-            "lte" -> actualNumber <= expectedNumber
-            else -> false
-        }
-    }
-
-    private fun equalsIgnoringCase(
-        actual: String?,
-        expected: String?
-    ): Boolean =
-        actual != null && actual.compareTo(expected.orEmpty(), ignoreCase = true) == 0
-
-    private fun severityRank(value: String?): Int =
-        when (value?.uppercase()) {
-            "CRITICAL" -> SEVERITY_CRITICAL_RANK
-            "HIGH" -> SEVERITY_HIGH_RANK
-            "MEDIUM" -> SEVERITY_MEDIUM_RANK
-            "LOW" -> SEVERITY_LOW_RANK
-            else -> SEVERITY_UNKNOWN_RANK
-        }
-
-    private fun String.requiresConditionValue(): Boolean =
-        this !in setOf("is_set", "is_not_set")
+        WorkflowConditionEvaluator.matchesAll(triggerName, conditions, scope)
 
     private fun buildOnceFor(
         onceForTemplate: List<String>,
-        scope: Map<String, String>
+        scope: Map<String, JsonElement>
     ): String =
         onceForTemplate
             .ifEmpty { listOf(ALERT_DEDUPLICATION_KEY_REFERENCE) }
-            .joinToString("|") { reference -> "$reference=${scope[reference].orEmpty()}" }
+            .joinToString("|") { reference -> "$reference=${scope[reference]?.workflowStringValue().orEmpty()}" }
 
     private fun workflowResponse(
         row: ResultRow,
@@ -652,9 +700,11 @@ class WorkflowService(
             triggerName = row[Workflows.triggerName],
             enabled = row[Workflows.enabled],
             version = version.version,
+            published = version.published,
             systemKey = row[Workflows.systemKey],
             conditions = version.conditions,
             steps = version.steps,
+            graph = version.graph,
             onceForTemplate = version.onceForTemplate,
             createdAt = row[Workflows.createdAt].toString(),
             updatedAt = row[Workflows.updatedAt].toString(),
@@ -684,11 +734,33 @@ class WorkflowService(
             onceFor = row[WorkflowRuns.onceFor],
             status = row[WorkflowRuns.status],
             progress = decodeProgress(row[WorkflowRuns.progress]),
+            steps = runSteps(row[WorkflowRuns.id].value),
             errorMessage = row[WorkflowRuns.errorMessage],
             createdAt = row[WorkflowRuns.createdAt].toString(),
             completedAt = row[WorkflowRuns.completedAt]?.toString(),
             failedAt = row[WorkflowRuns.failedAt]?.toString()
         )
+
+    private fun runSteps(runId: Int): List<WorkflowRunStepResponse> =
+        WorkflowRunSteps
+            .selectAll()
+            .where { WorkflowRunSteps.runId eq runId }
+            .orderBy(WorkflowRunSteps.id to SortOrder.ASC)
+            .map { row ->
+                WorkflowRunStepResponse(
+                    id = row[WorkflowRunSteps.id].value,
+                    runId = row[WorkflowRunSteps.runId],
+                    nodeId = row[WorkflowRunSteps.nodeId],
+                    type = row[WorkflowRunSteps.type],
+                    status = row[WorkflowRunSteps.status],
+                    startedAt = row[WorkflowRunSteps.startedAt]?.toString(),
+                    completedAt = row[WorkflowRunSteps.completedAt]?.toString(),
+                    input = decodeJsonElementMap(row[WorkflowRunSteps.input]),
+                    output = decodeJsonElementMap(row[WorkflowRunSteps.output]),
+                    errorMessage = row[WorkflowRunSteps.errorMessage],
+                    attempt = row[WorkflowRunSteps.attempt]
+                )
+            }
 
     private fun versionRecord(row: ResultRow): WorkflowVersionRecord =
         WorkflowVersionRecord(
@@ -696,6 +768,8 @@ class WorkflowService(
             version = row[WorkflowVersions.version],
             conditions = decodeConditions(row[WorkflowVersions.conditions]),
             steps = decodeSteps(row[WorkflowVersions.steps]),
+            graph = decodeGraph(row[WorkflowVersions.graph]),
+            published = row[WorkflowVersions.published],
             onceForTemplate = decodeStringList(row[WorkflowVersions.onceForTemplate])
         )
 
@@ -705,42 +779,61 @@ class WorkflowService(
     private fun decodeSteps(raw: String): List<WorkflowStepConfig> =
         if (raw.isBlank()) emptyList() else json.decodeFromString(raw)
 
+    private fun decodeGraph(raw: String): WorkflowGraphConfig =
+        if (raw.isBlank()) WorkflowGraphConfig() else json.decodeFromString(raw)
+
     private fun decodeStringList(raw: String): List<String> =
         if (raw.isBlank()) emptyList() else json.decodeFromString(raw)
 
     private fun decodeProgress(raw: String): List<WorkflowRunStepProgress> =
         if (raw.isBlank()) emptyList() else json.decodeFromString(raw)
 
-    private fun decodeScope(raw: String): Map<String, String> =
+    private fun decodeScope(raw: String): Map<String, JsonElement> =
         if (raw.isBlank()) emptyMap() else json.decodeFromString(raw)
+
+    private fun decodeJsonElementMap(raw: String): Map<String, JsonElement> =
+        if (raw.isBlank()) emptyMap() else json.decodeFromString<JsonElement>(raw).workflowObjectValue()
+
+    private fun Map<String, JsonElement>.stringParams(): Map<String, String> =
+        mapValues { (_, value) -> value.workflowStringValue() }
 
     private fun buildEngineConfig(
         conditions: List<WorkflowConditionConfig>,
         steps: List<WorkflowStepConfig>,
+        graph: WorkflowGraphConfig,
         onceForTemplate: List<String>
     ): List<String> =
-        (conditions.map { it.reference } + onceForTemplate + steps.flatMap { it.params.values })
+        (
+            conditions.map { it.reference } +
+                graph.nodes.flatMap { node -> node.conditions.map { condition -> condition.reference } } +
+                onceForTemplate +
+                steps.flatMap { it.params.values } +
+                graph.nodes.flatMap { node -> node.params.values.map { value -> value.workflowStringValue() } }
+            )
             .filter { it.startsWith("alert.") || it.startsWith("organization.") }
             .distinct()
 
-    private fun alertScope(event: AlertLifecycleEvent): Map<String, String> =
-        mapOf(
-            ALERT_TITLE_REFERENCE to event.title,
-            ALERT_DESCRIPTION_REFERENCE to event.description,
-            ALERT_SEVERITY_REFERENCE to event.severity.name,
-            ALERT_PRIORITY_REFERENCE to stepRenderer.priorityLabelForSeverity(event.severity.name),
-            ALERT_STATUS_REFERENCE to event.status.name,
-            ALERT_SOURCE_REFERENCE to event.source.name,
-            ALERT_DEDUPLICATION_KEY_REFERENCE to event.deduplicationKey,
-            ALERT_URL_REFERENCE to event.moneatUrl,
-            ORGANIZATION_ID_REFERENCE to event.organizationId.toString()
-        ) + alertMetadataScope(event.metadata)
+    private fun alertScope(event: AlertLifecycleEvent): Map<String, JsonElement> {
+        val baseScope =
+            mapOf(
+                ALERT_TITLE_REFERENCE to event.title,
+                ALERT_DESCRIPTION_REFERENCE to event.description,
+                ALERT_SEVERITY_REFERENCE to event.severity.name,
+                ALERT_PRIORITY_REFERENCE to stepRenderer.priorityLabelForSeverity(event.severity.name),
+                ALERT_STATUS_REFERENCE to event.status.name,
+                ALERT_SOURCE_REFERENCE to event.source.name,
+                ALERT_DEDUPLICATION_KEY_REFERENCE to event.deduplicationKey,
+                ALERT_URL_REFERENCE to event.moneatUrl,
+                ORGANIZATION_ID_REFERENCE to event.organizationId.toString()
+            ).typedWorkflowScope()
+        return baseScope + alertMetadataScope(event.metadata)
+    }
 
-    private fun alertMetadataScope(metadata: Map<String, JsonElement>): Map<String, String> =
+    private fun alertMetadataScope(metadata: Map<String, JsonElement>): Map<String, JsonElement> =
         metadata
             .mapNotNull { (reference, value) ->
                 if (reference !in ALERT_METADATA_REFERENCES) return@mapNotNull null
-                value.workflowScopeValue()?.let { reference to it }
+                value.workflowScopeValue()?.let { reference to JsonPrimitive(it) }
             }.toMap()
 
     private fun JsonElement.workflowScopeValue(): String? {
@@ -861,6 +954,8 @@ private data class WorkflowVersionRecord(
     val version: Int,
     val conditions: List<WorkflowConditionConfig>,
     val steps: List<WorkflowStepConfig>,
+    val graph: WorkflowGraphConfig,
+    val published: Boolean,
     val onceForTemplate: List<String>
 )
 

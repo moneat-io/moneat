@@ -23,6 +23,9 @@ import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Users
 import com.moneat.workflows.models.WorkflowStepConfig
 import com.moneat.workflows.models.WorkflowTestMessageResult
+import com.moneat.workflows.models.workflowStringView
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -37,14 +40,25 @@ class WorkflowActionExecutor(
     suspend fun executeStep(
         organizationId: Int,
         step: WorkflowStepConfig,
-        scope: Map<String, String>
-    ) {
-        if (!notificationStepEnabled(step.name, scope)) return
+        scope: Map<String, JsonElement>
+    ): Map<String, JsonElement> {
+        val stringScope = scope.workflowStringView()
+        if (!notificationStepEnabled(step.name, stringScope)) {
+            return mapOf("skipped" to JsonPrimitive(true))
+        }
 
-        when (step.name) {
-            EMAIL_ORG_STEP -> sendOrganizationEmail(organizationId, step.params, scope)
-            SLACK_STEP -> executeSlackStep(organizationId, step, scope)
-            DISCORD_STEP -> executeDiscordStep(organizationId, step, scope)
+        return when (step.name) {
+            EMAIL_ORG_STEP -> mapOf(
+                "recipient_count" to JsonPrimitive(
+                    sendOrganizationEmail(
+                        organizationId,
+                        step.params,
+                        stringScope
+                    )
+                )
+            )
+            SLACK_STEP -> executeSlackStep(organizationId, step, stringScope)
+            DISCORD_STEP -> executeDiscordStep(organizationId, step, stringScope)
             else -> throw IllegalArgumentException("Unknown workflow step ${step.name}")
         }
     }
@@ -125,7 +139,7 @@ class WorkflowActionExecutor(
         organizationId: Int,
         step: WorkflowStepConfig,
         scope: Map<String, String>
-    ) {
+    ): Map<String, JsonElement> {
         val skipIfUnconfigured = step.params[SKIP_IF_UNCONFIGURED_PARAM]?.toBooleanStrictOrNull() ?: true
         val sent =
             if (step.usesAlertLifecycleFormat()) {
@@ -141,13 +155,14 @@ class WorkflowActionExecutor(
         check(sent) {
             "Slack workflow message was not sent"
         }
+        return mapOf("sent" to JsonPrimitive(sent))
     }
 
     private suspend fun executeDiscordStep(
         organizationId: Int,
         step: WorkflowStepConfig,
         scope: Map<String, String>
-    ) {
+    ): Map<String, JsonElement> {
         val skipIfUnconfigured = step.params[SKIP_IF_UNCONFIGURED_PARAM]?.toBooleanStrictOrNull() ?: true
         val sent =
             if (step.usesAlertLifecycleFormat()) {
@@ -164,6 +179,7 @@ class WorkflowActionExecutor(
         check(sent) {
             "Discord workflow message was not sent"
         }
+        return mapOf("sent" to JsonPrimitive(sent))
     }
 
     private suspend fun sendTestMessageStepOrThrow(

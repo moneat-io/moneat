@@ -17,6 +17,7 @@
 import type {ApiClientCore} from '../client'
 import type {
   WorkflowCatalogResponse,
+  WorkflowJsonValue,
   WorkflowPreviewRequest,
   WorkflowPreviewResponse,
   WorkflowRequest,
@@ -58,6 +59,22 @@ export function workflowsMethods(core: ApiClientCore) {
       core.request<WorkflowResponse>(`${base}/workflows/${id}`, {
         method: 'PUT',
         body: JSON.stringify(request),
+      }),
+
+    publishWorkflow: (id: number) =>
+      core.request<WorkflowResponse>(`${base}/workflows/${id}/publish`, {
+        method: 'POST',
+      }),
+
+    unpublishWorkflow: (id: number) =>
+      core.request<WorkflowResponse>(`${base}/workflows/${id}/unpublish`, {
+        method: 'POST',
+      }),
+
+    runWorkflow: (id: number, scope: Record<string, WorkflowJsonValue> = {}) =>
+      core.request<WorkflowRunResponse>(`${base}/workflows/${id}/run`, {
+        method: 'POST',
+        body: JSON.stringify({scope}),
       }),
 
     deleteWorkflow: (id: number) =>
