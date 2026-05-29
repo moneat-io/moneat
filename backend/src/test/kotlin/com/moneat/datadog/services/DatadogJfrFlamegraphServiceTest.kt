@@ -30,6 +30,7 @@ import java.io.ByteArrayOutputStream
 import java.nio.file.Files
 import java.util.zip.GZIPOutputStream
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class DatadogJfrFlamegraphServiceTest {
@@ -293,8 +294,10 @@ class DatadogJfrFlamegraphServiceTest {
             { workerSamplePath() },
             WORKER_THREAD_NAME,
         )
+        worker.isDaemon = true
         worker.start()
-        worker.join()
+        worker.join(WORKER_JOIN_TIMEOUT_MILLIS)
+        assertFalse(worker.isAlive, "Worker thread did not finish in time")
     }
 
     private fun workerSamplePath() {
@@ -314,5 +317,6 @@ class DatadogJfrFlamegraphServiceTest {
         private const val ALLOCATION_SIZE_BYTES = 512L
         private const val ALLOCATION_TOTAL_BYTES = ALLOCATION_WEIGHT_BYTES + ALLOCATION_SIZE_BYTES
         private const val WORKER_THREAD_NAME = "flamegraph-worker"
+        private const val WORKER_JOIN_TIMEOUT_MILLIS = 2_000L
     }
 }

@@ -26,6 +26,8 @@ import com.moneat.datadog.models.DdResourceStatsResponse
 import com.moneat.datadog.models.DdServiceMapResponse
 import com.moneat.datadog.models.DdTraceListResponse
 import com.moneat.datadog.services.DatadogHostService
+import com.moneat.datadog.services.DatadogJfrFlamegraphService
+import com.moneat.datadog.services.DatadogPprofFlamegraphService
 import com.moneat.datadog.services.DdResourceStatsQuery
 import com.moneat.datadog.services.DdTraceListQuery
 import com.moneat.datadog.services.ProfileIngestionService
@@ -47,6 +49,10 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
+import io.mockk.verify
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -506,33 +512,73 @@ class DatadogQueryRoutesTest {
     fun `profile flamegraph forwards datadog pprof selectors`() = testApplication {
         installProfileRoutes()()
         val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val payload = "pprof-payload".toByteArray()
         coEvery {
             ProfileIngestionService.getProfileMeta(10, "profile-pprof")
         } returns ProfileIngestionService.ProfileMeta("profile-key", "cpu", "datadog")
-        every { ProfileStorageService.read("profile-key") } returns "not-a-pprof".toByteArray()
+        every { ProfileStorageService.read("profile-key") } returns payload
 
-        val resp = client.get("/v1/profiles/profile-pprof/flamegraph?sampleType=cpu&thread=all") {
-            withAuth(token)
+        mockkObject(DatadogPprofFlamegraphService)
+        try {
+            every { DatadogPprofFlamegraphService.isLikelyJfrPayload(payload) } returns false
+            every {
+                DatadogPprofFlamegraphService.parseToFrames(payload, "cpu", "worker-1")
+            } returns selectorFlamegraph("cpu", "worker-1")
+
+            val resp = client.get("/v1/profiles/profile-pprof/flamegraph?sampleType=cpu&thread=worker-1") {
+                withAuth(token)
+            }
+
+            assertEquals(HttpStatusCode.OK, resp.status)
+            val body = resp.bodyAsText()
+            assertTrue(body.contains("\"selectedSampleType\":\"cpu\""))
+            assertTrue(body.contains("\"selectedThread\":\"worker-1\""))
+            verify(exactly = 1) {
+                DatadogPprofFlamegraphService.parseToFrames(payload, "cpu", "worker-1")
+            }
+        } finally {
+            unmockkObject(DatadogPprofFlamegraphService)
         }
-
-        assertEquals(HttpStatusCode.OK, resp.status)
-        assertTrue(resp.bodyAsText().contains("\"frames\""))
     }
 
     @Test
     fun `profile flamegraph forwards datadog jfr selectors`() = testApplication {
         installProfileRoutes()()
         val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val payload = "jfr-payload".toByteArray()
         coEvery {
             ProfileIngestionService.getProfileMeta(10, "profile-jfr")
         } returns ProfileIngestionService.ProfileMeta("jfr-key", "jfr", "datadog")
-        every { ProfileStorageService.read("jfr-key") } returns "not-a-jfr".toByteArray()
+        every { ProfileStorageService.read("jfr-key") } returns payload
 
-        val resp = client.get("/v1/profiles/profile-jfr/flamegraph?sampleType=cpu&thread=all") {
-            withAuth(token)
+        mockkObject(DatadogJfrFlamegraphService)
+        try {
+            every {
+                DatadogJfrFlamegraphService.parseToFrames(payload, "cpu", "all")
+            } returns selectorFlamegraph("cpu", "all")
+
+            val resp = client.get("/v1/profiles/profile-jfr/flamegraph?sampleType=cpu&thread=all") {
+                withAuth(token)
+            }
+
+            assertEquals(HttpStatusCode.OK, resp.status)
+            val body = resp.bodyAsText()
+            assertTrue(body.contains("\"selectedSampleType\":\"cpu\""))
+            assertTrue(body.contains("\"selectedThread\":\"all\""))
+            verify(exactly = 1) {
+                DatadogJfrFlamegraphService.parseToFrames(payload, "cpu", "all")
+            }
+        } finally {
+            unmockkObject(DatadogJfrFlamegraphService)
         }
+    }
 
-        assertEquals(HttpStatusCode.OK, resp.status)
-        assertTrue(resp.bodyAsText().contains("\"frames\""))
+    private fun selectorFlamegraph(
+        sampleType: String,
+        thread: String,
+    ) = buildJsonObject {
+        put("frames", buildJsonArray {})
+        put("selectedSampleType", sampleType)
+        put("selectedThread", thread)
     }
 }
