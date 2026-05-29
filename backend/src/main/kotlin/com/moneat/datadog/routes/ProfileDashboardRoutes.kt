@@ -75,7 +75,8 @@ fun Route.profileDashboardRoutes() {
 
 private suspend fun ApplicationCall.handleListProfiles() {
     val orgId = requireOrgId() ?: return
-    val limit = (parameters["limit"]?.toIntOrNull() ?: DEFAULT_LIMIT).coerceAtMost(MAX_LIMIT)
+    val limit = (parameters["limit"]?.toIntOrNull() ?: DEFAULT_LIMIT).coerceIn(1, MAX_LIMIT)
+    val offset = (parameters["offset"]?.toIntOrNull() ?: 0).coerceAtLeast(0)
     val query = DdProfileListQuery(
         service = parameters["service"],
         profileType = parameters["type"],
@@ -86,7 +87,7 @@ private suspend fun ApplicationCall.handleListProfiles() {
         fromMs = parameters["from"]?.toLongOrNull(),
         toMs = parameters["to"]?.toLongOrNull(),
         limit = limit,
-        offset = parameters["offset"]?.toIntOrNull() ?: 0,
+        offset = offset,
     )
 
     suspendRunCatching { ProfileIngestionService.listProfiles(orgId, query) }
@@ -131,6 +132,11 @@ private suspend fun ApplicationCall.handleMergedFlamegraph() {
     val now = System.currentTimeMillis()
     val fromMs = parameters["from"]?.toLongOrNull() ?: (now - HOUR_MS)
     val toMs = parameters["to"]?.toLongOrNull() ?: now
+    if (toMs <= fromMs) {
+        respond(HttpStatusCode.BadRequest, mapOf(ERROR_KEY to "Invalid time range"))
+        return
+    }
+
     val query = ProfileMergeFlamegraphQuery(
         organizationId = orgId,
         filters = profileFilters(includeVersion = true),
@@ -232,7 +238,11 @@ private suspend fun ApplicationCall.requireProfileMeta(
     orgId: Int,
     profileId: String,
 ): ProfileIngestionService.ProfileMeta? {
-    val meta = ProfileIngestionService.getProfileMeta(orgId, profileId)
+    val meta = suspendRunCatching { ProfileIngestionService.getProfileMeta(orgId, profileId) }
+        .getOrElse {
+            respondGenericError(this, "getProfileMeta", it)
+            return null
+        }
     if (meta == null) {
         respondProfileNotFound()
     }

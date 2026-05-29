@@ -537,6 +537,23 @@ class DatadogQueryRoutesTest {
     }
 
     @Test
+    fun `profiles list normalizes invalid paging values`() = testApplication {
+        installProfileRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get("/v1/profiles?limit=0&offset=-10") { withAuth(token) }
+
+        assertEquals(HttpStatusCode.OK, resp.status)
+        coVerify {
+            ProfileIngestionService.listProfiles(
+                10,
+                match {
+                    it.limit == 1 && it.offset == 0
+                },
+            )
+        }
+    }
+
+    @Test
     fun `profile download returns not found for unknown profile`() = testApplication {
         installProfileRoutes()()
         val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
@@ -557,6 +574,19 @@ class DatadogQueryRoutesTest {
 
         assertEquals(HttpStatusCode.OK, resp.status)
         assertEquals("raw-profile", resp.bodyAsText())
+    }
+
+    @Test
+    fun `profile download returns generic error when metadata lookup fails`() = testApplication {
+        installProfileRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        coEvery {
+            ProfileIngestionService.getProfileMeta(10, "profile-error")
+        } throws IllegalStateException("metadata failed")
+
+        val resp = client.get("/v1/profiles/profile-error/download") { withAuth(token) }
+
+        assertEquals(HttpStatusCode.InternalServerError, resp.status)
     }
 
     @Test
@@ -713,6 +743,18 @@ class DatadogQueryRoutesTest {
         val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
         val resp = client.get("/v1/profiles/merged-flamegraph?service=api") { withAuth(token) }
         assertEquals(HttpStatusCode.OK, resp.status)
+    }
+
+    @Test
+    fun `merged flamegraph rejects inverted range`() = testApplication {
+        installProfileRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get("/v1/profiles/merged-flamegraph?from=200&to=100") { withAuth(token) }
+
+        assertEquals(HttpStatusCode.BadRequest, resp.status)
+        coVerify(exactly = 0) {
+            ProfileMergeService.mergeFlamegraph(any())
+        }
     }
 
     @Test
