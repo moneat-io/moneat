@@ -36,8 +36,15 @@ import com.moneat.shared.services.TaskLock
 import com.moneat.shared.services.TraceFinalizerBackgroundService
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.uptime.services.UptimeScheduler
+import com.moneat.utils.suspendRunCatching
+import com.moneat.workflows.engine.temporal.ExecuteActionActivityImpl
+import com.moneat.workflows.engine.temporal.PersistRunActivityImpl
+import com.moneat.workflows.engine.temporal.TemporalClientProvider
+import com.moneat.workflows.engine.temporal.WORKFLOW_TASK_QUEUE
+import com.moneat.workflows.engine.temporal.WorkflowInterpreterWorkflowImpl
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopping
+import io.temporal.worker.WorkerFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -45,12 +52,12 @@ import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import net.javacrumbs.shedlock.provider.exposed.ExposedLockProvider
 import org.koin.core.context.GlobalContext
+import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.hours
-import com.moneat.utils.suspendRunCatching
-import com.moneat.workflows.services.WorkflowExecutionWorker
 
 private val logger = KotlinLogging.logger {}
 private const val DEFAULT_WORKER_THREADS = 4
+private const val WORKFLOW_WORKER_SHUTDOWN_TIMEOUT_SECONDS = 30L
 
 fun Application.configureBackgroundJobs() {
     val backgroundJobsEnabled =
@@ -131,7 +138,14 @@ fun Application.configureBackgroundJobs() {
         otlpMetricsDlqKey,
         otlpMetricsWorkerCount
     )
-    val workflowExecutionWorker = WorkflowExecutionWorker(workflowService = koin.get())
+    val temporalClientProvider = koin.get<TemporalClientProvider>()
+    val workflowWorkerFactory = temporalClientProvider.newWorkerFactory()
+    val workflowWorker = workflowWorkerFactory.newWorker(WORKFLOW_TASK_QUEUE)
+    workflowWorker.registerWorkflowImplementationTypes(WorkflowInterpreterWorkflowImpl::class.java)
+    workflowWorker.registerActivitiesImplementations(
+        koin.get<ExecuteActionActivityImpl>(),
+        koin.get<PersistRunActivityImpl>()
+    )
 
     // Create a coroutine scope for background jobs
     val jobScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -151,7 +165,7 @@ fun Application.configureBackgroundJobs() {
     llmIngestionWorker.start()
     otlpTraceIngestionWorker.start()
     otlpMetricsIngestionWorker.start()
-    workflowExecutionWorker.start()
+    workflowWorkerFactory.start()
 
     // Start enterprise background jobs (SSO, On-Call, etc.) if modules are present
     FeatureRegistry.startBackgroundJobs(this)
@@ -196,7 +210,7 @@ fun Application.configureBackgroundJobs() {
             otlpTraceIngestionWorker.stop()
             otlpMetricsIngestionWorker.stop()
         }
-        workflowExecutionWorker.stop()
+        shutdownWorkflowWorker(workflowWorkerFactory, temporalClientProvider)
         pulseService?.stop()
         FeatureRegistry.stopBackgroundJobs()
 
@@ -206,5 +220,28 @@ fun Application.configureBackgroundJobs() {
         RedisConfig.close()
         ClickHouseClient.close()
         logger.info { "Infrastructure connections closed" }
+    }
+}
+
+private fun shutdownWorkflowWorker(
+    workflowWorkerFactory: WorkerFactory,
+    temporalClientProvider: TemporalClientProvider
+) {
+    try {
+        workflowWorkerFactory.shutdown()
+        workflowWorkerFactory.awaitTermination(WORKFLOW_WORKER_SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        if (!workflowWorkerFactory.isTerminated) {
+            logger.warn {
+                "Temporal workflow worker did not stop within " +
+                    "$WORKFLOW_WORKER_SHUTDOWN_TIMEOUT_SECONDS seconds; forcing shutdown"
+            }
+            workflowWorkerFactory.shutdownNow()
+        }
+    } catch (error: InterruptedException) {
+        Thread.currentThread().interrupt()
+        logger.warn(error) { "Interrupted while stopping Temporal workflow worker; forcing shutdown" }
+        workflowWorkerFactory.shutdownNow()
+    } finally {
+        temporalClientProvider.close()
     }
 }

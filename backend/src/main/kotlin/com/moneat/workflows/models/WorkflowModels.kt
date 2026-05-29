@@ -55,6 +55,8 @@ object WorkflowRuns : IntIdTable("workflow_runs") {
     val status = varchar("status", 32).default("pending")
     val progress = jsonb("progress").default("[]")
     val errorMessage = text("error_message").nullable()
+    val temporalWorkflowId = varchar("temporal_workflow_id", 255).nullable()
+    val temporalRunId = varchar("temporal_run_id", 255).nullable()
     val createdAt = timestamp("created_at")
     val completedAt = timestamp("completed_at").nullable()
     val failedAt = timestamp("failed_at").nullable()
@@ -187,9 +189,4 @@ data class WorkflowTriggerEvent(
     @SerialName("trigger_name") val triggerName: String,
     @SerialName("organization_id") val organizationId: Int,
     val scope: Map<String, String>
-)
-
-@Serializable
-data class WorkflowRunQueuedMessage(
-    @SerialName("run_id") val runId: Int
 )

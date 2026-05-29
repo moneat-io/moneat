@@ -100,6 +100,10 @@ dependencies {
     // Redis
     implementation(libs.lettuce)
 
+    // Workflow execution
+    implementation(libs.jackson.module.kotlin)
+    implementation(libs.temporal.sdk)
+
     // JDBC drivers for custom datasources
     runtimeOnly(libs.mysql.connector.j)
     runtimeOnly(libs.mariadb.java.client)
@@ -168,6 +172,7 @@ dependencies {
     testRuntimeOnly(libs.junit.jupiter.engine)
     testImplementation(libs.h2)
     testImplementation(libs.mockk)
+    testImplementation(libs.temporal.testing)
     testImplementation(kotlin("reflect"))
 
     // Integration testing dependencies

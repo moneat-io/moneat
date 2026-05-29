@@ -105,7 +105,14 @@ import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import com.moneat.uptime.services.UptimeCheckExecutor
 import com.moneat.uptime.services.UptimeScheduler
 import com.moneat.uptime.services.UptimeService
+import com.moneat.workflows.engine.temporal.ExecuteActionActivityImpl
+import com.moneat.workflows.engine.temporal.PersistRunActivityImpl
+import com.moneat.workflows.engine.temporal.TemporalClientProvider
+import com.moneat.workflows.engine.temporal.TemporalWorkflowExecutionEngine
+import com.moneat.workflows.engine.temporal.WorkflowExecutionEngine
+import com.moneat.workflows.services.WorkflowActionExecutor
 import com.moneat.workflows.services.WorkflowService
+import com.moneat.workflows.services.WorkflowStepRenderer
 import org.koin.dsl.module
 
 /** Shared cross-domain singletons: notification channels, pricing, retention, shared repositories. */
@@ -117,7 +124,13 @@ val sharedModule = module {
     single { SlackService() }
     single { DiscordService() }
     single { AlertNotificationPreferencesService() }
-    single { WorkflowService(get(), get(), get()) }
+    single { WorkflowStepRenderer() }
+    single { WorkflowActionExecutor(get(), get(), get(), get()) }
+    single { PersistRunActivityImpl() }
+    single { ExecuteActionActivityImpl(get()) }
+    single { TemporalClientProvider() }
+    single<WorkflowExecutionEngine> { TemporalWorkflowExecutionEngine(get()) }
+    single { WorkflowService(get(), get(), get(), get(), get(), get(), get()) }
     single { IncidentService(get()) }
 
     single { PricingTierService() }

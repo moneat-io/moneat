@@ -262,7 +262,9 @@ fun Application.configureRouting() {
         orgManagementRoutes()
 
         // Workflow automation endpoints
-        workflowRoutes()
+        rateLimit(RateLimitName("api")) {
+            workflowRoutes()
+        }
 
         routingLogger.info { "Registering enterprise routes..." }
         // Enterprise modules (SSO, On-Call, etc.) — registered via ServiceLoader

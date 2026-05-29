@@ -24,6 +24,9 @@ import com.moneat.testsupport.RouteTestSupport.installJwtAuth
 import com.moneat.testsupport.RouteTestSupport.withAuth
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.stopTestKoin
+import com.moneat.org.repositories.OrgMembershipRepository
+import com.moneat.org.repositories.OrgMembershipRepositoryImpl
+import com.moneat.org.services.OrgMembershipService
 import com.moneat.workflows.engine.WorkflowCatalog
 import com.moneat.workflows.models.CreateWorkflowRequest
 import com.moneat.workflows.models.UpdateWorkflowRequest
@@ -102,6 +105,8 @@ class WorkflowRoutesTest {
         startKoin {
             modules(
                 module {
+                    single<OrgMembershipRepository> { OrgMembershipRepositoryImpl() }
+                    single { OrgMembershipService(get()) }
                     single { workflowService }
                 }
             )
@@ -198,6 +203,34 @@ class WorkflowRoutesTest {
             assertTrue(created.bodyAsText().contains("Route workflow"))
             assertEquals(HttpStatusCode.BadRequest, invalid.status)
             assertTrue(invalid.bodyAsText().contains("Workflow name is required"))
+        }
+
+    @Test
+    fun `mutation routes require organization admin role`() =
+        testApplication {
+            setupApp()
+            val memberToken = RouteTestSupport.createToken(userId = memberUserId, orgId = organizationId)
+
+            val create = client.post("/v1/workflows") {
+                withAuth(memberToken)
+                contentType(ContentType.Application.Json)
+                setBody(json.encodeToString(createRequest("Route workflow")))
+            }
+            val update = client.put("/v1/workflows/$WORKFLOW_ID") {
+                withAuth(memberToken)
+                contentType(ContentType.Application.Json)
+                setBody(json.encodeToString(UpdateWorkflowRequest(name = "Nope")))
+            }
+            val delete = client.delete("/v1/workflows/$WORKFLOW_ID") {
+                withAuth(memberToken)
+            }
+
+            assertEquals(HttpStatusCode.Forbidden, create.status)
+            assertEquals(HttpStatusCode.Forbidden, update.status)
+            assertEquals(HttpStatusCode.Forbidden, delete.status)
+            verify(exactly = 0) { workflowService.createWorkflow(any(), any()) }
+            verify(exactly = 0) { workflowService.updateWorkflow(any(), any(), any()) }
+            verify(exactly = 0) { workflowService.deleteWorkflow(any(), any()) }
         }
 
     @Test

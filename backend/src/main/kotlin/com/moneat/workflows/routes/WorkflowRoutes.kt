@@ -18,6 +18,8 @@ package com.moneat.workflows.routes
 
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.suspendRunCatching
+import com.moneat.org.services.OrgMembershipService
+import com.moneat.org.services.OrgRole
 import com.moneat.workflows.models.CreateWorkflowRequest
 import com.moneat.workflows.models.UpdateWorkflowRequest
 import com.moneat.workflows.models.WorkflowPreviewRequest
@@ -43,9 +45,12 @@ private const val DEFAULT_WORKFLOW_RUN_LIMIT = 50
 private const val WORKFLOW_ID_ROUTE = "/{workflowId}"
 private const val INVALID_WORKFLOW_ID_MESSAGE = "Invalid workflow ID"
 private const val WORKFLOW_NOT_FOUND_MESSAGE = "Workflow not found"
+private const val FORBIDDEN_MESSAGE = "Insufficient permissions"
 
 fun Route.workflowRoutes() {
-    val workflowService = GlobalContext.get().get<WorkflowService>()
+    val koin = GlobalContext.get()
+    val workflowService = koin.get<WorkflowService>()
+    val membershipService = koin.get<OrgMembershipService>()
 
     route("/v1/workflows") {
         authenticate("auth-jwt") {
@@ -60,6 +65,7 @@ fun Route.workflowRoutes() {
 
             post {
                 val organizationId = currentOrganizationId() ?: return@post call.respond(HttpStatusCode.Forbidden)
+                ensureWorkflowAdmin(membershipService, organizationId) ?: return@post
                 val request = call.receive<CreateWorkflowRequest>()
                 suspendRunCatching {
                     workflowService.createWorkflow(organizationId, request)
@@ -104,6 +110,7 @@ fun Route.workflowRoutes() {
 
             put(WORKFLOW_ID_ROUTE) {
                 val organizationId = currentOrganizationId() ?: return@put call.respond(HttpStatusCode.Forbidden)
+                ensureWorkflowAdmin(membershipService, organizationId) ?: return@put
                 val workflowId = workflowIdFromPath() ?: return@put call.respond(
                     HttpStatusCode.BadRequest,
                     ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
@@ -125,6 +132,7 @@ fun Route.workflowRoutes() {
 
             delete(WORKFLOW_ID_ROUTE) {
                 val organizationId = currentOrganizationId() ?: return@delete call.respond(HttpStatusCode.Forbidden)
+                ensureWorkflowAdmin(membershipService, organizationId) ?: return@delete
                 val workflowId = workflowIdFromPath() ?: return@delete call.respond(
                     HttpStatusCode.BadRequest,
                     ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
@@ -168,10 +176,32 @@ private suspend fun RoutingContext.respondWorkflowError(error: Throwable) {
     }
 }
 
+private suspend fun RoutingContext.ensureWorkflowAdmin(
+    membershipService: OrgMembershipService,
+    organizationId: Int
+): Boolean? {
+    val userId = currentUserId() ?: run {
+        call.respond(HttpStatusCode.Forbidden, ErrorResponse(FORBIDDEN_MESSAGE))
+        return null
+    }
+    return suspendRunCatching {
+        membershipService.requireRole(organizationId, userId, OrgRole.ADMIN)
+        true
+    }.getOrElse {
+        call.respond(HttpStatusCode.Forbidden, ErrorResponse(FORBIDDEN_MESSAGE))
+        null
+    }
+}
+
 private fun RoutingContext.workflowIdFromPath(): Int? =
     call.parameters["workflowId"]?.toIntOrNull()
 
 private fun RoutingContext.currentOrganizationId(): Int? {
     val principal = call.principal<JWTPrincipal>() ?: return null
     return principal.payload.getClaim("orgId").asInt()
+}
+
+private fun RoutingContext.currentUserId(): Int? {
+    val principal = call.principal<JWTPrincipal>() ?: return null
+    return principal.payload.getClaim("userId").asInt()
 }

@@ -25,6 +25,8 @@ import kotlin.test.assertTrue
 
 class EnvironmentValidatorTest {
 
+    // ──── Validation Tests ────
+
     @Test
     fun `validate returns ValidationResult`() {
         val validator = EnvironmentValidator()
@@ -44,6 +46,28 @@ class EnvironmentValidatorTest {
         assertFalse(result.errors.any { it.contains("SLACK_CLIENT_ID") })
         assertFalse(result.errors.any { it.contains("DISCORD_CLIENT_ID") })
         assertFalse(result.errors.any { it.contains("STRIPE_SECRET_KEY") })
+    }
+
+    @Test
+    fun `validate reports malformed WORKFLOWS_ENABLED`() {
+        withSystemProperty("WORKFLOWS_ENABLED", "maybe") {
+            val result = EnvironmentValidator().validate()
+
+            assertTrue(result.errors.any { it.contains("WORKFLOWS_ENABLED") })
+        }
+    }
+
+    @Test
+    fun `validate skips workflow runtime requirements when workflows disabled`() {
+        withSystemProperty("WORKFLOWS_ENABLED", "false") {
+            val result = EnvironmentValidator().validate()
+
+            assertFalse(result.errors.any { it.contains("TEMPORAL_TARGET") })
+            assertFalse(result.errors.any { it.contains("TEMPORAL_NAMESPACE") })
+            assertFalse(result.errors.any { it.contains("WORKFLOWS_CONNECTION_KEK") })
+            assertFalse(result.errors.any { it.contains("WORKFLOWS_SIGNING_KEY") })
+            assertFalse(result.errors.any { it.contains("WORKFLOWS_TEMPORAL_PAYLOAD_KEY") })
+        }
     }
 
     @Test
@@ -137,5 +161,25 @@ class EnvironmentValidatorTest {
             )
         assertEquals(2, result.errors.size)
         assertEquals(3, result.warnings.size)
+    }
+
+    // ──── Test Helpers ────
+
+    private fun withSystemProperty(
+        key: String,
+        value: String,
+        block: () -> Unit
+    ) {
+        val previous = System.getProperty(key)
+        try {
+            System.setProperty(key, value)
+            block()
+        } finally {
+            if (previous == null) {
+                System.clearProperty(key)
+            } else {
+                System.setProperty(key, previous)
+            }
+        }
     }
 }
