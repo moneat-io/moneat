@@ -54,6 +54,7 @@ import com.moneat.utils.ClickHouseSqlUtils.doubleMapToSqlMap
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import com.moneat.utils.ClickHouseSqlUtils.mapToSqlMap
 import io.ktor.http.isSuccess
+import io.ktor.server.config.ApplicationConfig
 import io.sentry.ISpan
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -78,7 +79,10 @@ private const val APM_TRACE_SUMMARIES_TABLE = "apm_trace_summaries"
 // FINAL needed -- the finalizer writes each bucket exactly once). The most recent buckets are still
 // filling, so they are read live from apm_trace_summaries instead. Must match the finalizer's
 // liveWindowHours so the two ranges meet without a gap or overlap.
-private const val LIVE_WINDOW_HOURS = 2
+private val LIVE_WINDOW_HOURS: Int =
+    ApplicationConfig("application.conf")
+        .propertyOrNull("traceFinalizer.liveWindowHours")
+        ?.getString()?.toIntOrNull() ?: 2
 private const val APM_ERROR_GROUPS_TABLE = "apm_error_groups_hourly"
 private const val APM_RESOURCE_STATS_TABLE = "apm_resource_stats_hourly"
 private const val APM_SERVICE_STATS_TABLE = "apm_service_stats_hourly"

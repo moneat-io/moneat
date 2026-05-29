@@ -66,8 +66,8 @@ class TraceFinalizerBackgroundService(
         // nonsensical windows.
         require(intervalSeconds > 0) { "traceFinalizer.intervalSeconds must be > 0, got $intervalSeconds" }
         require(liveWindowHours > 0) { "traceFinalizer.liveWindowHours must be > 0, got $liveWindowHours" }
-        require(backfillWindowHours >= liveWindowHours) {
-            "traceFinalizer.backfillWindowHours ($backfillWindowHours) must be >= liveWindowHours " +
+        require(backfillWindowHours > liveWindowHours) {
+            "traceFinalizer.backfillWindowHours ($backfillWindowHours) must be > liveWindowHours " +
                 "($liveWindowHours)"
         }
         require(lookbackHours >= 0) { "traceFinalizer.lookbackHours must be >= 0, got $lookbackHours" }

@@ -163,6 +163,7 @@ class TraceFinalizerBackgroundServiceTest {
         assertFailsWith<IllegalArgumentException> { service(intervalSeconds = 0) }
         assertFailsWith<IllegalArgumentException> { service(liveWindowHours = 0) }
         assertFailsWith<IllegalArgumentException> { service(backfillWindowHours = 1, liveWindowHours = 2) }
+        assertFailsWith<IllegalArgumentException> { service(backfillWindowHours = 2, liveWindowHours = 2) }
         assertFailsWith<IllegalArgumentException> { service(lookbackHours = -1) }
         assertFailsWith<IllegalArgumentException> { service(maxExecutionSeconds = 0) }
     }
