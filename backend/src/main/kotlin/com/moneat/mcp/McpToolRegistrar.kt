@@ -24,6 +24,8 @@ import com.moneat.mcp.tools.CreateDashboardAlertTool
 import com.moneat.mcp.tools.CreateDashboardTool
 import com.moneat.mcp.tools.CreateDashboardWidgetTool
 import com.moneat.mcp.tools.CreateDataSourceTool
+import com.moneat.mcp.tools.CreateFeatureFlagEnvironmentTool
+import com.moneat.mcp.tools.CreateFeatureFlagSdkKeyTool
 import com.moneat.mcp.tools.CreateFeatureFlagTool
 import com.moneat.mcp.tools.CreateAgentKeyTool
 import com.moneat.mcp.tools.CreateProjectTool
@@ -35,6 +37,8 @@ import com.moneat.mcp.tools.DeleteAlertTool
 import com.moneat.mcp.tools.DeleteDashboardAlertTool
 import com.moneat.mcp.tools.DeleteDashboardTool
 import com.moneat.mcp.tools.DeleteDashboardWidgetTool
+import com.moneat.mcp.tools.DeleteFeatureFlagSegmentTool
+import com.moneat.mcp.tools.DeleteFeatureFlagTool
 import com.moneat.mcp.tools.DeleteHostTool
 import com.moneat.mcp.tools.DeleteSilencePeriodTool
 import com.moneat.mcp.tools.DeleteUptimeMonitorTool
@@ -47,6 +51,8 @@ import com.moneat.mcp.tools.GetDashboardTemplatesTool
 import com.moneat.mcp.tools.GetDashboardTool
 import com.moneat.mcp.tools.GetDataSourceSchemaTool
 import com.moneat.mcp.tools.GetDbmQueriesTool
+import com.moneat.mcp.tools.GetFeatureFlagAnalyticsTool
+import com.moneat.mcp.tools.GetFeatureFlagTool
 import com.moneat.mcp.tools.GetHostLogsTool
 import com.moneat.mcp.tools.GetHostMetricsTool
 import com.moneat.mcp.tools.GetHostStatusTool
@@ -78,6 +84,10 @@ import com.moneat.mcp.tools.ListContainersTool
 import com.moneat.mcp.tools.ListDashboardsTool
 import com.moneat.mcp.tools.ListDataSourcesTool
 import com.moneat.mcp.tools.ListFeedbackTool
+import com.moneat.mcp.tools.ListFeatureFlagAuditEventsTool
+import com.moneat.mcp.tools.ListFeatureFlagEnvironmentsTool
+import com.moneat.mcp.tools.ListFeatureFlagSdkKeysTool
+import com.moneat.mcp.tools.ListFeatureFlagSegmentsTool
 import com.moneat.mcp.tools.ListFeatureFlagsTool
 import com.moneat.mcp.tools.ListHostsTool
 import com.moneat.mcp.tools.ListIssuesTool
@@ -95,15 +105,19 @@ import com.moneat.mcp.tools.PreviewDashboardWidgetQueryTool
 import com.moneat.mcp.tools.QueryLogsTool
 import com.moneat.mcp.tools.ReplaceDashboardWidgetsTool
 import com.moneat.mcp.tools.ResumeUptimeMonitorTool
+import com.moneat.mcp.tools.RevokeFeatureFlagSdkKeyTool
 import com.moneat.mcp.tools.UpdateAlertNotificationChannelsTool
 import com.moneat.mcp.tools.UpdateAlertTool
 import com.moneat.mcp.tools.UpdateDashboardAlertTool
 import com.moneat.mcp.tools.UpdateDashboardTool
 import com.moneat.mcp.tools.UpdateDashboardWidgetTool
+import com.moneat.mcp.tools.UpdateFeatureFlagConfigTool
+import com.moneat.mcp.tools.UpdateFeatureFlagTool
 import com.moneat.mcp.tools.UpdateIssueStatusTool
 import com.moneat.mcp.tools.UpdateNotificationPreferencesTool
 import com.moneat.mcp.tools.UpdateStatusPageIncidentTool
 import com.moneat.mcp.tools.UpdateStatusPageTool
+import com.moneat.mcp.tools.UpsertFeatureFlagSegmentTool
 import com.moneat.mcp.tools.UpdateUptimeMonitorTool
 
 object McpToolRegistrar {
@@ -183,8 +197,22 @@ object McpToolRegistrar {
         toolRegistry.register(GetProjectStatsTool())
 
         // Feature flag tools
+        toolRegistry.register(ListFeatureFlagEnvironmentsTool())
+        toolRegistry.register(CreateFeatureFlagEnvironmentTool())
         toolRegistry.register(ListFeatureFlagsTool())
         toolRegistry.register(CreateFeatureFlagTool())
+        toolRegistry.register(GetFeatureFlagTool())
+        toolRegistry.register(UpdateFeatureFlagTool())
+        toolRegistry.register(DeleteFeatureFlagTool())
+        toolRegistry.register(UpdateFeatureFlagConfigTool())
+        toolRegistry.register(ListFeatureFlagSegmentsTool())
+        toolRegistry.register(UpsertFeatureFlagSegmentTool())
+        toolRegistry.register(DeleteFeatureFlagSegmentTool())
+        toolRegistry.register(ListFeatureFlagSdkKeysTool())
+        toolRegistry.register(CreateFeatureFlagSdkKeyTool())
+        toolRegistry.register(RevokeFeatureFlagSdkKeyTool())
+        toolRegistry.register(ListFeatureFlagAuditEventsTool())
+        toolRegistry.register(GetFeatureFlagAnalyticsTool())
 
         // Dashboard alert tools (Phase 1)
         toolRegistry.register(CreateDashboardAlertTool())

@@ -19,6 +19,8 @@ package com.moneat.mcp.tools
 import com.moneat.featureflags.models.FeatureFlagAuditEvents
 import com.moneat.featureflags.models.FeatureFlagEnvironmentConfigs
 import com.moneat.featureflags.models.FeatureFlagEnvironments
+import com.moneat.featureflags.models.FeatureFlagSdkKeys
+import com.moneat.featureflags.models.FeatureFlagSegments
 import com.moneat.featureflags.models.FeatureFlagVariants
 import com.moneat.featureflags.models.FeatureFlags
 import com.moneat.featureflags.services.FeatureFlagService
@@ -82,6 +84,8 @@ class FeatureFlagToolTest {
             FeatureFlags,
             FeatureFlagVariants,
             FeatureFlagEnvironmentConfigs,
+            FeatureFlagSegments,
+            FeatureFlagSdkKeys,
             FeatureFlagAuditEvents,
         )
         createSchema()
@@ -128,6 +132,165 @@ class FeatureFlagToolTest {
         assertEquals("checkout.enabled", flags.first().jsonObject["key"]!!.jsonPrimitive.content)
     }
 
+    @Test
+    fun `environment tools create and list custom environments`() = runBlocking {
+        val registry = registry()
+
+        val create = registry.callTool(
+            "create_feature_flag_environment",
+            JsonObject(
+                mapOf(
+                    "key" to JsonPrimitive("qa"),
+                    "name" to JsonPrimitive("QA"),
+                    "description" to JsonPrimitive("Quality assurance"),
+                )
+            ),
+            context,
+        )
+
+        assertFalse(create.isError, create.content.first().text.orEmpty())
+        val list = registry.callTool("list_feature_flag_environments", JsonObject(emptyMap()), context)
+        val environments = toolJson.parseToJsonElement(list.content.first().text.orEmpty())
+            .jsonObject["environments"]!!
+            .jsonArray
+        assertEquals(DEFAULT_ENVIRONMENT_COUNT + 1, environments.size)
+    }
+
+    @Test
+    fun `flag management tools get update configure and archive flags`() = runBlocking {
+        val registry = registry()
+        registry.callTool("create_feature_flag", createFlagArgs(), context)
+
+        val get = registry.callTool(
+            "get_feature_flag",
+            JsonObject(mapOf("flag_key" to JsonPrimitive("checkout.enabled"))),
+            context,
+        )
+        assertFalse(get.isError, get.content.first().text.orEmpty())
+
+        val update = registry.callTool(
+            "update_feature_flag",
+            JsonObject(
+                mapOf(
+                    "flag_key" to JsonPrimitive("checkout.enabled"),
+                    "name" to JsonPrimitive("Checkout Gate"),
+                    "client_visible" to JsonPrimitive(false),
+                    "tags" to JsonArray(listOf(JsonPrimitive("release"))),
+                )
+            ),
+            context,
+        )
+        assertFalse(update.isError, update.content.first().text.orEmpty())
+        val updated = toolJson.parseToJsonElement(update.content.first().text.orEmpty()).jsonObject
+        assertEquals("Checkout Gate", updated["name"]!!.jsonPrimitive.content)
+
+        val config = registry.callTool(
+            "update_feature_flag_config",
+            JsonObject(
+                mapOf(
+                    "flag_key" to JsonPrimitive("checkout.enabled"),
+                    "environment" to JsonPrimitive("production"),
+                    "enabled" to JsonPrimitive(true),
+                    "default_variant_key" to JsonPrimitive("on"),
+                    "off_variant_key" to JsonPrimitive("off"),
+                    "rules" to JsonObject(mapOf("rules" to JsonArray(emptyList()))),
+                )
+            ),
+            context,
+        )
+        assertFalse(config.isError, config.content.first().text.orEmpty())
+        val configResponse = toolJson.parseToJsonElement(config.content.first().text.orEmpty()).jsonObject
+        assertEquals("true", configResponse["enabled"]!!.jsonPrimitive.content)
+
+        val delete = registry.callTool(
+            "delete_feature_flag",
+            JsonObject(mapOf("flag_key" to JsonPrimitive("checkout.enabled"))),
+            context,
+        )
+        assertFalse(delete.isError, delete.content.first().text.orEmpty())
+
+        val list = registry.callTool("list_feature_flags", JsonObject(emptyMap()), context)
+        val flags = toolJson.parseToJsonElement(list.content.first().text.orEmpty()).jsonObject["flags"]!!.jsonArray
+        assertEquals(0, flags.size)
+    }
+
+    @Test
+    fun `segment tools upsert list and archive segments`() = runBlocking {
+        val registry = registry()
+        val segmentArgs = JsonObject(
+            mapOf(
+                "key" to JsonPrimitive("beta-users"),
+                "name" to JsonPrimitive("Beta Users"),
+                "conditions" to JsonObject(mapOf("all" to JsonArray(emptyList()))),
+            )
+        )
+
+        val upsert = registry.callTool("upsert_feature_flag_segment", segmentArgs, context)
+        assertFalse(upsert.isError, upsert.content.first().text.orEmpty())
+
+        val list = registry.callTool("list_feature_flag_segments", JsonObject(emptyMap()), context)
+        val segments = toolJson.parseToJsonElement(list.content.first().text.orEmpty())
+            .jsonObject["segments"]!!
+            .jsonArray
+        assertEquals(1, segments.size)
+
+        val delete = registry.callTool(
+            "delete_feature_flag_segment",
+            JsonObject(mapOf("segment_key" to JsonPrimitive("beta-users"))),
+            context,
+        )
+        assertFalse(delete.isError, delete.content.first().text.orEmpty())
+    }
+
+    @Test
+    fun `sdk key tools create list and revoke keys`() = runBlocking {
+        val registry = registry()
+
+        val create = registry.callTool(
+            "create_feature_flag_sdk_key",
+            JsonObject(
+                mapOf(
+                    "environment_key" to JsonPrimitive("production"),
+                    "name" to JsonPrimitive("Server SDK"),
+                    "key_type" to JsonPrimitive("server"),
+                )
+            ),
+            context,
+        )
+
+        assertFalse(create.isError, create.content.first().text.orEmpty())
+        val created = toolJson.parseToJsonElement(create.content.first().text.orEmpty()).jsonObject
+        assertEquals("server", created["keyType"]!!.jsonPrimitive.content)
+
+        val list = registry.callTool("list_feature_flag_sdk_keys", JsonObject(emptyMap()), context)
+        val keys = toolJson.parseToJsonElement(list.content.first().text.orEmpty()).jsonObject["keys"]!!.jsonArray
+        assertEquals(1, keys.size)
+
+        val revoke = registry.callTool(
+            "revoke_feature_flag_sdk_key",
+            JsonObject(mapOf("sdk_key_id" to created["id"]!!)),
+            context,
+        )
+        assertFalse(revoke.isError, revoke.content.first().text.orEmpty())
+    }
+
+    @Test
+    fun `audit and analytics tools return feature flag metadata`() = runBlocking {
+        val registry = registry()
+        registry.callTool("create_feature_flag", createFlagArgs(), context)
+
+        val audit = registry.callTool(
+            "list_feature_flag_audit_events",
+            JsonObject(mapOf("limit" to JsonPrimitive(5))),
+            context,
+        )
+        val events = toolJson.parseToJsonElement(audit.content.first().text.orEmpty()).jsonObject["events"]!!.jsonArray
+        assertEquals(1, events.size)
+
+        val analytics = registry.callTool("get_feature_flag_analytics", JsonObject(emptyMap()), context)
+        assertFalse(analytics.isError, analytics.content.first().text.orEmpty())
+    }
+
     private fun createSchema() {
         transaction {
             SchemaUtils.create(Users, Organizations)
@@ -140,8 +303,22 @@ class FeatureFlagToolTest {
     private fun registry(): McpToolRegistry {
         val service = FeatureFlagService()
         return McpToolRegistry().also {
+            it.register(ListFeatureFlagEnvironmentsTool(service))
+            it.register(CreateFeatureFlagEnvironmentTool(service))
             it.register(ListFeatureFlagsTool(service))
             it.register(CreateFeatureFlagTool(service))
+            it.register(GetFeatureFlagTool(service))
+            it.register(UpdateFeatureFlagTool(service))
+            it.register(DeleteFeatureFlagTool(service))
+            it.register(UpdateFeatureFlagConfigTool(service))
+            it.register(ListFeatureFlagSegmentsTool(service))
+            it.register(UpsertFeatureFlagSegmentTool(service))
+            it.register(DeleteFeatureFlagSegmentTool(service))
+            it.register(ListFeatureFlagSdkKeysTool(service))
+            it.register(CreateFeatureFlagSdkKeyTool(service))
+            it.register(RevokeFeatureFlagSdkKeyTool(service))
+            it.register(ListFeatureFlagAuditEventsTool(service))
+            it.register(GetFeatureFlagAnalyticsTool(service))
         }
     }
 
@@ -242,6 +419,35 @@ class FeatureFlagToolTest {
             updated_by INT NULL,
             created_at TIMESTAMP NOT NULL,
             updated_at TIMESTAMP NOT NULL
+        )
+        """.trimIndent(),
+        """
+        CREATE TABLE IF NOT EXISTS feature_flag_segments (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            organization_id INT NOT NULL,
+            "key" VARCHAR(255) NOT NULL,
+            "name" VARCHAR(255) NOT NULL,
+            description TEXT NULL,
+            conditions_json TEXT DEFAULT '{"all":[]}' NOT NULL,
+            created_at TIMESTAMP NOT NULL,
+            updated_at TIMESTAMP NOT NULL,
+            archived_at TIMESTAMP NULL
+        )
+        """.trimIndent(),
+        """
+        CREATE TABLE IF NOT EXISTS feature_flag_sdk_keys (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            organization_id INT NOT NULL,
+            environment_id INT NOT NULL,
+            "name" VARCHAR(255) NOT NULL,
+            key_type VARCHAR(16) NOT NULL,
+            key_hash VARCHAR(255) NOT NULL,
+            key_prefix VARCHAR(16) NOT NULL,
+            created_by INT NULL,
+            created_at TIMESTAMP NOT NULL,
+            last_used_at TIMESTAMP NULL,
+            revoked_at TIMESTAMP NULL,
+            is_active BOOLEAN DEFAULT TRUE NOT NULL
         )
         """.trimIndent(),
         """

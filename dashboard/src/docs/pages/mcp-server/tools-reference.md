@@ -69,12 +69,34 @@ Get error counts and event volume statistics.
 
 ## Feature Flag Tools
 
+### `list_feature_flag_environments`
+List feature flag environments.
+
+No parameters.
+
+### ✏️ `create_feature_flag_environment`
+Create a feature flag environment.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `key` | string | Yes | Stable environment key, such as `production` or `qa` |
+| `name` | string | Yes | Human-readable environment name |
+| `description` | string | No | Environment description |
+
 ### `list_feature_flags`
 List feature flags and environments for the organization.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `environment` | string | No | Environment key to prioritize in config results |
+
+### `get_feature_flag`
+Get one feature flag by key.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `flag_key` | string | Yes | Feature flag key |
+| `environment` | string | No | Environment key to return only that config |
 
 ### ✏️ `create_feature_flag`
 Create a feature flag with variants for OpenFeature evaluation.
@@ -90,6 +112,95 @@ Create a feature flag with variants for OpenFeature evaluation.
 | `tags` | array | No | Grouping tags |
 | `default_variant_key` | string | No | Variant returned when no targeting rule matches |
 | `off_variant_key` | string | No | Variant returned while the flag is disabled |
+
+### ✏️ `update_feature_flag`
+Update a feature flag's metadata, client visibility, tags, or variants.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `flag_key` | string | Yes | Feature flag key |
+| `name` | string | No | Updated display name |
+| `description` | string | No | Updated internal description |
+| `client_visible` | boolean | No | Allow client SDK keys to evaluate this flag |
+| `tags` | array | No | Replacement grouping tags |
+| `variants` | array | No | Replacement variant objects with `key`, optional `name`, and JSON `value` |
+
+### ✏️ `delete_feature_flag`
+Archive a feature flag by key.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `flag_key` | string | Yes | Feature flag key |
+
+### ✏️ `update_feature_flag_config`
+Update one environment-specific feature flag config.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `flag_key` | string | Yes | Feature flag key |
+| `environment` | string | Yes | Environment key |
+| `enabled` | boolean | No | Enable or disable this flag in the environment |
+| `default_variant_key` | string | No | Variant returned when no targeting rule matches |
+| `off_variant_key` | string | No | Variant returned while the flag is disabled |
+| `rules` | object | No | Rules JSON object, such as `{"rules": []}` |
+
+### `list_feature_flag_segments`
+List reusable feature flag targeting segments.
+
+No parameters.
+
+### ✏️ `upsert_feature_flag_segment`
+Create or update a reusable feature flag targeting segment.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `key` | string | Yes | Stable segment key |
+| `name` | string | Yes | Human-readable segment name |
+| `description` | string | No | Segment description |
+| `conditions` | object | No | Targeting conditions JSON object, such as `{"all": []}` |
+
+### ✏️ `delete_feature_flag_segment`
+Archive a feature flag segment by key.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `segment_key` | string | Yes | Segment key |
+
+### `list_feature_flag_sdk_keys`
+List active feature flag SDK keys.
+
+No parameters.
+
+### ✏️ `create_feature_flag_sdk_key`
+Create a feature flag SDK key and return its one-time secret.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `environment_key` | string | Yes | Environment key for this SDK key |
+| `name` | string | Yes | Human-readable SDK key name |
+| `key_type` | string | Yes | `server` or `client` |
+
+### ✏️ `revoke_feature_flag_sdk_key`
+Revoke an active feature flag SDK key.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `sdk_key_id` | integer | Yes | Feature flag SDK key ID |
+
+### `list_feature_flag_audit_events`
+List recent feature flag audit events.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `limit` | integer | No | Maximum events to return, from 1 to 100 |
+
+### `get_feature_flag_analytics`
+Get feature flag evaluation and tracking analytics.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `environment` | string | No | Environment key |
+| `hours` | integer | No | Lookback window in hours |
 
 ## Log Tools
 
