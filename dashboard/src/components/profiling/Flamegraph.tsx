@@ -116,7 +116,7 @@ function prefsKey(service?: string): string {
 
 function loadPrefs(service?: string): FlamegraphPrefs {
   try {
-    const raw = localStorage.getItem(prefsKey(service))
+    const raw = globalThis.localStorage.getItem(prefsKey(service))
     if (raw) return {...DEFAULT_PREFS, ...JSON.parse(raw)}
   } catch {
     // ignore malformed/inaccessible storage
@@ -257,7 +257,7 @@ export function Flamegraph({
 
   useEffect(() => {
     try {
-      localStorage.setItem(prefsKey(service), JSON.stringify(prefs))
+      globalThis.localStorage.setItem(prefsKey(service), JSON.stringify(prefs))
     } catch {
       // ignore inaccessible storage
     }
@@ -427,8 +427,8 @@ export function Flamegraph({
       const el = tooltipRef.current
       let left = e.clientX + 14
       let top = e.clientY - 10
-      if (left + 320 > window.innerWidth) left = e.clientX - 320
-      if (top + 120 > window.innerHeight) top = e.clientY - 120
+      if (left + 320 > globalThis.window.innerWidth) left = e.clientX - 320
+      if (top + 120 > globalThis.window.innerHeight) top = e.clientY - 120
       el.style.left = `${left}px`
       el.style.top = `${top}px`
     },
@@ -460,8 +460,8 @@ export function Flamegraph({
         copyText(hoveredRef.current.path.join(';'))
       }
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    globalThis.window.addEventListener('keydown', onKey)
+    return () => globalThis.window.removeEventListener('keydown', onKey)
   }, [gotoMatch, updatePrefs, prefs.denoise, prefs.orientation])
 
   const visibleFrames = useMemo(() => {
@@ -744,7 +744,7 @@ export function Flamegraph({
 
             return (
               <div
-                key={ff.path.join('')}
+                key={ff.path.join(';')}
                 className="absolute cursor-pointer group"
                 style={{
                   left: `${ff.x}%`,

@@ -35,7 +35,6 @@ private val logger = KotlinLogging.logger {}
 object DatadogJfrFlamegraphService {
 
     private const val JFR_MAGIC_LAST_BYTE_INDEX = 3
-    private const val MAX_THREADS = 50
 
     private data class MutableFrame(
         val name: String,

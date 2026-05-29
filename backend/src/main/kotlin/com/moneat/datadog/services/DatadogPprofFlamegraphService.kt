@@ -35,7 +35,6 @@ private val logger = KotlinLogging.logger {}
 
 private const val HEX_RADIX = 16
 private const val JFR_MAGIC_LAST_INDEX = 3
-private const val MAX_THREADS = 50
 private val THREAD_LABEL_KEYS = listOf("thread name", "thread")
 
 object DatadogPprofFlamegraphService {

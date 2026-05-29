@@ -20,6 +20,12 @@ import {
   filterToNamespaces,
   computeTopFunctions,
   computeDiff,
+  colorFor,
+  diffColor,
+  packageColor,
+  packageOf,
+  shortName,
+  sumValues,
   topLevelNamespace,
 } from '../frameModel'
 
@@ -36,6 +42,10 @@ describe('normalizeLanguage', () => {
     expect(normalizeLanguage('go')).toBe('go')
     expect(normalizeLanguage('python')).toBe('python')
     expect(normalizeLanguage('nodejs')).toBe('nodejs')
+    expect(normalizeLanguage('ts')).toBe('nodejs')
+    expect(normalizeLanguage('ruby')).toBe('ruby')
+    expect(normalizeLanguage('dotnet')).toBe('dotnet')
+    expect(normalizeLanguage('php')).toBe('php')
     expect(normalizeLanguage(undefined)).toBe('unknown')
   })
 })
@@ -87,11 +97,40 @@ describe('classifyFrame (go)', () => {
   })
 })
 
+describe('classifyFrame (python and node)', () => {
+  it('separates runtime, dependencies and app frames', () => {
+    expect(classifyFrame('<built-in>.len', {language: 'python', appPrefixes: []}))
+      .toBe('runtime')
+    expect(classifyFrame('/venv/lib/site-packages/flask/app.py', {
+      language: 'python',
+      appPrefixes: [],
+    })).toBe('library')
+    expect(classifyFrame('/srv/app/handler.py', {
+      language: 'python',
+      appPrefixes: ['/srv/app'],
+    })).toBe('app')
+
+    expect(classifyFrame('node:internal/process/task_queues', {
+      language: 'nodejs',
+      appPrefixes: [],
+    })).toBe('runtime')
+    expect(classifyFrame('/app/node_modules/react/index.js', {
+      language: 'nodejs',
+      appPrefixes: ['/app/src'],
+    })).toBe('library')
+    expect(classifyFrame('/app/src/server.ts', {
+      language: 'nodejs',
+      appPrefixes: ['/app/src'],
+    })).toBe('app')
+  })
+})
+
 describe('annotateSelf', () => {
   it('computes self as value minus children', () => {
     const [root] = annotateSelf([node('a', 10, [node('b', 4), node('c', 3)])])
     expect(root.self).toBe(3)
     expect(root.children[0].self).toBe(4)
+    expect(sumValues(root.children)).toBe(7)
   })
 })
 
@@ -165,6 +204,11 @@ describe('detectAppNamespaces', () => {
 })
 
 describe('filterToNamespaces', () => {
+  it('returns the original forest when no prefixes are selected', () => {
+    const tree = [node('com.app.A.run', 4)]
+    expect(filterToNamespaces(tree, [])).toBe(tree)
+  })
+
   it('keeps only paths reaching the namespace', () => {
     const tree = [
       node('java.lang.Thread.run', 10, [node('com.app.A.run', 6)]),
@@ -203,6 +247,19 @@ describe('computeTopFunctions', () => {
     expect(appOnly[0].name).toBe('com.moneat.svc.A.run')
     expect(appOnly[0].selfPercent).toBeCloseTo(30)
   })
+
+  it('ranks by total and falls back when profile total is zero', () => {
+    const ranked = computeTopFunctions(tree, 0, {
+      language: 'jvm',
+      appPrefixes: ['com.moneat'],
+      scope: 'all',
+      sortBy: 'total',
+      limit: 2,
+    })
+    expect(ranked).toHaveLength(2)
+    expect(ranked[0].name).toBe('com.moneat.svc.A.run')
+    expect(ranked[0].totalPercent).toBe(1000)
+  })
 })
 
 describe('computeDiff', () => {
@@ -229,5 +286,28 @@ describe('topLevelNamespace', () => {
     expect(topLevelNamespace('github.com/acme/api/h.Handle', 'go')).toBe(
       'github.com/acme/api',
     )
+    expect(topLevelNamespace('main.main', 'go')).toBe('main')
+    expect(topLevelNamespace('worker.run', 'python')).toBe('worker')
+  })
+})
+
+describe('colors and name formatting', () => {
+  it('uses deterministic package, kind and diff colors', () => {
+    expect(packageColor('com.moneat.service.Handler.run')).toBe('hsl(142, 55%, 42%)')
+    expect(packageColor('unknown.package.Handler.run')).toMatch(/^hsl\(/)
+    expect(colorFor('java.lang.Thread.run', {
+      mode: 'kind',
+      language: 'jvm',
+      appPrefixes: [],
+    })).toBe('hsl(220, 8%, 42%)')
+    expect(diffColor(6)).toContain('hsl(0')
+    expect(diffColor(-6)).toContain('hsl(210')
+    expect(diffColor(0)).toBe('hsl(220, 6%, 40%)')
+  })
+
+  it('formats packages and compact frame names', () => {
+    expect(packageOf('com.moneat.Service.run(java.lang.String)')).toBe('com.moneat.Service')
+    expect(shortName('com.moneat.Service.run(java.lang.String)')).toBe('Service.run()')
+    expect(shortName('main')).toBe('main')
   })
 })

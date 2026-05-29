@@ -53,7 +53,7 @@ export function FlamegraphMinimap({
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const dpr = window.devicePixelRatio || 1
+    const dpr = globalThis.window?.devicePixelRatio ?? 1
     canvas.width = width * dpr
     canvas.height = MINIMAP_HEIGHT * dpr
     const ctx = canvas.getContext('2d')
@@ -98,18 +98,21 @@ export function FlamegraphMinimap({
         ref={canvasRef}
         className="w-full rounded border cursor-pointer block"
         style={{height: MINIMAP_HEIGHT}}
-        onMouseDown={(e) => {
+        onPointerDown={(e) => {
           draggingRef.current = true
+          e.currentTarget.setPointerCapture(e.pointerId)
           scrollFromEvent(e.clientY)
         }}
-        onMouseMove={(e) => {
+        onPointerMove={(e) => {
           if (draggingRef.current) scrollFromEvent(e.clientY)
         }}
-        onMouseUp={() => {
+        onPointerUp={(e) => {
           draggingRef.current = false
+          e.currentTarget.releasePointerCapture(e.pointerId)
         }}
-        onMouseLeave={() => {
+        onPointerCancel={(e) => {
           draggingRef.current = false
+          e.currentTarget.releasePointerCapture(e.pointerId)
         }}
       />
     </div>

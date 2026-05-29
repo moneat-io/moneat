@@ -110,7 +110,7 @@ export async function downloadPng(
   height: number,
   filename: string,
 ): Promise<void> {
-  const scale = window.devicePixelRatio || 2
+  const scale = globalThis.window?.devicePixelRatio ?? 2
   const blob = new Blob([svg], {type: 'image/svg+xml;charset=utf-8'})
   const url = URL.createObjectURL(blob)
   try {
