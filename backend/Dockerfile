@@ -11,6 +11,13 @@ FROM --platform=$BUILDPLATFORM gradle:9-jdk17 AS build
 WORKDIR /app
 COPY backend/build.gradle.kts backend/settings.gradle.kts backend/gradle.properties ./
 COPY backend/gradle ./gradle
+# settings.gradle.kts includes :ee at ../ee/backend, so the project directory
+# must exist before any Gradle invocation configures the build.
+COPY ee/backend/build.gradle.kts \
+     ee/backend/detekt.yml \
+     ee/backend/detekt-format.yml \
+     ee/backend/license-header.txt \
+     /ee/backend/
 RUN --mount=type=cache,target=/home/gradle/.gradle \
     gradle dependencies --no-daemon --build-cache || true
 COPY backend/src ./src
