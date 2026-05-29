@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {Bug, CheckCircle2, ExternalLink, Loader2, PauseCircle, PlayCircle, XCircle} from 'lucide-react'
+import {Bug, CheckCircle2, Loader2, PauseCircle, PlayCircle, XCircle} from 'lucide-react'
 import type {WorkflowRunResponse} from '@/lib/api'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Sheet, SheetContent, SheetHeader, SheetTitle} from '@/components/ui/sheet'
-import type {WorkflowValidationIssue} from './workflowGraph'
+import {formatDate, type WorkflowValidationIssue} from './workflowGraph'
 
 interface PublishToggleProps {
   published: boolean
@@ -66,8 +66,8 @@ export function ValidationPanel({issues}: {issues: WorkflowValidationIssue[]}) {
         <p className="text-sm text-muted-foreground">Ready to save or publish.</p>
       ) : (
         <div className="space-y-1.5">
-          {issues.map((issue) => (
-            <div key={issue.message} className="flex items-start gap-2 text-sm">
+          {issues.map((issue, index) => (
+            <div key={`${issue.level}-${index}`} className="flex items-start gap-2 text-sm">
               <Badge variant={issue.level === 'error' ? 'destructive' : 'secondary'} className="mt-0.5">
                 {issue.level}
               </Badge>
@@ -83,12 +83,10 @@ export function ValidationPanel({issues}: {issues: WorkflowValidationIssue[]}) {
 export function RunDebugDrawer({
   run,
   open,
-  showTemporalLink,
   onOpenChange,
 }: {
   run: WorkflowRunResponse | null
   open: boolean
-  showTemporalLink: boolean
   onOpenChange: (open: boolean) => void
 }) {
   return (
@@ -107,12 +105,6 @@ export function RunDebugDrawer({
                 <span className="text-xs text-muted-foreground">{formatDate(run.created_at)}</span>
               </div>
               {run.error_message && <p className="mt-2 text-sm text-destructive">{run.error_message}</p>}
-              {showTemporalLink && (
-                <Button type="button" variant="outline" size="sm" className="mt-3 gap-1.5">
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  Open in Temporal
-                </Button>
-              )}
             </div>
             <div className="space-y-2">
               {run.steps.length === 0 ? (
@@ -142,9 +134,4 @@ export function RunDebugDrawer({
       </SheetContent>
     </Sheet>
   )
-}
-
-function formatDate(value?: string | null): string {
-  if (!value) return 'Never'
-  return new Date(value).toLocaleString()
 }

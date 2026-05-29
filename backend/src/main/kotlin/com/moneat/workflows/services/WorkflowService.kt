@@ -399,8 +399,24 @@ class WorkflowService(
                 createRun(event, WorkflowCandidate(workflowId, version), manualOnceFor(), force = true)
             } ?: return null
         startTemporalExecution(run)
-        return listRuns(organizationId, workflowId, limit = 1).firstOrNull { item -> item.id == run.runId }
+        return getRun(organizationId, workflowId, run.runId)
     }
+
+    private fun getRun(
+        organizationId: Int,
+        workflowId: Int,
+        runId: Int
+    ): WorkflowRunResponse? =
+        transaction {
+            WorkflowRuns
+                .selectAll()
+                .where {
+                    (WorkflowRuns.id eq runId) and
+                        (WorkflowRuns.workflowId eq workflowId) and
+                        (WorkflowRuns.organizationId eq organizationId)
+                }.firstOrNull()
+                ?.let { row -> runResponse(row) }
+        }
 
     fun listRuns(
         organizationId: Int,

@@ -88,6 +88,7 @@ function WorkflowCanvasNode({data}: {data: CanvasNodeData}) {
   const node = data.graphNode
   const label = nodeLabel(node, data.catalog)
   const subtitle = nodeSubtitle(node)
+  const handles = sourceHandlesForNode(node)
   return (
     <div
       className={cn(
@@ -109,6 +110,16 @@ function WorkflowCanvasNode({data}: {data: CanvasNodeData}) {
         </div>
       </div>
       <Handle className="!h-2 !w-2 !border-border !bg-background" type="source" position={Position.Bottom} />
+      {handles.map((handle, index) => (
+        <Handle
+          key={handle}
+          id={handle}
+          className="!h-2 !w-2 !border-border !bg-background"
+          type="source"
+          position={Position.Right}
+          style={{top: `${branchHandleOffset(index, handles.length)}%`}}
+        />
+      ))}
     </div>
   )
 }
@@ -153,6 +164,7 @@ function graphToFlow(
     id: edgeId(edge, index),
     source: edge.from,
     target: edge.to,
+    sourceHandle: edge.branch ?? undefined,
     label: edge.on === 'error' ? 'error' : edge.branch,
     animated: edge.on === 'error',
     className: edge.on === 'error' ? 'stroke-destructive' : undefined,
@@ -180,6 +192,24 @@ function edgeId(
   index: number
 ): string {
   return `${edge.from}-${edge.to}-${edge.branch ?? edge.on ?? index}`
+}
+
+function sourceHandlesForNode(node: WorkflowGraphNode): string[] {
+  if (node.type === 'condition' && node.kind === 'switch') {
+    return [...(node.cases ?? []).map((item) => item.name).filter(Boolean), 'default']
+  }
+  if (node.type === 'condition') return ['true', 'false']
+  if (node.type === 'control' && node.kind === 'wait_until') return ['true', 'timeout']
+  if (node.type === 'control' && (node.kind === 'for_each' || node.kind === 'while')) return ['body', 'done']
+  return []
+}
+
+function branchHandleOffset(
+  index: number,
+  count: number
+): number {
+  if (count <= 1) return 50
+  return 24 + (index * 52) / (count - 1)
 }
 
 const nodeTypes = {

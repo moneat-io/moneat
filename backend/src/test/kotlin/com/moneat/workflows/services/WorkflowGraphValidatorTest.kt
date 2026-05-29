@@ -25,7 +25,12 @@ import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
 class WorkflowGraphValidatorTest {
+
+    // ──── Fixture ────
+
     private val validator = WorkflowGraphValidator()
+
+    // ──── Tests ────
 
     @Test
     fun `validates branching graph`() {
@@ -100,6 +105,8 @@ class WorkflowGraphValidatorTest {
             onceForTemplate = emptyList()
         )
     }
+
+    // ──── Helpers ────
 
     private fun trigger(): WorkflowGraphNode =
         WorkflowGraphNode(id = "trigger", type = "trigger", trigger = "alert.triggered")

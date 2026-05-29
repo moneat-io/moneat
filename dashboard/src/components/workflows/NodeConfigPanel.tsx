@@ -21,6 +21,7 @@ import type {
   WorkflowGraphNode,
   WorkflowOperationDefinition,
   WorkflowScopeReferenceDefinition,
+  WorkflowSwitchCaseConfig,
 } from '@/lib/api'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
@@ -37,6 +38,9 @@ interface NodeConfigPanelProps {
   onChange: (node: WorkflowGraphNode) => void
   onRemove: (nodeId: string) => void
 }
+
+type ConditionKind = 'if' | 'switch'
+type ControlKind = 'sleep' | 'wait_until' | 'for_each' | 'while'
 
 export function NodeConfigPanel({
   node,
@@ -172,9 +176,10 @@ function ConditionFields({
   triggerName: string
   onChange: (node: WorkflowGraphNode) => void
 }) {
+  const conditionKind = node.kind === 'switch' ? 'switch' : 'if'
   return (
     <div className="space-y-3">
-      <Select value={node.kind ?? 'if'} onValueChange={(kind) => onChange({...node, kind})}>
+      <Select value={conditionKind} onValueChange={(kind) => onChange(nodeForConditionKind(node, kind))}>
         <SelectTrigger>
           <SelectValue />
         </SelectTrigger>
@@ -183,12 +188,21 @@ function ConditionFields({
           <SelectItem value="switch">Switch</SelectItem>
         </SelectContent>
       </Select>
-      <ConditionList
-        conditions={node.conditions ?? []}
-        catalog={catalog}
-        triggerName={triggerName}
-        onChange={(conditions) => onChange({...node, conditions})}
-      />
+      {conditionKind === 'switch' ? (
+        <SwitchCaseList
+          cases={node.cases ?? []}
+          catalog={catalog}
+          triggerName={triggerName}
+          onChange={(cases) => onChange({...node, cases})}
+        />
+      ) : (
+        <ConditionList
+          conditions={node.conditions ?? []}
+          catalog={catalog}
+          triggerName={triggerName}
+          onChange={(conditions) => onChange({...node, conditions})}
+        />
+      )}
     </div>
   )
 }
@@ -205,11 +219,12 @@ function ControlFields({
   onChange: (node: WorkflowGraphNode) => void
 }) {
   const paramName = node.kind === 'sleep' ? 'duration' : 'timeout'
+  const controlKind = controlKindFor(node.kind)
   return (
     <div className="space-y-3">
       <div className="space-y-1.5">
         <Label>Control</Label>
-        <Select value={node.kind ?? 'sleep'} onValueChange={(kind) => onChange({...node, kind})}>
+        <Select value={controlKind} onValueChange={(kind) => onChange(nodeForControlKind(node, kind))}>
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
@@ -231,6 +246,34 @@ function ControlFields({
           />
         </div>
       )}
+      {node.kind === 'for_each' && (
+        <div className="grid gap-2">
+          <div className="space-y-1.5">
+            <Label>Items reference</Label>
+            <Input
+              value={String(node.params?.items_reference ?? '')}
+              placeholder="alert.items"
+              onChange={(event) => updateParam(node, 'items_reference', event.target.value, onChange)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Item variable</Label>
+            <Input
+              value={String(node.params?.item_variable ?? 'item')}
+              onChange={(event) => updateParam(node, 'item_variable', event.target.value, onChange)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Max items</Label>
+            <Input
+              type="number"
+              min={1}
+              value={String(node.params?.max_items ?? '100')}
+              onChange={(event) => updateParam(node, 'max_items', event.target.value, onChange)}
+            />
+          </div>
+        </div>
+      )}
       {(node.kind === 'wait_until' || node.kind === 'while') && (
         <ConditionList
           conditions={node.conditions ?? []}
@@ -238,6 +281,78 @@ function ControlFields({
           triggerName={triggerName}
           onChange={(conditions) => onChange({...node, conditions})}
         />
+      )}
+    </div>
+  )
+}
+
+function SwitchCaseList({
+  cases,
+  catalog,
+  triggerName,
+  onChange,
+}: {
+  cases: WorkflowSwitchCaseConfig[]
+  catalog?: WorkflowCatalogResponse
+  triggerName: string
+  onChange: (cases: WorkflowSwitchCaseConfig[]) => void
+}) {
+  const addCase = () => {
+    const nextNumber = cases.length + 1
+    onChange([...cases, defaultSwitchCase(nextNumber)])
+  }
+  const updateCase = (index: number, nextCase: WorkflowSwitchCaseConfig) => {
+    onChange(cases.map((item, itemIndex) => (itemIndex === index ? nextCase : item)))
+  }
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <Label>Cases</Label>
+        <Button type="button" variant="outline" size="sm" onClick={addCase}>
+          Add
+        </Button>
+      </div>
+      {cases.length === 0 ? (
+        <p className="rounded-md border bg-background px-3 py-2 text-sm text-muted-foreground">
+          No switch cases configured.
+        </p>
+      ) : (
+        cases.map((switchCase, index) => (
+          <div key={`${switchCase.name}-${index}`} className="grid gap-2 rounded-md border bg-background p-2">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Branch key</Label>
+                <Input
+                  value={switchCase.name}
+                  onChange={(event) => updateCase(index, {...switchCase, name: event.target.value})}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Label</Label>
+                <Input
+                  value={switchCase.label ?? ''}
+                  onChange={(event) => updateCase(index, {...switchCase, label: event.target.value})}
+                />
+              </div>
+            </div>
+            <ConditionList
+              conditions={switchCase.conditions ?? []}
+              catalog={catalog}
+              triggerName={triggerName}
+              onChange={(conditions) => updateCase(index, {...switchCase, conditions})}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onChange(cases.filter((_, itemIndex) => itemIndex !== index))}
+              className="justify-start text-destructive"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Remove case
+            </Button>
+          </div>
+        ))
       )}
     </div>
   )
@@ -345,7 +460,14 @@ function ConditionRow({
   const operations = operationsForReference(catalog, reference)
   return (
     <div className="grid gap-2 rounded-md border bg-background p-2">
-      <Select value={condition.reference} onValueChange={(value) => onChange({...condition, reference: value})}>
+      <Select
+        value={condition.reference}
+        onValueChange={(value) => {
+          const nextReference = trigger?.scope.find((item) => item.name === value)
+          const operation = operationsForReference(catalog, nextReference)[0]?.name ?? 'is_set'
+          onChange({...condition, reference: value, operation, value: ''})
+        }}
+      >
         <SelectTrigger>
           <SelectValue />
         </SelectTrigger>
@@ -387,6 +509,61 @@ function updateParam(
   onChange: (node: WorkflowGraphNode) => void
 ) {
   onChange({...node, params: {...node.params, [name]: value}})
+}
+
+function nodeForConditionKind(
+  node: WorkflowGraphNode,
+  kind: string
+): WorkflowGraphNode {
+  const nextKind: ConditionKind = kind === 'switch' ? 'switch' : 'if'
+  if (nextKind === 'switch') {
+    const cases = node.cases?.length ? node.cases : [defaultSwitchCase(1, node.conditions ?? [])]
+    return {...node, kind: nextKind, conditions: [], cases}
+  }
+  return {...node, kind: nextKind, cases: []}
+}
+
+function nodeForControlKind(
+  node: WorkflowGraphNode,
+  kind: string
+): WorkflowGraphNode {
+  const nextKind = controlKindFor(kind)
+  if (nextKind === 'sleep') {
+    return {...node, kind: nextKind, params: {...node.params, duration: String(node.params?.duration ?? 'PT5M')}}
+  }
+  if (nextKind === 'wait_until') {
+    return {...node, kind: nextKind, params: {...node.params, timeout: String(node.params?.timeout ?? 'PT30M')}}
+  }
+  if (nextKind === 'for_each') {
+    return {
+      ...node,
+      kind: nextKind,
+      params: {
+        ...node.params,
+        items_reference: String(node.params?.items_reference ?? ''),
+        item_variable: String(node.params?.item_variable ?? 'item'),
+        max_items: String(node.params?.max_items ?? '100'),
+      },
+      conditions: [],
+    }
+  }
+  return {
+    ...node,
+    kind: nextKind,
+    params: {...node.params, max_iterations: String(node.params?.max_iterations ?? '100')},
+  }
+}
+
+function controlKindFor(kind: string | null | undefined): ControlKind {
+  if (kind === 'wait_until' || kind === 'for_each' || kind === 'while') return kind
+  return 'sleep'
+}
+
+function defaultSwitchCase(
+  nextNumber: number,
+  conditions: WorkflowConditionConfig[] = []
+): WorkflowSwitchCaseConfig {
+  return {name: `case-${nextNumber}`, label: `Case ${nextNumber}`, conditions}
 }
 
 function operationsForReference(

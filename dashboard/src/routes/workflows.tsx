@@ -74,6 +74,8 @@ export const Route = createFileRoute('/workflows')({
   component: WorkflowsPage,
 })
 
+const noop = () => undefined
+
 function WorkflowsPage() {
   const {toast} = useToast()
   const queryClient = useQueryClient()
@@ -216,7 +218,6 @@ function WorkflowsPage() {
       <RunDebugDrawer
         run={debugRun}
         open={debugRun !== null}
-        showTemporalLink={false}
         onOpenChange={(open) => {
           if (!open) setDebugRun(null)
         }}
@@ -381,8 +382,8 @@ function WorkflowDetail({
             graph={workflow.graph}
             catalog={catalog}
             selectedNodeId={null}
-            onSelectNode={() => undefined}
-            onGraphChange={() => undefined}
+            onSelectNode={noop}
+            onGraphChange={noop}
           />
           <RunsPanel runs={runs} loading={runsLoading} onDebugRun={onDebugRun} />
         </div>

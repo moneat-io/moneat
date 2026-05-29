@@ -29,6 +29,7 @@ import io.temporal.activity.ActivityInterface
 import io.temporal.activity.ActivityMethod
 import io.temporal.activity.ActivityOptions
 import io.temporal.common.RetryOptions
+import io.temporal.failure.ActivityFailure
 import io.temporal.workflow.Workflow
 import io.temporal.workflow.WorkflowInterface
 import io.temporal.workflow.WorkflowMethod
@@ -193,7 +194,16 @@ class WorkflowInterpreterWorkflowImpl : WorkflowInterpreterWorkflow {
             val step = WorkflowStepConfig(action, node.params.mapValues { (_, value) -> value.workflowStringValue() })
             val actions = Workflow.newActivityStub(ExecuteActionActivity::class.java, activityOptionsFor(node))
             markNodeRunning(node, scope)
-            val result = actions.execute(ExecuteActionInput(snapshot.organizationId, step, scope.toRuntimeValues()))
+            val result =
+                try {
+                    actions.execute(ExecuteActionInput(snapshot.organizationId, step, scope.toRuntimeValues()))
+                } catch (failure: ActivityFailure) {
+                    handleActionFailure(node, failure.workflowStepMessage())
+                    return
+                } catch (failure: RuntimeException) {
+                    handleActionFailure(node, failure.workflowStepMessage())
+                    return
+                }
             val output = result.output.toWorkflowValues()
             if (result.status == STATUS_COMPLETE) {
                 mergeStepOutput(node, output)
@@ -201,14 +211,25 @@ class WorkflowInterpreterWorkflowImpl : WorkflowInterpreterWorkflow {
                 follow(node)
                 return
             }
-            markNodeFailed(node, result.errorMessage ?: "Unknown workflow step error", result.completedAt)
+            handleActionFailure(node, result.errorMessage ?: "Unknown workflow step error", result.completedAt)
+        }
+
+        private fun handleActionFailure(
+            node: WorkflowGraphNode,
+            message: String,
+            completedAt: String = Instant.ofEpochMilli(Workflow.currentTimeMillis()).toString()
+        ) {
+            markNodeFailed(node, message, completedAt)
             val errorEdge = edgesBySource[node.id].orEmpty().firstOrNull { edge -> edge.on == "error" }
             when {
                 errorEdge != null -> executeFrom(errorEdge.to)
                 node.continueOnError -> follow(node)
-                else -> errorMessage = result.errorMessage ?: "Unknown workflow step error"
+                else -> errorMessage = message
             }
         }
+
+        private fun RuntimeException.workflowStepMessage(): String =
+            cause?.message ?: message ?: "Unknown workflow step error"
 
         private fun executeControl(node: WorkflowGraphNode) {
             when (node.kind) {
@@ -248,12 +269,18 @@ class WorkflowInterpreterWorkflowImpl : WorkflowInterpreterWorkflow {
             val maxItems = boundedIntParam(node, "max_items", DEFAULT_MAX_ITEMS)
             val items = scope.workflowValue(itemReference)?.workflowArrayValue().orEmpty().take(maxItems)
             markNodeRunning(node, mapOf("items" to JsonPrimitive(itemReference)))
+            var completedItems = 0
             items.forEachIndexed { index, item ->
                 scope[itemVariable] = item
                 scope["$itemVariable.index"] = JsonPrimitive(index)
                 follow(node, branch = "body")
+                if (errorMessage != null) {
+                    markNodeFailed(node, errorMessage ?: "For-each body failed")
+                    return
+                }
+                completedItems += 1
             }
-            markNodeComplete(node, mapOf("count" to JsonPrimitive(items.size)))
+            markNodeComplete(node, mapOf("count" to JsonPrimitive(completedItems)))
             follow(node, branch = "done")
         }
 
@@ -283,7 +310,10 @@ class WorkflowInterpreterWorkflowImpl : WorkflowInterpreterWorkflow {
         ) {
             if (errorMessage != null) return
             val nextEdges = edgesBySource[node.id].orEmpty().filter { edge -> edge.matches(branch) }
-            nextEdges.forEach { edge -> executeFrom(edge.to) }
+            for (edge in nextEdges) {
+                if (errorMessage != null) return
+                executeFrom(edge.to)
+            }
         }
 
         private fun WorkflowGraphEdge.matches(branch: String?): Boolean {
@@ -380,7 +410,9 @@ class WorkflowInterpreterWorkflowImpl : WorkflowInterpreterWorkflow {
             message: String?
         ) {
             progress = progress.map { item ->
-                if (item.nodeId == node.id || item.step == node.displayName()) {
+                val matchesNode = item.nodeId == node.id ||
+                    (item.nodeId.isNullOrBlank() && item.step == node.displayName())
+                if (matchesNode) {
                     item.copy(status = status, completedAt = completedAt, output = output, errorMessage = message)
                 } else {
                     item

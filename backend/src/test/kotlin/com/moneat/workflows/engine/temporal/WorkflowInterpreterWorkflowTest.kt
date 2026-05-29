@@ -20,12 +20,14 @@ import com.moneat.workflows.models.WorkflowConditionConfig
 import com.moneat.workflows.models.WorkflowGraphConfig
 import com.moneat.workflows.models.WorkflowGraphEdge
 import com.moneat.workflows.models.WorkflowGraphNode
+import com.moneat.workflows.models.WorkflowRetryConfig
 import com.moneat.workflows.models.WorkflowStepConfig
 import io.temporal.client.WorkflowClientOptions
 import io.temporal.client.WorkflowOptions
 import io.temporal.testing.TestEnvironmentOptions
 import io.temporal.testing.TestWorkflowEnvironment
 import java.util.Collections
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
@@ -36,6 +38,7 @@ import kotlin.test.assertTrue
 
 private const val STATUS_COMPLETE = "complete"
 private const val STATUS_FAILED = "failed"
+private const val STATUS_PENDING = "pending"
 private const val STATUS_RUNNING = "running"
 private const val TEST_COMPLETED_AT = "2026-05-29T00:00:00Z"
 private const val TEST_PAYLOAD_KEY = "workflow-test-payload-key-32-bytes"
@@ -149,6 +152,135 @@ class WorkflowInterpreterWorkflowTest {
         }
     }
 
+    @Test
+    fun `interpreter persists activity exceptions as failed nodes`() {
+        val actionActivity = RecordingExecuteActionActivity(throwingSteps = setOf("notification.email"))
+        val persistActivity =
+            RecordingPersistRunActivity(
+                snapshot = snapshot(
+                    graph = WorkflowGraphConfig(
+                        nodes = listOf(
+                            WorkflowGraphNode("trigger", "trigger", trigger = "alert.triggered"),
+                            WorkflowGraphNode(
+                                id = "email",
+                                type = "action",
+                                action = "notification.email",
+                                retry = WorkflowRetryConfig(maxAttempts = 1)
+                            )
+                        ),
+                        edges = listOf(WorkflowGraphEdge("trigger", "email"))
+                    )
+                )
+            )
+
+        runWorkflow(actionActivity, persistActivity).use { harness ->
+            val result = harness.workflow.run(input())
+
+            assertEquals(STATUS_FAILED, result.status)
+            assertEquals(STATUS_FAILED, result.progress.single().status)
+            assertTrue(result.progress.single().errorMessage?.contains("notification.email exploded") == true)
+        }
+    }
+
+    @Test
+    fun `interpreter stops fan out after a branch failure`() {
+        val actionActivity = RecordingExecuteActionActivity(failedSteps = setOf("notification.email"))
+        val persistActivity =
+            RecordingPersistRunActivity(
+                snapshot = snapshot(
+                    graph = WorkflowGraphConfig(
+                        nodes = listOf(
+                            WorkflowGraphNode("trigger", "trigger", trigger = "alert.triggered"),
+                            WorkflowGraphNode("email", "action", action = "notification.email"),
+                            WorkflowGraphNode("slack", "action", action = "notification.slack")
+                        ),
+                        edges = listOf(
+                            WorkflowGraphEdge("trigger", "email"),
+                            WorkflowGraphEdge("trigger", "slack")
+                        )
+                    )
+                )
+            )
+
+        runWorkflow(actionActivity, persistActivity).use { harness ->
+            val result = harness.workflow.run(input())
+
+            assertEquals(STATUS_FAILED, result.status)
+            assertEquals(listOf("notification.email"), actionActivity.executedSteps)
+            assertEquals(listOf(STATUS_FAILED, STATUS_PENDING), result.progress.map { step -> step.status })
+        }
+    }
+
+    @Test
+    fun `interpreter keeps repeated action progress scoped to node id`() {
+        val actionActivity = RecordingExecuteActionActivity(failedSteps = setOf("notification.email"))
+        val persistActivity =
+            RecordingPersistRunActivity(
+                snapshot = snapshot(
+                    graph = WorkflowGraphConfig(
+                        nodes = listOf(
+                            WorkflowGraphNode("trigger", "trigger", trigger = "alert.triggered"),
+                            WorkflowGraphNode("email-1", "action", action = "notification.email"),
+                            WorkflowGraphNode("email-2", "action", action = "notification.email")
+                        ),
+                        edges = listOf(
+                            WorkflowGraphEdge("trigger", "email-1"),
+                            WorkflowGraphEdge("email-1", "email-2")
+                        )
+                    )
+                )
+            )
+
+        runWorkflow(actionActivity, persistActivity).use { harness ->
+            val result = harness.workflow.run(input())
+
+            assertEquals(STATUS_FAILED, result.status)
+            assertEquals(listOf("email-1", "email-2"), result.progress.map { step -> step.nodeId })
+            assertEquals(listOf(STATUS_FAILED, STATUS_PENDING), result.progress.map { step -> step.status })
+        }
+    }
+
+    @Test
+    fun `interpreter marks for each failed when the body fails`() {
+        val actionActivity = RecordingExecuteActionActivity(failedSteps = setOf("notification.email"))
+        val persistActivity =
+            RecordingPersistRunActivity(
+                snapshot = snapshot(
+                    graph = WorkflowGraphConfig(
+                        nodes = listOf(
+                            WorkflowGraphNode("trigger", "trigger", trigger = "alert.triggered"),
+                            WorkflowGraphNode(
+                                id = "loop",
+                                type = "control",
+                                kind = "for_each",
+                                params = mapOf(
+                                    "items_reference" to JsonPrimitive("alert.items"),
+                                    "item_variable" to JsonPrimitive("item"),
+                                    "max_items" to JsonPrimitive("3")
+                                )
+                            ),
+                            WorkflowGraphNode("email", "action", action = "notification.email")
+                        ),
+                        edges = listOf(
+                            WorkflowGraphEdge("trigger", "loop"),
+                            WorkflowGraphEdge("loop", "email", branch = "body")
+                        )
+                    ),
+                    scope = mapOf(
+                        "alert.items" to JsonArray(listOf(JsonPrimitive("first"), JsonPrimitive("second")))
+                    )
+                )
+            )
+
+        runWorkflow(actionActivity, persistActivity).use { harness ->
+            val result = harness.workflow.run(input())
+
+            assertEquals(STATUS_FAILED, result.status)
+            assertEquals(listOf("notification.email"), actionActivity.executedSteps)
+            assertEquals(STATUS_FAILED, result.progress.first { step -> step.nodeId == "loop" }.status)
+        }
+    }
+
     private fun runWorkflow(
         actionActivity: ExecuteActionActivity,
         persistActivity: PersistRunActivity
@@ -228,12 +360,16 @@ private class TestWorkflowHarness(
 // ──── Recording Fakes ────
 
 private class RecordingExecuteActionActivity(
-    private val failedSteps: Set<String> = emptySet()
+    private val failedSteps: Set<String> = emptySet(),
+    private val throwingSteps: Set<String> = emptySet()
 ) : ExecuteActionActivity {
     val executedSteps: MutableList<String> = Collections.synchronizedList(mutableListOf())
 
     override fun execute(input: ExecuteActionInput): ExecuteActionResult {
         executedSteps += input.step.name
+        if (input.step.name in throwingSteps) {
+            throw IllegalStateException("${input.step.name} exploded")
+        }
         return if (input.step.name in failedSteps) {
             ExecuteActionResult(
                 status = STATUS_FAILED,

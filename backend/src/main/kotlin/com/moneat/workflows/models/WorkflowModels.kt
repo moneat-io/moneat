@@ -20,6 +20,7 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.jsonb
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.datetime.timestamp
@@ -115,7 +116,7 @@ data class WorkflowGraphNode(
     val trigger: String? = null,
     val kind: String? = null,
     val action: String? = null,
-    val params: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap(),
+    val params: Map<String, JsonElement> = emptyMap(),
     val conditions: List<WorkflowConditionConfig> = emptyList(),
     val cases: List<WorkflowSwitchCaseConfig> = emptyList(),
     val retry: WorkflowRetryConfig? = null,
@@ -140,7 +141,7 @@ data class WorkflowGraphConfig(
 data class WorkflowPreviewRequest(
     @SerialName("trigger_name") val triggerName: String,
     val steps: List<WorkflowStepConfig> = emptyList(),
-    val scope: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap(),
+    val scope: Map<String, JsonElement> = emptyMap(),
     val graph: WorkflowGraphConfig? = null,
     @SerialName("node_id") val nodeId: String? = null
 )
@@ -195,7 +196,7 @@ data class WorkflowRunStepProgress(
     @SerialName("node_id") val nodeId: String? = null,
     val type: String? = null,
     @SerialName("completed_at") val completedAt: String? = null,
-    val output: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap(),
+    val output: Map<String, JsonElement> = emptyMap(),
     @SerialName("error_message") val errorMessage: String? = null
 )
 
@@ -222,7 +223,7 @@ data class UpdateWorkflowRequest(
 
 @Serializable
 data class ManualWorkflowRunRequest(
-    val scope: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap()
+    val scope: Map<String, JsonElement> = emptyMap()
 )
 
 @Serializable
@@ -253,8 +254,8 @@ data class WorkflowRunStepResponse(
     val status: String,
     @SerialName("started_at") val startedAt: String? = null,
     @SerialName("completed_at") val completedAt: String? = null,
-    val input: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap(),
-    val output: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap(),
+    val input: Map<String, JsonElement> = emptyMap(),
+    val output: Map<String, JsonElement> = emptyMap(),
     @SerialName("error_message") val errorMessage: String? = null,
     val attempt: Int
 )
@@ -279,5 +280,5 @@ data class WorkflowRunResponse(
 data class WorkflowTriggerEvent(
     @SerialName("trigger_name") val triggerName: String,
     @SerialName("organization_id") val organizationId: Int,
-    val scope: Map<String, kotlinx.serialization.json.JsonElement>
+    val scope: Map<String, JsonElement>
 )

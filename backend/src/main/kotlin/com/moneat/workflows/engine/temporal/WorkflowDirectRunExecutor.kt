@@ -58,6 +58,7 @@ class WorkflowDirectRunExecutor(
         graph: WorkflowGraphConfig,
         initialProgress: List<WorkflowRunStepProgress>
     ): List<WorkflowRunStepProgress> {
+        // Direct fallback runs execute actions only; Temporal-owned waits and loops are marked complete.
         var progress = initialProgress.map { item ->
             if (item.type == LinearGraphAdapter.NODE_TYPE_ACTION) item else item.copy(status = STATUS_COMPLETE)
         }

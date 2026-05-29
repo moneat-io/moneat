@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import type {ReactNode} from 'react'
-import {Bell, GitBranch, Hourglass, Mail, MessageSquare, Plus} from 'lucide-react'
+import {Bell, GitBranch, Hourglass, Mail, MessageSquare, Plus, Slack} from 'lucide-react'
 import type {WorkflowCatalogResponse, WorkflowGraphNode} from '@/lib/api'
 import {Button} from '@/components/ui/button'
 import {defaultParamsForStep} from './workflowGraph'
@@ -24,6 +24,8 @@ interface NodePaletteProps {
   catalog?: WorkflowCatalogResponse
   onAddNode: (node: Omit<WorkflowGraphNode, 'id'>, prefix: string) => void
 }
+
+type ControlKind = 'sleep' | 'wait_until' | 'for_each' | 'while'
 
 export function NodePalette({catalog, onAddNode}: NodePaletteProps) {
   return (
@@ -52,6 +54,16 @@ export function NodePalette({catalog, onAddNode}: NodePaletteProps) {
           icon={<Hourglass className="h-4 w-4" />}
           label="Wait until"
           onClick={() => onAddNode(controlNode('wait_until'), 'wait')}
+        />
+        <PaletteButton
+          icon={<Hourglass className="h-4 w-4" />}
+          label="For each"
+          onClick={() => onAddNode(controlNode('for_each'), 'loop')}
+        />
+        <PaletteButton
+          icon={<Hourglass className="h-4 w-4" />}
+          label="While"
+          onClick={() => onAddNode(controlNode('while'), 'while')}
         />
       </div>
       <div className="space-y-2">
@@ -104,19 +116,27 @@ function conditionNode(kind: 'if' | 'switch'): Omit<WorkflowGraphNode, 'id'> {
   }
 }
 
-function controlNode(kind: 'sleep' | 'wait_until'): Omit<WorkflowGraphNode, 'id'> {
+function controlNode(kind: ControlKind): Omit<WorkflowGraphNode, 'id'> {
   return {
     type: 'control',
     kind,
-    params: kind === 'sleep' ? {duration: 'PT5M'} : {timeout: 'PT30M'},
+    params: controlParams(kind),
     conditions: [],
     cases: [],
   }
 }
 
+function controlParams(kind: ControlKind): Record<string, string> {
+  if (kind === 'sleep') return {duration: 'PT5M'}
+  if (kind === 'wait_until') return {timeout: 'PT30M'}
+  if (kind === 'for_each') return {items_reference: '', item_variable: 'item', max_items: '100'}
+  return {max_iterations: '100'}
+}
+
 function stepIcon(stepName: string) {
   const className = 'h-4 w-4'
   if (stepName.includes('email')) return <Mail className={className} />
+  if (stepName.includes('slack')) return <Slack className={className} />
   if (stepName.includes('discord')) return <Bell className={className} />
   return <MessageSquare className={className} />
 }
