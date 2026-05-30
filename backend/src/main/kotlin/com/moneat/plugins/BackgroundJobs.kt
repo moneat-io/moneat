@@ -176,22 +176,36 @@ fun Application.configureBackgroundJobs() {
         otlpMetricsDlqKey,
         otlpMetricsWorkerCount
     )
-    val temporalClientProvider = koin.get<TemporalClientProvider>()
-    val workflowWorkerFactory = temporalClientProvider.newWorkerFactory()
+    // Temporal worker initialization must not take down the whole backend: if the
+    // Temporal cluster is unreachable or a worker/activity fails to register, log it
+    // and continue serving (workflow execution is disabled on this instance) rather
+    // than aborting application startup.
     val workflowWorkerMode = workflowWorkerMode()
-    if (workflowWorkerMode == WorkflowWorkerMode.ALL || workflowWorkerMode == WorkflowWorkerMode.TRUSTED) {
-        val workflowWorker = workflowWorkerFactory.newWorker(WORKFLOW_TASK_QUEUE)
-        workflowWorker.registerWorkflowImplementationTypes(WorkflowInterpreterWorkflowImpl::class.java)
-        workflowWorker.registerActivitiesImplementations(
-            koin.get<ExecuteActionActivityImpl>(),
-            koin.get<PersistRunActivityImpl>(),
-            koin.get<RequestApprovalActivityImpl>()
-        )
-    }
-    if (workflowWorkerMode == WorkflowWorkerMode.ALL || workflowWorkerMode == WorkflowWorkerMode.EGRESS) {
-        workflowWorkerFactory
-            .newWorker(WORKFLOW_EGRESS_TASK_QUEUE)
-            .registerActivitiesImplementations(koin.get<ExecuteEgressActionActivityImpl>())
+    var temporalClientProvider: TemporalClientProvider? = null
+    var workflowWorkerFactory: WorkerFactory? = null
+    try {
+        val provider = koin.get<TemporalClientProvider>()
+        val factory = provider.newWorkerFactory()
+        if (workflowWorkerMode == WorkflowWorkerMode.ALL || workflowWorkerMode == WorkflowWorkerMode.TRUSTED) {
+            val workflowWorker = factory.newWorker(WORKFLOW_TASK_QUEUE)
+            workflowWorker.registerWorkflowImplementationTypes(WorkflowInterpreterWorkflowImpl::class.java)
+            workflowWorker.registerActivitiesImplementations(
+                koin.get<ExecuteActionActivityImpl>(),
+                koin.get<PersistRunActivityImpl>(),
+                koin.get<RequestApprovalActivityImpl>()
+            )
+        }
+        if (workflowWorkerMode == WorkflowWorkerMode.ALL || workflowWorkerMode == WorkflowWorkerMode.EGRESS) {
+            factory
+                .newWorker(WORKFLOW_EGRESS_TASK_QUEUE)
+                .registerActivitiesImplementations(koin.get<ExecuteEgressActionActivityImpl>())
+        }
+        temporalClientProvider = provider
+        workflowWorkerFactory = factory
+    } catch (e: Throwable) {
+        logger.error(e) {
+            "Temporal workflow worker initialization failed; workflow execution disabled on this instance"
+        }
     }
 
     // Create a coroutine scope for background jobs
@@ -212,7 +226,7 @@ fun Application.configureBackgroundJobs() {
     llmIngestionWorker.start()
     otlpTraceIngestionWorker.start()
     otlpMetricsIngestionWorker.start()
-    workflowWorkerFactory.start()
+    workflowWorkerFactory?.start()
     demoLivenessBackgroundService.start(jobScope)
 
     // Start enterprise background jobs (SSO, On-Call, etc.) if modules are present
@@ -258,7 +272,11 @@ fun Application.configureBackgroundJobs() {
             otlpTraceIngestionWorker.stop()
             otlpMetricsIngestionWorker.stop()
         }
-        shutdownWorkflowWorker(workflowWorkerFactory, temporalClientProvider)
+        val factoryToStop = workflowWorkerFactory
+        val providerToStop = temporalClientProvider
+        if (factoryToStop != null && providerToStop != null) {
+            shutdownWorkflowWorker(factoryToStop, providerToStop)
+        }
         demoLivenessBackgroundService.stop()
         pulseService?.stop()
         FeatureRegistry.stopBackgroundJobs()

@@ -73,7 +73,9 @@ class TemporalClientProvider(
             WorkflowServiceStubsOptions
                 .newBuilder()
                 .setTarget(target)
-                .build()
+                // validateAndBuildWithDefaults() defaults the metrics scope to NoopScope;
+                // plain build() leaves it null and NPEs in GrpcMetricsInterceptor.
+                .validateAndBuildWithDefaults()
         )
     }
     val service: WorkflowServiceStubs
@@ -97,7 +99,8 @@ class TemporalClientProvider(
             OperatorServiceStubsOptions
                 .newBuilder()
                 .setTarget(target)
-                .build()
+                // See serviceDelegate: defaults the metrics scope to avoid a null-scope NPE.
+                .validateAndBuildWithDefaults()
         )
     }
     private val operator: OperatorServiceStubs

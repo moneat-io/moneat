@@ -109,6 +109,7 @@ import com.moneat.uptime.services.UptimeService
 import com.moneat.workflows.engine.temporal.ExecuteActionActivityImpl
 import com.moneat.workflows.engine.temporal.ExecuteEgressActionActivityImpl
 import com.moneat.workflows.engine.temporal.PersistRunActivityImpl
+import com.moneat.workflows.engine.temporal.RequestApprovalActivityImpl
 import com.moneat.workflows.engine.temporal.TemporalClientProvider
 import com.moneat.workflows.engine.temporal.TemporalWorkflowExecutionEngine
 import com.moneat.workflows.engine.temporal.WorkflowExecutionEngine
@@ -142,6 +143,7 @@ val sharedModule = module {
     single { WorkflowActionExecutor(get(), get(), get(), get(), get()) }
     single { WorkflowEgressActionExecutor() }
     single { PersistRunActivityImpl() }
+    single { RequestApprovalActivityImpl() }
     single { ExecuteActionActivityImpl(get()) }
     single { ExecuteEgressActionActivityImpl(get()) }
     single { TemporalClientProvider() }
