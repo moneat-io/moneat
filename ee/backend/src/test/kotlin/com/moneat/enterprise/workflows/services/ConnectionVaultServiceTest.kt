@@ -158,6 +158,24 @@ class ConnectionVaultServiceTest {
     }
 
     @Test
+    fun `createGroup preserves requested member order`() {
+        runBlocking {
+            val first = service.createConnection(1, "webhook", "first", emptyMap(), "secret-1111", null)
+            val second = service.createConnection(1, "webhook", "second", emptyMap(), "secret-2222", null)
+            val group = service.createGroup(
+                organizationId = 1,
+                name = "ordered-webhooks",
+                connectionType = "webhook",
+                memberConnectionIds = listOf(second.id, first.id),
+                selectionStrategy = "first_match",
+                createdBy = null
+            )
+
+            assertEquals(listOf(second.id, first.id), group.memberConnectionIds)
+        }
+    }
+
+    @Test
     fun `rejects unsupported connection group selection strategies`() {
         runBlocking {
             val created = service.createConnection(1, "webhook", "primary", emptyMap(), "secret-5555", null)

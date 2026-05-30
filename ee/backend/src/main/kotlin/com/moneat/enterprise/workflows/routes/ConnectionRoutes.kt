@@ -54,19 +54,17 @@ fun Route.connectionRoutes(vault: WorkflowConnectionVault) {
     route("/v1/workflows/connections") {
         authenticate("auth-jwt") {
             get {
-                val organizationId = currentOrganizationId()
-                    ?: return@get call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
-                call.respond(vault.listConnections(organizationId).map { it.toResponse() })
+                val member = requireMember() ?: return@get
+                call.respond(vault.listConnections(member.organizationId).map { it.toResponse() })
             }
 
             post {
-                val organizationId = currentOrganizationId()
-                    ?: return@post call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
-                val userId = requireConnectionAdmin(organizationId) ?: return@post
+                val member = requireMember() ?: return@post
+                val userId = requireConnectionAdmin(member) ?: return@post
                 val request = call.receive<CreateConnectionRequest>()
                 suspendRunCatching {
                     vault.createConnection(
-                        organizationId = organizationId,
+                        organizationId = member.organizationId,
                         type = request.type,
                         name = request.name,
                         identifierTags = request.identifierTags,
@@ -80,24 +78,22 @@ fun Route.connectionRoutes(vault: WorkflowConnectionVault) {
             }
 
             get("/{connectionId}") {
-                val organizationId = currentOrganizationId()
-                    ?: return@get call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
+                val member = requireMember() ?: return@get
                 val connectionId = call.parameters["connectionId"]?.toIntOrNull()
                     ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_ID_MESSAGE))
-                val connection = vault.getConnection(organizationId, connectionId)
+                val connection = vault.getConnection(member.organizationId, connectionId)
                     ?: return@get call.respond(HttpStatusCode.NotFound, ErrorResponse(NOT_FOUND_MESSAGE))
                 call.respond(connection.toResponse())
             }
 
             put("/{connectionId}/rotate") {
-                val organizationId = currentOrganizationId()
-                    ?: return@put call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
-                requireConnectionAdmin(organizationId) ?: return@put
+                val member = requireMember() ?: return@put
+                requireConnectionAdmin(member) ?: return@put
                 val connectionId = call.parameters["connectionId"]?.toIntOrNull()
                     ?: return@put call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_ID_MESSAGE))
                 val request = call.receive<RotateConnectionRequest>()
                 suspendRunCatching {
-                    vault.rotateConnection(organizationId, connectionId, request.secret)
+                    vault.rotateConnection(member.organizationId, connectionId, request.secret)
                 }.fold(
                     onSuccess = { updated ->
                         if (updated == null) {
@@ -111,12 +107,11 @@ fun Route.connectionRoutes(vault: WorkflowConnectionVault) {
             }
 
             delete("/{connectionId}") {
-                val organizationId = currentOrganizationId()
-                    ?: return@delete call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
-                requireConnectionAdmin(organizationId) ?: return@delete
+                val member = requireMember() ?: return@delete
+                requireConnectionAdmin(member) ?: return@delete
                 val connectionId = call.parameters["connectionId"]?.toIntOrNull()
                     ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_ID_MESSAGE))
-                if (vault.deleteConnection(organizationId, connectionId)) {
+                if (vault.deleteConnection(member.organizationId, connectionId)) {
                     call.respond(HttpStatusCode.NoContent)
                 } else {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse(NOT_FOUND_MESSAGE))
@@ -128,19 +123,17 @@ fun Route.connectionRoutes(vault: WorkflowConnectionVault) {
     route("/v1/workflows/connection-groups") {
         authenticate("auth-jwt") {
             get {
-                val organizationId = currentOrganizationId()
-                    ?: return@get call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
-                call.respond(vault.listGroups(organizationId).map { it.toResponse() })
+                val member = requireMember() ?: return@get
+                call.respond(vault.listGroups(member.organizationId).map { it.toResponse() })
             }
 
             post {
-                val organizationId = currentOrganizationId()
-                    ?: return@post call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
-                val userId = requireConnectionAdmin(organizationId) ?: return@post
+                val member = requireMember() ?: return@post
+                val userId = requireConnectionAdmin(member) ?: return@post
                 val request = call.receive<CreateConnectionGroupRequest>()
                 suspendRunCatching {
                     vault.createGroup(
-                        organizationId = organizationId,
+                        organizationId = member.organizationId,
                         name = request.name,
                         connectionType = request.connectionType,
                         memberConnectionIds = request.memberConnectionIds,
@@ -154,12 +147,11 @@ fun Route.connectionRoutes(vault: WorkflowConnectionVault) {
             }
 
             delete("/{groupId}") {
-                val organizationId = currentOrganizationId()
-                    ?: return@delete call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
-                requireConnectionAdmin(organizationId) ?: return@delete
+                val member = requireMember() ?: return@delete
+                requireConnectionAdmin(member) ?: return@delete
                 val groupId = call.parameters["groupId"]?.toIntOrNull()
                     ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_GROUP_ID_MESSAGE))
-                if (vault.deleteGroup(organizationId, groupId)) {
+                if (vault.deleteGroup(member.organizationId, groupId)) {
                     call.respond(HttpStatusCode.NoContent)
                 } else {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse(GROUP_NOT_FOUND_MESSAGE))
@@ -168,6 +160,12 @@ fun Route.connectionRoutes(vault: WorkflowConnectionVault) {
         }
     }
 }
+
+private data class WorkflowConnectionMember(
+    val organizationId: Int,
+    val userId: Int,
+    val role: OrgRole
+)
 
 private fun WorkflowConnectionSummary.toResponse(): ConnectionResponse =
     ConnectionResponse(
@@ -200,27 +198,40 @@ private suspend fun RoutingContext.respondConnectionError(error: Throwable) {
 }
 
 /**
- * Resolve the caller and require at least ADMIN in the organization. Responds 403 and
- * returns null when the caller is missing or under-privileged; otherwise returns the
- * caller's user id (used for createdBy attribution).
+ * Resolve the caller's current organization membership. Read routes use this to avoid
+ * trusting stale org claims without a matching membership row.
  */
-private suspend fun RoutingContext.requireConnectionAdmin(organizationId: Int): Int? {
+private suspend fun RoutingContext.requireMember(): WorkflowConnectionMember? {
+    val organizationId = currentOrganizationId()
     val userId = currentUserId()
-    val role = userId?.let { uid ->
+    if (organizationId == null || userId == null) {
+        call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
+        return null
+    }
+    val role =
         transaction {
             Memberships
                 .selectAll()
-                .where { (Memberships.organization_id eq organizationId) and (Memberships.user_id eq uid) }
+                .where { (Memberships.organization_id eq organizationId) and (Memberships.user_id eq userId) }
                 .firstOrNull()
                 ?.get(Memberships.role)
+        } ?: run {
+            call.respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
+            return null
         }
-    }
-    val authorized = role != null && OrgRole.fromString(role).level >= OrgRole.ADMIN.level
-    if (!authorized) {
+    return WorkflowConnectionMember(organizationId, userId, OrgRole.fromString(role))
+}
+
+/**
+ * Write operations require ADMIN. Responds 403 and returns null when the member is
+ * under-privileged; otherwise returns the caller's user id for createdBy attribution.
+ */
+private suspend fun RoutingContext.requireConnectionAdmin(member: WorkflowConnectionMember): Int? {
+    if (member.role.level < OrgRole.ADMIN.level) {
         call.respond(HttpStatusCode.Forbidden, ErrorResponse(FORBIDDEN_MESSAGE))
         return null
     }
-    return userId
+    return member.userId
 }
 
 private fun RoutingContext.currentOrganizationId(): Int? =

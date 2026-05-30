@@ -6,6 +6,7 @@ package com.moneat.enterprise.workflows.models
 
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import org.junit.jupiter.api.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -30,9 +31,10 @@ class ConnectionApiResponseTest {
             updatedAt = "2026-05-29T00:00:00Z"
         )
         val serialized = json.encodeToString(response)
-        assertFalse(serialized.contains("secret"), "response must not contain a secret field")
-        assertTrue(serialized.contains("last_four"))
-        assertTrue(serialized.contains("identifier_tags"))
+        val payload = json.parseToJsonElement(serialized).jsonObject
+        assertFalse("secret" in payload, "response must not contain a secret field")
+        assertTrue("last_four" in payload)
+        assertTrue("identifier_tags" in payload)
     }
 
     @Test
@@ -47,8 +49,9 @@ class ConnectionApiResponseTest {
             updatedAt = "2026-05-29T00:00:00Z"
         )
         val serialized = json.encodeToString(response)
-        assertFalse(serialized.contains("secret"))
-        assertTrue(serialized.contains("member_connection_ids"))
-        assertTrue(serialized.contains("selection_strategy"))
+        val payload = json.parseToJsonElement(serialized).jsonObject
+        assertFalse("secret" in payload)
+        assertTrue("member_connection_ids" in payload)
+        assertTrue("selection_strategy" in payload)
     }
 }

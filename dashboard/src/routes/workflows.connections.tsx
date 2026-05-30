@@ -38,8 +38,9 @@ import {useToast} from '@/hooks/useToast'
 const WORKFLOWS_ADVANCED_MODULE = 'Workflows Advanced'
 
 export const Route = createFileRoute('/workflows/connections')({
-  beforeLoad: () => {
-    if (!api.isAuthenticated()) {
+  beforeLoad: async () => {
+    const authenticated = api.isAuthenticated() || (await api.checkAuth())
+    if (!authenticated) {
       throw redirect({to: '/login'})
     }
   },
@@ -47,13 +48,16 @@ export const Route = createFileRoute('/workflows/connections')({
 })
 
 function ConnectionsPage() {
-  const {data: features, isLoading} = useEnterpriseFeatures()
+  const {data: features, isLoading, isError, error} = useEnterpriseFeatures()
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
         <Loader2 className="h-5 w-5 animate-spin" />
       </div>
     )
+  }
+  if (isError) {
+    return <ErrorState title="Unable to load feature availability" message={error.message} />
   }
   if (!hasEnterpriseModule(features, WORKFLOWS_ADVANCED_MODULE)) {
     return <EnterpriseUpsell />
@@ -84,7 +88,7 @@ function ConnectionManager() {
   const [createOpen, setCreateOpen] = useState(false)
   const [rotateTarget, setRotateTarget] = useState<WorkflowConnection | null>(null)
 
-  const {data: connections = [], isLoading} = useQuery({
+  const {data: connections = [], isLoading, isError, error} = useQuery({
     queryKey: ['workflow-connections'],
     queryFn: () => api.listWorkflowConnections(),
   })
@@ -110,6 +114,8 @@ function ConnectionManager() {
           <div className="flex h-40 items-center justify-center rounded-md border">
             <Loader2 className="h-5 w-5 animate-spin" />
           </div>
+        ) : isError ? (
+          <ErrorState message={error.message} compact />
         ) : connections.length === 0 ? (
           <div className="rounded-md border border-dashed bg-background p-6 text-sm text-muted-foreground">
             No connections yet. Add one to use it from workflow actions.
@@ -136,6 +142,23 @@ function ConnectionManager() {
         }}
         onRotated={invalidate}
       />
+    </div>
+  )
+}
+
+function ErrorState({
+  title = 'Unable to load connections',
+  message,
+  compact = false,
+}: {
+  title?: string
+  message: string
+  compact?: boolean
+}) {
+  return (
+    <div className={compact ? 'rounded-md border p-4' : 'mx-auto max-w-xl px-4 py-16'}>
+      <div className="text-sm font-semibold">{title}</div>
+      <p className="mt-1 text-sm text-muted-foreground">{message}</p>
     </div>
   )
 }

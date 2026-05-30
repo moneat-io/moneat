@@ -33,7 +33,7 @@ describe('useEnterpriseFeatures', () => {
     expect(result.current.data?.modules).toContain('saml')
   })
 
-  it('returns defaults when endpoint fails', async () => {
+  it('reports an error when endpoint fails', async () => {
     server.use(
       http.get('*/features', () =>
         new HttpResponse(null, { status: 500 })
@@ -44,9 +44,8 @@ describe('useEnterpriseFeatures', () => {
       wrapper: createWrapper(),
     })
 
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(result.current.data?.enterprise).toBe(false)
-    expect(result.current.data?.modules).toEqual([])
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(result.current.error?.message).toBe('Unable to load feature availability')
   })
 })
 

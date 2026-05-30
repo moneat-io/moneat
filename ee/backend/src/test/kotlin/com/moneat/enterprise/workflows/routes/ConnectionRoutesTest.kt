@@ -137,6 +137,20 @@ class ConnectionRoutesTest {
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
 
+    @Test
+    fun `list requires current organization membership`() = testApplication {
+        application { installAuthJsonAndRoutes() }
+        val (orgId, userId) = seedUserAndOrganization()
+        val token = bearerForUser(userId, orgId)
+
+        val response =
+            client.get("/v1/workflows/connections") {
+                bearerAuth(token)
+            }
+
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
+    }
+
     private fun Application.installAuthJsonAndRoutes() {
         install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
         install(Authentication) {
@@ -155,6 +169,18 @@ class ConnectionRoutesTest {
     }
 
     private fun seedMember(role: String): Pair<Int, Int> {
+        val (orgId, userId) = seedUserAndOrganization()
+        transaction {
+            Memberships.insert {
+                it[user_id] = userId
+                it[organization_id] = orgId
+                it[Memberships.role] = role
+            }
+        }
+        return orgId to userId
+    }
+
+    private fun seedUserAndOrganization(): Pair<Int, Int> {
         val userId =
             transaction {
                 Users.insert {
@@ -169,13 +195,6 @@ class ConnectionRoutesTest {
                     it[slug] = "workflow-routes"
                 }[Organizations.id]
             }
-        transaction {
-            Memberships.insert {
-                it[user_id] = userId
-                it[organization_id] = orgId
-                it[Memberships.role] = role
-            }
-        }
         return orgId to userId
     }
 

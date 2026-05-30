@@ -19,6 +19,7 @@ import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
@@ -153,20 +154,23 @@ class ConnectionVaultService(
                         if (memberConnectionIds.isEmpty()) {
                             emptyList()
                         } else {
-                            WorkflowConnections
+                            val requestedMemberIds = memberConnectionIds.distinct()
+                            val validMemberIds = WorkflowConnections
                                 .selectAll()
                                 .where {
                                     (WorkflowConnections.organizationId eq organizationId) and
-                                        (WorkflowConnections.type eq normalizedConnectionType)
+                                        (WorkflowConnections.type eq normalizedConnectionType) and
+                                        (WorkflowConnections.id inList requestedMemberIds)
                                 }
                                 .map { it[WorkflowConnections.id].value }
-                                .filter { it in memberConnectionIds }
+                                .toSet()
+                            requestedMemberIds.filter { it in validMemberIds }
                         }
                     WorkflowConnectionGroups.insertAndGetId {
                         it[WorkflowConnectionGroups.organizationId] = organizationId
                         it[WorkflowConnectionGroups.name] = normalizedName
                         it[WorkflowConnectionGroups.connectionType] = normalizedConnectionType
-                        it[WorkflowConnectionGroups.memberConnectionIds] = json.encodeToString(validMembers.distinct())
+                        it[WorkflowConnectionGroups.memberConnectionIds] = json.encodeToString(validMembers)
                         it[WorkflowConnectionGroups.selectionRule] =
                             json.encodeToString(ConnectionSelectionRule(normalizedSelectionStrategy))
                         it[WorkflowConnectionGroups.createdBy] = createdBy
@@ -228,8 +232,10 @@ class ConnectionVaultService(
         val identifierTagsById =
             WorkflowConnections
                 .selectAll()
-                .where { WorkflowConnections.organizationId eq organizationId }
-                .filter { it[WorkflowConnections.id].value in memberIds }
+                .where {
+                    (WorkflowConnections.organizationId eq organizationId) and
+                        (WorkflowConnections.id inList memberIds)
+                }
                 .associate { row ->
                     row[WorkflowConnections.id].value to
                         json.decodeFromString<Map<String, String>>(row[WorkflowConnections.identifierTags])

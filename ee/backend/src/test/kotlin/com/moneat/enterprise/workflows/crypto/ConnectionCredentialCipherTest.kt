@@ -4,11 +4,14 @@
 
 package com.moneat.enterprise.workflows.crypto
 
+import org.junit.jupiter.api.parallel.ResourceLock
+import org.junit.jupiter.api.parallel.Resources
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
+import javax.crypto.AEADBadTagException
 
 class ConnectionCredentialCipherTest {
 
@@ -42,7 +45,7 @@ class ConnectionCredentialCipherTest {
     fun `decrypting with a different organization fails`() {
         val subject = cipher()
         val envelope = subject.encrypt("secret", organizationId = 1)
-        assertFailsWith<Exception> { subject.decrypt(envelope, organizationId = 2) }
+        assertFailsWith<AEADBadTagException> { subject.decrypt(envelope, organizationId = 2) }
     }
 
     @Test
@@ -50,7 +53,7 @@ class ConnectionCredentialCipherTest {
         val subject = cipher()
         val envelope = subject.encrypt("secret", organizationId = 1)
         val tampered = envelope.dropLast(2) + "AA"
-        assertFailsWith<Exception> { subject.decrypt(tampered, organizationId = 1) }
+        assertFailsWith<AEADBadTagException> { subject.decrypt(tampered, organizationId = 1) }
     }
 
     @Test
@@ -83,6 +86,7 @@ class ConnectionCredentialCipherTest {
     }
 
     @Test
+    @ResourceLock(Resources.SYSTEM_PROPERTIES)
     fun `fromEnv rejects reusing reserved application secrets`() {
         val reusedSecret = "reserved-secret-value-aaaaaaaaaaaaaaaa"
         withSystemProperties(
