@@ -1,9 +1,9 @@
 import {createFileRoute, Link, notFound} from '@tanstack/react-router'
 import {getPost} from '@/blog/loader'
-import {Helmet} from 'react-helmet-async'
 import {MdxPre} from '@/docs/mdx-components'
 import {BlogPostFeedback} from '@/components/BlogPostFeedback'
-import {SITE_ORIGIN} from '@/lib/site'
+import {SeoHead} from '@/components/SeoHead'
+import {blogPostSeo} from '@/lib/seo/routes'
 
 export const Route = createFileRoute('/blog/$slug')({
   loader: ({params}) => {
@@ -49,17 +49,7 @@ function BlogPost() {
 
   return (
     <>
-      <Helmet>
-        <title>{post.title} — Moneat Blog</title>
-        <meta name="description" content={post.description} />
-        <link rel="canonical" href={`${SITE_ORIGIN}/blog/${post.slug}`} />
-        <meta property="og:type" content="article" />
-        <meta property="og:title" content={post.title} />
-        <meta property="og:description" content={post.description} />
-        <meta property="og:url" content={`${SITE_ORIGIN}/blog/${post.slug}`} />
-        <meta property="article:published_time" content={post.date} />
-        <meta property="article:author" content={post.author} />
-      </Helmet>
+      <SeoHead seo={blogPostSeo(post)} />
       <article className="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
         <header className="mb-10">
           <div className="flex flex-wrap gap-2 mb-4">

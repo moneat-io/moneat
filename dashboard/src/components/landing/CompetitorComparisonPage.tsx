@@ -29,7 +29,8 @@ import {
   Scale,
   ShieldCheck,
 } from 'lucide-react'
-import {Helmet} from 'react-helmet-async'
+import {SeoHead} from '@/components/SeoHead'
+import {compareHubSeo, competitorPageSeo} from '@/lib/seo/routes'
 import {Button} from '@/components/ui/button'
 import {LandingFooter, LandingNavbar} from './LandingNavbar'
 import {
@@ -46,7 +47,6 @@ interface CompetitorComparisonPageProps {
 }
 
 const matrixIcons = [Scale, CircleDollarSign, Gauge, ShieldCheck]
-const comparisonOgImage = 'https://moneat.io/marketing/observability-comparison-hero-a.webp'
 
 const hubSources = Array.from(
   new Map(
@@ -553,23 +553,10 @@ function FinalCtaSection({page}: {readonly page: CompetitorPageData}) {
 
 export function CompetitorAlternativePage({slug}: CompetitorComparisonPageProps) {
   const page = getCompetitorPage(slug)
-  const canonicalUrl = 'https://moneat.io' + page.route
 
   return (
     <article className="min-h-screen bg-white text-slate-950">
-      <Helmet>
-        <title>{page.title} 2026 | Moneat</title>
-        <meta name="description" content={page.metaDescription} />
-        <link rel="canonical" href={canonicalUrl} />
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content={canonicalUrl} />
-        <meta property="og:title" content={`${page.title} 2026 | Moneat`} />
-        <meta property="og:description" content={page.metaDescription} />
-        <meta property="og:image" content={comparisonOgImage} />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={`${page.title} 2026 | Moneat`} />
-        <meta name="twitter:description" content={page.metaDescription} />
-      </Helmet>
+      <SeoHead seo={competitorPageSeo(page)} />
 
       <LandingNavbar tone="light" />
       <main>
@@ -592,30 +579,9 @@ export function CompetitorAlternativePage({slug}: CompetitorComparisonPageProps)
 }
 
 export function CompareHubPage() {
-  const canonicalUrl = 'https://moneat.io/compare'
-
   return (
     <article className="min-h-screen bg-white text-slate-950">
-      <Helmet>
-        <title>Compare Moneat 2026 | Moneat</title>
-        <meta
-          name="description"
-          content={
-            'Compare Moneat with Datadog, Sentry, Better Stack, and SigNoz using evidence-led ' +
-            'pricing and feature comparisons.'
-          }
-        />
-        <link rel="canonical" href={canonicalUrl} />
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content={canonicalUrl} />
-        <meta property="og:title" content="Compare Moneat 2026" />
-        <meta
-          property="og:description"
-          content="Evidence-led comparison pages for Moneat alternatives to Datadog, Sentry, Better Stack, and SigNoz."
-        />
-        <meta property="og:image" content={comparisonOgImage} />
-        <meta name="twitter:card" content="summary_large_image" />
-      </Helmet>
+      <SeoHead seo={compareHubSeo} />
 
       <LandingNavbar tone="light" />
       <main>

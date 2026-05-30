@@ -19,7 +19,8 @@ import {ArrowRight, Check, Database, ShieldCheck, type LucideIcon} from 'lucide-
 import {Button} from '@/components/ui/button'
 import {ScreenshotFrame} from './VariantA'
 import {LandingNavbar, LandingFooter} from './LandingNavbar'
-import {Helmet} from 'react-helmet-async'
+import {SeoHead} from '@/components/SeoHead'
+import {featurePageSeo} from '@/lib/seo/routes'
 
 interface SubFeature {
   icon: LucideIcon
@@ -58,11 +59,14 @@ export function FeaturePageTemplate({config}: {readonly config: FeaturePageConfi
 
   return (
     <article className="min-h-screen bg-white text-slate-950">
-      <Helmet>
-        <title>{config.title} | Moneat</title>
-        <meta name="description" content={config.metaDescription} />
-        <link rel="canonical" href={`https://moneat.io/${config.slug}`} />
-      </Helmet>
+      <SeoHead
+        seo={featurePageSeo({
+          slug: config.slug,
+          title: config.title,
+          metaDescription: config.metaDescription,
+          image: config.screenshot,
+        })}
+      />
 
       <LandingNavbar tone="light" />
 

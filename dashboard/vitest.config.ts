@@ -34,6 +34,9 @@ export default defineConfig({
         '**/*.config.*',
         '**/mockData/**',
         'src/routeTree.gen.ts',
+        // Build-time prerender entry: imports MDX so it only runs through Vite (not vitest),
+        // and is validated by the production build itself. Its pure logic lives in src/lib/seo.
+        'src/prerender/**',
       ],
       thresholds: {
         // Staged rollout: reporting-only=0%, soft=45%, hard=60%
