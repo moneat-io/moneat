@@ -25,6 +25,7 @@ import com.moneat.workflows.models.ManualWorkflowRunRequest
 import com.moneat.workflows.models.UpdateWorkflowRequest
 import com.moneat.workflows.models.WorkflowPreviewRequest
 import com.moneat.workflows.models.WorkflowRunInstanceRequest
+import com.moneat.workflows.services.WorkflowGovernanceService
 import com.moneat.workflows.services.WorkflowService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
@@ -59,6 +60,7 @@ private const val INVALID_WEBHOOK_SIGNATURE_MESSAGE = "Invalid workflow webhook 
 fun Route.workflowRoutes() {
     val koin = GlobalContext.get()
     val workflowService = koin.get<WorkflowService>()
+    val governanceService = koin.get<WorkflowGovernanceService>()
     val membershipService = koin.get<OrgMembershipService>()
 
     route("/v1/workflows") {
@@ -314,11 +316,13 @@ fun Route.workflowRoutes() {
                     onFailure = { error -> respondWorkflowError(error) }
                 )
             }
+
+            workflowGovernanceRoutes(governanceService, membershipService)
         }
     }
 }
 
-private suspend fun RoutingContext.respondWorkflowError(error: Throwable) {
+internal suspend fun RoutingContext.respondWorkflowError(error: Throwable) {
     if (error is IllegalArgumentException) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse(error.message ?: "Invalid workflow request"))
     } else {
@@ -326,7 +330,7 @@ private suspend fun RoutingContext.respondWorkflowError(error: Throwable) {
     }
 }
 
-private suspend fun RoutingContext.ensureWorkflowAdmin(
+internal suspend fun RoutingContext.ensureWorkflowAdmin(
     membershipService: OrgMembershipService,
     organizationId: Int
 ): Boolean? {
@@ -343,18 +347,22 @@ private suspend fun RoutingContext.ensureWorkflowAdmin(
     }
 }
 
-private fun RoutingContext.workflowIdFromPath(): Int? =
+internal fun RoutingContext.workflowIdFromPath(): Int? =
     call.parameters["workflowId"]?.toIntOrNull()
 
 private fun RoutingContext.instanceIdFromPath(): Int? =
     call.parameters["instanceId"]?.toIntOrNull()
 
-private fun RoutingContext.currentOrganizationId(): Int? {
+internal fun RoutingContext.currentOrganizationId(): Int? {
     val principal = call.principal<JWTPrincipal>() ?: return null
     return principal.payload.getClaim("orgId").asInt()
 }
 
-private fun RoutingContext.currentUserId(): Int? {
+internal fun RoutingContext.currentUserId(): Int? {
     val principal = call.principal<JWTPrincipal>() ?: return null
     return principal.payload.getClaim("userId").asInt()
 }
+
+internal const val WORKFLOW_GOVERNANCE_INVALID_ID_MESSAGE = INVALID_WORKFLOW_ID_MESSAGE
+internal const val WORKFLOW_GOVERNANCE_NOT_FOUND_MESSAGE = WORKFLOW_NOT_FOUND_MESSAGE
+internal const val WORKFLOW_GOVERNANCE_ID_ROUTE = WORKFLOW_ID_ROUTE

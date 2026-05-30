@@ -43,6 +43,7 @@ import com.moneat.workflows.models.WorkflowStepPreview
 import com.moneat.workflows.models.WorkflowTestMessageResponse
 import com.moneat.workflows.models.WorkflowTestMessageResult
 import com.moneat.workflows.models.WorkflowWebhookSigningResponse
+import com.moneat.workflows.services.WorkflowGovernanceService
 import com.moneat.workflows.services.WorkflowService
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
@@ -113,6 +114,7 @@ class WorkflowRoutesTest {
                     single<OrgMembershipRepository> { OrgMembershipRepositoryImpl() }
                     single { OrgMembershipService(get()) }
                     single { workflowService }
+                    single { WorkflowGovernanceService(workflowService) }
                 }
             )
         }

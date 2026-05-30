@@ -23,6 +23,7 @@ import com.moneat.alerts.models.AlertStatus
 import com.moneat.config.EnvConfig
 import com.moneat.datadog.security.QueuedSecurityBatch
 import com.moneat.datadog.security.QueuedSecurityEventEntry
+import com.moneat.monitoring.OperationalMetrics
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.SlackService
@@ -299,6 +300,11 @@ class WorkflowService(
                     onceForTemplate = request.onceForTemplate,
                     now = now
                 )
+                WorkflowAudit.recordInTransaction(
+                    organizationId = organizationId,
+                    action = WorkflowAudit.ACTION_CREATED,
+                    workflowId = id
+                )
                 id
             }
         return checkNotNull(getWorkflow(organizationId, workflowId))
@@ -361,6 +367,11 @@ class WorkflowService(
                     now = now
                 )
             }
+            WorkflowAudit.recordInTransaction(
+                organizationId = organizationId,
+                action = WorkflowAudit.ACTION_UPDATED,
+                workflowId = workflowId
+            )
         }
         return getWorkflow(organizationId, workflowId)
     }
@@ -381,9 +392,21 @@ class WorkflowService(
             }
         if (!shouldDelete) return false
         return transaction {
-            Workflows.deleteWhere {
-                (Workflows.id eq workflowId) and (Workflows.organizationId eq organizationId)
-            } > 0
+            val deleted =
+                Workflows.deleteWhere {
+                    (Workflows.id eq workflowId) and (Workflows.organizationId eq organizationId)
+                } > 0
+            if (deleted) {
+                // workflow_id stays null because the workflow row is being removed in
+                // this same transaction (cascade would otherwise drop the audit row).
+                WorkflowAudit.recordInTransaction(
+                    organizationId = organizationId,
+                    action = WorkflowAudit.ACTION_DELETED,
+                    workflowId = null,
+                    detail = mapOf("workflow_id" to workflowId.toString())
+                )
+            }
+            deleted
         }
     }
 
@@ -751,6 +774,11 @@ class WorkflowService(
 
         candidates.forEach { candidate ->
             if (!conditionsMatch(event.triggerName, candidate.version.conditions, event.scope)) return@forEach
+            if (WorkflowRateLimiter.isLimited(candidate.workflowId, candidate.version.graph)) {
+                OperationalMetrics.recordWorkflowRateLimited(event.triggerName)
+                logger.debug { "Workflow ${candidate.workflowId} rate limited for trigger ${event.triggerName}" }
+                return@forEach
+            }
             val onceForTemplate =
                 candidate.version.onceForTemplate.ifEmpty { trigger.defaultOnceForTemplate }
             val onceFor = buildOnceFor(onceForTemplate, event.scope)
@@ -808,6 +836,7 @@ class WorkflowService(
     ): WorkflowStartRequest? =
         transaction {
             if (!force && workflowRunExists(candidate.workflowId, onceFor)) return@transaction null
+            if (refuseForQuota(event, candidate.workflowId)) return@transaction null
             val temporalWorkflowId = temporalWorkflowId(candidate.workflowId, onceFor)
             try {
                 val runId = WorkflowRuns.insertAndGetId {
@@ -822,6 +851,13 @@ class WorkflowService(
                     it[WorkflowRuns.temporalWorkflowId] = temporalWorkflowId
                     it[createdAt] = Clock.System.now()
                 }.value
+                WorkflowAudit.recordInTransaction(
+                    organizationId = event.organizationId,
+                    action = WorkflowAudit.ACTION_RUN_STARTED,
+                    workflowId = candidate.workflowId,
+                    runId = runId
+                )
+                OperationalMetrics.recordWorkflowExecutionStarted(event.triggerName)
                 WorkflowStartRequest(
                     runId = runId,
                     workflowId = candidate.workflowId,
@@ -841,6 +877,27 @@ class WorkflowService(
                 }
             }
         }
+
+    private fun refuseForQuota(
+        event: WorkflowTriggerEvent,
+        workflowId: Int
+    ): Boolean {
+        if (!WorkflowUsage.isOverQuota(event.organizationId, Clock.System.now())) return false
+        WorkflowAudit.recordInTransaction(
+            organizationId = event.organizationId,
+            action = WorkflowAudit.ACTION_RUN_REFUSED,
+            workflowId = workflowId,
+            detail = mapOf("reason" to "monthly_quota_exceeded")
+        )
+        WorkflowUsage.recordRefused(
+            organizationId = event.organizationId,
+            workflowId = workflowId,
+            runId = null,
+            now = Clock.System.now()
+        )
+        logger.info { "Refused workflow $workflowId run: monthly execution quota exceeded" }
+        return true
+    }
 
     private fun workflowRunExists(
         workflowId: Int,
@@ -870,6 +927,11 @@ class WorkflowService(
             ) {
                 it[WorkflowVersions.published] = published
             }
+            WorkflowAudit.recordInTransaction(
+                organizationId = organizationId,
+                action = if (published) WorkflowAudit.ACTION_PUBLISHED else WorkflowAudit.ACTION_UNPUBLISHED,
+                workflowId = workflowId
+            )
         }
     }
 
