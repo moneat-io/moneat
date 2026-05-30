@@ -32,6 +32,15 @@ tasks.shadowJar {
     manifest {
         attributes("Main-Class" to application.mainClass.get())
     }
+    // GraalVM's polyglot language selectors (org.graalvm.polyglot:js, org.graalvm.js:js)
+    // are POM-only meta modules; their resolved artifact is a .pom that shadow cannot
+    // unzip ("Cannot expand ZIP …js-*.pom"). Exclude the meta artifacts — the actual
+    // language jars (js-language, truffle-api, truffle-runtime, regex, icu4j, …) are
+    // separate modules and stay on the classpath.
+    dependencies {
+        exclude(dependency("org.graalvm.polyglot:js:.*"))
+        exclude(dependency("org.graalvm.js:js:.*"))
+    }
 }
 
 repositories {
