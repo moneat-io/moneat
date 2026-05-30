@@ -6,6 +6,8 @@ package com.moneat.enterprise.rbac
 
 import com.moneat.authz.PermissionBridge
 import com.moneat.enterprise.EnterpriseModule
+import com.moneat.enterprise.rbac.routes.rbacRoutes
+import com.moneat.enterprise.rbac.services.RbacService
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
 
@@ -27,8 +29,10 @@ class RbacEnterpriseModule :
     override val name: String = "Advanced RBAC"
     override val licenseFeature: String = "advanced_rbac"
 
+    private val service = RbacService()
+
     override fun registerRoutes(route: Route) {
-        // Role and service-account CRUD routes land in a later phase.
+        route.rbacRoutes(service)
     }
 
     override fun startBackgroundJobs(application: Application) {
@@ -40,10 +44,13 @@ class RbacEnterpriseModule :
     }
 
     // --- PermissionBridge ---
-    // Granular permission resolution and service accounts land in a later phase;
-    // returning null defers to the coarse ADMIN/MEMBER role gates enforced in core.
+    // Resolution is additive: a user with at least one role assignment is governed by the
+    // union of those roles' permission keys; a user with none resolves to null so the caller
+    // falls back to the coarse ADMIN/MEMBER role gates.
 
-    override fun resolvePermissions(organizationId: Int, userId: Int): Set<String>? = null
+    override fun resolvePermissions(organizationId: Int, userId: Int): Set<String>? =
+        service.resolvePermissions(organizationId, userId)
 
-    override fun hasPermission(organizationId: Int, userId: Int, permission: String): Boolean? = null
+    override fun hasPermission(organizationId: Int, userId: Int, permission: String): Boolean? =
+        service.hasPermission(organizationId, userId, permission)
 }

@@ -18,8 +18,10 @@ package com.moneat.workflows.routes
 
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.suspendRunCatching
+import com.moneat.enterprise.FeatureRegistry
 import com.moneat.org.services.OrgMembershipService
 import com.moneat.org.services.OrgRole
+import com.moneat.workflows.WorkflowPermissions
 import com.moneat.workflows.models.CreateWorkflowRequest
 import com.moneat.workflows.models.ManualWorkflowRunRequest
 import com.moneat.workflows.models.UpdateWorkflowRequest
@@ -136,7 +138,7 @@ private fun Route.workflowCrudRoutes(
 ) {
     post {
         val organizationId = currentOrganizationId() ?: return@post call.respond(HttpStatusCode.Forbidden)
-        ensureWorkflowAdmin(membershipService, organizationId) ?: return@post
+        ensureWorkflowAccess(membershipService, organizationId) ?: return@post
         val request = call.receive<CreateWorkflowRequest>()
         suspendRunCatching {
             workflowService.createWorkflow(organizationId, request)
@@ -159,7 +161,7 @@ private fun Route.workflowCrudRoutes(
 
     put(WORKFLOW_ID_ROUTE) {
         val organizationId = currentOrganizationId() ?: return@put call.respond(HttpStatusCode.Forbidden)
-        ensureWorkflowAdmin(membershipService, organizationId) ?: return@put
+        ensureWorkflowAccess(membershipService, organizationId) ?: return@put
         val workflowId = workflowIdFromPath() ?: return@put call.respond(
             HttpStatusCode.BadRequest,
             ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
@@ -181,7 +183,7 @@ private fun Route.workflowCrudRoutes(
 
     delete(WORKFLOW_ID_ROUTE) {
         val organizationId = currentOrganizationId() ?: return@delete call.respond(HttpStatusCode.Forbidden)
-        ensureWorkflowAdmin(membershipService, organizationId) ?: return@delete
+        ensureWorkflowAccess(membershipService, organizationId) ?: return@delete
         val workflowId = workflowIdFromPath() ?: return@delete call.respond(
             HttpStatusCode.BadRequest,
             ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
@@ -245,7 +247,7 @@ private fun Route.workflowLifecycleRoutes(
 ) {
     post("$WORKFLOW_ID_ROUTE/publish") {
         val organizationId = currentOrganizationId() ?: return@post call.respond(HttpStatusCode.Forbidden)
-        ensureWorkflowAdmin(membershipService, organizationId) ?: return@post
+        ensureWorkflowAccess(membershipService, organizationId) ?: return@post
         val workflowId = workflowIdFromPath() ?: return@post call.respond(
             HttpStatusCode.BadRequest,
             ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
@@ -257,7 +259,7 @@ private fun Route.workflowLifecycleRoutes(
 
     post("$WORKFLOW_ID_ROUTE/unpublish") {
         val organizationId = currentOrganizationId() ?: return@post call.respond(HttpStatusCode.Forbidden)
-        ensureWorkflowAdmin(membershipService, organizationId) ?: return@post
+        ensureWorkflowAccess(membershipService, organizationId) ?: return@post
         val workflowId = workflowIdFromPath() ?: return@post call.respond(
             HttpStatusCode.BadRequest,
             ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
@@ -269,7 +271,7 @@ private fun Route.workflowLifecycleRoutes(
 
     get("$WORKFLOW_ID_ROUTE/webhook-signing") {
         val organizationId = currentOrganizationId() ?: return@get call.respond(HttpStatusCode.Forbidden)
-        ensureWorkflowAdmin(membershipService, organizationId) ?: return@get
+        ensureWorkflowAccess(membershipService, organizationId) ?: return@get
         val workflowId = workflowIdFromPath() ?: return@get call.respond(
             HttpStatusCode.BadRequest,
             ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
@@ -286,7 +288,7 @@ private fun Route.workflowRunTriggerRoutes(
 ) {
     put("$WORKFLOW_ID_ROUTE/instances/$INSTANCE_ID_ROUTE/cancel") {
         val organizationId = currentOrganizationId() ?: return@put call.respond(HttpStatusCode.Forbidden)
-        ensureWorkflowAdmin(membershipService, organizationId) ?: return@put
+        ensureWorkflowAccess(membershipService, organizationId) ?: return@put
         val workflowId = workflowIdFromPath() ?: return@put call.respond(
             HttpStatusCode.BadRequest,
             ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
@@ -305,7 +307,7 @@ private fun Route.workflowRunTriggerRoutes(
 
     post("$WORKFLOW_ID_ROUTE/run") {
         val organizationId = currentOrganizationId() ?: return@post call.respond(HttpStatusCode.Forbidden)
-        ensureWorkflowAdmin(membershipService, organizationId) ?: return@post
+        ensureWorkflowAccess(membershipService, organizationId, WorkflowPermissions.RUN) ?: return@post
         val workflowId = workflowIdFromPath() ?: return@post call.respond(
             HttpStatusCode.BadRequest,
             ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
@@ -318,7 +320,7 @@ private fun Route.workflowRunTriggerRoutes(
 
     post("$WORKFLOW_ID_ROUTE/instances") {
         val organizationId = currentOrganizationId() ?: return@post call.respond(HttpStatusCode.Forbidden)
-        ensureWorkflowAdmin(membershipService, organizationId) ?: return@post
+        ensureWorkflowAccess(membershipService, organizationId, WorkflowPermissions.RUN) ?: return@post
         val userId = currentUserId() ?: return@post call.respond(HttpStatusCode.Forbidden)
         val workflowId = workflowIdFromPath() ?: return@post call.respond(
             HttpStatusCode.BadRequest,
@@ -354,22 +356,39 @@ internal suspend fun RoutingContext.respondWorkflowError(error: Throwable) {
     }
 }
 
-internal suspend fun RoutingContext.ensureWorkflowAdmin(
+internal suspend fun RoutingContext.ensureWorkflowAccess(
     membershipService: OrgMembershipService,
-    organizationId: Int
+    organizationId: Int,
+    permission: String = WorkflowPermissions.WRITE
 ): Boolean? {
     val userId = currentUserId() ?: run {
         call.respond(HttpStatusCode.Forbidden, ErrorResponse(FORBIDDEN_MESSAGE))
         return null
     }
-    return suspendRunCatching {
-        membershipService.requireRole(organizationId, userId, OrgRole.ADMIN)
-        true
-    }.getOrElse {
-        call.respond(HttpStatusCode.Forbidden, ErrorResponse(FORBIDDEN_MESSAGE))
-        null
+    // Prefer the granular RBAC bridge (advanced_rbac); fall back to the coarse ADMIN org-role
+    // gate when no bridge is loaded or it has no granular grant for this user.
+    val granular = FeatureRegistry.getPermissionBridge()?.hasPermission(organizationId, userId, permission)
+    val allowed = resolveWorkflowAccess(granular) {
+        suspendRunCatching {
+            membershipService.requireRole(organizationId, userId, OrgRole.ADMIN)
+            true
+        }.getOrElse { false }
     }
+    if (!allowed) {
+        call.respond(HttpStatusCode.Forbidden, ErrorResponse(FORBIDDEN_MESSAGE))
+        return null
+    }
+    return true
 }
+
+/**
+ * Resolve a workflow access decision: the granular permission bridge wins when it can decide;
+ * otherwise fall back to the coarse org-role gate. Pure and bridge-free so it is unit-testable.
+ */
+internal fun resolveWorkflowAccess(
+    granular: Boolean?,
+    coarseAllowed: () -> Boolean
+): Boolean = granular ?: coarseAllowed()
 
 internal fun RoutingContext.workflowIdFromPath(): Int? =
     call.parameters["workflowId"]?.toIntOrNull()

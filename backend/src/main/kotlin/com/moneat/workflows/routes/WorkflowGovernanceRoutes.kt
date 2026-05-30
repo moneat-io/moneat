@@ -64,7 +64,7 @@ private fun Route.blueprintRoutes(
 
     post("/blueprints/{key}/instantiate") {
         val organizationId = currentOrganizationId() ?: return@post call.respond(HttpStatusCode.Forbidden)
-        ensureWorkflowAdmin(membershipService, organizationId) ?: return@post
+        ensureWorkflowAccess(membershipService, organizationId) ?: return@post
         val key = call.parameters["key"].orEmpty()
         val request = call.receive<InstantiateBlueprintRequest>()
         suspendRunCatching {
@@ -121,7 +121,7 @@ private fun Route.exportImportRoutes(
 
     post("/import") {
         val organizationId = currentOrganizationId() ?: return@post call.respond(HttpStatusCode.Forbidden)
-        ensureWorkflowAdmin(membershipService, organizationId) ?: return@post
+        ensureWorkflowAccess(membershipService, organizationId) ?: return@post
         val request = call.receive<WorkflowImportRequest>()
         suspendRunCatching {
             governanceService.import(organizationId, request, currentUserId())
