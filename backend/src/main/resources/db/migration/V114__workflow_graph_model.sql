@@ -38,27 +38,25 @@ action_nodes AS (
 graph_edges AS (
     SELECT
         vp.id,
-        COALESCE(JSONB_AGG(edge.edge), '[]'::JSONB) AS edges
+        COALESCE(JSONB_AGG(edge.edge ORDER BY edge.ord), '[]'::JSONB) AS edges
     FROM version_parts vp
     LEFT JOIN LATERAL (
-        SELECT JSONB_BUILD_OBJECT('from', 'trigger', 'to', 'conditions') AS edge
+        -- trigger -> conditions, when the legacy version carried conditions
+        SELECT JSONB_BUILD_OBJECT('from', 'trigger', 'to', 'conditions') AS edge, 0 AS ord
         WHERE vp.condition_count > 0
 
         UNION ALL
 
+        -- Legacy steps are independent, so fan one edge out from the source to every step rather
+        -- than chaining them step-to-step. With conditions the fan-out hangs off the "true" branch.
         SELECT JSONB_STRIP_NULLS(
             JSONB_BUILD_OBJECT(
                 'from', CASE WHEN vp.condition_count > 0 THEN 'conditions' ELSE 'trigger' END,
-                'to', 'step-1',
+                'to', 'step-' || series.n,
                 'branch', CASE WHEN vp.condition_count > 0 THEN 'true' ELSE NULL END
             )
-        ) AS edge
-        WHERE vp.step_count > 0
-
-        UNION ALL
-
-        SELECT JSONB_BUILD_OBJECT('from', 'step-' || series.n, 'to', 'step-' || (series.n + 1)) AS edge
-        FROM GENERATE_SERIES(1, GREATEST(vp.step_count - 1, 0)) AS series(n)
+        ) AS edge, series.n AS ord
+        FROM GENERATE_SERIES(1, vp.step_count) AS series(n)
     ) edge ON TRUE
     GROUP BY vp.id
 )

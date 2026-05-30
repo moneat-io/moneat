@@ -57,6 +57,7 @@ object LinearGraphAdapter {
                 type = NODE_TYPE_ACTION,
                 action = step.name,
                 params = step.params.mapValues { (_, value) -> JsonPrimitive(value) },
+                // Independent step: a failure is recorded and fails the run, but does not abort its siblings.
                 continueOnError = true
             )
         }
@@ -82,22 +83,21 @@ object LinearGraphAdapter {
             ?.conditions
             .orEmpty()
 
+    // Legacy versions declare no edges between steps: the steps are independent — each runs regardless
+    // of the others, and the run fails iff any step fails (the phase-0 cutover contract). Fan out one
+    // edge from the source to every action so the graph carries that independence.
     private fun legacyEdges(
         hasCondition: Boolean,
         actionNodes: List<WorkflowGraphNode>
     ): List<WorkflowGraphEdge> {
         val edges = mutableListOf<WorkflowGraphEdge>()
-        val firstAction = actionNodes.firstOrNull()
-        when {
-            hasCondition && firstAction != null -> {
-                edges += WorkflowGraphEdge(TRIGGER_NODE_ID, LEGACY_CONDITION_NODE_ID)
-                edges += WorkflowGraphEdge(LEGACY_CONDITION_NODE_ID, firstAction.id, branch = "true")
-            }
-            hasCondition -> edges += WorkflowGraphEdge(TRIGGER_NODE_ID, LEGACY_CONDITION_NODE_ID)
-            firstAction != null -> edges += WorkflowGraphEdge(TRIGGER_NODE_ID, firstAction.id)
+        val source = if (hasCondition) LEGACY_CONDITION_NODE_ID else TRIGGER_NODE_ID
+        val branch = if (hasCondition) "true" else null
+        if (hasCondition) {
+            edges += WorkflowGraphEdge(TRIGGER_NODE_ID, LEGACY_CONDITION_NODE_ID)
         }
-        actionNodes.zipWithNext().forEach { (from, to) ->
-            edges += WorkflowGraphEdge(from.id, to.id)
+        actionNodes.forEach { action ->
+            edges += WorkflowGraphEdge(source, action.id, branch = branch)
         }
         return edges
     }

@@ -45,7 +45,7 @@ class LinearGraphAdapterTest {
     // ──── graphFromLegacy ────
 
     @Test
-    fun `graphFromLegacy without conditions chains trigger to actions`() {
+    fun `graphFromLegacy without conditions fans actions out from the trigger`() {
         val graph =
             LinearGraphAdapter.graphFromLegacy(
                 triggerName = "alert.triggered",
@@ -60,39 +60,41 @@ class LinearGraphAdapterTest {
         val trigger = graph.nodes.first()
         assertEquals(LinearGraphAdapter.NODE_TYPE_TRIGGER, trigger.type)
         assertEquals("alert.triggered", trigger.trigger)
-        // First action carries params as JSON primitives and continueOnError = true.
+        // Each action carries params as JSON primitives and is independent (continueOnError = true).
         val firstAction = graph.nodes[1]
         assertEquals(LinearGraphAdapter.NODE_TYPE_ACTION, firstAction.type)
-        assertTrue(firstAction.continueOnError)
+        assertTrue(graph.nodes.drop(1).all { it.continueOnError })
         assertEquals("hi", firstAction.params["message"]?.workflowStringValue())
-        // Edges: trigger -> step-1 -> step-2 with no branch labels.
+        // Edges fan out: trigger -> every action, with nothing chaining the actions together.
         assertEquals(
-            listOf("trigger" to "step-1", "step-1" to "step-2"),
+            listOf("trigger" to "step-1", "trigger" to "step-2"),
             graph.edges.map { it.from to it.to }
         )
         assertTrue(graph.edges.all { it.branch == null })
     }
 
     @Test
-    fun `graphFromLegacy with conditions inserts a branching condition node`() {
+    fun `graphFromLegacy with conditions fans actions out from the condition true branch`() {
         val graph =
             LinearGraphAdapter.graphFromLegacy(
                 triggerName = "alert.triggered",
                 conditions = listOf(WorkflowConditionConfig("alert.severity", "at_least", "HIGH")),
-                steps = listOf(WorkflowStepConfig("notification.slack"))
+                steps = listOf(
+                    WorkflowStepConfig("notification.slack"),
+                    WorkflowStepConfig("notification.email")
+                )
             )
 
         val conditionNode = graph.nodes.single { it.type == LinearGraphAdapter.NODE_TYPE_CONDITION }
         assertEquals(LinearGraphAdapter.LEGACY_CONDITION_NODE_ID, conditionNode.id)
         assertEquals(LinearGraphAdapter.CONDITION_KIND_IF, conditionNode.kind)
-        // trigger -> conditions, then conditions -> step-1 on the "true" branch.
+        // trigger -> conditions, then conditions -> every action on the "true" branch.
+        assertEquals(WorkflowGraphEdge("trigger", "conditions"), graph.edges.first())
+        val branchEdges = graph.edges.filter { it.branch == "true" }
         assertEquals(
-            WorkflowGraphEdge("trigger", "conditions"),
-            graph.edges.first()
+            listOf("conditions" to "step-1", "conditions" to "step-2"),
+            branchEdges.map { it.from to it.to }
         )
-        val branchEdge = graph.edges.single { it.branch == "true" }
-        assertEquals("conditions", branchEdge.from)
-        assertEquals("step-1", branchEdge.to)
     }
 
     @Test

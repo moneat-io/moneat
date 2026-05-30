@@ -108,6 +108,32 @@ class WorkflowInterpreterWorkflowTest {
     }
 
     @Test
+    fun `interpreter runs every legacy step independently when an earlier step fails`() {
+        val actionActivity = RecordingExecuteActionActivity(failedSteps = setOf("notification.email"))
+        val persistActivity =
+            RecordingPersistRunActivity(
+                snapshot = snapshot(
+                    steps = listOf(
+                        WorkflowStepConfig("notification.email"),
+                        WorkflowStepConfig("notification.slack")
+                    )
+                )
+            )
+
+        runWorkflow(actionActivity, persistActivity).use { harness ->
+            val result = harness.workflow.run(input())
+
+            // Legacy steps are independent: the failed step fails the run, but its sibling still runs.
+            assertEquals(STATUS_FAILED, result.status)
+            assertEquals(
+                listOf("notification.email", "notification.slack"),
+                actionActivity.executedSteps.sorted()
+            )
+            assertEquals("notification.email failed", result.errorMessage)
+        }
+    }
+
+    @Test
     fun `interpreter follows condition branch in graph workflow`() {
         val actionActivity = RecordingExecuteActionActivity()
         val persistActivity =
