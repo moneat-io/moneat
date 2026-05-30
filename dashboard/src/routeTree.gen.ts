@@ -82,6 +82,7 @@ import { Route as ApmTracesIndexRouteImport } from './routes/apm-traces.index'
 import { Route as AnalyticsIndexRouteImport } from './routes/analytics.index'
 import { Route as AiIndexRouteImport } from './routes/ai.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as WorkflowsConnectionsRouteImport } from './routes/workflows.connections'
 import { Route as UptimeMonitorIdRouteImport } from './routes/uptime.$monitorId'
 import { Route as SyntheticsTestIdRouteImport } from './routes/synthetics.$testId'
 import { Route as StatusPagesPageIdRouteImport } from './routes/status-pages.$pageId'
@@ -512,6 +513,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
+const WorkflowsConnectionsRoute = WorkflowsConnectionsRouteImport.update({
+  id: '/connections',
+  path: '/connections',
+  getParentRoute: () => WorkflowsRoute,
+} as any)
 const UptimeMonitorIdRoute = UptimeMonitorIdRouteImport.update({
   id: '/uptime/$monitorId',
   path: '/uptime/$monitorId',
@@ -898,7 +904,7 @@ export interface FileRoutesByFullPath {
   '/usage-insights': typeof UsageInsightsRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-email-required': typeof VerifyEmailRequiredRoute
-  '/workflows': typeof WorkflowsRoute
+  '/workflows': typeof WorkflowsRouteWithChildren
   '/admin/attribution': typeof AdminAttributionRoute
   '/admin/billing': typeof AdminBillingRoute
   '/admin/emails': typeof AdminEmailsRoute
@@ -946,6 +952,7 @@ export interface FileRoutesByFullPath {
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/synthetics/$testId': typeof SyntheticsTestIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
+  '/workflows/connections': typeof WorkflowsConnectionsRoute
   '/admin/': typeof AdminIndexRoute
   '/ai/': typeof AiIndexRoute
   '/analytics/': typeof AnalyticsIndexRoute
@@ -1023,7 +1030,7 @@ export interface FileRoutesByTo {
   '/usage-insights': typeof UsageInsightsRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-email-required': typeof VerifyEmailRequiredRoute
-  '/workflows': typeof WorkflowsRoute
+  '/workflows': typeof WorkflowsRouteWithChildren
   '/admin/attribution': typeof AdminAttributionRoute
   '/admin/billing': typeof AdminBillingRoute
   '/admin/emails': typeof AdminEmailsRoute
@@ -1069,6 +1076,7 @@ export interface FileRoutesByTo {
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/synthetics/$testId': typeof SyntheticsTestIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
+  '/workflows/connections': typeof WorkflowsConnectionsRoute
   '/admin': typeof AdminIndexRoute
   '/ai': typeof AiIndexRoute
   '/analytics': typeof AnalyticsIndexRoute
@@ -1160,7 +1168,7 @@ export interface FileRoutesById {
   '/usage-insights': typeof UsageInsightsRoute
   '/verify-email': typeof VerifyEmailRoute
   '/verify-email-required': typeof VerifyEmailRequiredRoute
-  '/workflows': typeof WorkflowsRoute
+  '/workflows': typeof WorkflowsRouteWithChildren
   '/admin/attribution': typeof AdminAttributionRoute
   '/admin/billing': typeof AdminBillingRoute
   '/admin/emails': typeof AdminEmailsRoute
@@ -1208,6 +1216,7 @@ export interface FileRoutesById {
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/synthetics/$testId': typeof SyntheticsTestIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
+  '/workflows/connections': typeof WorkflowsConnectionsRoute
   '/admin/': typeof AdminIndexRoute
   '/ai/': typeof AiIndexRoute
   '/analytics/': typeof AnalyticsIndexRoute
@@ -1348,6 +1357,7 @@ export interface FileRouteTypes {
     | '/status-pages/$pageId'
     | '/synthetics/$testId'
     | '/uptime/$monitorId'
+    | '/workflows/connections'
     | '/admin/'
     | '/ai/'
     | '/analytics/'
@@ -1471,6 +1481,7 @@ export interface FileRouteTypes {
     | '/status-pages/$pageId'
     | '/synthetics/$testId'
     | '/uptime/$monitorId'
+    | '/workflows/connections'
     | '/admin'
     | '/ai'
     | '/analytics'
@@ -1609,6 +1620,7 @@ export interface FileRouteTypes {
     | '/status-pages/$pageId'
     | '/synthetics/$testId'
     | '/uptime/$monitorId'
+    | '/workflows/connections'
     | '/admin/'
     | '/ai/'
     | '/analytics/'
@@ -1700,7 +1712,7 @@ export interface RootRouteChildren {
   UsageInsightsRoute: typeof UsageInsightsRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   VerifyEmailRequiredRoute: typeof VerifyEmailRequiredRoute
-  WorkflowsRoute: typeof WorkflowsRoute
+  WorkflowsRoute: typeof WorkflowsRouteWithChildren
   AiGenerationsRoute: typeof AiGenerationsRoute
   LegalPrivacyRoute: typeof LegalPrivacyRoute
   LegalSmsConsentRoute: typeof LegalSmsConsentRoute
@@ -2228,6 +2240,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/workflows/connections': {
+      id: '/workflows/connections'
+      path: '/connections'
+      fullPath: '/workflows/connections'
+      preLoaderRoute: typeof WorkflowsConnectionsRouteImport
+      parentRoute: typeof WorkflowsRoute
     }
     '/uptime/$monitorId': {
       id: '/uptime/$monitorId'
@@ -3037,6 +3056,18 @@ const SyntheticsRouteWithChildren = SyntheticsRoute._addFileChildren(
   SyntheticsRouteChildren,
 )
 
+interface WorkflowsRouteChildren {
+  WorkflowsConnectionsRoute: typeof WorkflowsConnectionsRoute
+}
+
+const WorkflowsRouteChildren: WorkflowsRouteChildren = {
+  WorkflowsConnectionsRoute: WorkflowsConnectionsRoute,
+}
+
+const WorkflowsRouteWithChildren = WorkflowsRoute._addFileChildren(
+  WorkflowsRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AcceptInviteRoute: AcceptInviteRoute,
@@ -3094,7 +3125,7 @@ const rootRouteChildren: RootRouteChildren = {
   UsageInsightsRoute: UsageInsightsRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   VerifyEmailRequiredRoute: VerifyEmailRequiredRoute,
-  WorkflowsRoute: WorkflowsRoute,
+  WorkflowsRoute: WorkflowsRouteWithChildren,
   AiGenerationsRoute: AiGenerationsRoute,
   LegalPrivacyRoute: LegalPrivacyRoute,
   LegalSmsConsentRoute: LegalSmsConsentRoute,

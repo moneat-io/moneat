@@ -92,6 +92,7 @@ const STATIC_TITLES: Record<string, string> = {
   '/admin/billing': 'Admin Billing',
   '/admin/emails': 'Admin Emails',
   '/admin/infrastructure': 'Admin Infrastructure',
+  '/workflows/connections': 'Workflow Connections',
 }
 
 // Feature/marketing page routes (shared between public route gating and sidebar visibility)

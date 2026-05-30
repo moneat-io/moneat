@@ -15,9 +15,9 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {useMemo, useState} from 'react'
-import {createFileRoute, redirect} from '@tanstack/react-router'
+import {createFileRoute, Link, redirect} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
-import {Bug, Loader2, PlayCircle, Plus, Save, Trash2, Workflow as WorkflowIcon} from 'lucide-react'
+import {Bug, KeyRound, Loader2, PlayCircle, Plus, Save, Trash2, Workflow as WorkflowIcon} from 'lucide-react'
 import {api} from '@/lib/api'
 import type {
   WorkflowCatalogResponse,
@@ -239,10 +239,21 @@ function PageHeader({onCreate}: {onCreate: () => void}) {
             <p className="text-xs text-muted-foreground">Build automation graphs for telemetry-driven response.</p>
           </div>
         </div>
-        <Button size="sm" onClick={onCreate} className="gap-1.5">
-          <Plus className="h-3.5 w-3.5" />
-          New Workflow
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" asChild className="gap-1.5">
+            <Link to="/workflows/connections">
+              <KeyRound className="h-3.5 w-3.5" />
+              Connections
+              <Badge variant="outline" className="ml-1 text-[10px]">
+                Enterprise
+              </Badge>
+            </Link>
+          </Button>
+          <Button size="sm" onClick={onCreate} className="gap-1.5">
+            <Plus className="h-3.5 w-3.5" />
+            New Workflow
+          </Button>
+        </div>
       </div>
     </div>
   )
