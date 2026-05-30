@@ -2,6 +2,7 @@ import {DEFAULT_OG_IMAGE, SITE_NAME, SITE_ORIGIN, absoluteUrl} from './constants
 
 type Json = Record<string, unknown>
 
+/** schema.org Organization sub-object used as the `publisher` of articles. */
 function publisher(): Json {
   return {
     '@type': 'Organization',
@@ -10,6 +11,7 @@ function publisher(): Json {
   }
 }
 
+/** schema.org Organization describing Moneat (site-wide identity). */
 export function organizationLd(): Json {
   return {
     '@context': 'https://schema.org',
@@ -20,6 +22,7 @@ export function organizationLd(): Json {
   }
 }
 
+/** schema.org WebSite entry for moneat.io. */
 export function webSiteLd(): Json {
   return {
     '@context': 'https://schema.org',
@@ -29,6 +32,7 @@ export function webSiteLd(): Json {
   }
 }
 
+/** schema.org SoftwareApplication describing the Moneat product (used on the homepage). */
 export function softwareApplicationLd(): Json {
   return {
     '@context': 'https://schema.org',
@@ -60,6 +64,7 @@ export interface BlogPostingInput {
   image?: string
 }
 
+/** schema.org BlogPosting structured data for a single blog post. */
 export function blogPostingLd(post: BlogPostingInput): Json {
   const url = absoluteUrl(post.path)
   return {
@@ -82,6 +87,7 @@ export interface BreadcrumbItem {
   path: string
 }
 
+/** schema.org BreadcrumbList built from an ordered list of name/path pairs. */
 export function breadcrumbLd(items: BreadcrumbItem[]): Json {
   return {
     '@context': 'https://schema.org',

@@ -62,6 +62,7 @@ export interface CompetitorSeoInput {
   metaDescription: string
 }
 
+/** PageSeo for a competitor "X alternative" comparison page. */
 export function competitorPageSeo(page: CompetitorSeoInput): PageSeo {
   return {
     path: page.route,
@@ -78,6 +79,7 @@ export interface FeatureSeoInput {
   image?: string
 }
 
+/** PageSeo for a product feature page (slug === path, e.g. /error-tracking). */
 export function featurePageSeo(page: FeatureSeoInput): PageSeo {
   return {
     path: `/${page.slug}`,
@@ -96,6 +98,7 @@ export interface BlogPostSeoInput {
   image?: string
 }
 
+/** PageSeo (og:type article) for a blog post, including BlogPosting + breadcrumb JSON-LD. */
 export function blogPostSeo(post: BlogPostSeoInput): PageSeo {
   const path = `/blog/${post.slug}`
   return {

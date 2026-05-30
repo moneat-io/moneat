@@ -16,6 +16,7 @@ const distDir = join(root, 'dist')
 const ssrDir = join(root, 'dist-ssr')
 const ssrEntryOut = join(ssrDir, 'prerender-render.mjs')
 
+/** Inject SEO <head> markup before </head>, replacing the placeholder <title>. */
 function injectHead(template, headTags) {
   if (!template.includes('</head>')) {
     throw new Error('prerender: dist/index.html is missing a </head> tag')
@@ -25,6 +26,7 @@ function injectHead(template, headTags) {
   return withoutTitle.replace('</head>', `    ${headTags}\n  </head>`)
 }
 
+/** Inject prerendered body HTML into the empty #root container. */
 function injectBody(html, bodyHtml) {
   const marker = '<div id="root"></div>'
   if (!html.includes(marker)) {
@@ -33,11 +35,13 @@ function injectBody(html, bodyHtml) {
   return html.replace(marker, `<div id="root">${bodyHtml}</div>`)
 }
 
+/** Map a route path to its dist output file ('/' -> index.html, '/x' -> x/index.html). */
 function outputPath(routePath) {
   if (routePath === '/') return join(distDir, 'index.html')
   return join(distDir, routePath.replace(/^\/+/, ''), 'index.html')
 }
 
+/** Run the SSR build, inject head/body into per-route HTML, write sitemap.xml, then clean up. */
 async function main() {
   await build({
     root,

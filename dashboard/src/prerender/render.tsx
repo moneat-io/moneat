@@ -33,6 +33,7 @@ export interface PrerenderedRoute {
   bodyHtml?: string
 }
 
+/** Format an ISO date as e.g. "February 15, 2026" (UTC), matching the blog route's display. */
 function formatDate(date: string): string {
   return new Date(date).toLocaleDateString('en-US', {
     year: 'numeric',
@@ -91,6 +92,7 @@ export function getPrerenderRoutes(): PrerenderedRoute[] {
   return routes
 }
 
+/** Build the sitemap.xml document covering all indexable marketing/content routes. */
 export function getSitemapXml(buildDate: string = new Date().toISOString().slice(0, 10)): string {
   return buildSitemapXml(
     buildSitemapEntries({

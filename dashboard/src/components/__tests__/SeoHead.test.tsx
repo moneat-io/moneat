@@ -31,6 +31,7 @@ async function renderSeo(seo: PageSeo): Promise<void> {
   await waitFor(() => expect(document.head.querySelector('title')).not.toBeNull())
 }
 
+/** Read the `content` attribute of a meta tag in document.head, or null if absent. */
 function content(selector: string): string | null {
   return document.head.querySelector(selector)?.getAttribute('content') ?? null
 }
