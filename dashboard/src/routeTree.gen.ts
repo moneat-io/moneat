@@ -134,6 +134,7 @@ import { Route as AdminAttributionRouteImport } from './routes/admin.attribution
 import { Route as PerformanceTracesIndexRouteImport } from './routes/performance.traces.index'
 import { Route as MonitoringKubernetesIndexRouteImport } from './routes/monitoring.kubernetes.index'
 import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects.$projectId.settings'
+import { Route as ProfilesServiceServiceRouteImport } from './routes/profiles.service.$service'
 import { Route as PerformanceTracesTraceIdRouteImport } from './routes/performance.traces.$traceId'
 import { Route as OnCallIncidentsIncidentIdRouteImport } from './routes/on-call.incidents.$incidentId'
 import { Route as OnCallDeclaredIncidentsIncidentIdRouteImport } from './routes/on-call.declared-incidents.$incidentId'
@@ -779,6 +780,11 @@ const ProjectsProjectIdSettingsRoute =
     path: '/settings',
     getParentRoute: () => ProjectsProjectIdRoute,
   } as any)
+const ProfilesServiceServiceRoute = ProfilesServiceServiceRouteImport.update({
+  id: '/service/$service',
+  path: '/service/$service',
+  getParentRoute: () => ProfilesRoute,
+} as any)
 const PerformanceTracesTraceIdRoute =
   PerformanceTracesTraceIdRouteImport.update({
     id: '/$traceId',
@@ -988,6 +994,7 @@ export interface FileRoutesByFullPath {
   '/on-call/declared-incidents/$incidentId': typeof OnCallDeclaredIncidentsIncidentIdRoute
   '/on-call/incidents/$incidentId': typeof OnCallIncidentsIncidentIdRoute
   '/performance/traces/$traceId': typeof PerformanceTracesTraceIdRoute
+  '/profiles/service/$service': typeof ProfilesServiceServiceRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
   '/monitoring/kubernetes/': typeof MonitoringKubernetesIndexRoute
   '/performance/traces/': typeof PerformanceTracesIndexRoute
@@ -1113,6 +1120,7 @@ export interface FileRoutesByTo {
   '/on-call/declared-incidents/$incidentId': typeof OnCallDeclaredIncidentsIncidentIdRoute
   '/on-call/incidents/$incidentId': typeof OnCallIncidentsIncidentIdRoute
   '/performance/traces/$traceId': typeof PerformanceTracesTraceIdRoute
+  '/profiles/service/$service': typeof ProfilesServiceServiceRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
   '/monitoring/kubernetes': typeof MonitoringKubernetesIndexRoute
   '/performance/traces': typeof PerformanceTracesIndexRoute
@@ -1254,6 +1262,7 @@ export interface FileRoutesById {
   '/on-call/declared-incidents/$incidentId': typeof OnCallDeclaredIncidentsIncidentIdRoute
   '/on-call/incidents/$incidentId': typeof OnCallIncidentsIncidentIdRoute
   '/performance/traces/$traceId': typeof PerformanceTracesTraceIdRoute
+  '/profiles/service/$service': typeof ProfilesServiceServiceRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
   '/monitoring/kubernetes/': typeof MonitoringKubernetesIndexRoute
   '/performance/traces/': typeof PerformanceTracesIndexRoute
@@ -1396,6 +1405,7 @@ export interface FileRouteTypes {
     | '/on-call/declared-incidents/$incidentId'
     | '/on-call/incidents/$incidentId'
     | '/performance/traces/$traceId'
+    | '/profiles/service/$service'
     | '/projects/$projectId/settings'
     | '/monitoring/kubernetes/'
     | '/performance/traces/'
@@ -1521,6 +1531,7 @@ export interface FileRouteTypes {
     | '/on-call/declared-incidents/$incidentId'
     | '/on-call/incidents/$incidentId'
     | '/performance/traces/$traceId'
+    | '/profiles/service/$service'
     | '/projects/$projectId/settings'
     | '/monitoring/kubernetes'
     | '/performance/traces'
@@ -1661,6 +1672,7 @@ export interface FileRouteTypes {
     | '/on-call/declared-incidents/$incidentId'
     | '/on-call/incidents/$incidentId'
     | '/performance/traces/$traceId'
+    | '/profiles/service/$service'
     | '/projects/$projectId/settings'
     | '/monitoring/kubernetes/'
     | '/performance/traces/'
@@ -2617,6 +2629,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdSettingsRouteImport
       parentRoute: typeof ProjectsProjectIdRoute
     }
+    '/profiles/service/$service': {
+      id: '/profiles/service/$service'
+      path: '/service/$service'
+      fullPath: '/profiles/service/$service'
+      preLoaderRoute: typeof ProfilesServiceServiceRouteImport
+      parentRoute: typeof ProfilesRoute
+    }
     '/performance/traces/$traceId': {
       id: '/performance/traces/$traceId'
       path: '/$traceId'
@@ -2988,11 +3007,13 @@ const PerformanceRouteWithChildren = PerformanceRoute._addFileChildren(
 interface ProfilesRouteChildren {
   ProfilesProfileIdRoute: typeof ProfilesProfileIdRoute
   ProfilesIndexRoute: typeof ProfilesIndexRoute
+  ProfilesServiceServiceRoute: typeof ProfilesServiceServiceRoute
 }
 
 const ProfilesRouteChildren: ProfilesRouteChildren = {
   ProfilesProfileIdRoute: ProfilesProfileIdRoute,
   ProfilesIndexRoute: ProfilesIndexRoute,
+  ProfilesServiceServiceRoute: ProfilesServiceServiceRoute,
 }
 
 const ProfilesRouteWithChildren = ProfilesRoute._addFileChildren(

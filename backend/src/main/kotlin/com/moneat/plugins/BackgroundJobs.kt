@@ -30,6 +30,7 @@ import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.otlp.services.OtlpMetricsIngestionWorker
 import com.moneat.otlp.services.OtlpTraceIngestionWorker
 import com.moneat.shared.services.ArtifactCleanupService
+import com.moneat.shared.services.DemoLivenessBackgroundService
 import com.moneat.shared.services.PulseService
 import com.moneat.shared.services.RetentionBackgroundService
 import com.moneat.shared.services.TaskLock
@@ -83,6 +84,7 @@ fun Application.configureBackgroundJobs() {
     val refreshTokenCleanupService = koin.get<RefreshTokenCleanupService>()
     val artifactCleanupService = koin.get<ArtifactCleanupService>()
     val uptimeScheduler = koin.get<UptimeScheduler>()
+    val demoLivenessBackgroundService = koin.get<DemoLivenessBackgroundService>()
     val queueKey = environment.config.property("ingest.queueKey").getString()
     val dlqKey = environment.config.property("ingest.dlqKey").getString()
     val workerCount =
@@ -166,6 +168,7 @@ fun Application.configureBackgroundJobs() {
     otlpTraceIngestionWorker.start()
     otlpMetricsIngestionWorker.start()
     workflowWorkerFactory.start()
+    demoLivenessBackgroundService.start(jobScope)
 
     // Start enterprise background jobs (SSO, On-Call, etc.) if modules are present
     FeatureRegistry.startBackgroundJobs(this)
@@ -211,6 +214,7 @@ fun Application.configureBackgroundJobs() {
             otlpMetricsIngestionWorker.stop()
         }
         shutdownWorkflowWorker(workflowWorkerFactory, temporalClientProvider)
+        demoLivenessBackgroundService.stop()
         pulseService?.stop()
         FeatureRegistry.stopBackgroundJobs()
 

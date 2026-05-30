@@ -18,7 +18,11 @@ import type { ApiClientCore } from '../client'
 import { urlWithQuery, filenameFromContentDisposition } from '../utils'
 import type {
   ProfileListResponse,
+  ProfileResponse,
+  ProfileServicesResponse,
+  ProfileTimeseriesResponse,
   FlamegraphResponse,
+  MergedFlamegraphResponse,
 } from '../types'
 
 export function profilesMethods(core: ApiClientCore) {
@@ -30,6 +34,11 @@ export function profilesMethods(core: ApiClientCore) {
         service?: string
         type?: string
         source?: string
+        env?: string
+        host?: string
+        version?: string
+        from?: number
+        to?: number
         limit?: number
         offset?: number
       } = {}
@@ -38,10 +47,77 @@ export function profilesMethods(core: ApiClientCore) {
       if (params.service) searchParams.set('service', params.service)
       if (params.type) searchParams.set('type', params.type)
       if (params.source) searchParams.set('source', params.source)
+      if (params.env) searchParams.set('env', params.env)
+      if (params.host) searchParams.set('host', params.host)
+      if (params.version) searchParams.set('version', params.version)
+      if (params.from != null) searchParams.set('from', String(params.from))
+      if (params.to != null) searchParams.set('to', String(params.to))
       if (params.limit != null) searchParams.set('limit', String(params.limit))
       if (params.offset != null) searchParams.set('offset', String(params.offset))
       const qs = searchParams.toString()
       return core.request<ProfileListResponse>(urlWithQuery(`${base}/profiles`, qs))
+    },
+
+    getProfile: (profileId: string) =>
+      core.request<ProfileResponse>(`${base}/profiles/${profileId}`),
+
+    getProfileServices: (params: {from?: number; to?: number} = {}) => {
+      const sp = new URLSearchParams()
+      if (params.from != null) sp.set('from', String(params.from))
+      if (params.to != null) sp.set('to', String(params.to))
+      return core.request<ProfileServicesResponse>(
+        urlWithQuery(`${base}/profiles/services`, sp.toString())
+      )
+    },
+
+    getProfileTimeseries: (params: {
+      service?: string
+      type?: string
+      env?: string
+      host?: string
+      from: number
+      to: number
+      buckets?: number
+    }) => {
+      const sp = new URLSearchParams()
+      if (params.service) sp.set('service', params.service)
+      if (params.type) sp.set('type', params.type)
+      if (params.env) sp.set('env', params.env)
+      if (params.host) sp.set('host', params.host)
+      sp.set('from', String(params.from))
+      sp.set('to', String(params.to))
+      if (params.buckets != null) sp.set('buckets', String(params.buckets))
+      return core.request<ProfileTimeseriesResponse>(
+        urlWithQuery(`${base}/profiles/timeseries`, sp.toString())
+      )
+    },
+
+    getMergedFlamegraph: (params: {
+      service?: string
+      type?: string
+      env?: string
+      host?: string
+      version?: string
+      from?: number
+      to?: number
+      sampleType?: string | null
+      thread?: string | null
+      maxProfiles?: number
+    }) => {
+      const sp = new URLSearchParams()
+      if (params.service) sp.set('service', params.service)
+      if (params.type) sp.set('type', params.type)
+      if (params.env) sp.set('env', params.env)
+      if (params.host) sp.set('host', params.host)
+      if (params.version) sp.set('version', params.version)
+      if (params.from != null) sp.set('from', String(params.from))
+      if (params.to != null) sp.set('to', String(params.to))
+      if (params.sampleType) sp.set('sampleType', params.sampleType)
+      if (params.thread) sp.set('thread', params.thread)
+      if (params.maxProfiles != null) sp.set('maxProfiles', String(params.maxProfiles))
+      return core.request<MergedFlamegraphResponse>(
+        urlWithQuery(`${base}/profiles/merged-flamegraph`, sp.toString())
+      )
     },
 
     downloadProfile: async (

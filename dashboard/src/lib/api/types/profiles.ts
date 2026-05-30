@@ -64,3 +64,58 @@ export interface FlamegraphResponse {
   unit?: string
   totalSamples?: number
 }
+
+/** A merged flamegraph aggregated across multiple profiles in a window. */
+export interface MergedFlamegraphResponse extends FlamegraphResponse {
+  /** Number of profiles actually merged into this flamegraph. */
+  mergedCount?: number
+  /** Total profiles matching the window (mergedCount may be a sample of this). */
+  totalCount?: number
+}
+
+export interface ProfileTypeCount {
+  profileType: string
+  count: number
+}
+
+/** A bucket of profile-volume activity (ts = epoch millis). */
+export interface ProfileSeriesPoint {
+  ts: number
+  count: number
+}
+
+/** Per-service rollup powering the Profiles overview cards. */
+export interface ProfileServiceSummary {
+  service: string
+  languages: string[]
+  runtimes: string[]
+  environments: string[]
+  types: ProfileTypeCount[]
+  hostCount: number
+  profileCount: number
+  totalSizeBytes: number
+  firstSeen: string
+  lastSeen: string
+  avgDurationNs: number
+  series: ProfileSeriesPoint[]
+}
+
+export interface ProfileServicesResponse {
+  services: ProfileServiceSummary[]
+  totalProfiles: number
+  totalSizeBytes: number
+  serviceCount: number
+  hostCount: number
+  typeCount: number
+}
+
+export interface ProfileTimeseriesPoint {
+  ts: number
+  count: number
+  sizeBytes: number
+}
+
+export interface ProfileTimeseriesResponse {
+  points: ProfileTimeseriesPoint[]
+  bucketSeconds: number
+}

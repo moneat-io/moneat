@@ -280,6 +280,42 @@ class TraceIngestionServiceTest {
         }
     }
 
+    @Test
+    fun `getApmOverview skips streamed ClickHouse error lines instead of failing`() = runBlocking {
+        // Regression: ClickHouse can append a non-object line (e.g. a mid-stream Code 159
+        // timeout) after it has already streamed a 200 response. That line slips past the
+        // error check in executeWithFormat and previously crashed `.jsonObject` with
+        // "Element class JsonLiteral is not a JsonObject" -> unhandled 500 on /v1/traces/overview.
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "moneat"
+            coEvery { ClickHouseClient.executeWithFormat(any(), any()) } answers {
+                val query = firstArg<String>()
+                if ("facet_type" in query) {
+                    // Valid rows interleaved with a bare literal and a raw exception fragment.
+                    "{\"facet_type\":\"service\",\"value\":\"web\",\"count\":\"5\"}\n" +
+                        "159\n" +
+                        "Code: 159. DB::Exception: Timeout exceeded\n" +
+                        "{\"facet_type\":\"source\",\"value\":\"otlp\",\"count\":\"3\"}"
+                } else {
+                    ""
+                }
+            }
+
+            val overview = TraceIngestionService.getApmOverview(
+                organizationId = 10,
+                query = DdTraceListQuery(),
+            )
+
+            // The malformed lines are skipped; the surrounding valid facet rows survive.
+            assertEquals("web", overview.facets.services.single().value)
+            assertEquals("otlp", overview.facets.sources.single().value)
+            assertTrue(overview.facets.environments.isEmpty())
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
     // ──── JSON PARSING TESTS ────
 
     @Test

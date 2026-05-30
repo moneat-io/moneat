@@ -52,6 +52,8 @@ private data class ReseedSnapshot(
     val freshAnalyticsCount: Long,
     val freshLogsCount: Long,
     val freshDatadogCount: Long,
+    val freshFeatureFlagsCount: Long,
+    val freshFeedbackCount: Long,
     val freshK8sCount: Long,
     val freshDbmCount: Long,
     val freshDebuggerLogsCount: Long,
@@ -91,6 +93,8 @@ private data class ReseedSnapshot(
                 freshAnalyticsCount > 0,
                 freshLogsCount > 0,
                 freshDatadogCount > 0,
+                freshFeatureFlagsCount > 0,
+                freshFeedbackCount > 0,
                 freshSecurityCount > 0,
                 freshSyntheticsCount > 0,
                 demoDashboardCount >= DEMO_DASHBOARD_SEED_COUNT,
@@ -106,6 +110,8 @@ private suspend fun gatherReseedSnapshot(): ReseedSnapshot =
         freshAnalyticsCount = checkFreshAnalyticsDataCount(),
         freshLogsCount = checkFreshLogsCount(),
         freshDatadogCount = checkFreshDatadogCount(),
+        freshFeatureFlagsCount = checkFreshFeatureFlagsCount(),
+        freshFeedbackCount = checkFreshFeedbackCount(),
         freshK8sCount = checkFreshKubernetesDataCount(),
         freshDbmCount = checkFreshDbmDataCount(),
         freshDebuggerLogsCount = checkFreshDebuggerLogsCount(),
@@ -132,6 +138,8 @@ private suspend fun runStaleDemoReseed(snap: ReseedSnapshot) {
     maybeReseedAnalytics(snap.freshAnalyticsCount)
     maybeReseedLogs(snap.freshLogsCount)
     maybeReseedDatadog(snap.freshDatadogCount)
+    maybeReseedFeatureFlags(snap.freshFeatureFlagsCount)
+    maybeReseedFeedback(snap.freshFeedbackCount)
     maybeReseedKubernetes(snap.freshK8sCount)
     maybeReseedDbm(snap.freshDbmCount)
     maybeReseedDebugger(snap.hasFreshDebugger, snap)
@@ -152,6 +160,7 @@ private fun logSkippingReseed(s: ReseedSnapshot) {
             "${s.freshLlmCount} recent LLM generations, " +
             "${s.freshAnalyticsCount} recent analytics events, ${s.freshLogsCount} recent logs, " +
             "${s.freshDatadogCount} recent Datadog spans, " +
+            "${s.freshFeatureFlagsCount} recent flag evaluations, ${s.freshFeedbackCount} recent feedback, " +
             "infra (k8s=${s.freshK8sCount} dbm=${s.freshDbmCount} " +
             "debugger_logs=${s.freshDebuggerLogsCount} " +
             "debugger_diag=${s.freshDebuggerDiagCount} ndm_dev=${s.freshNdmDevicesCount} " +
@@ -214,6 +223,29 @@ private suspend fun maybeReseedDatadog(freshDatadogCount: Long) {
     logger.info { "Datadog demo data is stale or missing, reseeding..." }
     purgeDatadogDemoData()
     reseedDatadogData()
+}
+
+private suspend fun maybeReseedFeatureFlags(freshFeatureFlagsCount: Long) {
+    if (freshFeatureFlagsCount > 0) {
+        logger.info {
+            "Feature flag demo data is fresh ($freshFeatureFlagsCount recent evaluations), " +
+                "skipping feature flag reseed"
+        }
+        return
+    }
+    logger.info { "Feature flag demo data is stale or missing, reseeding..." }
+    purgeFeatureFlagsDemoData()
+    reseedFeatureFlags()
+}
+
+private suspend fun maybeReseedFeedback(freshFeedbackCount: Long) {
+    if (freshFeedbackCount > 0) {
+        logger.info { "Feedback demo data is fresh ($freshFeedbackCount recent entries), skipping feedback reseed" }
+        return
+    }
+    logger.info { "Feedback demo data is stale or missing, reseeding..." }
+    purgeFeedbackDemoData()
+    reseedFeedback()
 }
 
 private suspend fun maybeReseedKubernetes(freshK8sCount: Long) {
