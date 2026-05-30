@@ -285,6 +285,30 @@ object OperationalMetrics {
         ).increment()
     }
 
+    fun recordWorkflowExecutionStarted(trigger: String) {
+        workflowExecutionCounter(trigger, "started").increment()
+    }
+
+    fun recordWorkflowExecutionCompleted(
+        trigger: String,
+        durationSeconds: Double
+    ) {
+        workflowExecutionCounter(trigger, "completed").increment()
+        workflowExecutionDurationTimer(trigger).record(durationSeconds.toNanos(), TimeUnit.NANOSECONDS)
+    }
+
+    fun recordWorkflowExecutionFailed(trigger: String) {
+        workflowExecutionCounter(trigger, "failed").increment()
+    }
+
+    fun recordWorkflowRateLimited(trigger: String) {
+        counter(
+            WORKFLOW_RATE_LIMITED,
+            "Workflow runs skipped because the per-workflow rate limit was reached.",
+            tags("trigger" to trigger.normalizedLabelValue())
+        ).increment()
+    }
+
     fun scrape(): String = registry.scrape()
 
     internal fun resetForTest() {
@@ -445,6 +469,38 @@ object OperationalMetrics {
             .tags(tags)
             .register(registry)
 
+    private fun workflowExecutionCounter(
+        trigger: String,
+        status: String
+    ): Counter =
+        counter(
+            WORKFLOW_EXECUTIONS,
+            "Workflow executions by trigger and lifecycle status.",
+            tags(
+                "trigger" to trigger.normalizedLabelValue(),
+                "status" to status
+            )
+        )
+
+    @Suppress("MagicNumber")
+    private fun workflowExecutionDurationTimer(trigger: String): Timer =
+        Timer.builder(WORKFLOW_EXECUTION_DURATION)
+            .description("Workflow execution duration from run creation to completion, by trigger.")
+            .serviceLevelObjectives(
+                Duration.ofMillis(50),
+                Duration.ofMillis(250),
+                Duration.ofMillis(500),
+                Duration.ofSeconds(1),
+                Duration.ofSeconds(5),
+                Duration.ofSeconds(15),
+                Duration.ofSeconds(30),
+                Duration.ofSeconds(60),
+                Duration.ofMinutes(5),
+                Duration.ofMinutes(15)
+            )
+            .tags(tags("trigger" to trigger.normalizedLabelValue()))
+            .register(registry)
+
     private fun readQueueDepth(queueKey: String): Double {
         if (!RedisConfig.isConnected()) return Double.NaN
         return runCatching { RedisConfig.sync().llen(queueKey).toDouble() }
@@ -507,6 +563,9 @@ object OperationalMetrics {
     private const val BACKGROUND_JOB_LAST_SUCCESS_TIMESTAMP_SECONDS =
         "moneat_background_job_last_success_timestamp_seconds"
     private const val DATASOURCE_QUERY_FAILURES = "moneat_datasource_query_failures"
+    private const val WORKFLOW_EXECUTIONS = "moneat_workflow_executions"
+    private const val WORKFLOW_EXECUTION_DURATION = "moneat_workflow_execution_duration"
+    private const val WORKFLOW_RATE_LIMITED = "moneat_workflow_rate_limited"
     private const val NANOS_PER_SECOND = 1_000_000_000
     private const val MILLIS_PER_SECOND = 1_000
     private const val HEALTHY_VALUE = 1L

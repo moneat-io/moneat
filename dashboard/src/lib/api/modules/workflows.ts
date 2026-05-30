@@ -15,9 +15,17 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import type {ApiClientCore} from '../client'
+import {urlWithQuery} from '../utils'
 import type {
+  InstantiateBlueprintRequest,
+  WorkflowAuditEntry,
+  WorkflowBlueprintDetail,
+  WorkflowBlueprintSummary,
   WorkflowCatalogResponse,
+  WorkflowExportResponse,
+  WorkflowImportRequest,
   WorkflowJsonValue,
+  WorkflowOverviewResponse,
   WorkflowPreviewRequest,
   WorkflowPreviewResponse,
   WorkflowRequest,
@@ -27,8 +35,13 @@ import type {
   WorkflowRunResponse,
   WorkflowTestMessageResponse,
   WorkflowUpdateRequest,
+  WorkflowUsageResponse,
   WorkflowWebhookSigningResponse,
 } from '../types'
+
+function auditQuery(limit?: number): string {
+  return limit === undefined ? '' : new URLSearchParams({limit: String(limit)}).toString()
+}
 
 export function workflowsMethods(core: ApiClientCore) {
   const base = core.API_BASE
@@ -110,5 +123,47 @@ export function workflowsMethods(core: ApiClientCore) {
 
     getWorkflowWebhookSigning: (id: number) =>
       core.request<WorkflowWebhookSigningResponse>(`${base}/workflows/${id}/webhook-signing`),
+
+    getWorkflowBlueprints: () =>
+      core.request<WorkflowBlueprintSummary[]>(`${base}/workflows/blueprints`),
+
+    getWorkflowBlueprint: (key: string) =>
+      core.request<WorkflowBlueprintDetail>(
+        `${base}/workflows/blueprints/${encodeURIComponent(key)}`
+      ),
+
+    instantiateBlueprint: (key: string, request: InstantiateBlueprintRequest = {}) =>
+      core.request<WorkflowResponse>(
+        `${base}/workflows/blueprints/${encodeURIComponent(key)}/instantiate`,
+        {
+          method: 'POST',
+          body: JSON.stringify(request),
+        }
+      ),
+
+    getWorkflowOverview: () =>
+      core.request<WorkflowOverviewResponse>(`${base}/workflows/overview`),
+
+    getWorkflowUsage: () =>
+      core.request<WorkflowUsageResponse>(`${base}/workflows/usage`),
+
+    getWorkflowAudit: (limit?: number) =>
+      core.request<WorkflowAuditEntry[]>(
+        urlWithQuery(`${base}/workflows/audit`, auditQuery(limit))
+      ),
+
+    getWorkflowAuditForWorkflow: (id: number, limit?: number) =>
+      core.request<WorkflowAuditEntry[]>(
+        urlWithQuery(`${base}/workflows/${id}/audit`, auditQuery(limit))
+      ),
+
+    exportWorkflow: (id: number) =>
+      core.request<WorkflowExportResponse>(`${base}/workflows/${id}/export`),
+
+    importWorkflow: (request: WorkflowImportRequest) =>
+      core.request<WorkflowResponse>(`${base}/workflows/import`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }),
   }
 }

@@ -271,3 +271,79 @@ export interface WorkflowCatalogResponse {
   steps: WorkflowStepDefinition[]
   node_types: WorkflowNodeTypeDefinition[]
 }
+
+export interface WorkflowBlueprintSummary {
+  key: string
+  name: string
+  description: string
+  category: string
+  trigger_name: string
+  tags: string[]
+}
+
+export interface WorkflowBlueprintDetail extends WorkflowBlueprintSummary {
+  conditions: WorkflowConditionConfig[]
+  steps: WorkflowStepConfig[]
+  graph: WorkflowGraphConfig
+  once_for_template: string[]
+}
+
+export interface InstantiateBlueprintRequest {
+  name?: string
+}
+
+export interface WorkflowOverviewTopEntry {
+  workflow_id: number
+  name: string
+  run_count: number
+}
+
+export interface WorkflowOverviewResponse {
+  total_workflows: number
+  enabled_workflows: number
+  published_workflows: number
+  runs_last_30d: number
+  success_rate: number
+  failed_last_30d: number
+  top_workflows: WorkflowOverviewTopEntry[]
+}
+
+export interface WorkflowUsageResponse {
+  period: string
+  used: number
+  limit: number | null
+  remaining: number | null
+  unlimited: boolean
+}
+
+export interface WorkflowAuditEntry {
+  id: string
+  workflow_id?: number | null
+  run_id?: number | null
+  action: string
+  actor_user_id?: number | null
+  detail: Record<string, string>
+  created_at: string
+}
+
+export interface WorkflowExportResource {
+  name: string
+  trigger_name: string
+  enabled: boolean
+  graph: WorkflowGraphConfig
+  once_for_template: string[]
+}
+
+export interface WorkflowExportResponse {
+  schema_version: number
+  resource: WorkflowExportResource
+  terraform: string
+}
+
+export interface WorkflowImportRequest {
+  name: string
+  trigger_name: string
+  graph: WorkflowGraphConfig
+  enabled?: boolean
+  once_for_template?: string[]
+}

@@ -35,12 +35,14 @@ import com.moneat.workflows.engine.temporal.WorkflowStartRequest
 import com.moneat.workflows.engine.temporal.WorkflowStartResult
 import com.moneat.workflows.models.CreateWorkflowRequest
 import com.moneat.workflows.models.UpdateWorkflowRequest
+import com.moneat.workflows.models.WorkflowAuditEvents
 import com.moneat.workflows.models.WorkflowConditionConfig
 import com.moneat.workflows.models.WorkflowPreviewRequest
 import com.moneat.workflows.models.WorkflowRunInstanceRequest
 import com.moneat.workflows.models.WorkflowRuns
 import com.moneat.workflows.models.WorkflowRunSteps
 import com.moneat.workflows.models.WorkflowStepConfig
+import com.moneat.workflows.models.WorkflowUsageEvents
 import com.moneat.workflows.models.WorkflowVersions
 import com.moneat.workflows.models.Workflows
 import com.moneat.workflows.models.typedWorkflowScope
@@ -89,7 +91,7 @@ class WorkflowServiceTest {
     fun setup() {
         if (db == null) {
             db = Database.connect(
-                url = "jdbc:h2:mem:moneat_workflows;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                url = "jdbc:h2:mem:moneat_workflows;MODE=MYSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
         }
@@ -114,7 +116,9 @@ class WorkflowServiceTest {
             Workflows,
             WorkflowVersions,
             WorkflowRuns,
-            WorkflowRunSteps
+            WorkflowRunSteps,
+            WorkflowAuditEvents,
+            WorkflowUsageEvents
         )
         transaction {
             SchemaUtils.create(Users, Organizations, Memberships, Workflows)
@@ -206,6 +210,40 @@ class WorkflowServiceTest {
                 """
                 CREATE UNIQUE INDEX idx_workflow_run_steps_attempt
                     ON workflow_run_steps (run_id, node_id, attempt)
+                """.trimIndent()
+            )
+            exec(
+                """
+                CREATE TABLE workflow_audit_events (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    organization_id INT NOT NULL,
+                    workflow_id INT,
+                    run_id INT,
+                    action VARCHAR(48) NOT NULL,
+                    actor_user_id INT,
+                    detail TEXT NOT NULL DEFAULT '{}',
+                    created_at TIMESTAMP NOT NULL,
+                    CONSTRAINT fk_workflow_audit_events_org
+                        FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+                    CONSTRAINT fk_workflow_audit_events_workflow
+                        FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
+                )
+                """.trimIndent()
+            )
+            exec(
+                """
+                CREATE TABLE workflow_usage_events (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    organization_id INT NOT NULL,
+                    workflow_id INT,
+                    run_id INT NOT NULL,
+                    period VARCHAR(7) NOT NULL,
+                    outcome VARCHAR(16) NOT NULL,
+                    created_at TIMESTAMP NOT NULL,
+                    CONSTRAINT fk_workflow_usage_events_org
+                        FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+                    CONSTRAINT uq_workflow_usage_events_run_outcome UNIQUE (run_id, outcome)
+                )
                 """.trimIndent()
             )
         }

@@ -111,6 +111,7 @@ import com.moneat.workflows.engine.temporal.TemporalClientProvider
 import com.moneat.workflows.engine.temporal.TemporalWorkflowExecutionEngine
 import com.moneat.workflows.engine.temporal.WorkflowExecutionEngine
 import com.moneat.workflows.services.WorkflowActionExecutor
+import com.moneat.workflows.services.WorkflowGovernanceService
 import com.moneat.workflows.services.WorkflowService
 import com.moneat.workflows.services.WorkflowStepRenderer
 import com.moneat.workflows.services.WorkflowTrustedActionExecutor
@@ -141,6 +142,7 @@ val sharedModule = module {
     single { TemporalClientProvider() }
     single<WorkflowExecutionEngine> { TemporalWorkflowExecutionEngine(get()) }
     single { WorkflowService(get(), get(), get(), get(), get(), get(), get()) }
+    single { WorkflowGovernanceService(get()) }
     single { IncidentService(get()) }
 
     single { PricingTierService() }

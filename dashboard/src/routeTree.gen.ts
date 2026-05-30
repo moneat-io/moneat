@@ -82,6 +82,7 @@ import { Route as ApmTracesIndexRouteImport } from './routes/apm-traces.index'
 import { Route as AnalyticsIndexRouteImport } from './routes/analytics.index'
 import { Route as AiIndexRouteImport } from './routes/ai.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as WorkflowsInsightsRouteImport } from './routes/workflows.insights'
 import { Route as WorkflowsConnectionsRouteImport } from './routes/workflows.connections'
 import { Route as UptimeMonitorIdRouteImport } from './routes/uptime.$monitorId'
 import { Route as SyntheticsTestIdRouteImport } from './routes/synthetics.$testId'
@@ -512,6 +513,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AdminRoute,
+} as any)
+const WorkflowsInsightsRoute = WorkflowsInsightsRouteImport.update({
+  id: '/insights',
+  path: '/insights',
+  getParentRoute: () => WorkflowsRoute,
 } as any)
 const WorkflowsConnectionsRoute = WorkflowsConnectionsRouteImport.update({
   id: '/connections',
@@ -953,6 +959,7 @@ export interface FileRoutesByFullPath {
   '/synthetics/$testId': typeof SyntheticsTestIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/workflows/connections': typeof WorkflowsConnectionsRoute
+  '/workflows/insights': typeof WorkflowsInsightsRoute
   '/admin/': typeof AdminIndexRoute
   '/ai/': typeof AiIndexRoute
   '/analytics/': typeof AnalyticsIndexRoute
@@ -1077,6 +1084,7 @@ export interface FileRoutesByTo {
   '/synthetics/$testId': typeof SyntheticsTestIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/workflows/connections': typeof WorkflowsConnectionsRoute
+  '/workflows/insights': typeof WorkflowsInsightsRoute
   '/admin': typeof AdminIndexRoute
   '/ai': typeof AiIndexRoute
   '/analytics': typeof AnalyticsIndexRoute
@@ -1217,6 +1225,7 @@ export interface FileRoutesById {
   '/synthetics/$testId': typeof SyntheticsTestIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/workflows/connections': typeof WorkflowsConnectionsRoute
+  '/workflows/insights': typeof WorkflowsInsightsRoute
   '/admin/': typeof AdminIndexRoute
   '/ai/': typeof AiIndexRoute
   '/analytics/': typeof AnalyticsIndexRoute
@@ -1358,6 +1367,7 @@ export interface FileRouteTypes {
     | '/synthetics/$testId'
     | '/uptime/$monitorId'
     | '/workflows/connections'
+    | '/workflows/insights'
     | '/admin/'
     | '/ai/'
     | '/analytics/'
@@ -1482,6 +1492,7 @@ export interface FileRouteTypes {
     | '/synthetics/$testId'
     | '/uptime/$monitorId'
     | '/workflows/connections'
+    | '/workflows/insights'
     | '/admin'
     | '/ai'
     | '/analytics'
@@ -1621,6 +1632,7 @@ export interface FileRouteTypes {
     | '/synthetics/$testId'
     | '/uptime/$monitorId'
     | '/workflows/connections'
+    | '/workflows/insights'
     | '/admin/'
     | '/ai/'
     | '/analytics/'
@@ -2240,6 +2252,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/workflows/insights': {
+      id: '/workflows/insights'
+      path: '/insights'
+      fullPath: '/workflows/insights'
+      preLoaderRoute: typeof WorkflowsInsightsRouteImport
+      parentRoute: typeof WorkflowsRoute
     }
     '/workflows/connections': {
       id: '/workflows/connections'
@@ -3058,10 +3077,12 @@ const SyntheticsRouteWithChildren = SyntheticsRoute._addFileChildren(
 
 interface WorkflowsRouteChildren {
   WorkflowsConnectionsRoute: typeof WorkflowsConnectionsRoute
+  WorkflowsInsightsRoute: typeof WorkflowsInsightsRoute
 }
 
 const WorkflowsRouteChildren: WorkflowsRouteChildren = {
   WorkflowsConnectionsRoute: WorkflowsConnectionsRoute,
+  WorkflowsInsightsRoute: WorkflowsInsightsRoute,
 }
 
 const WorkflowsRouteWithChildren = WorkflowsRoute._addFileChildren(
