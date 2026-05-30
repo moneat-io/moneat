@@ -2,3 +2,4 @@ com.moneat.enterprise.ai.AiModule
 com.moneat.enterprise.sso.SamlModule
 com.moneat.enterprise.oncall.OnCallModule
 com.moneat.enterprise.workflows.WorkflowsEnterpriseModule
+com.moneat.enterprise.rbac.RbacEnterpriseModule

@@ -12,8 +12,6 @@ import com.moneat.workflows.WorkflowConnectionGroupSummary
 import com.moneat.workflows.WorkflowConnectionReference
 import com.moneat.workflows.WorkflowConnectionSummary
 import com.moneat.workflows.WorkflowConnectionVault
-import com.moneat.workflows.WorkflowPermission
-import com.moneat.workflows.WorkflowRbacBridge
 import com.moneat.workflows.WorkflowResolvedConnection
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
@@ -22,14 +20,14 @@ import io.ktor.server.routing.Route
  * Enterprise module for advanced workflow capabilities. This phase ships the
  * connection/secret vault. Requires the "workflows_advanced" license feature.
  *
- * Implements [WorkflowConnectionVault] and [WorkflowRbacBridge] so core can reach
- * these capabilities through `FeatureRegistry`. Without a valid license the module is
- * never loaded and core degrades gracefully (connection surfaces show as Enterprise).
+ * Implements [WorkflowConnectionVault] so core can reach the vault through
+ * `FeatureRegistry`. Without a valid license the module is never loaded and core degrades
+ * gracefully (connection surfaces show as Enterprise). RBAC is cross-cutting and ships in
+ * its own `advanced_rbac` module ([com.moneat.enterprise.rbac.RbacEnterpriseModule]).
  */
 class WorkflowsEnterpriseModule :
     EnterpriseModule,
-    WorkflowConnectionVault,
-    WorkflowRbacBridge {
+    WorkflowConnectionVault {
 
     override val name: String = "Workflows Advanced"
     override val licenseFeature: String = "workflows_advanced"
@@ -102,12 +100,4 @@ class WorkflowsEnterpriseModule :
         runScope: Map<String, String>
     ): WorkflowResolvedConnection? =
         vault.resolveSecret(organizationId, reference, runScope)
-
-    // --- WorkflowRbacBridge ---
-    // Granular permission resolution and service accounts land in a later phase;
-    // returning null defers to the coarse ADMIN/MEMBER role gates enforced in core.
-
-    override fun resolvePermissions(organizationId: Int, userId: Int): Set<String>? = null
-
-    override fun hasPermission(organizationId: Int, userId: Int, permission: WorkflowPermission): Boolean? = null
 }

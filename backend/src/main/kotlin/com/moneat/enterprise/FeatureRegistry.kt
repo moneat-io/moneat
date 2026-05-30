@@ -16,11 +16,11 @@
 
 package com.moneat.enterprise
 
+import com.moneat.authz.PermissionBridge
 import com.moneat.config.EnvConfig
 import com.moneat.enterprise.license.LicenseInfo
 import com.moneat.enterprise.license.LicenseValidator
 import com.moneat.workflows.WorkflowConnectionVault
-import com.moneat.workflows.WorkflowRbacBridge
 import io.ktor.server.application.*
 import io.ktor.server.routing.*
 import mu.KotlinLogging
@@ -151,9 +151,9 @@ object FeatureRegistry {
         return modules.filterIsInstance<WorkflowConnectionVault>().firstOrNull()
     }
 
-    /** Get the workflow RBAC bridge if the licensed workflows module is loaded. */
-    fun getWorkflowRbacBridge(): WorkflowRbacBridge? {
-        return modules.filterIsInstance<WorkflowRbacBridge>().firstOrNull()
+    /** Get the cross-cutting permission bridge if the licensed RBAC module is loaded. */
+    fun getPermissionBridge(): PermissionBridge? {
+        return modules.filterIsInstance<PermissionBridge>().firstOrNull()
     }
 
     // For testing
