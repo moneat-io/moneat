@@ -17,7 +17,18 @@
 import {useMemo, useState} from 'react'
 import {createFileRoute, Link, redirect} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
-import {Bug, KeyRound, Loader2, PlayCircle, Plus, Save, Trash2, Workflow as WorkflowIcon} from 'lucide-react'
+import {
+  Bug,
+  Gauge,
+  KeyRound,
+  Loader2,
+  PlayCircle,
+  Plus,
+  Save,
+  Share2,
+  Trash2,
+  Workflow as WorkflowIcon,
+} from 'lucide-react'
 import {api} from '@/lib/api'
 import type {
   WorkflowCatalogResponse,
@@ -28,6 +39,7 @@ import type {
 } from '@/lib/api'
 import {NodeConfigPanel} from '@/components/workflows/NodeConfigPanel'
 import {NodePalette} from '@/components/workflows/NodePalette'
+import {WorkflowActivityDrawer} from '@/components/workflows/WorkflowActivityDrawer'
 import {WorkflowCanvas} from '@/components/workflows/WorkflowCanvas'
 import {
   PublishToggle,
@@ -83,6 +95,7 @@ function WorkflowsPage() {
   const [editorOpen, setEditorOpen] = useState(false)
   const [draft, setDraft] = useState<WorkflowDraft>(() => emptyWorkflowDraft())
   const [debugRun, setDebugRun] = useState<WorkflowRunResponse | null>(null)
+  const [activityOpen, setActivityOpen] = useState(false)
 
   const {data: catalog, isLoading: catalogLoading} = useQuery({
     queryKey: ['workflow-catalog'],
@@ -204,6 +217,7 @@ function WorkflowsPage() {
           onPublishToggle={(workflow) => publishMutation.mutate({id: workflow.id, published: workflow.published})}
           onRun={(workflow) => runMutation.mutate(workflow.id)}
           onDebugRun={setDebugRun}
+          onOpenActivity={() => setActivityOpen(true)}
         />
       </div>
       <WorkflowEditorDialog
@@ -221,6 +235,11 @@ function WorkflowsPage() {
         onOpenChange={(open) => {
           if (!open) setDebugRun(null)
         }}
+      />
+      <WorkflowActivityDrawer
+        workflow={selectedWorkflow}
+        open={activityOpen}
+        onOpenChange={setActivityOpen}
       />
     </div>
   )
@@ -240,6 +259,12 @@ function PageHeader({onCreate}: {onCreate: () => void}) {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" asChild className="gap-1.5">
+            <Link to="/workflows/insights">
+              <Gauge className="h-3.5 w-3.5" />
+              Insights
+            </Link>
+          </Button>
           <Button size="sm" variant="outline" asChild className="gap-1.5">
             <Link to="/workflows/connections">
               <KeyRound className="h-3.5 w-3.5" />
@@ -332,6 +357,7 @@ function WorkflowDetail({
   onPublishToggle,
   onRun,
   onDebugRun,
+  onOpenActivity,
 }: {
   workflow: WorkflowResponse | null
   catalog?: WorkflowCatalogResponse
@@ -345,6 +371,7 @@ function WorkflowDetail({
   onPublishToggle: (workflow: WorkflowResponse) => void
   onRun: (workflow: WorkflowResponse) => void
   onDebugRun: (run: WorkflowRunResponse) => void
+  onOpenActivity: () => void
 }) {
   if (!workflow) {
     return <div className="rounded-md border bg-background p-6 text-sm text-muted-foreground">Select a workflow.</div>
@@ -374,6 +401,10 @@ function WorkflowDetail({
               Run
             </Button>
             <Button size="sm" variant="outline" onClick={() => onEdit(workflow)}>Edit</Button>
+            <Button size="sm" variant="outline" onClick={onOpenActivity} className="gap-1.5">
+              <Share2 className="h-3.5 w-3.5" />
+              Share &amp; activity
+            </Button>
             {!workflow.system_key && (
               <Button
                 size="sm"
