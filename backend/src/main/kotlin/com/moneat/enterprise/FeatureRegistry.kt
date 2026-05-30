@@ -19,6 +19,8 @@ package com.moneat.enterprise
 import com.moneat.config.EnvConfig
 import com.moneat.enterprise.license.LicenseInfo
 import com.moneat.enterprise.license.LicenseValidator
+import com.moneat.workflows.WorkflowConnectionVault
+import com.moneat.workflows.WorkflowRbacBridge
 import io.ktor.server.application.*
 import io.ktor.server.routing.*
 import mu.KotlinLogging
@@ -142,6 +144,16 @@ object FeatureRegistry {
     /** Get the OnCallBridge if the on-call enterprise module is loaded. */
     fun getOnCallBridge(): OnCallBridge? {
         return modules.filterIsInstance<OnCallBridge>().firstOrNull()
+    }
+
+    /** Get the workflow connection vault if the licensed workflows module is loaded. */
+    fun getWorkflowConnectionVault(): WorkflowConnectionVault? {
+        return modules.filterIsInstance<WorkflowConnectionVault>().firstOrNull()
+    }
+
+    /** Get the workflow RBAC bridge if the licensed workflows module is loaded. */
+    fun getWorkflowRbacBridge(): WorkflowRbacBridge? {
+        return modules.filterIsInstance<WorkflowRbacBridge>().firstOrNull()
     }
 
     // For testing
