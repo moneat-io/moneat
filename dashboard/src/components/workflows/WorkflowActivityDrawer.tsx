@@ -59,6 +59,24 @@ export function WorkflowActivityDrawer({workflow, open, onOpenChange}: WorkflowA
     },
   })
 
+  const renderActivity = () => {
+    if (auditQuery.isLoading) {
+      return (
+        <div className="flex h-24 items-center justify-center rounded-md border">
+          <Loader2 className="h-5 w-5 animate-spin" />
+        </div>
+      )
+    }
+    if (auditQuery.isError) {
+      return (
+        <div className="rounded-md border border-destructive/40 p-3 text-sm text-destructive">
+          Couldn&apos;t load activity. Please try again.
+        </div>
+      )
+    }
+    return <WorkflowAuditTimeline entries={auditQuery.data ?? []} />
+  }
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
@@ -75,6 +93,7 @@ export function WorkflowActivityDrawer({workflow, open, onOpenChange}: WorkflowA
             <WorkflowExportImport
               exportData={exportQuery.data}
               exporting={exportQuery.isFetching}
+              exportFailed={exportQuery.isError}
               onExport={() => exportQuery.refetch()}
               importing={importMutation.isPending}
               onImport={(request) => importMutation.mutate(request)}
@@ -84,13 +103,7 @@ export function WorkflowActivityDrawer({workflow, open, onOpenChange}: WorkflowA
                 <History className="h-4 w-4" />
                 Activity
               </h3>
-              {auditQuery.isLoading ? (
-                <div className="flex h-24 items-center justify-center rounded-md border">
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                </div>
-              ) : (
-                <WorkflowAuditTimeline entries={auditQuery.data ?? []} />
-              )}
+              {renderActivity()}
             </div>
           </div>
         )}

@@ -93,6 +93,7 @@ class WorkflowGovernanceServiceTest {
     private val runPersistence = PersistRunActivityImpl()
     private var orgId: Int = 0
     private var previousQuota: String? = null
+    private lateinit var usagePeriod: String
 
     @BeforeTest
     fun setup() {
@@ -116,6 +117,7 @@ class WorkflowGovernanceServiceTest {
         service = WorkflowService(emailService, slackService, discordService, executionEngine = workflowEngine)
         governance = WorkflowGovernanceService(service)
         orgId = seedOrganizationWithMember()
+        usagePeriod = WorkflowUsage.period(Clock.System.now())
     }
 
     @AfterTest
@@ -203,8 +205,7 @@ class WorkflowGovernanceServiceTest {
             assertTrue(actions.contains("run_started"))
             assertTrue(actions.contains("run_completed"))
 
-            val period = WorkflowUsage.period(Clock.System.now())
-            assertEquals(1L, WorkflowUsage.completedCount(orgId, period))
+            assertEquals(1L, WorkflowUsage.completedCount(orgId, usagePeriod))
         }
 
     @Test
@@ -217,8 +218,7 @@ class WorkflowGovernanceServiceTest {
         runPersistence.markComplete(PersistRunProgressInput(runId = runId, status = "complete"))
         runPersistence.markComplete(PersistRunProgressInput(runId = runId, status = "complete"))
 
-        val period = WorkflowUsage.period(Clock.System.now())
-        assertEquals(1L, WorkflowUsage.completedCount(orgId, period))
+        assertEquals(1L, WorkflowUsage.completedCount(orgId, usagePeriod))
         assertEquals(
             1L,
             transaction {
@@ -414,7 +414,7 @@ class WorkflowGovernanceServiceTest {
                 it[WorkflowUsageEvents.organizationId] = orgId
                 it[WorkflowUsageEvents.workflowId] = workflowId
                 it[WorkflowUsageEvents.runId] = runKey.hashCode()
-                it[WorkflowUsageEvents.period] = WorkflowUsage.period(Clock.System.now())
+                it[WorkflowUsageEvents.period] = usagePeriod
                 it[WorkflowUsageEvents.outcome] = outcome
                 it[createdAt] = Clock.System.now()
             }
@@ -566,7 +566,7 @@ class WorkflowGovernanceServiceTest {
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 organization_id INT NOT NULL,
                 workflow_id INT,
-                run_id INT NOT NULL,
+                run_id INT,
                 period VARCHAR(7) NOT NULL,
                 outcome VARCHAR(16) NOT NULL,
                 created_at TIMESTAMP NOT NULL,
@@ -632,6 +632,8 @@ class WorkflowGovernanceServiceTest {
                 failed_at TIMESTAMP,
                 CONSTRAINT fk_governance_runs_workflow_id
                     FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE,
+                CONSTRAINT fk_governance_runs_version_id
+                    FOREIGN KEY (workflow_version_id) REFERENCES workflow_versions(id),
                 CONSTRAINT fk_governance_runs_organization_id
                     FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
             )

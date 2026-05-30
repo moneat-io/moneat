@@ -27,6 +27,7 @@ type ExportFormat = 'terraform' | 'json'
 interface WorkflowExportImportProps {
   exportData?: WorkflowExportResponse | null
   exporting?: boolean
+  exportFailed?: boolean
   onExport: () => void
   importing?: boolean
   onImport: (request: WorkflowImportRequest) => void
@@ -35,13 +36,19 @@ interface WorkflowExportImportProps {
 export function WorkflowExportImport({
   exportData = null,
   exporting = false,
+  exportFailed = false,
   onExport,
   importing = false,
   onImport,
 }: WorkflowExportImportProps) {
   return (
     <div className="space-y-3">
-      <ExportSection exportData={exportData} exporting={exporting} onExport={onExport} />
+      <ExportSection
+        exportData={exportData}
+        exporting={exporting}
+        exportFailed={exportFailed}
+        onExport={onExport}
+      />
       <ImportSection importing={importing} onImport={onImport} />
     </div>
   )
@@ -50,10 +57,12 @@ export function WorkflowExportImport({
 function ExportSection({
   exportData,
   exporting,
+  exportFailed,
   onExport,
 }: {
   exportData: WorkflowExportResponse | null
   exporting: boolean
+  exportFailed: boolean
   onExport: () => void
 }) {
   const [format, setFormat] = useState<ExportFormat>('terraform')
@@ -116,11 +125,24 @@ function ExportSection({
           </pre>
         </div>
       ) : (
-        <p className="mt-3 text-sm text-muted-foreground">
-          Export this workflow as Terraform or portable JSON.
-        </p>
+        <EmptyExportState exportFailed={exportFailed} />
       )}
     </div>
+  )
+}
+
+function EmptyExportState({exportFailed}: {exportFailed: boolean}) {
+  if (exportFailed) {
+    return (
+      <p className="mt-3 text-sm text-destructive">
+        Couldn&apos;t load the export. Please try again.
+      </p>
+    )
+  }
+  return (
+    <p className="mt-3 text-sm text-muted-foreground">
+      Export this workflow as Terraform or portable JSON.
+    </p>
   )
 }
 

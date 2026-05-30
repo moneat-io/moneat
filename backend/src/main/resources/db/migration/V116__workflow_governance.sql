@@ -24,7 +24,11 @@ CREATE TABLE IF NOT EXISTS workflow_usage_events (
     id SERIAL PRIMARY KEY,
     organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     workflow_id INTEGER,
-    run_id INTEGER NOT NULL,
+    -- Completed runs carry their run id so UNIQUE (run_id, outcome) makes the
+    -- monthly count idempotent across Temporal replays. Refused executions have
+    -- no run, so run_id is NULL there; NULLs are distinct under the unique
+    -- constraint, so every refusal is still recorded.
+    run_id INTEGER,
     period VARCHAR(7) NOT NULL,
     outcome VARCHAR(16) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

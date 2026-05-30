@@ -39,7 +39,9 @@ export function parseImportJson(raw: string): WorkflowImportRequest | string {
   if (typeof triggerName !== 'string' || triggerName.length === 0) {
     return 'A trigger name is required.'
   }
-  if (!isRecord(graph)) return 'A graph object is required.'
+  if (!isRecord(graph) || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) {
+    return 'A graph with nodes and edges arrays is required.'
+  }
   const request: WorkflowImportRequest = {
     name,
     trigger_name: triggerName,

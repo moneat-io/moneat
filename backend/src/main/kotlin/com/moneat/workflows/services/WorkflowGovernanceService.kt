@@ -98,7 +98,7 @@ class WorkflowGovernanceService(
             runsLast30d = runs.size.toLong(),
             successRate = successRate,
             failedLast30d = failed.toLong(),
-            topWorkflows = topWorkflows(workflows)
+            topWorkflows = topWorkflows(workflows, runs)
         )
     }
 
@@ -141,6 +141,12 @@ class WorkflowGovernanceService(
         return if (existing == null) {
             createImported(organizationId, trimmedName, request, actorUserId)
         } else {
+            // A workflow's trigger is fixed at creation; updates never change it. Reject an
+            // import that reuses a name under a different trigger rather than silently treating
+            // it as unchanged or dropping the trigger change.
+            require(existing.triggerName == request.triggerName) {
+                "A workflow named \"$trimmedName\" already exists with a different trigger"
+            }
             upsertImported(organizationId, existing, request, actorUserId)
         }
     }
@@ -240,21 +246,27 @@ class WorkflowGovernanceService(
                     (WorkflowRuns.organizationId eq organizationId) and
                         (WorkflowRuns.createdAt greaterEq windowStart)
                 }
-                .map { row -> RunStatusRow(row[WorkflowRuns.status]) }
+                .map { row -> RunStatusRow(row[WorkflowRuns.workflowId], row[WorkflowRuns.status]) }
         }
 
-    private fun topWorkflows(workflows: List<WorkflowResponse>): List<WorkflowOverviewTopWorkflow> =
-        workflows
-            .filter { it.runCount > 0 }
-            .sortedWith(compareByDescending<WorkflowResponse> { it.runCount }.thenBy { it.id })
-            .take(TOP_WORKFLOW_LIMIT)
-            .map { workflow ->
-                WorkflowOverviewTopWorkflow(
-                    workflowId = workflow.id,
-                    name = workflow.name,
-                    runCount = workflow.runCount
-                )
+    // Ranks workflows by their run volume within the same 30-day window the rest of the
+    // overview uses, rather than by cumulative lifetime run count.
+    private fun topWorkflows(
+        workflows: List<WorkflowResponse>,
+        runs: List<RunStatusRow>
+    ): List<WorkflowOverviewTopWorkflow> {
+        val namesById = workflows.associate { it.id to it.name }
+        return runs
+            .groupingBy { it.workflowId }
+            .eachCount()
+            .entries
+            .mapNotNull { (workflowId, count) ->
+                val name = namesById[workflowId] ?: return@mapNotNull null
+                WorkflowOverviewTopWorkflow(workflowId = workflowId, name = name, runCount = count.toLong())
             }
+            .sortedWith(compareByDescending<WorkflowOverviewTopWorkflow> { it.runCount }.thenBy { it.workflowId })
+            .take(TOP_WORKFLOW_LIMIT)
+    }
 
     private fun graphsEqual(
         left: WorkflowGraphConfig,
@@ -271,5 +283,6 @@ class WorkflowGovernanceService(
 }
 
 private data class RunStatusRow(
+    val workflowId: Int,
     val status: String
 )

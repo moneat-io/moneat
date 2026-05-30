@@ -54,4 +54,8 @@ describe('formatDateTime', () => {
     expect(formatDateTime()).toBe('—')
     expect(formatDateTime(null)).toBe('—')
   })
+
+  it('returns the raw value when the timestamp is unparseable', () => {
+    expect(formatDateTime('not-a-date')).toBe('not-a-date')
+  })
 })

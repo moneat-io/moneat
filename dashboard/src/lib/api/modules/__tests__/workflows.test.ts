@@ -25,9 +25,9 @@ const emptyGraph = { nodes: [], edges: [] }
 
 describe('workflows phase 4 API', () => {
   beforeEach(() => {
-    localStorage.clear()
-    sessionStorage.clear()
-    sessionStorage.setItem('authenticated', 'true')
+    globalThis.localStorage.clear()
+    globalThis.sessionStorage.clear()
+    globalThis.sessionStorage.setItem('authenticated', 'true')
   })
 
   // ──── Blueprints ────

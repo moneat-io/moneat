@@ -60,6 +60,9 @@ object WorkflowExport {
             .ifBlank { "workflow" }
 
     private fun terraform(resource: WorkflowGraphResource): String {
+        // The graph travels as its canonical JSON string (the same shape the API accepts),
+        // emitted as a plain HCL string attribute. Wrapping it in jsonencode() would
+        // double-encode an already-serialized JSON string, so it is passed through directly.
         val graphJson = json.encodeToString(resource.graph)
         val onceForHcl = resource.onceForTemplate.joinToString(", ") { item -> item.hclString() }
         return buildString {
@@ -68,7 +71,7 @@ object WorkflowExport {
             appendLine("""  trigger_name      = ${resource.triggerName.hclString()}""")
             appendLine("""  enabled           = ${resource.enabled}""")
             appendLine("""  once_for_template = [$onceForHcl]""")
-            appendLine("""  graph             = jsonencode(${graphJson.hclString()})""")
+            appendLine("""  graph             = ${graphJson.hclString()}""")
             append("}")
         }
     }

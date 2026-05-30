@@ -140,4 +140,12 @@ describe('WorkflowActivityDrawer', () => {
     expect(screen.getByText(/Select a workflow first/i)).toBeInTheDocument()
     expect(mockApi.exportWorkflow).not.toHaveBeenCalled()
   })
+
+  it('surfaces export and activity fetch failures', async () => {
+    mockApi.exportWorkflow.mockRejectedValue(new Error('boom'))
+    mockApi.getWorkflowAuditForWorkflow.mockRejectedValue(new Error('boom'))
+    renderDrawer()
+    expect(await screen.findByText(/Couldn't load activity/i)).toBeInTheDocument()
+    expect(await screen.findByText(/Couldn't load the export/i)).toBeInTheDocument()
+  })
 })

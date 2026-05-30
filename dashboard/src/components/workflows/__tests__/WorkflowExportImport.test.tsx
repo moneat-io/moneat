@@ -15,9 +15,18 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {fireEvent, render, screen, waitFor} from '@testing-library/react'
-import {describe, expect, it, vi} from 'vitest'
+import {afterEach, describe, expect, it, vi} from 'vitest'
 import type {WorkflowExportResponse} from '@/lib/api'
 import {WorkflowExportImport} from '../WorkflowExportImport'
+
+const originalClipboard = Object.getOwnPropertyDescriptor(globalThis.navigator, 'clipboard')
+
+function stubClipboard(writeText: () => Promise<void>) {
+  Object.defineProperty(globalThis.navigator, 'clipboard', {
+    configurable: true,
+    value: {writeText},
+  })
+}
 
 const exportData: WorkflowExportResponse = {
   schema_version: 1,
@@ -32,6 +41,14 @@ const exportData: WorkflowExportResponse = {
 }
 
 describe('WorkflowExportImport', () => {
+  afterEach(() => {
+    if (originalClipboard) {
+      Object.defineProperty(globalThis.navigator, 'clipboard', originalClipboard)
+    } else {
+      delete (globalThis.navigator as {clipboard?: unknown}).clipboard
+    }
+  })
+
   it('prompts to export when no data is loaded and triggers onExport', () => {
     const onExport = vi.fn()
     render(<WorkflowExportImport onExport={onExport} onImport={vi.fn()} />)
@@ -40,12 +57,14 @@ describe('WorkflowExportImport', () => {
     expect(onExport).toHaveBeenCalledTimes(1)
   })
 
+  it('surfaces an export failure message', () => {
+    render(<WorkflowExportImport exportFailed onExport={vi.fn()} onImport={vi.fn()} />)
+    expect(screen.getByText(/Couldn't load the export/i)).toBeInTheDocument()
+  })
+
   it('shows the Terraform output and copies it to the clipboard', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
-    Object.defineProperty(globalThis.navigator, 'clipboard', {
-      configurable: true,
-      value: {writeText},
-    })
+    stubClipboard(writeText)
     render(<WorkflowExportImport exportData={exportData} onExport={vi.fn()} onImport={vi.fn()} />)
     expect(screen.getByText(/moneat_workflow/)).toBeInTheDocument()
 
@@ -57,10 +76,7 @@ describe('WorkflowExportImport', () => {
 
   it('switches to the JSON format and copies the JSON resource', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
-    Object.defineProperty(globalThis.navigator, 'clipboard', {
-      configurable: true,
-      value: {writeText},
-    })
+    stubClipboard(writeText)
     render(<WorkflowExportImport exportData={exportData} onExport={vi.fn()} onImport={vi.fn()} />)
 
     fireEvent.click(screen.getByRole('button', {name: 'JSON'}))

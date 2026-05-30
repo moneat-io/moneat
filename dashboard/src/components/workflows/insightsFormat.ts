@@ -27,8 +27,10 @@ export function formatCount(value: number): string {
   return Math.round(value).toLocaleString()
 }
 
-/** Formats an ISO timestamp as a locale date-time string; returns "—" when absent. */
+/** Formats an ISO timestamp as a locale date-time string; returns "—" when absent and the raw value when unparseable. */
 export function formatDateTime(value?: string | null): string {
   if (!value) return '—'
-  return new Date(value).toLocaleString()
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString()
 }

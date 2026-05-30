@@ -90,9 +90,11 @@ object WorkflowUsage {
         runId: Int?,
         now: Instant
     ) {
-        val refusedRunId = runId ?: syntheticRefusedRunId()
+        // Refused executions have no run row, so run_id is null here; the unique
+        // (run_id, outcome) constraint treats nulls as distinct, so each refusal
+        // is recorded rather than deduplicated.
         transaction {
-            insertUsageEvent(organizationId, workflowId, refusedRunId, period(now), OUTCOME_REFUSED)
+            insertUsageEvent(organizationId, workflowId, runId, period(now), OUTCOME_REFUSED)
         }
     }
 
@@ -138,7 +140,7 @@ object WorkflowUsage {
     private fun insertUsageEvent(
         organizationId: Int,
         workflowId: Int?,
-        runId: Int,
+        runId: Int?,
         period: String,
         outcome: String
     ): Boolean =
@@ -150,10 +152,4 @@ object WorkflowUsage {
             it[WorkflowUsageEvents.outcome] = outcome
             it[createdAt] = Clock.System.now()
         }.insertedCount > 0
-
-    // Refused executions never produce a run row, so they need a stable yet
-    // unique surrogate key to satisfy the not-null run_id column without
-    // colliding with real run identifiers (which are positive).
-    private fun syntheticRefusedRunId(): Int =
-        -(System.nanoTime() and Int.MAX_VALUE.toLong()).toInt() - 1
 }

@@ -37,7 +37,7 @@ object WorkflowAuditEvents : IntIdTable("workflow_audit_events") {
 object WorkflowUsageEvents : IntIdTable("workflow_usage_events") {
     val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
     val workflowId = integer("workflow_id").nullable()
-    val runId = integer("run_id")
+    val runId = integer("run_id").nullable()
     val period = varchar("period", 7)
     val outcome = varchar("outcome", 16)
     val createdAt = timestamp("created_at")

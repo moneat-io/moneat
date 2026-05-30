@@ -49,7 +49,16 @@ describe('parseImportJson', () => {
       'A trigger name is required.'
     )
     expect(parseImportJson(JSON.stringify({name: 'n', trigger_name: 't'}))).toBe(
-      'A graph object is required.'
+      'A graph with nodes and edges arrays is required.'
+    )
+  })
+
+  it('rejects a graph missing nodes or edges arrays', () => {
+    expect(parseImportJson(JSON.stringify({name: 'n', trigger_name: 't', graph: {}}))).toBe(
+      'A graph with nodes and edges arrays is required.'
+    )
+    expect(parseImportJson(JSON.stringify({name: 'n', trigger_name: 't', graph: {nodes: []}}))).toBe(
+      'A graph with nodes and edges arrays is required.'
     )
   })
 
