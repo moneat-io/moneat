@@ -1,6 +1,7 @@
 import {createFileRoute, Link} from '@tanstack/react-router'
 import {allPosts} from '@/blog/loader'
-import {Helmet} from 'react-helmet-async'
+import {SeoHead} from '@/components/SeoHead'
+import {blogIndexSeo} from '@/lib/seo/routes'
 
 export const Route = createFileRoute('/blog/')({
   component: BlogIndex,
@@ -11,10 +12,7 @@ function BlogIndex() {
 
   return (
     <>
-      <Helmet>
-        <title>Blog — Moneat</title>
-        <meta name="description" content="Engineering deep-dives, observability best practices, and product updates." />
-      </Helmet>
+      <SeoHead seo={blogIndexSeo} />
       <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
         <header className="mb-12 max-w-2xl">
           <h1 className="mb-4 text-4xl font-semibold leading-tight text-slate-950 sm:text-5xl">Blog</h1>
