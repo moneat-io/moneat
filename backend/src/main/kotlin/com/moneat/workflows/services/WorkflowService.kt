@@ -467,8 +467,7 @@ class WorkflowService(
             scope = apiScope + (request.scope - apiScope.keys),
             onceFor = apiOnceFor(),
             force = true,
-            requiredTriggerName = API_TRIGGER,
-            applyConditions = true
+            gate = TriggerGate(requiredTriggerName = API_TRIGGER, applyConditions = true)
         ) ?: return null
         startTemporalExecution(run)
         return getRun(organizationId, workflowId, run.runId)
@@ -493,9 +492,11 @@ class WorkflowService(
             scope = webhookScope,
             onceFor = webhookScope[WEBHOOK_EVENT_ID_REFERENCE]?.workflowStringValue().orEmpty(),
             force = false,
-            requiredTriggerName = WEBHOOK_TRIGGER,
-            requirePublished = true,
-            applyConditions = true
+            gate = TriggerGate(
+                requiredTriggerName = WEBHOOK_TRIGGER,
+                requirePublished = true,
+                applyConditions = true
+            )
         ) ?: return null
         startTemporalExecution(run)
         return getRun(workflowRef.organizationId, workflowId, run.runId)
@@ -797,9 +798,7 @@ class WorkflowService(
         scope: Map<String, JsonElement>,
         onceFor: String,
         force: Boolean,
-        requiredTriggerName: String? = null,
-        requirePublished: Boolean = false,
-        applyConditions: Boolean = false
+        gate: TriggerGate = TriggerGate()
     ): WorkflowStartRequest? =
         transaction {
             val workflowRow =
@@ -807,11 +806,11 @@ class WorkflowService(
                     .selectAll()
                     .where { (Workflows.id eq workflowId) and (Workflows.organizationId eq organizationId) }
                     .firstOrNull() ?: return@transaction null
-            if (requiredTriggerName != null && workflowRow[Workflows.triggerName] != requiredTriggerName) {
+            if (gate.requiredTriggerName != null && workflowRow[Workflows.triggerName] != gate.requiredTriggerName) {
                 return@transaction null
             }
             val version = latestVersion(workflowId) ?: return@transaction null
-            if (requirePublished && !version.published) return@transaction null
+            if (gate.requirePublished && !version.published) return@transaction null
             val triggerScope = stepRenderer.sampleScopeForTrigger(workflowRow[Workflows.triggerName])
                 .typedWorkflowScope()
             val event =
@@ -822,7 +821,7 @@ class WorkflowService(
                 )
             // Manual runs intentionally bypass conditions (they run against synthetic sample
             // scope); API and signed-webhook runs carry real input and honor configured conditions.
-            if (applyConditions && !conditionsMatch(event.triggerName, version.conditions, event.scope)) {
+            if (gate.applyConditions && !conditionsMatch(event.triggerName, version.conditions, event.scope)) {
                 return@transaction null
             }
             createRun(event, WorkflowCandidate(workflowId, version), onceFor, force)
@@ -1172,9 +1171,6 @@ class WorkflowService(
     private fun decodeProgress(raw: String): List<WorkflowRunStepProgress> =
         if (raw.isBlank()) emptyList() else json.decodeFromString(raw)
 
-    private fun decodeScope(raw: String): Map<String, JsonElement> =
-        if (raw.isBlank()) emptyMap() else json.decodeFromString(raw)
-
     private fun decodeJsonElementMap(raw: String): Map<String, JsonElement> =
         if (raw.isBlank()) emptyMap() else json.decodeFromString<JsonElement>(raw).workflowObjectValue()
 
@@ -1428,6 +1424,13 @@ private data class WorkflowVersionRecord(
 private data class WorkflowCandidate(
     val workflowId: Int,
     val version: WorkflowVersionRecord
+)
+
+/** Trigger eligibility policy applied when starting a run. */
+private data class TriggerGate(
+    val requiredTriggerName: String? = null,
+    val requirePublished: Boolean = false,
+    val applyConditions: Boolean = false
 )
 
 private data class WorkflowReference(

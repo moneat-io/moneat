@@ -71,6 +71,9 @@ object WorkflowBlueprintCatalog {
     private const val SECURITY_RULE_ID = "security.rule_id"
     private const val SECURITY_RESOURCE = "security.resource"
 
+    private const val TRIGGER_ALERT_TRIGGERED = "alert.triggered"
+    private const val TRIGGER_INCIDENT_CREATED = "incident.created"
+
     private val BLUEPRINTS: List<WorkflowBlueprint> =
         listOf(
             WorkflowBlueprint(
@@ -78,7 +81,7 @@ object WorkflowBlueprintCatalog {
                 name = "Notify Slack on alert",
                 description = "Post a formatted message to the Slack alert channel when an alert fires.",
                 category = CATEGORY_ALERTING,
-                triggerName = "alert.triggered",
+                triggerName = TRIGGER_ALERT_TRIGGERED,
                 onceForTemplate = listOf(DEDUP_KEY),
                 tags = listOf("slack", "notifications"),
                 steps = listOf(
@@ -92,7 +95,7 @@ object WorkflowBlueprintCatalog {
                 name = "Email team on critical alert",
                 description = "Email organization members when a critical-severity alert fires.",
                 category = CATEGORY_ALERTING,
-                triggerName = "alert.triggered",
+                triggerName = TRIGGER_ALERT_TRIGGERED,
                 onceForTemplate = listOf(DEDUP_KEY),
                 tags = listOf("email", "critical"),
                 conditions = listOf(
@@ -122,7 +125,7 @@ object WorkflowBlueprintCatalog {
                 name = "Notify Slack and Discord on alert",
                 description = "Send alerts to both Slack and Discord alert channels in parallel.",
                 category = CATEGORY_ALERTING,
-                triggerName = "alert.triggered",
+                triggerName = TRIGGER_ALERT_TRIGGERED,
                 onceForTemplate = listOf(DEDUP_KEY),
                 tags = listOf("slack", "discord"),
                 steps = listOf(
@@ -199,7 +202,7 @@ object WorkflowBlueprintCatalog {
                 name = "Page on-call when an incident opens",
                 description = "Page responders and announce a newly created incident on Slack.",
                 category = CATEGORY_INCIDENT,
-                triggerName = "incident.created",
+                triggerName = TRIGGER_INCIDENT_CREATED,
                 onceForTemplate = listOf(DEDUP_KEY),
                 tags = listOf("incident", "oncall"),
                 steps = listOf(
@@ -215,7 +218,7 @@ object WorkflowBlueprintCatalog {
                 name = "Announce incident on status page",
                 description = "Create a status page incident when a new incident is created.",
                 category = CATEGORY_INCIDENT,
-                triggerName = "incident.created",
+                triggerName = TRIGGER_INCIDENT_CREATED,
                 onceForTemplate = listOf(DEDUP_KEY),
                 tags = listOf("incident", "statuspage"),
                 steps = listOf(
@@ -300,7 +303,7 @@ object WorkflowBlueprintCatalog {
                 name = "Silence alerts during an incident",
                 description = "Silence noisy alerts and notify Slack when an incident is created.",
                 category = CATEGORY_INCIDENT,
-                triggerName = "incident.created",
+                triggerName = TRIGGER_INCIDENT_CREATED,
                 onceForTemplate = listOf(DEDUP_KEY),
                 tags = listOf("incident", "silence"),
                 steps = listOf(

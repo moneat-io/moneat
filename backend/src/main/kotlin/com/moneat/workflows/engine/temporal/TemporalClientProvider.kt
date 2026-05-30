@@ -118,8 +118,7 @@ class TemporalClientProvider(
         val existingAttributes = response.systemAttributesMap + response.customAttributesMap
         val mismatchedAttributes =
             WORKFLOW_SEARCH_ATTRIBUTES.filter { (name, expectedType) ->
-                val existingType = existingAttributes[name]
-                existingType != null && existingType != expectedType
+                name in existingAttributes && existingAttributes[name] != expectedType
             }
         require(mismatchedAttributes.isEmpty()) {
             "Temporal search attributes have incompatible types: ${mismatchedAttributes.keys.joinToString()}"

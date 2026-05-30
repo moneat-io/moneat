@@ -47,13 +47,13 @@ private const val DEFAULT_MAX_ITEMS = 100
 const val MAX_WHILE_ITERATIONS = 2_000
 
 @WorkflowInterface
-interface WorkflowInterpreterWorkflow {
+fun interface WorkflowInterpreterWorkflow {
     @WorkflowMethod
     fun run(input: WorkflowInterpreterInput): WorkflowInterpreterResult
 }
 
 @ActivityInterface
-interface ExecuteActionActivity {
+fun interface ExecuteActionActivity {
     @ActivityMethod
     fun execute(input: ExecuteActionInput): ExecuteActionResult
 }
@@ -274,8 +274,9 @@ class WorkflowInterpreterWorkflowImpl : WorkflowInterpreterWorkflow {
                 scope[itemVariable] = item
                 scope["$itemVariable.index"] = JsonPrimitive(index)
                 follow(node, branch = "body")
-                if (errorMessage != null) {
-                    markNodeFailed(node, errorMessage ?: "For-each body failed")
+                val failure = errorMessage
+                if (failure != null) {
+                    markNodeFailed(node, failure)
                     return
                 }
                 completedItems += 1

@@ -48,6 +48,10 @@ private const val SECURITY_RULE_NAME_REFERENCE = "security.rule_name"
 private const val SECURITY_SEVERITY_REFERENCE = "security.severity"
 private const val SECURITY_RESOURCE_REFERENCE = "security.resource"
 
+private const val DEDUPLICATION_KEY_LABEL = "Deduplication key"
+private const val ORGANIZATION_ID_LABEL = "Organization ID"
+private const val PROJECT_ID_LABEL = "Project ID"
+
 @Serializable
 data class WorkflowFieldConfig(
     val type: String,
@@ -228,7 +232,7 @@ object WorkflowCatalog {
         WorkflowScopeReferenceDefinition(ALERT_PRIORITY_REFERENCE, "Priority", "String"),
         WorkflowScopeReferenceDefinition(ALERT_STATUS_REFERENCE, "Status", "AlertStatus"),
         WorkflowScopeReferenceDefinition("alert.source", "Source", "AlertSource"),
-        WorkflowScopeReferenceDefinition(ALERT_DEDUPLICATION_KEY_REFERENCE, "Deduplication key", "String"),
+        WorkflowScopeReferenceDefinition(ALERT_DEDUPLICATION_KEY_REFERENCE, DEDUPLICATION_KEY_LABEL, "String"),
         WorkflowScopeReferenceDefinition("alert.url", "Moneat URL", "String"),
         WorkflowScopeReferenceDefinition(ALERT_DASHBOARD_TITLE_REFERENCE, "Dashboard title", "String"),
         WorkflowScopeReferenceDefinition(ALERT_WIDGET_TITLE_REFERENCE, "Widget title", "String"),
@@ -238,25 +242,25 @@ object WorkflowCatalog {
         WorkflowScopeReferenceDefinition(ALERT_CHANNEL_EMAIL_REFERENCE, "Email channel", "Boolean"),
         WorkflowScopeReferenceDefinition(ALERT_CHANNEL_SLACK_REFERENCE, "Slack channel", "Boolean"),
         WorkflowScopeReferenceDefinition(ALERT_CHANNEL_DISCORD_REFERENCE, "Discord channel", "Boolean"),
-        WorkflowScopeReferenceDefinition(ORGANIZATION_ID_REFERENCE, "Organization ID", "String")
+        WorkflowScopeReferenceDefinition(ORGANIZATION_ID_REFERENCE, ORGANIZATION_ID_LABEL, "String")
     )
 
     private val manualScope = listOf(
         WorkflowScopeReferenceDefinition(WORKFLOW_ACTOR_ID_REFERENCE, "Actor user ID", "String"),
         WorkflowScopeReferenceDefinition(WORKFLOW_INPUT_REFERENCE, "Run input", "Text"),
-        WorkflowScopeReferenceDefinition(ORGANIZATION_ID_REFERENCE, "Organization ID", "String")
+        WorkflowScopeReferenceDefinition(ORGANIZATION_ID_REFERENCE, ORGANIZATION_ID_LABEL, "String")
     )
 
     private val apiScope = listOf(
         WorkflowScopeReferenceDefinition(WORKFLOW_CALLER_REFERENCE, "Caller", "String"),
         WorkflowScopeReferenceDefinition(WORKFLOW_INPUT_REFERENCE, "API input", "Text"),
-        WorkflowScopeReferenceDefinition(ORGANIZATION_ID_REFERENCE, "Organization ID", "String")
+        WorkflowScopeReferenceDefinition(ORGANIZATION_ID_REFERENCE, ORGANIZATION_ID_LABEL, "String")
     )
 
     private val webhookScope = listOf(
         WorkflowScopeReferenceDefinition(WEBHOOK_PAYLOAD_REFERENCE, "Webhook payload", "Text"),
         WorkflowScopeReferenceDefinition(WEBHOOK_EVENT_ID_REFERENCE, "Webhook event ID", "String"),
-        WorkflowScopeReferenceDefinition(ORGANIZATION_ID_REFERENCE, "Organization ID", "String")
+        WorkflowScopeReferenceDefinition(ORGANIZATION_ID_REFERENCE, ORGANIZATION_ID_LABEL, "String")
     )
 
     private val incidentScope = listOf(
@@ -264,8 +268,8 @@ object WorkflowCatalog {
         WorkflowScopeReferenceDefinition(INCIDENT_TITLE_REFERENCE, "Incident title", "String"),
         WorkflowScopeReferenceDefinition(INCIDENT_STATUS_REFERENCE, "Incident status", "IncidentStatus"),
         WorkflowScopeReferenceDefinition(INCIDENT_SEVERITY_REFERENCE, "Incident severity", "AlertSeverity"),
-        WorkflowScopeReferenceDefinition(ALERT_DEDUPLICATION_KEY_REFERENCE, "Deduplication key", "String"),
-        WorkflowScopeReferenceDefinition(ORGANIZATION_ID_REFERENCE, "Organization ID", "String")
+        WorkflowScopeReferenceDefinition(ALERT_DEDUPLICATION_KEY_REFERENCE, DEDUPLICATION_KEY_LABEL, "String"),
+        WorkflowScopeReferenceDefinition(ORGANIZATION_ID_REFERENCE, ORGANIZATION_ID_LABEL, "String")
     )
 
     private val securityScope = listOf(
@@ -273,7 +277,7 @@ object WorkflowCatalog {
         WorkflowScopeReferenceDefinition(SECURITY_RULE_NAME_REFERENCE, "Rule name", "String"),
         WorkflowScopeReferenceDefinition(SECURITY_SEVERITY_REFERENCE, "Severity", "SecuritySeverity"),
         WorkflowScopeReferenceDefinition(SECURITY_RESOURCE_REFERENCE, "Resource", "String"),
-        WorkflowScopeReferenceDefinition(ORGANIZATION_ID_REFERENCE, "Organization ID", "String")
+        WorkflowScopeReferenceDefinition(ORGANIZATION_ID_REFERENCE, ORGANIZATION_ID_LABEL, "String")
     )
 
     val triggers = listOf(
@@ -446,7 +450,7 @@ object WorkflowCatalog {
             label = "Search traces",
             description = "Read recent transaction and trace summaries for a project.",
             params = listOf(
-                WorkflowStepParamDefinition("project_id", "Project ID", "Number"),
+                WorkflowStepParamDefinition("project_id", PROJECT_ID_LABEL, "Number"),
                 WorkflowStepParamDefinition("period", "Period", "String", "1h, 6h, 24h, 7d, or 30d", false),
                 WorkflowStepParamDefinition("environment", "Environment", "String", required = false),
                 WorkflowStepParamDefinition("operation", "Operation", "String", required = false)
@@ -457,7 +461,7 @@ object WorkflowCatalog {
             label = "Get span",
             description = "Read details for a single span in an organization project.",
             params = listOf(
-                WorkflowStepParamDefinition("project_id", "Project ID", "Number"),
+                WorkflowStepParamDefinition("project_id", PROJECT_ID_LABEL, "Number"),
                 WorkflowStepParamDefinition("span_id", "Span ID", "String")
             )
         ),
@@ -466,7 +470,7 @@ object WorkflowCatalog {
             label = "List issues",
             description = "List issues in an organization project.",
             params = listOf(
-                WorkflowStepParamDefinition("project_id", "Project ID", "Number"),
+                WorkflowStepParamDefinition("project_id", PROJECT_ID_LABEL, "Number"),
                 WorkflowStepParamDefinition("status", "Status", "String", required = false),
                 WorkflowStepParamDefinition("page", "Page", "Number", required = false),
                 WorkflowStepParamDefinition("limit", "Limit", "Number", required = false)
@@ -477,7 +481,7 @@ object WorkflowCatalog {
             label = "Get issue",
             description = "Read issue details in an organization project.",
             params = listOf(
-                WorkflowStepParamDefinition("project_id", "Project ID", "Number"),
+                WorkflowStepParamDefinition("project_id", PROJECT_ID_LABEL, "Number"),
                 WorkflowStepParamDefinition("issue_id", "Issue ID", "String")
             )
         ),
@@ -523,7 +527,7 @@ object WorkflowCatalog {
                 WorkflowStepParamDefinition("title", "Title", "String"),
                 WorkflowStepParamDefinition("description", "Description", "Text", required = false),
                 WorkflowStepParamDefinition("priority_level", "Priority", "String", required = false),
-                WorkflowStepParamDefinition("deduplication_key", "Deduplication key", "String", required = false)
+                WorkflowStepParamDefinition("deduplication_key", DEDUPLICATION_KEY_LABEL, "String", required = false)
             )
         )
     )
