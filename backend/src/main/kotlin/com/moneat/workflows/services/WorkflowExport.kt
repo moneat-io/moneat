@@ -76,10 +76,20 @@ object WorkflowExport {
         }
     }
 
+    // Terraform template markers, built via concatenation to avoid Kotlin string-template parsing.
+    private const val HCL_INTERP = "$" + "{"
+    private const val HCL_INTERP_ESCAPED = "$$" + "{"
+    private const val HCL_DIRECTIVE = "%{"
+    private const val HCL_DIRECTIVE_ESCAPED = "%%{"
+
     private fun String.hclString(): String =
         "\"" +
             replace("\\", "\\\\")
                 .replace("\"", "\\\"")
-                .replace("\n", "\\n") +
+                .replace("\n", "\\n")
+                // Escape Terraform template markers so literal `${` / `%{` in user-controlled
+                // values are not interpreted as interpolations/directives.
+                .replace(HCL_INTERP, HCL_INTERP_ESCAPED)
+                .replace(HCL_DIRECTIVE, HCL_DIRECTIVE_ESCAPED) +
             "\""
 }

@@ -974,7 +974,6 @@ class WorkflowService(
 
     private fun workflowSigningKey(): String =
         EnvConfig.get("WORKFLOWS_SIGNING_KEY")
-            ?: System.getProperty("WORKFLOWS_SIGNING_KEY")
             ?: throw IllegalStateException("WORKFLOWS_SIGNING_KEY is required for workflow webhook signing")
 
     private fun hmacSha256(
