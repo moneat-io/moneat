@@ -16,6 +16,7 @@
 
 package com.moneat.workflows.engine.temporal
 
+import com.moneat.enterprise.FeatureRegistry
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.suspendRunCatching
 import com.moneat.workflows.models.WorkflowGraphConfig
@@ -27,6 +28,7 @@ import com.moneat.workflows.models.WorkflowVersions
 import com.moneat.workflows.models.workflowJson
 import com.moneat.workflows.services.WorkflowActionExecutor
 import com.moneat.workflows.services.WorkflowAudit
+import com.moneat.workflows.services.WorkflowEgressActionExecutor
 import com.moneat.workflows.services.WorkflowUsage
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
@@ -71,6 +73,48 @@ class ExecuteActionActivityImpl(
                     )
                 }
             )
+        }
+}
+
+class ExecuteEgressActionActivityImpl(
+    private val egressActionExecutor: WorkflowEgressActionExecutor
+) : ExecuteEgressActionActivity {
+    override fun execute(input: ExecuteActionInput): ExecuteActionResult =
+        runBlocking {
+            suspendRunCatching {
+                egressActionExecutor.execute(
+                    stepName = input.step.name,
+                    params = input.step.params,
+                    scope = input.scope
+                )
+            }.fold(
+                onSuccess = {
+                    ExecuteActionResult(
+                        status = STATUS_COMPLETE,
+                        completedAt = Clock.System.now().toString(),
+                        output = it.toRuntimeValues()
+                    )
+                },
+                onFailure = { error ->
+                    ExecuteActionResult(
+                        status = STATUS_FAILED,
+                        completedAt = Clock.System.now().toString(),
+                        errorMessage = error.message ?: "Unknown egress workflow step error"
+                    )
+                }
+            )
+        }
+}
+
+class RequestApprovalActivityImpl : RequestApprovalActivity {
+    override fun request(input: WorkflowApprovalRequestInput): WorkflowApprovalRequestResult =
+        runBlocking {
+            val bridge = FeatureRegistry.getWorkflowApprovalBridge()
+                ?: return@runBlocking WorkflowApprovalRequestResult(
+                    status = STATUS_FAILED,
+                    errorMessage = "Workflow approvals require the workflows_advanced Enterprise module"
+                )
+            bridge.requestApproval(input)
         }
 }
 

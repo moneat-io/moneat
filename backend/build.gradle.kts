@@ -103,6 +103,8 @@ dependencies {
     // Workflow execution
     implementation(libs.jackson.module.kotlin)
     implementation(libs.temporal.sdk)
+    implementation(libs.graalvm.polyglot)
+    implementation(libs.graalvm.polyglot.js)
 
     // JDBC drivers for custom datasources
     runtimeOnly(libs.mysql.connector.j)

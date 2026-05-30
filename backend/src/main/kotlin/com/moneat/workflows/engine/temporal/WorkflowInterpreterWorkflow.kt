@@ -30,9 +30,12 @@ import io.temporal.activity.ActivityMethod
 import io.temporal.activity.ActivityOptions
 import io.temporal.common.RetryOptions
 import io.temporal.failure.ActivityFailure
+import io.temporal.workflow.Async
+import io.temporal.workflow.Promise
 import io.temporal.workflow.Workflow
 import io.temporal.workflow.WorkflowInterface
 import io.temporal.workflow.WorkflowMethod
+import io.temporal.workflow.SignalMethod
 import java.time.Duration
 import java.time.Instant
 import kotlinx.serialization.json.JsonElement
@@ -47,15 +50,30 @@ private const val DEFAULT_MAX_ITEMS = 100
 const val MAX_WHILE_ITERATIONS = 2_000
 
 @WorkflowInterface
-fun interface WorkflowInterpreterWorkflow {
+interface WorkflowInterpreterWorkflow {
     @WorkflowMethod
     fun run(input: WorkflowInterpreterInput): WorkflowInterpreterResult
+
+    @SignalMethod
+    fun approve(input: WorkflowApprovalSignal)
 }
 
 @ActivityInterface
 fun interface ExecuteActionActivity {
     @ActivityMethod
     fun execute(input: ExecuteActionInput): ExecuteActionResult
+}
+
+@ActivityInterface
+fun interface ExecuteEgressActionActivity {
+    @ActivityMethod
+    fun execute(input: ExecuteActionInput): ExecuteActionResult
+}
+
+@ActivityInterface
+fun interface RequestApprovalActivity {
+    @ActivityMethod
+    fun request(input: WorkflowApprovalRequestInput): WorkflowApprovalRequestResult
 }
 
 @ActivityInterface
@@ -89,6 +107,12 @@ class WorkflowInterpreterWorkflowImpl : WorkflowInterpreterWorkflow {
             .setStartToCloseTimeout(Duration.ofSeconds(ACTIVITY_TIMEOUT_SECONDS))
             .build()
     private val runs = Workflow.newActivityStub(PersistRunActivity::class.java, activityOptions)
+    private val approvals = Workflow.newActivityStub(RequestApprovalActivity::class.java, activityOptions)
+    private val approvalSignals = mutableMapOf<String, WorkflowApprovalSignal>()
+
+    override fun approve(input: WorkflowApprovalSignal) {
+        approvalSignals[input.nodeId] = input
+    }
 
     override fun run(input: WorkflowInterpreterInput): WorkflowInterpreterResult {
         val snapshot = runs.loadRun(LoadRunInput(runId = input.runId))
@@ -195,11 +219,14 @@ class WorkflowInterpreterWorkflowImpl : WorkflowInterpreterWorkflow {
         private fun executeAction(node: WorkflowGraphNode) {
             val action = node.action ?: return
             val step = WorkflowStepConfig(action, node.params.mapValues { (_, value) -> value.workflowStringValue() })
-            val actions = Workflow.newActivityStub(ExecuteActionActivity::class.java, activityOptionsFor(node))
             markNodeRunning(node, scope)
             val result =
                 try {
-                    actions.execute(ExecuteActionInput(snapshot.organizationId, step, scope.toRuntimeValues()))
+                    executeActionActivity(
+                        node = node,
+                        action = action,
+                        input = ExecuteActionInput(snapshot.organizationId, step, scope.toRuntimeValues())
+                    )
                 } catch (failure: ActivityFailure) {
                     handleActionFailure(node, failure.workflowStepMessage())
                     return
@@ -240,6 +267,7 @@ class WorkflowInterpreterWorkflowImpl : WorkflowInterpreterWorkflow {
                 LinearGraphAdapter.CONTROL_KIND_WAIT_UNTIL -> executeWaitUntil(node)
                 LinearGraphAdapter.CONTROL_KIND_FOR_EACH -> executeForEach(node)
                 LinearGraphAdapter.CONTROL_KIND_WHILE -> executeWhile(node)
+                LinearGraphAdapter.CONTROL_KIND_APPROVAL -> executeApproval(node)
                 else -> {
                     markNodeFailed(node, "Unsupported control node ${node.kind}")
                     errorMessage = "Unsupported control node ${node.kind}"
@@ -308,23 +336,96 @@ class WorkflowInterpreterWorkflowImpl : WorkflowInterpreterWorkflow {
             follow(node, branch = "done")
         }
 
+        private fun executeApproval(node: WorkflowGraphNode) {
+            val timeout = Duration.parse(node.params["timeout"]?.workflowStringValue() ?: "PT24H")
+            val message = node.params["message"]?.workflowStringValue() ?: "Workflow approval requested"
+            markNodeRunning(node, mapOf("message" to JsonPrimitive(message)))
+            val request =
+                WorkflowApprovalRequestInput(
+                    runId = input.runId,
+                    workflowId = input.workflowId,
+                    organizationId = input.organizationId,
+                    nodeId = node.id,
+                    message = message,
+                    approverRole = node.params["approver_role"]?.workflowStringValue(),
+                    timeout = timeout.toString()
+                )
+            val result = approvals.request(request)
+            if (result.status == STATUS_FAILED) {
+                val messageText = result.errorMessage ?: "Workflow approval request failed"
+                markNodeFailed(node, messageText)
+                errorMessage = messageText
+                return
+            }
+            val signaled = Workflow.await(timeout) { approvalSignals.containsKey(node.id) }
+            val signal = approvalSignals[node.id]
+            val branch =
+                when {
+                    !signaled -> "timeout"
+                    signal?.approved == true -> "approved"
+                    else -> "rejected"
+                }
+            markNodeComplete(
+                node,
+                mapOf(
+                    "approval_id" to JsonPrimitive(result.approvalId ?: 0),
+                    "branch" to JsonPrimitive(branch),
+                    "comment" to JsonPrimitive(signal?.comment.orEmpty())
+                )
+            )
+            follow(node, branch)
+        }
+
         private fun follow(
             node: WorkflowGraphNode,
             branch: String? = null
         ) {
             if (errorMessage != null) return
             val nextEdges = edgesBySource[node.id].orEmpty().filter { edge -> edge.matches(branch) }
+            if (nextEdges.canRunConcurrently()) {
+                Promise.allOf(nextEdges.map { edge -> Async.procedure { executeFrom(edge.to) } }).get()
+                return
+            }
             for (edge in nextEdges) {
                 if (errorMessage != null) return
                 executeFrom(edge.to)
             }
         }
 
+        private fun List<WorkflowGraphEdge>.canRunConcurrently(): Boolean =
+            size > 1 &&
+                all { edge ->
+                    nodesById[edge.to]?.let { target ->
+                        target.type == LinearGraphAdapter.NODE_TYPE_ACTION && target.continueOnError
+                    } == true
+                }
+
         private fun WorkflowGraphEdge.matches(branch: String?): Boolean {
             if (on == "error") return false
             if (branch == null) return this.branch == null
             return this.branch == branch
         }
+
+        private fun executeActionActivity(
+            node: WorkflowGraphNode,
+            action: String,
+            input: ExecuteActionInput
+        ): ExecuteActionResult =
+            if (action in WORKFLOW_EGRESS_ACTIONS) {
+                Workflow
+                    .newActivityStub(ExecuteEgressActionActivity::class.java, egressActivityOptionsFor(node))
+                    .execute(input)
+            } else {
+                Workflow
+                    .newActivityStub(ExecuteActionActivity::class.java, activityOptionsFor(node))
+                    .execute(input)
+            }
+
+        private fun egressActivityOptionsFor(node: WorkflowGraphNode): ActivityOptions =
+            ActivityOptions
+                .newBuilder(activityOptionsFor(node))
+                .setTaskQueue(WORKFLOW_EGRESS_TASK_QUEUE)
+                .build()
 
         private fun activityOptionsFor(node: WorkflowGraphNode): ActivityOptions {
             val retry = node.retry ?: return activityOptions

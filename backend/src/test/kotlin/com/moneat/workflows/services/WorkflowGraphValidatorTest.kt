@@ -417,6 +417,33 @@ class WorkflowGraphValidatorTest {
     }
 
     @Test
+    fun `validates approval control nodes`() {
+        validator.validate(
+            triggerName = "alert.triggered",
+            graph = WorkflowGraphConfig(
+                nodes = listOf(
+                    trigger(),
+                    WorkflowGraphNode(
+                        id = "approval",
+                        type = "control",
+                        kind = "approval",
+                        params = mapOf(
+                            "message" to JsonPrimitive("Approve remediation"),
+                            "timeout" to JsonPrimitive("PT1H")
+                        )
+                    ),
+                    action("a1")
+                ),
+                edges = listOf(
+                    WorkflowGraphEdge("trigger", "approval"),
+                    WorkflowGraphEdge("approval", "a1", branch = "approved")
+                )
+            ),
+            onceForTemplate = emptyList()
+        )
+    }
+
+    @Test
     fun `rejects unsupported node type`() {
         assertFailsWith<IllegalArgumentException> {
             validator.validate(

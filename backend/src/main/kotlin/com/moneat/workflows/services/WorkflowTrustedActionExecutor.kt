@@ -31,6 +31,11 @@ import com.moneat.shared.models.Projects
 import com.moneat.statuspage.models.CreateIncidentRequest
 import com.moneat.statuspage.models.UpdateStatusPageRequest
 import com.moneat.statuspage.services.StatusPageService
+import com.moneat.workflows.engine.temporal.CONNECTOR_GITHUB_CREATE_ISSUE_ACTION
+import com.moneat.workflows.engine.temporal.CONNECTOR_JIRA_CREATE_ISSUE_ACTION
+import com.moneat.workflows.engine.temporal.CONNECTOR_PAGERDUTY_TRIGGER_INCIDENT_ACTION
+import com.moneat.workflows.engine.temporal.CONNECTOR_SERVICENOW_CREATE_INCIDENT_ACTION
+import com.moneat.workflows.engine.temporal.WORKFLOW_PREMIUM_CONNECTOR_ACTIONS
 import com.moneat.workflows.models.workflowJson
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
@@ -83,6 +88,8 @@ class WorkflowTrustedActionExecutor(
             STATUS_PAGE_INCIDENT_CREATE_STEP -> executeStatusPageIncidentCreate(organizationId, params)
             ALERT_SILENCE_STEP -> executeAlertSilence(organizationId, params, actorUserId)
             ON_CALL_PAGE_STEP -> executeOnCallPage(organizationId, params)
+            in WORKFLOW_PREMIUM_CONNECTOR_ACTIONS ->
+                executePremiumConnector(organizationId, stepName, params, actorUserId)
             else -> throw IllegalArgumentException("Unknown workflow step $stepName")
         }
 
@@ -280,6 +287,20 @@ class WorkflowTrustedActionExecutor(
         return mapOf("incident_id" to JsonPrimitive(incidentId))
     }
 
+    private suspend fun executePremiumConnector(
+        organizationId: Int,
+        stepName: String,
+        params: Map<String, String>,
+        actorUserId: Int?
+    ): Map<String, JsonElement> {
+        val bridge = FeatureRegistry.getWorkflowPremiumConnectorBridge()
+            ?: return mapOf(
+                "requires_enterprise" to JsonPrimitive(true),
+                "message" to JsonPrimitive("Premium workflow connectors require workflows_advanced")
+            )
+        return bridge.executeConnectorAction(organizationId, stepName, params, actorUserId)
+    }
+
     private fun requireProjectAccess(
         organizationId: Int,
         projectId: Long
@@ -371,6 +392,10 @@ class WorkflowTrustedActionExecutor(
         const val STATUS_PAGE_INCIDENT_CREATE_STEP = "statuspage.incident.create"
         const val ALERT_SILENCE_STEP = "alert.silence"
         const val ON_CALL_PAGE_STEP = "oncall.page"
+        const val JIRA_CREATE_ISSUE_STEP = CONNECTOR_JIRA_CREATE_ISSUE_ACTION
+        const val PAGERDUTY_TRIGGER_INCIDENT_STEP = CONNECTOR_PAGERDUTY_TRIGGER_INCIDENT_ACTION
+        const val GITHUB_CREATE_ISSUE_STEP = CONNECTOR_GITHUB_CREATE_ISSUE_ACTION
+        const val SERVICENOW_CREATE_INCIDENT_STEP = CONNECTOR_SERVICENOW_CREATE_INCIDENT_ACTION
 
         private val SUPPORTED_ACTIONS =
             setOf(
@@ -384,7 +409,7 @@ class WorkflowTrustedActionExecutor(
                 STATUS_PAGE_UPDATE_STEP,
                 STATUS_PAGE_INCIDENT_CREATE_STEP,
                 ALERT_SILENCE_STEP,
-                ON_CALL_PAGE_STEP
-            )
+                ON_CALL_PAGE_STEP,
+            ) + WORKFLOW_PREMIUM_CONNECTOR_ACTIONS
     }
 }

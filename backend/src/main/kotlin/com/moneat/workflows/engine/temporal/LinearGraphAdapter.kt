@@ -117,6 +117,7 @@ object LinearGraphAdapter {
     const val CONTROL_KIND_WAIT_UNTIL = "wait_until"
     const val CONTROL_KIND_FOR_EACH = "for_each"
     const val CONTROL_KIND_WHILE = "while"
+    const val CONTROL_KIND_APPROVAL = "approval"
 }
 
 data class LinearWorkflowNode(

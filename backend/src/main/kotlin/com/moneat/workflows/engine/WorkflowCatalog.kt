@@ -16,6 +16,12 @@
 
 package com.moneat.workflows.engine
 
+import com.moneat.workflows.engine.temporal.CONNECTOR_GITHUB_CREATE_ISSUE_ACTION
+import com.moneat.workflows.engine.temporal.CONNECTOR_JIRA_CREATE_ISSUE_ACTION
+import com.moneat.workflows.engine.temporal.CONNECTOR_PAGERDUTY_TRIGGER_INCIDENT_ACTION
+import com.moneat.workflows.engine.temporal.CONNECTOR_SERVICENOW_CREATE_INCIDENT_ACTION
+import com.moneat.workflows.engine.temporal.HTTP_REQUEST_ACTION
+import com.moneat.workflows.engine.temporal.TRANSFORM_GRAALJS_ACTION
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -529,6 +535,51 @@ object WorkflowCatalog {
                 WorkflowStepParamDefinition("priority_level", "Priority", "String", required = false),
                 WorkflowStepParamDefinition("deduplication_key", DEDUPLICATION_KEY_LABEL, "String", required = false)
             )
+        ),
+        WorkflowStepDefinition(
+            name = HTTP_REQUEST_ACTION,
+            label = "HTTP request",
+            description = "Call an external HTTP endpoint from the isolated egress worker.",
+            params = listOf(
+                WorkflowStepParamDefinition("url", "URL", "String"),
+                WorkflowStepParamDefinition("method", "Method", "String", required = false),
+                WorkflowStepParamDefinition("headers", "Headers", "Text", "JSON object of allowed headers", false),
+                WorkflowStepParamDefinition("body", "Body", "Text", required = false),
+                WorkflowStepParamDefinition("timeout_seconds", "Timeout seconds", "Number", required = false)
+            )
+        ),
+        WorkflowStepDefinition(
+            name = TRANSFORM_GRAALJS_ACTION,
+            label = "Transform with JavaScript",
+            description = "Run a bounded GraalJS transform in the isolated egress worker.",
+            params = listOf(
+                WorkflowStepParamDefinition("script", "Script", "Text"),
+                WorkflowStepParamDefinition("timeout_seconds", "Timeout seconds", "Number", required = false)
+            )
+        ),
+        WorkflowStepDefinition(
+            name = CONNECTOR_JIRA_CREATE_ISSUE_ACTION,
+            label = "Create Jira issue",
+            description = "Create a Jira issue using an Enterprise workflow connection.",
+            params = connectorParams("jira")
+        ),
+        WorkflowStepDefinition(
+            name = CONNECTOR_PAGERDUTY_TRIGGER_INCIDENT_ACTION,
+            label = "Trigger PagerDuty incident",
+            description = "Trigger a PagerDuty incident using an Enterprise workflow connection.",
+            params = connectorParams("pagerduty")
+        ),
+        WorkflowStepDefinition(
+            name = CONNECTOR_GITHUB_CREATE_ISSUE_ACTION,
+            label = "Create GitHub issue",
+            description = "Create a GitHub issue using an Enterprise workflow connection.",
+            params = connectorParams("github")
+        ),
+        WorkflowStepDefinition(
+            name = CONNECTOR_SERVICENOW_CREATE_INCIDENT_ACTION,
+            label = "Create ServiceNow incident",
+            description = "Create a ServiceNow incident using an Enterprise workflow connection.",
+            params = connectorParams("servicenow")
         )
     )
 
@@ -599,6 +650,19 @@ object WorkflowCatalog {
                 WorkflowStepParamDefinition("max_iterations", "Maximum iterations", "Number", required = false)
             ),
             branchLabels = listOf("body", "done")
+        ),
+        WorkflowNodeTypeDefinition(
+            type = "control",
+            kind = "approval",
+            name = "control.approval",
+            label = "Approval",
+            description = "Pause the workflow until an authorized approver accepts, rejects, or the timeout expires.",
+            params = listOf(
+                WorkflowStepParamDefinition("message", "Message", "Text"),
+                WorkflowStepParamDefinition("approver_role", "Approver role", "String", required = false),
+                WorkflowStepParamDefinition("timeout", "Timeout", "String", "ISO-8601 duration, for example PT24H")
+            ),
+            branchLabels = listOf("approved", "rejected", "timeout")
         )
     )
 
@@ -611,4 +675,18 @@ object WorkflowCatalog {
 
     fun scopeType(triggerName: String, reference: String): String? =
         trigger(triggerName)?.scope?.firstOrNull { it.name == reference }?.type
+
+    private fun connectorParams(connectionType: String): List<WorkflowStepParamDefinition> =
+        listOf(
+            WorkflowStepParamDefinition("connection_id", "$connectionType connection ID", "Number", required = false),
+            WorkflowStepParamDefinition(
+                "connection_group_id",
+                "$connectionType connection group ID",
+                "Number",
+                required = false
+            ),
+            WorkflowStepParamDefinition("title", "Title", "String"),
+            WorkflowStepParamDefinition("description", "Description", "Text", required = false),
+            WorkflowStepParamDefinition("metadata", "Metadata", "Text", "Connector-specific JSON payload", false)
+        )
 }

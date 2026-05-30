@@ -192,6 +192,14 @@ class WorkflowGraphValidator {
                 validateBoundedControl(node, "max_iterations")
                 validateConditions(triggerName, node.conditions)
             }
+            LinearGraphAdapter.CONTROL_KIND_APPROVAL -> {
+                require(!node.params["message"]?.workflowStringValue().isNullOrBlank()) {
+                    "Approval node ${node.id} must define message"
+                }
+                require(!node.params["timeout"]?.workflowStringValue().isNullOrBlank()) {
+                    "Approval node ${node.id} must define timeout"
+                }
+            }
             else -> throw IllegalArgumentException("Unsupported control node kind ${node.kind}")
         }
     }

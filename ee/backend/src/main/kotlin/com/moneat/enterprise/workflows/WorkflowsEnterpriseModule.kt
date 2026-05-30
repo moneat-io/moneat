@@ -6,13 +6,21 @@ package com.moneat.enterprise.workflows
 
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.enterprise.workflows.crypto.ConnectionCredentialCipher
+import com.moneat.enterprise.workflows.routes.approvalRoutes
 import com.moneat.enterprise.workflows.routes.connectionRoutes
 import com.moneat.enterprise.workflows.services.ConnectionVaultService
+import com.moneat.enterprise.workflows.services.PremiumConnectorService
+import com.moneat.enterprise.workflows.services.WorkflowApprovalService
+import com.moneat.workflows.WorkflowApprovalBridge
 import com.moneat.workflows.WorkflowConnectionGroupSummary
 import com.moneat.workflows.WorkflowConnectionReference
 import com.moneat.workflows.WorkflowConnectionSummary
 import com.moneat.workflows.WorkflowConnectionVault
+import com.moneat.workflows.WorkflowPremiumConnectorBridge
 import com.moneat.workflows.WorkflowResolvedConnection
+import com.moneat.workflows.engine.temporal.WorkflowApprovalRequestInput
+import com.moneat.workflows.engine.temporal.WorkflowApprovalRequestResult
+import kotlinx.serialization.json.JsonElement
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
 
@@ -27,7 +35,9 @@ import io.ktor.server.routing.Route
  */
 class WorkflowsEnterpriseModule :
     EnterpriseModule,
-    WorkflowConnectionVault {
+    WorkflowConnectionVault,
+    WorkflowApprovalBridge,
+    WorkflowPremiumConnectorBridge {
 
     override val name: String = "Workflows Advanced"
     override val licenseFeature: String = "workflows_advanced"
@@ -37,9 +47,12 @@ class WorkflowsEnterpriseModule :
     private val vault: WorkflowConnectionVault by lazy {
         ConnectionVaultService(ConnectionCredentialCipher.fromEnv())
     }
+    private val approvals: WorkflowApprovalService by lazy { WorkflowApprovalService() }
+    private val connectors: WorkflowPremiumConnectorBridge by lazy { PremiumConnectorService(this) }
 
     override fun registerRoutes(route: Route) {
         route.connectionRoutes(this)
+        route.approvalRoutes(approvals)
     }
 
     override fun startBackgroundJobs(application: Application) {
@@ -100,4 +113,19 @@ class WorkflowsEnterpriseModule :
         runScope: Map<String, String>
     ): WorkflowResolvedConnection? =
         vault.resolveSecret(organizationId, reference, runScope)
+
+    // --- WorkflowApprovalBridge ---
+
+    override suspend fun requestApproval(input: WorkflowApprovalRequestInput): WorkflowApprovalRequestResult =
+        approvals.requestApproval(input)
+
+    // --- WorkflowPremiumConnectorBridge ---
+
+    override suspend fun executeConnectorAction(
+        organizationId: Int,
+        actionName: String,
+        params: Map<String, String>,
+        actorUserId: Int?
+    ): Map<String, JsonElement> =
+        connectors.executeConnectorAction(organizationId, actionName, params, actorUserId)
 }

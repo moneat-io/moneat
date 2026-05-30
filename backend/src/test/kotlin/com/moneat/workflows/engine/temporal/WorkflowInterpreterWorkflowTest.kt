@@ -27,6 +27,7 @@ import io.temporal.client.WorkflowOptions
 import io.temporal.testing.TestEnvironmentOptions
 import io.temporal.testing.TestWorkflowEnvironment
 import java.util.Collections
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
@@ -130,6 +131,27 @@ class WorkflowInterpreterWorkflowTest {
                 actionActivity.executedSteps.sorted()
             )
             assertEquals("notification.email failed", result.errorMessage)
+        }
+    }
+
+    @Test
+    fun `interpreter runs independent legacy steps concurrently`() {
+        val actionActivity = OverlapRecordingExecuteActionActivity()
+        val persistActivity =
+            RecordingPersistRunActivity(
+                snapshot = snapshot(
+                    steps = listOf(
+                        WorkflowStepConfig("notification.email"),
+                        WorkflowStepConfig("notification.slack")
+                    )
+                )
+            )
+
+        runWorkflow(actionActivity, persistActivity).use { harness ->
+            val result = harness.workflow.run(input())
+
+            assertEquals(STATUS_COMPLETE, result.status)
+            assertTrue(actionActivity.maxConcurrent.get() > 1)
         }
     }
 
@@ -405,6 +427,19 @@ private class RecordingExecuteActionActivity(
         } else {
             ExecuteActionResult(status = STATUS_COMPLETE, completedAt = TEST_COMPLETED_AT)
         }
+    }
+}
+
+private class OverlapRecordingExecuteActionActivity : ExecuteActionActivity {
+    private val active = AtomicInteger(0)
+    val maxConcurrent = AtomicInteger(0)
+
+    override fun execute(input: ExecuteActionInput): ExecuteActionResult {
+        val current = active.incrementAndGet()
+        maxConcurrent.updateAndGet { previous -> maxOf(previous, current) }
+        Thread.sleep(150)
+        active.decrementAndGet()
+        return ExecuteActionResult(status = STATUS_COMPLETE, completedAt = TEST_COMPLETED_AT)
     }
 }
 

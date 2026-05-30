@@ -30,8 +30,24 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 
 const val WORKFLOW_TASK_QUEUE = "moneat-workflows-trusted"
+const val WORKFLOW_EGRESS_TASK_QUEUE = "moneat-workflows-egress"
+const val HTTP_REQUEST_ACTION = "http.request"
+const val TRANSFORM_GRAALJS_ACTION = "transform.graaljs"
+const val CONNECTOR_JIRA_CREATE_ISSUE_ACTION = "connector.jira.create_issue"
+const val CONNECTOR_PAGERDUTY_TRIGGER_INCIDENT_ACTION = "connector.pagerduty.trigger_incident"
+const val CONNECTOR_GITHUB_CREATE_ISSUE_ACTION = "connector.github.create_issue"
+const val CONNECTOR_SERVICENOW_CREATE_INCIDENT_ACTION = "connector.servicenow.create_incident"
 internal const val ORGANIZATION_SEARCH_ATTRIBUTE = "organizationId"
 internal const val WORKFLOW_SEARCH_ATTRIBUTE = "workflowId"
+
+val WORKFLOW_EGRESS_ACTIONS = setOf(HTTP_REQUEST_ACTION, TRANSFORM_GRAALJS_ACTION)
+val WORKFLOW_PREMIUM_CONNECTOR_ACTIONS =
+    setOf(
+        CONNECTOR_JIRA_CREATE_ISSUE_ACTION,
+        CONNECTOR_PAGERDUTY_TRIGGER_INCIDENT_ACTION,
+        CONNECTOR_GITHUB_CREATE_ISSUE_ACTION,
+        CONNECTOR_SERVICENOW_CREATE_INCIDENT_ACTION
+    )
 
 data class WorkflowStartRequest(
     val runId: Int,
@@ -74,6 +90,30 @@ data class ExecuteActionResult(
     var completedAt: String = "",
     var output: Map<String, String> = emptyMap(),
     var errorMessage: String? = null
+)
+
+data class WorkflowApprovalRequestInput(
+    var runId: Int = 0,
+    var workflowId: Int = 0,
+    var organizationId: Int = 0,
+    var nodeId: String = "",
+    var message: String = "",
+    var approverRole: String? = null,
+    var timeout: String = ""
+)
+
+data class WorkflowApprovalRequestResult(
+    var status: String = "",
+    var approvalId: Int? = null,
+    var errorMessage: String? = null
+)
+
+data class WorkflowApprovalSignal(
+    var nodeId: String = "",
+    var approvalId: Int? = null,
+    var approved: Boolean = false,
+    var actorUserId: Int? = null,
+    var comment: String? = null
 )
 
 data class LoadRunInput(

@@ -39,8 +39,11 @@ import com.moneat.shared.services.UsageTrackingService
 import com.moneat.uptime.services.UptimeScheduler
 import com.moneat.utils.suspendRunCatching
 import com.moneat.workflows.engine.temporal.ExecuteActionActivityImpl
+import com.moneat.workflows.engine.temporal.ExecuteEgressActionActivityImpl
 import com.moneat.workflows.engine.temporal.PersistRunActivityImpl
+import com.moneat.workflows.engine.temporal.RequestApprovalActivityImpl
 import com.moneat.workflows.engine.temporal.TemporalClientProvider
+import com.moneat.workflows.engine.temporal.WORKFLOW_EGRESS_TASK_QUEUE
 import com.moneat.workflows.engine.temporal.WORKFLOW_TASK_QUEUE
 import com.moneat.workflows.engine.temporal.WorkflowInterpreterWorkflowImpl
 import io.ktor.server.application.Application
@@ -59,6 +62,39 @@ import kotlin.time.Duration.Companion.hours
 private val logger = KotlinLogging.logger {}
 private const val DEFAULT_WORKER_THREADS = 4
 private const val WORKFLOW_WORKER_SHUTDOWN_TIMEOUT_SECONDS = 30L
+private const val WORKFLOW_WORKER_MODE_CONFIG = "workflows.workerMode"
+
+enum class WorkflowWorkerMode {
+    ALL,
+    TRUSTED,
+    EGRESS,
+    NONE
+}
+
+fun Application.workflowWorkerMode(): WorkflowWorkerMode {
+    val rawMode =
+        environment.config
+            .propertyOrNull(WORKFLOW_WORKER_MODE_CONFIG)
+            ?.getString()
+            ?.trim()
+            ?.uppercase()
+            ?: "ALL"
+    return WorkflowWorkerMode.entries.firstOrNull { mode -> mode.name == rawMode } ?: WorkflowWorkerMode.ALL
+}
+
+fun Application.configureEgressWorkflowWorker() {
+    val koin = GlobalContext.get()
+    val temporalClientProvider = koin.get<TemporalClientProvider>()
+    val workflowWorkerFactory = temporalClientProvider.newWorkerFactory()
+    workflowWorkerFactory
+        .newWorker(WORKFLOW_EGRESS_TASK_QUEUE)
+        .registerActivitiesImplementations(koin.get<ExecuteEgressActionActivityImpl>())
+    logger.info { "Starting isolated Temporal egress worker on $WORKFLOW_EGRESS_TASK_QUEUE" }
+    workflowWorkerFactory.start()
+    monitor.subscribe(ApplicationStopping) {
+        shutdownWorkflowWorker(workflowWorkerFactory, temporalClientProvider)
+    }
+}
 
 fun Application.configureBackgroundJobs() {
     val backgroundJobsEnabled =
@@ -142,12 +178,21 @@ fun Application.configureBackgroundJobs() {
     )
     val temporalClientProvider = koin.get<TemporalClientProvider>()
     val workflowWorkerFactory = temporalClientProvider.newWorkerFactory()
-    val workflowWorker = workflowWorkerFactory.newWorker(WORKFLOW_TASK_QUEUE)
-    workflowWorker.registerWorkflowImplementationTypes(WorkflowInterpreterWorkflowImpl::class.java)
-    workflowWorker.registerActivitiesImplementations(
-        koin.get<ExecuteActionActivityImpl>(),
-        koin.get<PersistRunActivityImpl>()
-    )
+    val workflowWorkerMode = workflowWorkerMode()
+    if (workflowWorkerMode == WorkflowWorkerMode.ALL || workflowWorkerMode == WorkflowWorkerMode.TRUSTED) {
+        val workflowWorker = workflowWorkerFactory.newWorker(WORKFLOW_TASK_QUEUE)
+        workflowWorker.registerWorkflowImplementationTypes(WorkflowInterpreterWorkflowImpl::class.java)
+        workflowWorker.registerActivitiesImplementations(
+            koin.get<ExecuteActionActivityImpl>(),
+            koin.get<PersistRunActivityImpl>(),
+            koin.get<RequestApprovalActivityImpl>()
+        )
+    }
+    if (workflowWorkerMode == WorkflowWorkerMode.ALL || workflowWorkerMode == WorkflowWorkerMode.EGRESS) {
+        workflowWorkerFactory
+            .newWorker(WORKFLOW_EGRESS_TASK_QUEUE)
+            .registerActivitiesImplementations(koin.get<ExecuteEgressActionActivityImpl>())
+    }
 
     // Create a coroutine scope for background jobs
     val jobScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
