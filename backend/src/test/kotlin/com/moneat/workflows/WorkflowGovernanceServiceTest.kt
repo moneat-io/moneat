@@ -303,7 +303,10 @@ class WorkflowGovernanceServiceTest {
         assertNotNull(export)
         assertEquals(WorkflowExport.WORKFLOW_SCHEMA_VERSION, export.schemaVersion)
         assertTrue(export.terraform.contains("""resource "moneat_workflow" "exportable""""))
-        assertTrue(export.terraform.contains("jsonencode("))
+        // The graph is emitted as a plain JSON string attribute, not wrapped in jsonencode()
+        // (which would double-encode an already-serialized JSON string).
+        assertFalse(export.terraform.contains("jsonencode("))
+        assertTrue(export.terraform.contains("nodes"))
 
         val importRequest =
             WorkflowImportRequest(

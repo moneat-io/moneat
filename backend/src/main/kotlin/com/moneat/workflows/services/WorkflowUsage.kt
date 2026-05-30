@@ -87,14 +87,13 @@ object WorkflowUsage {
     fun recordRefused(
         organizationId: Int,
         workflowId: Int?,
-        runId: Int?,
         now: Instant
     ) {
-        // Refused executions have no run row, so run_id is null here; the unique
+        // Refused executions have no run row, so run_id is always null; the unique
         // (run_id, outcome) constraint treats nulls as distinct, so each refusal
         // is recorded rather than deduplicated.
         transaction {
-            insertUsageEvent(organizationId, workflowId, runId, period(now), OUTCOME_REFUSED)
+            insertUsageEvent(organizationId, workflowId, runId = null, period(now), OUTCOME_REFUSED)
         }
     }
 

@@ -892,7 +892,6 @@ class WorkflowService(
         WorkflowUsage.recordRefused(
             organizationId = event.organizationId,
             workflowId = workflowId,
-            runId = null,
             now = Clock.System.now()
         )
         logger.info { "Refused workflow $workflowId run: monthly execution quota exceeded" }
