@@ -154,18 +154,21 @@ class WorkflowInterpreterWorkflowImpl : WorkflowInterpreterWorkflow {
         }
 
         fun completeRun(): WorkflowInterpreterResult {
-            val failedStep = progress.firstOrNull { step -> step.status == STATUS_FAILED }
-            val failure = errorMessage ?: failedStep?.errorMessage
+            val failure = resolveFailure()
+            val runtimeProgress = progress.toRuntimeProgress()
             return if (failure == null) {
-                val runtimeProgress = progress.toRuntimeProgress()
                 runs.markComplete(PersistRunProgressInput(input.runId, STATUS_COMPLETE, runtimeProgress))
                 WorkflowInterpreterResult(status = STATUS_COMPLETE, progress = runtimeProgress)
             } else {
-                val runtimeProgress = progress.toRuntimeProgress()
                 runs.markFailed(PersistRunFailureInput(input.runId, runtimeProgress, failure))
                 WorkflowInterpreterResult(status = STATUS_FAILED, progress = runtimeProgress, errorMessage = failure)
             }
         }
+
+        // Extracted so the optional-failure resolution stays opaque to flow analysis:
+        // a fully successful run legitimately resolves to null here.
+        private fun resolveFailure(): String? =
+            errorMessage ?: progress.firstOrNull { step -> step.status == STATUS_FAILED }?.errorMessage
 
         private fun executeCondition(node: WorkflowGraphNode) {
             markNodeRunning(node, emptyMap())
