@@ -398,6 +398,84 @@ class SigmaImporterTest {
         assertTrue(rule.filter.contains("\\\""), rule.filter)
     }
 
+    @Test
+    fun `a literal wildcard in a contains-startswith-endswith value is rejected not widened`() {
+        // Faithfulness: a raw `*`/`?` inside a value modifier must not silently become a wildcard (a
+        // broader rule than authored), so it is rejected rather than emitted. Values are YAML-quoted so
+        // the glob reaches the importer (an unquoted leading `*` is a YAML alias, a different error).
+        listOf("CommandLine|contains" to "a*b", "Image|startswith" to "C:?x", "TargetFilename|endswith" to "x*.exe")
+            .forEach { (key, value) ->
+                val ex = assertFailsWith<SigmaImportException>("$key:$value should be rejected") {
+                    map(sel(key, "\"$value\""))
+                }
+                assertTrue(ex.message!!.contains("literal", ignoreCase = true), ex.message)
+            }
+    }
+
+    @Test
+    fun `an over-nested condition trips the per-node depth guard not just the size pre-filter`() {
+        // Stays under the coarse length/paren pre-filter (so this exercises the recursive depth() guard
+        // itself) yet nests past the depth cap; it must reject gracefully, never StackOverflowError.
+        val depth = 90
+        val nested = "(".repeat(depth) + "selection" + ")".repeat(depth)
+        val ex = assertFailsWith<SigmaImportException> {
+            map(
+                """
+                title: t
+                detection:
+                  selection:
+                    Image: x
+                  condition: $nested
+                """.trimIndent()
+            )
+        }
+        assertTrue(ex.message!!.contains("nested too deeply", ignoreCase = true), ex.message)
+    }
+
+    @Test
+    fun `a huge-paren condition is rejected by the coarse pre-filter before recursing`() {
+        // Thousands of parens would otherwise drive the recursive descent into a StackOverflowError; the
+        // pre-tokenize bound rejects it up front as an ordinary import error.
+        val depth = 5_000
+        val nested = "(".repeat(depth) + "selection" + ")".repeat(depth)
+        val ex = assertFailsWith<SigmaImportException> {
+            map(
+                """
+                title: t
+                detection:
+                  selection:
+                    Image: x
+                  condition: $nested
+                """.trimIndent()
+            )
+        }
+        assertTrue(ex.message!!.contains("too", ignoreCase = true), ex.message)
+    }
+
+    @Test
+    fun `an oversized document is rejected before parsing`() {
+        val huge = "title: t\ndescription: " + "x".repeat(600 * 1024) +
+            "\ndetection:\n  s:\n    Image: x\n  condition: s"
+        val ex = assertFailsWith<SigmaImportException> { map(huge) }
+        assertTrue(ex.message!!.contains("too large", ignoreCase = true), ex.message)
+    }
+
+    @Test
+    fun `a yaml billion-laughs alias bomb is bounded by the alias limit`() {
+        // Explicit alias cap (not the library default) keeps an alias-expansion bomb from exhausting memory.
+        val bomb = buildString {
+            append("title: t\n")
+            append("detection:\n  s:\n    Image: x\n  condition: s\n")
+            append("a: &a [\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\",\"x\"]\n")
+            for (i in 0 until 12) {
+                append("b$i: [")
+                append((0 until 10).joinToString(",") { "*a" })
+                append("]\n")
+            }
+        }
+        assertFailsWith<SigmaImportException> { map(bomb) }
+    }
+
     private fun sel(field: String, value: String): String =
         """
         title: t

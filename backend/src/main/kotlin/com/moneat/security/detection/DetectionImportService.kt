@@ -49,6 +49,11 @@ class DetectionImportService(
             importer.toRuleRequest(document)
         } catch (e: SigmaImportException) {
             return SigmaImportItemResult(index = index, error = e.message ?: "Could not map Sigma rule")
+        } catch (e: StackOverflowError) {
+            // Defence in depth: the compiler caps nesting and rejects oversized conditions before
+            // recursing, but a malformed/over-nested document must still degrade to a per-item error
+            // rather than an uncaught Error that fails the whole batch (500 / fork crash).
+            return SigmaImportItemResult(index = index, error = "Could not map Sigma rule: condition too complex")
         }
         return try {
             // forceDisabled = true so an imported rule can never arrive pre-enabled regardless of mapping.

@@ -44,6 +44,12 @@ private const val TEMPLATE_NOT_FOUND_MESSAGE = "Detection template not found"
 private const val NO_DOCUMENTS_MESSAGE = "No Sigma documents supplied"
 private const val MAX_SIGMA_DOCUMENTS = 200
 
+private const val BYTES_PER_MB = 1024 * 1024
+
+/** Aggregate cap on the combined size of all Sigma documents in one request (~8MB), bounding total work. */
+private const val MAX_SIGMA_TOTAL_MB = 8
+private const val MAX_SIGMA_TOTAL_CHARS = MAX_SIGMA_TOTAL_MB.toLong() * BYTES_PER_MB
+
 /**
  * OSS core detection-rule CRUD + preview. Reads require org MEMBER; mutations and preview require org
  * ADMIN via [OrgMembershipService.requireRole] — because a rule executes server-side ClickHouse
@@ -197,6 +203,12 @@ private suspend fun RoutingContext.handleSigmaImport(
         return call.respond(
             HttpStatusCode.BadRequest,
             ErrorResponse("At most $MAX_SIGMA_DOCUMENTS Sigma documents may be imported at once"),
+        )
+    }
+    if (documents.sumOf { it.length.toLong() } > MAX_SIGMA_TOTAL_CHARS) {
+        return call.respond(
+            HttpStatusCode.BadRequest,
+            ErrorResponse("Sigma import payload is too large (limit ${MAX_SIGMA_TOTAL_MB}MB)"),
         )
     }
     // Per-document mapping/compile failures are returned as item errors; only an unexpected (non-DSL)

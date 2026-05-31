@@ -169,6 +169,24 @@ class DetectionImportRoutesTest {
     }
 
     @Test
+    fun `a pathologically nested condition yields a clean per-item error not a 500`() = testApplication {
+        setupApp()
+        val nested = "(".repeat(20_000) + "s" + ")".repeat(20_000)
+        val evil = "title: nested\ndetection:\n  s:\n    Image: x\n  condition: $nested"
+        val response = client.post("/v1/security/detection/import/sigma") {
+            withAuth(token(adminUserId))
+            contentType(ContentType.Application.Json)
+            setBody(json.encodeToString(SigmaImportRequest(documents = listOf(sampleSigma, evil))))
+        }
+        // The whole batch still returns 200; the hostile document is a per-item error, the good one persists.
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = response.bodyAsText()
+        assertTrue(body.contains("\"created_count\":1"), body)
+        assertTrue(body.contains("\"error_count\":1"), body)
+        assertEquals(1, service.list(orgId).totalCount)
+    }
+
+    @Test
     fun `empty document list is a 400`() = testApplication {
         setupApp()
         val response = client.post("/v1/security/detection/import/sigma") {

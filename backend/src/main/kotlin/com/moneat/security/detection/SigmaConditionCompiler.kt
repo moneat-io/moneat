@@ -45,15 +45,46 @@ internal class SigmaConditionCompiler(
     private lateinit var tokens: List<String>
     private var pos: Int = 0
 
+    /** Current grouping/`not` nesting depth; guards the recursive descent against stack exhaustion. */
+    private var depth: Int = 0
+
     fun compile(condition: String): String {
+        boundRawCondition(condition)
         tokens = tokenize(condition)
         pos = 0
+        depth = 0
         if (tokens.isEmpty()) throw SigmaImportException("Sigma condition is empty")
         val node = parseOr()
         if (pos != tokens.size) {
             throw SigmaImportException("Sigma condition has trailing tokens after '${peekSafe()}'")
         }
         return node
+    }
+
+    /**
+     * Reject an absurdly large or deeply parenthesised raw condition before tokenizing, so a hostile
+     * `((((…))))` cannot drive the recursive-descent parser into a [StackOverflowError]. This is a coarse
+     * pre-filter; [enterDepth] is the precise per-node guard once we are parsing.
+     */
+    private fun boundRawCondition(condition: String) {
+        if (condition.length > MAX_CONDITION_LENGTH) {
+            throw SigmaImportException("Sigma condition is too long (limit $MAX_CONDITION_LENGTH characters)")
+        }
+        val openParens = condition.count { it == '(' }
+        if (openParens > MAX_PARENS) {
+            throw SigmaImportException("Sigma condition nests too many parentheses (limit $MAX_PARENS)")
+        }
+    }
+
+    /** Enters one recursion level, rejecting a condition nested past [MAX_DEPTH] instead of overflowing. */
+    private fun enterDepth() {
+        if (++depth > MAX_DEPTH) {
+            throw SigmaImportException("Sigma condition is nested too deeply (limit $MAX_DEPTH)")
+        }
+    }
+
+    private fun exitDepth() {
+        depth--
     }
 
     // ── Recursive-descent parser; each level returns a parser-syntax fragment. ──
@@ -78,7 +109,9 @@ internal class SigmaConditionCompiler(
 
     private fun parseNot(): String {
         if (matchKeyword("not")) {
+            enterDepth()
             val inner = parseNot()
+            exitDepth()
             return "NOT ($inner)"
         }
         return parseAtom()
@@ -88,7 +121,9 @@ internal class SigmaConditionCompiler(
         val token = peek() ?: throw SigmaImportException("Sigma condition ended unexpectedly")
         if (token == "(") {
             advance()
+            enterDepth()
             val inner = parseOr()
+            exitDepth()
             expect(")")
             return "($inner)"
         }
@@ -177,6 +212,14 @@ internal class SigmaConditionCompiler(
 
     companion object {
         private const val IDENT_PREVIEW = 60
+
+        /** Hard cap on grouping/`not` nesting; well past any real Sigma condition, far below a stack overflow. */
+        private const val MAX_DEPTH = 64
+
+        /** Coarse pre-tokenize bounds so a pathological condition is rejected before any recursion. */
+        private const val MAX_CONDITION_LENGTH = 4_096
+        private const val MAX_PARENS = 128
+
         private val STRUCTURAL = setOf("(", ")")
         private val KEYWORDS = setOf("and", "or", "not", "of")
 

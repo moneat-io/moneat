@@ -64,7 +64,7 @@ class SigmaImporter {
         val title: String,
     )
 
-    private val yaml: Yaml = Yaml(SafeConstructor(LoaderOptions().apply { isAllowDuplicateKeys = false }))
+    private val yaml: Yaml = Yaml(SafeConstructor(loaderOptions()))
 
     /**
      * Parse and map a single Sigma YAML document. Multi-document YAML is rejected here so the caller can
@@ -113,6 +113,10 @@ class SigmaImporter {
 
     private fun parseSingleDocument(sigmaYaml: String): Map<String, Any?> {
         if (sigmaYaml.isBlank()) throw SigmaImportException("Sigma document is empty")
+        if (sigmaYaml.length > MAX_DOCUMENT_CHARS) {
+            // Reject before handing to snakeyaml; bounds the aggregate request even at the document cap.
+            throw SigmaImportException("Sigma document is too large (limit ${MAX_DOCUMENT_KB}KB)")
+        }
         val docs = try {
             yaml.loadAll(sigmaYaml).toList()
         } catch (e: org.yaml.snakeyaml.error.YAMLException) {
@@ -250,14 +254,14 @@ class SigmaImporter {
     /**
      * One `field op value` fragment in [LogQueryParser][com.moneat.logs.services.LogQueryParser] syntax.
      * Equality uses a quoted value so separators bind as a literal; the contains/startswith/endswith
-     * modifiers use wildcards, which the parser turns into an `ILIKE` (values are still escaped by the
-     * compiler, so a value can never become SQL structure).
+     * modifiers append the modifier's own wildcard, which the parser turns into an `ILIKE` (values are
+     * still escaped by the compiler, so a value can never become SQL structure).
      */
     private fun fieldValueFragment(field: String, value: String, modifier: String?): String {
         val token = when (modifier) {
-            "contains" -> "*${wildcardEscape(value)}*"
-            "startswith" -> "${wildcardEscape(value)}*"
-            "endswith" -> "*${wildcardEscape(value)}"
+            "contains" -> "*${wildcardValue(value, modifier)}*"
+            "startswith" -> "${wildcardValue(value, modifier)}*"
+            "endswith" -> "*${wildcardValue(value, modifier)}"
             null -> null
             else -> throw SigmaImportException("Unsupported Sigma value modifier '${sanitize(modifier)}'")
         }
@@ -339,13 +343,22 @@ class SigmaImporter {
     }
 
     /**
-     * Escape a value used inside an unquoted wildcard token so only the modifier's own `*`/`?` act as
-     * wildcards: a literal `*`/`?` in the Sigma value is backslash-escaped (the parser unescapes it back
-     * to a literal), and the parser's other control chars cannot appear because they would already have
-     * been rejected by the field/condition handling that routes here.
+     * Prepare a `contains`/`startswith`/`endswith` value for an unquoted wildcard token. A raw `*` or `?`
+     * in such a value is **rejected**, not escaped or passed through: faithfully matching a Sigma literal
+     * `a*b` is ambiguous (Sigma treats it as a literal there, but emitting it would either widen the rule
+     * to an extra wildcard or silently drop the glob), so per the "never silently produce an over-broad
+     * rule" requirement we refuse it rather than guess. The backslash and quote are escaped so the value
+     * still cannot break out of the parser token; the modifier's own surrounding `*` stays a wildcard.
      */
-    private fun wildcardEscape(value: String): String =
-        value.replace("\\", "\\\\").replace("*", "\\*").replace("?", "\\?").replace("\"", "\\\"")
+    private fun wildcardValue(value: String, modifier: String): String {
+        if (value.contains('*') || value.contains('?')) {
+            throw SigmaImportException(
+                "Sigma '$modifier' value '${sanitize(value)}' contains a literal '*'/'?'; " +
+                    "this cannot be mapped without changing the rule's breadth"
+            )
+        }
+        return value.replace("\\", "\\\\").replace("\"", "\\\"")
+    }
 
     private fun joinAnd(fragments: List<String>): String = combine(fragments, "AND")
 
@@ -370,6 +383,32 @@ class SigmaImporter {
         private const val MSG_PREVIEW = 80
         private const val TOKEN_PREVIEW = 60
         private const val TAG_PREVIEW = 60
+
+        private const val BYTES_PER_KB = 1024
+
+        /** Per-document input cap (~512KB). Bounds parser work and the aggregate request body up front. */
+        private const val MAX_DOCUMENT_KB = 512
+        private const val MAX_DOCUMENT_CHARS = MAX_DOCUMENT_KB * BYTES_PER_KB
+
+        /** snakeyaml DoS limits pinned explicitly so safety does not depend on library defaults. */
+        private const val YAML_NESTING_DEPTH_LIMIT = 50
+        private const val YAML_MAX_ALIASES = 50
+        private const val YAML_CODEPOINT_LIMIT = MAX_DOCUMENT_CHARS
+
+        /**
+         * A [LoaderOptions] with the DoS limits set explicitly (rather than relying on snakeyaml's
+         * defaults, which can shift across upgrades): no duplicate keys, no recursive keys, a bounded
+         * alias count, a bounded nesting depth, and a tight per-document code-point limit. Combined with
+         * [SafeConstructor]/`UnTrustedTagInspector` this keeps untrusted Sigma YAML from exhausting CPU
+         * or memory.
+         */
+        private fun loaderOptions(): LoaderOptions = LoaderOptions().apply {
+            isAllowDuplicateKeys = false
+            allowRecursiveKeys = false
+            maxAliasesForCollections = YAML_MAX_ALIASES
+            nestingDepthLimit = YAML_NESTING_DEPTH_LIMIT
+            codePointLimit = YAML_CODEPOINT_LIMIT
+        }
 
         /** Field name charset: identifier chars plus the dot/dash Sigma uses; nothing the parser treats specially. */
         private val FIELD_NAME_REGEX = Regex("^[A-Za-z0-9_.-]{1,128}$")
