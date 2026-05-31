@@ -17,7 +17,7 @@
 package com.moneat.datadog.security
 
 import com.moneat.config.ClickHouseClient
-import com.moneat.config.ClickHouseQueryException
+import com.moneat.plugins.installErrorHandling
 import com.moneat.testsupport.RouteTestSupport
 import com.moneat.testsupport.RouteTestSupport.installJwtAuth
 import com.moneat.testsupport.RouteTestSupport.withAuth
@@ -28,9 +28,6 @@ import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
-import io.ktor.server.application.install
-import io.ktor.server.plugins.statuspages.StatusPages
-import io.ktor.server.response.respond
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
@@ -57,6 +54,7 @@ class SecurityQueryRoutesTest {
         private const val SUMMARY_PATH = "/v1/security/compliance/summary"
         private const val ORG_ID = 42
         private const val OTHER_ORG_ID = 99
+        private const val DEMO_ORG_ID = -1
         private const val TEST_DB = "testdb"
 
         private fun isCountQuery(sql: String): Boolean =
@@ -109,17 +107,14 @@ class SecurityQueryRoutesTest {
         stopTestKoin()
     }
 
-    private fun token(orgId: Int = ORG_ID): String =
+    private fun token(orgId: Int? = ORG_ID): String =
         RouteTestSupport.createToken(userId = 1, orgId = orgId)
 
     private fun Application.installRoutes() {
         installJwtAuth()
-        install(StatusPages) {
-            exception<ClickHouseQueryException> { call, cause ->
-                val message = if (cause.isTimeout) "Query timed out" else "Data unavailable"
-                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to message))
-            }
-        }
+        // Wire the production error handling (handleClickHouseQueryException) so the sanitization
+        // assertions exercise the real plugin rather than a local copy of the generic message.
+        installErrorHandling()
         routing { securityQueryRoutes() }
     }
 
@@ -412,5 +407,82 @@ class SecurityQueryRoutesTest {
         assertFalse(body.contains("secret_col"), "must not leak column names")
         assertFalse(body.contains("Code: 47"), "must not leak ClickHouse error codes")
         assertFalse(body.contains("security_events"), "must not leak table names")
+    }
+
+    // ──── Demo reseed: negative org id is cast for the UInt64 column ────
+
+    @Test
+    fun `insert path wraps a negative demo org id in toUInt64`() {
+        val fake = FakeClickHouse()
+        stubClickHouse(fake)
+        // Demo orgs carry a negative id (-1); the reseed inserts through this same path. A bare
+        // negative literal into the UInt64 organization_id column is rejected by ClickHouse, so the
+        // helpers must wrap it as toUInt64(...).
+        val batch = QueuedSecurityBatch(
+            organizationId = DEMO_ORG_ID,
+            batchType = "events",
+            events = listOf(
+                QueuedSecurityEventEntry(
+                    ruleId = "cws-001",
+                    ruleName = "Sensitive file accessed",
+                    ruleCategory = "file",
+                    severity = "critical",
+                    eventType = "file_open",
+                    processName = "bash",
+                    host = "prod-web-01",
+                    env = "production",
+                    timestampMs = 1_700_000_000_000L,
+                ),
+            ),
+        )
+        runBlocking { SecurityIngestionService.insertBatch(batch) }
+
+        val insert = fake.insertSql.first { it.contains("security_events") }
+        assertTrue(
+            insert.contains("toUInt64($DEMO_ORG_ID)"),
+            "negative demo org id must be wrapped in toUInt64: $insert",
+        )
+        assertFalse(
+            insert.contains("($DEMO_ORG_ID,"),
+            "must not emit a bare negative org literal into the UInt64 column: $insert",
+        )
+    }
+
+    // ──── Missing orgId claim returns the endpoint's empty shape ────
+
+    @Test
+    fun `events list returns empty shape when token has no org id`() = testApplication {
+        captureStub(mutableListOf())
+        application { installRoutes() }
+        val response = client.get(EVENTS_PATH) { withAuth(token(orgId = null)) }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals("""{"events":[],"totalCount":0}""", response.bodyAsText())
+    }
+
+    @Test
+    fun `dumps list returns empty shape when token has no org id`() = testApplication {
+        captureStub(mutableListOf())
+        application { installRoutes() }
+        val response = client.get(DUMPS_PATH) { withAuth(token(orgId = null)) }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals("""{"dumps":[],"totalCount":0}""", response.bodyAsText())
+    }
+
+    @Test
+    fun `compliance list returns empty shape when token has no org id`() = testApplication {
+        captureStub(mutableListOf())
+        application { installRoutes() }
+        val response = client.get(COMPLIANCE_PATH) { withAuth(token(orgId = null)) }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals("""{"findings":[],"totalCount":0}""", response.bodyAsText())
+    }
+
+    @Test
+    fun `compliance summary returns empty shape when token has no org id`() = testApplication {
+        captureStub(mutableListOf())
+        application { installRoutes() }
+        val response = client.get(SUMMARY_PATH) { withAuth(token(orgId = null)) }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals("""{"summary":[]}""", response.bodyAsText())
     }
 }
