@@ -16,6 +16,8 @@
 
 package com.moneat.security.vulnerabilities
 
+import com.moneat.datadog.models.DdSbomPackage
+import com.moneat.datadog.models.DdSbomPayload
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -123,6 +125,65 @@ class SbomParserTest {
     }
 
     @Test
+    fun `parses agent payload and drops incomplete package rows`() {
+        val parsed = SbomParser.parseAgentPayload(
+            DdSbomPayload(
+                host = "prod-web",
+                imageName = "registry/checkout:latest",
+                packages = listOf(
+                    DdSbomPackage(name = "requests", version = "2.32.0", type = "python"),
+                    DdSbomPackage(name = "ignored", version = "", type = "npm"),
+                ),
+            )
+        )
+
+        assertEquals(SbomFormat.AGENT, parsed.format)
+        assertEquals("registry/checkout:latest", parsed.targetName)
+        assertEquals("requests", parsed.packages.single().name)
+        assertEquals("pypi", parsed.packages.single().ecosystem)
+    }
+
+    @Test
+    fun `parses SPDX licenses while dropping assertions and duplicates`() {
+        val parsed = SbomParser.parse(
+            """
+            {
+              "spdxVersion": "SPDX-2.3",
+              "name": "worker-image",
+              "packages": [
+                {
+                  "SPDXID": "SPDXRef-Package-requests",
+                  "name": "requests",
+                  "versionInfo": "2.32.0",
+                  "supplier": "Organization: Python Packaging Authority",
+                  "licenseConcluded": "NOASSERTION",
+                  "licenseDeclared": "Apache-2.0",
+                  "externalRefs": [
+                    {
+                      "referenceCategory": "PACKAGE-MANAGER",
+                      "referenceType": "purl",
+                      "referenceLocator": "pkg:pypi/requests@2.32.0"
+                    }
+                  ]
+                },
+                {
+                  "SPDXID": "SPDXRef-Package-urllib3",
+                  "name": "urllib3",
+                  "versionInfo": "2.2.1",
+                  "licenseConcluded": "MIT",
+                  "licenseDeclared": "MIT"
+                }
+              ]
+            }
+            """.trimIndent().encodeToByteArray()
+        )
+
+        assertEquals(listOf("Apache-2.0"), parsed.packages.first().licenses)
+        assertEquals("Python Packaging Authority", parsed.packages.first().supplier)
+        assertEquals(listOf("MIT"), parsed.packages.last().licenses)
+    }
+
+    @Test
     fun `rejects malformed SBOMs safely`() {
         val error = assertFailsWith<SbomValidationException> {
             SbomParser.parse("""{"components": []}""".encodeToByteArray())
@@ -138,5 +199,35 @@ class SbomParserTest {
 
         assertEquals("Malformed SBOM JSON", error.message)
         assertNotNull(error.cause)
+    }
+
+    @Test
+    fun `rejects empty and non-object SBOM payloads`() {
+        assertEquals(
+            "SBOM payload is empty",
+            assertFailsWith<SbomValidationException> {
+                SbomParser.parse(ByteArray(0))
+            }.message,
+        )
+        assertEquals(
+            "SBOM JSON root must be an object",
+            assertFailsWith<SbomValidationException> {
+                SbomParser.parse("""["not-an-object"]""".encodeToByteArray())
+            }.message,
+        )
+    }
+
+    @Test
+    fun `rejects agent payloads without complete packages`() {
+        val error = assertFailsWith<SbomValidationException> {
+            SbomParser.parseAgentPayload(
+                DdSbomPayload(
+                    host = "prod-web",
+                    packages = listOf(DdSbomPackage(name = "requests", version = "")),
+                )
+            )
+        }
+
+        assertEquals("SBOM contains no packages with name and version", error.message)
     }
 }
