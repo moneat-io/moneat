@@ -163,3 +163,26 @@ data class DetectionPreviewResponse(
     val samples: List<DetectionMatchSample>,
     @SerialName("window_seconds") val windowSeconds: Int,
 )
+
+/** Body of a Sigma import: one or more raw Sigma YAML documents to map + create as disabled rules. */
+@Serializable
+data class SigmaImportRequest(
+    /** Each entry is a single Sigma YAML document (split multi-doc YAML on `---` before sending). */
+    val documents: List<String> = emptyList(),
+)
+
+/** A single imported rule's outcome: the created rule, or a schema-free reason it could not be mapped. */
+@Serializable
+data class SigmaImportItemResult(
+    val index: Int,
+    val title: String? = null,
+    @SerialName("rule_id") val ruleId: Int? = null,
+    val error: String? = null,
+)
+
+@Serializable
+data class SigmaImportResponse(
+    @SerialName("created_count") val createdCount: Int,
+    @SerialName("error_count") val errorCount: Int,
+    val results: List<SigmaImportItemResult>,
+)

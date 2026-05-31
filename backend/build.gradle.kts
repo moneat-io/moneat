@@ -146,6 +146,9 @@ dependencies {
     // JSON path query for uptime monitoring
     implementation(libs.jsonpath)
 
+    // YAML parsing for Sigma detection-rule import
+    implementation(libs.snakeyaml)
+
     // Environment variables
     implementation(libs.dotenv.kotlin)
 

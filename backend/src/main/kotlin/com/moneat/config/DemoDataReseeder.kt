@@ -147,6 +147,7 @@ private suspend fun runStaleDemoReseed(snap: ReseedSnapshot) {
     maybeReseedSbom(snap.freshSbomCount)
     maybeReseedDashboards(snap.demoDashboardCount)
     maybeReseedSecurity(snap.freshSecurityCount)
+    seedDemoDetectionRules()
     maybeReseedSynthetics(snap.freshSyntheticsCount)
 
     logger.info { "Demo data reseed complete" }
