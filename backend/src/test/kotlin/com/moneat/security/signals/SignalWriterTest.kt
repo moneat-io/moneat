@@ -30,6 +30,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 class SignalWriterTest {
     companion object {
@@ -89,6 +91,33 @@ class SignalWriterTest {
         }
         // No new signal was created.
         transaction { assertEquals(1, SecuritySignals.selectAll().count()) }
+    }
+
+    @Test
+    fun `an out-of-order fold never moves last_seen back and lowers first_seen to the earliest`() {
+        // Agent events can arrive out of order (Redis queue, multiple workers, producer retries).
+        val baseMs = 1_700_000_000_000
+        val earlierMs = baseMs - 60_000
+
+        val first = SignalWriter.upsert(orgId, spec(severity = SignalSeverity.MEDIUM, occurredAtMs = baseMs))
+        val (firstSeenAfterCreate, lastSeenAfterCreate) = transaction {
+            val row = SecuritySignals.selectAll().where { SecuritySignals.id eq first.signalId }.single()
+            row[SecuritySignals.firstSeen] to row[SecuritySignals.lastSeen]
+        }
+
+        // An older occurrence folds into the still-open signal.
+        SignalWriter.upsert(orgId, spec(severity = SignalSeverity.MEDIUM, occurredAtMs = earlierMs))
+
+        transaction {
+            val row = SecuritySignals.selectAll().where { SecuritySignals.id eq first.signalId }.single()
+            val firstSeen = row[SecuritySignals.firstSeen]
+            val lastSeen = row[SecuritySignals.lastSeen]
+            // last_seen is the list sort key and time-filter bound: it must not regress.
+            assertEquals(lastSeenAfterCreate, lastSeen)
+            // first_seen lowers to reflect the earliest occurrence seen.
+            assertEquals(Instant.fromEpochMilliseconds(earlierMs), firstSeen)
+            assertTrue(firstSeen < firstSeenAfterCreate)
+        }
     }
 
     @Test
@@ -158,7 +187,7 @@ class SignalWriterTest {
         }
     }
 
-    private fun spec(severity: SignalSeverity) = SignalSpec(
+    private fun spec(severity: SignalSeverity, occurredAtMs: Long = 1_700_000_000_000) = SignalSpec(
         source = SignalSource.AGENT_RUNTIME,
         ruleId = "cws-1",
         ruleName = "Suspicious exec",
@@ -167,7 +196,7 @@ class SignalWriterTest {
         entities = mapOf("host" to "web-01", "process" to "bash"),
         evidenceType = "clickhouse_query",
         evidenceReference = "table=security_events dedup=cws-1|web-01|bash",
-        occurredAtMs = 1_700_000_000_000
+        occurredAtMs = occurredAtMs
     )
 
     private fun seedOrg(name: String): Int =

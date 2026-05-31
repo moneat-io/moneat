@@ -102,17 +102,24 @@ object SignalWriter {
                     organizationId = row[SecuritySignals.organizationId],
                     severity = SignalSeverity.fromWire(row[SecuritySignals.severity]),
                     sampleCount = row[SecuritySignals.sampleCount],
+                    firstSeen = row[SecuritySignals.firstSeen],
+                    lastSeen = row[SecuritySignals.lastSeen],
                 )
             }
 
     private fun foldIntoExisting(existing: OpenSignalRow, spec: SignalSpec): SignalOutcome {
         val now = Clock.System.now()
+        val occurred = occurrenceTime(spec.occurredAtMs, now)
         val escalated = spec.severity.rank > existing.severity.rank
         val newSeverity = if (escalated) spec.severity else existing.severity
         SecuritySignals.update({ SecuritySignals.id eq existing.id }) {
             it[sampleCount] = existing.sampleCount + 1
             it[severity] = newSeverity.wire
-            it[lastSeen] = occurrenceTime(spec.occurredAtMs, now)
+            // Agent events can arrive out of order, so clamp the window monotonically: never move
+            // last_seen backwards (it is the list sort key and time-filter bound) and lower first_seen
+            // only when an earlier occurrence folds in.
+            it[firstSeen] = minOf(existing.firstSeen, occurred)
+            it[lastSeen] = maxOf(existing.lastSeen, occurred)
             it[updatedAt] = now
         }
         insertEvidence(existing.id, spec, now)
@@ -188,5 +195,7 @@ object SignalWriter {
         val organizationId: Int,
         val severity: SignalSeverity,
         val sampleCount: Int,
+        val firstSeen: kotlin.time.Instant,
+        val lastSeen: kotlin.time.Instant,
     )
 }
