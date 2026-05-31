@@ -123,32 +123,32 @@ private fun normalizeTagPrefix(tag: String): String =
 private val TACTIC_NAMES = setOf(
     "reconnaissance",
     "resource-development",
-    "initial-access",
+    TACTIC_INITIAL_ACCESS,
     "execution",
     "persistence",
-    "privilege-escalation",
-    "defense-evasion",
-    "credential-access",
+    TACTIC_PRIVILEGE_ESCALATION,
+    TACTIC_DEFENSE_EVASION,
+    TACTIC_CREDENTIAL_ACCESS,
     "discovery",
     "lateral-movement",
     "collection",
-    "command-and-control",
+    TACTIC_COMMAND_AND_CONTROL,
     "exfiltration",
     "impact",
 )
 
 private val TACTIC_IDS = mapOf(
-    "TA0001" to "initial-access",
+    "TA0001" to TACTIC_INITIAL_ACCESS,
     "TA0002" to "execution",
     "TA0003" to "persistence",
-    "TA0004" to "privilege-escalation",
-    "TA0005" to "defense-evasion",
-    "TA0006" to "credential-access",
+    "TA0004" to TACTIC_PRIVILEGE_ESCALATION,
+    "TA0005" to TACTIC_DEFENSE_EVASION,
+    "TA0006" to TACTIC_CREDENTIAL_ACCESS,
     "TA0007" to "discovery",
     "TA0008" to "lateral-movement",
     "TA0009" to "collection",
     "TA0010" to "exfiltration",
-    "TA0011" to "command-and-control",
+    "TA0011" to TACTIC_COMMAND_AND_CONTROL,
     "TA0040" to "impact",
     "TA0042" to "resource-development",
     "TA0043" to "reconnaissance",
@@ -156,9 +156,15 @@ private val TACTIC_IDS = mapOf(
 
 private val TECHNIQUE_TACTICS = mapOf(
     "T1059" to setOf("execution"),
-    "T1071" to setOf("command-and-control"),
-    "T1078" to setOf("defense-evasion", "initial-access", "persistence", "privilege-escalation"),
-    "T1110" to setOf("credential-access"),
-    "T1548" to setOf("defense-evasion", "privilege-escalation"),
-    "T1552" to setOf("credential-access"),
+    "T1071" to setOf(TACTIC_COMMAND_AND_CONTROL),
+    "T1078" to setOf(TACTIC_DEFENSE_EVASION, TACTIC_INITIAL_ACCESS, "persistence", TACTIC_PRIVILEGE_ESCALATION),
+    "T1110" to setOf(TACTIC_CREDENTIAL_ACCESS),
+    "T1548" to setOf(TACTIC_DEFENSE_EVASION, TACTIC_PRIVILEGE_ESCALATION),
+    "T1552" to setOf(TACTIC_CREDENTIAL_ACCESS),
 )
+
+private const val TACTIC_INITIAL_ACCESS = "initial-access"
+private const val TACTIC_PRIVILEGE_ESCALATION = "privilege-escalation"
+private const val TACTIC_DEFENSE_EVASION = "defense-evasion"
+private const val TACTIC_CREDENTIAL_ACCESS = "credential-access"
+private const val TACTIC_COMMAND_AND_CONTROL = "command-and-control"

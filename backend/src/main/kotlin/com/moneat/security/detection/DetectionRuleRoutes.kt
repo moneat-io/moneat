@@ -42,6 +42,7 @@ private const val MISSING_ORG_MESSAGE = "No active organization"
 private const val FORBIDDEN_MESSAGE = "Insufficient permissions"
 private const val TEMPLATE_NOT_FOUND_MESSAGE = "Detection template not found"
 private const val NO_DOCUMENTS_MESSAGE = "No Sigma documents supplied"
+private const val AUTH_JWT_PROVIDER = "auth-jwt"
 private const val MAX_SIGMA_DOCUMENTS = 200
 
 private const val BYTES_PER_MB = 1024 * 1024
@@ -64,7 +65,7 @@ fun Route.detectionRuleRoutes(
     coverageService: MitreCoverageService = MitreCoverageService(),
 ) {
     route("/v1/security/detection/rules") {
-        authenticate("auth-jwt") {
+        authenticate(AUTH_JWT_PROVIDER) {
             get { handleList(service) }
             get(RULE_ID_ROUTE) { handleGet(service) }
             post { handleCreate(service, membershipService) }
@@ -80,7 +81,7 @@ fun Route.detectionRuleRoutes(
 
 private fun Route.detectionCoverageRoutes(coverageService: MitreCoverageService) {
     route("/v1/security/detection/coverage") {
-        authenticate("auth-jwt") {
+        authenticate(AUTH_JWT_PROVIDER) {
             get { handleCoverage(coverageService) }
         }
     }
@@ -96,7 +97,7 @@ private fun Route.detectionImportRoutes(
     membershipService: OrgMembershipService,
 ) {
     route("/v1/security/detection/import/sigma") {
-        authenticate("auth-jwt") {
+        authenticate(AUTH_JWT_PROVIDER) {
             post { handleSigmaImport(importService, membershipService) }
         }
     }
@@ -111,7 +112,7 @@ private fun Route.detectionTemplateRoutes(
     membershipService: OrgMembershipService,
 ) {
     route("/v1/security/detection/templates") {
-        authenticate("auth-jwt") {
+        authenticate(AUTH_JWT_PROVIDER) {
             get { handleTemplateList(importService) }
             post("/{templateId}/install") { handleTemplateInstall(importService, membershipService) }
         }

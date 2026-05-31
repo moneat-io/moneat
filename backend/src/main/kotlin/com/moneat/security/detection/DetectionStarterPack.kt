@@ -66,6 +66,7 @@ data class StarterTemplate(
  */
 object DetectionStarterPack {
 
+    private const val STARTER_PACK_TAG = "starter-pack"
     private const val WINDOW_5M = 300
     private const val WINDOW_10M = 600
     private const val WINDOW_15M = 900
@@ -110,7 +111,7 @@ object DetectionStarterPack {
             signalTitle = "Failed-auth brute force on {host}",
             signalMessage = "{host} saw repeated failed authentications in the last 5 minutes.",
             enabled = false,
-            tags = listOf("starter-pack", "mitre:T1110", "category:authentication"),
+            tags = listOf(STARTER_PACK_TAG, "mitre:T1110", "category:authentication"),
         ),
     )
 
@@ -129,7 +130,7 @@ object DetectionStarterPack {
             signalTitle = "New login source {host}",
             signalMessage = "First-seen successful login for {host} / {tags['user']}.",
             enabled = false,
-            tags = listOf("starter-pack", "mitre:T1078", "category:authentication"),
+            tags = listOf(STARTER_PACK_TAG, "mitre:T1078", "category:authentication"),
         ),
     )
 
@@ -148,7 +149,7 @@ object DetectionStarterPack {
             signalTitle = "Privilege-escalation spike on {host}",
             signalMessage = "{host} had an unusual volume of privilege-escalation events.",
             enabled = false,
-            tags = listOf("starter-pack", "mitre:T1548", "category:privilege_escalation"),
+            tags = listOf(STARTER_PACK_TAG, "mitre:T1548", "category:privilege_escalation"),
         ),
     )
 
@@ -168,7 +169,7 @@ object DetectionStarterPack {
             signalTitle = "Suspicious process on {host}",
             signalMessage = "{host} executed a process matching a known download/exec pattern.",
             enabled = false,
-            tags = listOf("starter-pack", "mitre:T1059", "category:execution"),
+            tags = listOf(STARTER_PACK_TAG, "mitre:T1059", "category:execution"),
         ),
     )
 
@@ -188,7 +189,7 @@ object DetectionStarterPack {
             signalTitle = "Sensitive file access on {host}",
             signalMessage = "{host} accessed credential or secret material.",
             enabled = false,
-            tags = listOf("starter-pack", "mitre:T1552", "category:credential_access"),
+            tags = listOf(STARTER_PACK_TAG, "mitre:T1552", "category:credential_access"),
         ),
     )
 
@@ -209,7 +210,7 @@ object DetectionStarterPack {
             signalTitle = "Suspicious outbound from {host}",
             signalMessage = "{host} made repeated connections to a suspicious destination pattern.",
             enabled = false,
-            tags = listOf("starter-pack", "mitre:T1071", "category:command_and_control"),
+            tags = listOf(STARTER_PACK_TAG, "mitre:T1071", "category:command_and_control"),
         ),
     )
 }

@@ -145,6 +145,8 @@ class RuleQueryCompiler(
         private const val DEFAULT_MAX_ROWS_TO_READ = "50000000"
         private const val DEFAULT_MAX_RESULT_ROWS = "10000"
         private const val DEFAULT_MAX_BYTES_TO_READ = "10000000000"
+        private const val SELECT_CLAUSE = "SELECT "
+        private const val WHERE_CLAUSE = " WHERE "
     }
 
     private val parser = LogQueryParser()
@@ -187,11 +189,11 @@ class RuleQueryCompiler(
         }
 
         val sql = buildString {
-            append("SELECT ")
+            append(SELECT_CLAUSE)
             if (selectItems.isNotBlank()) append("$selectItems, ")
             append("count() AS match_count")
             append(" FROM `${clickhouseDb()}`.logs")
-            append(" WHERE ").append(whereClause)
+            append(WHERE_CLAUSE).append(whereClause)
             if (groupByClause.isNotBlank()) append(" GROUP BY ").append(groupByClause)
             if (having.isNotBlank()) append(" ").append(having)
             append(" ").append(settingsClause())
@@ -258,11 +260,11 @@ class RuleQueryCompiler(
             "($current) c INNER JOIN ($baseline) b USING (${aliases.joinToString(", ")})"
         }
         val sql = buildString {
-            append("SELECT ")
+            append(SELECT_CLAUSE)
             append(projectedGroups)
             append("c.current_count AS match_count FROM ")
             append(join)
-            append(" WHERE c.current_count >= ${rule.thresholdCount} AND b.baseline_avg > 0")
+            append(WHERE_CLAUSE).append("c.current_count >= ${rule.thresholdCount} AND b.baseline_avg > 0")
             append(" AND c.current_count > b.baseline_avg + greatest(b.baseline_stddev * ")
             append(ANOMALY_STDDEV_MULTIPLIER)
             append(", 1)")
@@ -295,11 +297,11 @@ class RuleQueryCompiler(
         val selectItems = groupSelectItems(groupExprs, aliases)
         val groupByClause = groupByClause(aliases)
         return buildString {
-            append("SELECT ")
+            append(SELECT_CLAUSE)
             if (selectItems.isNotBlank()) append("$selectItems, ")
             append("sumMerge(event_count_state) AS current_count")
             append(" FROM `${clickhouseDb()}`.security_log_rate_rollup_5m")
-            append(" WHERE ").append(whereClause)
+            append(WHERE_CLAUSE).append(whereClause)
             append(groupByClause)
         }
     }
@@ -319,14 +321,14 @@ class RuleQueryCompiler(
             " GROUP BY bucket_start, $aliasesCsv"
         }
         val inner = buildString {
-            append("SELECT ")
+            append(SELECT_CLAUSE)
             if (selectItems.isNotBlank()) append("$selectItems, ")
             append("bucket_start, sumMerge(event_count_state) AS bucket_count")
             append(" FROM `${clickhouseDb()}`.security_log_rate_rollup_5m")
-            append(" WHERE ").append(whereClause)
+            append(WHERE_CLAUSE).append(whereClause)
             append(innerGroupBy)
         }
-        return "SELECT ${outerSelect}avg(bucket_count) AS baseline_avg, " +
+        return SELECT_CLAUSE + outerSelect + "avg(bucket_count) AS baseline_avg, " +
             "stddevPop(bucket_count) AS baseline_stddev FROM ($inner)$outerGroupBy"
     }
 
@@ -442,19 +444,19 @@ class RuleQueryCompiler(
     }
 
     private fun validateAnomalyFilterNode(node: LogQueryParser.QueryNode) {
+        node.binaryChildren()?.let { (left, right) ->
+            validateAnomalyFilterNode(left)
+            validateAnomalyFilterNode(right)
+            return
+        }
         when (node) {
             is LogQueryParser.QueryNode.FieldNode -> requireAnomalyField(node.field)
             is LogQueryParser.QueryNode.RangeNode -> requireAnomalyField(node.field)
             is LogQueryParser.QueryNode.ComparisonNode -> requireAnomalyField(node.field)
             is LogQueryParser.QueryNode.ExistsNode -> requireAnomalyField(node.field)
-            is LogQueryParser.QueryNode.AndNode -> {
-                validateAnomalyFilterNode(node.left)
-                validateAnomalyFilterNode(node.right)
-            }
-            is LogQueryParser.QueryNode.OrNode -> {
-                validateAnomalyFilterNode(node.left)
-                validateAnomalyFilterNode(node.right)
-            }
+            is LogQueryParser.QueryNode.AndNode,
+            is LogQueryParser.QueryNode.OrNode,
+            -> Unit
             is LogQueryParser.QueryNode.NotNode -> validateAnomalyFilterNode(node.node)
             is LogQueryParser.QueryNode.FullTextNode,
             is LogQueryParser.QueryNode.TagExistsNode,
@@ -462,6 +464,13 @@ class RuleQueryCompiler(
             -> throw DetectionCompileException("Rate anomaly filters may use only rollup fields")
         }
     }
+
+    private fun LogQueryParser.QueryNode.binaryChildren(): Pair<LogQueryParser.QueryNode, LogQueryParser.QueryNode>? =
+        when (this) {
+            is LogQueryParser.QueryNode.AndNode -> left to right
+            is LogQueryParser.QueryNode.OrNode -> left to right
+            else -> null
+        }
 
     private fun requireAnomalyField(field: String) {
         val normalized = when (field.lowercase()) {

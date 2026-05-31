@@ -127,11 +127,9 @@ internal class SigmaConditionCompiler(
             expect(")")
             return "($inner)"
         }
-        if (token == "1" || token.equals("all", ignoreCase = true)) {
+        if ((token == "1" || token.lowercase() == "all") && peek(1)?.lowercase() == "of") {
             // Could be a quantifier ("1 of …" / "all of …"); only treat as one when 'of' follows.
-            if (peek(1)?.equals("of", ignoreCase = true) == true) {
-                return parseQuantifier(token)
-            }
+            return parseQuantifier(token)
         }
         return resolveIdentifier(consumeIdentifier())
     }
@@ -140,7 +138,7 @@ internal class SigmaConditionCompiler(
         advance() // quantifier ('1' or 'all')
         expectKeyword("of")
         val target = consumeIdentifier()
-        val matched = if (target.equals("them", ignoreCase = true)) {
+        val matched = if (target.lowercase() == "them") {
             selections.keys.toList()
         } else {
             resolvePattern(target)
