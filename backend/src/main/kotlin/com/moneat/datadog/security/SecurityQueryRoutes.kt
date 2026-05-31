@@ -59,7 +59,7 @@ fun Route.securityQueryRoutes() {
     }
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleListEvents() {
-    val orgId = extractOrgId() ?: return
+    val orgId = extractOrgId() ?: return respondEmptyList("events")
     val limit = paramLimit()
     val offset = paramOffset()
     val db = ClickHouseClient.getDatabase()
@@ -114,7 +114,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListEvents() {
     )
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleEventDetail() {
-    val orgId = extractOrgId() ?: return
+    val orgId = extractOrgId() ?: return call.respond(
+        HttpStatusCode.NotFound, mapOf("error" to "Event not found")
+    )
     val eventId = call.parameters["eventId"] ?: return call.respond(
         HttpStatusCode.BadRequest, mapOf("error" to "Missing eventId")
     )
@@ -154,7 +156,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleEventDetail() {
     }
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleListDumps() {
-    val orgId = extractOrgId() ?: return
+    val orgId = extractOrgId() ?: return respondEmptyList("dumps")
     val limit = paramLimit()
     val offset = paramOffset()
     val db = ClickHouseClient.getDatabase()
@@ -200,7 +202,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListDumps() {
     )
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleListFindings() {
-    val orgId = extractOrgId() ?: return
+    val orgId = extractOrgId() ?: return respondEmptyList("findings")
     val limit = paramLimit()
     val offset = paramOffset()
     val db = ClickHouseClient.getDatabase()
@@ -249,7 +251,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListFindings() {
     )
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleComplianceSummary() {
-    val orgId = extractOrgId() ?: return
+    val orgId = extractOrgId() ?: return respondEmptySummary()
     val db = ClickHouseClient.getDatabase()
     val where = ClickHouseQueryUtils.orgIdClause(orgId.toLong())
 
@@ -274,9 +276,29 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleComplianceSummar
     )
 }
 
+/**
+ * Tenant isolation is enforced by the signed `orgId` JWT claim combined with [ClickHouseQueryUtils.orgIdClause]
+ * on every query, so there is no cross-tenant read path and no per-request membership lookup is needed here
+ * (matching other claim-scoped read routes such as InfraRoutes and MonitorRoutes).
+ */
 private fun io.ktor.server.routing.RoutingContext.extractOrgId(): Int? {
     val principal = call.principal<JWTPrincipal>()
     return principal?.payload?.getClaim("orgId")?.asInt()
+}
+
+/** Empty list-with-count payload returned when the caller token carries no `orgId` claim. */
+private suspend fun io.ktor.server.routing.RoutingContext.respondEmptyList(arrayKey: String) {
+    call.respond(
+        buildJsonObject {
+            putJsonArray(arrayKey) {}
+            put("totalCount", 0)
+        }
+    )
+}
+
+/** Empty summary payload returned when the caller token carries no `orgId` claim. */
+private suspend fun io.ktor.server.routing.RoutingContext.respondEmptySummary() {
+    call.respond(buildJsonObject { putJsonArray("summary") {} })
 }
 
 private fun io.ktor.server.routing.RoutingContext.paramLimit(): Int =
