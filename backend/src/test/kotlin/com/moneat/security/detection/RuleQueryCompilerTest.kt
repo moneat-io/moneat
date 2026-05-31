@@ -295,6 +295,21 @@ class RuleQueryCompilerTest {
     }
 
     @Test
+    fun `rate anomaly rules allow boolean OR over rollup fields`() {
+        val compiled = compiler.compile(
+            orgId = 42,
+            input(
+                filter = "service:api OR level:error",
+                groupBy = listOf("service"),
+                type = DetectionRuleType.RATE_ANOMALY,
+                thresholdCount = 50,
+            ),
+        )
+        assertTrue(compiled.sql.contains(" OR "), compiled.sql)
+        assertTrue(compiled.sql.contains("organization_id = 42"), compiled.sql)
+    }
+
+    @Test
     fun `rate anomaly rules reject fields outside the rollup`() {
         val ex = assertFailsWith<DetectionCompileException> {
             compiler.compile(

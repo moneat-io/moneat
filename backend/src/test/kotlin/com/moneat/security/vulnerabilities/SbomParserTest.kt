@@ -84,6 +84,45 @@ class SbomParserTest {
     }
 
     @Test
+    fun `SPDX purl selection skips unrelated external refs`() {
+        val parsed = SbomParser.parse(
+            """
+            {
+              "spdxVersion": "SPDX-2.3",
+              "name": "worker-image",
+              "packages": [
+                {
+                  "SPDXID": "SPDXRef-Package-minimist",
+                  "name": "minimist",
+                  "versionInfo": "1.2.5",
+                  "externalRefs": [
+                    {
+                      "referenceCategory": "OTHER",
+                      "referenceType": "purl",
+                      "referenceLocator": "pkg:generic/ignored@1.2.5"
+                    },
+                    {
+                      "referenceCategory": "PACKAGE-MANAGER",
+                      "referenceType": "cpe23Type",
+                      "referenceLocator": "cpe:2.3:a:minimist:minimist:1.2.5:*:*:*:*:*:*:*"
+                    },
+                    {
+                      "referenceCategory": "PACKAGE-MANAGER",
+                      "referenceType": "purl",
+                      "referenceLocator": "pkg:npm/minimist@1.2.5"
+                    }
+                  ]
+                }
+              ]
+            }
+            """.trimIndent().encodeToByteArray()
+        )
+
+        assertEquals("pkg:npm/minimist@1.2.5", parsed.packages.single().purl)
+        assertEquals("npm", parsed.packages.single().ecosystem)
+    }
+
+    @Test
     fun `rejects malformed SBOMs safely`() {
         val error = assertFailsWith<SbomValidationException> {
             SbomParser.parse("""{"components": []}""".encodeToByteArray())
