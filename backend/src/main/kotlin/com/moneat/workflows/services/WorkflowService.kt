@@ -21,9 +21,8 @@ import com.moneat.alerts.models.AlertSeverity
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertStatus
 import com.moneat.config.EnvConfig
-import com.moneat.datadog.security.QueuedSecurityBatch
-import com.moneat.datadog.security.QueuedSecurityEventEntry
 import com.moneat.monitoring.OperationalMetrics
+import com.moneat.security.signals.SignalOutcome
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.SlackService
@@ -723,30 +722,20 @@ class WorkflowService(
         )
     }
 
-    suspend fun publishSecuritySignals(batch: QueuedSecurityBatch) {
-        batch.events.forEach { event ->
-            publishTrigger(
-                WorkflowTriggerEvent(
-                    triggerName = SECURITY_SIGNAL_TRIGGER,
-                    organizationId = batch.organizationId,
-                    scope = securityEventScope(batch.organizationId, event)
-                )
-            )
-        }
-        batch.findings
-            .filter { finding -> finding.status != "passed" }
-            .forEach { finding ->
+    /**
+     * Fires the `security.signal` workflow trigger once per **newly created or escalated** signal,
+     * not once per raw agent event — eliminating the previous per-event fan-out. Repeats that merely
+     * fold into an existing open signal (`Updated`) intentionally do not re-trigger.
+     */
+    suspend fun publishSecuritySignals(organizationId: Int, signals: List<SignalOutcome>) {
+        signals
+            .filter { it is SignalOutcome.Created || it is SignalOutcome.Escalated }
+            .forEach { signal ->
                 publishTrigger(
                     WorkflowTriggerEvent(
                         triggerName = SECURITY_SIGNAL_TRIGGER,
-                        organizationId = batch.organizationId,
-                        scope = mapOf(
-                            SECURITY_RULE_ID_REFERENCE to finding.ruleId,
-                            SECURITY_RULE_NAME_REFERENCE to finding.ruleName,
-                            SECURITY_SEVERITY_REFERENCE to finding.status,
-                            SECURITY_RESOURCE_REFERENCE to finding.resourceName.ifBlank { finding.resourceId },
-                            ORGANIZATION_ID_REFERENCE to batch.organizationId.toString()
-                        ).typedWorkflowScope()
+                        organizationId = organizationId,
+                        scope = securitySignalScope(organizationId, signal)
                     )
                 )
             }
@@ -1231,17 +1220,23 @@ class WorkflowService(
             ORGANIZATION_ID_REFERENCE to organizationId.toString()
         ).typedWorkflowScope()
 
-    private fun securityEventScope(
+    private fun securitySignalScope(
         organizationId: Int,
-        event: QueuedSecurityEventEntry
+        signal: SignalOutcome
     ): Map<String, JsonElement> =
         mapOf(
-            SECURITY_RULE_ID_REFERENCE to event.ruleId,
-            SECURITY_RULE_NAME_REFERENCE to event.ruleName,
-            SECURITY_SEVERITY_REFERENCE to event.severity,
-            SECURITY_RESOURCE_REFERENCE to event.filePath.ifBlank { event.processName.ifBlank { event.host } },
+            SECURITY_RULE_ID_REFERENCE to signal.ruleId,
+            SECURITY_RULE_NAME_REFERENCE to signal.ruleName,
+            SECURITY_SEVERITY_REFERENCE to signal.severity.wire,
+            SECURITY_RESOURCE_REFERENCE to signalResource(signal),
             ORGANIZATION_ID_REFERENCE to organizationId.toString()
         ).typedWorkflowScope()
+
+    private fun signalResource(signal: SignalOutcome): String =
+        signal.entities["resource"]
+            ?: signal.entities["process"]
+            ?: signal.entities["host"]
+            ?: ""
 
     private fun sourceSpecificAlertTrigger(event: AlertLifecycleEvent): String? =
         if (event.status == AlertStatus.RESOLVED) {

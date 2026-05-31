@@ -21,6 +21,9 @@ import com.moneat.config.RedisConfig
 import com.moneat.datadog.models.DdActivityDumpPayload
 import com.moneat.datadog.models.DdCompliancePayload
 import com.moneat.datadog.models.DdSecurityEventPayload
+import com.moneat.security.signals.SignalDerivation
+import com.moneat.security.signals.SignalOutcome
+import com.moneat.security.signals.SignalWriter
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.http.isSuccess
 import kotlinx.serialization.SerialName
@@ -152,13 +155,33 @@ object SecurityIngestionService {
         return entries.size
     }
 
-    suspend fun insertBatch(batch: QueuedSecurityBatch) {
+    /**
+     * Inserts the batch into ClickHouse, then derives security signals from it via [SignalWriter]
+     * (open-signal dedup). Returns the resulting signal outcomes so the caller can drive the
+     * `security.signal` workflow trigger off signal lifecycle rather than per raw event. Both the
+     * ingestion worker and the demo reseed call this, so both populate the triage surface.
+     */
+    suspend fun insertBatch(batch: QueuedSecurityBatch): List<SignalOutcome> {
         when (batch.batchType) {
             "events" -> insertSecurityEvents(batch)
             "dumps" -> insertActivityDumps(batch)
             "findings" -> insertComplianceFindings(batch)
         }
+        return deriveSignals(batch)
     }
+
+    /**
+     * Derives signals best-effort: the ClickHouse insert is already durable by this point, so a
+     * problem persisting signals (e.g. a transient Postgres issue) is logged and degrades to "no
+     * signals for this batch" rather than failing the ingest or crashing the worker. Each spec is
+     * upserted independently so one bad row cannot drop the rest.
+     */
+    private fun deriveSignals(batch: QueuedSecurityBatch): List<SignalOutcome> =
+        SignalDerivation.fromBatch(batch).mapNotNull { spec ->
+            runCatching { SignalWriter.upsert(batch.organizationId, spec) }
+                .onFailure { logger.warn { "Signal derivation failed for rule ${spec.ruleId}: ${it.message}" } }
+                .getOrNull()
+        }
 
     @Suppress("LongMethod")
     private suspend fun insertSecurityEvents(batch: QueuedSecurityBatch) {
