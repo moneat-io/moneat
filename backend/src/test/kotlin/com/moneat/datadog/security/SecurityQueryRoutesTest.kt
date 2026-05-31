@@ -364,6 +364,21 @@ class SecurityQueryRoutesTest {
         )
     }
 
+    @Test
+    fun `events query for a demo org id targets the demo-org representation`() = testApplication {
+        val captured = mutableListOf<String>()
+        captureStub(captured)
+        application { installRoutes() }
+        client.get(EVENTS_PATH) { withAuth(token(DEMO_ORG_ID)) }
+        assertTrue(captured.isNotEmpty(), "expected a query to be issued")
+        // Demo rows are inserted with toUInt64(-1); the read path must match them via
+        // toInt64(organization_id), otherwise reseeds succeed but stay unreadable.
+        assertTrue(
+            captured.all { it.contains("toInt64(organization_id) IN (-1, -2, -3)") },
+            "demo-org reads must use the toInt64 representation that matches toUInt64(-1) rows: $captured",
+        )
+    }
+
     // ──── Parameter sanitization (migrated from SecurityRoutesTest) ────
 
     @Test

@@ -303,10 +303,10 @@ private suspend fun io.ktor.server.routing.RoutingContext.respondEmptySummary() 
 
 private fun io.ktor.server.routing.RoutingContext.paramLimit(): Int =
     (call.parameters["limit"]?.toIntOrNull() ?: DEFAULT_LIMIT)
-        .coerceAtMost(MAX_LIMIT)
+        .coerceIn(0, MAX_LIMIT)
 
 private fun io.ktor.server.routing.RoutingContext.paramOffset(): Int =
-    call.parameters["offset"]?.toIntOrNull() ?: 0
+    (call.parameters["offset"]?.toIntOrNull() ?: 0).coerceAtLeast(0)
 
 private suspend fun executeCount(sql: String): Long {
     val resp = ClickHouseClient.execute(sql)
