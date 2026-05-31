@@ -190,6 +190,39 @@ class DetectionEvaluatorTest {
         }
     }
 
+    @Test
+    fun `warm-up is anchored to first evaluation not rule creation`() = runBlocking {
+        // Rule created long before the warm-up window elapsed, but enabled and first evaluated only now.
+        // Warm-up must restart at this first run, so the first sweep suppresses every unseen group
+        // instead of bursting alerts just because createdAt is old.
+        val createdLongAgo = Clock.System.now() - 30.days
+        seedRule(newValueRule(createdLongAgo))
+        val firstRun = Clock.System.now()
+
+        val store = PostgresDetectionBaselineStore()
+        val firstSweep = NewValueEvaluator(
+            compiler = compiler,
+            runner = fakeRunner(listOf(DetectionGroupRow(mapOf("host" to "web-01"), 3))),
+            baseline = store,
+            warmupSeconds = 1.days.inWholeSeconds,
+            clock = { firstRun },
+        ).evaluate(newValueRule(createdLongAgo))
+        assertEquals(0, firstSweep.size, "first evaluation must warm up even when createdAt is old")
+        assertEquals(firstRun, store.warmupStartedAt(2), "warm-up marker is stamped on first run")
+
+        // After the window has elapsed *from first evaluation*, a genuinely-new value fires.
+        val afterWarmup = firstRun + 2.days
+        val secondSweep = NewValueEvaluator(
+            compiler = compiler,
+            runner = fakeRunner(listOf(DetectionGroupRow(mapOf("host" to "web-02"), 1))),
+            baseline = store,
+            warmupSeconds = 1.days.inWholeSeconds,
+            clock = { afterWarmup },
+        ).evaluate(newValueRule(createdLongAgo))
+        assertEquals(1, secondSweep.size, "post-warm-up new values fire")
+        assertEquals("web-02", secondSweep.single().groupValues["host"])
+    }
+
     private fun seedRule(rule: DetectionRuleRecord) {
         transaction {
             DetectionRules.insert {

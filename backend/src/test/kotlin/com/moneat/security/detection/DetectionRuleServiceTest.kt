@@ -160,6 +160,38 @@ class DetectionRuleServiceTest {
         assertNull(service.preview(otherOrgId, created.id))
     }
 
+    @Test
+    fun `new-value preview honors the warm-up gate so it matches the first scheduler run`() = runBlocking {
+        // A freshly created new-value rule has never evaluated (no warm-up marker), so the scheduler's
+        // first run would suppress everything during warm-up. Preview must agree and report no matches,
+        // even though both rows are absent from the (empty) baseline.
+        val created = service.create(
+            orgId,
+            createRequest(type = "new_value", thresholdCount = null),
+        )
+        val preview = service.preview(orgId, created.id)
+        assertEquals(0, preview?.matchCount, "warming new-value rule previews zero, matching its first run")
+    }
+
+    @Test
+    fun `new-value preview reports unseen values once warm-up has elapsed`() = runBlocking {
+        // Same service but with warm-up already elapsed: now preview should surface baseline-absent rows.
+        val warmService = DetectionRuleService(
+            compiler = RuleQueryCompiler({ "moneat" }),
+            runner = DetectionQueryRunner(execute = { _ ->
+                """{"g0":"web-01","match_count":12}
+{"g0":"web-02","match_count":2}"""
+            }),
+            warmupSeconds = 0,
+        )
+        val created = warmService.create(
+            orgId,
+            createRequest(type = "new_value", thresholdCount = null),
+        )
+        val preview = warmService.preview(orgId, created.id)
+        assertEquals(2, preview?.matchCount, "post-warm-up new-value preview surfaces baseline-absent rows")
+    }
+
     private fun seedOrg(name: String): Int =
         transaction {
             Organizations.insert {

@@ -30,6 +30,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.seconds
 
 private val ruleJson = Json {
     encodeDefaults = true
@@ -49,6 +50,8 @@ class DetectionRuleService(
     private val compiler: RuleQueryCompiler = RuleQueryCompiler({ ClickHouseClient.getDatabase() }),
     private val runner: DetectionQueryRunner = DetectionQueryRunner(),
     private val baseline: DetectionBaselineStore = PostgresDetectionBaselineStore(),
+    private val warmupSeconds: Long = NewValueEvaluator.DEFAULT_WARMUP_SECONDS,
+    private val clock: () -> kotlin.time.Instant = { Clock.System.now() },
 ) {
 
     fun list(organizationId: Int): DetectionRuleListResponse = transaction {
@@ -174,7 +177,7 @@ class DetectionRuleService(
         val rows = runner.run(compiled)
         val matches = when (record.type) {
             DetectionRuleType.THRESHOLD -> rows
-            DetectionRuleType.NEW_VALUE -> filterToNewValues(persistedRuleId, record.groupBy, rows)
+            DetectionRuleType.NEW_VALUE -> filterToNewValues(persistedRuleId, record, rows)
         }
         val samples = matches.take(PREVIEW_SAMPLE_LIMIT).map { row ->
             DetectionMatchSample(groupValues = row.groupValues, count = row.count)
@@ -186,16 +189,23 @@ class DetectionRuleService(
         )
     }
 
+    /**
+     * Mirror what [NewValueEvaluator] would emit on its next run: a value is a would-be match only if it
+     * is absent from the baseline AND the rule has finished warming up. Warm-up is anchored to the rule's
+     * first real evaluation (its marker), exactly as the scheduler computes it; preview never mutates the
+     * marker, so a never-evaluated rule previews as still warming (no matches), matching its first run.
+     */
     private fun filterToNewValues(
         ruleId: Int?,
-        groupBy: List<String>,
+        record: DetectionRuleRecord,
         rows: List<DetectionGroupRow>,
     ): List<DetectionGroupRow> {
-        val known = ruleId?.let { baseline.knownKeys(it) } ?: emptySet()
-        return rows.filter { row ->
-            val key = groupBy.joinToString("|") { col -> "$col=${row.groupValues[col] ?: ""}" }
-            key !in known
-        }
+        if (ruleId == null) return emptyList()
+        val warmupStart = baseline.warmupStartedAt(ruleId) ?: clock()
+        val warm = clock() >= (warmupStart + warmupSeconds.seconds)
+        if (!warm) return emptyList()
+        val known = baseline.knownKeys(ruleId)
+        return rows.filter { row -> encodeGroupKey(record.groupBy, row.groupValues) !in known }
     }
 
     private fun parseType(type: String): DetectionRuleType =

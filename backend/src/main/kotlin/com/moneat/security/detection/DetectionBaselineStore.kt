@@ -19,6 +19,7 @@ package com.moneat.security.detection
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.lessEq
+import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -32,7 +33,7 @@ import kotlin.time.Instant
  * the new-value baseline lives; it never touches ClickHouse and is scoped by rule (hence by org).
  */
 interface DetectionBaselineStore {
-    /** Returns the group keys already known for [ruleId]. */
+    /** Returns the group keys already known for [ruleId] (excludes the warm-up marker). */
     fun knownKeys(ruleId: Int): Set<String>
 
     /** Records [groupKey] as seen for [ruleId] at [seenAt], or bumps its last_seen if already present. */
@@ -40,7 +41,23 @@ interface DetectionBaselineStore {
 
     /** Drops baseline entries for [ruleId] whose last_seen is older than [olderThan]. */
     fun evictOlderThan(ruleId: Int, olderThan: Instant)
+
+    /**
+     * Instant the new-value warm-up began for [ruleId] — the rule's first real evaluation — or `null`
+     * if it has never evaluated. Used to anchor warm-up to activation, not rule creation.
+     */
+    fun warmupStartedAt(ruleId: Int): Instant?
+
+    /** Records [startedAt] as the warm-up start for [ruleId] on first evaluation; a no-op if already set. */
+    fun markWarmupStarted(ruleId: Int, organizationId: Int, startedAt: Instant)
 }
+
+/**
+ * Reserved baseline key for the per-rule warm-up-start marker. Begins with the NUL control char, which
+ * [encodeGroupKey] never emits, so it can never collide with a real group key and is excluded from
+ * [DetectionBaselineStore.knownKeys].
+ */
+internal const val WARMUP_MARKER_KEY: String = "\u0000warmup_started"
 
 /** Exposed-backed [DetectionBaselineStore] over [DetectionBaselineValues]. */
 class PostgresDetectionBaselineStore : DetectionBaselineStore {
@@ -48,7 +65,10 @@ class PostgresDetectionBaselineStore : DetectionBaselineStore {
     override fun knownKeys(ruleId: Int): Set<String> = transaction {
         DetectionBaselineValues
             .selectAll()
-            .where { DetectionBaselineValues.ruleId eq ruleId }
+            .where {
+                (DetectionBaselineValues.ruleId eq ruleId) and
+                    (DetectionBaselineValues.groupKey neq WARMUP_MARKER_KEY)
+            }
             .map { it[DetectionBaselineValues.groupKey] }
             .toSet()
     }
@@ -83,8 +103,43 @@ class PostgresDetectionBaselineStore : DetectionBaselineStore {
 
     override fun evictOlderThan(ruleId: Int, olderThan: Instant) {
         transaction {
+            // Never evict the warm-up marker: dropping it would reset activation and re-arm warm-up.
             DetectionBaselineValues.deleteWhere {
-                (DetectionBaselineValues.ruleId eq ruleId) and (lastSeen lessEq olderThan)
+                (DetectionBaselineValues.ruleId eq ruleId) and
+                    (lastSeen lessEq olderThan) and
+                    (groupKey neq WARMUP_MARKER_KEY)
+            }
+        }
+    }
+
+    override fun warmupStartedAt(ruleId: Int): Instant? = transaction {
+        DetectionBaselineValues
+            .selectAll()
+            .where {
+                (DetectionBaselineValues.ruleId eq ruleId) and
+                    (DetectionBaselineValues.groupKey eq WARMUP_MARKER_KEY)
+            }
+            .firstOrNull()
+            ?.get(DetectionBaselineValues.firstSeen)
+    }
+
+    override fun markWarmupStarted(ruleId: Int, organizationId: Int, startedAt: Instant) {
+        transaction {
+            val present = DetectionBaselineValues
+                .selectAll()
+                .where {
+                    (DetectionBaselineValues.ruleId eq ruleId) and
+                        (DetectionBaselineValues.groupKey eq WARMUP_MARKER_KEY)
+                }
+                .firstOrNull() != null
+            if (!present) {
+                DetectionBaselineValues.insert {
+                    it[DetectionBaselineValues.ruleId] = ruleId
+                    it[DetectionBaselineValues.organizationId] = organizationId
+                    it[groupKey] = WARMUP_MARKER_KEY
+                    it[firstSeen] = startedAt
+                    it[lastSeen] = startedAt
+                }
             }
         }
     }

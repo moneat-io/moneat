@@ -29,10 +29,17 @@ private val logger = KotlinLogging.logger {}
 
 /**
  * New-value rule type: a group-by value not previously seen is a match. The baseline is a per-`(rule,
- * group_key)` seen-set in [DetectionBaselineStore]; a configurable **warm-up** after rule creation
- * suppresses signals while the baseline is learned, so the rule does not alert on every value on day
- * one. Values appearing after warm-up that are absent from the baseline produce a signal, then join the
- * baseline. Baseline entries older than the retention window are evicted to bound state growth.
+ * group_key)` seen-set in [DetectionBaselineStore]; a configurable **warm-up** suppresses signals while
+ * the baseline is learned, so the rule does not alert on every value on day one. Values appearing after
+ * warm-up that are absent from the baseline produce a signal, then join the baseline. Baseline entries
+ * older than the retention window are evicted to bound state growth.
+ *
+ * Warm-up is anchored to the rule's **first real evaluation** (activation), not its creation time: a
+ * rule created disabled and enabled long after the window has elapsed would otherwise be `warm` on its
+ * very first run and alert on every unseen group at once. On the first evaluation we record a per-rule
+ * warm-up-start marker (a sentinel row in [DetectionBaselineStore]) and treat the rule as still warming;
+ * `warm` becomes true only once `now >= warmupStart + window`. [DetectionRuleService.preview] mirrors
+ * this so a freshly created rule's preview matches what the scheduler would emit.
  *
  * The grouping query is compiled by [RuleQueryCompiler] with the rule's owning org injected, so the
  * baseline only ever reflects this tenant's logs.
@@ -57,7 +64,10 @@ class NewValueEvaluator(
         val rows = runner.run(compiled)
         val known = baseline.knownKeys(rule.id)
         val now = clock()
-        val warm = now >= (rule.createdAt + warmupSeconds.seconds)
+        // Anchor warm-up to first activation, not rule creation: stamp the marker on the first run and
+        // treat the rule as still warming on that run, so a long-dormant rule cannot alert on enable.
+        val warmupStart = warmupStart(rule, now)
+        val warm = isWarm(now, warmupStart)
 
         val matches = mutableListOf<DetectionGroupRow>()
         rows.forEach { row ->
@@ -71,13 +81,24 @@ class NewValueEvaluator(
         }
         baseline.evictOlderThan(rule.id, now - baselineRetentionSeconds.seconds)
         if (matches.isNotEmpty()) {
-            logger.info { "New-value rule ${rule.id} produced ${matches.size} new value(s)" }
+            logger.info { "New-value rule ${rule.id} org ${rule.organizationId}: ${matches.size} new value(s)" }
         }
         return matches
     }
 
+    /** Warm-up start for [rule]: the stored first-evaluation marker, stamped to [now] on the first run. */
+    private fun warmupStart(rule: DetectionRuleRecord, now: Instant): Instant {
+        baseline.warmupStartedAt(rule.id)?.let { return it }
+        baseline.markWarmupStarted(rule.id, rule.organizationId, now)
+        return now
+    }
+
+    /** Warm-up has elapsed once [now] reaches [warmupStart] + the configured window. */
+    private fun isWarm(now: Instant, warmupStart: Instant): Boolean =
+        now >= (warmupStart + warmupSeconds.seconds)
+
     private fun baselineKey(rule: DetectionRuleRecord, row: DetectionGroupRow): String =
-        rule.groupBy.joinToString("|") { col -> "$col=${row.groupValues[col] ?: ""}" }
+        encodeGroupKey(rule.groupBy, row.groupValues)
 
     private fun writeSignal(rule: DetectionRuleRecord, compiled: CompiledRuleQuery, row: DetectionGroupRow) {
         val spec = SignalSpec(
