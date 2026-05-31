@@ -45,6 +45,7 @@ import {
     LineChart,
     LogOut,
     MessageSquare,
+    Network,
     Package,
     Play,
     Plus,
@@ -232,11 +233,12 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
     // Core Observability
     { key: 'overview', icon: Home, label: 'Overview', href: '/', requiresProject: false, group: 'core' },
     { key: 'issues', icon: AlertCircle, label: 'Issues', href: '/issues', requiresProject: false, group: 'core' },
-    { key: 'performance', icon: Timer, label: 'Performance', href: '/performance/traces', requiresProject: false, group: 'core' },
+    { key: 'performance', icon: Timer, label: 'Traces', href: '/performance/traces', requiresProject: false, group: 'core' },
     { key: 'logs', icon: ScrollText, label: 'Logs', href: '/logs', requiresProject: false, group: 'core' },
     ...datadogCoreNavItems,
     // Infrastructure & Uptime
     { key: 'monitoring', icon: Server, label: 'Monitoring', href: '/monitoring', requiresProject: false, group: 'infrastructure' },
+    { key: 'service-map', icon: Network, label: 'Service Map', href: '/monitoring/service-map', requiresProject: false, group: 'infrastructure' },
     { key: 'uptime', icon: Activity, label: 'Uptime', href: '/uptime', requiresProject: false, group: 'infrastructure' },
     {
       key: 'status-pages',

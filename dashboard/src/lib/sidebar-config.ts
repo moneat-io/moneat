@@ -16,6 +16,7 @@ import {
   LayoutDashboard,
   LineChart,
   MessageSquare,
+  Network,
   Package,
   Play,
   ScrollText,
@@ -33,7 +34,7 @@ export interface SidebarItem {
 // Configurable sidebar items (can be hidden by user)
 // Note: 'dashboard', 'admin' and 'settings' are always visible and not included here
 export const CONFIGURABLE_SIDEBAR_ITEMS: SidebarItem[] = [
-  { key: 'performance', label: 'Performance', icon: Timer },
+  { key: 'performance', label: 'Traces', icon: Timer },
   { key: 'issues', label: 'Issues', icon: AlertCircle },
   { key: 'logs', label: 'Logs', icon: ScrollText },
   { key: 'replays', label: 'Replays', icon: Play },
@@ -44,6 +45,7 @@ export const CONFIGURABLE_SIDEBAR_ITEMS: SidebarItem[] = [
   { key: 'uptime', label: 'Uptime', icon: Activity },
   { key: 'status-pages', label: 'Status Pages', icon: Globe },
   { key: 'monitoring', label: 'Monitoring', icon: Server },
+  { key: 'service-map', label: 'Service Map', icon: Network },
   { key: 'analytics', label: 'Analytics', icon: BarChart3 },
   { key: 'on-call', label: 'On-Call', icon: Bell },
   { key: 'dashboards', label: 'Dashboards', icon: LayoutDashboard },

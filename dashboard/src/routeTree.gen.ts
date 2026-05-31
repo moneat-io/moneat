@@ -100,6 +100,7 @@ import { Route as OnCallSchedulesRouteImport } from './routes/on-call.schedules'
 import { Route as OnCallIncidentsRouteImport } from './routes/on-call.incidents'
 import { Route as OnCallEscalationPoliciesRouteImport } from './routes/on-call.escalation-policies'
 import { Route as OnCallDeclaredIncidentsRouteImport } from './routes/on-call.declared-incidents'
+import { Route as MonitoringServiceMapRouteImport } from './routes/monitoring.service-map'
 import { Route as MonitoringSbomRouteImport } from './routes/monitoring.sbom'
 import { Route as MonitoringProcessesRouteImport } from './routes/monitoring.processes'
 import { Route as MonitoringNetworkDevicesRouteImport } from './routes/monitoring.network-devices'
@@ -607,6 +608,11 @@ const OnCallDeclaredIncidentsRoute = OnCallDeclaredIncidentsRouteImport.update({
   path: '/declared-incidents',
   getParentRoute: () => OnCallRoute,
 } as any)
+const MonitoringServiceMapRoute = MonitoringServiceMapRouteImport.update({
+  id: '/service-map',
+  path: '/service-map',
+  getParentRoute: () => MonitoringRoute,
+} as any)
 const MonitoringSbomRoute = MonitoringSbomRouteImport.update({
   id: '/sbom',
   path: '/sbom',
@@ -948,6 +954,7 @@ export interface FileRoutesByFullPath {
   '/monitoring/network-devices': typeof MonitoringNetworkDevicesRouteWithChildren
   '/monitoring/processes': typeof MonitoringProcessesRoute
   '/monitoring/sbom': typeof MonitoringSbomRoute
+  '/monitoring/service-map': typeof MonitoringServiceMapRoute
   '/on-call/declared-incidents': typeof OnCallDeclaredIncidentsRouteWithChildren
   '/on-call/escalation-policies': typeof OnCallEscalationPoliciesRoute
   '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
@@ -1075,6 +1082,7 @@ export interface FileRoutesByTo {
   '/monitoring/network-devices': typeof MonitoringNetworkDevicesRouteWithChildren
   '/monitoring/processes': typeof MonitoringProcessesRoute
   '/monitoring/sbom': typeof MonitoringSbomRoute
+  '/monitoring/service-map': typeof MonitoringServiceMapRoute
   '/on-call/declared-incidents': typeof OnCallDeclaredIncidentsRouteWithChildren
   '/on-call/escalation-policies': typeof OnCallEscalationPoliciesRoute
   '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
@@ -1216,6 +1224,7 @@ export interface FileRoutesById {
   '/monitoring/network-devices': typeof MonitoringNetworkDevicesRouteWithChildren
   '/monitoring/processes': typeof MonitoringProcessesRoute
   '/monitoring/sbom': typeof MonitoringSbomRoute
+  '/monitoring/service-map': typeof MonitoringServiceMapRoute
   '/on-call/declared-incidents': typeof OnCallDeclaredIncidentsRouteWithChildren
   '/on-call/escalation-policies': typeof OnCallEscalationPoliciesRoute
   '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
@@ -1359,6 +1368,7 @@ export interface FileRouteTypes {
     | '/monitoring/network-devices'
     | '/monitoring/processes'
     | '/monitoring/sbom'
+    | '/monitoring/service-map'
     | '/on-call/declared-incidents'
     | '/on-call/escalation-policies'
     | '/on-call/incidents'
@@ -1486,6 +1496,7 @@ export interface FileRouteTypes {
     | '/monitoring/network-devices'
     | '/monitoring/processes'
     | '/monitoring/sbom'
+    | '/monitoring/service-map'
     | '/on-call/declared-incidents'
     | '/on-call/escalation-policies'
     | '/on-call/incidents'
@@ -1626,6 +1637,7 @@ export interface FileRouteTypes {
     | '/monitoring/network-devices'
     | '/monitoring/processes'
     | '/monitoring/sbom'
+    | '/monitoring/service-map'
     | '/on-call/declared-incidents'
     | '/on-call/escalation-policies'
     | '/on-call/incidents'
@@ -2391,6 +2403,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnCallDeclaredIncidentsRouteImport
       parentRoute: typeof OnCallRoute
     }
+    '/monitoring/service-map': {
+      id: '/monitoring/service-map'
+      path: '/service-map'
+      fullPath: '/monitoring/service-map'
+      preLoaderRoute: typeof MonitoringServiceMapRouteImport
+      parentRoute: typeof MonitoringRoute
+    }
     '/monitoring/sbom': {
       id: '/monitoring/sbom'
       path: '/sbom'
@@ -2905,6 +2924,7 @@ interface MonitoringRouteChildren {
   MonitoringNetworkDevicesRoute: typeof MonitoringNetworkDevicesRouteWithChildren
   MonitoringProcessesRoute: typeof MonitoringProcessesRoute
   MonitoringSbomRoute: typeof MonitoringSbomRoute
+  MonitoringServiceMapRoute: typeof MonitoringServiceMapRoute
   MonitoringIndexRoute: typeof MonitoringIndexRoute
   MonitoringHostsHostIdRoute: typeof MonitoringHostsHostIdRoute
 }
@@ -2919,6 +2939,7 @@ const MonitoringRouteChildren: MonitoringRouteChildren = {
   MonitoringNetworkDevicesRoute: MonitoringNetworkDevicesRouteWithChildren,
   MonitoringProcessesRoute: MonitoringProcessesRoute,
   MonitoringSbomRoute: MonitoringSbomRoute,
+  MonitoringServiceMapRoute: MonitoringServiceMapRoute,
   MonitoringIndexRoute: MonitoringIndexRoute,
   MonitoringHostsHostIdRoute: MonitoringHostsHostIdRoute,
 }

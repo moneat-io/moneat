@@ -648,7 +648,7 @@ function ServiceHealthPanel({
           </Table>
         </div>
         <Link
-          to="/performance/service-map"
+          to="/monitoring/service-map"
           className="flex items-center gap-1 border-t px-4 py-3 text-sm font-medium text-primary hover:underline"
         >
           Open service map
