@@ -111,6 +111,7 @@ enum class SignalSeverity(val wire: String, val rank: Int) {
 enum class SignalSource(val wire: String) {
     AGENT_RUNTIME("agent_runtime"),
     AGENT_COMPLIANCE("agent_compliance"),
+    DETECTION("detection"),
 }
 
 /** Audit action kinds. */

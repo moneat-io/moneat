@@ -43,6 +43,7 @@ import com.moneat.org.routes.adminRoutes
 import com.moneat.org.routes.orgManagementRoutes
 import com.moneat.otlp.routes.otlpMetricsRoutes
 import com.moneat.otlp.routes.otlpTraceRoutes
+import com.moneat.security.detection.detectionRuleRoutes
 import com.moneat.security.signals.signalRoutes
 import com.moneat.statuspage.routes.statusPageRoutes
 import com.moneat.summary.routes.summaryRoutes
@@ -270,6 +271,11 @@ fun Application.configureRouting() {
         // Security signals triage surface (OSS core)
         rateLimit(RateLimitName("api")) {
             signalRoutes()
+        }
+
+        // Detection rules: scheduled, declarative rules over logs → signals (OSS core)
+        rateLimit(RateLimitName("api")) {
+            detectionRuleRoutes()
         }
 
         routingLogger.info { "Registering enterprise routes..." }

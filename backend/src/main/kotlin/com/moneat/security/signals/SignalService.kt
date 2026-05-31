@@ -267,8 +267,45 @@ class SignalService {
         when (SignalSource.entries.firstOrNull { it.wire == signal.source }) {
             SignalSource.AGENT_RUNTIME -> fetchRuntimeSamples(orgId, signal)
             SignalSource.AGENT_COMPLIANCE -> fetchComplianceSamples(orgId, signal)
+            SignalSource.DETECTION -> fetchDetectionSamples(orgId, signal)
             null -> emptyList()
         }
+
+    /**
+     * Evidence for a detection-rule signal: recent matching log rows, scoped by org and by the entity
+     * values the rule grouped on (service/host/environment when present). The query is org-injected via
+     * [ClickHouseQueryUtils.orgIdClause]; entity values are escaped, so a crafted entity cannot widen
+     * the scope past the calling org.
+     */
+    private suspend fun fetchDetectionSamples(orgId: Int, signal: SignalResponse): List<JsonElement> {
+        val db = ClickHouseClient.getDatabase()
+        val conditions = mutableListOf(ClickHouseQueryUtils.orgIdClause(orgId.toLong()))
+        listOf("service", "host", "environment", "container_name").forEach { col ->
+            signal.entities[col]?.takeIf { it.isNotBlank() }?.let {
+                conditions.add("$col = '${escapeSql(it)}'")
+            }
+        }
+        val where = conditions.joinToString(" AND ")
+        return executeSamples(
+            """SELECT toString(log_id) AS log_id, toString(level) AS level, service, environment, host,
+                message, container_name, trace_id,
+                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as ts
+            FROM `$db`.logs WHERE $where
+            ORDER BY timestamp DESC LIMIT $SAMPLE_EVENT_LIMIT FORMAT JSONEachRow""",
+        ) { obj ->
+            buildJsonObject {
+                put("logId", obj.s("log_id"))
+                put("level", obj.s("level"))
+                put("service", obj.s("service"))
+                put("environment", obj.s("environment"))
+                put("host", obj.s("host"))
+                put("message", obj.s("message"))
+                put("containerName", obj.s("container_name"))
+                put("traceId", obj.s("trace_id"))
+                put("timestamp", obj.s("ts"))
+            }
+        }
+    }
 
     private suspend fun fetchRuntimeSamples(orgId: Int, signal: SignalResponse): List<JsonElement> {
         val db = ClickHouseClient.getDatabase()
