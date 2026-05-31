@@ -52,6 +52,7 @@ fun Route.securityQueryRoutes() {
         authenticate("auth-jwt") {
             get("/events") { handleListEvents() }
             get("/events/{eventId}") { handleEventDetail() }
+            get("/dumps") { handleListDumps() }
             get("/compliance") { handleListFindings() }
             get("/compliance/summary") { handleComplianceSummary() }
         }
@@ -151,6 +152,52 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleEventDetail() {
     } else {
         call.respond(rows.first())
     }
+}
+private suspend fun io.ktor.server.routing.RoutingContext.handleListDumps() {
+    val orgId = extractOrgId() ?: return
+    val limit = paramLimit()
+    val offset = paramOffset()
+    val db = ClickHouseClient.getDatabase()
+    val conditions = mutableListOf(
+        ClickHouseQueryUtils.orgIdClause(orgId.toLong())
+    )
+    call.parameters["host"]?.let {
+        conditions.add("host LIKE '%${escapeSql(it)}%'")
+    }
+    call.parameters["activity_type"]?.let {
+        conditions.add("activity_type = '${escapeSql(it)}'")
+    }
+    val where = conditions.joinToString(" AND ")
+
+    val totalCount = executeCount(
+        "SELECT count() as cnt FROM `$db`.security_dumps WHERE $where FORMAT JSONEachRow"
+    )
+
+    val rows = executeRows(
+        """SELECT dump_id, activity_type, process_name, host,
+            duration_ns, tags,
+            formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as ts
+        FROM `$db`.security_dumps WHERE $where
+        ORDER BY timestamp DESC LIMIT $limit OFFSET $offset
+        FORMAT JSONEachRow"""
+    ) { obj ->
+        buildJsonObject {
+            put("dumpId", obj.s("dump_id"))
+            put("activityType", obj.s("activity_type"))
+            put("processName", obj.s("process_name"))
+            put("host", obj.s("host"))
+            put("durationNs", obj.s("duration_ns"))
+            obj["tags"]?.let { put("tags", it) }
+            put("timestamp", obj.s("ts"))
+        }
+    }
+
+    call.respond(
+        buildJsonObject {
+            putJsonArray("dumps") { rows.forEach { add(it) } }
+            put("totalCount", totalCount)
+        }
+    )
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleListFindings() {
     val orgId = extractOrgId() ?: return
