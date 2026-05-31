@@ -16,7 +16,10 @@
 
 package com.moneat.security.signals
 
+import com.auth0.jwt.JWT
+import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.shared.models.Organizations
+import com.moneat.testsupport.RouteTestSupport.TEST_JWT_SECRET
 import com.moneat.testsupport.RouteTestSupport.createToken
 import com.moneat.testsupport.RouteTestSupport.installJwtAuth
 import com.moneat.testsupport.RouteTestSupport.withAuth
@@ -140,6 +143,20 @@ class SignalRoutesTest {
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
 
+    @Test
+    fun `patch requires a user claim for audit attribution`() = testApplication {
+        setupApp()
+        val created = SignalWriter.upsert(orgId, spec("a"))
+
+        val response = client.patch("/v1/security/signals/${created.signalId}") {
+            withAuth(orgOnlyToken(orgId))
+            contentType(ContentType.Application.Json)
+            setBody(json.encodeToString(TriageRequest(status = "under_review")))
+        }
+
+        assertEquals(HttpStatusCode.Forbidden, response.status)
+    }
+
     private fun ApplicationTestBuilder.setupApp() {
         application {
             installJwtAuth()
@@ -148,6 +165,13 @@ class SignalRoutesTest {
     }
 
     private fun token(org: Int): String = createToken(userId = USER_ID, orgId = org)
+
+    private fun orgOnlyToken(org: Int): String =
+        JWT.create()
+            .withIssuer("moneat")
+            .withAudience("moneat-users")
+            .withClaim("orgId", org)
+            .sign(Algorithm.HMAC256(TEST_JWT_SECRET))
 
     private fun spec(ruleId: String) = SignalSpec(
         source = SignalSource.AGENT_RUNTIME,

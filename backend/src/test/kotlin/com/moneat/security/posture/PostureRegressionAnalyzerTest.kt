@@ -110,6 +110,16 @@ class PostureRegressionAnalyzerTest {
     }
 
     @Test
+    fun `unknown status is treated as non passing`() {
+        PostureRegressionAnalyzer.analyze(orgId, listOf(finding(status = "unknown")))
+
+        val specs = PostureRegressionAnalyzer.analyze(orgId, listOf(finding(status = "failed")))
+
+        assertTrue(specs.isEmpty())
+        assertEquals(ComplianceFindingStatus.ERROR, ComplianceFindingStatus.normalize("unknown"))
+    }
+
+    @Test
     fun `state is isolated by organization`() {
         PostureRegressionAnalyzer.analyze(orgId, listOf(finding(status = "passed")))
 

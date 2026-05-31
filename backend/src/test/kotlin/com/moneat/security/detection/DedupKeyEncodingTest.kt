@@ -59,6 +59,16 @@ class DedupKeyEncodingTest {
     }
 
     @Test
+    fun `literal nul is distinct from missing value and escaped text`() {
+        val missing = encodeGroupKey(listOf("host"), emptyMap())
+        val literalNul = encodeGroupKey(listOf("host"), mapOf("host" to "\u0000"))
+        val escapedText = encodeGroupKey(listOf("host"), mapOf("host" to "\\0"))
+
+        assertNotEquals(missing, literalNul, "literal NUL must not encode like an absent group value")
+        assertNotEquals(escapedText, literalNul, "literal NUL must not encode like backslash-zero text")
+    }
+
+    @Test
     fun `equals sign in a value does not forge a new key-value pair`() {
         val withEquals = encodeGroupKey(listOf("env"), mapOf("env" to "k=v"))
         val plain = encodeGroupKey(listOf("env"), mapOf("env" to "kv"))

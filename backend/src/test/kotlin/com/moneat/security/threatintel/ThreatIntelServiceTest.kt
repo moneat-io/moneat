@@ -42,6 +42,31 @@ class ThreatIntelServiceTest {
     }
 
     @Test
+    fun `warm enrich uses cached indicator index`() {
+        val indicators = SingleIterationIndicators(
+            listOf(
+                ThreatIntelIndicator(
+                    type = "ip",
+                    value = "203.0.113.66",
+                    threatType = "command_and_control",
+                    confidence = 70,
+                ),
+            )
+        )
+        val service = ThreatIntelService(
+            provider = ThreatIntelProvider { snapshot(indicators) },
+            ttl = 15.minutes,
+            clock = { NOW },
+        )
+
+        val first = service.enrich(mapOf("destination_ip" to "203.0.113.66"))
+        val second = service.enrich(mapOf("destination_ip" to "203.0.113.66"))
+
+        assertEquals(first, second)
+        assertEquals(1, indicators.iterations)
+    }
+
+    @Test
     fun `snapshot load failure is non-blocking`() {
         val service = ThreatIntelService(
             provider = ThreatIntelProvider { error("feed unavailable") },
@@ -70,6 +95,36 @@ class ThreatIntelServiceTest {
                 ),
             ),
         )
+
+    private fun snapshot(indicators: List<ThreatIntelIndicator>): ThreatIntelSnapshot =
+        ThreatIntelSnapshot(
+            feeds = listOf(
+                ThreatIntelFeed(
+                    name = "local",
+                    source = "seed",
+                    updatedAt = "2026-05-31T00:00:00Z",
+                    indicators = indicators,
+                ),
+            ),
+        )
+
+    private class SingleIterationIndicators(
+        private val values: List<ThreatIntelIndicator>,
+    ) : AbstractList<ThreatIntelIndicator>() {
+        var iterations = 0
+            private set
+
+        override val size: Int
+            get() = values.size
+
+        override fun get(index: Int): ThreatIntelIndicator = values[index]
+
+        override fun iterator(): Iterator<ThreatIntelIndicator> {
+            iterations++
+            check(iterations == 1) { "cached snapshot indicators were rescanned" }
+            return values.iterator()
+        }
+    }
 
     companion object {
         private val NOW = Instant.parse("2026-05-31T00:00:00Z")

@@ -35,6 +35,7 @@ private const val SIGNAL_ID_ROUTE = "/{signalId}"
 private const val INVALID_SIGNAL_ID_MESSAGE = "Invalid signal ID"
 private const val SIGNAL_NOT_FOUND_MESSAGE = "Signal not found"
 private const val MISSING_ORG_MESSAGE = "No active organization"
+private const val MISSING_USER_MESSAGE = "No authenticated user"
 
 /**
  * OSS core signal triage API. Tenant isolation is enforced by the signed `orgId` JWT claim combined
@@ -79,8 +80,10 @@ private suspend fun RoutingContext.handleTriage(service: SignalService) {
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(MISSING_ORG_MESSAGE))
     val signalId = signalIdFromPath()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_SIGNAL_ID_MESSAGE))
+    val userId = currentUserId()
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(MISSING_USER_MESSAGE))
     val request = call.receive<TriageRequest>()
-    when (val result = service.triage(orgId, signalId, currentUserId(), request)) {
+    when (val result = service.triage(orgId, signalId, userId, request)) {
         is TriageResult.Ok -> call.respond(result.signal)
         is TriageResult.NotFound -> call.respond(HttpStatusCode.NotFound, ErrorResponse(SIGNAL_NOT_FOUND_MESSAGE))
         is TriageResult.Invalid -> call.respond(HttpStatusCode.BadRequest, ErrorResponse(result.message))

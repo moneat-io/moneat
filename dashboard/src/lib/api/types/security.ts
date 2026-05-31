@@ -14,9 +14,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-// Wire shapes mirror the backend DTOs in
-// backend/src/main/kotlin/com/moneat/security/{signals,detection}; field names are snake_case
-// to match the Kotlin @SerialName values exactly.
+// Wire shapes mirror backend security DTOs. Most API DTOs here use snake_case to match Kotlin
+// @SerialName values; compliance trend DTOs intentionally use camelCase.
 
 export type SignalSeverity = 'info' | 'low' | 'medium' | 'high' | 'critical'
 export type SignalStatus = 'open' | 'under_review' | 'archived'
