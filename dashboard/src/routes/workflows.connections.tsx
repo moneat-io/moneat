@@ -20,7 +20,6 @@ import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {KeyRound, Loader2, Lock, Plus, RotateCw, Trash2} from 'lucide-react'
 import {api} from '@/lib/api'
 import type {WorkflowConnection} from '@/lib/api'
-import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {
@@ -33,9 +32,8 @@ import {
 } from '@/components/ui/dialog'
 import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
+import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
 import {useToast} from '@/hooks/useToast'
-
-const WORKFLOWS_ADVANCED_MODULE = 'Workflows Advanced'
 
 export const Route = createFileRoute('/workflows/connections')({
   beforeLoad: async () => {
@@ -48,20 +46,6 @@ export const Route = createFileRoute('/workflows/connections')({
 })
 
 function ConnectionsPage() {
-  const {data: features, isLoading, isError, error} = useEnterpriseFeatures()
-  if (isLoading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-5 w-5 animate-spin" />
-      </div>
-    )
-  }
-  if (isError) {
-    return <ErrorState title="Unable to load feature availability" message={error.message} />
-  }
-  if (!hasEnterpriseModule(features, WORKFLOWS_ADVANCED_MODULE)) {
-    return <EnterpriseUpsell />
-  }
   return <ConnectionManager />
 }
 
@@ -87,11 +71,14 @@ function ConnectionManager() {
   const queryClient = useQueryClient()
   const [createOpen, setCreateOpen] = useState(false)
   const [rotateTarget, setRotateTarget] = useState<WorkflowConnection | null>(null)
+  const {data: features} = useEnterpriseFeatures()
+  const showEnterpriseBadge = features !== undefined && !hasEnterpriseModule(features, 'workflows_advanced')
 
   const {data: connections = [], isLoading, isError, error} = useQuery({
     queryKey: ['workflow-connections'],
     queryFn: () => api.listWorkflowConnections(),
   })
+  const showEnterpriseUpsell = isError && isEnterpriseConnectionsError(error)
 
   const invalidate = () => queryClient.invalidateQueries({queryKey: ['workflow-connections']})
 
@@ -108,12 +95,18 @@ function ConnectionManager() {
 
   return (
     <div className="connections-page">
-      <PageHeader onCreate={() => setCreateOpen(true)} />
+      <PageHeader
+        showEnterpriseBadge={showEnterpriseBadge}
+        canCreate={!showEnterpriseUpsell}
+        onCreate={() => setCreateOpen(true)}
+      />
       <div className="px-4 py-4 lg:px-6">
         {isLoading ? (
           <div className="flex h-40 items-center justify-center rounded-md border">
             <Loader2 className="h-5 w-5 animate-spin" />
           </div>
+        ) : showEnterpriseUpsell ? (
+          <EnterpriseUpsell />
         ) : isError ? (
           <ErrorState message={error.message} compact />
         ) : connections.length === 0 ? (
@@ -146,6 +139,16 @@ function ConnectionManager() {
   )
 }
 
+function isEnterpriseConnectionsError(error: Error): boolean {
+  const status = (error as Error & {status?: number}).status
+  const message = error.message.toLowerCase()
+  return (
+    status === 403 ||
+    message.includes('enterprise') ||
+    (status === 400 && message.includes('invalid workflow id'))
+  )
+}
+
 function ErrorState({
   title = 'Unable to load connections',
   message,
@@ -163,7 +166,15 @@ function ErrorState({
   )
 }
 
-function PageHeader({onCreate}: {onCreate: () => void}) {
+function PageHeader({
+  showEnterpriseBadge,
+  canCreate,
+  onCreate,
+}: {
+  showEnterpriseBadge: boolean
+  canCreate: boolean
+  onCreate: () => void
+}) {
   return (
     <div className="border-b bg-card/50">
       <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between lg:px-6">
@@ -174,14 +185,14 @@ function PageHeader({onCreate}: {onCreate: () => void}) {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-bold tracking-tight">Connections</h1>
-              <Badge variant="outline">Enterprise</Badge>
+              {showEnterpriseBadge && <Badge variant="outline">Enterprise</Badge>}
             </div>
             <p className="text-xs text-muted-foreground">
               Encrypted credentials for workflow actions. Secrets are entered once and never shown again.
             </p>
           </div>
         </div>
-        <Button size="sm" onClick={onCreate} className="gap-1.5">
+        <Button size="sm" onClick={onCreate} disabled={!canCreate} className="gap-1.5">
           <Plus className="h-3.5 w-3.5" />
           New Connection
         </Button>
@@ -357,7 +368,7 @@ function CreateConnectionDialog({
             />
           </div>
         </div>
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2 pt-5">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
@@ -427,7 +438,7 @@ function RotateConnectionDialog({
             onChange={(event) => setSecret(event.target.value)}
           />
         </div>
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2 pt-5">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>

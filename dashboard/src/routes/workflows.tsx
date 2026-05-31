@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useMemo, useState} from 'react'
-import {createFileRoute, Link, redirect} from '@tanstack/react-router'
+import {useCallback, useEffect, useMemo, useState} from 'react'
+import {createFileRoute, Link, Outlet, redirect, useRouterState} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {
   Bug,
@@ -34,6 +34,7 @@ import type {
   WorkflowCatalogResponse,
   WorkflowGraphConfig,
   WorkflowGraphNode,
+  WorkflowGraphPosition,
   WorkflowResponse,
   WorkflowRunResponse,
 } from '@/lib/api'
@@ -52,12 +53,14 @@ import {
   draftToRequest,
   emptyWorkflowDraft,
   formatDate,
+  nextAppendedNodePosition,
   nextNodeId,
   removeGraphNode,
   statusClass,
   triggerNodeId,
   updateGraphNode,
   validateDraft,
+  type WorkflowPaletteDragPayload,
   type WorkflowDraft,
 } from '@/components/workflows/workflowGraph'
 import {Badge} from '@/components/ui/badge'
@@ -74,6 +77,7 @@ import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {Switch} from '@/components/ui/switch'
+import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
 import {useToast} from '@/hooks/useToast'
 import {cn} from '@/lib/utils'
 
@@ -83,10 +87,21 @@ export const Route = createFileRoute('/workflows')({
       throw redirect({to: '/login'})
     }
   },
-  component: WorkflowsPage,
+  component: WorkflowsLayout,
 })
 
 const noop = () => undefined
+
+function WorkflowsLayout() {
+  const pathname = useRouterState({select: (state) => state.location.pathname})
+  const showingChildRoute = pathname !== '/workflows'
+
+  if (showingChildRoute) {
+    return <Outlet />
+  }
+
+  return <WorkflowsPage />
+}
 
 function WorkflowsPage() {
   const {toast} = useToast()
@@ -246,6 +261,10 @@ function WorkflowsPage() {
 }
 
 function PageHeader({onCreate}: {onCreate: () => void}) {
+  const {data: features} = useEnterpriseFeatures()
+  const showConnectionsEnterpriseBadge =
+    features !== undefined && !hasEnterpriseModule(features, 'workflows_advanced')
+
   return (
     <div className="border-b bg-card/50">
       <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between lg:px-6">
@@ -269,9 +288,11 @@ function PageHeader({onCreate}: {onCreate: () => void}) {
             <Link to="/workflows/connections">
               <KeyRound className="h-3.5 w-3.5" />
               Connections
-              <Badge variant="outline" className="ml-1 text-[10px]">
-                Enterprise
-              </Badge>
+              {showConnectionsEnterpriseBadge && (
+                <Badge variant="outline" className="ml-1 text-[10px]">
+                  Enterprise
+                </Badge>
+              )}
             </Link>
           </Button>
           <Button size="sm" onClick={onCreate} className="gap-1.5">
@@ -493,10 +514,22 @@ function WorkflowEditorDialog({
   const issues = useMemo(() => validateDraft(draft, catalog), [catalog, draft])
   const selectedNode = draft.graph.nodes.find((node) => node.id === selectedNodeId)
   const updateGraph = (graph: WorkflowGraphConfig) => onDraftChange({...draft, graph})
-  const addNode = (node: Omit<WorkflowGraphNode, 'id'>, prefix: string) => {
+  const removeSelectedNode = useCallback(() => {
+    if (!selectedNodeId) return
+    onDraftChange({...draft, graph: removeGraphNode(draft.graph, selectedNodeId)})
+    setSelectedNodeId(selectedNodeId === triggerNodeId ? null : triggerNodeId)
+  }, [draft, onDraftChange, selectedNodeId])
+  const addNode = (
+    node: Omit<WorkflowGraphNode, 'id'>,
+    prefix: string,
+    position: WorkflowGraphPosition = nextAppendedNodePosition(draft.graph)
+  ) => {
     const nextNode = {...node, id: nextNodeId(draft.graph, prefix)}
-    updateGraph(addGraphNode(draft.graph, nextNode))
+    updateGraph(addGraphNode(draft.graph, nextNode, position))
     setSelectedNodeId(nextNode.id)
+  }
+  const addDroppedNode = (payload: WorkflowPaletteDragPayload, position: WorkflowGraphPosition) => {
+    addNode(payload.node, payload.prefix, position)
   }
   const changeTrigger = (triggerName: string) => {
     const graph = updateGraphTrigger(draft.graph, triggerName)
@@ -508,6 +541,22 @@ function WorkflowEditorDialog({
       onceForTemplate: trigger?.default_once_for_template.join(', ') ?? draft.onceForTemplate,
     })
   }
+
+  useEffect(() => {
+    if (!open || !selectedNodeId) return undefined
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return
+      if (event.key !== 'Delete' && event.key !== 'Backspace') return
+      if (isEditableKeyboardTarget(event.target)) return
+      event.preventDefault()
+      removeSelectedNode()
+    }
+
+    globalThis.window?.addEventListener('keydown', handleKeyDown)
+    return () => globalThis.window?.removeEventListener('keydown', handleKeyDown)
+  }, [open, removeSelectedNode, selectedNodeId])
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92vh] max-w-[1400px] overflow-y-auto">
@@ -529,6 +578,7 @@ function WorkflowEditorDialog({
             selectedNodeId={selectedNodeId}
             onSelectNode={setSelectedNodeId}
             onGraphChange={updateGraph}
+            onAddNode={addDroppedNode}
           />
           <NodeConfigPanel
             node={selectedNode}
@@ -541,7 +591,7 @@ function WorkflowEditorDialog({
             }}
           />
         </div>
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2 pt-5">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button type="button" onClick={onSave} disabled={pending} className="gap-1.5">
             {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
@@ -604,10 +654,35 @@ function updateGraphTrigger(
   graph: WorkflowGraphConfig,
   triggerName: string
 ): WorkflowGraphConfig {
+  if (!graph.nodes.some((node) => node.id === triggerNodeId)) {
+    return {
+      ...graph,
+      nodes: [
+        {
+          id: triggerNodeId,
+          type: 'trigger',
+          trigger: triggerName,
+          params: {},
+          conditions: [],
+          cases: [],
+          position: nextAppendedNodePosition(graph),
+        },
+        ...graph.nodes,
+      ],
+    }
+  }
   return {
     ...graph,
     nodes: graph.nodes.map((node) => (
       node.id === triggerNodeId ? {...node, trigger: triggerName} : node
     )),
   }
+}
+
+function isEditableKeyboardTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  const tagName = target.tagName.toLowerCase()
+  if (target.isContentEditable) return true
+  if (tagName === 'input' || tagName === 'textarea' || tagName === 'select') return true
+  return target.getAttribute('role') === 'textbox'
 }

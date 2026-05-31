@@ -47,6 +47,11 @@ export interface WorkflowSwitchCaseConfig {
   conditions: WorkflowConditionConfig[]
 }
 
+export interface WorkflowGraphPosition {
+  x: number
+  y: number
+}
+
 export interface WorkflowGraphNode {
   id: string
   type: 'trigger' | 'condition' | 'action' | 'control'
@@ -58,6 +63,7 @@ export interface WorkflowGraphNode {
   cases?: WorkflowSwitchCaseConfig[]
   retry?: WorkflowRetryConfig | null
   continue_on_error?: boolean
+  position?: WorkflowGraphPosition | null
 }
 
 export interface WorkflowGraphEdge {

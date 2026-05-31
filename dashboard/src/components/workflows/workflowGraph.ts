@@ -20,15 +20,28 @@ import type {
   WorkflowGraphConfig,
   WorkflowGraphEdge,
   WorkflowGraphNode,
+  WorkflowGraphPosition,
   WorkflowJsonValue,
   WorkflowRequest,
   WorkflowResponse,
   WorkflowStepConfig,
   WorkflowStepDefinition,
 } from '@/lib/api'
+import dagre from '@dagrejs/dagre'
 
 export const triggerNodeId = 'trigger'
+export const workflowNodeWidth = 220
+export const workflowNodeHeight = 78
+export const workflowPaletteDragDataType = 'application/x-moneat-workflow-node'
+
 const legacyConditionNodeId = 'conditions'
+const workflowNodeVerticalGap = 80
+const workflowNodeHorizontalGap = 80
+
+export interface WorkflowPaletteDragPayload {
+  node: Omit<WorkflowGraphNode, 'id'>
+  prefix: string
+}
 
 export interface WorkflowDraft {
   id?: number
@@ -125,9 +138,10 @@ export function graphFromLegacy(
 
 export function addGraphNode(
   graph: WorkflowGraphConfig,
-  node: WorkflowGraphNode
+  node: WorkflowGraphNode,
+  position?: WorkflowGraphPosition
 ): WorkflowGraphConfig {
-  return {...graph, nodes: [...graph.nodes, withNodeDefaults(node)]}
+  return {...graph, nodes: [...graph.nodes, withNodeDefaults(position === undefined ? node : {...node, position})]}
 }
 
 export function updateGraphNode(
@@ -144,10 +158,20 @@ export function removeGraphNode(
   graph: WorkflowGraphConfig,
   nodeId: string
 ): WorkflowGraphConfig {
-  if (nodeId === triggerNodeId) return graph
   return {
     nodes: graph.nodes.filter((node) => node.id !== nodeId),
     edges: graph.edges.filter((edge) => edge.from !== nodeId && edge.to !== nodeId),
+  }
+}
+
+export function updateGraphNodePosition(
+  graph: WorkflowGraphConfig,
+  nodeId: string,
+  position: WorkflowGraphPosition
+): WorkflowGraphConfig {
+  return {
+    ...graph,
+    nodes: graph.nodes.map((node) => (node.id === nodeId ? {...node, position} : node)),
   }
 }
 
@@ -156,6 +180,49 @@ export function nextNodeId(graph: WorkflowGraphConfig, prefix: string): string {
   let index = graph.nodes.length + 1
   while (used.has(`${prefix}-${index}`)) index += 1
   return `${prefix}-${index}`
+}
+
+export function nextAppendedNodePosition(graph: WorkflowGraphConfig): WorkflowGraphPosition {
+  const positions = resolveWorkflowNodePositions(graph)
+  let appendedPosition: WorkflowGraphPosition | null = null
+  let lowestBottom = Number.NEGATIVE_INFINITY
+
+  graph.nodes.forEach((node) => {
+    const position = positions.get(node.id)
+    if (!position) return
+    const bottom = position.y + workflowNodeHeight
+    if (bottom >= lowestBottom) {
+      lowestBottom = bottom
+      appendedPosition = {x: position.x, y: bottom + workflowNodeVerticalGap}
+    }
+  })
+
+  return appendedPosition ?? {x: 0, y: 0}
+}
+
+export function resolveWorkflowNodePositions(graph: WorkflowGraphConfig): Map<string, WorkflowGraphPosition> {
+  const layout = layoutWorkflowGraph(graph)
+  return new Map(
+    graph.nodes.map((node) => [
+      node.id,
+      validNodePosition(node) ?? layout.get(node.id) ?? {x: 0, y: 0},
+    ])
+  )
+}
+
+export function parseWorkflowPaletteDragPayload(raw: string): WorkflowPaletteDragPayload | null {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return null
+  }
+  if (!isRecord(parsed) || !isRecord(parsed.node) || typeof parsed.prefix !== 'string') return null
+  if (!isWorkflowNodeType(parsed.node.type)) return null
+  return {
+    node: parsed.node as Omit<WorkflowGraphNode, 'id'>,
+    prefix: parsed.prefix,
+  }
 }
 
 export function nodeLabel(
@@ -252,6 +319,41 @@ export function stepsFromGraph(graph: WorkflowGraphConfig): WorkflowStepConfig[]
 
 function legacyConditionsFromGraph(graph: WorkflowGraphConfig): WorkflowConditionConfig[] {
   return graph.nodes.find((node) => node.type === 'condition' && node.kind === 'if')?.conditions ?? []
+}
+
+function layoutWorkflowGraph(graph: WorkflowGraphConfig): Map<string, WorkflowGraphPosition> {
+  const dagreGraph = new dagre.graphlib.Graph()
+  dagreGraph.setDefaultEdgeLabel(() => ({}))
+  dagreGraph.setGraph({
+    rankdir: 'TB',
+    ranksep: workflowNodeVerticalGap,
+    nodesep: workflowNodeHorizontalGap,
+  })
+  graph.nodes.forEach((node) => {
+    dagreGraph.setNode(node.id, {width: workflowNodeWidth, height: workflowNodeHeight})
+  })
+  graph.edges.forEach((edge) => dagreGraph.setEdge(edge.from, edge.to))
+  dagre.layout(dagreGraph)
+  return new Map(
+    graph.nodes.map((node) => {
+      const position = dagreGraph.node(node.id)
+      return [node.id, {x: position.x - workflowNodeWidth / 2, y: position.y - workflowNodeHeight / 2}]
+    })
+  )
+}
+
+function validNodePosition(node: WorkflowGraphNode): WorkflowGraphPosition | null {
+  if (!node.position) return null
+  if (!Number.isFinite(node.position.x) || !Number.isFinite(node.position.y)) return null
+  return node.position
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isWorkflowNodeType(value: unknown): value is WorkflowGraphNode['type'] {
+  return value === 'trigger' || value === 'condition' || value === 'action' || value === 'control'
 }
 
 function legacyEdges(
