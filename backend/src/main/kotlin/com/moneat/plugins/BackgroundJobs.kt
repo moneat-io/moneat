@@ -30,6 +30,7 @@ import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.otlp.services.OtlpMetricsIngestionWorker
 import com.moneat.otlp.services.OtlpTraceIngestionWorker
 import com.moneat.security.detection.DetectionScheduler
+import com.moneat.security.vulnerabilities.VulnerabilityAdvisorySyncJob
 import com.moneat.shared.services.ArtifactCleanupService
 import com.moneat.shared.services.DemoLivenessBackgroundService
 import com.moneat.shared.services.PulseService
@@ -131,6 +132,7 @@ fun Application.configureBackgroundJobs() {
     val artifactCleanupService = koin.get<ArtifactCleanupService>()
     val uptimeScheduler = koin.get<UptimeScheduler>()
     val detectionScheduler = koin.get<DetectionScheduler>()
+    val vulnerabilityAdvisorySyncJob = koin.get<VulnerabilityAdvisorySyncJob>()
     val demoLivenessBackgroundService = koin.get<DemoLivenessBackgroundService>()
     val queueKey = environment.config.property("ingest.queueKey").getString()
     val dlqKey = environment.config.property("ingest.dlqKey").getString()
@@ -233,6 +235,7 @@ fun Application.configureBackgroundJobs() {
     artifactCleanupService.start(jobScope)
     uptimeScheduler.start()
     detectionScheduler.start(jobScope)
+    vulnerabilityAdvisorySyncJob.start(jobScope)
     ingestionWorker.start()
     logIngestionWorker.start()
     llmIngestionWorker.start()
@@ -278,6 +281,7 @@ fun Application.configureBackgroundJobs() {
         artifactCleanupService.stop()
         uptimeScheduler.stop()
         detectionScheduler.stop()
+        vulnerabilityAdvisorySyncJob.stop()
         ingestionWorker.stop()
         logIngestionWorker.stop()
         llmIngestionWorker.stop()

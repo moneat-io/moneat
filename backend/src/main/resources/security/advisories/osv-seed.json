@@ -1,0 +1,60 @@
+[
+  {
+    "schema_version": "1.6.0",
+    "id": "CVE-2019-10744",
+    "aliases": ["GHSA-jf85-cpcp-j695"],
+    "summary": "Prototype pollution in lodash before 4.17.12",
+    "published": "2019-07-25T00:00:00Z",
+    "modified": "2025-01-01T00:00:00Z",
+    "database_specific": {
+      "severity": "critical",
+      "cvss_score": 9.8
+    },
+    "affected": [
+      {
+        "package": {
+          "ecosystem": "npm",
+          "name": "lodash"
+        },
+        "ranges": [
+          {
+            "type": "SEMVER",
+            "events": [
+              {"introduced": "0"},
+              {"fixed": "4.17.12"}
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "schema_version": "1.6.0",
+    "id": "CVE-2021-44906",
+    "aliases": ["GHSA-vh95-rmgr-6w4m", "GHSA-xvch-5gv4-984h"],
+    "summary": "Prototype pollution in minimist versions up to 1.2.5",
+    "published": "2022-03-18T00:00:00Z",
+    "modified": "2025-01-01T00:00:00Z",
+    "database_specific": {
+      "severity": "critical",
+      "cvss_score": 9.8
+    },
+    "affected": [
+      {
+        "package": {
+          "ecosystem": "npm",
+          "name": "minimist"
+        },
+        "ranges": [
+          {
+            "type": "SEMVER",
+            "events": [
+              {"introduced": "0"},
+              {"fixed": "1.2.6"}
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

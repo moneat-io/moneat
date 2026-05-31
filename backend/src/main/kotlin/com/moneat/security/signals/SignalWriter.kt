@@ -143,7 +143,7 @@ object SignalWriter {
             it[dedupKey] = spec.dedupKey
             it[entities] = signalJson.encodeToString(spec.entities)
             it[sampleCount] = 1
-            it[tags] = "[]"
+            it[tags] = signalJson.encodeToString(spec.tags)
             it[firstSeen] = occurred
             it[lastSeen] = occurred
             it[createdAt] = now

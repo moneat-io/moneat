@@ -87,6 +87,7 @@ import { Route as WorkflowsConnectionsRouteImport } from './routes/workflows.con
 import { Route as UptimeMonitorIdRouteImport } from './routes/uptime.$monitorId'
 import { Route as SyntheticsTestIdRouteImport } from './routes/synthetics.$testId'
 import { Route as StatusPagesPageIdRouteImport } from './routes/status-pages.$pageId'
+import { Route as SecurityVulnerabilitiesRouteImport } from './routes/security.vulnerabilities'
 import { Route as SecuritySignalsRouteImport } from './routes/security.signals'
 import { Route as SecurityEventsRouteImport } from './routes/security.events'
 import { Route as SecurityDetectionsRouteImport } from './routes/security.detections'
@@ -543,6 +544,11 @@ const StatusPagesPageIdRoute = StatusPagesPageIdRouteImport.update({
   path: '/status-pages/$pageId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SecurityVulnerabilitiesRoute = SecurityVulnerabilitiesRouteImport.update({
+  id: '/vulnerabilities',
+  path: '/vulnerabilities',
+  getParentRoute: () => SecurityRoute,
+} as any)
 const SecuritySignalsRoute = SecuritySignalsRouteImport.update({
   id: '/signals',
   path: '/signals',
@@ -982,6 +988,7 @@ export interface FileRoutesByFullPath {
   '/security/detections': typeof SecurityDetectionsRoute
   '/security/events': typeof SecurityEventsRoute
   '/security/signals': typeof SecuritySignalsRoute
+  '/security/vulnerabilities': typeof SecurityVulnerabilitiesRoute
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/synthetics/$testId': typeof SyntheticsTestIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
@@ -1111,6 +1118,7 @@ export interface FileRoutesByTo {
   '/security/detections': typeof SecurityDetectionsRoute
   '/security/events': typeof SecurityEventsRoute
   '/security/signals': typeof SecuritySignalsRoute
+  '/security/vulnerabilities': typeof SecurityVulnerabilitiesRoute
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/synthetics/$testId': typeof SyntheticsTestIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
@@ -1256,6 +1264,7 @@ export interface FileRoutesById {
   '/security/detections': typeof SecurityDetectionsRoute
   '/security/events': typeof SecurityEventsRoute
   '/security/signals': typeof SecuritySignalsRoute
+  '/security/vulnerabilities': typeof SecurityVulnerabilitiesRoute
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/synthetics/$testId': typeof SyntheticsTestIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
@@ -1402,6 +1411,7 @@ export interface FileRouteTypes {
     | '/security/detections'
     | '/security/events'
     | '/security/signals'
+    | '/security/vulnerabilities'
     | '/status-pages/$pageId'
     | '/synthetics/$testId'
     | '/uptime/$monitorId'
@@ -1531,6 +1541,7 @@ export interface FileRouteTypes {
     | '/security/detections'
     | '/security/events'
     | '/security/signals'
+    | '/security/vulnerabilities'
     | '/status-pages/$pageId'
     | '/synthetics/$testId'
     | '/uptime/$monitorId'
@@ -1675,6 +1686,7 @@ export interface FileRouteTypes {
     | '/security/detections'
     | '/security/events'
     | '/security/signals'
+    | '/security/vulnerabilities'
     | '/status-pages/$pageId'
     | '/synthetics/$testId'
     | '/uptime/$monitorId'
@@ -2335,6 +2347,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/status-pages/$pageId'
       preLoaderRoute: typeof StatusPagesPageIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/security/vulnerabilities': {
+      id: '/security/vulnerabilities'
+      path: '/vulnerabilities'
+      fullPath: '/security/vulnerabilities'
+      preLoaderRoute: typeof SecurityVulnerabilitiesRouteImport
+      parentRoute: typeof SecurityRoute
     }
     '/security/signals': {
       id: '/security/signals'
@@ -3130,6 +3149,7 @@ interface SecurityRouteChildren {
   SecurityDetectionsRoute: typeof SecurityDetectionsRoute
   SecurityEventsRoute: typeof SecurityEventsRoute
   SecuritySignalsRoute: typeof SecuritySignalsRoute
+  SecurityVulnerabilitiesRoute: typeof SecurityVulnerabilitiesRoute
   SecurityIndexRoute: typeof SecurityIndexRoute
 }
 
@@ -3138,6 +3158,7 @@ const SecurityRouteChildren: SecurityRouteChildren = {
   SecurityDetectionsRoute: SecurityDetectionsRoute,
   SecurityEventsRoute: SecurityEventsRoute,
   SecuritySignalsRoute: SecuritySignalsRoute,
+  SecurityVulnerabilitiesRoute: SecurityVulnerabilitiesRoute,
   SecurityIndexRoute: SecurityIndexRoute,
 }
 

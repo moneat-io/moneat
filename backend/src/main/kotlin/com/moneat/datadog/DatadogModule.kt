@@ -103,7 +103,7 @@ class DatadogModule : EnterpriseModule {
                 dbmIngestRoutes()
                 debuggerIngestRoutes()
                 telemetryProxyRoutes()
-                miscIngestRoutes()
+                miscIngestRoutes(includeSbomRoutes = false)
                 ndmIngestRoutes()
                 securityIngestRoutes()
             }

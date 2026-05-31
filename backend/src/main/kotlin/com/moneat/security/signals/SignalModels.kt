@@ -112,6 +112,7 @@ enum class SignalSource(val wire: String) {
     AGENT_RUNTIME("agent_runtime"),
     AGENT_COMPLIANCE("agent_compliance"),
     DETECTION("detection"),
+    VULNERABILITY("vulnerability"),
 }
 
 /** Audit action kinds. */
@@ -136,6 +137,7 @@ data class SignalSpec(
     val evidenceType: String,
     val evidenceReference: String,
     val occurredAtMs: Long,
+    val tags: List<String> = emptyList(),
 )
 
 /** Result of [SignalWriter.upsert]; drives whether the workflow trigger fires (Created/Escalated only). */
