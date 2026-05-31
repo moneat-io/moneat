@@ -34,7 +34,7 @@ class SigmaImporterTest {
 
     private fun map(yaml: String) = importer.toRuleRequest(yaml).request
 
-    // ── Supported subset ───────────────────────────────────────────────────
+    // ──── Supported subset ────
 
     @Test
     fun `title description and level map to name description and severity`() {
@@ -94,8 +94,8 @@ class SigmaImporterTest {
     fun `contains startswith endswith map to wildcard matches`() {
         val contains = map(sel("CommandLine|contains", "mimikatz"))
         assertEquals("@CommandLine:*mimikatz*", contains.filter)
-        val starts = map(sel("Image|startswith", "C:\\Temp"))
-        assertTrue(starts.filter.startsWith("@Image:C:") && starts.filter.endsWith("*"), starts.filter)
+        val starts = map(sel("Image|startswith", "powershell"))
+        assertEquals("@Image:powershell*", starts.filter)
         val ends = map(sel("TargetFilename|endswith", ".lnk"))
         assertEquals("@TargetFilename:*.lnk", ends.filter)
     }
@@ -274,7 +274,7 @@ class SigmaImporterTest {
         assertTrue(rule.tags.any { it.contains("attack.t1059") })
     }
 
-    // ── Rejections (faithfulness: reject rather than mistranslate) ──────────
+    // ──── Rejections (faithfulness: reject rather than mistranslate) ────
 
     @Test
     fun `regex modifier is rejected`() {
@@ -410,6 +410,62 @@ class SigmaImporterTest {
                 }
                 assertTrue(ex.message!!.contains("literal", ignoreCase = true), ex.message)
             }
+    }
+
+    @Test
+    fun `a parser control character in a contains-startswith-endswith value is rejected`() {
+        // The wildcard token is emitted unquoted, so whitespace / ':' / parentheses in the value could
+        // change the filter's structure. These are rejected rather than mangled.
+        listOf("CommandLine|contains" to "foo bar", "Image|startswith" to "C:dir", "Name|endswith" to "a(b)")
+            .forEach { (key, value) ->
+                val ex = assertFailsWith<SigmaImportException>("$key:$value should be rejected") {
+                    map(sel(key, "\"$value\""))
+                }
+                assertTrue(ex.message!!.contains("control characters", ignoreCase = true), ex.message)
+            }
+    }
+
+    @Test
+    fun `an empty field value list is rejected rather than dropped`() {
+        // `field: []` would otherwise compile to a blank fragment that is silently filtered out, dropping
+        // part of the rule. Faithfulness requires rejecting it.
+        val ex = assertFailsWith<SigmaImportException> { map(sel("CommandLine", "[]")) }
+        assertTrue(ex.message!!.contains("empty value list", ignoreCase = true), ex.message)
+    }
+
+    @Test
+    fun `a scalar logsource is rejected rather than treated as missing`() {
+        val ex = assertFailsWith<SigmaImportException> {
+            map(
+                """
+                title: t
+                logsource: windows
+                detection:
+                  selection:
+                    Image: x
+                  condition: selection
+                """.trimIndent()
+            )
+        }
+        assertTrue(ex.message!!.contains("logsource", ignoreCase = true), ex.message)
+    }
+
+    @Test
+    fun `a sequence logsource is rejected rather than treated as missing`() {
+        val ex = assertFailsWith<SigmaImportException> {
+            map(
+                """
+                title: t
+                logsource:
+                  - category: process_creation
+                detection:
+                  selection:
+                    Image: x
+                  condition: selection
+                """.trimIndent()
+            )
+        }
+        assertTrue(ex.message!!.contains("logsource", ignoreCase = true), ex.message)
     }
 
     @Test

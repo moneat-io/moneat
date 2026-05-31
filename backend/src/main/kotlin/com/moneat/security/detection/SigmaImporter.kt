@@ -152,7 +152,11 @@ class SigmaImporter {
      * evaluate over the `logs` table (e.g. raw network-flow or registry sources with no log representation).
      */
     private fun mapLogsource(raw: Any?): LogsourceTags {
-        val map = asMap(raw) ?: return LogsourceTags(null, null, null)
+        if (raw == null) return LogsourceTags(null, null, null)
+        // A scalar or sequence logsource is malformed Sigma; reject it rather than treating it as absent
+        // (which would silently fall back to the default grouping for an unintended rule).
+        val map = asMap(raw)
+            ?: throw SigmaImportException("Sigma logsource must be a mapping")
         val category = optionalText(map["category"]).lowercase().ifBlank { null }
         val product = optionalText(map["product"]).lowercase().ifBlank { null }
         val service = optionalText(map["service"]).lowercase().ifBlank { null }
@@ -238,6 +242,11 @@ class SigmaImporter {
 
         val rendered = when (rawValue) {
             is List<*> -> {
+                if (rawValue.isEmpty()) {
+                    throw SigmaImportException(
+                        "Sigma rule '$title' field '${sanitize(rawField)}' has an empty value list"
+                    )
+                }
                 val fragments = rawValue.map { v -> fieldValueFragment(safeField, scalar(v, title), valueModifier) }
                 if (combineWithAnd) joinAnd(fragments) else joinOr(fragments)
             }
@@ -353,8 +362,16 @@ class SigmaImporter {
     private fun wildcardValue(value: String, modifier: String): String {
         if (value.contains('*') || value.contains('?')) {
             throw SigmaImportException(
-                "Sigma '$modifier' value '${sanitize(value)}' contains a literal '*'/'?'; " +
+                "Sigma '${sanitize(modifier)}' value '${sanitize(value)}' contains a literal '*'/'?'; " +
                     "this cannot be mapped without changing the rule's breadth"
+            )
+        }
+        // The wildcard token is emitted unquoted, so a value carrying the parser's control characters
+        // (whitespace, ':' or parentheses) could change the filter's structure. Reject rather than mangle.
+        if (value.any { it.isWhitespace() || it in ":()" }) {
+            throw SigmaImportException(
+                "Sigma '${sanitize(modifier)}' value '${sanitize(value)}' contains parser control characters; " +
+                    "this cannot be mapped safely without quoted wildcard support"
             )
         }
         return value.replace("\\", "\\\\").replace("\"", "\\\"")

@@ -20,6 +20,8 @@ import com.moneat.security.detection.DetectionRuleService
 import com.moneat.security.detection.DetectionRules
 import com.moneat.security.detection.DetectionStarterPack
 import com.moneat.utils.suspendRunCatching
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -43,19 +45,25 @@ private const val DEMO_ORG_ID = -1
  * so it never blocks the rest of the demo reseed.
  */
 internal suspend fun seedDemoDetectionRules() {
+    // Detection rules live in Postgres, so this does blocking Exposed transaction work; run it on the
+    // IO dispatcher so it never blocks the calling event-loop thread. Still non-fatal.
     suspendRunCatching {
-        if (demoStarterRulesPresent()) {
-            logger.info { "Demo detection rules already present, skipping detection seed" }
-            return@suspendRunCatching
+        withContext(Dispatchers.IO) {
+            if (demoStarterRulesPresent()) {
+                logger.info { "Demo detection rules already present, skipping detection seed" }
+                return@withContext
+            }
+            val service = DetectionRuleService()
+            var created = 0
+            for (request in DetectionStarterPack.seedRequests()) {
+                suspendRunCatching { service.create(DEMO_ORG_ID, request.copy(enabled = false)) }
+                    .onSuccess { created++ }
+                    .onFailure {
+                        logger.warn { "Demo detection rule '${request.name}' failed (non-fatal): ${it.message}" }
+                    }
+            }
+            logger.info { "Seeded $created demo detection rules (disabled)" }
         }
-        val service = DetectionRuleService()
-        var created = 0
-        for (request in DetectionStarterPack.seedRequests()) {
-            suspendRunCatching { service.create(DEMO_ORG_ID, request.copy(enabled = false)) }
-                .onSuccess { created++ }
-                .onFailure { logger.warn { "Demo detection rule '${request.name}' failed (non-fatal): ${it.message}" } }
-        }
-        logger.info { "Seeded $created demo detection rules (disabled)" }
     }.onFailure {
         logger.warn { "Demo detection rule seed failed (non-fatal): ${it.message}" }
     }
