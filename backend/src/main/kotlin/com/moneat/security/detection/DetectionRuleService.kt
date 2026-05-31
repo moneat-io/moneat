@@ -138,11 +138,14 @@ class DetectionRuleService(
     }
 
     /** All enabled rules across orgs, as records for the scheduler. The compiler still injects each
-     * rule's owning org, so loading them together never crosses tenant boundaries. */
+     * rule's owning org, so loading them together never crosses tenant boundaries. Ordered by id so the
+     * scheduler's per-org cap defers a *stable* remainder it can rotate across ticks (without a
+     * deterministic order, rules past the cap could be starved indefinitely). */
     fun loadEnabledRules(): List<DetectionRuleRecord> = transaction {
         DetectionRules
             .selectAll()
             .where { DetectionRules.enabled eq true }
+            .orderBy(DetectionRules.id, SortOrder.ASC)
             .map { it.toRecord() }
     }
 
@@ -160,30 +163,6 @@ class DetectionRuleService(
                 ?.toRecord()
         } ?: return null
         return runPreview(organizationId, record, persistedRuleId = ruleId)
-    }
-
-    /** Preview an unsaved rule body, e.g. before first save. Same caps; no writes; no baseline read. */
-    suspend fun previewRequest(
-        organizationId: Int,
-        request: CreateDetectionRuleRequest,
-    ): DetectionPreviewResponse {
-        val type = parseType(request.type)
-        val record = DetectionRuleRecord(
-            id = 0,
-            organizationId = organizationId,
-            name = request.name,
-            source = request.source,
-            filter = request.filter,
-            groupBy = request.groupBy,
-            windowSeconds = request.windowSeconds,
-            type = type,
-            thresholdCount = request.thresholdCount,
-            severity = SignalSeverity.fromWire(request.severity),
-            signalTitle = request.signalTitle,
-            signalMessage = request.signalMessage,
-            createdAt = Clock.System.now(),
-        )
-        return runPreview(organizationId, record, persistedRuleId = null)
     }
 
     private suspend fun runPreview(

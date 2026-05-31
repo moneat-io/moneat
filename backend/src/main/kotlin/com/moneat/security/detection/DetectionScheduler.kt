@@ -57,6 +57,9 @@ class DetectionScheduler(
 
     private var evaluationJob: Job? = null
 
+    /** Monotonic sweep counter. Rotates the per-org cap window so deferred rules eventually run. */
+    private var tick: Long = 0
+
     private val intervalSeconds: Int
         get() = EnvConfig.get(ENV_INTERVAL_SECONDS, DEFAULT_INTERVAL_SECONDS.toString())
             .toIntOrNull()?.coerceAtLeast(RuleQueryCompiler.MIN_WINDOW_SECONDS) ?: DEFAULT_INTERVAL_SECONDS
@@ -94,7 +97,8 @@ class DetectionScheduler(
                 logger.error(e) { "Failed to load enabled detection rules" }
                 emptyList()
             }
-        val capped = capPerOrg(rules, perOrgMaxRules)
+        val capped = capPerOrg(rules, perOrgMaxRules, tick)
+        tick++
         logger.debug { "Evaluating ${capped.size}/${rules.size} enabled detection rules this tick" }
         for (rule in capped) {
             suspendRunCatching { evaluateRule(rule) }
@@ -112,18 +116,31 @@ class DetectionScheduler(
 
 /**
  * Caps the rules evaluated per organization to [maxPerOrg] so a tenant with many rules cannot crowd
- * out others or saturate ClickHouse in a single tick. Order within an org is preserved (the query
- * returns them deterministically), so the remainder is simply deferred to the next tick.
+ * out others or saturate ClickHouse in a single tick. [rules] arrives in a stable order (id ASC from
+ * [DetectionRuleService.loadEnabledRules]); the per-org window of size [maxPerOrg] is *rotated* by
+ * [tick] so that the remainder deferred this tick is picked up on a later one. Over
+ * `ceil(orgRuleCount / maxPerOrg)` ticks every rule in an org is evaluated, so no rule past the cap is
+ * starved indefinitely. With a stable order and no rotation, ticks would re-run the same prefix forever.
  */
-internal fun capPerOrg(rules: List<DetectionRuleRecord>, maxPerOrg: Int): List<DetectionRuleRecord> {
-    val perOrgCount = HashMap<Int, Int>()
+internal fun capPerOrg(
+    rules: List<DetectionRuleRecord>,
+    maxPerOrg: Int,
+    tick: Long = 0,
+): List<DetectionRuleRecord> {
+    if (maxPerOrg < 1) return emptyList()
+    val byOrg = rules.groupBy { it.organizationId }
     return rules.filter { rule ->
-        val count = perOrgCount.getOrDefault(rule.organizationId, 0)
-        if (count >= maxPerOrg) {
-            false
-        } else {
-            perOrgCount[rule.organizationId] = count + 1
+        val orgRules = byOrg.getValue(rule.organizationId)
+        if (orgRules.size <= maxPerOrg) {
             true
+        } else {
+            // Slide a window of size maxPerOrg over this org's rules, advancing by maxPerOrg each tick
+            // and wrapping, so successive ticks cover the whole set round-robin.
+            val size = orgRules.size
+            // `mod` is floored (always non-negative for a positive divisor), unlike `%`.
+            val start = (tick.mod(size.toLong()).toInt() * maxPerOrg) % size
+            val offset = (orgRules.indexOf(rule) - start).mod(size)
+            offset < maxPerOrg
         }
     }
 }

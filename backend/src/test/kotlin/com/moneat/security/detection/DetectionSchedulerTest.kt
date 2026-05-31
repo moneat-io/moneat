@@ -89,6 +89,17 @@ class DetectionSchedulerTest {
         assertEquals(2, capped.count { it.organizationId == orgId + 1 })
     }
 
+    @Test
+    fun `per-org cap rotates so every rule runs across ticks`() {
+        val rules = (1..5).map { recordForOrg(id = it, org = orgId) }
+        // Each tick covers 3 of 5; over two ticks the union must be all 5 rules — no starvation.
+        val tick0 = capPerOrg(rules, maxPerOrg = 3, tick = 0).map { it.id }.toSet()
+        val tick1 = capPerOrg(rules, maxPerOrg = 3, tick = 1).map { it.id }.toSet()
+        assertEquals(setOf(1, 2, 3), tick0)
+        assertEquals(setOf(4, 5, 1), tick1)
+        assertEquals(setOf(1, 2, 3, 4, 5), tick0 + tick1)
+    }
+
     private fun recordForOrg(id: Int, org: Int) = DetectionRuleRecord(
         id = id,
         organizationId = org,
