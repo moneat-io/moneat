@@ -58,7 +58,6 @@ private suspend fun RoutingContext.handleList(service: SignalService) {
         status = call.parameters["status"],
         severity = call.parameters["severity"],
         source = call.parameters["source"],
-        entity = call.parameters["entity"],
         from = call.parameters["from"],
         to = call.parameters["to"],
     )

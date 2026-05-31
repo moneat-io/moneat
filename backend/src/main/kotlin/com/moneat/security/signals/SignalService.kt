@@ -49,7 +49,6 @@ data class SignalFilters(
     val status: String? = null,
     val severity: String? = null,
     val source: String? = null,
-    val entity: String? = null,
     val from: String? = null,
     val to: String? = null,
 )
