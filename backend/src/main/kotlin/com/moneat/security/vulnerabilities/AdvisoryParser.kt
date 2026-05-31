@@ -101,20 +101,32 @@ object AdvisoryParser {
         val parsed = mutableListOf<AdvisoryRange>()
         ranges.forEach { rangeElement ->
             val range = rangeElement as? JsonObject ?: return@forEach
+            val type = range.s("type").takeIf { it.isNotBlank() }
             val events = range.a("events")
             var introduced: String? = null
             events.forEach { eventElement ->
                 val event = eventElement as? JsonObject ?: return@forEach
                 val nextIntroduced = event.s("introduced").takeIf { it.isNotBlank() }
                 val fixed = event.s("fixed").takeIf { it.isNotBlank() }
+                val lastAffected = event.s("last_affected").takeIf { it.isNotBlank() }
                 if (nextIntroduced != null) introduced = nextIntroduced
                 if (fixed != null) {
-                    parsed.add(AdvisoryRange(introduced = introduced ?: "0", fixed = fixed))
+                    parsed.add(AdvisoryRange(type = type, introduced = introduced ?: "0", fixed = fixed))
+                    introduced = null
+                }
+                if (lastAffected != null) {
+                    parsed.add(
+                        AdvisoryRange(
+                            type = type,
+                            introduced = introduced ?: "0",
+                            lastAffected = lastAffected,
+                        )
+                    )
                     introduced = null
                 }
             }
             if (introduced != null) {
-                parsed.add(AdvisoryRange(introduced = introduced))
+                parsed.add(AdvisoryRange(type = type, introduced = introduced))
             }
         }
         return parsed
@@ -145,6 +157,7 @@ object AdvisoryParser {
                 packageType = ecosystem,
                 affectedRanges = listOf(
                     AdvisoryRange(
+                        type = "SEMVER",
                         vulnerableRange = vulnerability.s("vulnerable_version_range").ifBlank { null },
                         fixed = fixedVersion,
                     )

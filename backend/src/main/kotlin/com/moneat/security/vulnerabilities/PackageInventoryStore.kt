@@ -112,7 +112,8 @@ class ClickHousePackageInventoryStore(
                 host,
                 image_name,
                 container_id,
-                formatDateTime(max(collected_at), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') AS last_seen
+                formatDateTime(max(collected_at), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') AS last_seen,
+                toUInt32(0) AS finding_count
             FROM `${databaseProvider()}`.security_package_inventory
             WHERE $where
             GROUP BY

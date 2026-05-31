@@ -94,6 +94,36 @@ class SignalWriterTest {
     }
 
     @Test
+    fun `repeat within an open signal refreshes entities tags and title`() {
+        val first = SignalWriter.upsert(
+            orgId,
+            spec(
+                severity = SignalSeverity.MEDIUM,
+                ruleName = "Old advisory",
+                entities = mapOf("package" to "lodash", "fix_version" to "1.0.0"),
+                tags = listOf("severity:medium"),
+            )
+        )
+
+        SignalWriter.upsert(
+            orgId,
+            spec(
+                severity = SignalSeverity.MEDIUM,
+                ruleName = "Updated advisory",
+                entities = mapOf("package" to "lodash", "fix_version" to "2.0.0"),
+                tags = listOf("severity:medium", "cve:CVE-2026-0001"),
+            )
+        )
+
+        transaction {
+            val row = SecuritySignals.selectAll().where { SecuritySignals.id eq first.signalId }.single()
+            assertEquals("Updated advisory", row[SecuritySignals.ruleName])
+            assertTrue(row[SecuritySignals.entities].contains("\"fix_version\":\"2.0.0\""))
+            assertTrue(row[SecuritySignals.tags].contains("CVE-2026-0001"))
+        }
+    }
+
+    @Test
     fun `an out-of-order fold never moves last_seen back and lowers first_seen to the earliest`() {
         // Agent events can arrive out of order (Redis queue, multiple workers, producer retries).
         val baseMs = 1_700_000_000_000
@@ -187,16 +217,23 @@ class SignalWriterTest {
         }
     }
 
-    private fun spec(severity: SignalSeverity, occurredAtMs: Long = 1_700_000_000_000) = SignalSpec(
+    private fun spec(
+        severity: SignalSeverity,
+        occurredAtMs: Long = 1_700_000_000_000,
+        ruleName: String = "Suspicious exec",
+        entities: Map<String, String> = mapOf("host" to "web-01", "process" to "bash"),
+        tags: List<String> = emptyList(),
+    ) = SignalSpec(
         source = SignalSource.AGENT_RUNTIME,
         ruleId = "cws-1",
-        ruleName = "Suspicious exec",
+        ruleName = ruleName,
         severity = severity,
         dedupKey = "cws-1|web-01|bash",
-        entities = mapOf("host" to "web-01", "process" to "bash"),
+        entities = entities,
         evidenceType = "clickhouse_query",
         evidenceReference = "table=security_events dedup=cws-1|web-01|bash",
-        occurredAtMs = occurredAtMs
+        occurredAtMs = occurredAtMs,
+        tags = tags,
     )
 
     private fun seedOrg(name: String): Int =

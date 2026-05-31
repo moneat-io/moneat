@@ -113,8 +113,11 @@ object SignalWriter {
         val escalated = spec.severity.rank > existing.severity.rank
         val newSeverity = if (escalated) spec.severity else existing.severity
         SecuritySignals.update({ SecuritySignals.id eq existing.id }) {
+            it[ruleName] = spec.ruleName
             it[sampleCount] = existing.sampleCount + 1
             it[severity] = newSeverity.wire
+            it[entities] = signalJson.encodeToString(spec.entities)
+            it[tags] = signalJson.encodeToString(spec.tags)
             // Agent events can arrive out of order, so clamp the window monotonically: never move
             // last_seen backwards (it is the list sort key and time-filter bound) and lower first_seen
             // only when an earlier occurrence folds in.
