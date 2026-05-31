@@ -106,7 +106,19 @@ import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import com.moneat.uptime.services.UptimeCheckExecutor
 import com.moneat.uptime.services.UptimeScheduler
 import com.moneat.uptime.services.UptimeService
+import com.moneat.workflows.engine.temporal.ExecuteActionActivityImpl
+import com.moneat.workflows.engine.temporal.ExecuteEgressActionActivityImpl
+import com.moneat.workflows.engine.temporal.PersistRunActivityImpl
+import com.moneat.workflows.engine.temporal.RequestApprovalActivityImpl
+import com.moneat.workflows.engine.temporal.TemporalClientProvider
+import com.moneat.workflows.engine.temporal.TemporalWorkflowExecutionEngine
+import com.moneat.workflows.engine.temporal.WorkflowExecutionEngine
+import com.moneat.workflows.services.WorkflowActionExecutor
+import com.moneat.workflows.services.WorkflowEgressActionExecutor
+import com.moneat.workflows.services.WorkflowGovernanceService
 import com.moneat.workflows.services.WorkflowService
+import com.moneat.workflows.services.WorkflowStepRenderer
+import com.moneat.workflows.services.WorkflowTrustedActionExecutor
 import org.koin.dsl.module
 
 /** Shared cross-domain singletons: notification channels, pricing, retention, shared repositories. */
@@ -118,7 +130,26 @@ val sharedModule = module {
     single { SlackService() }
     single { DiscordService() }
     single { AlertNotificationPreferencesService() }
-    single { WorkflowService(get(), get(), get()) }
+    single { WorkflowStepRenderer() }
+    single {
+        WorkflowTrustedActionExecutor(
+            logService = get(),
+            dashboardService = get(),
+            monitorService = get(),
+            monitorAlertServiceProvider = { get<MonitorAlertService>() },
+            statusPageService = get(),
+        )
+    }
+    single { WorkflowActionExecutor(get(), get(), get(), get(), get()) }
+    single { WorkflowEgressActionExecutor() }
+    single { PersistRunActivityImpl() }
+    single { RequestApprovalActivityImpl() }
+    single { ExecuteActionActivityImpl(get()) }
+    single { ExecuteEgressActionActivityImpl(get()) }
+    single { TemporalClientProvider() }
+    single<WorkflowExecutionEngine> { TemporalWorkflowExecutionEngine(get()) }
+    single { WorkflowService(get(), get(), get(), get(), get(), get(), get()) }
+    single { WorkflowGovernanceService(get()) }
     single { IncidentService(get()) }
 
     single { PricingTierService() }

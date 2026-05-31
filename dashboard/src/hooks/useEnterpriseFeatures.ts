@@ -23,7 +23,7 @@ export function useEnterpriseFeatures() {
     queryKey: ['features'],
     queryFn: async () => {
       const res = await fetch(FEATURES_URL)
-      if (!res.ok) return { enterprise: false, modules: [], selfHost: false }
+      if (!res.ok) throw new Error('Unable to load feature availability')
       return res.json()
     },
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes

@@ -25,12 +25,15 @@ import com.moneat.enterprise.FeatureRegistry
 import com.moneat.plugins.configureBackgroundJobs
 import com.moneat.plugins.configureDatabases
 import com.moneat.plugins.configureDemoModeRestrictions
+import com.moneat.plugins.configureEgressWorkflowWorker
 import com.moneat.plugins.configureHTTP
 import com.moneat.plugins.configureMonitoring
 import com.moneat.plugins.configureRateLimiting
 import com.moneat.plugins.configureRouting
 import com.moneat.plugins.configureSecurity
 import com.moneat.plugins.configureSerialization
+import com.moneat.plugins.WorkflowWorkerMode
+import com.moneat.plugins.workflowWorkerMode
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopping
 import io.ktor.server.application.install
@@ -80,6 +83,12 @@ fun Application.module() {
     install(Koin) {
         slf4jLogger()
         modules(appModules)
+    }
+    if (workflowWorkerMode() == WorkflowWorkerMode.EGRESS) {
+        configureSerialization()
+        configureEgressWorkflowWorker()
+        log.info("Workflow egress worker startup complete")
+        return
     }
     configureSecurity()
     configureHTTP()

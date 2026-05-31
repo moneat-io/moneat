@@ -32,6 +32,15 @@ tasks.shadowJar {
     manifest {
         attributes("Main-Class" to application.mainClass.get())
     }
+    // GraalVM's polyglot language selectors (org.graalvm.polyglot:js, org.graalvm.js:js)
+    // are POM-only meta modules; their resolved artifact is a .pom that shadow cannot
+    // unzip ("Cannot expand ZIP …js-*.pom"). Exclude the meta artifacts — the actual
+    // language jars (js-language, truffle-api, truffle-runtime, regex, icu4j, …) are
+    // separate modules and stay on the classpath.
+    dependencies {
+        exclude(dependency("org.graalvm.polyglot:js:.*"))
+        exclude(dependency("org.graalvm.js:js:.*"))
+    }
 }
 
 repositories {
@@ -99,6 +108,12 @@ dependencies {
 
     // Redis
     implementation(libs.lettuce)
+
+    // Workflow execution
+    implementation(libs.jackson.module.kotlin)
+    implementation(libs.temporal.sdk)
+    implementation(libs.graalvm.polyglot)
+    implementation(libs.graalvm.polyglot.js)
 
     // JDBC drivers for custom datasources
     runtimeOnly(libs.mysql.connector.j)
@@ -168,6 +183,7 @@ dependencies {
     testRuntimeOnly(libs.junit.jupiter.engine)
     testImplementation(libs.h2)
     testImplementation(libs.mockk)
+    testImplementation(libs.temporal.testing)
     testImplementation(kotlin("reflect"))
 
     // Integration testing dependencies

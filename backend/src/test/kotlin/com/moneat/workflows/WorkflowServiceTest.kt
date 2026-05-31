@@ -20,7 +20,8 @@ import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.alerts.models.AlertSeverity
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertStatus
-import com.moneat.config.RedisConfig
+import com.moneat.datadog.security.QueuedSecurityBatch
+import com.moneat.datadog.security.QueuedSecurityEventEntry
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.SlackService
@@ -29,26 +30,30 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.workflows.engine.WorkflowCatalog
+import com.moneat.workflows.engine.temporal.WorkflowExecutionEngine
+import com.moneat.workflows.engine.temporal.WorkflowStartRequest
+import com.moneat.workflows.engine.temporal.WorkflowStartResult
 import com.moneat.workflows.models.CreateWorkflowRequest
 import com.moneat.workflows.models.UpdateWorkflowRequest
+import com.moneat.workflows.models.WorkflowAuditEvents
 import com.moneat.workflows.models.WorkflowConditionConfig
 import com.moneat.workflows.models.WorkflowPreviewRequest
+import com.moneat.workflows.models.WorkflowRunInstanceRequest
 import com.moneat.workflows.models.WorkflowRuns
+import com.moneat.workflows.models.WorkflowRunSteps
 import com.moneat.workflows.models.WorkflowStepConfig
+import com.moneat.workflows.models.WorkflowUsageEvents
 import com.moneat.workflows.models.WorkflowVersions
 import com.moneat.workflows.models.Workflows
+import com.moneat.workflows.models.typedWorkflowScope
 import com.moneat.workflows.services.WorkflowService
-import io.lettuce.core.RedisException
-import io.lettuce.core.api.sync.RedisCommands
 import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
-import io.mockk.mockkObject
 import io.mockk.runs
-import io.mockk.unmockkObject
 import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonPrimitive
@@ -59,7 +64,8 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import kotlin.test.AfterTest
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -77,7 +83,7 @@ class WorkflowServiceTest {
     private val emailService = mockk<EmailService>(relaxed = true)
     private val slackService = mockk<SlackService>()
     private val discordService = mockk<DiscordService>()
-    private val redis = mockk<RedisCommands<String, String>>(relaxed = true)
+    private lateinit var workflowEngine: FakeWorkflowExecutionEngine
     private lateinit var service: WorkflowService
     private var orgId: Int = 0
 
@@ -85,28 +91,21 @@ class WorkflowServiceTest {
     fun setup() {
         if (db == null) {
             db = Database.connect(
-                url = "jdbc:h2:mem:moneat_workflows;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                url = "jdbc:h2:mem:moneat_workflows;MODE=MYSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
         }
         TransactionManager.defaultDatabase = db
         resetWorkflowSchema()
-        clearMocks(emailService, slackService, discordService, redis)
-        mockkObject(RedisConfig)
-        every { RedisConfig.sync() } returns redis
-        every { redis.lpush(any(), any<String>()) } returns 1L
+        workflowEngine = FakeWorkflowExecutionEngine()
+        clearMocks(emailService, slackService, discordService)
         every { emailService.sendEmail(any(), any(), any(), any(), any()) } just runs
         coEvery { slackService.sendWorkflowMessage(any(), any(), any()) } returns true
         coEvery { slackService.sendWorkflowAlertMessage(any(), any(), any()) } returns true
         coEvery { discordService.sendWorkflowMessage(any(), any(), any(), any()) } returns true
         coEvery { discordService.sendWorkflowAlertMessage(any(), any(), any()) } returns true
-        service = WorkflowService(emailService, slackService, discordService)
+        service = WorkflowService(emailService, slackService, discordService, executionEngine = workflowEngine)
         orgId = seedOrganizationWithMembers()
-    }
-
-    @AfterTest
-    fun teardown() {
-        unmockkObject(RedisConfig)
     }
 
     private fun resetWorkflowSchema() {
@@ -116,7 +115,10 @@ class WorkflowServiceTest {
             Memberships,
             Workflows,
             WorkflowVersions,
-            WorkflowRuns
+            WorkflowRuns,
+            WorkflowRunSteps,
+            WorkflowAuditEvents,
+            WorkflowUsageEvents
         )
         transaction {
             SchemaUtils.create(Users, Organizations, Memberships, Workflows)
@@ -130,6 +132,10 @@ class WorkflowServiceTest {
                     version INT NOT NULL,
                     conditions TEXT NOT NULL DEFAULT '[]',
                     steps TEXT NOT NULL DEFAULT '[]',
+                    graph TEXT NOT NULL DEFAULT '{"nodes":[],"edges":[]}',
+                    published BOOLEAN NOT NULL DEFAULT FALSE,
+                    input_schema TEXT NOT NULL DEFAULT '{}',
+                    tags TEXT NOT NULL DEFAULT '[]',
                     once_for_template TEXT NOT NULL DEFAULT '[]',
                     engine_config TEXT NOT NULL DEFAULT '{}',
                     most_recent BOOLEAN NOT NULL DEFAULT TRUE,
@@ -160,6 +166,8 @@ class WorkflowServiceTest {
                     ),
                     progress TEXT NOT NULL DEFAULT '[]',
                     error_message TEXT,
+                    temporal_workflow_id VARCHAR(255),
+                    temporal_run_id VARCHAR(255),
                     created_at TIMESTAMP NOT NULL,
                     completed_at TIMESTAMP,
                     failed_at TIMESTAMP,
@@ -179,6 +187,65 @@ class WorkflowServiceTest {
                 """.trimIndent()
             )
             exec("CREATE INDEX idx_workflow_runs_workflow_created ON workflow_runs (workflow_id, created_at DESC)")
+            exec(
+                """
+                CREATE TABLE workflow_run_steps (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    run_id INT NOT NULL,
+                    node_id VARCHAR(120) NOT NULL,
+                    type VARCHAR(64) NOT NULL,
+                    status VARCHAR(32) NOT NULL,
+                    started_at TIMESTAMP,
+                    completed_at TIMESTAMP,
+                    input TEXT NOT NULL DEFAULT '{}',
+                    output TEXT NOT NULL DEFAULT '{}',
+                    error_message TEXT,
+                    attempt INT NOT NULL DEFAULT 1,
+                    CONSTRAINT fk_workflow_run_steps_run_id
+                        FOREIGN KEY (run_id) REFERENCES workflow_runs(id) ON DELETE CASCADE
+                )
+                """.trimIndent()
+            )
+            exec(
+                """
+                CREATE UNIQUE INDEX idx_workflow_run_steps_attempt
+                    ON workflow_run_steps (run_id, node_id, attempt)
+                """.trimIndent()
+            )
+            exec(
+                """
+                CREATE TABLE workflow_audit_events (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    organization_id INT NOT NULL,
+                    workflow_id INT,
+                    run_id INT,
+                    action VARCHAR(48) NOT NULL,
+                    actor_user_id INT,
+                    detail TEXT NOT NULL DEFAULT '{}',
+                    created_at TIMESTAMP NOT NULL,
+                    CONSTRAINT fk_workflow_audit_events_org
+                        FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+                    CONSTRAINT fk_workflow_audit_events_workflow
+                        FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
+                )
+                """.trimIndent()
+            )
+            exec(
+                """
+                CREATE TABLE workflow_usage_events (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    organization_id INT NOT NULL,
+                    workflow_id INT,
+                    run_id INT NOT NULL,
+                    period VARCHAR(7) NOT NULL,
+                    outcome VARCHAR(16) NOT NULL,
+                    created_at TIMESTAMP NOT NULL,
+                    CONSTRAINT fk_workflow_usage_events_org
+                        FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+                    CONSTRAINT uq_workflow_usage_events_run_outcome UNIQUE (run_id, outcome)
+                )
+                """.trimIndent()
+            )
         }
     }
 
@@ -186,10 +253,11 @@ class WorkflowServiceTest {
     fun `catalog exposes alert triggers resources steps and lookup helpers`() {
         val response = service.catalog()
 
-        assertEquals(7, response.resources.size)
+        assertEquals(9, response.resources.size)
         assertTrue(response.resources.any { it.type == "Boolean" })
         assertTrue(response.resources.any { it.type == "AlertSeverity" })
         assertTrue(response.resources.any { it.type == "AlertStatus" })
+        assertTrue(response.resources.any { it.type == "SecuritySeverity" })
         assertTrue(
             response.resources
                 .first { it.type == "String" }
@@ -198,11 +266,20 @@ class WorkflowServiceTest {
         )
         assertEquals("alert.triggered", response.triggers.first().name)
         assertEquals(listOf("alert.deduplication_key"), response.triggers.first().defaultOnceForTemplate)
-        assertEquals("alert.resolved", response.triggers.last().name)
+        val resolvedTrigger = response.triggers.first { it.name == "alert.resolved" }
         assertEquals(
             listOf("alert.deduplication_key", "alert.status"),
-            response.triggers.last().defaultOnceForTemplate
+            resolvedTrigger.defaultOnceForTemplate
         )
+        assertTrue(response.triggers.any { it.name == "api" })
+        assertTrue(response.triggers.any { it.name == "webhook" })
+        assertTrue(response.triggers.any { it.name == "security.signal" })
+        assertTrue(response.steps.any { it.name == "moneat.logs.search" })
+        assertTrue(response.steps.any { it.name == "statuspage.incident.create" })
+        // http.request and transform.graaljs are hidden unless WORKFLOWS_EGRESS_ENABLED is set;
+        // their visibility in both states is covered by WorkflowCatalogTest.
+        assertFalse(response.steps.any { it.name == "http.request" })
+        assertFalse(response.steps.any { it.name == "transform.graaljs" })
         assertEquals("Email organization members", WorkflowCatalog.step("notification.email_org")?.label)
         assertEquals("AlertSeverity", WorkflowCatalog.scopeType("alert.triggered", "alert.severity"))
         assertEquals("String", WorkflowCatalog.scopeType("alert.triggered", "alert.priority"))
@@ -431,7 +508,7 @@ class WorkflowServiceTest {
                                 )
                             )
                         ),
-                        scope = mapOf("alert.channels.slack" to "false")
+                        scope = mapOf("alert.channels.slack" to "false").typedWorkflowScope()
                     )
                 )
 
@@ -582,6 +659,7 @@ class WorkflowServiceTest {
                         onceForTemplate = listOf("alert.deduplication_key")
                     )
                 )
+            publish(workflow.id)
 
             service.publishAlertTriggered(alertEvent())
             val queuedRun = service.listRuns(orgId, workflow.id).single()
@@ -630,6 +708,7 @@ class WorkflowServiceTest {
                         onceForTemplate = listOf("alert.deduplication_key")
                     )
                 )
+            publish(workflow.id)
 
             service.publishAlertTriggered(alertEvent())
             service.publishAlertTriggered(alertEvent())
@@ -644,6 +723,10 @@ class WorkflowServiceTest {
             val queuedRun = service.listRuns(orgId, workflow.id).single()
             assertEquals("pending", queuedRun.status)
             assertEquals("alert.deduplication_key=host-1", queuedRun.onceFor)
+            val startRequest = workflowEngine.requests.single()
+            val temporalIds = persistedTemporalIds(queuedRun.id)
+            assertEquals(startRequest.temporalWorkflowId, temporalIds.workflowId)
+            assertEquals("temporal-run-${queuedRun.id}", temporalIds.runId)
 
             service.executeRun(queuedRun.id)
             service.executeRun(queuedRun.id)
@@ -651,7 +734,7 @@ class WorkflowServiceTest {
 
             val completedRun = service.listRuns(orgId, workflow.id).single()
             assertEquals("complete", completedRun.status)
-            assertEquals(3, completedRun.progress.size)
+            assertEquals(4, completedRun.progress.size)
             assertTrue(completedRun.progress.all { it.status == "complete" })
             assertNotNull(service.getWorkflow(orgId, workflow.id)?.lastRunAt)
             assertEquals(1L, service.getWorkflow(orgId, workflow.id)?.runCount)
@@ -691,6 +774,207 @@ class WorkflowServiceTest {
         }
 
     @Test
+    fun `source specific alert triggers preserve legacy alert workflow behavior`() =
+        runBlocking {
+            val alertWorkflow =
+                service.createWorkflow(
+                    orgId,
+                    validRequest(
+                        name = "Legacy alert trigger",
+                        triggerName = "alert.triggered",
+                        steps = emptyList()
+                    )
+                )
+            val uptimeWorkflow =
+                service.createWorkflow(
+                    orgId,
+                    validRequest(
+                        name = "Uptime down trigger",
+                        triggerName = "uptime.down",
+                        steps = emptyList()
+                    )
+                )
+            publish(alertWorkflow.id)
+            publish(uptimeWorkflow.id)
+
+            service.publishAlertTriggered(
+                alertEvent().copy(
+                    source = AlertSource.UPTIME_MONITOR,
+                    deduplicationKey = "uptime-1"
+                )
+            )
+
+            assertEquals("alert.triggered", service.listRuns(orgId, alertWorkflow.id).single().triggerName)
+            assertEquals("uptime.down", service.listRuns(orgId, uptimeWorkflow.id).single().triggerName)
+            assertEquals(listOf("alert.triggered", "uptime.down"), workflowEngine.requests.map { it.triggerName })
+        }
+
+    @Test
+    fun `security signal trigger supports severity conditions`() =
+        runBlocking {
+            val workflow =
+                service.createWorkflow(
+                    orgId,
+                    validRequest(
+                        name = "Security enrichment",
+                        triggerName = "security.signal",
+                        conditions = listOf(WorkflowConditionConfig("security.severity", "at_least", "high")),
+                        steps = emptyList(),
+                        onceForTemplate = listOf("security.rule_id", "security.resource")
+                    )
+                )
+            publish(workflow.id)
+
+            service.publishSecuritySignals(
+                QueuedSecurityBatch(
+                    organizationId = orgId,
+                    batchType = "runtime",
+                    events = listOf(
+                        securityEvent("rule-low", "low"),
+                        securityEvent("rule-high", "high")
+                    )
+                )
+            )
+
+            val run = service.listRuns(orgId, workflow.id).single()
+            assertEquals("security.signal", run.triggerName)
+            assertEquals("security.rule_id=rule-high|security.resource=/tmp/high", run.onceFor)
+        }
+
+    @Test
+    fun `API workflow instances and cancellation record Temporal identifiers`() =
+        runBlocking {
+            val workflow =
+                service.createWorkflow(
+                    orgId,
+                    validRequest(
+                        name = "API trigger",
+                        triggerName = "api",
+                        steps = emptyList(),
+                        onceForTemplate = emptyList()
+                    )
+                )
+
+            val run =
+                service.createWorkflowInstance(
+                    organizationId = orgId,
+                    workflowId = workflow.id,
+                    request = WorkflowRunInstanceRequest(
+                        scope = mapOf("workflow.input.reason" to JsonPrimitive("operator"))
+                    ),
+                    callerUserId = 99
+                )
+
+            assertNotNull(run)
+            assertEquals("api", run.triggerName)
+            assertEquals("pending", run.status)
+            assertEquals(workflowEngine.requests.single().temporalWorkflowId, run.temporalWorkflowId)
+            assertEquals("temporal-run-${run.id}", run.temporalRunId)
+            assertNotNull(service.getRun(orgId, workflow.id, run.id))
+
+            val canceled = service.cancelRun(orgId, workflow.id, run.id)
+
+            assertEquals("canceled", canceled?.status)
+            assertEquals(listOf(run.temporalWorkflowId), workflowEngine.canceledWorkflowIds)
+            assertEquals("canceled", service.getRun(orgId, workflow.id, run.id)?.status)
+        }
+
+    @Test
+    fun `API workflow instances honor configured conditions`() =
+        runBlocking {
+            val request = WorkflowRunInstanceRequest(scope = mapOf("service" to JsonPrimitive("checkout")))
+            val matching =
+                service.createWorkflow(
+                    orgId,
+                    validRequest(
+                        name = "Conditional API trigger",
+                        triggerName = "api",
+                        conditions = listOf(WorkflowConditionConfig("workflow.input", "contains", "checkout")),
+                        steps = emptyList(),
+                        onceForTemplate = emptyList()
+                    )
+                )
+
+            val matched =
+                service.createWorkflowInstance(
+                    organizationId = orgId,
+                    workflowId = matching.id,
+                    request = request,
+                    callerUserId = 7
+                )
+
+            assertNotNull(matched)
+            assertEquals(1, workflowEngine.requests.size)
+
+            val mismatch =
+                service.createWorkflow(
+                    orgId,
+                    validRequest(
+                        name = "Non-matching API trigger",
+                        triggerName = "api",
+                        conditions = listOf(WorkflowConditionConfig("workflow.input", "contains", "database")),
+                        steps = emptyList(),
+                        onceForTemplate = emptyList()
+                    )
+                )
+            val skipped =
+                service.createWorkflowInstance(
+                    organizationId = orgId,
+                    workflowId = mismatch.id,
+                    request = request,
+                    callerUserId = 7
+                )
+
+            assertNull(skipped)
+            assertEquals(1, workflowEngine.requests.size)
+            assertTrue(service.listRuns(orgId, mismatch.id).isEmpty())
+        }
+
+    @Test
+    fun `signed webhook trigger requires valid signature and published webhook workflow`() =
+        runBlocking {
+            val previousSigningKey = System.getProperty("WORKFLOWS_SIGNING_KEY")
+            System.setProperty("WORKFLOWS_SIGNING_KEY", "test-workflow-signing-key")
+            try {
+                val workflow =
+                    service.createWorkflow(
+                        orgId,
+                        validRequest(
+                            name = "Webhook trigger",
+                            triggerName = "webhook",
+                            steps = emptyList(),
+                            onceForTemplate = listOf("webhook.event_id")
+                        )
+                    )
+                publish(workflow.id)
+                val payload = """{"event":"deploy"}"""
+                val signing = service.webhookSigningInfo(orgId, workflow.id)
+                val signature = "sha256=${hmacSha256(signing?.signingSecret.orEmpty(), payload)}"
+
+                assertTrue(service.verifyWebhookSignature(workflow.id, payload, signature))
+                assertFalse(service.verifyWebhookSignature(workflow.id, payload, "sha256=invalid"))
+
+                val run =
+                    service.createWebhookRun(
+                        workflowId = workflow.id,
+                        payload = payload,
+                        eventId = "deploy-1"
+                    )
+
+                assertNotNull(run)
+                assertEquals("webhook", run.triggerName)
+                assertEquals("deploy-1", run.onceFor)
+                assertEquals(1, workflowEngine.requests.size)
+            } finally {
+                if (previousSigningKey == null) {
+                    System.clearProperty("WORKFLOWS_SIGNING_KEY")
+                } else {
+                    System.setProperty("WORKFLOWS_SIGNING_KEY", previousSigningKey)
+                }
+            }
+        }
+
+    @Test
     fun `dashboard alert channel metadata skips disabled notification steps`() =
         runBlocking {
             val workflow =
@@ -701,6 +985,7 @@ class WorkflowServiceTest {
                         steps = listOf(emailStep(), slackStep(), discordStep())
                     )
                 )
+            publish(workflow.id)
             val event =
                 alertEvent().copy(
                     source = AlertSource.DASHBOARD_ALERT,
@@ -746,6 +1031,7 @@ class WorkflowServiceTest {
                         steps = listOf(emailStep(), slackStep(), discordStep())
                     )
                 )
+            publish(workflow.id)
 
             service.publishAlertTriggered(alertEvent())
             val queuedRun = service.listRuns(orgId, workflow.id).single()
@@ -793,6 +1079,7 @@ class WorkflowServiceTest {
                         )
                     )
                 )
+            publish(workflow.id)
 
             service.publishAlertResolved(
                 organizationId = orgId,
@@ -806,10 +1093,11 @@ class WorkflowServiceTest {
             service.executeRun(queuedRun.id)
 
             val failedRun = service.listRuns(orgId, workflow.id).single()
+            val actionProgress = failedRun.progress.filter { it.type == "action" }
             assertEquals("failed", failedRun.status)
             assertEquals("Slack workflow message was not sent", failedRun.errorMessage)
-            assertEquals("failed", failedRun.progress.single().status)
-            assertEquals("Slack workflow message was not sent", failedRun.progress.single().errorMessage)
+            assertEquals("failed", actionProgress.single().status)
+            assertEquals("Slack workflow message was not sent", actionProgress.single().errorMessage)
             coVerify(exactly = 1) {
                 slackService.sendWorkflowMessage(orgId, "Resolved uptime-1", false)
             }
@@ -835,6 +1123,8 @@ class WorkflowServiceTest {
                         conditions = listOf(WorkflowConditionConfig("alert.description", "not_contains", "cpu"))
                     )
                 )
+            publish(disabled.id)
+            publish(nonMatching.id)
 
             service.publishAlertTriggered(alertEvent())
 
@@ -843,20 +1133,21 @@ class WorkflowServiceTest {
         }
 
     @Test
-    fun `publish marks run failed when enqueue fails`() =
+    fun `publish marks run failed when Temporal start fails`() =
         runBlocking {
-            every { redis.lpush(any(), any<String>()) } throws RedisException("redis unavailable")
+            workflowEngine.error = IllegalStateException("temporal unavailable")
             val workflow =
                 service.createWorkflow(
                     orgId,
-                    validRequest(name = "Redis unavailable workflow")
+                    validRequest(name = "Temporal unavailable workflow")
                 )
+            publish(workflow.id)
 
             service.publishAlertTriggered(alertEvent())
 
             val run = service.listRuns(orgId, workflow.id).single()
             assertEquals("failed", run.status)
-            assertTrue(run.errorMessage?.contains("redis unavailable") == true)
+            assertTrue(run.errorMessage?.contains("temporal unavailable") == true)
         }
 
     private fun seedOrganizationWithMembers(): Int {
@@ -916,6 +1207,10 @@ class WorkflowServiceTest {
             onceForTemplate = onceForTemplate
         )
 
+    private fun publish(workflowId: Int) {
+        assertNotNull(service.publishWorkflow(orgId, workflowId))
+    }
+
     private fun emailStep(): WorkflowStepConfig =
         WorkflowStepConfig(
             name = "notification.email_org",
@@ -955,4 +1250,60 @@ class WorkflowServiceTest {
             organizationId = orgId,
             moneatUrl = "https://moneat.io/hosts/1"
         )
+
+    private fun securityEvent(
+        ruleId: String,
+        severity: String
+    ): QueuedSecurityEventEntry =
+        QueuedSecurityEventEntry(
+            ruleId = ruleId,
+            ruleName = "Rule $ruleId",
+            severity = severity,
+            filePath = "/tmp/$severity",
+            timestampMs = 1_700_000_000_000
+        )
+
+    private fun persistedTemporalIds(runId: Int): PersistedTemporalIds =
+        transaction {
+            val run = WorkflowRuns.selectAll().where { WorkflowRuns.id eq runId }.single()
+            PersistedTemporalIds(
+                workflowId = run[WorkflowRuns.temporalWorkflowId],
+                runId = run[WorkflowRuns.temporalRunId]
+            )
+        }
+}
+
+private fun hmacSha256(
+    key: String,
+    value: String
+): String {
+    val mac = Mac.getInstance("HmacSHA256")
+    mac.init(SecretKeySpec(key.encodeToByteArray(), "HmacSHA256"))
+    return mac.doFinal(value.encodeToByteArray()).joinToString("") { byte ->
+        "%02x".format(byte.toInt() and 0xff)
+    }
+}
+
+private data class PersistedTemporalIds(
+    val workflowId: String?,
+    val runId: String?
+)
+
+private class FakeWorkflowExecutionEngine : WorkflowExecutionEngine {
+    val requests = mutableListOf<WorkflowStartRequest>()
+    val canceledWorkflowIds = mutableListOf<String?>()
+    var error: Throwable? = null
+
+    override suspend fun start(request: WorkflowStartRequest): WorkflowStartResult {
+        error?.let { throw it }
+        requests += request
+        return WorkflowStartResult(
+            temporalWorkflowId = request.temporalWorkflowId,
+            temporalRunId = "temporal-run-${request.runId}"
+        )
+    }
+
+    override suspend fun cancel(temporalWorkflowId: String) {
+        canceledWorkflowIds += temporalWorkflowId
+    }
 }

@@ -20,6 +20,7 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.jsonb
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.datetime.timestamp
@@ -39,6 +40,10 @@ object WorkflowVersions : IntIdTable("workflow_versions") {
     val version = integer("version")
     val conditions = jsonb("conditions").default("[]")
     val steps = jsonb("steps").default("[]")
+    val graph = jsonb("graph").default("""{"nodes":[],"edges":[]}""")
+    val published = bool("published").default(false)
+    val inputSchema = jsonb("input_schema").default("{}")
+    val tags = jsonb("tags").default("[]")
     val onceForTemplate = jsonb("once_for_template").default("[]")
     val engineConfig = jsonb("engine_config").default("{}")
     val mostRecent = bool("most_recent").default(true)
@@ -55,9 +60,24 @@ object WorkflowRuns : IntIdTable("workflow_runs") {
     val status = varchar("status", 32).default("pending")
     val progress = jsonb("progress").default("[]")
     val errorMessage = text("error_message").nullable()
+    val temporalWorkflowId = varchar("temporal_workflow_id", 255).nullable()
+    val temporalRunId = varchar("temporal_run_id", 255).nullable()
     val createdAt = timestamp("created_at")
     val completedAt = timestamp("completed_at").nullable()
     val failedAt = timestamp("failed_at").nullable()
+}
+
+object WorkflowRunSteps : IntIdTable("workflow_run_steps") {
+    val runId = integer("run_id").references(WorkflowRuns.id, onDelete = ReferenceOption.CASCADE)
+    val nodeId = varchar("node_id", 120)
+    val type = varchar("type", 64)
+    val status = varchar("status", 32)
+    val startedAt = timestamp("started_at").nullable()
+    val completedAt = timestamp("completed_at").nullable()
+    val input = jsonb("input").default("{}")
+    val output = jsonb("output").default("{}")
+    val errorMessage = text("error_message").nullable()
+    val attempt = integer("attempt").default(1)
 }
 
 @Serializable
@@ -74,10 +94,56 @@ data class WorkflowStepConfig(
 )
 
 @Serializable
+data class WorkflowRetryConfig(
+    @SerialName("max_attempts") val maxAttempts: Int = 1,
+    @SerialName("initial_interval") val initialInterval: String = "PT1S",
+    @SerialName("backoff_coefficient") val backoffCoefficient: Double = 2.0,
+    @SerialName("maximum_interval") val maximumInterval: String? = null,
+    @SerialName("non_retryable_error_types") val nonRetryableErrorTypes: List<String> = emptyList()
+)
+
+@Serializable
+data class WorkflowSwitchCaseConfig(
+    val name: String,
+    val label: String? = null,
+    val conditions: List<WorkflowConditionConfig> = emptyList()
+)
+
+@Serializable
+data class WorkflowGraphNode(
+    val id: String,
+    val type: String,
+    val trigger: String? = null,
+    val kind: String? = null,
+    val action: String? = null,
+    val params: Map<String, JsonElement> = emptyMap(),
+    val conditions: List<WorkflowConditionConfig> = emptyList(),
+    val cases: List<WorkflowSwitchCaseConfig> = emptyList(),
+    val retry: WorkflowRetryConfig? = null,
+    @SerialName("continue_on_error") val continueOnError: Boolean = false
+)
+
+@Serializable
+data class WorkflowGraphEdge(
+    val from: String,
+    val to: String,
+    val branch: String? = null,
+    val on: String? = null
+)
+
+@Serializable
+data class WorkflowGraphConfig(
+    val nodes: List<WorkflowGraphNode> = emptyList(),
+    val edges: List<WorkflowGraphEdge> = emptyList()
+)
+
+@Serializable
 data class WorkflowPreviewRequest(
     @SerialName("trigger_name") val triggerName: String,
-    val steps: List<WorkflowStepConfig>,
-    val scope: Map<String, String> = emptyMap()
+    val steps: List<WorkflowStepConfig> = emptyList(),
+    val scope: Map<String, JsonElement> = emptyMap(),
+    val graph: WorkflowGraphConfig? = null,
+    @SerialName("node_id") val nodeId: String? = null
 )
 
 @Serializable
@@ -127,7 +193,10 @@ data class WorkflowPreviewField(
 data class WorkflowRunStepProgress(
     val step: String,
     val status: String,
+    @SerialName("node_id") val nodeId: String? = null,
+    val type: String? = null,
     @SerialName("completed_at") val completedAt: String? = null,
+    val output: Map<String, JsonElement> = emptyMap(),
     @SerialName("error_message") val errorMessage: String? = null
 )
 
@@ -138,6 +207,7 @@ data class CreateWorkflowRequest(
     val enabled: Boolean = true,
     val conditions: List<WorkflowConditionConfig> = emptyList(),
     val steps: List<WorkflowStepConfig> = emptyList(),
+    val graph: WorkflowGraphConfig? = null,
     @SerialName("once_for_template") val onceForTemplate: List<String> = emptyList()
 )
 
@@ -147,7 +217,33 @@ data class UpdateWorkflowRequest(
     val enabled: Boolean? = null,
     val conditions: List<WorkflowConditionConfig>? = null,
     val steps: List<WorkflowStepConfig>? = null,
+    val graph: WorkflowGraphConfig? = null,
     @SerialName("once_for_template") val onceForTemplate: List<String>? = null
+)
+
+@Serializable
+data class ManualWorkflowRunRequest(
+    val scope: Map<String, JsonElement> = emptyMap()
+)
+
+@Serializable
+data class WorkflowRunInstanceRequest(
+    val scope: Map<String, JsonElement> = emptyMap()
+)
+
+@Serializable
+data class WorkflowRunCancelResponse(
+    val id: Int,
+    val status: String
+)
+
+@Serializable
+data class WorkflowWebhookSigningResponse(
+    @SerialName("workflow_id") val workflowId: Int,
+    @SerialName("webhook_url") val webhookUrl: String,
+    @SerialName("signing_secret") val signingSecret: String,
+    @SerialName("signature_header") val signatureHeader: String,
+    @SerialName("signature_format") val signatureFormat: String
 )
 
 @Serializable
@@ -157,14 +253,31 @@ data class WorkflowResponse(
     @SerialName("trigger_name") val triggerName: String,
     val enabled: Boolean,
     val version: Int,
+    val published: Boolean,
     @SerialName("system_key") val systemKey: String? = null,
     val conditions: List<WorkflowConditionConfig>,
     val steps: List<WorkflowStepConfig>,
+    val graph: WorkflowGraphConfig,
     @SerialName("once_for_template") val onceForTemplate: List<String>,
     @SerialName("created_at") val createdAt: String,
     @SerialName("updated_at") val updatedAt: String,
     @SerialName("last_run_at") val lastRunAt: String? = null,
     @SerialName("run_count") val runCount: Long = 0
+)
+
+@Serializable
+data class WorkflowRunStepResponse(
+    val id: Int,
+    @SerialName("run_id") val runId: Int,
+    @SerialName("node_id") val nodeId: String,
+    val type: String,
+    val status: String,
+    @SerialName("started_at") val startedAt: String? = null,
+    @SerialName("completed_at") val completedAt: String? = null,
+    val input: Map<String, JsonElement> = emptyMap(),
+    val output: Map<String, JsonElement> = emptyMap(),
+    @SerialName("error_message") val errorMessage: String? = null,
+    val attempt: Int
 )
 
 @Serializable
@@ -176,7 +289,10 @@ data class WorkflowRunResponse(
     @SerialName("once_for") val onceFor: String,
     val status: String,
     val progress: List<WorkflowRunStepProgress>,
+    val steps: List<WorkflowRunStepResponse> = emptyList(),
     @SerialName("error_message") val errorMessage: String? = null,
+    @SerialName("temporal_workflow_id") val temporalWorkflowId: String? = null,
+    @SerialName("temporal_run_id") val temporalRunId: String? = null,
     @SerialName("created_at") val createdAt: String,
     @SerialName("completed_at") val completedAt: String? = null,
     @SerialName("failed_at") val failedAt: String? = null
@@ -186,10 +302,5 @@ data class WorkflowRunResponse(
 data class WorkflowTriggerEvent(
     @SerialName("trigger_name") val triggerName: String,
     @SerialName("organization_id") val organizationId: Int,
-    val scope: Map<String, String>
-)
-
-@Serializable
-data class WorkflowRunQueuedMessage(
-    @SerialName("run_id") val runId: Int
+    val scope: Map<String, JsonElement>
 )

@@ -37,8 +37,18 @@ import com.moneat.shared.services.TaskLock
 import com.moneat.shared.services.TraceFinalizerBackgroundService
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.uptime.services.UptimeScheduler
+import com.moneat.utils.suspendRunCatching
+import com.moneat.workflows.engine.temporal.ExecuteActionActivityImpl
+import com.moneat.workflows.engine.temporal.ExecuteEgressActionActivityImpl
+import com.moneat.workflows.engine.temporal.PersistRunActivityImpl
+import com.moneat.workflows.engine.temporal.RequestApprovalActivityImpl
+import com.moneat.workflows.engine.temporal.TemporalClientProvider
+import com.moneat.workflows.engine.temporal.WORKFLOW_EGRESS_TASK_QUEUE
+import com.moneat.workflows.engine.temporal.WORKFLOW_TASK_QUEUE
+import com.moneat.workflows.engine.temporal.WorkflowInterpreterWorkflowImpl
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopping
+import io.temporal.worker.WorkerFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -46,12 +56,54 @@ import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import net.javacrumbs.shedlock.provider.exposed.ExposedLockProvider
 import org.koin.core.context.GlobalContext
+import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.hours
-import com.moneat.utils.suspendRunCatching
-import com.moneat.workflows.services.WorkflowExecutionWorker
 
 private val logger = KotlinLogging.logger {}
 private const val DEFAULT_WORKER_THREADS = 4
+private const val WORKFLOW_WORKER_SHUTDOWN_TIMEOUT_SECONDS = 30L
+private const val WORKFLOW_WORKER_MODE_CONFIG = "workflows.workerMode"
+
+enum class WorkflowWorkerMode {
+    ALL,
+    TRUSTED,
+    EGRESS,
+    NONE
+}
+
+fun Application.workflowWorkerMode(): WorkflowWorkerMode {
+    return parseWorkflowWorkerMode(
+        environment.config
+            .propertyOrNull(WORKFLOW_WORKER_MODE_CONFIG)
+            ?.getString()
+    )
+}
+
+internal fun parseWorkflowWorkerMode(rawMode: String?): WorkflowWorkerMode {
+    val normalized = rawMode?.trim()?.uppercase()
+    if (normalized.isNullOrBlank()) {
+        return WorkflowWorkerMode.TRUSTED
+    }
+    return WorkflowWorkerMode.entries.firstOrNull { mode -> mode.name == normalized }
+        ?: throw IllegalArgumentException(
+            "Invalid $WORKFLOW_WORKER_MODE_CONFIG value '$normalized'. Expected one of: " +
+                WorkflowWorkerMode.entries.joinToString { mode -> mode.name.lowercase() }
+        )
+}
+
+fun Application.configureEgressWorkflowWorker() {
+    val koin = GlobalContext.get()
+    val temporalClientProvider = koin.get<TemporalClientProvider>()
+    val workflowWorkerFactory = temporalClientProvider.newWorkerFactory()
+    workflowWorkerFactory
+        .newWorker(WORKFLOW_EGRESS_TASK_QUEUE)
+        .registerActivitiesImplementations(koin.get<ExecuteEgressActionActivityImpl>())
+    logger.info { "Starting isolated Temporal egress worker on $WORKFLOW_EGRESS_TASK_QUEUE" }
+    workflowWorkerFactory.start()
+    monitor.subscribe(ApplicationStopping) {
+        shutdownWorkflowWorker(workflowWorkerFactory, temporalClientProvider)
+    }
+}
 
 fun Application.configureBackgroundJobs() {
     val backgroundJobsEnabled =
@@ -133,7 +185,37 @@ fun Application.configureBackgroundJobs() {
         otlpMetricsDlqKey,
         otlpMetricsWorkerCount
     )
-    val workflowExecutionWorker = WorkflowExecutionWorker(workflowService = koin.get())
+    // Temporal worker initialization must not take down the whole backend: if the
+    // Temporal cluster is unreachable or a worker/activity fails to register, log it
+    // and continue serving (workflow execution is disabled on this instance) rather
+    // than aborting application startup.
+    val workflowWorkerMode = workflowWorkerMode()
+    var temporalClientProvider: TemporalClientProvider? = null
+    var workflowWorkerFactory: WorkerFactory? = null
+    try {
+        val provider = koin.get<TemporalClientProvider>()
+        val factory = provider.newWorkerFactory()
+        if (workflowWorkerMode == WorkflowWorkerMode.ALL || workflowWorkerMode == WorkflowWorkerMode.TRUSTED) {
+            val workflowWorker = factory.newWorker(WORKFLOW_TASK_QUEUE)
+            workflowWorker.registerWorkflowImplementationTypes(WorkflowInterpreterWorkflowImpl::class.java)
+            workflowWorker.registerActivitiesImplementations(
+                koin.get<ExecuteActionActivityImpl>(),
+                koin.get<PersistRunActivityImpl>(),
+                koin.get<RequestApprovalActivityImpl>()
+            )
+        }
+        if (workflowWorkerMode == WorkflowWorkerMode.ALL || workflowWorkerMode == WorkflowWorkerMode.EGRESS) {
+            factory
+                .newWorker(WORKFLOW_EGRESS_TASK_QUEUE)
+                .registerActivitiesImplementations(koin.get<ExecuteEgressActionActivityImpl>())
+        }
+        temporalClientProvider = provider
+        workflowWorkerFactory = factory
+    } catch (e: Throwable) {
+        logger.error(e) {
+            "Temporal workflow worker initialization failed; workflow execution disabled on this instance"
+        }
+    }
 
     // Create a coroutine scope for background jobs
     val jobScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -153,7 +235,7 @@ fun Application.configureBackgroundJobs() {
     llmIngestionWorker.start()
     otlpTraceIngestionWorker.start()
     otlpMetricsIngestionWorker.start()
-    workflowExecutionWorker.start()
+    workflowWorkerFactory?.start()
     demoLivenessBackgroundService.start(jobScope)
 
     // Start enterprise background jobs (SSO, On-Call, etc.) if modules are present
@@ -199,7 +281,11 @@ fun Application.configureBackgroundJobs() {
             otlpTraceIngestionWorker.stop()
             otlpMetricsIngestionWorker.stop()
         }
-        workflowExecutionWorker.stop()
+        val factoryToStop = workflowWorkerFactory
+        val providerToStop = temporalClientProvider
+        if (factoryToStop != null && providerToStop != null) {
+            shutdownWorkflowWorker(factoryToStop, providerToStop)
+        }
         demoLivenessBackgroundService.stop()
         pulseService?.stop()
         FeatureRegistry.stopBackgroundJobs()
@@ -210,5 +296,28 @@ fun Application.configureBackgroundJobs() {
         RedisConfig.close()
         ClickHouseClient.close()
         logger.info { "Infrastructure connections closed" }
+    }
+}
+
+private fun shutdownWorkflowWorker(
+    workflowWorkerFactory: WorkerFactory,
+    temporalClientProvider: TemporalClientProvider
+) {
+    try {
+        workflowWorkerFactory.shutdown()
+        workflowWorkerFactory.awaitTermination(WORKFLOW_WORKER_SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        if (!workflowWorkerFactory.isTerminated) {
+            logger.warn {
+                "Temporal workflow worker did not stop within " +
+                    "$WORKFLOW_WORKER_SHUTDOWN_TIMEOUT_SECONDS seconds; forcing shutdown"
+            }
+            workflowWorkerFactory.shutdownNow()
+        }
+    } catch (error: InterruptedException) {
+        Thread.currentThread().interrupt()
+        logger.warn(error) { "Interrupted while stopping Temporal workflow worker; forcing shutdown" }
+        workflowWorkerFactory.shutdownNow()
+    } finally {
+        temporalClientProvider.close()
     }
 }

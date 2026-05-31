@@ -44,6 +44,7 @@ import { dashboardsMethods } from './modules/dashboards'
 import { syntheticsMethods } from './modules/synthetics'
 import { logIndexesMethods } from './modules/log-indexes'
 import { workflowsMethods } from './modules/workflows'
+import { workflowConnectionsMethods } from './modules/connections'
 import { featureFlagsMethods } from './modules/feature-flags'
 import { mcpMethods } from './modules/mcp'
 
@@ -80,6 +81,7 @@ export const api = {
   ...syntheticsMethods(core),
   ...logIndexesMethods(core),
   ...workflowsMethods(core),
+  ...workflowConnectionsMethods(core),
   ...featureFlagsMethods(core),
   ...mcpMethods(core),
 }

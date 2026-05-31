@@ -20,6 +20,9 @@ shedlock = "7.6.0"
 koin = "4.1.1"
 mcp-kotlin-sdk = "0.12.0"
 micrometer = "1.16.5"
+temporal = "1.27.1"
+jackson = "2.21.3"
+graalvm = "25.0.3"
 
 [libraries]
 # Ktor Server
@@ -107,6 +110,13 @@ opentelemetry-logback = { module = "io.opentelemetry.instrumentation:opentelemet
 
 # Micrometer
 micrometer-registry-prometheus = { module = "io.micrometer:micrometer-registry-prometheus", version.ref = "micrometer" }
+
+# Temporal workflow execution
+jackson-module-kotlin = { module = "com.fasterxml.jackson.module:jackson-module-kotlin", version.ref = "jackson" }
+temporal-sdk = { module = "io.temporal:temporal-sdk", version.ref = "temporal" }
+temporal-testing = { module = "io.temporal:temporal-testing", version.ref = "temporal" }
+graalvm-polyglot-js = { module = "org.graalvm.polyglot:js", version.ref = "graalvm" }
+graalvm-polyglot = { module = "org.graalvm.polyglot:polyglot", version.ref = "graalvm" }
 
 # Sentry
 sentry-kotlin = { module = "io.sentry:sentry-kotlin-extensions", version.ref = "sentry" }

@@ -20,6 +20,7 @@ import com.moneat.config.RedisConfig
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.brpopLoopBackoff
 import com.moneat.utils.pushToDlq
+import com.moneat.workflows.services.WorkflowService
 import io.lettuce.core.RedisException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -42,6 +43,7 @@ class SecurityIngestionWorker(
     private val queueKey: String = "moneat:dd:security:queue",
     private val dlqKey: String = "moneat:dd:security:dlq",
     private val workerCount: Int = 1,
+    private val workflowService: WorkflowService = WorkflowService()
 ) {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var jobs: List<Job> = emptyList()
@@ -104,6 +106,7 @@ class SecurityIngestionWorker(
         suspendRunCatching {
             val batch = SecurityIngestionService.decodeBatch(payload)
             SecurityIngestionService.insertBatch(batch)
+            workflowService.publishSecuritySignals(batch)
             logger.debug {
                 "Security worker $workerId processed batch: " +
                     "type=${batch.batchType}"

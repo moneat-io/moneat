@@ -86,7 +86,12 @@ class IncidentService(
             suspendRunCatching {
                 workflowService.publishAlertTriggered(event)
             }.getOrElse { e ->
-                logger.error("Error publishing alert workflow", e)
+                logger.error("Error publishing alert-triggered workflow", e)
+            }
+            suspendRunCatching {
+                workflowService.publishIncidentCreated(event)
+            }.getOrElse { e ->
+                logger.error("Error publishing incident-created workflow", e)
             }
         }
 
@@ -160,7 +165,16 @@ class IncidentService(
                     moneatUrl = moneatUrl
                 )
             }.getOrElse { e ->
-                logger.error("Error publishing resolved alert workflow", e)
+                logger.error("Error publishing alert-resolved workflow", e)
+            }
+            suspendRunCatching {
+                workflowService.publishIncidentResolved(
+                    organizationId = organizationId,
+                    deduplicationKey = deduplicationKey,
+                    title = title
+                )
+            }.getOrElse { e ->
+                logger.error("Error publishing incident-resolved workflow", e)
             }
         }
 

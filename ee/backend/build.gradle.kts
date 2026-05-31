@@ -46,6 +46,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.sentry.kotlin)
+    implementation(libs.temporal.sdk)
 
     // Detekt formatting (ktlint)
     detektPlugins(libs.detekt.formatting)

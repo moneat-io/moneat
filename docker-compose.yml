@@ -60,6 +60,69 @@ services:
       timeout: 5s
       retries: 5
 
+  temporal-bootstrap:
+    image: postgres:18-alpine
+    container_name: moneat-temporal-bootstrap
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${DATABASE_PASSWORD:-moneat_dev_password}
+    command:
+      - /bin/sh
+      - -c
+      - |
+        psql -h postgres -U moneat -d postgres -v ON_ERROR_STOP=1 \
+          -v temporal_user="${TEMPORAL_DB_USER:-temporal}" \
+          -v temporal_password="${TEMPORAL_DB_PASSWORD:-temporal_dev_password}" <<'SQL'
+        SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'temporal_user', :'temporal_password')
+        WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'temporal_user') \gexec
+        SELECT format('ALTER ROLE %I WITH PASSWORD %L', :'temporal_user', :'temporal_password') \gexec
+        SELECT format('CREATE DATABASE temporal OWNER %I', :'temporal_user')
+        WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'temporal') \gexec
+        SELECT format('CREATE DATABASE temporal_visibility OWNER %I', :'temporal_user')
+        WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'temporal_visibility') \gexec
+        SQL
+
+  temporal:
+    image: temporalio/auto-setup:1.27.2
+    container_name: moneat-temporal
+    restart: unless-stopped
+    depends_on:
+      temporal-bootstrap:
+        condition: service_completed_successfully
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      SKIP_DB_CREATE: "true"
+      DEFAULT_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      POSTGRES_USER: ${TEMPORAL_DB_USER:-temporal}
+      POSTGRES_PWD: ${TEMPORAL_DB_PASSWORD:-temporal_dev_password}
+      POSTGRES_SEEDS: postgres
+      DBNAME: temporal
+      VISIBILITY_DBNAME: temporal_visibility
+    ports:
+      - "${TEMPORAL_GRPC_PORT:-7233}:7233"
+    healthcheck:
+      test: ["CMD", "tctl", "--address", "127.0.0.1:7233", "cluster", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  temporal-ui:
+    image: temporalio/ui:2.34.0
+    container_name: moneat-temporal-ui
+    restart: unless-stopped
+    depends_on:
+      temporal:
+        condition: service_healthy
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+    ports:
+      - "${TEMPORAL_UI_PORT:-8233}:8080"
+
   backend:
     image: ghcr.io/moneat-io/moneat-backend:latest
     container_name: moneat-backend
@@ -76,6 +139,11 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD:-moneat_dev_password}@redis:6379
       JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-production}
       DATA_SOURCE_ENCRYPTION_KEY: ${DATA_SOURCE_ENCRYPTION_KEY:-}
+      TEMPORAL_TARGET: ${TEMPORAL_TARGET:-temporal:7233}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      WORKFLOWS_CONNECTION_KEK: ${WORKFLOWS_CONNECTION_KEK:-}
+      WORKFLOWS_SIGNING_KEY: ${WORKFLOWS_SIGNING_KEY:-}
+      WORKFLOWS_TEMPORAL_PAYLOAD_KEY: ${WORKFLOWS_TEMPORAL_PAYLOAD_KEY:-}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       BACKEND_URL: ${BACKEND_URL:-http://localhost:8080}
       STRIPE_ENABLED: "false"
@@ -90,6 +158,8 @@ services:
       clickhouse:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      temporal:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health"]
