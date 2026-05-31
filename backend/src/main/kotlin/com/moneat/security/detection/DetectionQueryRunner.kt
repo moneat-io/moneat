@@ -21,17 +21,27 @@ import com.moneat.config.ClickHouseQueryException
 import com.moneat.config.isClickHouseError
 import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.longOrNull
 import mu.KotlinLogging
+import java.security.MessageDigest
 
 private val logger = KotlinLogging.logger {}
 private val runnerJson = Json { ignoreUnknownKeys = true }
 
-private const val LOG_SQL_MAX_LEN = 200
-private const val LOG_BODY_MAX_LEN = 300
+private const val QUERY_FINGERPRINT_LEN = 12
+
+/**
+ * Short, stable fingerprint of a compiled query for logs. A SHA-256 prefix correlates failures and
+ * malformed rows back to a query without ever writing the SQL itself — which embeds user-authored
+ * filter literals and tenant-scoping — to the log.
+ */
+internal fun queryFingerprint(sql: String): String =
+    MessageDigest.getInstance("SHA-256")
+        .digest(sql.toByteArray())
+        .joinToString("") { "%02x".format(it) }
+        .take(QUERY_FINGERPRINT_LEN)
 
 /** One aggregated group returned by a compiled detection query. */
 data class DetectionGroupRow(
@@ -42,24 +52,20 @@ data class DetectionGroupRow(
 
 /**
  * Executes compiled detection aggregations against ClickHouse, reusing [ClickHouseClient.execute]
- * (which itself caps SELECT execution time) and the project's sanitized-error convention: the raw
- * ClickHouse body is logged server-side and wrapped in a [ClickHouseQueryException] whose client-facing
- * message is generic, so no SQL/schema text leaks. The compiled SQL already carries org scoping and
- * resource caps from [RuleQueryCompiler]; this runner adds no SQL of its own.
+ * (which itself caps SELECT execution time) and the project's sanitized-error convention. On a
+ * ClickHouse error only a query fingerprint is logged — never the SQL or the response body, both of
+ * which embed user-authored filter literals and backend schema/error text — and the surfaced
+ * [ClickHouseQueryException] carries a generic detail, so no SQL/schema/tenant data leaks to logs or
+ * clients. The compiled SQL already carries org scoping and resource caps from [RuleQueryCompiler];
+ * this runner adds no SQL of its own.
  */
 class DetectionQueryRunner(
     private val execute: suspend (String) -> String = { sql ->
         val resp = ClickHouseClient.execute("$sql FORMAT JSONEachRow")
         val body = resp.bodyAsText()
         if (resp.isClickHouseError(body)) {
-            logger.error {
-                "ClickHouse error in detection query. SQL: ${sql.take(LOG_SQL_MAX_LEN)} " +
-                    "Body: ${body.take(LOG_BODY_MAX_LEN)}"
-            }
-            throw ClickHouseQueryException(
-                isTimeout = false,
-                internalDetail = "Detection query failed: ${body.take(LOG_BODY_MAX_LEN)}",
-            )
+            logger.error { "ClickHouse error in detection query (fingerprint=${queryFingerprint(sql)})" }
+            throw ClickHouseQueryException(isTimeout = false, internalDetail = "Detection query failed")
         }
         body
     },
@@ -68,40 +74,50 @@ class DetectionQueryRunner(
     /** Run [compiled] and map each JSONEachRow line back to a [DetectionGroupRow]. */
     suspend fun run(compiled: CompiledRuleQuery): List<DetectionGroupRow> {
         val body = execute(compiled.sql)
-        return parseRows(body, compiled)
+        val aliasToColumn = compiled.groupByAliases.zip(compiled.groupByColumns).toMap()
+        return parseRows(body, aliasToColumn, queryFingerprint(compiled.sql))
     }
 
     /** Run an arbitrary org-scoped, capped aggregation [sql] with explicit alias→column mapping. */
     suspend fun runRaw(sql: String, aliasToColumn: Map<String, String>): List<DetectionGroupRow> {
         val body = execute(sql)
-        return body.lineSequence()
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-            .mapNotNull { line -> parseLine(line, aliasToColumn) }
-            .toList()
+        return parseRows(body, aliasToColumn, queryFingerprint(sql))
     }
 
-    private fun parseRows(body: String, compiled: CompiledRuleQuery): List<DetectionGroupRow> {
-        val aliasToColumn = compiled.groupByAliases.zip(compiled.groupByColumns).toMap()
-        return body.lineSequence()
+    private fun parseRows(
+        body: String,
+        aliasToColumn: Map<String, String>,
+        fingerprint: String,
+    ): List<DetectionGroupRow> =
+        body.lineSequence()
             .map { it.trim() }
             .filter { it.isNotBlank() }
-            .mapNotNull { line -> parseLine(line, aliasToColumn) }
+            .mapNotNull { line -> parseLine(line, aliasToColumn, fingerprint) }
             .toList()
-    }
 
-    private fun parseLine(line: String, aliasToColumn: Map<String, String>): DetectionGroupRow? {
-        val obj = runCatching { runnerJson.parseToJsonElement(line).jsonObject }.getOrNull() ?: return null
-        val count = obj["match_count"]?.let { (it as? JsonPrimitive)?.longOrNull } ?: 0L
-        val values = aliasToColumn.entries.associate { (alias, column) ->
-            column to (obj[alias]?.stringValue() ?: "")
+    /**
+     * Parses one JSONEachRow line into a [DetectionGroupRow], or returns `null` to **skip** a malformed
+     * row. A row is dropped (with a fingerprint-only warning) when the line is not valid JSON, when
+     * `match_count` is missing or non-numeric, or when any expected group alias is absent. Coercing such
+     * rows to `0`/empty values would fabricate signals with wrong dedup keys, so they are skipped rather
+     * than crashing the whole evaluation.
+     */
+    private fun parseLine(line: String, aliasToColumn: Map<String, String>, fingerprint: String): DetectionGroupRow? {
+        val obj = runCatching { runnerJson.parseToJsonElement(line).jsonObject }.getOrNull()
+            ?: return skip(fingerprint, "non-JSON row")
+        val count = obj["match_count"]?.let { (it as? JsonPrimitive)?.longOrNull }
+            ?: return skip(fingerprint, "missing/invalid match_count")
+        val values = mutableMapOf<String, String>()
+        for ((alias, column) in aliasToColumn) {
+            val value = obj[alias]?.let { (it as? JsonPrimitive)?.content }
+                ?: return skip(fingerprint, "missing group alias")
+            values[column] = value
         }
         return DetectionGroupRow(groupValues = values, count = count)
     }
+
+    private fun skip(fingerprint: String, reason: String): DetectionGroupRow? {
+        logger.warn { "Skipping malformed detection row ($reason, fingerprint=$fingerprint)" }
+        return null
+    }
 }
-
-private fun kotlinx.serialization.json.JsonElement.stringValue(): String =
-    (this as? JsonPrimitive)?.content ?: toString()
-
-internal fun JsonObject.matchCount(): Long =
-    this["match_count"]?.let { (it as? JsonPrimitive)?.longOrNull } ?: 0L
