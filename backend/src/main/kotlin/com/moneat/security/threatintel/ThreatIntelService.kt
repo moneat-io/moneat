@@ -73,11 +73,19 @@ class ThreatIntelService(
     private fun ThreatIntelSnapshot.indexIndicators(): Map<IndicatorKey, List<IndexedIndicator>> =
         feeds
             .flatMap { feed ->
+                val metadata = feed.toMetadata()
                 feed.indicators.map { indicator ->
-                    IndexedIndicator(feed, IndicatorKey(indicator.type, indicator.normalized()), indicator)
+                    IndexedIndicator(metadata, IndicatorKey(indicator.type, indicator.normalized()), indicator)
                 }
             }
             .groupBy { it.key }
+
+    private fun ThreatIntelFeed.toMetadata(): ThreatIntelFeedMetadata =
+        ThreatIntelFeedMetadata(
+            name = name,
+            source = source,
+            updatedAt = updatedAt,
+        )
 
     private fun ThreatCandidate.toResponse(indexed: IndexedIndicator): ThreatIntelEnrichmentResponse =
         ThreatIntelEnrichmentResponse(
@@ -102,8 +110,14 @@ class ThreatIntelService(
         val normalizedValue: String,
     )
 
+    private data class ThreatIntelFeedMetadata(
+        val name: String,
+        val source: String,
+        val updatedAt: String,
+    )
+
     private data class IndexedIndicator(
-        val feed: ThreatIntelFeed,
+        val feed: ThreatIntelFeedMetadata,
         val key: IndicatorKey,
         val indicator: ThreatIntelIndicator,
     )

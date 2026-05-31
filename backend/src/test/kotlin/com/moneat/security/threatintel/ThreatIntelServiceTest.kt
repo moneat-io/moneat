@@ -18,6 +18,7 @@ package com.moneat.security.threatintel
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
@@ -67,6 +68,23 @@ class ThreatIntelServiceTest {
     }
 
     @Test
+    fun `cached index entries retain feed metadata without full feed`() {
+        val service = ThreatIntelService(
+            provider = ThreatIntelProvider { snapshot("203.0.113.66") },
+            ttl = 15.minutes,
+            clock = { NOW },
+        )
+
+        service.enrich(mapOf("destination_ip" to "203.0.113.66"))
+
+        val indexedIndicator = cachedIndexedIndicators(service).single()
+        val storesFullFeed = indexedIndicator.javaClass.declaredFields.any { field ->
+            field.type == ThreatIntelFeed::class.java
+        }
+        assertFalse(storesFullFeed)
+    }
+
+    @Test
     fun `snapshot load failure is non-blocking`() {
         val service = ThreatIntelService(
             provider = ThreatIntelProvider { error("feed unavailable") },
@@ -107,6 +125,18 @@ class ThreatIntelServiceTest {
                 ),
             ),
         )
+
+    private fun cachedIndexedIndicators(service: ThreatIntelService): List<Any> {
+        val cacheField = service.javaClass.getDeclaredField("cache")
+        check(cacheField.trySetAccessible()) { "ThreatIntelService cache field is not accessible" }
+        val snapshot = requireNotNull(cacheField.get(service))
+        val indicatorsField = snapshot.javaClass.getDeclaredField("indicatorsByKey")
+        check(indicatorsField.trySetAccessible()) { "Cached snapshot indicators field is not accessible" }
+        val indicatorsByKey = indicatorsField.get(snapshot) as Map<*, *>
+        return indicatorsByKey.values.flatMap { indexedIndicators ->
+            (indexedIndicators as List<*>).filterNotNull()
+        }
+    }
 
     private class SingleIterationIndicators(
         private val values: List<ThreatIntelIndicator>,
