@@ -74,7 +74,7 @@ object DetectionTemplate {
  * Encodes a rule's group values into one stable, unambiguous string in the rule's declared column
  * order. Group values can legally contain the field/record separators (`|`, `=`), and a missing value
  * must stay distinct from an empty one, so naive `col=value` joins can collapse distinct matches and
- * suppress signals. Each segment escapes `\`, `|` and `=`; a missing value is encoded as a control-char
+ * suppress signals. Each segment escapes `\`, NUL, `|` and `=`; a missing value is encoded as a control-char
  * [MISSING_VALUE_SENTINEL] that escaping can never produce, so no two distinct inputs share a key
  * (an empty value encodes as `col=`, a missing one as `col=<sentinel>`). Same inputs → same key.
  */
@@ -92,6 +92,7 @@ private const val MISSING_VALUE_SENTINEL = "\u0000"
 private fun escapeKeySegment(segment: String): String =
     segment
         .replace("\\", "\\\\")
+        .replace(MISSING_VALUE_SENTINEL, "\\0")
         .replace("|", "\\|")
         .replace("=", "\\=")
 

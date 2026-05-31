@@ -44,37 +44,48 @@ class ThreatIntelService(
     private var cache: CachedSnapshot? = null
 
     fun enrich(entities: Map<String, String>): List<ThreatIntelEnrichmentResponse> {
-        val snapshot = snapshotOrNull() ?: return emptyList()
+        val snapshot = cachedSnapshotOrNull() ?: return emptyList()
         val candidates = extractCandidates(entities)
         if (candidates.isEmpty()) return emptyList()
-        val indicators = snapshot.feeds.flatMap { feed ->
-            feed.indicators.map { indicator -> IndexedIndicator(feed, indicator.normalized(), indicator) }
-        }
         return candidates.flatMap { candidate ->
-            indicators
-                .filter { indexed ->
-                    indexed.indicator.type == candidate.type && indexed.normalizedValue == candidate.normalizedValue
-                }
+            snapshot.indicatorsByKey[IndicatorKey(candidate.type, candidate.normalizedValue)]
+                .orEmpty()
                 .map { indexed -> candidate.toResponse(indexed) }
         }
     }
 
-    private fun snapshotOrNull(): ThreatIntelSnapshot? {
+    private fun cachedSnapshotOrNull(): CachedSnapshot? {
         val now = clock()
         val current = cache
-        if (current != null && current.expiresAt > now) return current.snapshot
+        if (current != null && current.expiresAt > now) return current
         return runCatching {
             val snapshot = provider.load()
-            cache = CachedSnapshot(snapshot, now + ttl)
-            snapshot
+            CachedSnapshot(snapshot.indexIndicators(), now + ttl).also { cache = it }
         }.getOrElse { error ->
             logger.warn { "Threat intelligence snapshot load failed: ${error.message}" }
-            current?.snapshot
+            current
         }
     }
 
     private fun ThreatIntelIndicator.normalized(): String =
         if (type == "hash") value.lowercase() else value.lowercase().trimEnd('.')
+
+    private fun ThreatIntelSnapshot.indexIndicators(): Map<IndicatorKey, List<IndexedIndicator>> =
+        feeds
+            .flatMap { feed ->
+                val metadata = feed.toMetadata()
+                feed.indicators.map { indicator ->
+                    IndexedIndicator(metadata, IndicatorKey(indicator.type, indicator.normalized()), indicator)
+                }
+            }
+            .groupBy { it.key }
+
+    private fun ThreatIntelFeed.toMetadata(): ThreatIntelFeedMetadata =
+        ThreatIntelFeedMetadata(
+            name = name,
+            source = source,
+            updatedAt = updatedAt,
+        )
 
     private fun ThreatCandidate.toResponse(indexed: IndexedIndicator): ThreatIntelEnrichmentResponse =
         ThreatIntelEnrichmentResponse(
@@ -90,13 +101,24 @@ class ThreatIntelService(
         )
 
     private data class CachedSnapshot(
-        val snapshot: ThreatIntelSnapshot,
+        val indicatorsByKey: Map<IndicatorKey, List<IndexedIndicator>>,
         val expiresAt: Instant,
     )
 
-    private data class IndexedIndicator(
-        val feed: ThreatIntelFeed,
+    private data class IndicatorKey(
+        val type: String,
         val normalizedValue: String,
+    )
+
+    private data class ThreatIntelFeedMetadata(
+        val name: String,
+        val source: String,
+        val updatedAt: String,
+    )
+
+    private data class IndexedIndicator(
+        val feed: ThreatIntelFeedMetadata,
+        val key: IndicatorKey,
         val indicator: ThreatIntelIndicator,
     )
 }

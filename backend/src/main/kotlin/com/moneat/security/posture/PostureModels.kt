@@ -44,7 +44,7 @@ enum class ComplianceFindingStatus(val wire: String) {
 
     companion object {
         fun normalize(value: String): ComplianceFindingStatus =
-            entries.firstOrNull { it.wire == value } ?: PASSED
+            entries.firstOrNull { it.wire == value } ?: ERROR
     }
 }
 

@@ -40,7 +40,7 @@ class RuleQueryCompilerTest {
         source: String = "logs",
     ) = RuleQueryCompiler.RuleInput(source, filter, groupBy, windowSeconds, type, thresholdCount)
 
-    // (a) Org filter always present, and no rule field can set/override it.
+    // ──── Org Scope ────
 
     @Test
     fun `every compiled query injects the org clause for the context org`() {
@@ -87,7 +87,7 @@ class RuleQueryCompilerTest {
         assertTrue(sql.indexOf("organization_id = 99") < sql.indexOf("GROUP BY"), sql)
     }
 
-    // (b) Whitelist enforced: tables/columns/functions outside the allowlist are rejected.
+    // ──── Whitelist ────
 
     @Test
     fun `only the logs table is ever used`() {
@@ -160,7 +160,7 @@ class RuleQueryCompilerTest {
         }
     }
 
-    // (c) No injection: adversarial filter strings are escaped/parsed and never alter structure.
+    // ──── Injection Resistance ────
 
     private fun assertFilterCannotAlterStructure(filter: String) {
         val sql = compiler.compile(orgId = 5, input(filter = filter)).sql
@@ -211,7 +211,7 @@ class RuleQueryCompilerTest {
         assertTrue(sql.contains("tags['user.id']"), sql)
     }
 
-    // (d) Cross-tenant read fails closed — covered structurally: there is no author path to another org.
+    // ──── Cross Tenant ────
 
     @Test
     fun `no rule field maps to org scoping so a rule cannot target another tenant`() {
@@ -222,7 +222,7 @@ class RuleQueryCompilerTest {
         assertTrue(sql.contains("organization_id = 11"))
     }
 
-    // (e) Resource caps attached to every compiled query.
+    // ──── Resource Caps ────
 
     @Test
     fun `every compiled query carries the resource caps`() {
@@ -246,7 +246,7 @@ class RuleQueryCompilerTest {
         assertTrue(compiled.sql.contains(compiled.whereClause), compiled.sql)
     }
 
-    // Window + threshold validation produce DSL messages, not CH text.
+    // ──── Validation ────
 
     @Test
     fun `a too-short window is rejected with a DSL message`() {
@@ -341,7 +341,7 @@ class RuleQueryCompilerTest {
         assertTrue(ex.message!!.contains("Unknown group-by column"))
     }
 
-    // (f) Compiler/validation errors never leak ClickHouse text.
+    // ──── Error Hygiene ────
 
     @Test
     fun `compile errors never contain ClickHouse internals`() {

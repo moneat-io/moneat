@@ -18,6 +18,7 @@ package com.moneat.security.threatintel
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
@@ -39,6 +40,48 @@ class ThreatIntelServiceTest {
         assertEquals(1, loads)
         assertEquals("command_and_control", first.single().threatType)
         assertEquals(first, second)
+    }
+
+    @Test
+    fun `warm enrich uses cached indicator index`() {
+        val indicators = SingleIterationIndicators(
+            listOf(
+                ThreatIntelIndicator(
+                    type = "ip",
+                    value = "203.0.113.66",
+                    threatType = "command_and_control",
+                    confidence = 70,
+                ),
+            )
+        )
+        val service = ThreatIntelService(
+            provider = ThreatIntelProvider { snapshot(indicators) },
+            ttl = 15.minutes,
+            clock = { NOW },
+        )
+
+        val first = service.enrich(mapOf("destination_ip" to "203.0.113.66"))
+        val second = service.enrich(mapOf("destination_ip" to "203.0.113.66"))
+
+        assertEquals(first, second)
+        assertEquals(1, indicators.iterations)
+    }
+
+    @Test
+    fun `cached index entries retain feed metadata without full feed`() {
+        val service = ThreatIntelService(
+            provider = ThreatIntelProvider { snapshot("203.0.113.66") },
+            ttl = 15.minutes,
+            clock = { NOW },
+        )
+
+        service.enrich(mapOf("destination_ip" to "203.0.113.66"))
+
+        val indexedIndicator = cachedIndexedIndicators(service).single()
+        val storesFullFeed = indexedIndicator.javaClass.declaredFields.any { field ->
+            field.type == ThreatIntelFeed::class.java
+        }
+        assertFalse(storesFullFeed)
     }
 
     @Test
@@ -70,6 +113,48 @@ class ThreatIntelServiceTest {
                 ),
             ),
         )
+
+    private fun snapshot(indicators: List<ThreatIntelIndicator>): ThreatIntelSnapshot =
+        ThreatIntelSnapshot(
+            feeds = listOf(
+                ThreatIntelFeed(
+                    name = "local",
+                    source = "seed",
+                    updatedAt = "2026-05-31T00:00:00Z",
+                    indicators = indicators,
+                ),
+            ),
+        )
+
+    private fun cachedIndexedIndicators(service: ThreatIntelService): List<Any> {
+        val cacheField = service.javaClass.getDeclaredField("cache")
+        check(cacheField.trySetAccessible()) { "ThreatIntelService cache field is not accessible" }
+        val snapshot = requireNotNull(cacheField.get(service))
+        val indicatorsField = snapshot.javaClass.getDeclaredField("indicatorsByKey")
+        check(indicatorsField.trySetAccessible()) { "Cached snapshot indicators field is not accessible" }
+        val indicatorsByKey = indicatorsField.get(snapshot) as Map<*, *>
+        return indicatorsByKey.values.flatMap { indexedIndicators ->
+            (indexedIndicators as List<*>).filterNotNull()
+        }
+    }
+
+    private class SingleIterationIndicators(
+        private val values: List<ThreatIntelIndicator>,
+    ) : AbstractList<ThreatIntelIndicator>() {
+        var iterations = 0
+            private set
+
+        override val size: Int
+            get() = values.size
+
+        override fun get(index: Int): ThreatIntelIndicator = values[index]
+
+        override fun iterator(): Iterator<ThreatIntelIndicator> {
+            iterations++
+            check(iterations == 1) { "cached snapshot indicators were rescanned" }
+            return values.iterator()
+        }
+    }
 
     companion object {
         private val NOW = Instant.parse("2026-05-31T00:00:00Z")
