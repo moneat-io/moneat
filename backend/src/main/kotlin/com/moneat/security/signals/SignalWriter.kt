@@ -127,9 +127,9 @@ object SignalWriter {
         }
         insertEvidence(existing.id, spec, now)
         return if (escalated) {
-            outcome(SignalOutcome::Escalated, existing.id, existing.organizationId, spec, newSeverity)
+            outcome(SignalOutcomeKind.ESCALATED, existing.id, existing.organizationId, spec, newSeverity)
         } else {
-            outcome(SignalOutcome::Updated, existing.id, existing.organizationId, spec, newSeverity)
+            outcome(SignalOutcomeKind.UPDATED, existing.id, existing.organizationId, spec, newSeverity)
         }
     }
 
@@ -153,7 +153,7 @@ object SignalWriter {
             it[updatedAt] = now
         }.value
         insertEvidence(signalId, spec, now)
-        return outcome(SignalOutcome::Created, signalId, organizationId, spec, spec.severity)
+        return outcome(SignalOutcomeKind.CREATED, signalId, organizationId, spec, spec.severity)
     }
 
     private fun insertEvidence(signalId: Int, spec: SignalSpec, now: kotlin.time.Instant) {
@@ -165,24 +165,45 @@ object SignalWriter {
         }
     }
 
-    @Suppress("LongParameterList")
     private fun outcome(
-        factory: (Int, Int, SignalSource, String, String, SignalSeverity, String, Map<String, String>) -> SignalOutcome,
+        kind: SignalOutcomeKind,
         signalId: Int,
         organizationId: Int,
         spec: SignalSpec,
         severity: SignalSeverity,
     ): SignalOutcome =
-        factory(
-            signalId,
-            organizationId,
-            spec.source,
-            spec.ruleId,
-            spec.ruleName,
-            severity,
-            spec.dedupKey,
-            spec.entities,
-        )
+        when (kind) {
+            SignalOutcomeKind.CREATED -> SignalOutcome.Created(
+                signalId,
+                organizationId,
+                spec.source,
+                spec.ruleId,
+                spec.ruleName,
+                severity,
+                spec.dedupKey,
+                spec.entities,
+            )
+            SignalOutcomeKind.ESCALATED -> SignalOutcome.Escalated(
+                signalId,
+                organizationId,
+                spec.source,
+                spec.ruleId,
+                spec.ruleName,
+                severity,
+                spec.dedupKey,
+                spec.entities,
+            )
+            SignalOutcomeKind.UPDATED -> SignalOutcome.Updated(
+                signalId,
+                organizationId,
+                spec.source,
+                spec.ruleId,
+                spec.ruleName,
+                severity,
+                spec.dedupKey,
+                spec.entities,
+            )
+        }
 
     /**
      * The occurrence time clamped so a bad future timestamp from a producer cannot push `last_seen`
@@ -201,4 +222,10 @@ object SignalWriter {
         val firstSeen: kotlin.time.Instant,
         val lastSeen: kotlin.time.Instant,
     )
+
+    private enum class SignalOutcomeKind {
+        CREATED,
+        ESCALATED,
+        UPDATED,
+    }
 }

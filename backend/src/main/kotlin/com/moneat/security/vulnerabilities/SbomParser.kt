@@ -32,6 +32,9 @@ private const val MAX_STRING_LENGTH = 512
 private const val MAX_PURL_LENGTH = 2_048
 private const val MAX_LICENSES = 20
 private const val MAX_ECOSYSTEM_LENGTH = 64
+private const val CYCLONEDX_FORMAT = "cyclonedx"
+private const val SPDX_PACKAGE_MANAGER_CATEGORY = "package-manager"
+private const val PURL_REFERENCE_TYPE = "purl"
 
 class SbomValidationException(
     message: String,
@@ -48,7 +51,7 @@ object SbomParser {
         validateSize(rawBody)
         val root = parseJson(rawBody)
         val parsed = when {
-            root.s("bomFormat").equals("CycloneDX", ignoreCase = true) -> parseCycloneDx(root)
+            root.s("bomFormat").lowercase() == CYCLONEDX_FORMAT -> parseCycloneDx(root)
             root["spdxVersion"] != null || root["SPDXID"] != null -> parseSpdx(root)
             else -> throw SbomValidationException("Unsupported SBOM format")
         }
@@ -179,7 +182,7 @@ object SbomParser {
             val ref = element as? JsonObject ?: return@forEach
             val category = ref.s("referenceCategory")
             val type = ref.s("referenceType")
-            if (category.equals("PACKAGE-MANAGER", ignoreCase = true) && type.equals("purl", ignoreCase = true)) {
+            if (category.lowercase() == SPDX_PACKAGE_MANAGER_CATEGORY && type.lowercase() == PURL_REFERENCE_TYPE) {
                 return cleanPurl(ref.s("referenceLocator"))
             }
         }

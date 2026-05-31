@@ -155,41 +155,16 @@ class SignalService(
                 .firstOrNull() ?: return@transaction TriageResult.NotFound
 
             val current = SignalStatus.fromWire(row[SecuritySignals.status]) ?: SignalStatus.OPEN
-            val transition = resolveTransition(current, request)
-            if (transition is TransitionResult.Invalid) {
-                return@transaction TriageResult.Invalid(transition.message)
+            val target = when (val transition = resolveTransition(current, request)) {
+                is TransitionResult.Invalid -> return@transaction TriageResult.Invalid(transition.message)
+                is TransitionResult.Valid -> transition
             }
-            val target = (transition as TransitionResult.Valid)
 
             val now = Clock.System.now()
-            SecuritySignals.update({ SecuritySignals.id eq signalId }) {
-                if (target.status != null) {
-                    it[status] = target.status.wire
-                    it[archiveReason] = target.archiveReason?.wire
-                }
-                if (request.clearAssignee) {
-                    it[assigneeUserId] = null
-                } else if (request.assigneeUserId != null) {
-                    it[assigneeUserId] = request.assigneeUserId
-                }
-                it[updatedAt] = now
-            }
+            updateSignalTriage(signalId, request, target, now)
 
             val audit = AuditContext(signalId, orgId, actorUserId, now)
-            if (target.status != null && target.status != current) {
-                audit.write(
-                    SignalAuditAction.STATUS_CHANGE,
-                    from = current,
-                    to = target.status,
-                    archiveReason = target.archiveReason,
-                )
-            }
-            if (request.clearAssignee || request.assigneeUserId != null) {
-                audit.write(SignalAuditAction.ASSIGN)
-            }
-            if (!request.note.isNullOrBlank()) {
-                audit.write(SignalAuditAction.NOTE, auditNote = request.note)
-            }
+            writeTriageAudit(audit, current, target, request)
 
             val updated = SecuritySignals
                 .selectAll()
@@ -198,6 +173,48 @@ class SignalService(
                 .toSignalResponse()
             TriageResult.Ok(updated)
         }
+
+    private fun updateSignalTriage(
+        signalId: Int,
+        request: TriageRequest,
+        target: TransitionResult.Valid,
+        now: kotlin.time.Instant,
+    ) {
+        SecuritySignals.update({ SecuritySignals.id eq signalId }) {
+            if (target.status != null) {
+                it[status] = target.status.wire
+                it[archiveReason] = target.archiveReason?.wire
+            }
+            if (request.clearAssignee) {
+                it[assigneeUserId] = null
+            } else if (request.assigneeUserId != null) {
+                it[assigneeUserId] = request.assigneeUserId
+            }
+            it[updatedAt] = now
+        }
+    }
+
+    private fun writeTriageAudit(
+        audit: AuditContext,
+        current: SignalStatus,
+        target: TransitionResult.Valid,
+        request: TriageRequest,
+    ) {
+        if (target.status != null && target.status != current) {
+            audit.write(
+                SignalAuditAction.STATUS_CHANGE,
+                from = current,
+                to = target.status,
+                archiveReason = target.archiveReason,
+            )
+        }
+        if (request.clearAssignee || request.assigneeUserId != null) {
+            audit.write(SignalAuditAction.ASSIGN)
+        }
+        if (!request.note.isNullOrBlank()) {
+            audit.write(SignalAuditAction.NOTE, auditNote = request.note)
+        }
+    }
 
     private fun buildPredicate(
         orgId: Int,
