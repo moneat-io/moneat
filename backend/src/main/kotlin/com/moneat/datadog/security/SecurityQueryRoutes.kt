@@ -17,6 +17,7 @@
 package com.moneat.datadog.security
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.config.ClickHouseQueryException
 import com.moneat.config.isClickHouseError
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
@@ -51,13 +52,14 @@ fun Route.securityQueryRoutes() {
         authenticate("auth-jwt") {
             get("/events") { handleListEvents() }
             get("/events/{eventId}") { handleEventDetail() }
+            get("/dumps") { handleListDumps() }
             get("/compliance") { handleListFindings() }
             get("/compliance/summary") { handleComplianceSummary() }
         }
     }
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleListEvents() {
-    val orgId = extractOrgId() ?: return
+    val orgId = extractOrgId() ?: return respondEmptyList("events")
     val limit = paramLimit()
     val offset = paramOffset()
     val db = ClickHouseClient.getDatabase()
@@ -112,7 +114,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListEvents() {
     )
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleEventDetail() {
-    val orgId = extractOrgId() ?: return
+    val orgId = extractOrgId() ?: return call.respond(
+        HttpStatusCode.NotFound, mapOf("error" to "Event not found")
+    )
     val eventId = call.parameters["eventId"] ?: return call.respond(
         HttpStatusCode.BadRequest, mapOf("error" to "Missing eventId")
     )
@@ -151,8 +155,54 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleEventDetail() {
         call.respond(rows.first())
     }
 }
+private suspend fun io.ktor.server.routing.RoutingContext.handleListDumps() {
+    val orgId = extractOrgId() ?: return respondEmptyList("dumps")
+    val limit = paramLimit()
+    val offset = paramOffset()
+    val db = ClickHouseClient.getDatabase()
+    val conditions = mutableListOf(
+        ClickHouseQueryUtils.orgIdClause(orgId.toLong())
+    )
+    call.parameters["host"]?.let {
+        conditions.add("host LIKE '%${escapeSql(it)}%'")
+    }
+    call.parameters["activity_type"]?.let {
+        conditions.add("activity_type = '${escapeSql(it)}'")
+    }
+    val where = conditions.joinToString(" AND ")
+
+    val totalCount = executeCount(
+        "SELECT count() as cnt FROM `$db`.security_dumps WHERE $where FORMAT JSONEachRow"
+    )
+
+    val rows = executeRows(
+        """SELECT dump_id, activity_type, process_name, host,
+            duration_ns, tags,
+            formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as ts
+        FROM `$db`.security_dumps WHERE $where
+        ORDER BY timestamp DESC LIMIT $limit OFFSET $offset
+        FORMAT JSONEachRow"""
+    ) { obj ->
+        buildJsonObject {
+            put("dumpId", obj.s("dump_id"))
+            put("activityType", obj.s("activity_type"))
+            put("processName", obj.s("process_name"))
+            put("host", obj.s("host"))
+            put("durationNs", obj.s("duration_ns"))
+            obj["tags"]?.let { put("tags", it) }
+            put("timestamp", obj.s("ts"))
+        }
+    }
+
+    call.respond(
+        buildJsonObject {
+            putJsonArray("dumps") { rows.forEach { add(it) } }
+            put("totalCount", totalCount)
+        }
+    )
+}
 private suspend fun io.ktor.server.routing.RoutingContext.handleListFindings() {
-    val orgId = extractOrgId() ?: return
+    val orgId = extractOrgId() ?: return respondEmptyList("findings")
     val limit = paramLimit()
     val offset = paramOffset()
     val db = ClickHouseClient.getDatabase()
@@ -201,7 +251,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListFindings() {
     )
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleComplianceSummary() {
-    val orgId = extractOrgId() ?: return
+    val orgId = extractOrgId() ?: return respondEmptySummary()
     val db = ClickHouseClient.getDatabase()
     val where = ClickHouseQueryUtils.orgIdClause(orgId.toLong())
 
@@ -226,26 +276,43 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleComplianceSummar
     )
 }
 
+/**
+ * Tenant isolation is enforced by the signed `orgId` JWT claim combined with [ClickHouseQueryUtils.orgIdClause]
+ * on every query, so there is no cross-tenant read path and no per-request membership lookup is needed here
+ * (matching other claim-scoped read routes such as InfraRoutes and MonitorRoutes).
+ */
 private fun io.ktor.server.routing.RoutingContext.extractOrgId(): Int? {
     val principal = call.principal<JWTPrincipal>()
     return principal?.payload?.getClaim("orgId")?.asInt()
 }
 
+/** Empty list-with-count payload returned when the caller token carries no `orgId` claim. */
+private suspend fun io.ktor.server.routing.RoutingContext.respondEmptyList(arrayKey: String) {
+    call.respond(
+        buildJsonObject {
+            putJsonArray(arrayKey) {}
+            put("totalCount", 0)
+        }
+    )
+}
+
+/** Empty summary payload returned when the caller token carries no `orgId` claim. */
+private suspend fun io.ktor.server.routing.RoutingContext.respondEmptySummary() {
+    call.respond(buildJsonObject { putJsonArray("summary") {} })
+}
+
 private fun io.ktor.server.routing.RoutingContext.paramLimit(): Int =
     (call.parameters["limit"]?.toIntOrNull() ?: DEFAULT_LIMIT)
-        .coerceAtMost(MAX_LIMIT)
+        .coerceIn(0, MAX_LIMIT)
 
 private fun io.ktor.server.routing.RoutingContext.paramOffset(): Int =
-    call.parameters["offset"]?.toIntOrNull() ?: 0
+    (call.parameters["offset"]?.toIntOrNull() ?: 0).coerceAtLeast(0)
 
 private suspend fun executeCount(sql: String): Long {
     val resp = ClickHouseClient.execute(sql)
     val body = resp.bodyAsText()
     if (resp.isClickHouseError(body)) {
-        logger.error {
-            "ClickHouse error in executeCount. SQL: ${sql.take(LOG_SQL_MAX_LEN)} Body: ${body.take(LOG_BODY_MAX_LEN)}"
-        }
-        throw IllegalStateException("ClickHouse query error: ${body.take(LOG_BODY_MAX_LEN)}")
+        throw securityQueryError("executeCount", sql, body)
     }
     return body.trim().lines().firstOrNull()?.let {
         json.parseToJsonElement(it).jsonObject["cnt"]
@@ -260,14 +327,26 @@ private suspend fun executeRows(
     val resp = ClickHouseClient.execute(sql)
     val body = resp.bodyAsText()
     if (resp.isClickHouseError(body)) {
-        logger.error {
-            "ClickHouse error in executeRows. SQL: ${sql.take(LOG_SQL_MAX_LEN)} Body: ${body.take(LOG_BODY_MAX_LEN)}"
-        }
-        throw IllegalStateException("ClickHouse query error: ${body.take(LOG_BODY_MAX_LEN)}")
+        throw securityQueryError("executeRows", sql, body)
     }
     return body.trim().lines().filter { it.isNotBlank() }.map { line ->
         mapper(json.parseToJsonElement(line).jsonObject)
     }
+}
+
+/**
+ * Builds a [ClickHouseQueryException] for a failed security query. The detail (query text and
+ * ClickHouse body) is logged and retained server-side only; the status-pages plugin maps this
+ * exception to a generic client response so no query text, column names, or ClickHouse errors leak.
+ */
+private fun securityQueryError(operation: String, sql: String, body: String): ClickHouseQueryException {
+    logger.error {
+        "ClickHouse error in $operation. SQL: ${sql.take(LOG_SQL_MAX_LEN)} Body: ${body.take(LOG_BODY_MAX_LEN)}"
+    }
+    return ClickHouseQueryException(
+        isTimeout = false,
+        internalDetail = "Security query failed in $operation: ${body.take(LOG_BODY_MAX_LEN)}",
+    )
 }
 
 private fun JsonObject.s(key: String): String {

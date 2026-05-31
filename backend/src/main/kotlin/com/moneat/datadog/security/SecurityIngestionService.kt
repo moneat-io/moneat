@@ -172,7 +172,7 @@ object SecurityIngestionService {
                 else -> "info"
             }
             """(
-                ${batch.organizationId},
+                toUInt64(${batch.organizationId}),
                 '${escapeSql(e.ruleId)}', '${escapeSql(e.ruleName)}',
                 '${escapeSql(e.ruleCategory)}', '$sev',
                 '${escapeSql(e.agentRuleVersion)}',
@@ -198,7 +198,7 @@ object SecurityIngestionService {
         if (batch.dumps.isEmpty()) return
         val rows = batch.dumps.joinToString(",\n") { d ->
             """(
-                ${batch.organizationId},
+                toUInt64(${batch.organizationId}),
                 '${escapeSql(d.activityType)}',
                 '${escapeSql(d.processName)}',
                 '${escapeSql(d.host)}',
@@ -227,7 +227,7 @@ object SecurityIngestionService {
                 else -> "passed"
             }
             """(
-                ${batch.organizationId},
+                toUInt64(${batch.organizationId}),
                 '${escapeSql(f.framework)}',
                 '${escapeSql(f.ruleId)}', '${escapeSql(f.ruleName)}',
                 '$status',

@@ -16,9 +16,9 @@
 
 package com.moneat.monitoring
 
+import com.moneat.datadog.security.securityQueryRoutes
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.monitor.routes.agentApiKeyRoutes
-import com.moneat.security.routes.securityRoutes
 import com.moneat.synthetics.routes.SyntheticsScheduler
 import com.moneat.synthetics.routes.syntheticsRoutes
 import io.ktor.server.application.Application
@@ -39,7 +39,7 @@ class MonitoringModule : EnterpriseModule {
     override fun registerRoutes(route: Route) {
         route.apply {
             // Note: infraRoutes() is registered in core Routing.kt, not here
-            securityRoutes()
+            securityQueryRoutes()
             syntheticsRoutes()
             agentApiKeyRoutes()
         }
