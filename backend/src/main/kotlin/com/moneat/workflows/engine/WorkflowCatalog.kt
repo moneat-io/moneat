@@ -22,6 +22,8 @@ import com.moneat.workflows.engine.temporal.CONNECTOR_PAGERDUTY_TRIGGER_INCIDENT
 import com.moneat.workflows.engine.temporal.CONNECTOR_SERVICENOW_CREATE_INCIDENT_ACTION
 import com.moneat.workflows.engine.temporal.HTTP_REQUEST_ACTION
 import com.moneat.workflows.engine.temporal.TRANSFORM_GRAALJS_ACTION
+import com.moneat.workflows.engine.temporal.WORKFLOW_EGRESS_ACTIONS
+import com.moneat.workflows.engine.temporal.workflowEgressActionsEnabled
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -666,8 +668,16 @@ object WorkflowCatalog {
         )
     )
 
-    fun response(): WorkflowCatalogResponse =
-        WorkflowCatalogResponse(resources = resources, triggers = triggers, steps = steps, nodeTypes = nodeTypes)
+    fun response(): WorkflowCatalogResponse {
+        val visibleSteps =
+            if (workflowEgressActionsEnabled()) steps else steps.filterNot { it.name in WORKFLOW_EGRESS_ACTIONS }
+        return WorkflowCatalogResponse(
+            resources = resources,
+            triggers = triggers,
+            steps = visibleSteps,
+            nodeTypes = nodeTypes
+        )
+    }
 
     fun trigger(name: String): WorkflowTriggerDefinition? = triggers.firstOrNull { it.name == name }
 

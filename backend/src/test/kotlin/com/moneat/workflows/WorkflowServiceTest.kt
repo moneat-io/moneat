@@ -276,8 +276,10 @@ class WorkflowServiceTest {
         assertTrue(response.triggers.any { it.name == "security.signal" })
         assertTrue(response.steps.any { it.name == "moneat.logs.search" })
         assertTrue(response.steps.any { it.name == "statuspage.incident.create" })
-        assertTrue(response.steps.any { it.name == "http.request" })
-        assertTrue(response.steps.any { it.name == "transform.graaljs" })
+        // http.request and transform.graaljs are hidden unless WORKFLOWS_EGRESS_ENABLED is set;
+        // their visibility in both states is covered by WorkflowCatalogTest.
+        assertFalse(response.steps.any { it.name == "http.request" })
+        assertFalse(response.steps.any { it.name == "transform.graaljs" })
         assertEquals("Email organization members", WorkflowCatalog.step("notification.email_org")?.label)
         assertEquals("AlertSeverity", WorkflowCatalog.scopeType("alert.triggered", "alert.severity"))
         assertEquals("String", WorkflowCatalog.scopeType("alert.triggered", "alert.priority"))

@@ -18,7 +18,10 @@ package com.moneat.workflows.services
 
 import com.moneat.workflows.engine.temporal.HTTP_REQUEST_ACTION
 import com.moneat.workflows.engine.temporal.TRANSFORM_GRAALJS_ACTION
+import com.moneat.workflows.engine.temporal.WORKFLOWS_EGRESS_ENABLED_ENV
 import kotlinx.serialization.json.JsonPrimitive
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -26,6 +29,56 @@ import kotlin.test.assertTrue
 
 class WorkflowEgressActionExecutorTest {
     private val executor = WorkflowEgressActionExecutor()
+
+    @BeforeTest
+    fun enableEgress() {
+        System.setProperty(WORKFLOWS_EGRESS_ENABLED_ENV, "true")
+    }
+
+    @AfterTest
+    fun resetEgress() {
+        System.clearProperty(WORKFLOWS_EGRESS_ENABLED_ENV)
+    }
+
+    @Test
+    fun `execute refuses egress actions when the feature is disabled`() {
+        System.clearProperty(WORKFLOWS_EGRESS_ENABLED_ENV)
+        val error =
+            assertFailsWith<IllegalArgumentException> {
+                executor.execute(
+                    stepName = TRANSFORM_GRAALJS_ACTION,
+                    params = mapOf("script" to "return 1;"),
+                    scope = emptyMap()
+                )
+            }
+        assertTrue(error.message.orEmpty().contains("disabled"))
+    }
+
+    @Test
+    fun `http request rejects unique-local IPv6 targets`() {
+        val error =
+            assertFailsWith<IllegalArgumentException> {
+                executor.execute(
+                    stepName = HTTP_REQUEST_ACTION,
+                    params = mapOf("url" to "http://[fd00::1]/data"),
+                    scope = emptyMap()
+                )
+            }
+        assertTrue(error.message.orEmpty().contains("Private"))
+    }
+
+    @Test
+    fun `transform rejects output larger than the cap`() {
+        val error =
+            assertFailsWith<IllegalArgumentException> {
+                executor.execute(
+                    stepName = TRANSFORM_GRAALJS_ACTION,
+                    params = mapOf("script" to "return 'x'.repeat(70000);"),
+                    scope = emptyMap()
+                )
+            }
+        assertTrue(error.message.orEmpty().contains("exceeds"))
+    }
 
     @Test
     fun `transform action runs GraalJS without host access`() {

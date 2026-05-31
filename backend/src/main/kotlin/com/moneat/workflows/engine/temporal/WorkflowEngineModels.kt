@@ -16,6 +16,7 @@
 
 package com.moneat.workflows.engine.temporal
 
+import com.moneat.config.EnvConfig
 import com.moneat.workflows.models.WorkflowConditionConfig
 import com.moneat.workflows.models.WorkflowGraphConfig
 import com.moneat.workflows.models.WorkflowGraphEdge
@@ -48,6 +49,17 @@ val WORKFLOW_PREMIUM_CONNECTOR_ACTIONS =
         CONNECTOR_GITHUB_CREATE_ISSUE_ACTION,
         CONNECTOR_SERVICENOW_CREATE_INCIDENT_ACTION
     )
+
+const val WORKFLOWS_EGRESS_ENABLED_ENV = "WORKFLOWS_EGRESS_ENABLED"
+
+/**
+ * Whether the `http.request` and `transform.graaljs` actions are enabled (default false).
+ *
+ * When disabled they are hidden from the catalog, rejected by graph validation, and refused
+ * at execution time.
+ */
+fun workflowEgressActionsEnabled(): Boolean =
+    EnvConfig.get(WORKFLOWS_EGRESS_ENABLED_ENV)?.toBoolean() ?: false
 
 data class WorkflowStartRequest(
     val runId: Int,

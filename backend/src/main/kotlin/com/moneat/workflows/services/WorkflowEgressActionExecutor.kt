@@ -19,7 +19,10 @@ package com.moneat.workflows.services
 import com.moneat.config.EnvConfig
 import com.moneat.workflows.engine.temporal.HTTP_REQUEST_ACTION
 import com.moneat.workflows.engine.temporal.TRANSFORM_GRAALJS_ACTION
+import com.moneat.workflows.engine.temporal.workflowEgressActionsEnabled
 import com.moneat.workflows.models.workflowJson
+import java.net.Inet4Address
+import java.net.Inet6Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ProxySelector
@@ -42,6 +45,11 @@ private const val DEFAULT_HTTP_TIMEOUT_SECONDS = 15L
 private const val DEFAULT_TRANSFORM_TIMEOUT_SECONDS = 2L
 private const val DEFAULT_EGRESS_PROXY_PORT = 3128
 private const val MAX_HTTP_BODY_CHARS = 64_000
+private const val MAX_TRANSFORM_OUTPUT_CHARS = 64_000
+private const val IPV4_ZERO_PREFIX = 0
+private const val IPV6_ULA_MASK = 0xFE
+private const val IPV6_ULA_PREFIX = 0xFC
+private const val OCTET_MASK = 0xFF
 private const val HTTP_STATUS_KEY = "status_code"
 private const val HTTP_BODY_KEY = "body"
 private const val HTTP_URL_KEY = "url"
@@ -72,12 +80,16 @@ class WorkflowEgressActionExecutor(
         stepName: String,
         params: Map<String, String>,
         scope: Map<String, String>
-    ): Map<String, JsonElement> =
-        when (stepName) {
+    ): Map<String, JsonElement> {
+        require(workflowEgressActionsEnabled()) {
+            "Egress workflow actions are disabled; set WORKFLOWS_EGRESS_ENABLED=true on the isolated egress worker"
+        }
+        return when (stepName) {
             HTTP_REQUEST_ACTION -> executeHttpRequest(params)
             TRANSFORM_GRAALJS_ACTION -> executeTransform(params, scope)
             else -> throw IllegalArgumentException("Unknown egress workflow step $stepName")
         }
+    }
 
     private fun executeHttpRequest(params: Map<String, String>): Map<String, JsonElement> {
         val uri = params.requiredUri("url")
@@ -115,6 +127,10 @@ class WorkflowEgressActionExecutor(
                 ?.coerceIn(1L, DEFAULT_TRANSFORM_TIMEOUT_SECONDS)
                 ?: DEFAULT_TRANSFORM_TIMEOUT_SECONDS
         val result = evaluateJavaScript(script, scope, Duration.ofSeconds(timeoutSeconds))
+        val serialized = workflowJson.encodeToString(JsonElement.serializer(), result)
+        require(serialized.length <= MAX_TRANSFORM_OUTPUT_CHARS) {
+            "Transform output exceeds $MAX_TRANSFORM_OUTPUT_CHARS characters"
+        }
         return mapOf(TRANSFORM_RESULT_KEY to result)
     }
 
@@ -214,7 +230,17 @@ class WorkflowEgressActionExecutor(
             isLoopbackAddress ||
             isLinkLocalAddress ||
             isSiteLocalAddress ||
-            isMulticastAddress
+            isMulticastAddress ||
+            isReservedRange()
+
+    // Covers ranges that the JDK helpers above miss: IPv4 0.0.0.0/8 and IPv6 unique-local fc00::/7.
+    // RFC1918 (isSiteLocalAddress) and metadata 169.254.0.0/16 (isLinkLocalAddress) are already blocked.
+    private fun InetAddress.isReservedRange(): Boolean =
+        when (this) {
+            is Inet4Address -> (address[0].toInt() and OCTET_MASK) == IPV4_ZERO_PREFIX
+            is Inet6Address -> (address[0].toInt() and IPV6_ULA_MASK) == IPV6_ULA_PREFIX
+            else -> false
+        }
 
     private fun requireSafeHeader(name: String) {
         val lowerName = name.lowercase()

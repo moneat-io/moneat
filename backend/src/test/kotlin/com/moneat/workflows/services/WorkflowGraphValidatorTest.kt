@@ -16,6 +16,8 @@
 
 package com.moneat.workflows.services
 
+import com.moneat.workflows.engine.temporal.HTTP_REQUEST_ACTION
+import com.moneat.workflows.engine.temporal.WORKFLOWS_EGRESS_ENABLED_ENV
 import com.moneat.workflows.models.WorkflowConditionConfig
 import com.moneat.workflows.models.WorkflowGraphConfig
 import com.moneat.workflows.models.WorkflowGraphEdge
@@ -328,6 +330,32 @@ class WorkflowGraphValidatorTest {
     }
 
     @Test
+    fun `rejects egress actions when the egress feature is disabled`() {
+        System.clearProperty(WORKFLOWS_EGRESS_ENABLED_ENV)
+        assertFailsWith<IllegalArgumentException> {
+            validator.validate(
+                triggerName = "alert.triggered",
+                graph = egressActionGraph(),
+                onceForTemplate = emptyList()
+            )
+        }
+    }
+
+    @Test
+    fun `accepts egress actions when the egress feature is enabled`() {
+        System.setProperty(WORKFLOWS_EGRESS_ENABLED_ENV, "true")
+        try {
+            validator.validate(
+                triggerName = "alert.triggered",
+                graph = egressActionGraph(),
+                onceForTemplate = emptyList()
+            )
+        } finally {
+            System.clearProperty(WORKFLOWS_EGRESS_ENABLED_ENV)
+        }
+    }
+
+    @Test
     fun `rejects retry attempts outside the allowed range`() {
         assertFailsWith<IllegalArgumentException> {
             validator.validate(
@@ -533,6 +561,20 @@ class WorkflowGraphValidatorTest {
                 WorkflowGraphEdge("trigger", "c1"),
                 WorkflowGraphEdge("c1", "a1", branch = "true")
             )
+        )
+
+    private fun egressActionGraph(): WorkflowGraphConfig =
+        WorkflowGraphConfig(
+            nodes = listOf(
+                trigger(),
+                WorkflowGraphNode(
+                    id = "egress-1",
+                    type = "action",
+                    action = HTTP_REQUEST_ACTION,
+                    params = mapOf("url" to JsonPrimitive("https://example.com/hook"))
+                )
+            ),
+            edges = listOf(WorkflowGraphEdge("trigger", "egress-1"))
         )
 
     private fun trigger(): WorkflowGraphNode =

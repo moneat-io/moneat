@@ -18,6 +18,8 @@ package com.moneat.workflows.services
 
 import com.moneat.workflows.engine.WorkflowCatalog
 import com.moneat.workflows.engine.temporal.LinearGraphAdapter
+import com.moneat.workflows.engine.temporal.WORKFLOW_EGRESS_ACTIONS
+import com.moneat.workflows.engine.temporal.workflowEgressActionsEnabled
 import com.moneat.workflows.models.WorkflowConditionConfig
 import com.moneat.workflows.models.WorkflowGraphConfig
 import com.moneat.workflows.models.WorkflowGraphNode
@@ -162,6 +164,9 @@ class WorkflowGraphValidator {
 
     private fun validateActionNode(node: WorkflowGraphNode) {
         val action = node.action ?: throw IllegalArgumentException("Action node ${node.id} is missing an action")
+        require(action !in WORKFLOW_EGRESS_ACTIONS || workflowEgressActionsEnabled()) {
+            "Action $action runs on the isolated egress worker, which is not enabled on this deployment"
+        }
         val definition = WorkflowCatalog.step(action)
             ?: throw IllegalArgumentException("Unknown workflow step $action")
         definition.params.filter { param -> param.required }.forEach { param ->

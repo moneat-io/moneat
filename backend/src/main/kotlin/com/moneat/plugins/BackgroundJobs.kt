@@ -78,8 +78,8 @@ fun Application.workflowWorkerMode(): WorkflowWorkerMode {
             ?.getString()
             ?.trim()
             ?.uppercase()
-            ?: "ALL"
-    return WorkflowWorkerMode.entries.firstOrNull { mode -> mode.name == rawMode } ?: WorkflowWorkerMode.ALL
+            ?: WorkflowWorkerMode.TRUSTED.name
+    return WorkflowWorkerMode.entries.firstOrNull { mode -> mode.name == rawMode } ?: WorkflowWorkerMode.TRUSTED
 }
 
 fun Application.configureEgressWorkflowWorker() {
