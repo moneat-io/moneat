@@ -840,4 +840,15 @@ class LogQueryParserTest {
         assertTrue(sql.contains("ILIKE"), "Wildcard message search should use ILIKE: $sql")
         assertTrue(sql.contains("Rate%"), "Should convert * to %: $sql")
     }
+
+    @Test
+    fun `an unbalanced closing paren terminates instead of looping forever`() {
+        // Regression: a stray top-level ')' (e.g. from "message:*) OR x") previously left the tokenizer
+        // index unable to advance, spinning into an unbounded token list / OOM. It must now parse and
+        // return promptly with bounded, safe SQL.
+        val result = parser.parse("message:*) OR organization_id:2")
+        assertNotNull(result.rootNode)
+        val sql = parser.toClickHouseSql(result.rootNode!!, ::escapeSql)
+        assertTrue(sql.isNotBlank())
+    }
 }

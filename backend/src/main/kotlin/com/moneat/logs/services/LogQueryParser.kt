@@ -181,10 +181,20 @@ class LogQueryParser {
                     i = endIdx
                 }
 
+                // Stray closing paren with no matching '(' — extractNextToken cannot consume ')',
+                // so without this guard the index would never advance and tokenize would loop
+                // forever (unbounded token list / OOM) on unbalanced input. Skip it.
+                query[i] == ')' -> {
+                    i++
+                }
+
                 else -> {
                     val (token, endIdx) = extractNextToken(query, i)
                     tokens.add(token)
-                    i = endIdx
+                    // Defensive: extractNextToken must always make progress. If it ever returns
+                    // without advancing (e.g. a char it cannot consume), skip one char rather than
+                    // spin forever.
+                    i = if (endIdx > i) endIdx else i + 1
                 }
             }
         }
