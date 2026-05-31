@@ -21,6 +21,7 @@ import {Badge} from '@/components/ui/badge'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
 import {cn} from '@/lib/utils'
 import {colorFor, severityColors} from '@/components/security/securityChips'
+import {SecurityError} from '@/components/security/SecurityError'
 
 export const Route = createFileRoute('/security/events')({
   component: SecurityEvents,
@@ -37,7 +38,7 @@ interface SecurityEvent {
 }
 
 function SecurityEvents() {
-  const {data, isLoading} = useQuery({
+  const {data, isLoading, isError, error} = useQuery({
     queryKey: ['security-events'],
     queryFn: () => api.get<{events?: SecurityEvent[]; totalCount?: number}>('/v1/security/events?limit=50'),
   })
@@ -45,6 +46,7 @@ function SecurityEvents() {
   const events: SecurityEvent[] = data?.events ?? []
 
   if (isLoading) return <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-6 w-6 border-2 border-muted border-t-primary" /></div>
+  if (isError) return <SecurityError title="Couldn’t load security events" error={error} />
 
   return (
     <Card>

@@ -27,9 +27,9 @@ export interface SignalResponse {
   source: string
   rule_id: string
   rule_name: string
-  severity: string
-  status: string
-  archive_reason?: string | null
+  severity: SignalSeverity
+  status: SignalStatus
+  archive_reason?: ArchiveReason | null
   dedup_key: string
   entities: Record<string, string>
   sample_count: number
@@ -52,9 +52,9 @@ export interface SignalAuditResponse {
   id: number
   actor_user_id?: number | null
   action: string
-  from_status?: string | null
-  to_status?: string | null
-  reason?: string | null
+  from_status?: SignalStatus | null
+  to_status?: SignalStatus | null
+  reason?: ArchiveReason | null
   note?: string | null
   created_at: string
 }
@@ -98,9 +98,9 @@ export interface DetectionRuleResponse {
   filter: string
   group_by: string[]
   window_seconds: number
-  type: string
+  type: DetectionRuleType
   threshold_count?: number | null
-  severity: string
+  severity: SignalSeverity
   signal_title: string
   signal_message: string
   suppressions: string[]

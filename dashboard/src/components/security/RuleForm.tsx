@@ -33,7 +33,9 @@ import {RulePreview} from './RulePreview'
 interface RuleFormProps {
   // Existing rule when editing; undefined when creating.
   rule?: DetectionRuleResponse
-  onSubmit: (request: CreateDetectionRuleRequest) => Promise<DetectionRuleResponse>
+  // Creates when ruleId is undefined, otherwise updates that rule. After a preview persists a draft
+  // we hold its id and pass it here so later saves update the draft instead of creating duplicates.
+  onSubmit: (request: CreateDetectionRuleRequest, ruleId?: number) => Promise<DetectionRuleResponse>
   // Runs a preview against a saved rule id (preview evaluates the persisted rule).
   onPreview: (ruleId: number) => Promise<DetectionPreviewResponse>
   onCancel: () => void
@@ -66,8 +68,10 @@ export function RuleForm({rule, onSubmit, onPreview, onCancel, isSubmitting}: Ru
       return
     }
     setError(null)
+    // Once a preview (or an earlier save) has persisted the rule, route subsequent saves through its
+    // id so we update rather than create a duplicate.
     // onError on the parent mutation surfaces failures; swallow here to avoid an unhandled rejection.
-    void onSubmit(built.request)
+    void onSubmit(built.request, savedRuleId)
       .then((saved) => setSavedRuleId(saved.id))
       .catch(() => {})
   }
@@ -88,7 +92,7 @@ export function RuleForm({rule, onSubmit, onPreview, onCancel, isSubmitting}: Ru
     // TODO: a stateless preview endpoint (evaluate an unsaved rule body) would remove this save.
     const previewingUnsaved = isUnsaved
     const request = previewingUnsaved ? {...built.request, enabled: false} : built.request
-    onSubmit(request)
+    onSubmit(request, savedRuleId)
       .then((saved) => {
         setSavedRuleId(saved.id)
         if (previewingUnsaved) {

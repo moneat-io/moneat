@@ -40,6 +40,7 @@ import {
 import {useToast} from '@/hooks/useToast'
 import {RuleList} from '@/components/security/RuleList'
 import {RuleForm} from '@/components/security/RuleForm'
+import {SecurityError} from '@/components/security/SecurityError'
 
 export const Route = createFileRoute('/security/detections')({
   component: DetectionsTab,
@@ -53,7 +54,7 @@ function DetectionsTab() {
   const [editing, setEditing] = useState<Editing>(null)
   const [pendingDelete, setPendingDelete] = useState<DetectionRuleResponse | null>(null)
 
-  const {data, isLoading} = useQuery({
+  const {data, isLoading, isError, error} = useQuery({
     queryKey: ['detection-rules'],
     queryFn: () => api.listDetectionRules(),
   })
@@ -112,6 +113,8 @@ function DetectionsTab() {
         <div className="flex justify-center py-8">
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-primary" />
         </div>
+      ) : isError ? (
+        <SecurityError title="Couldn’t load detection rules" error={error} />
       ) : (
         <Card>
           <CardHeader className="px-2.5 py-1.5">
@@ -140,7 +143,9 @@ function DetectionsTab() {
                 rule={editingRule}
                 isSubmitting={save.isPending}
                 onCancel={() => setEditing(null)}
-                onSubmit={(request) => save.mutateAsync({ruleId: editingRule?.id, request})}
+                onSubmit={(request, ruleId) =>
+                  save.mutateAsync({ruleId: ruleId ?? editingRule?.id, request})
+                }
                 onPreview={(ruleId) => api.previewDetectionRule(ruleId)}
               />
             </div>

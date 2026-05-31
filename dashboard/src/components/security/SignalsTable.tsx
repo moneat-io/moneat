@@ -56,7 +56,7 @@ export function SignalsTable({signals, selectedId, onSelect}: SignalsTableProps)
               <td className="py-1.5 pr-2 font-medium">{s.rule_name}</td>
               <td className="py-1.5 pr-2">
                 <Badge variant="outline" className={cn('text-[10px]', colorFor(statusColors, s.status))}>
-                  {STATUS_LABELS[s.status as keyof typeof STATUS_LABELS] ?? s.status}
+                  {STATUS_LABELS[s.status]}
                 </Badge>
               </td>
               <td className="py-1.5 pr-2 text-muted-foreground">{s.source.replace(/_/g, ' ')}</td>

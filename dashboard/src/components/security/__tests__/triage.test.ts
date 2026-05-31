@@ -51,6 +51,13 @@ describe('toSignalStatus', () => {
     expect(toSignalStatus('bogus')).toBe('open')
     expect(toSignalStatus('')).toBe('open')
   })
+
+  it('does not treat inherited object keys as statuses', () => {
+    expect(toSignalStatus('toString')).toBe('open')
+    expect(toSignalStatus('__proto__')).toBe('open')
+    expect(toSignalStatus('constructor')).toBe('open')
+    expect(toSignalStatus('hasOwnProperty')).toBe('open')
+  })
 })
 
 describe('isTransitionAllowed', () => {

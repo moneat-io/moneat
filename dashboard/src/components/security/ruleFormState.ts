@@ -64,9 +64,9 @@ export function ruleToForm(rule: DetectionRuleResponse): RuleFormState {
     filter: rule.filter,
     groupBy: rule.group_by.join(', '),
     windowSeconds: rule.window_seconds,
-    type: (rule.type as DetectionRuleType) ?? 'threshold',
+    type: rule.type ?? 'threshold',
     thresholdCount: rule.threshold_count != null ? String(rule.threshold_count) : '',
-    severity: (rule.severity as SignalSeverity) ?? 'medium',
+    severity: rule.severity ?? 'medium',
     signalTitle: rule.signal_title,
     signalMessage: rule.signal_message,
     tags: rule.tags.join(', '),
@@ -93,7 +93,11 @@ export function buildRuleRequest(form: RuleFormState): RuleFormValidation {
   const name = form.name.trim()
   if (!name) return {ok: false, error: 'Name is required'}
   if (!form.filter.trim()) return {ok: false, error: 'Filter is required'}
-  if (form.windowSeconds <= 0) return {ok: false, error: 'Window must be greater than zero'}
+  // Number(form.windowSeconds) is NaN when the input is cleared; reject non-finite values so a bad
+  // window never reaches the API.
+  if (!Number.isFinite(form.windowSeconds) || form.windowSeconds <= 0) {
+    return {ok: false, error: 'Window must be greater than zero'}
+  }
 
   let thresholdCount: number | null = null
   if (form.type === 'threshold') {

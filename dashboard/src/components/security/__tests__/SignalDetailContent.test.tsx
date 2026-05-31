@@ -46,7 +46,9 @@ describe('SignalDetailContent', () => {
     })
     render(<SignalDetailContent detail={detail} onTriage={vi.fn().mockResolvedValue(detail.signal)} />)
     expect(screen.getByText('Activity')).toBeInTheDocument()
-    expect(screen.getByText('open → archived')).toBeInTheDocument()
+    // Audit status enums render with their user-facing labels, not raw values.
+    expect(screen.getByText('Open → Archived')).toBeInTheDocument()
+    expect(screen.queryByText('open → archived')).not.toBeInTheDocument()
     expect(screen.getByText(/expected noise/)).toBeInTheDocument()
   })
 

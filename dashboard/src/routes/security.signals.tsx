@@ -24,6 +24,7 @@ import {useToast} from '@/hooks/useToast'
 import {SignalFilterBar, type SignalFilters} from '@/components/security/SignalFilterBar'
 import {SignalsTable} from '@/components/security/SignalsTable'
 import {SignalDetailContent} from '@/components/security/SignalDetailContent'
+import {SecurityError} from '@/components/security/SecurityError'
 
 export const Route = createFileRoute('/security/signals')({
   component: SignalsTab,
@@ -36,7 +37,7 @@ function SignalsTab() {
   const [selected, setSelected] = useState<SignalResponse | null>(null)
 
   const listKey = ['security-signals', filters] as const
-  const {data, isLoading} = useQuery({
+  const {data, isLoading, isError, error} = useQuery({
     queryKey: listKey,
     queryFn: () => api.listSignals({...filters, limit: 100}),
   })
@@ -74,6 +75,8 @@ function SignalsTab() {
         <div className="flex justify-center py-8">
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-primary" />
         </div>
+      ) : isError ? (
+        <SecurityError title="Couldn’t load signals" error={error} />
       ) : (
         <Card>
           <CardHeader className="px-2.5 py-1.5">
@@ -91,7 +94,9 @@ function SignalsTab() {
             <SheetTitle className="text-sm">{selected?.rule_name}</SheetTitle>
           </SheetHeader>
           <div className="mt-4">
-            {detailQuery.data ? (
+            {detailQuery.isError ? (
+              <SecurityError title="Couldn’t load signal details" error={detailQuery.error} />
+            ) : detailQuery.data ? (
               <SignalDetailContent
                 detail={detailQuery.data}
                 onTriage={(request) => triage.mutateAsync(request)}

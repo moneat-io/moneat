@@ -27,6 +27,14 @@ import {
 } from './securityChips'
 import {SignalTriagePanel} from './SignalTriagePanel'
 
+// Renders a raw audit status enum (e.g. "under_review") with its user-facing label, falling back to
+// the raw value for anything unrecognised.
+function statusLabel(value: string): string {
+  return Object.hasOwn(STATUS_LABELS, value)
+    ? STATUS_LABELS[value as keyof typeof STATUS_LABELS]
+    : value
+}
+
 interface SignalDetailContentProps {
   detail: SignalDetailResponse
   onTriage: (request: TriageRequest) => Promise<unknown>
@@ -52,7 +60,7 @@ export function SignalDetailContent({detail, onTriage, isSubmitting}: SignalDeta
           {signal.severity}
         </Badge>
         <Badge variant="outline" className={cn('text-[10px]', colorFor(statusColors, signal.status))}>
-          {STATUS_LABELS[signal.status as keyof typeof STATUS_LABELS] ?? signal.status}
+          {statusLabel(signal.status)}
         </Badge>
         {signal.archive_reason && (
           <Badge variant="outline" className="text-[10px]">
@@ -133,7 +141,7 @@ export function SignalDetailContent({detail, onTriage, isSubmitting}: SignalDeta
                   {entry.from_status && entry.to_status && (
                     <span>
                       {' '}
-                      {entry.from_status} → {entry.to_status}
+                      {statusLabel(entry.from_status)} → {statusLabel(entry.to_status)}
                     </span>
                   )}
                   {entry.reason && <span> ({ARCHIVE_REASON_LABELS[entry.reason] ?? entry.reason})</span>}

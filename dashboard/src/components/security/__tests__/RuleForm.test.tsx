@@ -40,7 +40,8 @@ describe('RuleForm', () => {
     fireEvent.click(screen.getByRole('button', {name: 'Create rule'}))
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        expect.objectContaining({name: 'Failed logins', filter: 'status:failed', type: 'threshold'})
+        expect.objectContaining({name: 'Failed logins', filter: 'status:failed', type: 'threshold'}),
+        undefined
       )
     )
   })
@@ -86,13 +87,31 @@ describe('RuleForm', () => {
     fireEvent.click(screen.getByRole('switch', {name: 'Enabled'}))
     fireEvent.click(screen.getByRole('button', {name: 'Save draft & preview'}))
     await waitFor(() =>
-      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({name: 'Failed logins', enabled: false}))
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({name: 'Failed logins', enabled: false}),
+        undefined
+      )
     )
     await waitFor(() => expect(onPreview).toHaveBeenCalledWith(42))
     expect(await screen.findByText(/Draft saved/)).toBeInTheDocument()
     // Once saved, the button reverts to a plain Preview and the Enabled toggle is forced off.
     expect(screen.getByRole('button', {name: 'Preview'})).toBeInTheDocument()
     expect(screen.getByRole('switch', {name: 'Enabled'})).not.toBeChecked()
+  })
+
+  it('reuses the draft id on save after a preview, so it updates instead of creating a duplicate', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(makeRule({id: 42}))
+    render(<RuleForm onSubmit={onSubmit} onPreview={noopPreview()} onCancel={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText('Name'), {target: {value: 'Failed logins'}})
+    fireEvent.change(screen.getByPlaceholderText(/status:/), {target: {value: 'status:failed'}})
+    // Preview persists a disabled draft (created, so ruleId is undefined here).
+    fireEvent.click(screen.getByRole('button', {name: 'Save draft & preview'}))
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
+    expect(onSubmit).toHaveBeenLastCalledWith(expect.objectContaining({name: 'Failed logins'}), undefined)
+    // Saving now must target the persisted draft id (42), not create a second rule.
+    fireEvent.click(screen.getByRole('button', {name: 'Save changes'}))
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2))
+    expect(onSubmit).toHaveBeenLastCalledWith(expect.objectContaining({name: 'Failed logins'}), 42)
   })
 
   it('surfaces a preview failure', async () => {
@@ -128,7 +147,9 @@ describe('RuleForm', () => {
           signal_message: 'Many failures',
           tags: ['auth', 'brute-force'],
           enabled: true,
-        })
+        }),
+        // Editing an existing rule threads its id so saves update rather than create.
+        1
       )
     )
   })

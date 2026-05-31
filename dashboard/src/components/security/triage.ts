@@ -48,7 +48,8 @@ const STATUS_ACTIONS: Record<SignalStatus, StatusAction[]> = {
  * falling back to `open` for anything unrecognised so the UI stays usable.
  */
 export function toSignalStatus(value: string): SignalStatus {
-  return value in STATUS_ACTIONS ? (value as SignalStatus) : 'open'
+  // Own-property check (not `in`) so inherited keys like "toString"/"__proto__" don't pass as statuses.
+  return Object.hasOwn(STATUS_ACTIONS, value) ? (value as SignalStatus) : 'open'
 }
 
 /** Status moves available from `current`, in display order. */

@@ -52,6 +52,11 @@ describe('buildRuleRequest', () => {
     expect(result).toEqual({ok: false, error: 'Window must be greater than zero'})
   })
 
+  it('rejects a non-finite window (cleared input yields NaN)', () => {
+    const result = buildRuleRequest(makeForm({windowSeconds: Number.NaN}))
+    expect(result).toEqual({ok: false, error: 'Window must be greater than zero'})
+  })
+
   it('requires a positive integer threshold for threshold rules', () => {
     expect(buildRuleRequest(makeForm({thresholdCount: '0'})).ok).toBe(false)
     expect(buildRuleRequest(makeForm({thresholdCount: 'abc'})).ok).toBe(false)
