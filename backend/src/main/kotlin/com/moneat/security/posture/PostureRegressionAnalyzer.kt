@@ -19,10 +19,15 @@ package com.moneat.security.posture
 import com.moneat.security.signals.SignalSeverity
 import com.moneat.security.signals.SignalSource
 import com.moneat.security.signals.SignalSpec
+import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.statements.UpdateBuilder
+import org.jetbrains.exposed.v1.core.vendors.PostgreSQLDialect
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
@@ -41,7 +46,7 @@ object PostureRegressionAnalyzer {
                 val occurred = occurrenceTime(finding.timestampMs)
                 val previous = upsertState(organizationId, finding, status, occurred)
                 if (previous == ComplianceFindingStatus.PASSED && status == ComplianceFindingStatus.FAILED) {
-                    regressionSignal(finding)
+                    regressionSignal(finding, occurred)
                 } else {
                     null
                 }
@@ -55,7 +60,17 @@ object PostureRegressionAnalyzer {
         status: ComplianceFindingStatus,
         occurred: Instant,
     ): ComplianceFindingStatus? {
-        val existing = SecurityComplianceFindingStates
+        val existing = selectStateForUpdate(organizationId, finding)
+        val now = Clock.System.now()
+        if (existing == null) {
+            return insertStateOrUpdateConcurrent(organizationId, finding, status, occurred, now)
+        }
+
+        return updateExistingState(existing, finding, status, occurred, now)
+    }
+
+    private fun selectStateForUpdate(organizationId: Int, finding: ComplianceFindingInput): ResultRow? =
+        SecurityComplianceFindingStates
             .selectAll()
             .where {
                 (SecurityComplianceFindingStates.organizationId eq organizationId) and
@@ -66,25 +81,74 @@ object PostureRegressionAnalyzer {
             }
             .forUpdate()
             .firstOrNull()
-        val now = Clock.System.now()
-        if (existing == null) {
+
+    private fun insertStateOrUpdateConcurrent(
+        organizationId: Int,
+        finding: ComplianceFindingInput,
+        status: ComplianceFindingStatus,
+        occurred: Instant,
+        now: Instant,
+    ): ComplianceFindingStatus? {
+        if (insertNewState(organizationId, finding, status, occurred, now)) return null
+
+        val concurrent = checkNotNull(selectStateForUpdate(organizationId, finding)) {
+            "Compliance finding state insert was ignored without an existing state"
+        }
+        return updateExistingState(concurrent, finding, status, occurred, now)
+    }
+
+    private fun insertNewState(
+        organizationId: Int,
+        finding: ComplianceFindingInput,
+        status: ComplianceFindingStatus,
+        occurred: Instant,
+        now: Instant,
+    ): Boolean {
+        if (!usesPostgreSqlDialect()) {
             SecurityComplianceFindingStates.insert {
-                it[SecurityComplianceFindingStates.organizationId] = organizationId
-                it[framework] = finding.framework
-                it[ruleId] = finding.ruleId
-                it[ruleName] = finding.ruleName
-                it[resourceType] = finding.resourceType
-                it[resourceId] = finding.resourceId
-                it[resourceName] = finding.resourceName
-                it[SecurityComplianceFindingStates.status] = status.wire
-                it[firstSeen] = occurred
-                it[lastSeen] = occurred
-                it[lastRegressedAt] = null
-                it[updatedAt] = now
+                assignStateInsert(it, organizationId, finding, status, occurred, now)
             }
-            return null
+            return true
         }
 
+        val insert = SecurityComplianceFindingStates.insertIgnore {
+            assignStateInsert(it, organizationId, finding, status, occurred, now)
+        }
+        return insert.insertedCount > 0
+    }
+
+    private fun assignStateInsert(
+        statement: UpdateBuilder<*>,
+        organizationId: Int,
+        finding: ComplianceFindingInput,
+        status: ComplianceFindingStatus,
+        occurred: Instant,
+        now: Instant,
+    ) {
+        statement[SecurityComplianceFindingStates.organizationId] = organizationId
+        statement[SecurityComplianceFindingStates.framework] = finding.framework
+        statement[SecurityComplianceFindingStates.ruleId] = finding.ruleId
+        statement[SecurityComplianceFindingStates.ruleName] = finding.ruleName
+        statement[SecurityComplianceFindingStates.resourceType] = finding.resourceType
+        statement[SecurityComplianceFindingStates.resourceId] = finding.resourceId
+        statement[SecurityComplianceFindingStates.resourceName] = finding.resourceName
+        statement[SecurityComplianceFindingStates.status] = status.wire
+        statement[SecurityComplianceFindingStates.firstSeen] = occurred
+        statement[SecurityComplianceFindingStates.lastSeen] = occurred
+        statement[SecurityComplianceFindingStates.lastRegressedAt] = null
+        statement[SecurityComplianceFindingStates.updatedAt] = now
+    }
+
+    private fun usesPostgreSqlDialect(): Boolean =
+        TransactionManager.current().db.dialect is PostgreSQLDialect
+
+    private fun updateExistingState(
+        existing: ResultRow,
+        finding: ComplianceFindingInput,
+        status: ComplianceFindingStatus,
+        occurred: Instant,
+        now: Instant,
+    ): ComplianceFindingStatus {
         val previous = ComplianceFindingStatus.normalize(existing[SecurityComplianceFindingStates.status])
         val stateId = existing[SecurityComplianceFindingStates.id].value
         SecurityComplianceFindingStates.update({ SecurityComplianceFindingStates.id eq stateId }) {
@@ -101,8 +165,9 @@ object PostureRegressionAnalyzer {
         return previous
     }
 
-    private fun regressionSignal(finding: ComplianceFindingInput): SignalSpec {
+    private fun regressionSignal(finding: ComplianceFindingInput, occurred: Instant): SignalSpec {
         val key = findingKey(finding)
+        val occurredAtMs = occurred.toEpochMilliseconds()
         val resourceName = finding.resourceName.ifBlank { finding.resourceId }
         val entities = buildMap {
             if (finding.framework.isNotBlank()) put("framework", finding.framework)
@@ -121,8 +186,8 @@ object PostureRegressionAnalyzer {
             evidenceType = EVIDENCE_TYPE,
             evidenceReference = "table=$COMPLIANCE_TABLE finding=$key rule_id=${finding.ruleId} " +
                 "resource_id=${finding.resourceId} previous=passed status=failed " +
-                "occurred_at_ms=${finding.timestampMs}",
-            occurredAtMs = finding.timestampMs,
+                "occurred_at_ms=$occurredAtMs",
+            occurredAtMs = occurredAtMs,
             tags = listOf("posture:regression"),
         )
     }

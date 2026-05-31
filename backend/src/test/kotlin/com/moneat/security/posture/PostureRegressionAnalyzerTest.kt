@@ -25,10 +25,13 @@ import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.time.Clock
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+
+private const val ONE_DAY_MS = 86_400_000L
 
 class PostureRegressionAnalyzerTest {
     companion object {
@@ -79,6 +82,24 @@ class PostureRegressionAnalyzerTest {
     }
 
     @Test
+    fun `regression signal uses clamped occurrence time`() {
+        val futureMs = Clock.System.now().toEpochMilliseconds() + ONE_DAY_MS
+        PostureRegressionAnalyzer.analyze(orgId, listOf(finding(status = "passed", timestampMs = futureMs)))
+
+        val beforeFailure = Clock.System.now().toEpochMilliseconds()
+        val specs = PostureRegressionAnalyzer.analyze(
+            orgId,
+            listOf(finding(status = "failed", timestampMs = futureMs)),
+        )
+        val afterFailure = Clock.System.now().toEpochMilliseconds()
+
+        val spec = specs.single()
+        assertTrue(spec.occurredAtMs in beforeFailure..afterFailure)
+        assertTrue(spec.occurredAtMs < futureMs)
+        assertTrue(spec.evidenceReference.contains("occurred_at_ms=${spec.occurredAtMs}"))
+    }
+
+    @Test
     fun `repeated failed finding updates state without emitting`() {
         PostureRegressionAnalyzer.analyze(orgId, listOf(finding(status = "passed")))
         PostureRegressionAnalyzer.analyze(orgId, listOf(finding(status = "failed")))
@@ -99,7 +120,7 @@ class PostureRegressionAnalyzerTest {
         assertEquals(1, originalOrgSpecs.size)
     }
 
-    private fun finding(status: String): ComplianceFindingInput =
+    private fun finding(status: String, timestampMs: Long = 1_700_000_000_000): ComplianceFindingInput =
         ComplianceFindingInput(
             framework = "cis-aws",
             ruleId = "cis-1.1",
@@ -108,7 +129,7 @@ class PostureRegressionAnalyzerTest {
             resourceType = "aws_account",
             resourceId = "acct-123",
             resourceName = "prod",
-            timestampMs = 1_700_000_000_000,
+            timestampMs = timestampMs,
         )
 
     private fun seedOrg(name: String): Int =
