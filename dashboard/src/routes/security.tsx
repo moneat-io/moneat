@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute, Link, Outlet, useRouterState} from '@tanstack/react-router'
-import {ShieldAlert, ShieldCheck} from 'lucide-react'
+import {AlertTriangle, ListFilter, ShieldAlert, ShieldCheck} from 'lucide-react'
 import {cn} from '@/lib/utils'
 
 export const Route = createFileRoute('/security')({
@@ -23,7 +23,9 @@ export const Route = createFileRoute('/security')({
 })
 
 const tabs = [
-  {id: 'events', label: 'Security Events', href: '/security', icon: ShieldAlert},
+  {id: 'signals', label: 'Signals', href: '/security/signals', icon: AlertTriangle},
+  {id: 'detections', label: 'Detections', href: '/security/detections', icon: ListFilter},
+  {id: 'events', label: 'Security Events', href: '/security/events', icon: ShieldAlert},
   {id: 'compliance', label: 'Compliance', href: '/security/compliance', icon: ShieldCheck},
 ]
 
@@ -46,9 +48,7 @@ function SecurityLayout() {
       <div className="border-b">
         <nav className="flex gap-1">
           {tabs.map((tab) => {
-            const isActive = tab.href === '/security'
-              ? currentPath === '/security' || currentPath === '/security/'
-              : currentPath.startsWith(tab.href)
+            const isActive = currentPath.startsWith(tab.href)
             const Icon = tab.icon
             return (
               <Link key={tab.id} to={tab.href}

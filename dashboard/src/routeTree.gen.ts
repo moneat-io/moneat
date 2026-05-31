@@ -87,6 +87,9 @@ import { Route as WorkflowsConnectionsRouteImport } from './routes/workflows.con
 import { Route as UptimeMonitorIdRouteImport } from './routes/uptime.$monitorId'
 import { Route as SyntheticsTestIdRouteImport } from './routes/synthetics.$testId'
 import { Route as StatusPagesPageIdRouteImport } from './routes/status-pages.$pageId'
+import { Route as SecuritySignalsRouteImport } from './routes/security.signals'
+import { Route as SecurityEventsRouteImport } from './routes/security.events'
+import { Route as SecurityDetectionsRouteImport } from './routes/security.detections'
 import { Route as SecurityComplianceRouteImport } from './routes/security.compliance'
 import { Route as SSlugRouteImport } from './routes/s.$slug'
 import { Route as ReplaysReplayIdRouteImport } from './routes/replays.$replayId'
@@ -540,6 +543,21 @@ const StatusPagesPageIdRoute = StatusPagesPageIdRouteImport.update({
   path: '/status-pages/$pageId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SecuritySignalsRoute = SecuritySignalsRouteImport.update({
+  id: '/signals',
+  path: '/signals',
+  getParentRoute: () => SecurityRoute,
+} as any)
+const SecurityEventsRoute = SecurityEventsRouteImport.update({
+  id: '/events',
+  path: '/events',
+  getParentRoute: () => SecurityRoute,
+} as any)
+const SecurityDetectionsRoute = SecurityDetectionsRouteImport.update({
+  id: '/detections',
+  path: '/detections',
+  getParentRoute: () => SecurityRoute,
+} as any)
 const SecurityComplianceRoute = SecurityComplianceRouteImport.update({
   id: '/compliance',
   path: '/compliance',
@@ -961,6 +979,9 @@ export interface FileRoutesByFullPath {
   '/replays/$replayId': typeof ReplaysReplayIdRoute
   '/s/$slug': typeof SSlugRoute
   '/security/compliance': typeof SecurityComplianceRoute
+  '/security/detections': typeof SecurityDetectionsRoute
+  '/security/events': typeof SecurityEventsRoute
+  '/security/signals': typeof SecuritySignalsRoute
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/synthetics/$testId': typeof SyntheticsTestIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
@@ -1087,6 +1108,9 @@ export interface FileRoutesByTo {
   '/replays/$replayId': typeof ReplaysReplayIdRoute
   '/s/$slug': typeof SSlugRoute
   '/security/compliance': typeof SecurityComplianceRoute
+  '/security/detections': typeof SecurityDetectionsRoute
+  '/security/events': typeof SecurityEventsRoute
+  '/security/signals': typeof SecuritySignalsRoute
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/synthetics/$testId': typeof SyntheticsTestIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
@@ -1229,6 +1253,9 @@ export interface FileRoutesById {
   '/replays/$replayId': typeof ReplaysReplayIdRoute
   '/s/$slug': typeof SSlugRoute
   '/security/compliance': typeof SecurityComplianceRoute
+  '/security/detections': typeof SecurityDetectionsRoute
+  '/security/events': typeof SecurityEventsRoute
+  '/security/signals': typeof SecuritySignalsRoute
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/synthetics/$testId': typeof SyntheticsTestIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
@@ -1372,6 +1399,9 @@ export interface FileRouteTypes {
     | '/replays/$replayId'
     | '/s/$slug'
     | '/security/compliance'
+    | '/security/detections'
+    | '/security/events'
+    | '/security/signals'
     | '/status-pages/$pageId'
     | '/synthetics/$testId'
     | '/uptime/$monitorId'
@@ -1498,6 +1528,9 @@ export interface FileRouteTypes {
     | '/replays/$replayId'
     | '/s/$slug'
     | '/security/compliance'
+    | '/security/detections'
+    | '/security/events'
+    | '/security/signals'
     | '/status-pages/$pageId'
     | '/synthetics/$testId'
     | '/uptime/$monitorId'
@@ -1639,6 +1672,9 @@ export interface FileRouteTypes {
     | '/replays/$replayId'
     | '/s/$slug'
     | '/security/compliance'
+    | '/security/detections'
+    | '/security/events'
+    | '/security/signals'
     | '/status-pages/$pageId'
     | '/synthetics/$testId'
     | '/uptime/$monitorId'
@@ -2299,6 +2335,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/status-pages/$pageId'
       preLoaderRoute: typeof StatusPagesPageIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/security/signals': {
+      id: '/security/signals'
+      path: '/signals'
+      fullPath: '/security/signals'
+      preLoaderRoute: typeof SecuritySignalsRouteImport
+      parentRoute: typeof SecurityRoute
+    }
+    '/security/events': {
+      id: '/security/events'
+      path: '/events'
+      fullPath: '/security/events'
+      preLoaderRoute: typeof SecurityEventsRouteImport
+      parentRoute: typeof SecurityRoute
+    }
+    '/security/detections': {
+      id: '/security/detections'
+      path: '/detections'
+      fullPath: '/security/detections'
+      preLoaderRoute: typeof SecurityDetectionsRouteImport
+      parentRoute: typeof SecurityRoute
     }
     '/security/compliance': {
       id: '/security/compliance'
@@ -3070,11 +3127,17 @@ const ReplaysRouteWithChildren =
 
 interface SecurityRouteChildren {
   SecurityComplianceRoute: typeof SecurityComplianceRoute
+  SecurityDetectionsRoute: typeof SecurityDetectionsRoute
+  SecurityEventsRoute: typeof SecurityEventsRoute
+  SecuritySignalsRoute: typeof SecuritySignalsRoute
   SecurityIndexRoute: typeof SecurityIndexRoute
 }
 
 const SecurityRouteChildren: SecurityRouteChildren = {
   SecurityComplianceRoute: SecurityComplianceRoute,
+  SecurityDetectionsRoute: SecurityDetectionsRoute,
+  SecurityEventsRoute: SecurityEventsRoute,
+  SecuritySignalsRoute: SecuritySignalsRoute,
   SecurityIndexRoute: SecurityIndexRoute,
 }
 
