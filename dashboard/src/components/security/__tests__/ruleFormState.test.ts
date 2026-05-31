@@ -62,6 +62,18 @@ describe('buildRuleRequest', () => {
     expect(buildRuleRequest(makeForm({thresholdCount: 'abc'})).ok).toBe(false)
   })
 
+  it('requires a positive minimum count for rate anomaly rules', () => {
+    const invalid = buildRuleRequest(makeForm({type: 'rate_anomaly', thresholdCount: ''}))
+    expect(invalid).toEqual({ok: false, error: 'Minimum count must be a positive integer'})
+
+    const valid = buildRuleRequest(makeForm({type: 'rate_anomaly', thresholdCount: '20'}))
+    expect(valid.ok).toBe(true)
+    if (valid.ok) {
+      expect(valid.request.type).toBe('rate_anomaly')
+      expect(valid.request.threshold_count).toBe(20)
+    }
+  })
+
   it('splits comma-separated group_by and tags', () => {
     const result = buildRuleRequest(
       makeForm({groupBy: 'user.id, source.ip ,', tags: 'auth, brute-force', thresholdCount: '5'})

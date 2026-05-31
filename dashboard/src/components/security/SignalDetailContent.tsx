@@ -52,6 +52,7 @@ function Field({label, children}: {label: string; children: React.ReactNode}) {
 
 export function SignalDetailContent({detail, onTriage, isSubmitting}: SignalDetailContentProps) {
   const {signal, evidence, audit, sample_events: sampleEvents} = detail
+  const threatIntel = detail.threat_intel ?? []
 
   return (
     <div className="space-y-4">
@@ -86,6 +87,26 @@ export function SignalDetailContent({detail, onTriage, isSubmitting}: SignalDeta
               <Badge key={k} variant="outline" className="text-[10px] font-mono">
                 {k}={v}
               </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {threatIntel.length > 0 && (
+        <div className="space-y-1">
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Threat Intel</div>
+          <div className="space-y-1">
+            {threatIntel.map((item) => (
+              <div key={`${item.entity_key}:${item.entity_value}:${item.feed_name}`} className="rounded border p-1.5">
+                <div className="flex flex-wrap items-center gap-1">
+                  <Badge variant="outline" className="text-[10px]">{item.indicator_type}</Badge>
+                  <span className="font-mono text-[10px]">{item.entity_key}={item.entity_value}</span>
+                  <Badge variant="outline" className="text-[10px]">{item.confidence}%</Badge>
+                </div>
+                <div className="mt-1 text-[10px] text-muted-foreground">
+                  {item.threat_type.replace(/_/g, ' ')} - {item.feed_name}
+                </div>
+              </div>
             ))}
           </div>
         </div>

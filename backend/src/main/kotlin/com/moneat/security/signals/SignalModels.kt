@@ -18,6 +18,7 @@ package com.moneat.security.signals
 
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.jsonb
+import com.moneat.security.threatintel.ThreatIntelEnrichmentResponse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
@@ -140,6 +141,16 @@ data class SignalSpec(
     val tags: List<String> = emptyList(),
 )
 
+data class RuntimeSecurityEventInput(
+    val ruleId: String = "",
+    val ruleName: String = "",
+    val severity: String = "info",
+    val processName: String = "",
+    val filePath: String = "",
+    val host: String = "",
+    val timestampMs: Long,
+)
+
 /** Result of [SignalWriter.upsert]; drives whether the workflow trigger fires (Created/Escalated only). */
 sealed interface SignalOutcome {
     val signalId: Int
@@ -237,6 +248,7 @@ data class SignalDetailResponse(
     val evidence: List<SignalEvidenceResponse>,
     val audit: List<SignalAuditResponse>,
     @SerialName("sample_events") val sampleEvents: List<JsonElement>,
+    @SerialName("threat_intel") val threatIntel: List<ThreatIntelEnrichmentResponse> = emptyList(),
 )
 
 @Serializable

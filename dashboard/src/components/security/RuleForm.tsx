@@ -45,6 +45,7 @@ interface RuleFormProps {
 const TYPE_OPTIONS: {value: RuleFormState['type']; label: string}[] = [
   {value: 'threshold', label: 'Threshold'},
   {value: 'new_value', label: 'New value'},
+  {value: 'rate_anomaly', label: 'Rate anomaly'},
 ]
 
 export function RuleForm({rule, onSubmit, onPreview, onCancel, isSubmitting}: RuleFormProps) {
@@ -180,8 +181,10 @@ export function RuleForm({rule, onSubmit, onPreview, onCancel, isSubmitting}: Ru
             className="h-8 text-xs"
           />
         </Field>
-        {form.type === 'threshold' && (
-          <Field label="Threshold count" htmlFor="rule-threshold">
+        {form.type !== 'new_value' && (
+          <Field
+            label={form.type === 'rate_anomaly' ? 'Minimum count' : 'Threshold count'}
+            htmlFor="rule-threshold">
             <Input
               id="rule-threshold"
               type="number"

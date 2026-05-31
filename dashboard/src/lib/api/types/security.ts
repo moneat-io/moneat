@@ -70,6 +70,7 @@ export interface SignalDetailResponse {
   audit: SignalAuditResponse[]
   // Raw ClickHouse evidence rows; shape varies by source, so kept opaque.
   sample_events: Record<string, unknown>[]
+  threat_intel: ThreatIntelEnrichmentResponse[]
 }
 
 export interface SignalListParams {
@@ -88,7 +89,19 @@ export interface TriageRequest {
   note?: string
 }
 
-export type DetectionRuleType = 'threshold' | 'new_value'
+export interface ThreatIntelEnrichmentResponse {
+  entity_key: string
+  entity_value: string
+  indicator_type: string
+  feed_name: string
+  source: string
+  threat_type: string
+  confidence: number
+  reference?: string
+  updated_at: string
+}
+
+export type DetectionRuleType = 'threshold' | 'new_value' | 'rate_anomaly'
 
 export interface DetectionRuleResponse {
   id: number
@@ -113,6 +126,31 @@ export interface DetectionRuleResponse {
 export interface DetectionRuleListResponse {
   rules: DetectionRuleResponse[]
   total_count: number
+}
+
+export interface DetectionCoverageResponse {
+  enabled_rule_count: number
+  tactics: MitreTacticCoverage[]
+  techniques: MitreTechniqueCoverage[]
+}
+
+export interface MitreTacticCoverage {
+  tactic: string
+  technique_count: number
+  rule_count: number
+}
+
+export interface MitreTechniqueCoverage {
+  technique_id: string
+  tactics: string[]
+  rule_count: number
+  rules: MitreCoveredRule[]
+}
+
+export interface MitreCoveredRule {
+  id: number
+  name: string
+  enabled: boolean
 }
 
 export interface CreateDetectionRuleRequest {
@@ -144,6 +182,25 @@ export interface DetectionPreviewResponse {
   match_count: number
   samples: DetectionMatchSample[]
   window_seconds: number
+}
+
+export interface ComplianceTrendBucket {
+  bucketStart: string
+  passed: number
+  failed: number
+  skipped: number
+  error: number
+  total: number
+  passRate: number
+}
+
+export interface ComplianceFrameworkTrend {
+  framework: string
+  buckets: ComplianceTrendBucket[]
+}
+
+export interface ComplianceTrendResponse {
+  frameworks: ComplianceFrameworkTrend[]
 }
 
 export interface VulnerabilitySummaryResponse {

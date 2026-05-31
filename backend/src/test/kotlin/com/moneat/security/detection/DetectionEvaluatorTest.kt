@@ -133,6 +133,26 @@ class DetectionEvaluatorTest {
         }
     }
 
+    @Test
+    fun `rate anomaly matches become detection signals through the compiler gate`() = runBlocking {
+        val rule = rateAnomalyRule()
+        seedRule(rule)
+        val runner = fakeRunner(listOf(DetectionGroupRow(mapOf("host" to "web-01"), 120)))
+        val evaluator = RateAnomalyEvaluator(compiler, runner)
+
+        val matches = evaluator.evaluate(rule)
+
+        assertEquals(1, matches.size)
+        transaction {
+            val signal = SecuritySignals.selectAll()
+                .where { SecuritySignals.organizationId eq orgId }
+                .single()
+            assertEquals("detection-3", signal[SecuritySignals.ruleId])
+            assertEquals("detection-3|host=web-01", signal[SecuritySignals.dedupKey])
+            assertTrue(signal[SecuritySignals.tags].contains("mitre:T1059"))
+        }
+    }
+
     private fun newValueRule(createdAt: Instant) = DetectionRuleRecord(
         id = 2,
         organizationId = orgId,
@@ -147,6 +167,23 @@ class DetectionEvaluatorTest {
         signalTitle = "New value {host}",
         signalMessage = "first seen {host}",
         createdAt = createdAt,
+    )
+
+    private fun rateAnomalyRule() = DetectionRuleRecord(
+        id = 3,
+        organizationId = orgId,
+        name = "Log rate anomaly",
+        source = "logs",
+        filter = "level:error",
+        groupBy = listOf("host"),
+        windowSeconds = 300,
+        type = DetectionRuleType.RATE_ANOMALY,
+        thresholdCount = 25,
+        severity = SignalSeverity.HIGH,
+        signalTitle = "Anomalous log rate on {host}",
+        signalMessage = "{host} exceeded its moving baseline.",
+        createdAt = Instant.fromEpochMilliseconds(1_700_000_000_000),
+        tags = listOf("mitre:T1059"),
     )
 
     @Test
@@ -208,7 +245,11 @@ class DetectionEvaluatorTest {
             clock = { firstRun },
         ).evaluate(newValueRule(createdLongAgo))
         assertEquals(0, firstSweep.size, "first evaluation must warm up even when createdAt is old")
-        assertEquals(firstRun, store.warmupStartedAt(2), "warm-up marker is stamped on first run")
+        assertEquals(
+            firstRun.toEpochMilliseconds(),
+            store.warmupStartedAt(2)?.toEpochMilliseconds(),
+            "warm-up marker is stamped on first run",
+        )
 
         // After the window has elapsed *from first evaluation*, a genuinely-new value fires.
         val afterWarmup = firstRun + 2.days

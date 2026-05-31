@@ -20,6 +20,7 @@ import com.moneat.config.ClickHouseClient
 import com.moneat.config.ClickHouseQueryException
 import com.moneat.config.isClickHouseError
 import com.moneat.security.detection.RuleQueryCompiler
+import com.moneat.security.threatintel.ThreatIntelService
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
@@ -66,7 +67,9 @@ sealed interface TriageResult {
  * or mutate signals their organization owns. Sample evidence is pulled from ClickHouse on demand and
  * its errors are sanitized via [ClickHouseQueryException] so no query text or schema leaks.
  */
-class SignalService {
+class SignalService(
+    private val threatIntelService: ThreatIntelService = ThreatIntelService(),
+) {
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -127,7 +130,15 @@ class SignalService {
 
         val (signal, evidence, audit) = detail
         val sampleEvents = fetchSampleEvents(orgId, signal)
-        return SignalDetailResponse(signal = signal, evidence = evidence, audit = audit, sampleEvents = sampleEvents)
+        val threatIntel = runCatching { threatIntelService.enrich(signal.entities) }
+            .getOrDefault(emptyList())
+        return SignalDetailResponse(
+            signal = signal,
+            evidence = evidence,
+            audit = audit,
+            sampleEvents = sampleEvents,
+            threatIntel = threatIntel,
+        )
     }
 
     /**
@@ -370,9 +381,9 @@ class SignalService {
             ClickHouseQueryUtils.orgIdClause(orgId.toLong()),
             "rule_id = '${escapeSql(signal.ruleId)}'",
         )
-        signal.entities["resource"]?.takeIf { it.isNotBlank() }?.let {
-            conditions.add("resource_id = '${escapeSql(it)}'")
-        }
+        conditions.addComplianceEntityFilter(signal, "framework", "framework")
+        conditions.addComplianceEntityFilter(signal, "resource_type", "resource_type")
+        conditions.addComplianceEntityFilter(signal, "resource_id", "resource_id")
         val where = conditions.joinToString(" AND ")
         return executeSamples(
             """SELECT finding_id, framework, rule_id, rule_name, status, resource_type,
@@ -392,6 +403,16 @@ class SignalService {
                 put("resourceName", obj.s("resource_name"))
                 put("evaluatedAt", obj.s("ts"))
             }
+        }
+    }
+
+    private fun MutableList<String>.addComplianceEntityFilter(
+        signal: SignalResponse,
+        entityKey: String,
+        column: String,
+    ) {
+        signal.entities[entityKey]?.takeIf { it.isNotBlank() }?.let {
+            add("$column = '${escapeSql(it)}'")
         }
     }
 

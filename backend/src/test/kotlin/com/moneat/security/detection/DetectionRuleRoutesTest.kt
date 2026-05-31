@@ -201,6 +201,20 @@ class DetectionRuleRoutesTest {
     }
 
     @Test
+    fun `coverage reports enabled rule MITRE tags for the caller org`() = testApplication {
+        setupApp()
+        service.create(orgId, request().copy(tags = listOf("mitre:T1110")))
+        service.create(otherOrgId, request().copy(name = "Other", tags = listOf("mitre:T1059")))
+
+        val response = client.get("/v1/security/detection/coverage") { withAuth(token(memberUserId)) }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = response.bodyAsText()
+        assertTrue(body.contains("\"technique_id\":\"T1110\""))
+        assertFalse(body.contains("\"technique_id\":\"T1059\""))
+    }
+
+    @Test
     fun `delete requires admin and removes the rule`() = testApplication {
         setupApp()
         val created = service.create(orgId, request())

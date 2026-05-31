@@ -111,6 +111,7 @@ class NewValueEvaluator(
             evidenceType = "clickhouse_query",
             evidenceReference = "${compiled.evidenceDescriptor} match=new_value",
             occurredAtMs = clock().toEpochMilliseconds(),
+            tags = rule.tags,
         )
         upsert(rule.organizationId, spec)
     }

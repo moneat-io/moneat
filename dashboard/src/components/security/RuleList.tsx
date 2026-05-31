@@ -24,6 +24,7 @@ import {colorFor, severityColors} from './securityChips'
 const TYPE_LABELS: Record<string, string> = {
   threshold: 'Threshold',
   new_value: 'New value',
+  rate_anomaly: 'Rate anomaly',
 }
 
 interface RuleListProps {

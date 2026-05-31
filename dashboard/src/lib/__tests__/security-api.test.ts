@@ -97,4 +97,25 @@ describe('security api module', () => {
     await api.deleteDetectionRule(9)
     expect(called).toBe(true)
   })
+
+  it('GETs detection coverage and compliance trends', async () => {
+    let coverageCalled = false
+    let trendsCalled = false
+    server.use(
+      http.get(`${API_BASE}/v1/security/detection/coverage`, () => {
+        coverageCalled = true
+        return HttpResponse.json({enabled_rule_count: 1, tactics: [], techniques: []})
+      }),
+      http.get(`${API_BASE}/v1/security/compliance/trends`, () => {
+        trendsCalled = true
+        return HttpResponse.json({frameworks: []})
+      })
+    )
+
+    await api.getDetectionCoverage()
+    await api.getComplianceTrends()
+
+    expect(coverageCalled).toBe(true)
+    expect(trendsCalled).toBe(true)
+  })
 })

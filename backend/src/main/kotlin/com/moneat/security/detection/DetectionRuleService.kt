@@ -178,6 +178,7 @@ class DetectionRuleService(
         val matches = when (record.type) {
             DetectionRuleType.THRESHOLD -> rows
             DetectionRuleType.NEW_VALUE -> filterToNewValues(persistedRuleId, record, rows)
+            DetectionRuleType.RATE_ANOMALY -> rows
         }
         val samples = matches.take(PREVIEW_SAMPLE_LIMIT).map { row ->
             DetectionMatchSample(groupValues = row.groupValues, count = row.count)
@@ -246,6 +247,7 @@ class DetectionRuleService(
         signalTitle = this[DetectionRules.signalTitle],
         signalMessage = this[DetectionRules.signalMessage],
         createdAt = this[DetectionRules.createdAt],
+        tags = decodeStringList(this[DetectionRules.tags]),
     )
 
     private fun decodeStringList(raw: String): List<String> =

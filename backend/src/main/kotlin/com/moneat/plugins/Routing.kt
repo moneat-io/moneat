@@ -298,7 +298,6 @@ fun Application.configureRouting() {
         McpModule.registerRoutes(this)
         routingLogger.info { "MCP routes registered" }
 
-        // AI chat assistant endpoints
         aiChatRoutes()
 
         // Custom dashboard builder endpoints

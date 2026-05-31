@@ -16,7 +16,12 @@
 
 package com.moneat.security.signals
 
+import com.moneat.config.ClickHouseClient
 import com.moneat.shared.models.Organizations
+import com.moneat.testsupport.MockHttpServer
+import com.moneat.testsupport.requestBodyText
+import com.moneat.testsupport.respond
+import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -24,9 +29,11 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -35,6 +42,7 @@ class SignalServiceTest {
     companion object {
         private var db: Database? = null
         private const val ACTOR = 7
+        private const val TEXT_PLAIN = "text/plain"
     }
 
     private val service = SignalService()
@@ -53,6 +61,11 @@ class SignalServiceTest {
         SignalSchemaTestSupport.reset()
         orgId = seedOrg("acme")
         otherOrgId = seedOrg("globex")
+    }
+
+    @AfterTest
+    fun teardown() {
+        ClickHouseClient.close()
     }
 
     @Test
@@ -168,6 +181,39 @@ class SignalServiceTest {
         }
     }
 
+    @Test
+    fun `compliance samples filter by framework resource type and resource id`() = runBlocking {
+        val created = SignalWriter.upsert(
+            orgId,
+            complianceSpec(
+                entities = mapOf(
+                    "framework" to "cis-aws",
+                    "resource_type" to "aws_account",
+                    "resource" to "display-account",
+                    "resource_id" to "acct-123",
+                ),
+            ),
+        )
+        val capturedSql = mutableListOf<String>()
+        MockHttpServer { exchange ->
+            capturedSql.add(exchange.requestBodyText())
+            exchange.respond(200, complianceFindingRow(), contentType = TEXT_PLAIN)
+        }.use { server ->
+            ClickHouseClient.close()
+            ClickHouseClient.init(server.baseUrl, "test_db", "default", "")
+
+            val detail = service.get(orgId, created.signalId)
+
+            assertEquals(1, detail?.sampleEvents?.size)
+        }
+
+        val sql = capturedSql.single()
+        assertTrue(sql.contains("framework = 'cis-aws'"))
+        assertTrue(sql.contains("resource_type = 'aws_account'"))
+        assertTrue(sql.contains("resource_id = 'acct-123'"))
+        assertFalse(sql.contains("display-account"))
+    }
+
     private fun latestAudit(signalId: Int): SignalAuditResponse =
         transaction {
             SecuritySignalAudit.selectAll()
@@ -206,6 +252,23 @@ class SignalServiceTest {
         evidenceReference = "table=security_events dedup=$ruleId",
         occurredAtMs = 1_700_000_000_000
     )
+
+    private fun complianceSpec(entities: Map<String, String>) = SignalSpec(
+        source = SignalSource.AGENT_COMPLIANCE,
+        ruleId = "cis-1.1",
+        ruleName = "Root MFA",
+        severity = SignalSeverity.HIGH,
+        dedupKey = "cis-aws|cis-1.1|aws_account|acct-123",
+        entities = entities,
+        evidenceType = "clickhouse_query",
+        evidenceReference = "table=compliance_findings rule_id=cis-1.1",
+        occurredAtMs = 1_700_000_000_000,
+    )
+
+    private fun complianceFindingRow(): String =
+        """{"finding_id":"f1","framework":"cis-aws","rule_id":"cis-1.1","rule_name":"Root MFA",""" +
+            """"status":"failed","resource_type":"aws_account","resource_id":"acct-123",""" +
+            """"resource_name":"Production","ts":"2026-05-31T00:00:00.000Z"}"""
 
     private fun seedOrg(name: String): Int =
         transaction {

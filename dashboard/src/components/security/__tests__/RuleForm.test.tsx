@@ -47,11 +47,31 @@ describe('RuleForm', () => {
   })
 
   it('hides the threshold field for new_value rules', () => {
-    render(<RuleForm rule={makeRule({type: 'new_value'})} onSubmit={vi.fn()} onPreview={noopPreview()} onCancel={vi.fn()} />)
+    render(
+      <RuleForm
+        rule={makeRule({type: 'new_value'})}
+        onSubmit={vi.fn()}
+        onPreview={noopPreview()}
+        onCancel={vi.fn()}
+      />
+    )
     expect(screen.queryByLabelText('Threshold count')).not.toBeInTheDocument()
     // Switching back to threshold reveals it.
     fireEvent.change(screen.getByLabelText('Rule type'), {target: {value: 'threshold'}})
     expect(screen.getByLabelText('Threshold count')).toBeInTheDocument()
+  })
+
+  it('uses minimum count for rate anomaly rules', () => {
+    render(
+      <RuleForm
+        rule={makeRule({type: 'rate_anomaly', threshold_count: 20})}
+        onSubmit={vi.fn()}
+        onPreview={noopPreview()}
+        onCancel={vi.fn()}
+      />
+    )
+    expect(screen.getByLabelText('Minimum count')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Threshold count')).not.toBeInTheDocument()
   })
 
   it('saves then previews and renders the would-be count', async () => {

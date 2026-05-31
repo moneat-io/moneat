@@ -57,4 +57,25 @@ describe('SignalDetailContent', () => {
     render(<SignalDetailContent detail={detail} onTriage={vi.fn().mockResolvedValue(detail.signal)} />)
     expect(screen.getByText('No sample events')).toBeInTheDocument()
   })
+
+  it('renders threat intelligence enrichment when present', () => {
+    const detail = makeSignalDetail({
+      threat_intel: [
+        {
+          entity_key: 'destination_ip',
+          entity_value: '203.0.113.66',
+          indicator_type: 'ip',
+          feed_name: 'local',
+          source: 'seed',
+          threat_type: 'command_and_control',
+          confidence: 70,
+          updated_at: '2026-05-31T00:00:00Z',
+        },
+      ],
+    })
+    render(<SignalDetailContent detail={detail} onTriage={vi.fn().mockResolvedValue(detail.signal)} />)
+    expect(screen.getByText('Threat Intel')).toBeInTheDocument()
+    expect(screen.getByText('destination_ip=203.0.113.66')).toBeInTheDocument()
+    expect(screen.getByText(/command and control/)).toBeInTheDocument()
+  })
 })

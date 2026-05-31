@@ -45,6 +45,7 @@ class DetectionScheduler(
     runner: DetectionQueryRunner = DetectionQueryRunner(),
     private val thresholdEvaluator: ThresholdEvaluator = ThresholdEvaluator(compiler, runner),
     private val newValueEvaluator: NewValueEvaluator = NewValueEvaluator(compiler, runner),
+    private val rateAnomalyEvaluator: RateAnomalyEvaluator = RateAnomalyEvaluator(compiler, runner),
 ) {
     companion object {
         const val DEFAULT_INTERVAL_SECONDS = 60
@@ -110,6 +111,7 @@ class DetectionScheduler(
         when (rule.type) {
             DetectionRuleType.THRESHOLD -> thresholdEvaluator.evaluate(rule)
             DetectionRuleType.NEW_VALUE -> newValueEvaluator.evaluate(rule)
+            DetectionRuleType.RATE_ANOMALY -> rateAnomalyEvaluator.evaluate(rule)
         }
     }
 }
