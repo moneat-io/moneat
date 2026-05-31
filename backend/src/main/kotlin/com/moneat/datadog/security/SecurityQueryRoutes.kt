@@ -17,6 +17,7 @@
 package com.moneat.datadog.security
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.config.ClickHouseQueryException
 import com.moneat.config.isClickHouseError
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
@@ -242,10 +243,7 @@ private suspend fun executeCount(sql: String): Long {
     val resp = ClickHouseClient.execute(sql)
     val body = resp.bodyAsText()
     if (resp.isClickHouseError(body)) {
-        logger.error {
-            "ClickHouse error in executeCount. SQL: ${sql.take(LOG_SQL_MAX_LEN)} Body: ${body.take(LOG_BODY_MAX_LEN)}"
-        }
-        throw IllegalStateException("ClickHouse query error: ${body.take(LOG_BODY_MAX_LEN)}")
+        throw securityQueryError("executeCount", sql, body)
     }
     return body.trim().lines().firstOrNull()?.let {
         json.parseToJsonElement(it).jsonObject["cnt"]
@@ -260,14 +258,26 @@ private suspend fun executeRows(
     val resp = ClickHouseClient.execute(sql)
     val body = resp.bodyAsText()
     if (resp.isClickHouseError(body)) {
-        logger.error {
-            "ClickHouse error in executeRows. SQL: ${sql.take(LOG_SQL_MAX_LEN)} Body: ${body.take(LOG_BODY_MAX_LEN)}"
-        }
-        throw IllegalStateException("ClickHouse query error: ${body.take(LOG_BODY_MAX_LEN)}")
+        throw securityQueryError("executeRows", sql, body)
     }
     return body.trim().lines().filter { it.isNotBlank() }.map { line ->
         mapper(json.parseToJsonElement(line).jsonObject)
     }
+}
+
+/**
+ * Builds a [ClickHouseQueryException] for a failed security query. The detail (query text and
+ * ClickHouse body) is logged and retained server-side only; the status-pages plugin maps this
+ * exception to a generic client response so no query text, column names, or ClickHouse errors leak.
+ */
+private fun securityQueryError(operation: String, sql: String, body: String): ClickHouseQueryException {
+    logger.error {
+        "ClickHouse error in $operation. SQL: ${sql.take(LOG_SQL_MAX_LEN)} Body: ${body.take(LOG_BODY_MAX_LEN)}"
+    }
+    return ClickHouseQueryException(
+        isTimeout = false,
+        internalDetail = "Security query failed in $operation: ${body.take(LOG_BODY_MAX_LEN)}",
+    )
 }
 
 private fun JsonObject.s(key: String): String {
