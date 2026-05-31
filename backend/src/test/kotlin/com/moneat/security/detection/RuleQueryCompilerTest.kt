@@ -238,10 +238,12 @@ class RuleQueryCompilerTest {
     }
 
     @Test
-    fun `the where clause helper used by baseline and preview carries org and window`() {
-        val where = compiler.buildWhere(orgId = 3, filter = "service:api", windowSeconds = 600)
-        assertTrue(where.contains("organization_id = 3"))
-        assertTrue(where.contains("INTERVAL 600 SECOND"))
+    fun `the compiled where clause carries org and window`() {
+        val compiled = compiler.compile(orgId = 3, input(windowSeconds = 600))
+        assertTrue(compiled.whereClause.contains("organization_id = 3"))
+        assertTrue(compiled.whereClause.contains("INTERVAL 600 SECOND"))
+        // The same WHERE is embedded in the executable SQL.
+        assertTrue(compiled.sql.contains(compiled.whereClause), compiled.sql)
     }
 
     // Window + threshold validation produce DSL messages, not CH text.

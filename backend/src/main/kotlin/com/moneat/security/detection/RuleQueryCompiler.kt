@@ -39,7 +39,7 @@ data class CompiledRuleQuery(
     val groupByColumns: List<String>,
     /** Stable result aliases (`g0`, `g1`, …) for each [groupByColumns] entry. */
     val groupByAliases: List<String>,
-    /** Compiled WHERE clause (org clause + filter + window), reused by baseline/preview queries. */
+    /** Compiled WHERE clause (org clause + filter + window) as embedded in [sql], for diagnostics. */
     val whereClause: String,
     /** A human-readable, schema-free descriptor stored as signal evidence-by-reference. */
     val evidenceDescriptor: String,
@@ -167,10 +167,13 @@ class RuleQueryCompiler(
     }
 
     /**
-     * The WHERE clause alone (org clause + parsed filter + window). Reused for the new-value baseline
-     * sweep, which groups without a HAVING. Carries the same org injection and caps story.
+     * The WHERE clause alone (org clause + parsed filter + window), used by [compile] to assemble the
+     * aggregation. Private: the only safe entry point is [compile], which always wraps this in the
+     * whitelisted SELECT/FROM and the resource caps; there is no supported raw-WHERE path. The
+     * new-value path does not reuse this directly — [NewValueEvaluator] re-runs [compile] (it groups
+     * without a HAVING), so it inherits the identical org injection and caps.
      */
-    fun buildWhere(orgId: Int, filter: String, windowSeconds: Int): String {
+    private fun buildWhere(orgId: Int, filter: String, windowSeconds: Int): String {
         // Fail closed: a non-positive org id is never a real tenant. Demo orgs use negative ids handled
         // by orgIdClause, so we reject only the impossible 0 / unset case here.
         if (orgId == 0) {
@@ -183,8 +186,8 @@ class RuleQueryCompiler(
         return conditions.joinToString(" AND ")
     }
 
-    /** Settings clause attached to every compiled / preview / baseline query. */
-    fun settingsClause(): String {
+    /** Resource-cap SETTINGS clause [compile] appends to every emitted query. */
+    private fun settingsClause(): String {
         val maxExecution = EnvConfig.get(ENV_MAX_EXECUTION_TIME, DEFAULT_MAX_EXECUTION_TIME)
         val maxRowsToRead = EnvConfig.get(ENV_MAX_ROWS_TO_READ, DEFAULT_MAX_ROWS_TO_READ)
         val maxResultRows = EnvConfig.get(ENV_MAX_RESULT_ROWS, DEFAULT_MAX_RESULT_ROWS)

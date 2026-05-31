@@ -272,10 +272,18 @@ class SignalService {
         }
 
     /**
-     * Evidence for a detection-rule signal: recent matching log rows, scoped by org and by the entity
-     * values the rule grouped on (service/host/environment when present). The query is org-injected via
-     * [ClickHouseQueryUtils.orgIdClause]; entity values are escaped, so a crafted entity cannot widen
-     * the scope past the calling org.
+     * Evidence for a detection-rule signal: recent log rows for the entity this signal fired on, scoped
+     * by org and by the group-by values the rule keyed on (service/host/environment/container when
+     * present). The query is org-injected via [ClickHouseQueryUtils.orgIdClause] and every entity value
+     * is escaped, so a crafted entity cannot widen the scope past the calling org.
+     *
+     * Detection evidence is **entity-scoped by design**, not rule-filter-scoped: the signal persists
+     * only its group-by entity values and a schema-free evidence descriptor (see
+     * [com.moneat.security.detection.RuleQueryCompiler]'s `evidenceDescriptor`), never the compiled
+     * filter/WHERE, so it is not reachable here. As a result this sample may include rows that match the
+     * entity but not the rule's original filter — it answers "what is this entity doing now," which is
+     * the intended triage view, rather than replaying the exact matched set. Re-running the rule's
+     * compiled filter is the [com.moneat.security.detection.DetectionRuleService.preview] path.
      */
     private suspend fun fetchDetectionSamples(orgId: Int, signal: SignalResponse): List<JsonElement> {
         val db = ClickHouseClient.getDatabase()
