@@ -47,6 +47,7 @@ import { workflowsMethods } from './modules/workflows'
 import { workflowConnectionsMethods } from './modules/connections'
 import { featureFlagsMethods } from './modules/feature-flags'
 import { mcpMethods } from './modules/mcp'
+import { securityMethods } from './modules/security'
 
 const core = createApiClientCore()
 
@@ -84,6 +85,7 @@ export const api = {
   ...workflowConnectionsMethods(core),
   ...featureFlagsMethods(core),
   ...mcpMethods(core),
+  ...securityMethods(core),
 }
 
 export { formatErrorForLogging } from './utils'
