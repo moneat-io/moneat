@@ -21,6 +21,7 @@ import com.moneat.workflows.models.WorkflowConditionConfig
 import com.moneat.workflows.models.WorkflowGraphConfig
 import com.moneat.workflows.models.WorkflowGraphEdge
 import com.moneat.workflows.models.WorkflowGraphNode
+import com.moneat.workflows.models.WorkflowGraphPosition
 import com.moneat.workflows.models.WorkflowRetryConfig
 import com.moneat.workflows.models.WorkflowRunStepProgress
 import com.moneat.workflows.models.WorkflowSwitchCaseConfig
@@ -181,7 +182,8 @@ data class RuntimeWorkflowGraphNode(
     var conditions: List<WorkflowConditionConfig> = emptyList(),
     var cases: List<WorkflowSwitchCaseConfig> = emptyList(),
     var retry: WorkflowRetryConfig? = null,
-    var continueOnError: Boolean = false
+    var continueOnError: Boolean = false,
+    var position: WorkflowGraphPosition? = null
 )
 
 data class RuntimeWorkflowGraphEdge(
@@ -240,7 +242,8 @@ private fun WorkflowGraphNode.toRuntimeGraphNode(): RuntimeWorkflowGraphNode =
         conditions = conditions,
         cases = cases,
         retry = retry,
-        continueOnError = continueOnError
+        continueOnError = continueOnError,
+        position = position
     )
 
 private fun RuntimeWorkflowGraphNode.toWorkflowGraphNode(): WorkflowGraphNode =
@@ -254,7 +257,8 @@ private fun RuntimeWorkflowGraphNode.toWorkflowGraphNode(): WorkflowGraphNode =
         conditions = conditions,
         cases = cases,
         retry = retry,
-        continueOnError = continueOnError
+        continueOnError = continueOnError,
+        position = position
     )
 
 private fun WorkflowRunStepProgress.toRuntimeProgress(): RuntimeWorkflowRunStepProgress =

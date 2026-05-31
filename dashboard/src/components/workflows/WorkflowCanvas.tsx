@@ -14,18 +14,38 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useMemo} from 'react'
-import {Background, Controls, Handle, Position, ReactFlow, type Connection, type Edge, type Node} from '@xyflow/react'
+import {useMemo, type DragEvent} from 'react'
+import {
+  Background,
+  Controls,
+  Handle,
+  Position,
+  ReactFlow,
+  ReactFlowProvider,
+  useReactFlow,
+  type Connection,
+  type Edge,
+  type Node,
+} from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import dagre from '@dagrejs/dagre'
 import {GitBranch, Mail, MessageSquare, Timer, Workflow} from 'lucide-react'
-import type {WorkflowCatalogResponse, WorkflowGraphConfig, WorkflowGraphEdge, WorkflowGraphNode} from '@/lib/api'
+import type {
+  WorkflowCatalogResponse,
+  WorkflowGraphConfig,
+  WorkflowGraphEdge,
+  WorkflowGraphNode,
+  WorkflowGraphPosition,
+} from '@/lib/api'
 import {Badge} from '@/components/ui/badge'
 import {cn} from '@/lib/utils'
-import {nodeLabel} from './workflowGraph'
-
-const nodeWidth = 220
-const nodeHeight = 78
+import {
+  nodeLabel,
+  parseWorkflowPaletteDragPayload,
+  resolveWorkflowNodePositions,
+  updateGraphNodePosition,
+  workflowPaletteDragDataType,
+  type WorkflowPaletteDragPayload,
+} from './workflowGraph'
 
 interface WorkflowCanvasProps {
   graph: WorkflowGraphConfig
@@ -33,6 +53,7 @@ interface WorkflowCanvasProps {
   selectedNodeId: string | null
   onSelectNode: (nodeId: string | null) => void
   onGraphChange: (graph: WorkflowGraphConfig) => void
+  onAddNode?: (payload: WorkflowPaletteDragPayload, position: WorkflowGraphPosition) => void
 }
 
 interface CanvasNodeData extends Record<string, unknown> {
@@ -47,7 +68,31 @@ export function WorkflowCanvas({
   selectedNodeId,
   onSelectNode,
   onGraphChange,
+  onAddNode,
 }: WorkflowCanvasProps) {
+  return (
+    <ReactFlowProvider>
+      <WorkflowCanvasInner
+        graph={graph}
+        catalog={catalog}
+        selectedNodeId={selectedNodeId}
+        onSelectNode={onSelectNode}
+        onGraphChange={onGraphChange}
+        onAddNode={onAddNode}
+      />
+    </ReactFlowProvider>
+  )
+}
+
+function WorkflowCanvasInner({
+  graph,
+  catalog,
+  selectedNodeId,
+  onSelectNode,
+  onGraphChange,
+  onAddNode,
+}: WorkflowCanvasProps) {
+  const {screenToFlowPosition} = useReactFlow()
   const flow = useMemo(() => graphToFlow(graph, catalog, selectedNodeId), [catalog, graph, selectedNodeId])
 
   const handleConnect = (connection: Connection) => {
@@ -65,8 +110,26 @@ export function WorkflowCanvas({
     })
   }
 
+  const handleNodeDragStop = (_: unknown, node: Node<CanvasNodeData>) => {
+    onGraphChange(updateGraphNodePosition(graph, node.id, node.position))
+  }
+
+  const handleDragOver = (event: DragEvent) => {
+    if (!onAddNode) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+  }
+
+  const handleDrop = (event: DragEvent) => {
+    if (!onAddNode) return
+    event.preventDefault()
+    const payload = parseWorkflowPaletteDragPayload(event.dataTransfer.getData(workflowPaletteDragDataType))
+    if (!payload) return
+    onAddNode(payload, screenToFlowPosition({x: event.clientX, y: event.clientY}))
+  }
+
   return (
-    <div className="h-[560px] min-h-[420px] overflow-hidden rounded-md border bg-background">
+    <div className="h-[560px] min-h-[420px] overflow-hidden rounded-md border bg-background xl:h-[680px]">
       <ReactFlow
         nodes={flow.nodes}
         edges={flow.edges}
@@ -75,7 +138,10 @@ export function WorkflowCanvas({
         nodesDraggable
         onConnect={handleConnect}
         onNodeClick={(_, node) => onSelectNode(node.id)}
+        onNodeDragStop={handleNodeDragStop}
         onPaneClick={() => onSelectNode(null)}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
       >
         <Background gap={20} />
         <Controls />
@@ -153,11 +219,11 @@ function graphToFlow(
   catalog: WorkflowCatalogResponse | undefined,
   selectedNodeId: string | null
 ): {nodes: Node<CanvasNodeData>[]; edges: Edge[]} {
-  const layout = layoutGraph(graph)
+  const positions = resolveWorkflowNodePositions(graph)
   const nodes = graph.nodes.map((node) => ({
     id: node.id,
     type: 'workflowNode',
-    position: layout.get(node.id) ?? {x: 0, y: 0},
+    position: positions.get(node.id) ?? {x: 0, y: 0},
     data: {graphNode: node, catalog, selected: node.id === selectedNodeId},
   }))
   const edges = graph.edges.map((edge, index) => ({
@@ -170,21 +236,6 @@ function graphToFlow(
     className: edge.on === 'error' ? 'stroke-destructive' : undefined,
   }))
   return {nodes, edges}
-}
-
-function layoutGraph(graph: WorkflowGraphConfig): Map<string, {x: number; y: number}> {
-  const dagreGraph = new dagre.graphlib.Graph()
-  dagreGraph.setDefaultEdgeLabel(() => ({}))
-  dagreGraph.setGraph({rankdir: 'TB', ranksep: 80, nodesep: 80})
-  graph.nodes.forEach((node) => dagreGraph.setNode(node.id, {width: nodeWidth, height: nodeHeight}))
-  graph.edges.forEach((edge) => dagreGraph.setEdge(edge.from, edge.to))
-  dagre.layout(dagreGraph)
-  return new Map(
-    graph.nodes.map((node) => {
-      const position = dagreGraph.node(node.id)
-      return [node.id, {x: position.x - nodeWidth / 2, y: position.y - nodeHeight / 2}]
-    })
-  )
 }
 
 function edgeId(

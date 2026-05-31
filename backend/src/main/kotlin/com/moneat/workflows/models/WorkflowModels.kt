@@ -110,6 +110,12 @@ data class WorkflowSwitchCaseConfig(
 )
 
 @Serializable
+data class WorkflowGraphPosition(
+    val x: Double,
+    val y: Double
+)
+
+@Serializable
 data class WorkflowGraphNode(
     val id: String,
     val type: String,
@@ -120,7 +126,8 @@ data class WorkflowGraphNode(
     val conditions: List<WorkflowConditionConfig> = emptyList(),
     val cases: List<WorkflowSwitchCaseConfig> = emptyList(),
     val retry: WorkflowRetryConfig? = null,
-    @SerialName("continue_on_error") val continueOnError: Boolean = false
+    @SerialName("continue_on_error") val continueOnError: Boolean = false,
+    val position: WorkflowGraphPosition? = null
 )
 
 @Serializable

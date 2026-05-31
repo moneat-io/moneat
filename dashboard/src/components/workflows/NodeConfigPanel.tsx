@@ -14,22 +14,38 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {Trash2} from 'lucide-react'
+import {useState} from 'react'
+import {useQuery} from '@tanstack/react-query'
+import {Check, ChevronsUpDown, Loader2, Trash2} from 'lucide-react'
 import type {
+  EscalationPolicy,
   WorkflowCatalogResponse,
   WorkflowConditionConfig,
+  WorkflowConnection,
+  WorkflowConnectionGroup,
   WorkflowGraphNode,
   WorkflowOperationDefinition,
   WorkflowScopeReferenceDefinition,
   WorkflowStepParamDefinition,
   WorkflowSwitchCaseConfig,
 } from '@/lib/api'
+import {api} from '@/lib/api'
 import {Button} from '@/components/ui/button'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
 import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
+import {Popover, PopoverContent, PopoverTrigger} from '@/components/ui/popover'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {Switch} from '@/components/ui/switch'
 import {Textarea} from '@/components/ui/textarea'
+import {cn} from '@/lib/utils'
 import {nodeLabel, stepDefinition, triggerNodeId} from './workflowGraph'
 
 interface NodeConfigPanelProps {
@@ -162,6 +178,33 @@ function ParamField({
   onChange: (node: WorkflowGraphNode) => void
 }) {
   const value = node.params?.[param.name]
+  if (node.action === 'oncall.page' && param.name === 'escalation_policy_id') {
+    return (
+      <EscalationPolicyParamField
+        value={value}
+        onChange={(policyId) => updateParamValue(node, param.name, policyId, onChange)}
+      />
+    )
+  }
+  if (node.type === 'action' && param.name === 'connection_id') {
+    return (
+      <ConnectionParamField
+        value={value}
+        actionName={node.action ?? undefined}
+        onChange={(connectionId) => updateParamValue(node, param.name, connectionId, onChange)}
+      />
+    )
+  }
+  if (node.type === 'action' && param.name === 'connection_group_id') {
+    return (
+      <ConnectionGroupParamField
+        value={value}
+        actionName={node.action ?? undefined}
+        onChange={(groupId) => updateParamValue(node, param.name, groupId, onChange)}
+      />
+    )
+  }
+
   return (
     <div className="space-y-1.5">
       <Label>{param.label}</Label>
@@ -196,6 +239,311 @@ function ParamField({
         />
       )}
     </div>
+  )
+}
+
+function ConnectionParamField({
+  value,
+  actionName,
+  onChange,
+}: {
+  value: unknown
+  actionName?: string
+  onChange: (connectionId: number | '') => void
+}) {
+  const [open, setOpen] = useState(false)
+  const selectedConnectionId = numberParamValue(value)
+  const connectionType = connectionTypeForAction(actionName)
+  const {data: connections = [], isLoading} = useQuery({
+    queryKey: ['workflow-connections'],
+    queryFn: () => api.listWorkflowConnections(),
+  })
+  const visibleConnections = connections.filter((connection) => connectionMatchesAction(connection, connectionType))
+  const selectedConnection = connections.find((connection) => connection.id === selectedConnectionId)
+  const emptyLabel = connections.length === 0 ? 'No connections found.' : 'No matching connections found.'
+
+  return (
+    <div className="space-y-1.5">
+      <Label>Connection</Label>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className={cn('w-full justify-between font-normal', !selectedConnection && 'text-muted-foreground')}
+          >
+            <span className="min-w-0 truncate">
+              {selectedConnection?.name ?? selectedConnectionFallbackLabel(selectedConnectionId)}
+            </span>
+            {isLoading ? (
+              <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin opacity-60" />
+            ) : (
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+          <Command>
+            <CommandInput placeholder="Search connections..." />
+            <CommandList>
+              <CommandEmpty>{emptyLabel}</CommandEmpty>
+              <CommandGroup>
+                {selectedConnectionId !== null && (
+                  <CommandItem
+                    value="no connection"
+                    onSelect={() => {
+                      onChange('')
+                      setOpen(false)
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    <Check className="h-4 w-4 shrink-0 opacity-0" />
+                    <span className="text-muted-foreground">No connection</span>
+                  </CommandItem>
+                )}
+                {visibleConnections.map((connection) => (
+                  <ConnectionItem
+                    key={connection.id}
+                    connection={connection}
+                    selected={connection.id === selectedConnectionId}
+                    onSelect={() => {
+                      onChange(connection.id)
+                      setOpen(false)
+                    }}
+                  />
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </div>
+  )
+}
+
+function ConnectionItem({
+  connection,
+  selected,
+  onSelect,
+}: {
+  connection: WorkflowConnection
+  selected: boolean
+  onSelect: () => void
+}) {
+  return (
+    <CommandItem
+      value={`${connection.name} ${connection.type} ${connectionTagSearchText(connection)}`}
+      onSelect={onSelect}
+      className="flex items-start gap-2"
+    >
+      <Check className={cn('mt-0.5 h-4 w-4 shrink-0', selected ? 'opacity-100' : 'opacity-0')} />
+      <span className="min-w-0">
+        <span className="block truncate font-medium">{connection.name}</span>
+        <span className="block truncate text-xs text-muted-foreground">
+          {connectionTypeLabel(connection.type)} - {connectionDetailLabel(connection)}
+        </span>
+      </span>
+    </CommandItem>
+  )
+}
+
+function ConnectionGroupParamField({
+  value,
+  actionName,
+  onChange,
+}: {
+  value: unknown
+  actionName?: string
+  onChange: (groupId: number | '') => void
+}) {
+  const [open, setOpen] = useState(false)
+  const selectedGroupId = numberParamValue(value)
+  const connectionType = connectionTypeForAction(actionName)
+  const {data: groups = [], isLoading} = useQuery({
+    queryKey: ['workflow-connection-groups'],
+    queryFn: () => api.listWorkflowConnectionGroups(),
+  })
+  const visibleGroups = groups.filter((group) => connectionGroupMatchesAction(group, connectionType))
+  const selectedGroup = groups.find((group) => group.id === selectedGroupId)
+  const emptyLabel = groups.length === 0 ? 'No connection groups found.' : 'No matching connection groups found.'
+
+  return (
+    <div className="space-y-1.5">
+      <Label>Connection group</Label>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className={cn('w-full justify-between font-normal', !selectedGroup && 'text-muted-foreground')}
+          >
+            <span className="min-w-0 truncate">
+              {selectedGroup?.name ?? selectedGroupFallbackLabel(selectedGroupId)}
+            </span>
+            {isLoading ? (
+              <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin opacity-60" />
+            ) : (
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+          <Command>
+            <CommandInput placeholder="Search connection groups..." />
+            <CommandList>
+              <CommandEmpty>{emptyLabel}</CommandEmpty>
+              <CommandGroup>
+                {selectedGroupId !== null && (
+                  <CommandItem
+                    value="no connection group"
+                    onSelect={() => {
+                      onChange('')
+                      setOpen(false)
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    <Check className="h-4 w-4 shrink-0 opacity-0" />
+                    <span className="text-muted-foreground">No connection group</span>
+                  </CommandItem>
+                )}
+                {visibleGroups.map((group) => (
+                  <ConnectionGroupItem
+                    key={group.id}
+                    group={group}
+                    selected={group.id === selectedGroupId}
+                    onSelect={() => {
+                      onChange(group.id)
+                      setOpen(false)
+                    }}
+                  />
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </div>
+  )
+}
+
+function ConnectionGroupItem({
+  group,
+  selected,
+  onSelect,
+}: {
+  group: WorkflowConnectionGroup
+  selected: boolean
+  onSelect: () => void
+}) {
+  const memberCount = group.member_connection_ids.length
+  return (
+    <CommandItem
+      value={`${group.name} ${group.connection_type} ${group.selection_strategy} ${group.id}`}
+      onSelect={onSelect}
+      className="flex items-start gap-2"
+    >
+      <Check className={cn('mt-0.5 h-4 w-4 shrink-0', selected ? 'opacity-100' : 'opacity-0')} />
+      <span className="min-w-0">
+        <span className="block truncate font-medium">{group.name}</span>
+        <span className="block truncate text-xs text-muted-foreground">
+          {connectionTypeLabel(group.connection_type)} - {memberCount} member{memberCount === 1 ? '' : 's'} -{' '}
+          {selectionStrategyLabel(group.selection_strategy)}
+        </span>
+      </span>
+    </CommandItem>
+  )
+}
+
+function EscalationPolicyParamField({
+  value,
+  onChange,
+}: {
+  value: unknown
+  onChange: (policyId: number) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const selectedPolicyId = numberParamValue(value)
+  const {data: policies = [], isLoading} = useQuery({
+    queryKey: ['escalation-policies'],
+    queryFn: () => api.getEscalationPolicies(),
+  })
+  const selectedPolicy = policies.find((policy) => policy.id === selectedPolicyId)
+
+  return (
+    <div className="space-y-1.5">
+      <Label>Escalation policy</Label>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className={cn('w-full justify-between font-normal', !selectedPolicy && 'text-muted-foreground')}
+          >
+            <span className="min-w-0 truncate">
+              {selectedPolicy?.name ?? selectedPolicyFallbackLabel(selectedPolicyId)}
+            </span>
+            {isLoading ? (
+              <Loader2 className="ml-2 h-4 w-4 shrink-0 animate-spin opacity-60" />
+            ) : (
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+          <Command>
+            <CommandInput placeholder="Search escalation policies..." />
+            <CommandList>
+              <CommandEmpty>No escalation policy found.</CommandEmpty>
+              <CommandGroup>
+                {policies.map((policy) => (
+                  <EscalationPolicyItem
+                    key={policy.id}
+                    policy={policy}
+                    selected={policy.id === selectedPolicyId}
+                    onSelect={() => {
+                      onChange(policy.id)
+                      setOpen(false)
+                    }}
+                  />
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </div>
+  )
+}
+
+function EscalationPolicyItem({
+  policy,
+  selected,
+  onSelect,
+}: {
+  policy: EscalationPolicy
+  selected: boolean
+  onSelect: () => void
+}) {
+  return (
+    <CommandItem
+      value={`${policy.name} ${policy.description ?? ''}`}
+      onSelect={onSelect}
+      className="flex items-start gap-2"
+    >
+      <Check className={cn('mt-0.5 h-4 w-4 shrink-0', selected ? 'opacity-100' : 'opacity-0')} />
+      <span className="min-w-0">
+        <span className="block truncate font-medium">{policy.name}</span>
+        <span className="block truncate text-xs text-muted-foreground">
+          {policy.description || `${policy.steps.length} step${policy.steps.length === 1 ? '' : 's'}`}
+        </span>
+      </span>
+    </CommandItem>
   )
 }
 
@@ -526,7 +874,10 @@ function ConditionRow({
         </SelectContent>
       </Select>
       {condition.operation !== 'is_set' && condition.operation !== 'is_not_set' && (
-        <Input value={condition.value ?? ''} onChange={(event) => onChange({...condition, value: event.target.value})} />
+        <Input
+          value={condition.value ?? ''}
+          onChange={(event) => onChange({...condition, value: event.target.value})}
+        />
       )}
       <Button type="button" variant="ghost" size="sm" onClick={onRemove} className="justify-start text-destructive">
         <Trash2 className="mr-2 h-4 w-4" />
@@ -567,6 +918,81 @@ function updateParamValue(
   onChange: (node: WorkflowGraphNode) => void
 ) {
   onChange({...node, params: {...node.params, [name]: value}})
+}
+
+function numberParamValue(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (trimmed === '') return null
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function selectedPolicyFallbackLabel(policyId: number | null): string {
+  return policyId === null ? 'Select escalation policy...' : `Policy #${policyId}`
+}
+
+function selectedConnectionFallbackLabel(connectionId: number | null): string {
+  return connectionId === null ? 'Select connection...' : 'Unknown connection'
+}
+
+function selectedGroupFallbackLabel(groupId: number | null): string {
+  return groupId === null ? 'Select connection group...' : 'Unknown connection group'
+}
+
+function connectionMatchesAction(connection: WorkflowConnection, connectionType: string | null): boolean {
+  return connectionType === null || normalizeConnectionType(connection.type) === connectionType
+}
+
+function connectionGroupMatchesAction(group: WorkflowConnectionGroup, connectionType: string | null): boolean {
+  return connectionType === null || normalizeConnectionType(group.connection_type) === connectionType
+}
+
+function connectionTypeForAction(actionName: string | undefined): string | null {
+  const normalizedAction = normalizeConnectionType(actionName ?? '')
+  if (normalizedAction.includes('pagerduty')) return 'pagerduty'
+  if (normalizedAction.includes('servicenow')) return 'servicenow'
+  if (normalizedAction.includes('github')) return 'github'
+  if (normalizedAction.includes('jira')) return 'jira'
+  return null
+}
+
+function normalizeConnectionType(value: string): string {
+  return value.toLowerCase().replace(/[\s_.-]/g, '')
+}
+
+function connectionTypeLabel(connectionType: string): string {
+  if (normalizeConnectionType(connectionType) === 'pagerduty') return 'PagerDuty'
+  if (normalizeConnectionType(connectionType) === 'servicenow') return 'ServiceNow'
+  if (normalizeConnectionType(connectionType) === 'github') return 'GitHub'
+  if (normalizeConnectionType(connectionType) === 'jira') return 'Jira'
+  return connectionType
+}
+
+function selectionStrategyLabel(selectionStrategy: string): string {
+  return selectionStrategy
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+}
+
+function connectionDetailLabel(connection: WorkflowConnection): string {
+  const tagEntries = Object.entries(connection.identifier_tags)
+  if (tagEntries.length > 0) {
+    return tagEntries
+      .slice(0, 2)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join(', ')
+  }
+  return connection.last_four ? `Secret ending ${connection.last_four}` : 'No tags'
+}
+
+function connectionTagSearchText(connection: WorkflowConnection): string {
+  return Object.entries(connection.identifier_tags)
+    .map(([key, value]) => `${key} ${value}`)
+    .join(' ')
 }
 
 function booleanParamChecked(value: unknown): boolean {
