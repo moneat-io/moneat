@@ -40,6 +40,15 @@ private const val INVALID_RULE_ID_MESSAGE = "Invalid rule ID"
 private const val RULE_NOT_FOUND_MESSAGE = "Detection rule not found"
 private const val MISSING_ORG_MESSAGE = "No active organization"
 private const val FORBIDDEN_MESSAGE = "Insufficient permissions"
+private const val TEMPLATE_NOT_FOUND_MESSAGE = "Detection template not found"
+private const val NO_DOCUMENTS_MESSAGE = "No Sigma documents supplied"
+private const val MAX_SIGMA_DOCUMENTS = 200
+
+private const val BYTES_PER_MB = 1024 * 1024
+
+/** Aggregate cap on the combined size of all Sigma documents in one request (~8MB), bounding total work. */
+private const val MAX_SIGMA_TOTAL_MB = 8
+private const val MAX_SIGMA_TOTAL_CHARS = MAX_SIGMA_TOTAL_MB.toLong() * BYTES_PER_MB
 
 /**
  * OSS core detection-rule CRUD + preview. Reads require org MEMBER; mutations and preview require org
@@ -51,6 +60,7 @@ private const val FORBIDDEN_MESSAGE = "Insufficient permissions"
 fun Route.detectionRuleRoutes(
     service: DetectionRuleService = DetectionRuleService(),
     membershipService: OrgMembershipService = GlobalContext.get().get(),
+    importService: DetectionImportService = DetectionImportService(service),
 ) {
     route("/v1/security/detection/rules") {
         authenticate("auth-jwt") {
@@ -60,6 +70,40 @@ fun Route.detectionRuleRoutes(
             put(RULE_ID_ROUTE) { handleUpdate(service, membershipService) }
             delete(RULE_ID_ROUTE) { handleDelete(service, membershipService) }
             post("$RULE_ID_ROUTE/preview") { handlePreview(service, membershipService) }
+        }
+    }
+    detectionImportRoutes(importService, membershipService)
+    detectionTemplateRoutes(importService, membershipService)
+}
+
+/**
+ * Sigma import (ADMIN). Each mapped rule is created through the compiler-gated path, so an imported rule
+ * gets no more power than a hand-authored one; unmappable/non-compiling documents return a per-item,
+ * DSL-level error rather than aborting the batch. Created rules are always disabled.
+ */
+private fun Route.detectionImportRoutes(
+    importService: DetectionImportService,
+    membershipService: OrgMembershipService,
+) {
+    route("/v1/security/detection/import/sigma") {
+        authenticate("auth-jwt") {
+            post { handleSigmaImport(importService, membershipService) }
+        }
+    }
+}
+
+/**
+ * Starter-pack templates: list (MEMBER) and install (ADMIN). Install creates a disabled rule via the
+ * same compiler-gated path, so a template can never bypass org injection or the column whitelist.
+ */
+private fun Route.detectionTemplateRoutes(
+    importService: DetectionImportService,
+    membershipService: OrgMembershipService,
+) {
+    route("/v1/security/detection/templates") {
+        authenticate("auth-jwt") {
+            get { handleTemplateList(importService) }
+            post("/{templateId}/install") { handleTemplateInstall(importService, membershipService) }
         }
     }
 }
@@ -139,6 +183,60 @@ private suspend fun RoutingContext.handlePreview(
                 call.respond(HttpStatusCode.NotFound, ErrorResponse(RULE_NOT_FOUND_MESSAGE))
             } else {
                 call.respond(preview)
+            }
+        },
+        onFailure = { respondRuleError(it) },
+    )
+}
+
+private suspend fun RoutingContext.handleSigmaImport(
+    importService: DetectionImportService,
+    membershipService: OrgMembershipService,
+) {
+    val orgId = requireAdmin(membershipService) ?: return
+    val request = call.receive<SigmaImportRequest>()
+    val documents = request.documents.filter { it.isNotBlank() }
+    if (documents.isEmpty()) {
+        return call.respond(HttpStatusCode.BadRequest, ErrorResponse(NO_DOCUMENTS_MESSAGE))
+    }
+    if (documents.size > MAX_SIGMA_DOCUMENTS) {
+        return call.respond(
+            HttpStatusCode.BadRequest,
+            ErrorResponse("At most $MAX_SIGMA_DOCUMENTS Sigma documents may be imported at once"),
+        )
+    }
+    if (documents.sumOf { it.length.toLong() } > MAX_SIGMA_TOTAL_CHARS) {
+        return call.respond(
+            HttpStatusCode.BadRequest,
+            ErrorResponse("Sigma import payload is too large (limit ${MAX_SIGMA_TOTAL_MB}MB)"),
+        )
+    }
+    // Per-document mapping/compile failures are returned as item errors; only an unexpected (non-DSL)
+    // failure rethrows to the status-pages plugin so no ClickHouse internals leak.
+    suspendRunCatching { importService.importSigma(orgId, documents) }.fold(
+        onSuccess = { call.respond(HttpStatusCode.OK, it) },
+        onFailure = { respondRuleError(it) },
+    )
+}
+
+private suspend fun RoutingContext.handleTemplateList(importService: DetectionImportService) {
+    currentOrganizationId()
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(MISSING_ORG_MESSAGE))
+    call.respond(importService.listTemplates())
+}
+
+private suspend fun RoutingContext.handleTemplateInstall(
+    importService: DetectionImportService,
+    membershipService: OrgMembershipService,
+) {
+    val orgId = requireAdmin(membershipService) ?: return
+    val templateId = call.parameters["templateId"].orEmpty()
+    suspendRunCatching { importService.installTemplate(orgId, templateId) }.fold(
+        onSuccess = { created ->
+            if (created == null) {
+                call.respond(HttpStatusCode.NotFound, ErrorResponse(TEMPLATE_NOT_FOUND_MESSAGE))
+            } else {
+                call.respond(HttpStatusCode.Created, created)
             }
         },
         onFailure = { respondRuleError(it) },
