@@ -43,6 +43,7 @@ import com.moneat.org.routes.adminRoutes
 import com.moneat.org.routes.orgManagementRoutes
 import com.moneat.otlp.routes.otlpMetricsRoutes
 import com.moneat.otlp.routes.otlpTraceRoutes
+import com.moneat.security.signals.signalRoutes
 import com.moneat.statuspage.routes.statusPageRoutes
 import com.moneat.summary.routes.summaryRoutes
 import com.moneat.uptime.routes.uptimeRoutes
@@ -264,6 +265,11 @@ fun Application.configureRouting() {
         // Workflow automation endpoints
         rateLimit(RateLimitName("api")) {
             workflowRoutes()
+        }
+
+        // Security signals triage surface (OSS core)
+        rateLimit(RateLimitName("api")) {
+            signalRoutes()
         }
 
         routingLogger.info { "Registering enterprise routes..." }
