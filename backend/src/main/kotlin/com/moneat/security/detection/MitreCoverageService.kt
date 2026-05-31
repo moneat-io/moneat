@@ -100,21 +100,25 @@ data class CoverageRule(
         MitreCoveredRuleResponse(id = id, name = name, enabled = enabled)
 }
 
-private val TECHNIQUE_REGEX = Regex("""^(?:mitre|attack)(?::technique)?:([Tt]\d{4}(?:\.\d{3})?)$""")
-private val TACTIC_ID_REGEX = Regex("""^(?:mitre|attack):([Tt][Aa]\d{4})$""")
-private val TACTIC_NAME_REGEX = Regex("""^(?:mitre|attack):(?:tactic:)?([a-z][a-z0-9_-]+)$""")
+private val TECHNIQUE_REGEX = Regex("""^(?:mitre|attack)(?::technique)?[:.]([Tt]\d{4}(?:\.\d{3})?)$""")
+private val TACTIC_ID_REGEX = Regex("""^(?:mitre|attack)[:.]([Tt][Aa]\d{4})$""")
+private val TACTIC_NAME_REGEX = Regex("""^(?:mitre|attack)[:.](?:tactic[:.])?([a-z][a-z0-9_-]+)$""")
 
 private fun normalizeTechnique(tag: String): String? =
-    TECHNIQUE_REGEX.find(tag)?.groupValues?.get(1)?.uppercase()
+    TECHNIQUE_REGEX.find(normalizeTagPrefix(tag))?.groupValues?.get(1)?.uppercase()
 
 private fun normalizeTactic(tag: String): String? {
-    val tacticId = TACTIC_ID_REGEX.find(tag)?.groupValues?.get(1)?.uppercase()
+    val normalizedTag = normalizeTagPrefix(tag)
+    val tacticId = TACTIC_ID_REGEX.find(normalizedTag)?.groupValues?.get(1)?.uppercase()
     if (tacticId != null) return TACTIC_IDS[tacticId]
-    val tactic = TACTIC_NAME_REGEX.find(tag)?.groupValues?.get(1)
+    val tactic = TACTIC_NAME_REGEX.find(normalizedTag)?.groupValues?.get(1)
         ?.lowercase()
         ?.replace('_', '-')
     return tactic?.takeIf { it in TACTIC_NAMES }
 }
+
+private fun normalizeTagPrefix(tag: String): String =
+    tag.removePrefix("sigma:")
 
 private val TACTIC_NAMES = setOf(
     "reconnaissance",

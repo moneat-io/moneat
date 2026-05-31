@@ -23,7 +23,6 @@ import com.moneat.billing.routes.stripeWebhookRoutes
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.config.RedisConfig
-import com.moneat.datadog.security.securityQueryRoutes
 import com.moneat.dashboards.routes.customDashboardRoutes
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.events.routes.apiRoutes
@@ -272,7 +271,6 @@ fun Application.configureRouting() {
 
         // Security signals triage surface (OSS core)
         rateLimit(RateLimitName("api")) {
-            securityQueryRoutes()
             signalRoutes()
         }
 

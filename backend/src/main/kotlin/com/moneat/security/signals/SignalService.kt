@@ -381,9 +381,9 @@ class SignalService(
             ClickHouseQueryUtils.orgIdClause(orgId.toLong()),
             "rule_id = '${escapeSql(signal.ruleId)}'",
         )
-        signal.entities["resource"]?.takeIf { it.isNotBlank() }?.let {
-            conditions.add("resource_id = '${escapeSql(it)}'")
-        }
+        conditions.addComplianceEntityFilter(signal, "framework", "framework")
+        conditions.addComplianceEntityFilter(signal, "resource_type", "resource_type")
+        conditions.addComplianceEntityFilter(signal, "resource_id", "resource_id")
         val where = conditions.joinToString(" AND ")
         return executeSamples(
             """SELECT finding_id, framework, rule_id, rule_name, status, resource_type,
@@ -403,6 +403,16 @@ class SignalService(
                 put("resourceName", obj.s("resource_name"))
                 put("evaluatedAt", obj.s("ts"))
             }
+        }
+    }
+
+    private fun MutableList<String>.addComplianceEntityFilter(
+        signal: SignalResponse,
+        entityKey: String,
+        column: String,
+    ) {
+        signal.entities[entityKey]?.takeIf { it.isNotBlank() }?.let {
+            add("$column = '${escapeSql(it)}'")
         }
     }
 

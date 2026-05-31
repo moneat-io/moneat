@@ -16,7 +16,6 @@
 
 package com.moneat.security.posture
 
-import com.moneat.datadog.security.QueuedComplianceEntry
 import com.moneat.security.signals.SignalSeverity
 import com.moneat.security.signals.SignalSource
 import com.moneat.security.signals.SignalSpec
@@ -34,7 +33,7 @@ private const val EVIDENCE_TYPE = "clickhouse_query"
 
 object PostureRegressionAnalyzer {
 
-    fun analyze(organizationId: Int, findings: List<QueuedComplianceEntry>): List<SignalSpec> {
+    fun analyze(organizationId: Int, findings: List<ComplianceFindingInput>): List<SignalSpec> {
         if (findings.isEmpty()) return emptyList()
         return transaction {
             findings.mapNotNull { finding ->
@@ -52,7 +51,7 @@ object PostureRegressionAnalyzer {
 
     private fun upsertState(
         organizationId: Int,
-        finding: QueuedComplianceEntry,
+        finding: ComplianceFindingInput,
         status: ComplianceFindingStatus,
         occurred: Instant,
     ): ComplianceFindingStatus? {
@@ -102,7 +101,7 @@ object PostureRegressionAnalyzer {
         return previous
     }
 
-    private fun regressionSignal(finding: QueuedComplianceEntry): SignalSpec {
+    private fun regressionSignal(finding: ComplianceFindingInput): SignalSpec {
         val key = findingKey(finding)
         val resourceName = finding.resourceName.ifBlank { finding.resourceId }
         val entities = buildMap {
@@ -128,7 +127,7 @@ object PostureRegressionAnalyzer {
         )
     }
 
-    private fun findingKey(finding: QueuedComplianceEntry): String =
+    private fun findingKey(finding: ComplianceFindingInput): String =
         listOf(finding.framework, finding.ruleId, finding.resourceType, finding.resourceId)
             .joinToString("|")
 

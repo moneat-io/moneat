@@ -141,6 +141,16 @@ data class SignalSpec(
     val tags: List<String> = emptyList(),
 )
 
+data class RuntimeSecurityEventInput(
+    val ruleId: String = "",
+    val ruleName: String = "",
+    val severity: String = "info",
+    val processName: String = "",
+    val filePath: String = "",
+    val host: String = "",
+    val timestampMs: Long,
+)
+
 /** Result of [SignalWriter.upsert]; drives whether the workflow trigger fires (Created/Escalated only). */
 sealed interface SignalOutcome {
     val signalId: Int

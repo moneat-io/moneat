@@ -16,9 +16,6 @@
 
 package com.moneat.security.signals
 
-import com.moneat.datadog.security.QueuedSecurityBatch
-import com.moneat.datadog.security.QueuedSecurityEventEntry
-
 private const val EVIDENCE_TYPE = "clickhouse_query"
 private const val EVENTS_TABLE = "security_events"
 
@@ -30,13 +27,10 @@ private const val EVENTS_TABLE = "security_events"
  */
 object SignalDerivation {
 
-    fun fromBatch(batch: QueuedSecurityBatch): List<SignalSpec> =
-        when (batch.batchType) {
-            "events" -> batch.events.map { runtimeSpec(it) }
-            else -> emptyList()
-        }
+    fun fromRuntimeEvents(events: List<RuntimeSecurityEventInput>): List<SignalSpec> =
+        events.map { runtimeSpec(it) }
 
-    private fun runtimeSpec(event: QueuedSecurityEventEntry): SignalSpec {
+    private fun runtimeSpec(event: RuntimeSecurityEventInput): SignalSpec {
         val host = event.host
         val process = event.processName
         val resource = event.filePath.ifBlank { process.ifBlank { host } }
@@ -59,7 +53,7 @@ object SignalDerivation {
         )
     }
 
-    private fun runtimeEvidence(event: QueuedSecurityEventEntry, dedupKey: String): String =
+    private fun runtimeEvidence(event: RuntimeSecurityEventInput, dedupKey: String): String =
         "table=$EVENTS_TABLE dedup=$dedupKey rule_id=${event.ruleId} " +
             "host=${event.host} process=${event.processName} occurred_at_ms=${event.timestampMs}"
 }

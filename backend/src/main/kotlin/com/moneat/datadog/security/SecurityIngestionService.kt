@@ -21,7 +21,9 @@ import com.moneat.config.RedisConfig
 import com.moneat.datadog.models.DdActivityDumpPayload
 import com.moneat.datadog.models.DdCompliancePayload
 import com.moneat.datadog.models.DdSecurityEventPayload
+import com.moneat.security.posture.ComplianceFindingInput
 import com.moneat.security.posture.PostureRegressionAnalyzer
+import com.moneat.security.signals.RuntimeSecurityEventInput
 import com.moneat.security.signals.SignalDerivation
 import com.moneat.security.signals.SignalOutcome
 import com.moneat.security.signals.SignalWriter
@@ -180,9 +182,15 @@ object SecurityIngestionService {
     private fun deriveSignals(batch: QueuedSecurityBatch): List<SignalOutcome> {
         val specs = runCatching {
             if (batch.batchType == "findings") {
-                PostureRegressionAnalyzer.analyze(batch.organizationId, batch.findings)
+                PostureRegressionAnalyzer.analyze(
+                    batch.organizationId,
+                    batch.findings.map { it.toPostureFindingInput() },
+                )
+            } else if (batch.batchType == "events") {
+                val events = batch.events.map { it.toRuntimeSecurityEventInput() }
+                SignalDerivation.fromRuntimeEvents(events)
             } else {
-                SignalDerivation.fromBatch(batch)
+                emptyList()
             }
         }.getOrElse { e ->
             logger.warn { "Security signal analysis failed for ${batch.batchType}: ${e.message}" }
@@ -313,4 +321,27 @@ object SecurityIngestionService {
         }
         return "map($entries)"
     }
+
+    private fun QueuedComplianceEntry.toPostureFindingInput(): ComplianceFindingInput =
+        ComplianceFindingInput(
+            framework = framework,
+            ruleId = ruleId,
+            ruleName = ruleName,
+            status = status,
+            resourceType = resourceType,
+            resourceId = resourceId,
+            resourceName = resourceName,
+            timestampMs = timestampMs,
+        )
+
+    private fun QueuedSecurityEventEntry.toRuntimeSecurityEventInput(): RuntimeSecurityEventInput =
+        RuntimeSecurityEventInput(
+            ruleId = ruleId,
+            ruleName = ruleName,
+            severity = severity,
+            processName = processName,
+            filePath = filePath,
+            host = host,
+            timestampMs = timestampMs,
+        )
 }

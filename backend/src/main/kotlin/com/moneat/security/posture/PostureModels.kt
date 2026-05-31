@@ -47,3 +47,14 @@ enum class ComplianceFindingStatus(val wire: String) {
             entries.firstOrNull { it.wire == value } ?: PASSED
     }
 }
+
+data class ComplianceFindingInput(
+    val framework: String = "",
+    val ruleId: String = "",
+    val ruleName: String = "",
+    val status: String = "passed",
+    val resourceType: String = "",
+    val resourceId: String = "",
+    val resourceName: String = "",
+    val timestampMs: Long,
+)

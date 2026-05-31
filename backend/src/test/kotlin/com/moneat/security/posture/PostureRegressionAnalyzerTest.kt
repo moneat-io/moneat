@@ -16,7 +16,6 @@
 
 package com.moneat.security.posture
 
-import com.moneat.datadog.security.QueuedComplianceEntry
 import com.moneat.security.signals.SignalSeverity
 import com.moneat.security.signals.SignalSource
 import com.moneat.shared.models.Organizations
@@ -100,8 +99,8 @@ class PostureRegressionAnalyzerTest {
         assertEquals(1, originalOrgSpecs.size)
     }
 
-    private fun finding(status: String): QueuedComplianceEntry =
-        QueuedComplianceEntry(
+    private fun finding(status: String): ComplianceFindingInput =
+        ComplianceFindingInput(
             framework = "cis-aws",
             ruleId = "cis-1.1",
             ruleName = "Root MFA",

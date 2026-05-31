@@ -16,8 +16,6 @@
 
 package com.moneat.security.signals
 
-import com.moneat.datadog.security.QueuedSecurityBatch
-import com.moneat.datadog.security.QueuedSecurityEventEntry
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -26,23 +24,19 @@ class SignalDerivationTest {
 
     @Test
     fun `runtime event derives a single agent_runtime spec keyed by rule host process`() {
-        val batch = QueuedSecurityBatch(
-            organizationId = 1,
-            batchType = "events",
-            events = listOf(
-                QueuedSecurityEventEntry(
-                    ruleId = "cws-1",
-                    ruleName = "Suspicious exec",
-                    severity = "high",
-                    processName = "bash",
-                    filePath = "/etc/shadow",
-                    host = "web-01",
-                    timestampMs = 1_700_000_000_000
-                )
+        val events = listOf(
+            RuntimeSecurityEventInput(
+                ruleId = "cws-1",
+                ruleName = "Suspicious exec",
+                severity = "high",
+                processName = "bash",
+                filePath = "/etc/shadow",
+                host = "web-01",
+                timestampMs = 1_700_000_000_000
             )
         )
 
-        val specs = SignalDerivation.fromBatch(batch)
+        val specs = SignalDerivation.fromRuntimeEvents(events)
 
         assertEquals(1, specs.size)
         val spec = specs.single()
@@ -57,18 +51,7 @@ class SignalDerivationTest {
     }
 
     @Test
-    fun `compliance findings derive no direct signals`() {
-        val batch = QueuedSecurityBatch(
-            organizationId = 1,
-            batchType = "findings",
-        )
-
-        assertTrue(SignalDerivation.fromBatch(batch).isEmpty())
-    }
-
-    @Test
-    fun `activity dump batches derive no signals`() {
-        val batch = QueuedSecurityBatch(organizationId = 1, batchType = "dumps")
-        assertTrue(SignalDerivation.fromBatch(batch).isEmpty())
+    fun `empty runtime event input derives no signals`() {
+        assertTrue(SignalDerivation.fromRuntimeEvents(emptyList()).isEmpty())
     }
 }
