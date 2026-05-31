@@ -19,6 +19,7 @@ package com.moneat.security.signals
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.ClickHouseQueryException
 import com.moneat.config.isClickHouseError
+import com.moneat.security.detection.RuleQueryCompiler
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
@@ -273,9 +274,11 @@ class SignalService {
 
     /**
      * Evidence for a detection-rule signal: recent log rows for the entity this signal fired on, scoped
-     * by org and by the group-by values the rule keyed on (service/host/environment/container when
-     * present). The query is org-injected via [ClickHouseQueryUtils.orgIdClause] and every entity value
-     * is escaped, so a crafted entity cannot widen the scope past the calling org.
+     * by org and by **every** group-by dimension the rule keyed on — top-level columns and `tags[…]` /
+     * `resource_attributes[…]` map access alike — via [RuleQueryCompiler.entityPredicate], which reuses
+     * the detection whitelist + escaping. The query is org-injected via [ClickHouseQueryUtils.orgIdClause]
+     * (org clause first) and every entity value/key is escaped, so a crafted entity can neither widen the
+     * scope past the calling org nor alter query structure.
      *
      * Detection evidence is **entity-scoped by design**, not rule-filter-scoped: the signal persists
      * only its group-by entity values and a schema-free evidence descriptor (see
@@ -288,10 +291,13 @@ class SignalService {
     private suspend fun fetchDetectionSamples(orgId: Int, signal: SignalResponse): List<JsonElement> {
         val db = ClickHouseClient.getDatabase()
         val conditions = mutableListOf(ClickHouseQueryUtils.orgIdClause(orgId.toLong()))
-        listOf("service", "host", "environment", "container_name").forEach { col ->
-            signal.entities[col]?.takeIf { it.isNotBlank() }?.let {
-                conditions.add("$col = '${escapeSql(it)}'")
-            }
+        // Re-scope on every dimension the rule grouped on — service/host/environment/container_name AND
+        // tags[…]/resource_attributes[…] (and any other whitelisted column) — so a map-grouped signal
+        // does not fall back to org-wide samples of unrelated logs. Each predicate reuses the detection
+        // whitelist + escaping; non-whitelisted/blank entity keys are skipped.
+        signal.entities.forEach { (column, value) ->
+            if (value.isBlank()) return@forEach
+            RuleQueryCompiler.entityPredicate(column, value, ::escapeSql)?.let { conditions.add(it) }
         }
         val where = conditions.joinToString(" AND ")
         return executeSamples(

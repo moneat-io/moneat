@@ -98,6 +98,26 @@ class RuleQueryCompiler(
         private const val MAP_KEY_PATTERN = """^([a-z_]+)\[(?:'|")?([A-Za-z0-9_.:/-]+)(?:'|")?]$"""
         private val MAP_ACCESS_REGEX = Regex(MAP_KEY_PATTERN)
 
+        /**
+         * Builds a safe `<column> = '<value>'` equality predicate for a stored group-by [column] (one
+         * key of a signal's `entities`), or `null` if [column] is not a whitelisted top-level column or
+         * whitelisted `map['key']` access. Reuses the same whitelist + map-access parsing as a compiled
+         * group-by, so evidence sampling can re-scope on **every** dimension a rule grouped on — including
+         * `tags[…]` / `resource_attributes[…]` — without widening past the whitelist. [value] is bound via
+         * [escape] (the caller's `escapeSql`) and a map key is escaped too, so neither can alter structure.
+         */
+        fun entityPredicate(column: String, value: String, escape: (String) -> String): String? {
+            val trimmed = column.trim()
+            if (trimmed in ALLOWED_GROUP_BY_COLUMNS) {
+                return "$trimmed = '${escape(value)}'"
+            }
+            val mapMatch = MAP_ACCESS_REGEX.find(trimmed) ?: return null
+            val mapColumn = mapMatch.groupValues[1]
+            if (mapColumn !in ALLOWED_MAP_COLUMNS) return null
+            val key = escape(mapMatch.groupValues[2])
+            return "$mapColumn['$key'] = '${escape(value)}'"
+        }
+
         // Resource caps (env-overridable). Defaults are conservative for a shared multi-tenant cluster.
         private const val ENV_MAX_EXECUTION_TIME = "DETECTION_QUERY_MAX_EXECUTION_SECONDS"
         private const val ENV_MAX_ROWS_TO_READ = "DETECTION_QUERY_MAX_ROWS_TO_READ"
