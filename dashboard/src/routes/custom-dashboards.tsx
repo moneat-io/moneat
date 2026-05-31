@@ -17,19 +17,22 @@
 import {createFileRoute} from '@tanstack/react-router'
 import {LayoutDashboard, Database, LineChart, Grid3x3, Share2, Palette} from 'lucide-react'
 import {FeaturePageTemplate, type FeaturePageConfig} from '@/components/landing/FeaturePageTemplate'
+import {getFeaturePageSeoInput} from '@/lib/seo/routes'
+
+const pageSeo = getFeaturePageSeoInput('custom-dashboards')
 
 const config: FeaturePageConfig = {
-  slug: 'custom-dashboards',
-  title: 'Dashboards',
+  slug: pageSeo.slug,
+  title: pageSeo.title,
   tagline: 'Visualize anything',
   description: 'Build custom dashboards with drag-and-drop widgets powered by any data source. Connect PostgreSQL, ClickHouse, BigQuery, or use built-in Moneat metrics to create the views your team needs.',
-  metaDescription: 'Custom dashboards with drag-and-drop widgets. Connect any data source — PostgreSQL, ClickHouse, BigQuery, and more. Start free with Moneat.',
+  metaDescription: pageSeo.metaDescription,
   icon: LayoutDashboard,
   iconColor: 'text-sky-400',
   iconBg: 'bg-sky-500/10',
   gradient: 'from-sky-500 to-blue-400',
   accentColor: 'text-sky-400',
-  screenshot: '/screenshots/dashboard.png',
+  screenshot: pageSeo.image,
   screenshotAlt: 'Custom dashboard with multiple widgets showing metrics and charts',
   subFeatures: [
     {icon: Grid3x3, title: 'Drag & Drop', description: 'Arrange widgets on a flexible grid. Resize, reorder, and organize your dashboard layout visually.', iconColor: 'text-sky-400'},

@@ -17,19 +17,22 @@
 import {createFileRoute} from '@tanstack/react-router'
 import {FileText, Filter, RefreshCw, Search, Braces, Link2} from 'lucide-react'
 import {FeaturePageTemplate, type FeaturePageConfig} from '@/components/landing/FeaturePageTemplate'
+import {getFeaturePageSeoInput} from '@/lib/seo/routes'
+
+const pageSeo = getFeaturePageSeoInput('log-management')
 
 const config: FeaturePageConfig = {
-  slug: 'log-management',
-  title: 'Log Management',
+  slug: pageSeo.slug,
+  title: pageSeo.title,
   tagline: 'Structured logging at scale',
   description: 'Structured JSON logs with auto-refresh, full-text search, and powerful filtering. Unified with your errors and traces for faster root-cause analysis.',
-  metaDescription: 'Log management with structured JSON, full-text search, real-time streaming, and powerful filtering. Start free with Moneat.',
+  metaDescription: pageSeo.metaDescription,
   icon: FileText,
   iconColor: 'text-blue-400',
   iconBg: 'bg-blue-500/10',
   gradient: 'from-blue-500 to-indigo-400',
   accentColor: 'text-blue-400',
-  screenshot: '/screenshots/log-management.png',
+  screenshot: pageSeo.image,
   screenshotAlt: 'Log management interface with real-time log viewer and filtering',
   subFeatures: [
     {icon: Search, title: 'Full-Text Search', description: 'Search across billions of log entries with sub-second response times.', iconColor: 'text-blue-400'},

@@ -17,19 +17,22 @@
 import {createFileRoute} from '@tanstack/react-router'
 import {Play, MousePointerClick, Monitor, Bug, Clock, Layers} from 'lucide-react'
 import {FeaturePageTemplate, type FeaturePageConfig} from '@/components/landing/FeaturePageTemplate'
+import {getFeaturePageSeoInput} from '@/lib/seo/routes'
+
+const pageSeo = getFeaturePageSeoInput('session-replay')
 
 const config: FeaturePageConfig = {
-  slug: 'session-replay',
-  title: 'Session Replay',
+  slug: pageSeo.slug,
+  title: pageSeo.title,
   tagline: 'See what your users see',
   description: 'Watch exactly what users did before an error. See clicks, navigation, and console output reconstructed in real-time. No more guessing — replay the exact session that triggered the bug.',
-  metaDescription: 'Session replay with click tracking, console output, and error correlation. Replay user sessions to debug issues faster. Start free with Moneat.',
+  metaDescription: pageSeo.metaDescription,
   icon: Play,
   iconColor: 'text-violet-400',
   iconBg: 'bg-violet-500/10',
   gradient: 'from-violet-500 to-purple-400',
   accentColor: 'text-violet-400',
-  screenshot: '/screenshots/session-replay.png',
+  screenshot: pageSeo.image,
   screenshotAlt: 'Session replay showing user interactions before errors occurred',
   subFeatures: [
     {icon: MousePointerClick, title: 'Click & Scroll Tracking', description: 'See every click, scroll, and navigation event in the exact order the user performed them.', iconColor: 'text-violet-400'},

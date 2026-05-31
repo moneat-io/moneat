@@ -17,19 +17,22 @@
 import {createFileRoute} from '@tanstack/react-router'
 import {Phone, Calendar, ArrowUpRight, MessageSquare, Clock, Users} from 'lucide-react'
 import {FeaturePageTemplate, type FeaturePageConfig} from '@/components/landing/FeaturePageTemplate'
+import {getFeaturePageSeoInput} from '@/lib/seo/routes'
+
+const pageSeo = getFeaturePageSeoInput('on-call-management')
 
 const config: FeaturePageConfig = {
-  slug: 'on-call-management',
-  title: 'On-Call & Incidents',
+  slug: pageSeo.slug,
+  title: pageSeo.title,
   tagline: 'The right person, every time',
   description: 'Manage on-call rotations and escalation policies. When things break, Moneat notifies the right person via phone call, SMS, Slack, or email — with automatic escalation if they don\'t respond.',
-  metaDescription: 'On-call scheduling with phone, SMS, and Slack alerts. Escalation policies and rotation management. Start free with Moneat.',
+  metaDescription: pageSeo.metaDescription,
   icon: Phone,
   iconColor: 'text-orange-400',
   iconBg: 'bg-orange-500/10',
   gradient: 'from-orange-500 to-amber-400',
   accentColor: 'text-orange-400',
-  screenshot: '/screenshots/escalation-policies.png',
+  screenshot: pageSeo.image,
   screenshotAlt: 'On-call escalation policies with rotation schedules',
   subFeatures: [
     {icon: Calendar, title: 'On-Call Schedules', description: 'Create rotating schedules with daily, weekly, or custom rotation patterns for your team.', iconColor: 'text-orange-400'},

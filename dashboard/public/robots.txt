@@ -21,4 +21,3 @@ Disallow: /impersonate-callback
 Disallow: /auth
 
 Sitemap: https://moneat.io/sitemap.xml
-Sitemap: https://moneat.io/docs/sitemap.xml

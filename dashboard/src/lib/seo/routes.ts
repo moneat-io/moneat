@@ -7,7 +7,7 @@ export interface FeatureSeoInput {
   readonly slug: string
   readonly title: string
   readonly metaDescription: string
-  readonly image?: string
+  readonly image: string
 }
 
 /** Product feature/marketing pages rendered via FeaturePageTemplate (slug === path). */
@@ -126,6 +126,17 @@ export const FEATURE_PAGE_SEO_INPUTS = [
   },
 ] as const satisfies readonly FeatureSeoInput[]
 
+export type FeaturePageSlug = (typeof FEATURE_PAGE_SEO_INPUTS)[number]['slug']
+
+/** Return the shared SEO data for a feature route so runtime pages and prerender stay aligned. */
+export function getFeaturePageSeoInput(slug: FeaturePageSlug): FeatureSeoInput {
+  const page = FEATURE_PAGE_SEO_INPUTS.find((candidate) => candidate.slug === slug)
+  if (!page) {
+    throw new Error(`Missing feature SEO input for ${slug}`)
+  }
+  return page
+}
+
 export const homeSeo: PageSeo = {
   path: '/',
   title: 'Moneat | Open-Source Observability for Sentry and Datadog Teams',
@@ -149,6 +160,13 @@ export const blogIndexSeo: PageSeo = {
   path: '/blog',
   title: 'Blog — Moneat',
   description: 'Engineering deep-dives, observability best practices, and product updates.',
+}
+
+export const docsIndexSeo: PageSeo = {
+  path: '/docs',
+  title: 'Documentation — Moneat',
+  description:
+    'Moneat documentation — error monitoring, incident management, uptime tracking, and structured logging.',
 }
 
 export const compareHubSeo: PageSeo = {
@@ -185,6 +203,7 @@ export const privacySeo: PageSeo = {
 export const STATIC_SEO_PAGES = [
   homeSeo,
   blogIndexSeo,
+  docsIndexSeo,
   compareHubSeo,
   pricingSeo,
   termsSeo,

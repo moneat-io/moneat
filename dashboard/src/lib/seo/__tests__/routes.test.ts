@@ -21,17 +21,19 @@ import {
   blogPostSeo,
   buildSitemapEntries,
   compareHubSeo,
+  docsIndexSeo,
   competitorPageSeo,
   featurePageSeo,
   homeSeo,
 } from '../routes'
 
 describe('static route descriptors', () => {
-  it('home/blog/compare descriptors have required fields', () => {
+  it('home/blog/docs/compare descriptors have required fields', () => {
     expect(homeSeo.path).toBe('/')
     expect(homeSeo.jsonLd?.length).toBeGreaterThan(0)
     expect(homeSeo.socialTitle).toBeTruthy()
     expect(blogIndexSeo.path).toBe('/blog')
+    expect(docsIndexSeo.path).toBe('/docs')
     expect(compareHubSeo.path).toBe('/compare')
     expect(compareHubSeo.image).toContain('/marketing/')
   })
@@ -98,7 +100,7 @@ describe('buildSitemapEntries', () => {
   })
 
   it('keeps noindex and docs-only routes out of the root sitemap', () => {
-    // Docs detail pages are advertised by /docs/sitemap.xml, not the root app sitemap.
+    // Docs detail pages do not have prerendered app SEO output, so the root sitemap lists only /docs.
     expect(paths).not.toContain('/docs/getting-started')
     expect(paths).not.toContain('/docs/')
     expect(paths.filter((p) => p === '/docs')).toHaveLength(1)

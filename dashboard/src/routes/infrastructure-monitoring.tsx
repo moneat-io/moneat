@@ -17,21 +17,24 @@
 import {createFileRoute} from '@tanstack/react-router'
 import {Server, Cpu, HardDrive, Box, Network, Database} from 'lucide-react'
 import {FeaturePageTemplate, type FeaturePageConfig} from '@/components/landing/FeaturePageTemplate'
+import {getFeaturePageSeoInput} from '@/lib/seo/routes'
+
+const pageSeo = getFeaturePageSeoInput('infrastructure-monitoring')
 
 const config: FeaturePageConfig = {
-  slug: 'infrastructure-monitoring',
-  title: 'Infrastructure Monitoring',
+  slug: pageSeo.slug,
+  title: pageSeo.title,
   tagline: 'Infrastructure telemetry',
   description:
     'Monitor hosts, containers, Kubernetes clusters, and databases with real-time infrastructure telemetry. ' +
     'Point compatible agents at Moneat and get full visibility without changing your applications.',
-  metaDescription: 'Infrastructure monitoring for hosts, containers, Kubernetes, and databases. Compatible with the Datadog Agent. Start free with Moneat.',
+  metaDescription: pageSeo.metaDescription,
   icon: Server,
   iconColor: 'text-orange-400',
   iconBg: 'bg-orange-500/10',
   gradient: 'from-orange-500 to-amber-400',
   accentColor: 'text-orange-400',
-  screenshot: '/screenshots/containers.png',
+  screenshot: pageSeo.image,
   screenshotAlt: 'Infrastructure monitoring showing host and container metrics',
   subFeatures: [
     {icon: Cpu, title: 'Host Metrics', description: 'CPU, memory, disk, network, and load metrics from every host in your fleet.', iconColor: 'text-orange-400'},

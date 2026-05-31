@@ -17,21 +17,24 @@
 import {createFileRoute} from '@tanstack/react-router'
 import {Flame, Cpu, HardDrive, Clock, Layers, Search} from 'lucide-react'
 import {FeaturePageTemplate, type FeaturePageConfig} from '@/components/landing/FeaturePageTemplate'
+import {getFeaturePageSeoInput} from '@/lib/seo/routes'
+
+const pageSeo = getFeaturePageSeoInput('profiling')
 
 const config: FeaturePageConfig = {
-  slug: 'profiling',
-  title: 'Continuous Profiling',
+  slug: pageSeo.slug,
+  title: pageSeo.title,
   tagline: 'Pinpoint hot paths in production',
   description:
     'CPU, heap, and wall-time profiles from production telemetry. Identify hot functions, memory leaks, ' +
     'and resource bottlenecks without adding application overhead.',
-  metaDescription: 'Continuous profiling with CPU, heap, and wall-time flamegraphs. Pinpoint performance bottlenecks in production. Start free with Moneat.',
+  metaDescription: pageSeo.metaDescription,
   icon: Flame,
   iconColor: 'text-red-400',
   iconBg: 'bg-red-500/10',
   gradient: 'from-red-500 to-orange-400',
   accentColor: 'text-red-400',
-  screenshot: '/screenshots/profiles.png',
+  screenshot: pageSeo.image,
   screenshotAlt: 'Continuous profiling flamegraph showing CPU and memory hotspots',
   subFeatures: [
     {icon: Flame, title: 'Flamegraphs', description: 'Interactive flamegraphs that visualize exactly where your application spends its time.', iconColor: 'text-red-400'},

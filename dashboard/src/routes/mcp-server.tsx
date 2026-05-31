@@ -17,19 +17,22 @@
 import {createFileRoute} from '@tanstack/react-router'
 import {Bot, Code2, Search, BarChart3, Bug, Terminal} from 'lucide-react'
 import {FeaturePageTemplate, type FeaturePageConfig} from '@/components/landing/FeaturePageTemplate'
+import {getFeaturePageSeoInput} from '@/lib/seo/routes'
+
+const pageSeo = getFeaturePageSeoInput('mcp-server')
 
 const config: FeaturePageConfig = {
-  slug: 'mcp-server',
-  title: 'MCP Server',
+  slug: pageSeo.slug,
+  title: pageSeo.title,
   tagline: 'Observability in your IDE',
   description: 'Connect Cursor, GitHub Copilot, Claude Code, or your own agents to Moneat via the Model Context Protocol. Query issues, logs, traces, and metrics from your AI workflows without leaving your editor.',
-  metaDescription: 'MCP server for AI-powered observability. Query issues, logs, and traces from Cursor, GitHub Copilot, or any MCP client. Start free with Moneat.',
+  metaDescription: pageSeo.metaDescription,
   icon: Bot,
   iconColor: 'text-violet-400',
   iconBg: 'bg-violet-500/10',
   gradient: 'from-violet-500 to-purple-400',
   accentColor: 'text-violet-400',
-  screenshot: '/screenshots/dashboard.png',
+  screenshot: pageSeo.image,
   screenshotAlt: 'Moneat dashboard showing observability data accessible via MCP',
   subFeatures: [
     {icon: Terminal, title: '30+ Tools', description: 'List issues, query logs, get traces, search hosts, create dashboards, and more — all via MCP.', iconColor: 'text-violet-400'},

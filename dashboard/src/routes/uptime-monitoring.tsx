@@ -17,19 +17,22 @@
 import {createFileRoute} from '@tanstack/react-router'
 import {Globe, Clock, Bell, BarChart3, GitBranch, Phone} from 'lucide-react'
 import {FeaturePageTemplate, type FeaturePageConfig} from '@/components/landing/FeaturePageTemplate'
+import {getFeaturePageSeoInput} from '@/lib/seo/routes'
+
+const pageSeo = getFeaturePageSeoInput('uptime-monitoring')
 
 const config: FeaturePageConfig = {
-  slug: 'uptime-monitoring',
-  title: 'Uptime Monitoring',
+  slug: pageSeo.slug,
+  title: pageSeo.title,
   tagline: 'Never miss downtime',
   description: 'Monitor your services 24/7 with customizable check intervals. Get alerted instantly via phone, SMS, Slack, or Discord when something goes down. Automatic public status pages included.',
-  metaDescription: 'Uptime monitoring with instant alerts via phone, SMS, Slack. Public status pages included. Start free with Moneat.',
+  metaDescription: pageSeo.metaDescription,
   icon: Globe,
   iconColor: 'text-green-400',
   iconBg: 'bg-green-500/10',
   gradient: 'from-green-500 to-emerald-400',
   accentColor: 'text-green-400',
-  screenshot: '/screenshots/uptime.png',
+  screenshot: pageSeo.image,
   screenshotAlt: 'Uptime monitoring dashboard with status checks and availability metrics',
   subFeatures: [
     {icon: Clock, title: 'Configurable Intervals', description: 'Check every 30 seconds to every 30 minutes. Choose the cadence that matches your SLA.', iconColor: 'text-green-400'},
