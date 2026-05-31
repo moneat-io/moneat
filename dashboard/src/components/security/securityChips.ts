@@ -53,3 +53,12 @@ export const ARCHIVE_REASON_LABELS: Record<string, string> = Object.fromEntries(
 export function colorFor(map: Record<string, string>, key: string | null | undefined): string {
   return (key && map[key]) || ''
 }
+
+/** Formats a window in seconds as a compact human label (e.g. 300 -> "5m", 3600 -> "1h"). */
+export function formatWindow(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return `${seconds}s`
+  if (seconds % 86400 === 0) return `${seconds / 86400}d`
+  if (seconds % 3600 === 0) return `${seconds / 3600}h`
+  if (seconds % 60 === 0) return `${seconds / 60}m`
+  return `${seconds}s`
+}

@@ -15,6 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import type {DetectionPreviewResponse} from '@/lib/api'
+import {formatWindow} from './securityChips'
 
 interface RulePreviewProps {
   preview: DetectionPreviewResponse
@@ -24,7 +25,8 @@ export function RulePreview({preview}: RulePreviewProps) {
   return (
     <div className="space-y-1.5 rounded-md border border-border bg-muted/30 p-2">
       <p className="text-xs font-medium">
-        Would produce {preview.match_count} signal{preview.match_count === 1 ? '' : 's'} over the last 24h
+        Would produce {preview.match_count} signal{preview.match_count === 1 ? '' : 's'} over the
+        last {formatWindow(preview.window_seconds)}
       </p>
       {preview.samples.length > 0 && (
         <table className="w-full text-[10px]">

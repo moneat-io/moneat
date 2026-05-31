@@ -20,6 +20,7 @@ import {
   availableStatusActions,
   buildStatusChangeRequest,
   isTransitionAllowed,
+  toSignalStatus,
   transitionRequiresReason,
 } from '../triage'
 
@@ -36,6 +37,19 @@ describe('availableStatusActions', () => {
     const actions = availableStatusActions('archived')
     expect(actions.map((a) => a.to)).toEqual(['open'])
     expect(actions[0].requiresReason).toBe(false)
+  })
+})
+
+describe('toSignalStatus', () => {
+  it('passes through known statuses', () => {
+    expect(toSignalStatus('open')).toBe('open')
+    expect(toSignalStatus('under_review')).toBe('under_review')
+    expect(toSignalStatus('archived')).toBe('archived')
+  })
+
+  it('falls back to open for unknown wire values', () => {
+    expect(toSignalStatus('bogus')).toBe('open')
+    expect(toSignalStatus('')).toBe('open')
   })
 })
 

@@ -65,15 +65,34 @@ describe('RuleForm', () => {
     fireEvent.click(screen.getByRole('button', {name: 'Preview'}))
     await waitFor(() => expect(onPreview).toHaveBeenCalledWith(99))
     expect(onSubmit).toHaveBeenCalledTimes(1)
-    expect(await screen.findByText(/Would produce 4 signals over the last 24h/)).toBeInTheDocument()
+    expect(await screen.findByText(/Would produce 4 signals over the last 5m/)).toBeInTheDocument()
   })
 
   it('blocks preview on an invalid form and does not call onPreview', () => {
     const onPreview = noopPreview()
     render(<RuleForm onSubmit={vi.fn().mockResolvedValue(makeRule())} onPreview={onPreview} onCancel={vi.fn()} />)
-    fireEvent.click(screen.getByRole('button', {name: 'Preview'}))
+    fireEvent.click(screen.getByRole('button', {name: 'Save draft & preview'}))
     expect(screen.getByText('Name is required')).toBeInTheDocument()
     expect(onPreview).not.toHaveBeenCalled()
+  })
+
+  it('saves an unsaved rule as a disabled draft when previewing', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(makeRule({id: 42}))
+    const onPreview = noopPreview()
+    render(<RuleForm onSubmit={onSubmit} onPreview={onPreview} onCancel={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText('Name'), {target: {value: 'Failed logins'}})
+    fireEvent.change(screen.getByPlaceholderText(/status:/), {target: {value: 'status:failed'}})
+    // Enabled toggle is on, but the preview-save must persist a disabled draft regardless.
+    fireEvent.click(screen.getByRole('switch', {name: 'Enabled'}))
+    fireEvent.click(screen.getByRole('button', {name: 'Save draft & preview'}))
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({name: 'Failed logins', enabled: false}))
+    )
+    await waitFor(() => expect(onPreview).toHaveBeenCalledWith(42))
+    expect(await screen.findByText(/Draft saved/)).toBeInTheDocument()
+    // Once saved, the button reverts to a plain Preview and the Enabled toggle is forced off.
+    expect(screen.getByRole('button', {name: 'Preview'})).toBeInTheDocument()
+    expect(screen.getByRole('switch', {name: 'Enabled'})).not.toBeChecked()
   })
 
   it('surfaces a preview failure', async () => {

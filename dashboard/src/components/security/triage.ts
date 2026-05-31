@@ -43,6 +43,14 @@ const STATUS_ACTIONS: Record<SignalStatus, StatusAction[]> = {
   archived: [{to: 'open', label: 'Reopen', requiresReason: false}],
 }
 
+/**
+ * Narrows an untyped wire status (SignalResponse.status is `string`) to a known SignalStatus,
+ * falling back to `open` for anything unrecognised so the UI stays usable.
+ */
+export function toSignalStatus(value: string): SignalStatus {
+  return value in STATUS_ACTIONS ? (value as SignalStatus) : 'open'
+}
+
 /** Status moves available from `current`, in display order. */
 export function availableStatusActions(current: SignalStatus): StatusAction[] {
   return STATUS_ACTIONS[current] ?? []

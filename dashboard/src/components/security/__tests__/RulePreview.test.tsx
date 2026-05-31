@@ -32,7 +32,7 @@ describe('RulePreview', () => {
         }}
       />
     )
-    expect(screen.getByText(/Would produce 3 signals over the last 24h/)).toBeInTheDocument()
+    expect(screen.getByText(/Would produce 3 signals over the last 5m/)).toBeInTheDocument()
     expect(screen.getByText('user.id=alice')).toBeInTheDocument()
     expect(screen.getByText('12')).toBeInTheDocument()
   })
@@ -43,7 +43,7 @@ describe('RulePreview', () => {
         preview={{match_count: 1, window_seconds: 60, samples: [{group_values: {}, count: 1}]}}
       />
     )
-    expect(screen.getByText(/Would produce 1 signal over the last 24h/)).toBeInTheDocument()
+    expect(screen.getByText(/Would produce 1 signal over the last 1m/)).toBeInTheDocument()
     expect(screen.getByText('(all)')).toBeInTheDocument()
   })
 })

@@ -20,7 +20,7 @@ import {Button} from '@/components/ui/button'
 import {Textarea} from '@/components/ui/textarea'
 import {Label} from '@/components/ui/label'
 import {ARCHIVE_REASONS} from './securityChips'
-import {availableStatusActions, buildStatusChangeRequest, type StatusAction} from './triage'
+import {availableStatusActions, buildStatusChangeRequest, toSignalStatus, type StatusAction} from './triage'
 
 interface SignalTriagePanelProps {
   signal: SignalResponse
@@ -30,8 +30,8 @@ interface SignalTriagePanelProps {
 }
 
 export function SignalTriagePanel({signal, onTriage, isSubmitting}: SignalTriagePanelProps) {
-  const status = signal.status as SignalResponse['status']
-  const actions = availableStatusActions(status as never)
+  const status = toSignalStatus(signal.status)
+  const actions = availableStatusActions(status)
   const [pending, setPending] = useState<StatusAction | null>(null)
   const [reason, setReason] = useState<ArchiveReason | ''>('')
   const [note, setNote] = useState('')
@@ -45,7 +45,7 @@ export function SignalTriagePanel({signal, onTriage, isSubmitting}: SignalTriage
       return
     }
     const built = buildStatusChangeRequest({
-      current: status as never,
+      current: status,
       target: action.to,
       reason: reason || null,
       note,
@@ -55,17 +55,23 @@ export function SignalTriagePanel({signal, onTriage, isSubmitting}: SignalTriage
       return
     }
     setError(null)
-    void onTriage(built.request).then(() => {
-      setPending(null)
-      setReason('')
-      setNote('')
-    })
+    // Errors surface via the parent mutation's onError toast; swallow the rejection here so it
+    // doesn't become an unhandled promise rejection.
+    void onTriage(built.request)
+      .then(() => {
+        setPending(null)
+        setReason('')
+        setNote('')
+      })
+      .catch(() => {})
   }
 
   const saveNote = () => {
     const trimmed = note.trim()
     if (!trimmed) return
-    void onTriage({note: trimmed}).then(() => setNote(''))
+    void onTriage({note: trimmed})
+      .then(() => setNote(''))
+      .catch(() => {})
   }
 
   return (

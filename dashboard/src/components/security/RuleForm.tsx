@@ -52,6 +52,9 @@ export function RuleForm({rule, onSubmit, onPreview, onCancel, isSubmitting}: Ru
   const [preview, setPreview] = useState<DetectionPreviewResponse | null>(null)
   const [previewing, setPreviewing] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
+  const [draftSaved, setDraftSaved] = useState(false)
+
+  const isUnsaved = savedRuleId == null
 
   const set = <K extends keyof RuleFormState>(key: K, value: RuleFormState[K]) =>
     setForm((prev) => ({...prev, [key]: value}))
@@ -63,7 +66,10 @@ export function RuleForm({rule, onSubmit, onPreview, onCancel, isSubmitting}: Ru
       return
     }
     setError(null)
-    void onSubmit(built.request).then((saved) => setSavedRuleId(saved.id))
+    // onError on the parent mutation surfaces failures; swallow here to avoid an unhandled rejection.
+    void onSubmit(built.request)
+      .then((saved) => setSavedRuleId(saved.id))
+      .catch(() => {})
   }
 
   const handlePreview = () => {
@@ -75,10 +81,20 @@ export function RuleForm({rule, onSubmit, onPreview, onCancel, isSubmitting}: Ru
     setError(null)
     setPreviewing(true)
     setPreviewError(null)
-    // Persist the current edits first so preview evaluates exactly what is on screen.
-    onSubmit(built.request)
+    // The backend /preview endpoint evaluates a persisted rule, so we must save before previewing.
+    // For an unsaved rule we save it as a DISABLED draft regardless of the Enabled toggle, so
+    // previewing never silently enables a rule the scheduler would then run. For an already-saved
+    // rule we update-then-preview, preserving its current enabled state.
+    // TODO: a stateless preview endpoint (evaluate an unsaved rule body) would remove this save.
+    const previewingUnsaved = isUnsaved
+    const request = previewingUnsaved ? {...built.request, enabled: false} : built.request
+    onSubmit(request)
       .then((saved) => {
         setSavedRuleId(saved.id)
+        if (previewingUnsaved) {
+          setForm((prev) => ({...prev, enabled: false}))
+          setDraftSaved(true)
+        }
         return onPreview(saved.id)
       })
       .then((result) => setPreview(result))
@@ -230,13 +246,18 @@ export function RuleForm({rule, onSubmit, onPreview, onCancel, isSubmitting}: Ru
           {savedRuleId ? 'Save changes' : 'Create rule'}
         </Button>
         <Button size="sm" variant="outline" disabled={isSubmitting || previewing} onClick={handlePreview}>
-          {previewing ? 'Previewing…' : 'Preview'}
+          {previewing ? 'Previewing…' : isUnsaved ? 'Save draft & preview' : 'Preview'}
         </Button>
         <Button size="sm" variant="ghost" onClick={onCancel}>
           Cancel
         </Button>
       </div>
 
+      {draftSaved && (
+        <p className="text-xs text-muted-foreground">
+          Draft saved (disabled). It won’t produce signals until you enable it.
+        </p>
+      )}
       {previewError && <p className="text-xs text-destructive">{previewError}</p>}
       {preview && <RulePreview preview={preview} />}
     </div>
