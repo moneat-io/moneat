@@ -81,12 +81,14 @@ class PackageInventoryStoreTest {
     }
 
     @Test
-    fun `insert converts ClickHouse failures to query exception`() = runBlocking {
-        coEvery { ClickHouseClient.execute(any()) } returns okResponse("Code: 62. Syntax error")
-        val store = ClickHousePackageInventoryStore { "security_db" }
+    fun `insert converts ClickHouse failures to query exception`() {
+        runBlocking {
+            coEvery { ClickHouseClient.execute(any()) } returns okResponse("Code: 62. Syntax error")
+            val store = ClickHousePackageInventoryStore { "security_db" }
 
-        assertFailsWith<ClickHouseQueryException> {
-            store.insert(listOf(inventoryRecord(packageName = "lodash")))
+            assertFailsWith<ClickHouseQueryException> {
+                store.insert(listOf(inventoryRecord(packageName = "lodash")))
+            }
         }
     }
 
