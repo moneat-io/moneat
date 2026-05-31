@@ -38,6 +38,7 @@ data class DetectionRuleRecord(
     val signalTitle: String,
     val signalMessage: String,
     val createdAt: Instant,
+    val tags: List<String> = emptyList(),
 ) {
     /** Stable rule identifier used as the signal `rule_id`. */
     fun ruleId(): String = "detection-$id"

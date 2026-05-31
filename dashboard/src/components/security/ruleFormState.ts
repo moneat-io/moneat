@@ -100,10 +100,10 @@ export function buildRuleRequest(form: RuleFormState): RuleFormValidation {
   }
 
   let thresholdCount: number | null = null
-  if (form.type === 'threshold') {
+  if (form.type !== 'new_value') {
     const parsed = Number(form.thresholdCount)
     if (!Number.isInteger(parsed) || parsed <= 0) {
-      return {ok: false, error: 'Threshold count must be a positive integer'}
+      return {ok: false, error: 'Minimum count must be a positive integer'}
     }
     thresholdCount = parsed
   }

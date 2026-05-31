@@ -22,10 +22,12 @@ import {
   api,
   formatErrorForLogging,
   type CreateDetectionRuleRequest,
+  type DetectionCoverageResponse,
   type DetectionRuleResponse,
 } from '@/lib/api'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
 import {Button} from '@/components/ui/button'
+import {Badge} from '@/components/ui/badge'
 import {Sheet, SheetContent, SheetHeader, SheetTitle} from '@/components/ui/sheet'
 import {
   AlertDialog,
@@ -58,9 +60,16 @@ function DetectionsTab() {
     queryKey: ['detection-rules'],
     queryFn: () => api.listDetectionRules(),
   })
+  const {data: coverage} = useQuery({
+    queryKey: ['detection-coverage'],
+    queryFn: () => api.getDetectionCoverage(),
+  })
   const rules = useMemo(() => data?.rules ?? [], [data])
 
-  const invalidate = () => queryClient.invalidateQueries({queryKey: ['detection-rules']})
+  const invalidate = () => {
+    void queryClient.invalidateQueries({queryKey: ['detection-rules']})
+    void queryClient.invalidateQueries({queryKey: ['detection-coverage']})
+  }
 
   const save = useMutation({
     mutationFn: (vars: {ruleId?: number; request: CreateDetectionRuleRequest}) =>
@@ -108,6 +117,8 @@ function DetectionsTab() {
           New rule
         </Button>
       </div>
+
+      {coverage && <CoveragePanel coverage={coverage} />}
 
       {isLoading ? (
         <div className="flex justify-center py-8">
@@ -172,5 +183,47 @@ function DetectionsTab() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  )
+}
+
+function CoveragePanel({coverage}: {coverage: DetectionCoverageResponse}) {
+  const topTechniques = coverage.techniques.slice(0, 6)
+  const topTactics = coverage.tactics.slice(0, 8)
+  return (
+    <Card>
+      <CardHeader className="px-2.5 py-1.5">
+        <CardTitle className="text-xs">
+          MITRE ATT&CK Coverage ({coverage.techniques.length} techniques)
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2 p-2.5 pt-0">
+        <div className="flex flex-wrap gap-1">
+          {topTactics.length === 0 ? (
+            <span className="text-xs text-muted-foreground">No enabled rules with ATT&CK tags</span>
+          ) : (
+            topTactics.map((tactic) => (
+              <Badge key={tactic.tactic} variant="outline" className="text-[10px]">
+                {tactic.tactic.replace(/-/g, ' ')} - {tactic.rule_count}
+              </Badge>
+            ))
+          )}
+        </div>
+        {topTechniques.length > 0 && (
+          <div className="grid gap-1 md:grid-cols-2">
+            {topTechniques.map((technique) => (
+              <div key={technique.technique_id} className="rounded border p-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-xs">{technique.technique_id}</span>
+                  <Badge variant="outline" className="text-[10px]">{technique.rule_count} rules</Badge>
+                </div>
+                <div className="mt-1 truncate text-[10px] text-muted-foreground">
+                  {technique.tactics.map((tactic) => tactic.replace(/-/g, ' ')).join(', ')}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

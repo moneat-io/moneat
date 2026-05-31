@@ -44,6 +44,7 @@ export function makeSignalDetail(overrides: Partial<SignalDetailResponse> = {}):
     evidence: [{id: 1, evidence_type: 'logs', reference: 'ref', created_at: '2026-05-30T00:00:00Z'}],
     audit: [],
     sample_events: [{message: 'login failed', user: 'alice'}],
+    threat_intel: [],
     ...overrides,
   }
 }

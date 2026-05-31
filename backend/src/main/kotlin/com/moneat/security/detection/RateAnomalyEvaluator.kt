@@ -23,28 +23,21 @@ import com.moneat.security.signals.SignalWriter
 import mu.KotlinLogging
 import kotlin.time.Clock
 
-private val logger = KotlinLogging.logger {}
+private val rateLogger = KotlinLogging.logger {}
 
-/**
- * Threshold rule type: `count() >= N` per group over the window. The compiler emits the GROUP BY +
- * `HAVING count() >= threshold`, so every row the query returns is already a match; this evaluator
- * folds each into a signal via [SignalWriter] (dedup by rule + group values).
- */
-class ThresholdEvaluator(
+class RateAnomalyEvaluator(
     private val compiler: RuleQueryCompiler,
     private val runner: DetectionQueryRunner = DetectionQueryRunner(),
     private val upsert: (Int, SignalSpec) -> SignalOutcome = SignalWriter::upsert,
     private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() },
 ) {
 
-    /** Evaluate [rule], upserting one signal per group over threshold. Returns the matches found. */
     suspend fun evaluate(rule: DetectionRuleRecord): List<DetectionGroupRow> {
-        // The compiler injects org scoping from the rule's owning org; the author cannot influence it.
         val compiled = compiler.compile(rule.organizationId, rule.compilerInput())
         val rows = runner.run(compiled)
         rows.forEach { row -> writeSignal(rule, compiled, row) }
         if (rows.isNotEmpty()) {
-            logger.info { "Threshold rule ${rule.id} produced ${rows.size} match(es)" }
+            rateLogger.info { "Rate anomaly rule ${rule.id} produced ${rows.size} match(es)" }
         }
         return rows
     }
@@ -58,7 +51,7 @@ class ThresholdEvaluator(
             dedupKey = dedupKeyFor(rule, row.groupValues),
             entities = row.groupValues,
             evidenceType = "clickhouse_query",
-            evidenceReference = "${compiled.evidenceDescriptor} match=count>=${rule.thresholdCount}",
+            evidenceReference = "${compiled.evidenceDescriptor} match=rate_deviation",
             occurredAtMs = now(),
             tags = rule.tags,
         )

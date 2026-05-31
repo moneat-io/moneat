@@ -18,6 +18,7 @@ package com.moneat.security.signals
 
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.jsonb
+import com.moneat.security.threatintel.ThreatIntelEnrichmentResponse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
@@ -237,6 +238,7 @@ data class SignalDetailResponse(
     val evidence: List<SignalEvidenceResponse>,
     val audit: List<SignalAuditResponse>,
     @SerialName("sample_events") val sampleEvents: List<JsonElement>,
+    @SerialName("threat_intel") val threatIntel: List<ThreatIntelEnrichmentResponse> = emptyList(),
 )
 
 @Serializable

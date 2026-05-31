@@ -80,7 +80,8 @@ enum class DetectionSource(val wire: String) {
 /** The two Phase 1 rule types. */
 enum class DetectionRuleType(val wire: String) {
     THRESHOLD("threshold"),
-    NEW_VALUE("new_value");
+    NEW_VALUE("new_value"),
+    RATE_ANOMALY("rate_anomaly");
 
     companion object {
         fun fromWire(value: String?): DetectionRuleType? = entries.firstOrNull { it.wire == value }
@@ -112,6 +113,35 @@ data class DetectionRuleResponse(
 data class DetectionRuleListResponse(
     val rules: List<DetectionRuleResponse>,
     @SerialName("total_count") val totalCount: Long,
+)
+
+@Serializable
+data class DetectionCoverageResponse(
+    @SerialName("enabled_rule_count") val enabledRuleCount: Int,
+    val tactics: List<MitreTacticCoverageResponse>,
+    val techniques: List<MitreTechniqueCoverageResponse>,
+)
+
+@Serializable
+data class MitreTacticCoverageResponse(
+    val tactic: String,
+    @SerialName("technique_count") val techniqueCount: Int,
+    @SerialName("rule_count") val ruleCount: Int,
+)
+
+@Serializable
+data class MitreTechniqueCoverageResponse(
+    @SerialName("technique_id") val techniqueId: String,
+    val tactics: List<String>,
+    @SerialName("rule_count") val ruleCount: Int,
+    val rules: List<MitreCoveredRuleResponse>,
+)
+
+@Serializable
+data class MitreCoveredRuleResponse(
+    val id: Int,
+    val name: String,
+    val enabled: Boolean,
 )
 
 @Serializable

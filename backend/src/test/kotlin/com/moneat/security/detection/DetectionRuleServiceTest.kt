@@ -192,6 +192,24 @@ class DetectionRuleServiceTest {
         assertEquals(2, preview?.matchCount, "post-warm-up new-value preview surfaces baseline-absent rows")
     }
 
+    @Test
+    fun `rate anomaly rules are compiler-gated and previewable`() = runBlocking {
+        val created = service.create(
+            orgId,
+            createRequest(
+                type = "rate_anomaly",
+                thresholdCount = 20,
+                filter = "level:error",
+                groupBy = listOf("host"),
+            ),
+        )
+
+        val preview = service.preview(orgId, created.id)
+
+        assertEquals("rate_anomaly", created.type)
+        assertEquals(2, preview?.matchCount)
+    }
+
     private fun seedOrg(name: String): Int =
         transaction {
             Organizations.insert {

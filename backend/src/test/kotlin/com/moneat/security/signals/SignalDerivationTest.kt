@@ -16,7 +16,6 @@
 
 package com.moneat.security.signals
 
-import com.moneat.datadog.security.QueuedComplianceEntry
 import com.moneat.datadog.security.QueuedSecurityBatch
 import com.moneat.datadog.security.QueuedSecurityEventEntry
 import kotlin.test.Test
@@ -58,61 +57,13 @@ class SignalDerivationTest {
     }
 
     @Test
-    fun `failed compliance finding derives an agent_compliance spec keyed by rule resource`() {
+    fun `compliance findings derive no direct signals`() {
         val batch = QueuedSecurityBatch(
             organizationId = 1,
             batchType = "findings",
-            findings = listOf(
-                QueuedComplianceEntry(
-                    framework = "cis-aws",
-                    ruleId = "cis-1.1",
-                    ruleName = "Root MFA",
-                    status = "failed",
-                    resourceType = "aws_account",
-                    resourceId = "acct-123",
-                    resourceName = "prod",
-                    timestampMs = 1_700_000_000_000
-                )
-            )
-        )
-
-        val specs = SignalDerivation.fromBatch(batch)
-
-        assertEquals(1, specs.size)
-        val spec = specs.single()
-        assertEquals(SignalSource.AGENT_COMPLIANCE, spec.source)
-        assertEquals("cis-1.1|acct-123", spec.dedupKey)
-        assertEquals(SignalSeverity.HIGH, spec.severity)
-        assertEquals("prod", spec.entities["resource"])
-        assertEquals("acct-123", spec.entities["resource_id"])
-        assertTrue(spec.evidenceReference.contains("table=compliance_findings"))
-    }
-
-    @Test
-    fun `passed and skipped compliance findings derive no signals`() {
-        val batch = QueuedSecurityBatch(
-            organizationId = 1,
-            batchType = "findings",
-            findings = listOf(
-                QueuedComplianceEntry(ruleId = "r1", status = "passed", timestampMs = 1),
-                QueuedComplianceEntry(ruleId = "r2", status = "skipped", timestampMs = 1)
-            )
         )
 
         assertTrue(SignalDerivation.fromBatch(batch).isEmpty())
-    }
-
-    @Test
-    fun `error compliance finding maps to medium severity`() {
-        val batch = QueuedSecurityBatch(
-            organizationId = 1,
-            batchType = "findings",
-            findings = listOf(
-                QueuedComplianceEntry(ruleId = "r3", status = "error", resourceId = "x", timestampMs = 1)
-            )
-        )
-
-        assertEquals(SignalSeverity.MEDIUM, SignalDerivation.fromBatch(batch).single().severity)
     }
 
     @Test

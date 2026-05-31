@@ -1,0 +1,32 @@
+{
+  "feeds": [
+    {
+      "name": "urlhaus-local",
+      "source": "abuse.ch URLhaus mirror",
+      "updated_at": "2026-05-31T00:00:00Z",
+      "indicators": [
+        {
+          "type": "domain",
+          "value": "malware.example",
+          "threat_type": "malware_delivery",
+          "confidence": 80,
+          "reference": "local-urlhaus-seed"
+        },
+        {
+          "type": "ip",
+          "value": "203.0.113.66",
+          "threat_type": "command_and_control",
+          "confidence": 70,
+          "reference": "local-ip-seed"
+        },
+        {
+          "type": "hash",
+          "value": "44d88612fea8a8f36de82e1278abb02f",
+          "threat_type": "test_malware_hash",
+          "confidence": 60,
+          "reference": "local-hash-seed"
+        }
+      ]
+    }
+  ]
+}

@@ -61,6 +61,7 @@ fun Route.detectionRuleRoutes(
     service: DetectionRuleService = DetectionRuleService(),
     membershipService: OrgMembershipService = GlobalContext.get().get(),
     importService: DetectionImportService = DetectionImportService(service),
+    coverageService: MitreCoverageService = MitreCoverageService(),
 ) {
     route("/v1/security/detection/rules") {
         authenticate("auth-jwt") {
@@ -72,8 +73,17 @@ fun Route.detectionRuleRoutes(
             post("$RULE_ID_ROUTE/preview") { handlePreview(service, membershipService) }
         }
     }
+    detectionCoverageRoutes(coverageService)
     detectionImportRoutes(importService, membershipService)
     detectionTemplateRoutes(importService, membershipService)
+}
+
+private fun Route.detectionCoverageRoutes(coverageService: MitreCoverageService) {
+    route("/v1/security/detection/coverage") {
+        authenticate("auth-jwt") {
+            get { handleCoverage(coverageService) }
+        }
+    }
 }
 
 /**
@@ -223,6 +233,12 @@ private suspend fun RoutingContext.handleTemplateList(importService: DetectionIm
     currentOrganizationId()
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(MISSING_ORG_MESSAGE))
     call.respond(importService.listTemplates())
+}
+
+private suspend fun RoutingContext.handleCoverage(coverageService: MitreCoverageService) {
+    val orgId = currentOrganizationId()
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(MISSING_ORG_MESSAGE))
+    call.respond(coverageService.coverage(orgId))
 }
 
 private suspend fun RoutingContext.handleTemplateInstall(

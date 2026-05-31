@@ -86,11 +86,29 @@ class RuleQueryCompiler(
         /** Map columns that support `col['key']` access in a group-by. */
         val ALLOWED_MAP_COLUMNS: Set<String> = setOf("tags", "resource_attributes")
 
+        val ALLOWED_ANOMALY_GROUP_BY_COLUMNS: Set<String> = setOf(
+            "service",
+            "environment",
+            "host",
+            "level",
+            "source",
+        )
+
+        val ALLOWED_ANOMALY_FILTER_FIELDS: Set<String> = setOf(
+            "service",
+            "environment",
+            "host",
+            "level",
+            "source",
+        )
+
         const val MIN_WINDOW_SECONDS: Int = 60
         const val MAX_WINDOW_SECONDS: Int = 24 * 60 * 60
         const val MAX_GROUP_BY_COLUMNS: Int = 5
         const val MIN_THRESHOLD: Int = 1
         const val MAX_THRESHOLD: Int = 1_000_000
+        const val ANOMALY_BASELINE_SECONDS: Int = 24 * 60 * 60
+        private const val ANOMALY_STDDEV_MULTIPLIER = 3
 
         // map column, then a key restricted to a conservative safe charset (identifier-ish), with
         // optional surrounding quotes. Anything outside this set (quotes-in-key, brackets, parens,
@@ -149,6 +167,9 @@ class RuleQueryCompiler(
     fun compile(orgId: Int, rule: RuleInput): CompiledRuleQuery {
         validateSource(rule.source)
         val window = validateWindow(rule.windowSeconds)
+        if (rule.type == DetectionRuleType.RATE_ANOMALY) {
+            return compileRateAnomaly(orgId, rule, window)
+        }
         if (rule.type == DetectionRuleType.THRESHOLD) {
             validateThreshold(rule.thresholdCount)
         }
@@ -205,6 +226,115 @@ class RuleQueryCompiler(
         renderFilter(filter)?.let { conditions += it }
         return conditions.joinToString(" AND ")
     }
+
+    private fun compileRateAnomaly(
+        orgId: Int,
+        rule: RuleInput,
+        window: Int,
+    ): CompiledRuleQuery {
+        validateThreshold(rule.thresholdCount)
+        val groupBy = validateAnomalyGroupBy(validateGroupBy(rule.groupBy))
+        val aliases = groupBy.indices.map { "g$it" }
+        val groupExprs = groupBy.map { rollupColumnExpression(it) }
+        val filterSql = renderFilter(rule.filter, ::validateAnomalyFilterNode)
+        val currentWhere = buildRollupWhere(
+            orgId = orgId,
+            timeClause = "bucket_start >= now() - INTERVAL $window SECOND",
+            filterSql = filterSql,
+        )
+        val baselineWhere = buildRollupWhere(
+            orgId = orgId,
+            timeClause = "bucket_start >= now() - INTERVAL $ANOMALY_BASELINE_SECONDS SECOND " +
+                "AND bucket_start < now() - INTERVAL $window SECOND",
+            filterSql = filterSql,
+        )
+        val current = anomalyCurrentSubquery(groupExprs, aliases, currentWhere)
+        val baseline = anomalyBaselineSubquery(groupExprs, aliases, baselineWhere)
+        val selectItems = aliases.joinToString(", ") { "c.$it AS $it" }
+        val projectedGroups = if (selectItems.isBlank()) "" else "$selectItems, "
+        val join = if (aliases.isEmpty()) {
+            "($current) c CROSS JOIN ($baseline) b"
+        } else {
+            "($current) c INNER JOIN ($baseline) b USING (${aliases.joinToString(", ")})"
+        }
+        val sql = buildString {
+            append("SELECT ")
+            append(projectedGroups)
+            append("c.current_count AS match_count FROM ")
+            append(join)
+            append(" WHERE c.current_count >= ${rule.thresholdCount} AND b.baseline_avg > 0")
+            append(" AND c.current_count > b.baseline_avg + greatest(b.baseline_stddev * ")
+            append(ANOMALY_STDDEV_MULTIPLIER)
+            append(", 1)")
+            append(" ").append(settingsClause())
+        }
+        return CompiledRuleQuery(
+            sql = sql,
+            groupByColumns = groupBy,
+            groupByAliases = aliases,
+            whereClause = currentWhere,
+            evidenceDescriptor = anomalyEvidenceDescriptor(groupBy, window),
+            windowSeconds = window,
+        )
+    }
+
+    private fun buildRollupWhere(orgId: Int, timeClause: String, filterSql: String?): String {
+        if (orgId == 0) {
+            throw DetectionCompileException("Detection query is missing organization context")
+        }
+        val conditions = mutableListOf(ClickHouseQueryUtils.orgIdClause(orgId.toLong()), timeClause)
+        filterSql?.let { conditions += it }
+        return conditions.joinToString(" AND ")
+    }
+
+    private fun anomalyCurrentSubquery(
+        groupExprs: List<String>,
+        aliases: List<String>,
+        whereClause: String,
+    ): String {
+        val selectItems = groupSelectItems(groupExprs, aliases)
+        val groupByClause = groupByClause(aliases)
+        return buildString {
+            append("SELECT ")
+            if (selectItems.isNotBlank()) append("$selectItems, ")
+            append("sumMerge(event_count_state) AS current_count")
+            append(" FROM `${clickhouseDb()}`.security_log_rate_rollup_5m")
+            append(" WHERE ").append(whereClause)
+            append(groupByClause)
+        }
+    }
+
+    private fun anomalyBaselineSubquery(
+        groupExprs: List<String>,
+        aliases: List<String>,
+        whereClause: String,
+    ): String {
+        val selectItems = groupSelectItems(groupExprs, aliases)
+        val aliasesCsv = aliases.joinToString(", ")
+        val outerSelect = if (aliasesCsv.isBlank()) "" else "$aliasesCsv, "
+        val outerGroupBy = if (aliasesCsv.isBlank()) "" else " GROUP BY $aliasesCsv"
+        val innerGroupBy = if (aliasesCsv.isBlank()) {
+            " GROUP BY bucket_start"
+        } else {
+            " GROUP BY bucket_start, $aliasesCsv"
+        }
+        val inner = buildString {
+            append("SELECT ")
+            if (selectItems.isNotBlank()) append("$selectItems, ")
+            append("bucket_start, sumMerge(event_count_state) AS bucket_count")
+            append(" FROM `${clickhouseDb()}`.security_log_rate_rollup_5m")
+            append(" WHERE ").append(whereClause)
+            append(innerGroupBy)
+        }
+        return "SELECT ${outerSelect}avg(bucket_count) AS baseline_avg, " +
+            "stddevPop(bucket_count) AS baseline_stddev FROM ($inner)$outerGroupBy"
+    }
+
+    private fun groupSelectItems(groupExprs: List<String>, aliases: List<String>): String =
+        aliases.indices.joinToString(", ") { i -> "${groupExprs[i]} AS ${aliases[i]}" }
+
+    private fun groupByClause(aliases: List<String>): String =
+        if (aliases.isEmpty()) "" else " GROUP BY ${aliases.joinToString(", ")}"
 
     /** Resource-cap SETTINGS clause [compile] appends to every emitted query. */
     private fun settingsClause(): String {
@@ -287,20 +417,77 @@ class RuleQueryCompiler(
      * reports `errors`) is surfaced as a DSL-level message; the raw ClickHouse never appears because we
      * never reach ClickHouse with an unrendered filter.
      */
-    private fun renderFilter(filter: String): String? {
+    private fun renderFilter(
+        filter: String,
+        validator: ((LogQueryParser.QueryNode) -> Unit)? = null,
+    ): String? {
         if (filter.isBlank()) return null
         val parsed = parser.parse(filter)
         if (parsed.errors.isNotEmpty()) {
             throw DetectionCompileException("Invalid filter expression")
         }
         val node = parsed.rootNode ?: return null
+        validator?.invoke(node)
         val rendered = parser.toClickHouseSql(node, ::escapeSql)
         return if (rendered.isBlank() || rendered == "1=1") null else "($rendered)"
     }
 
+    private fun validateAnomalyGroupBy(groupBy: List<String>): List<String> {
+        groupBy.forEach { column ->
+            if (column.trim() !in ALLOWED_ANOMALY_GROUP_BY_COLUMNS) {
+                throw DetectionCompileException("Unknown group-by column '${sanitizeToken(column)}'")
+            }
+        }
+        return groupBy
+    }
+
+    private fun validateAnomalyFilterNode(node: LogQueryParser.QueryNode) {
+        when (node) {
+            is LogQueryParser.QueryNode.FieldNode -> requireAnomalyField(node.field)
+            is LogQueryParser.QueryNode.RangeNode -> requireAnomalyField(node.field)
+            is LogQueryParser.QueryNode.ComparisonNode -> requireAnomalyField(node.field)
+            is LogQueryParser.QueryNode.ExistsNode -> requireAnomalyField(node.field)
+            is LogQueryParser.QueryNode.AndNode -> {
+                validateAnomalyFilterNode(node.left)
+                validateAnomalyFilterNode(node.right)
+            }
+            is LogQueryParser.QueryNode.OrNode -> {
+                validateAnomalyFilterNode(node.left)
+                validateAnomalyFilterNode(node.right)
+            }
+            is LogQueryParser.QueryNode.NotNode -> validateAnomalyFilterNode(node.node)
+            is LogQueryParser.QueryNode.FullTextNode,
+            is LogQueryParser.QueryNode.TagExistsNode,
+            is LogQueryParser.QueryNode.TermNode,
+            -> throw DetectionCompileException("Rate anomaly filters may use only rollup fields")
+        }
+    }
+
+    private fun requireAnomalyField(field: String) {
+        val normalized = when (field.lowercase()) {
+            "status" -> "level"
+            else -> field
+        }
+        if (normalized !in ALLOWED_ANOMALY_FILTER_FIELDS) {
+            throw DetectionCompileException("Rate anomaly filters may use only rollup fields")
+        }
+    }
+
+    private fun rollupColumnExpression(column: String): String =
+        when (val trimmed = column.trim()) {
+            in ALLOWED_ANOMALY_GROUP_BY_COLUMNS -> trimmed
+            else -> throw DetectionCompileException("Unknown group-by column '${sanitizeToken(column)}'")
+        }
+
     private fun evidenceDescriptor(groupBy: List<String>, windowSeconds: Int): String {
         val groups = if (groupBy.isEmpty()) "-" else groupBy.joinToString(",")
         return "table=logs group_by=$groups window=${windowSeconds}s"
+    }
+
+    private fun anomalyEvidenceDescriptor(groupBy: List<String>, windowSeconds: Int): String {
+        val groups = if (groupBy.isEmpty()) "-" else groupBy.joinToString(",")
+        return "table=security_log_rate_rollup_5m group_by=$groups window=${windowSeconds}s " +
+            "baseline=${ANOMALY_BASELINE_SECONDS}s"
     }
 
     /** Coerce an env value to a non-negative long, falling back to [default] if it is not numeric. */

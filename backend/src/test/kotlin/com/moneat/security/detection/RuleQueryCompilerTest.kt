@@ -276,6 +276,56 @@ class RuleQueryCompilerTest {
         assertFalse(sql.contains("HAVING"), sql)
     }
 
+    @Test
+    fun `a rate anomaly rule reads the bounded rollup with org scope and caps`() {
+        val compiled = compiler.compile(
+            orgId = 42,
+            input(
+                filter = "service:api level:error",
+                groupBy = listOf("service"),
+                type = DetectionRuleType.RATE_ANOMALY,
+                thresholdCount = 50,
+            ),
+        )
+        assertTrue(compiled.sql.contains("security_log_rate_rollup_5m"), compiled.sql)
+        assertTrue(compiled.sql.contains("organization_id = 42"), compiled.sql)
+        assertTrue(compiled.sql.contains("c.current_count >= 50"), compiled.sql)
+        assertTrue(compiled.sql.contains("max_rows_to_read"), compiled.sql)
+        assertFalse(compiled.sql.contains("`moneat`.logs"), compiled.sql)
+    }
+
+    @Test
+    fun `rate anomaly rules reject fields outside the rollup`() {
+        val ex = assertFailsWith<DetectionCompileException> {
+            compiler.compile(
+                orgId = 1,
+                input(
+                    filter = "*:failed",
+                    groupBy = listOf("service"),
+                    type = DetectionRuleType.RATE_ANOMALY,
+                    thresholdCount = 10,
+                ),
+            )
+        }
+        assertTrue(ex.message!!.contains("rollup fields"))
+        assertFalse(ex.message!!.contains("security_log_rate_rollup_5m"))
+    }
+
+    @Test
+    fun `rate anomaly group-by cannot use map fields`() {
+        val ex = assertFailsWith<DetectionCompileException> {
+            compiler.compile(
+                orgId = 1,
+                input(
+                    groupBy = listOf("tags['user']"),
+                    type = DetectionRuleType.RATE_ANOMALY,
+                    thresholdCount = 10,
+                ),
+            )
+        }
+        assertTrue(ex.message!!.contains("Unknown group-by column"))
+    }
+
     // (f) Compiler/validation errors never leak ClickHouse text.
 
     @Test

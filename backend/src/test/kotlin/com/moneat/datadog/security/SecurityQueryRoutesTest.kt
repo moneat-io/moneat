@@ -52,6 +52,7 @@ class SecurityQueryRoutesTest {
         private const val DUMPS_PATH = "/v1/security/dumps"
         private const val COMPLIANCE_PATH = "/v1/security/compliance"
         private const val SUMMARY_PATH = "/v1/security/compliance/summary"
+        private const val TRENDS_PATH = "/v1/security/compliance/trends"
         private const val ORG_ID = 42
         private const val OTHER_ORG_ID = 99
         private const val DEMO_ORG_ID = -1
@@ -191,6 +192,12 @@ class SecurityQueryRoutesTest {
     fun `compliance summary returns 401 without jwt`() = testApplication {
         application { installRoutes() }
         assertEquals(HttpStatusCode.Unauthorized, client.get(SUMMARY_PATH).status)
+    }
+
+    @Test
+    fun `compliance trends returns 401 without jwt`() = testApplication {
+        application { installRoutes() }
+        assertEquals(HttpStatusCode.Unauthorized, client.get(TRENDS_PATH).status)
     }
 
     // ──── Ingest → store → query (real insert path) ────
@@ -343,6 +350,28 @@ class SecurityQueryRoutesTest {
         assertTrue(body.contains("\"findingId\":\"f-1\""))
         assertTrue(body.contains("\"framework\":\"PCI-DSS\""))
         assertTrue(body.contains("\"totalCount\":1"))
+    }
+
+    @Test
+    fun `compliance trends groups pass rate buckets by framework`() = testApplication {
+        val fake = FakeClickHouse()
+        stubClickHouse(fake)
+        fake.registerRows(
+            "GROUP BY framework, bucket",
+            listOf(
+                """{"framework":"CIS","bucket":"2026-05-30T00:00:00.000Z",
+                    "passed":"8","failed":"2","skipped":"1","error":"0","total":"11"}"""
+                    .replace("\n", " ")
+                    .replace(Regex(" +"), " "),
+            ),
+        )
+        application { installRoutes() }
+        val response = client.get(TRENDS_PATH) { withAuth(token()) }
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = response.bodyAsText()
+        assertTrue(body.contains("\"framework\":\"CIS\""))
+        assertTrue(body.contains("\"bucketStart\":\"2026-05-30T00:00:00.000Z\""))
+        assertTrue(body.contains("\"passRate\":0.8"))
     }
 
     // ──── Org scoping ────
@@ -499,5 +528,14 @@ class SecurityQueryRoutesTest {
         val response = client.get(SUMMARY_PATH) { withAuth(token(orgId = null)) }
         assertEquals(HttpStatusCode.OK, response.status)
         assertEquals("""{"summary":[]}""", response.bodyAsText())
+    }
+
+    @Test
+    fun `compliance trends returns empty shape when token has no org id`() = testApplication {
+        captureStub(mutableListOf())
+        application { installRoutes() }
+        val response = client.get(TRENDS_PATH) { withAuth(token(orgId = null)) }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals("""{"frameworks":[]}""", response.bodyAsText())
     }
 }

@@ -21,6 +21,7 @@ import com.moneat.config.RedisConfig
 import com.moneat.datadog.models.DdActivityDumpPayload
 import com.moneat.datadog.models.DdCompliancePayload
 import com.moneat.datadog.models.DdSecurityEventPayload
+import com.moneat.security.posture.PostureRegressionAnalyzer
 import com.moneat.security.signals.SignalDerivation
 import com.moneat.security.signals.SignalOutcome
 import com.moneat.security.signals.SignalWriter
@@ -176,12 +177,23 @@ object SecurityIngestionService {
      * signals for this batch" rather than failing the ingest or crashing the worker. Each spec is
      * upserted independently so one bad row cannot drop the rest.
      */
-    private fun deriveSignals(batch: QueuedSecurityBatch): List<SignalOutcome> =
-        SignalDerivation.fromBatch(batch).mapNotNull { spec ->
+    private fun deriveSignals(batch: QueuedSecurityBatch): List<SignalOutcome> {
+        val specs = runCatching {
+            if (batch.batchType == "findings") {
+                PostureRegressionAnalyzer.analyze(batch.organizationId, batch.findings)
+            } else {
+                SignalDerivation.fromBatch(batch)
+            }
+        }.getOrElse { e ->
+            logger.warn { "Security signal analysis failed for ${batch.batchType}: ${e.message}" }
+            emptyList()
+        }
+        return specs.mapNotNull { spec ->
             runCatching { SignalWriter.upsert(batch.organizationId, spec) }
                 .onFailure { logger.warn { "Signal derivation failed for rule ${spec.ruleId}: ${it.message}" } }
                 .getOrNull()
         }
+    }
 
     @Suppress("LongMethod")
     private suspend fun insertSecurityEvents(batch: QueuedSecurityBatch) {

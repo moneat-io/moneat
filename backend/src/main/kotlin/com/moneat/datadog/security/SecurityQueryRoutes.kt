@@ -53,8 +53,9 @@ fun Route.securityQueryRoutes() {
             get("/events") { handleListEvents() }
             get("/events/{eventId}") { handleEventDetail() }
             get("/dumps") { handleListDumps() }
-            get("/compliance") { handleListFindings() }
             get("/compliance/summary") { handleComplianceSummary() }
+            get("/compliance/trends") { handleComplianceTrends() }
+            get("/compliance") { handleListFindings() }
         }
     }
 }
@@ -276,6 +277,58 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleComplianceSummar
     )
 }
 
+private suspend fun io.ktor.server.routing.RoutingContext.handleComplianceTrends() {
+    val orgId = extractOrgId() ?: return respondEmptyFrameworks()
+    val db = ClickHouseClient.getDatabase()
+    val where = ClickHouseQueryUtils.orgIdClause(orgId.toLong())
+
+    val rows = executeRows(
+        """SELECT framework,
+            formatDateTime(toStartOfDay(evaluated_at), '%Y-%m-%dT00:00:00.000Z', 'UTC') as bucket,
+            countIf(status = 'passed') as passed,
+            countIf(status = 'failed') as failed,
+            countIf(status = 'skipped') as skipped,
+            countIf(status = 'error') as error,
+            count() as total
+        FROM `$db`.compliance_findings
+        WHERE $where AND evaluated_at >= now() - INTERVAL 14 DAY
+        GROUP BY framework, bucket
+        ORDER BY framework, bucket
+        FORMAT JSONEachRow"""
+    ) { obj ->
+        val passed = obj.l("passed")
+        val failed = obj.l("failed")
+        val errors = obj.l("error")
+        val evaluated = passed + failed + errors
+        val passRate = if (evaluated > 0) passed.toDouble() / evaluated.toDouble() else 0.0
+        buildJsonObject {
+            put("framework", obj.s("framework"))
+            put("bucketStart", obj.s("bucket"))
+            put("passed", passed)
+            put("failed", failed)
+            put("skipped", obj.l("skipped"))
+            put("error", errors)
+            put("total", obj.l("total"))
+            put("passRate", passRate)
+        }
+    }
+
+    call.respond(
+        buildJsonObject {
+            putJsonArray("frameworks") {
+                rows.groupBy { it.s("framework") }.forEach { (framework, buckets) ->
+                    add(
+                        buildJsonObject {
+                            put("framework", framework)
+                            putJsonArray("buckets") { buckets.forEach { add(it) } }
+                        }
+                    )
+                }
+            }
+        }
+    )
+}
+
 /**
  * Tenant isolation is enforced by the signed `orgId` JWT claim combined with [ClickHouseQueryUtils.orgIdClause]
  * on every query, so there is no cross-tenant read path and no per-request membership lookup is needed here
@@ -299,6 +352,10 @@ private suspend fun io.ktor.server.routing.RoutingContext.respondEmptyList(array
 /** Empty summary payload returned when the caller token carries no `orgId` claim. */
 private suspend fun io.ktor.server.routing.RoutingContext.respondEmptySummary() {
     call.respond(buildJsonObject { putJsonArray("summary") {} })
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.respondEmptyFrameworks() {
+    call.respond(buildJsonObject { putJsonArray("frameworks") {} })
 }
 
 private fun io.ktor.server.routing.RoutingContext.paramLimit(): Int =
@@ -357,3 +414,5 @@ private fun JsonObject.s(key: String): String {
         el.toString()
     }
 }
+
+private fun JsonObject.l(key: String): Long = s(key).toLongOrNull() ?: 0L

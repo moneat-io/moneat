@@ -16,7 +16,7 @@
 
 import {createFileRoute} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
-import {api} from '@/lib/api'
+import {api, type ComplianceFrameworkTrend} from '@/lib/api'
 import {Badge} from '@/components/ui/badge'
 import {Card, CardContent, CardHeader, CardTitle, CardDescription} from '@/components/ui/card'
 import {cn} from '@/lib/utils'
@@ -57,9 +57,14 @@ function ComplianceFindings() {
     queryKey: ['compliance-findings'],
     queryFn: () => api.get<{findings?: ComplianceFinding[]; totalCount?: number}>('/v1/security/compliance?limit=50'),
   })
+  const {data: trendData} = useQuery({
+    queryKey: ['compliance-trends'],
+    queryFn: () => api.getComplianceTrends(),
+  })
 
   const findings: ComplianceFinding[] = data?.findings ?? []
   const summary: ComplianceSummary[] = summaryData?.summary ?? []
+  const trends = trendData?.frameworks ?? []
 
   return (
     <div className="space-y-4">
@@ -84,9 +89,13 @@ function ComplianceFindings() {
         </div>
       )}
 
+      {trends.length > 0 && <PassRateTrends trends={trends} />}
+
       {/* Findings table */}
       {isLoading ? (
-        <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-6 w-6 border-2 border-muted border-t-primary" /></div>
+        <div className="flex justify-center py-8">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-primary" />
+        </div>
       ) : (
         <Card>
           <CardHeader className="py-2 px-3">
@@ -108,7 +117,9 @@ function ComplianceFindings() {
                 <tbody>
                   {findings.map((f) => (
                     <tr key={f.findingId} className="border-b last:border-0 hover:bg-muted/30">
-                      <td className="py-1.5 pr-2"><Badge variant="outline" className="text-[10px]">{f.framework}</Badge></td>
+                      <td className="py-1.5 pr-2">
+                        <Badge variant="outline" className="text-[10px]">{f.framework}</Badge>
+                      </td>
                       <td className="py-1.5 pr-2">{f.ruleName}</td>
                       <td className="py-1.5 pr-2">
                         <Badge variant="outline" className={cn('text-[10px]', statusColors[f.status ?? ''] || '')}>
@@ -120,7 +131,11 @@ function ComplianceFindings() {
                     </tr>
                   ))}
                   {findings.length === 0 && (
-                    <tr><td colSpan={5} className="py-6 text-center text-muted-foreground">No compliance findings</td></tr>
+                    <tr>
+                      <td colSpan={5} className="py-6 text-center text-muted-foreground">
+                        No compliance findings
+                      </td>
+                    </tr>
                   )}
                 </tbody>
               </table>
@@ -129,5 +144,44 @@ function ComplianceFindings() {
         </Card>
       )}
     </div>
+  )
+}
+
+function PassRateTrends({trends}: {trends: ComplianceFrameworkTrend[]}) {
+  return (
+    <Card>
+      <CardHeader className="py-2 px-3">
+        <CardTitle className="text-sm">Pass-Rate Trend</CardTitle>
+        <CardDescription className="text-xs">Daily posture pass rate by framework</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-2 p-3 pt-0 md:grid-cols-2">
+        {trends.map((trend) => {
+          const buckets = trend.buckets.slice(-14)
+          const latest = buckets.at(-1)
+          const passRate = Math.round((latest?.passRate ?? 0) * 100)
+          return (
+            <div key={trend.framework} className="rounded border p-2">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <Badge variant="outline" className="text-[10px]">{trend.framework}</Badge>
+                <span className="text-xs font-medium">{passRate}%</span>
+              </div>
+              <div className="flex h-8 items-end gap-1">
+                {buckets.map((bucket) => (
+                  <div
+                    key={bucket.bucketStart}
+                    className="min-w-2 flex-1 rounded-sm bg-emerald-500/70"
+                    style={{height: `${Math.max(8, Math.round(bucket.passRate * 32))}px`}}
+                    title={`${bucket.bucketStart}: ${Math.round(bucket.passRate * 100)}%`}
+                  />
+                ))}
+              </div>
+              <div className="mt-1 text-[10px] text-muted-foreground">
+                {latest ? `${latest.passed} passed, ${latest.failed + latest.error} failed or errored` : 'No buckets'}
+              </div>
+            </div>
+          )
+        })}
+      </CardContent>
+    </Card>
   )
 }

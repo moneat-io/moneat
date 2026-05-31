@@ -18,6 +18,8 @@ import type { ApiClientCore } from '../client'
 import { urlWithQuery } from '../utils'
 import type {
   CreateDetectionRuleRequest,
+  ComplianceTrendResponse,
+  DetectionCoverageResponse,
   DetectionPreviewResponse,
   DetectionRuleListResponse,
   DetectionRuleResponse,
@@ -78,6 +80,9 @@ export function securityMethods(core: ApiClientCore) {
     listDetectionRules: () =>
       core.request<DetectionRuleListResponse>(rules),
 
+    getDetectionCoverage: () =>
+      core.request<DetectionCoverageResponse>(`${base}/security/detection/coverage`),
+
     getDetectionRule: (ruleId: number) =>
       core.request<DetectionRuleResponse>(`${rules}/${ruleId}`),
 
@@ -125,5 +130,9 @@ export function securityMethods(core: ApiClientCore) {
       }
       return response.text()
     },
+
+    // --- Compliance posture ---
+    getComplianceTrends: () =>
+      core.request<ComplianceTrendResponse>(`${base}/security/compliance/trends`),
   }
 }
