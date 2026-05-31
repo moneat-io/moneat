@@ -26,6 +26,10 @@ import type {
   SignalListResponse,
   TriageRequest,
   UpdateDetectionRuleRequest,
+  VulnerabilityFindingListResponse,
+  VulnerabilityInventoryResponse,
+  VulnerabilityListParams,
+  VulnerabilitySummaryResponse,
 } from '../types'
 
 function signalsQuery(params: SignalListParams): string {
@@ -38,10 +42,23 @@ function signalsQuery(params: SignalListParams): string {
   return qs.toString()
 }
 
+function vulnerabilityQuery(params: VulnerabilityListParams): string {
+  const qs = new URLSearchParams()
+  if (params.search) qs.set('search', params.search)
+  if (params.package) qs.set('package', params.package)
+  if (params.target) qs.set('target', params.target)
+  if (params.severity) qs.set('severity', params.severity)
+  if (params.status) qs.set('status', params.status)
+  if (params.limit !== undefined) qs.set('limit', String(params.limit))
+  if (params.offset !== undefined) qs.set('offset', String(params.offset))
+  return qs.toString()
+}
+
 export function securityMethods(core: ApiClientCore) {
   const base = core.API_BASE
   const signals = `${base}/security/signals`
   const rules = `${base}/security/detection/rules`
+  const vulnerabilities = `${base}/security/vulnerabilities`
 
   return {
     // --- Signals (triage surface) ---
@@ -85,5 +102,28 @@ export function securityMethods(core: ApiClientCore) {
       core.request<DetectionPreviewResponse>(`${rules}/${ruleId}/preview`, {
         method: 'POST',
       }),
+
+    // --- Vulnerabilities / SBOM ---
+    getVulnerabilitySummary: () =>
+      core.request<VulnerabilitySummaryResponse>(`${vulnerabilities}/summary`),
+
+    listVulnerabilityInventory: (params: VulnerabilityListParams = {}) =>
+      core.request<VulnerabilityInventoryResponse>(
+        urlWithQuery(`${vulnerabilities}/inventory`, vulnerabilityQuery(params))
+      ),
+
+    listVulnerabilityFindings: (params: VulnerabilityListParams = {}) =>
+      core.request<VulnerabilityFindingListResponse>(
+        urlWithQuery(`${vulnerabilities}/findings`, vulnerabilityQuery(params))
+      ),
+
+    exportVulnerabilitySbom: async (format: 'cyclonedx' | 'spdx') => {
+      const qs = new URLSearchParams({format})
+      const response = await core.fetchWithAuth(urlWithQuery(`${vulnerabilities}/sbom/export`, qs.toString()))
+      if (!response.ok) {
+        throw new Error(`Export failed: ${response.status}`)
+      }
+      return response.text()
+    },
   }
 }

@@ -269,8 +269,16 @@ class SignalService {
             SignalSource.AGENT_RUNTIME -> fetchRuntimeSamples(orgId, signal)
             SignalSource.AGENT_COMPLIANCE -> fetchComplianceSamples(orgId, signal)
             SignalSource.DETECTION -> fetchDetectionSamples(orgId, signal)
+            SignalSource.VULNERABILITY -> vulnerabilitySamples(signal)
             null -> emptyList()
         }
+
+    private fun vulnerabilitySamples(signal: SignalResponse): List<JsonElement> =
+        listOf(
+            buildJsonObject {
+                signal.entities.forEach { (key, value) -> put(key, value) }
+            }
+        )
 
     /**
      * Evidence for a detection-rule signal: recent log rows for the entity this signal fired on, scoped

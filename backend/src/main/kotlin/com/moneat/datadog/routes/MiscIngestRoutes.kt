@@ -48,6 +48,7 @@ private val json = Json {
 
 fun Route.miscIngestRoutes(
     quotaService: BillingQuotaService = BillingQuotaService(),
+    includeSbomRoutes: Boolean = true,
 ) {
     route("/dd") {
         // Symbol DB
@@ -70,7 +71,9 @@ fun Route.miscIngestRoutes(
             post("/data_streams") { handleDataStreams(quotaService) }
             post("/synthetics") { handleSynthetics(quotaService) }
             post("/contimage") { handleContainerImage(quotaService) }
-            post("/sbom") { handleSbom(quotaService) }
+            if (includeSbomRoutes) {
+                post("/sbom") { handleSbom(quotaService) }
+            }
         }
     }
 
@@ -79,7 +82,9 @@ fun Route.miscIngestRoutes(
     route("/api/v2") {
         post("/contlcycle") { handleContainerLifecycle() }
         post("/contimage") { handleContainerImage(quotaService) }
-        post("/sbom") { handleSbom(quotaService) }
+        if (includeSbomRoutes) {
+            post("/sbom") { handleSbom(quotaService) }
+        }
         post("/synthetics") { handleSynthetics(quotaService) }
         post("/data_streams_messages") { handleDataStreams(quotaService) }
         post("/events") { handleEventManagement() }

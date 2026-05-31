@@ -145,3 +145,62 @@ export interface DetectionPreviewResponse {
   samples: DetectionMatchSample[]
   window_seconds: number
 }
+
+export interface VulnerabilitySummaryResponse {
+  package_count: number
+  finding_count: number
+  critical_count: number
+  high_count: number
+}
+
+export interface VulnerabilityInventoryItem {
+  package_name: string
+  package_version: string
+  package_type: string
+  ecosystem: string
+  purl: string
+  target_type: string
+  target_name: string
+  host: string
+  image_name: string
+  container_id: string
+  last_seen: string
+  finding_count: number
+}
+
+export interface VulnerabilityInventoryResponse {
+  inventory: VulnerabilityInventoryItem[]
+  total_count: number
+}
+
+export interface VulnerabilityFindingResponse {
+  signal_id: number
+  advisory_id: string
+  cve_id?: string | null
+  package_name: string
+  package_version: string
+  package_type: string
+  ecosystem: string
+  target_name: string
+  severity: SignalSeverity
+  cvss_score?: number | null
+  fixed_version?: string | null
+  link: string
+  status: SignalStatus
+  last_seen: string
+}
+
+export interface VulnerabilityFindingListResponse {
+  findings: VulnerabilityFindingResponse[]
+  total_count: number
+}
+
+export interface VulnerabilityListParams {
+  search?: string
+  package?: string
+  target?: string
+  severity?: SignalSeverity
+  status?: SignalStatus
+  limit?: number
+  offset?: number
+}

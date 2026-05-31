@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute, Link, Outlet, useRouterState} from '@tanstack/react-router'
-import {AlertTriangle, ListFilter, ShieldAlert, ShieldCheck} from 'lucide-react'
+import {AlertTriangle, ListFilter, PackageSearch, ShieldAlert, ShieldCheck} from 'lucide-react'
 import {cn} from '@/lib/utils'
 
 export const Route = createFileRoute('/security')({
@@ -24,6 +24,7 @@ export const Route = createFileRoute('/security')({
 
 const tabs = [
   {id: 'signals', label: 'Signals', href: '/security/signals', icon: AlertTriangle},
+  {id: 'vulnerabilities', label: 'Vulnerabilities', href: '/security/vulnerabilities', icon: PackageSearch},
   {id: 'detections', label: 'Detections', href: '/security/detections', icon: ListFilter},
   {id: 'events', label: 'Security Events', href: '/security/events', icon: ShieldAlert},
   {id: 'compliance', label: 'Compliance', href: '/security/compliance', icon: ShieldCheck},
@@ -37,7 +38,9 @@ function SecurityLayout() {
     <div className="space-y-2">
       <div className="p-3 space-y-2">
       <div className="flex items-center gap-2">
-        <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-gradient-to-br from-red-500 to-orange-600 shrink-0">
+        <div
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-red-500 to-orange-600"
+        >
           <ShieldAlert className="h-3.5 w-3.5 text-white" />
         </div>
         <div className="min-w-0">

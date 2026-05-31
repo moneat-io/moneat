@@ -18,6 +18,7 @@ import React from 'react'
 import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
 import {fireEvent, render, screen, waitFor, within} from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import {makeRule, makeSignal} from '@/components/security/__tests__/fixtures'
 
 const {mockApi, mockToast} = vi.hoisted(() => ({
@@ -30,6 +31,10 @@ const {mockApi, mockToast} = vi.hoisted(() => ({
     listSignals: vi.fn(),
     getSignal: vi.fn(),
     triageSignal: vi.fn(),
+    getVulnerabilitySummary: vi.fn(),
+    listVulnerabilityInventory: vi.fn(),
+    listVulnerabilityFindings: vi.fn(),
+    exportVulnerabilitySbom: vi.fn(),
     get: vi.fn(),
   },
   mockToast: vi.fn(),
@@ -51,11 +56,13 @@ vi.mock('@tanstack/react-router', () => ({
 import {Route as DetectionsRouteImport} from '../security.detections'
 import {Route as EventsRouteImport} from '../security.events'
 import {Route as SignalsRouteImport} from '../security.signals'
+import {Route as VulnerabilitiesRouteImport} from '../security.vulnerabilities'
 
 type RouteLike = {component: React.ComponentType}
 const DetectionsRoute = DetectionsRouteImport as unknown as RouteLike
 const EventsRoute = EventsRouteImport as unknown as RouteLike
 const SignalsRoute = SignalsRouteImport as unknown as RouteLike
+const VulnerabilitiesRoute = VulnerabilitiesRouteImport as unknown as RouteLike
 
 function renderRoute(route: RouteLike) {
   const Component = route.component
@@ -74,6 +81,15 @@ describe('security routes error states', () => {
     vi.clearAllMocks()
     mockApi.listDetectionRules.mockResolvedValue({rules: [], total_count: 0})
     mockApi.listSignals.mockResolvedValue({signals: [], total_count: 0})
+    mockApi.getVulnerabilitySummary.mockResolvedValue({
+      package_count: 0,
+      finding_count: 0,
+      critical_count: 0,
+      high_count: 0,
+    })
+    mockApi.listVulnerabilityInventory.mockResolvedValue({inventory: [], total_count: 0})
+    mockApi.listVulnerabilityFindings.mockResolvedValue({findings: [], total_count: 0})
+    mockApi.exportVulnerabilitySbom.mockResolvedValue('{}')
     mockApi.get.mockResolvedValue({events: [], totalCount: 0})
     mockApi.getSignal.mockResolvedValue({signal: makeSignal(), evidence: [], audit: [], sample_events: []})
   })
@@ -100,6 +116,76 @@ describe('security routes error states', () => {
     expect(await screen.findByText('Couldn’t load signals')).toBeInTheDocument()
     expect(screen.getByText('signals boom')).toBeInTheDocument()
     expect(screen.queryByText(/^Signals \(/)).not.toBeInTheDocument()
+  })
+
+  it('vulnerabilities: summary failure shows an error instead of zero metric cards', async () => {
+    mockApi.getVulnerabilitySummary.mockRejectedValue(new Error('summary boom'))
+    renderRoute(VulnerabilitiesRoute)
+    expect(await screen.findByText('Couldn’t load vulnerability summary')).toBeInTheDocument()
+    expect(screen.getByText('summary boom')).toBeInTheDocument()
+    expect(screen.queryByText('Packages')).not.toBeInTheDocument()
+  })
+
+  it('vulnerabilities: paginates inventory and findings with returned totals', async () => {
+    mockApi.listVulnerabilityFindings.mockResolvedValue({
+      findings: [makeFinding()],
+      total_count: 51,
+    })
+    mockApi.listVulnerabilityInventory.mockResolvedValue({
+      inventory: [makeInventory()],
+      total_count: 51,
+    })
+
+    renderRoute(VulnerabilitiesRoute)
+
+    expect(await screen.findByText('Findings (51)')).toBeInTheDocument()
+    expect(screen.getByText('Inventory (51)')).toBeInTheDocument()
+    expect(mockApi.listVulnerabilityFindings).toHaveBeenCalledWith({
+      search: undefined,
+      limit: 50,
+      offset: 0,
+    })
+    expect(mockApi.listVulnerabilityInventory).toHaveBeenCalledWith({
+      search: undefined,
+      limit: 50,
+      offset: 0,
+    })
+
+    fireEvent.click(screen.getByRole('button', {name: 'Findings next page'}))
+    await waitFor(() =>
+      expect(mockApi.listVulnerabilityFindings).toHaveBeenLastCalledWith({
+        search: undefined,
+        limit: 50,
+        offset: 50,
+      })
+    )
+
+    fireEvent.click(screen.getByRole('button', {name: 'Inventory next page'}))
+    await waitFor(() =>
+      expect(mockApi.listVulnerabilityInventory).toHaveBeenLastCalledWith({
+        search: undefined,
+        limit: 50,
+        offset: 50,
+      })
+    )
+  })
+
+  it('vulnerabilities: finding rows open from the keyboard', async () => {
+    const user = userEvent.setup()
+    mockApi.listVulnerabilityFindings.mockResolvedValue({
+      findings: [makeFinding()],
+      total_count: 1,
+    })
+    renderRoute(VulnerabilitiesRoute)
+
+    const openFinding = await screen.findByRole('button', {
+      name: 'Open vulnerability finding CVE-2019-10744',
+    })
+    openFinding.focus()
+    expect(openFinding).toHaveFocus()
+    await user.keyboard('{Enter}')
+
+    expect(await screen.findByText('Fixed in')).toBeInTheDocument()
   })
 
   it('signals detail drawer: shows an error state when the detail query fails', async () => {
@@ -184,3 +270,39 @@ describe('security routes error states', () => {
     )
   })
 })
+
+function makeFinding() {
+  return {
+    signal_id: 42,
+    advisory_id: 'GHSA-jf85-cpcp-j695',
+    cve_id: 'CVE-2019-10744',
+    package_name: 'lodash',
+    package_version: '4.17.11',
+    package_type: 'npm',
+    ecosystem: 'npm',
+    target_name: 'checkout',
+    severity: 'critical',
+    cvss_score: 9.8,
+    fixed_version: '4.17.12',
+    link: 'https://osv.dev/vulnerability/CVE-2019-10744',
+    status: 'open',
+    last_seen: '2026-05-31T00:00:00.000Z',
+  }
+}
+
+function makeInventory() {
+  return {
+    package_name: 'lodash',
+    package_version: '4.17.11',
+    package_type: 'npm',
+    ecosystem: 'npm',
+    purl: 'pkg:npm/lodash@4.17.11',
+    target_type: 'service',
+    target_name: 'checkout',
+    host: '',
+    image_name: '',
+    container_id: '',
+    last_seen: '2026-05-31T00:00:00.000Z',
+    finding_count: 1,
+  }
+}
