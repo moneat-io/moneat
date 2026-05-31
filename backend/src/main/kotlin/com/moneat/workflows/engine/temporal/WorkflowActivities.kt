@@ -19,6 +19,7 @@ package com.moneat.workflows.engine.temporal
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.suspendRunCatching
+import com.moneat.workflows.WorkflowApprovalBridge
 import com.moneat.workflows.models.WorkflowGraphConfig
 import com.moneat.workflows.models.WorkflowRunSteps
 import com.moneat.workflows.models.WorkflowRunStepProgress
@@ -106,15 +107,24 @@ class ExecuteEgressActionActivityImpl(
         }
 }
 
-class RequestApprovalActivityImpl : RequestApprovalActivity {
+class RequestApprovalActivityImpl(
+    private val bridgeProvider: () -> WorkflowApprovalBridge? = { FeatureRegistry.getWorkflowApprovalBridge() }
+) : RequestApprovalActivity {
     override fun request(input: WorkflowApprovalRequestInput): WorkflowApprovalRequestResult =
         runBlocking {
-            val bridge = FeatureRegistry.getWorkflowApprovalBridge()
+            val bridge = bridgeProvider()
                 ?: return@runBlocking WorkflowApprovalRequestResult(
                     status = STATUS_FAILED,
                     errorMessage = "Workflow approvals require the workflows_advanced Enterprise module"
                 )
-            bridge.requestApproval(input)
+            suspendRunCatching {
+                bridge.requestApproval(input)
+            }.getOrElse { error ->
+                WorkflowApprovalRequestResult(
+                    status = STATUS_FAILED,
+                    errorMessage = error.message ?: "Workflow approval request failed"
+                )
+            }
         }
 }
 

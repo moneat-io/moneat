@@ -63,7 +63,7 @@ private val BLOCKED_HOST_SUFFIXES = listOf(".local", ".localhost", ".internal")
  * behind an egress proxy and on an outbound-only Docker network.
  */
 class WorkflowEgressActionExecutor(
-    proxySelector: ProxySelector? = proxySelectorFromEnv()
+    private val proxySelector: ProxySelector? = proxySelectorFromEnv()
 ) {
     private val httpClient =
         HttpClient
@@ -94,6 +94,9 @@ class WorkflowEgressActionExecutor(
     private fun executeHttpRequest(params: Map<String, String>): Map<String, JsonElement> {
         val uri = params.requiredUri("url")
         requirePublicHttpTarget(uri)
+        require(proxySelector != null) {
+            "HTTP workflow egress requires WORKFLOWS_EGRESS_PROXY_URL so DNS resolution is enforced by the proxy"
+        }
         val method = params.optional("method")?.uppercase() ?: "GET"
         require(method in SAFE_HTTP_METHODS) { "Unsupported HTTP method $method" }
         val timeout = params.optionalLong("timeout_seconds")

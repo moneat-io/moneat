@@ -288,7 +288,7 @@ private fun Route.workflowRunTriggerRoutes(
 ) {
     put("$WORKFLOW_ID_ROUTE/instances/$INSTANCE_ID_ROUTE/cancel") {
         val organizationId = currentOrganizationId() ?: return@put call.respond(HttpStatusCode.Forbidden)
-        ensureWorkflowAccess(membershipService, organizationId) ?: return@put
+        ensureWorkflowAccess(membershipService, organizationId, WorkflowPermissions.RUN) ?: return@put
         val workflowId = workflowIdFromPath() ?: return@put call.respond(
             HttpStatusCode.BadRequest,
             ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)

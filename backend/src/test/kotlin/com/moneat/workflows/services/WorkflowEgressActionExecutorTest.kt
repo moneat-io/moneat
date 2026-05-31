@@ -29,15 +29,19 @@ import kotlin.test.assertTrue
 
 class WorkflowEgressActionExecutorTest {
     private val executor = WorkflowEgressActionExecutor()
+    private var previousEgressValue: String? = null
 
     @BeforeTest
     fun enableEgress() {
+        previousEgressValue = System.getProperty(WORKFLOWS_EGRESS_ENABLED_ENV)
         System.setProperty(WORKFLOWS_EGRESS_ENABLED_ENV, "true")
     }
 
     @AfterTest
     fun resetEgress() {
-        System.clearProperty(WORKFLOWS_EGRESS_ENABLED_ENV)
+        previousEgressValue?.let { value ->
+            System.setProperty(WORKFLOWS_EGRESS_ENABLED_ENV, value)
+        } ?: System.clearProperty(WORKFLOWS_EGRESS_ENABLED_ENV)
     }
 
     @Test
@@ -65,6 +69,20 @@ class WorkflowEgressActionExecutorTest {
                 )
             }
         assertTrue(error.message.orEmpty().contains("Private"))
+    }
+
+    @Test
+    fun `http request requires an egress proxy for public targets`() {
+        val error =
+            assertFailsWith<IllegalArgumentException> {
+                executor.execute(
+                    stepName = HTTP_REQUEST_ACTION,
+                    params = mapOf("url" to "http://93.184.216.34/data"),
+                    scope = emptyMap()
+                )
+            }
+
+        assertTrue(error.message.orEmpty().contains("WORKFLOWS_EGRESS_PROXY_URL"))
     }
 
     @Test

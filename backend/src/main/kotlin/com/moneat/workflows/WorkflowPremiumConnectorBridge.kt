@@ -25,7 +25,7 @@ import kotlinx.serialization.json.JsonElement
  * Enterprise resolves vaulted credentials and performs connector-specific work;
  * unlicensed installations return a clear "requires Enterprise" response.
  */
-interface WorkflowPremiumConnectorBridge {
+fun interface WorkflowPremiumConnectorBridge {
     suspend fun executeConnectorAction(
         organizationId: Int,
         actionName: String,

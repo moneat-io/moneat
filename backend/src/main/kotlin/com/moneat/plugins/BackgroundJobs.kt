@@ -72,14 +72,23 @@ enum class WorkflowWorkerMode {
 }
 
 fun Application.workflowWorkerMode(): WorkflowWorkerMode {
-    val rawMode =
+    return parseWorkflowWorkerMode(
         environment.config
             .propertyOrNull(WORKFLOW_WORKER_MODE_CONFIG)
             ?.getString()
-            ?.trim()
-            ?.uppercase()
-            ?: WorkflowWorkerMode.TRUSTED.name
-    return WorkflowWorkerMode.entries.firstOrNull { mode -> mode.name == rawMode } ?: WorkflowWorkerMode.TRUSTED
+    )
+}
+
+internal fun parseWorkflowWorkerMode(rawMode: String?): WorkflowWorkerMode {
+    val normalized = rawMode?.trim()?.uppercase()
+    if (normalized.isNullOrBlank()) {
+        return WorkflowWorkerMode.TRUSTED
+    }
+    return WorkflowWorkerMode.entries.firstOrNull { mode -> mode.name == normalized }
+        ?: throw IllegalArgumentException(
+            "Invalid $WORKFLOW_WORKER_MODE_CONFIG value '$normalized'. Expected one of: " +
+                WorkflowWorkerMode.entries.joinToString { mode -> mode.name.lowercase() }
+        )
 }
 
 fun Application.configureEgressWorkflowWorker() {

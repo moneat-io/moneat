@@ -22,8 +22,10 @@ import com.moneat.workflows.models.WorkflowGraphEdge
 import com.moneat.workflows.models.WorkflowGraphNode
 import com.moneat.workflows.models.WorkflowRetryConfig
 import com.moneat.workflows.models.WorkflowStepConfig
+import io.temporal.client.WorkflowClient
 import io.temporal.client.WorkflowClientOptions
 import io.temporal.client.WorkflowOptions
+import io.temporal.client.WorkflowStub
 import io.temporal.testing.TestEnvironmentOptions
 import io.temporal.testing.TestWorkflowEnvironment
 import java.util.Collections
@@ -329,14 +331,58 @@ class WorkflowInterpreterWorkflowTest {
         }
     }
 
+    @Test
+    fun `interpreter consumes only the matching approval signal`() {
+        val actionActivity = RecordingExecuteActionActivity()
+        val persistActivity =
+            RecordingPersistRunActivity(
+                snapshot = snapshot(
+                    graph = WorkflowGraphConfig(
+                        nodes = listOf(
+                            WorkflowGraphNode("trigger", "trigger", trigger = "alert.triggered"),
+                            WorkflowGraphNode(
+                                id = "approval",
+                                type = "control",
+                                kind = LinearGraphAdapter.CONTROL_KIND_APPROVAL,
+                                params = mapOf("timeout" to JsonPrimitive("PT1H"))
+                            ),
+                            WorkflowGraphNode("email", "action", action = "notification.email"),
+                            WorkflowGraphNode("slack", "action", action = "notification.slack")
+                        ),
+                        edges = listOf(
+                            WorkflowGraphEdge("trigger", "approval"),
+                            WorkflowGraphEdge("approval", "email", branch = "approved"),
+                            WorkflowGraphEdge("approval", "slack", branch = "rejected")
+                        )
+                    )
+                )
+            )
+        val approvalActivity = RecordingRequestApprovalActivity(approvalId = 22)
+
+        runWorkflow(actionActivity, persistActivity, approvalActivity).use { harness ->
+            WorkflowClient.start(harness.workflow::run, input())
+            harness.workflow.approve(WorkflowApprovalSignal("approval", approvalId = 21, approved = true))
+            Thread.sleep(100)
+            harness.workflow.approve(WorkflowApprovalSignal("approval", approvalId = 22, approved = false))
+            val result = WorkflowStub.fromTyped(harness.workflow)
+                .getResult(WorkflowInterpreterResult::class.java)
+
+            assertEquals(STATUS_COMPLETE, result.status)
+            assertEquals(listOf("notification.slack"), actionActivity.executedSteps)
+            val approval = result.progress.first { step -> step.nodeId == "approval" }
+            assertEquals(JsonPrimitive("rejected").toString(), approval.output["branch"])
+        }
+    }
+
     private fun runWorkflow(
         actionActivity: ExecuteActionActivity,
-        persistActivity: PersistRunActivity
+        persistActivity: PersistRunActivity,
+        approvalActivity: RequestApprovalActivity = RecordingRequestApprovalActivity()
     ): TestWorkflowHarness {
         val environment = newEnvironment()
         val worker = environment.newWorker(WORKFLOW_TASK_QUEUE)
         worker.registerWorkflowImplementationTypes(WorkflowInterpreterWorkflowImpl::class.java)
-        worker.registerActivitiesImplementations(actionActivity, persistActivity)
+        worker.registerActivitiesImplementations(actionActivity, persistActivity, approvalActivity)
         environment.start()
         val workflow =
             environment.workflowClient.newWorkflowStub(
@@ -441,6 +487,16 @@ private class OverlapRecordingExecuteActionActivity : ExecuteActionActivity {
         active.decrementAndGet()
         return ExecuteActionResult(status = STATUS_COMPLETE, completedAt = TEST_COMPLETED_AT)
     }
+}
+
+private class RecordingRequestApprovalActivity(
+    private val approvalId: Int = 1
+) : RequestApprovalActivity {
+    override fun request(input: WorkflowApprovalRequestInput): WorkflowApprovalRequestResult =
+        WorkflowApprovalRequestResult(
+            status = STATUS_COMPLETE,
+            approvalId = approvalId
+        )
 }
 
 private class RecordingPersistRunActivity(

@@ -19,11 +19,27 @@ package com.moneat.workflows.engine
 import com.moneat.workflows.engine.temporal.HTTP_REQUEST_ACTION
 import com.moneat.workflows.engine.temporal.TRANSFORM_GRAALJS_ACTION
 import com.moneat.workflows.engine.temporal.WORKFLOWS_EGRESS_ENABLED_ENV
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class WorkflowCatalogTest {
+    private var previousEgressValue: String? = null
+
+    @BeforeTest
+    fun snapshotEgressFlag() {
+        previousEgressValue = System.getProperty(WORKFLOWS_EGRESS_ENABLED_ENV)
+    }
+
+    @AfterTest
+    fun restoreEgressFlag() {
+        previousEgressValue?.let { value ->
+            System.setProperty(WORKFLOWS_EGRESS_ENABLED_ENV, value)
+        } ?: System.clearProperty(WORKFLOWS_EGRESS_ENABLED_ENV)
+    }
+
     @Test
     fun `hides egress actions when the egress feature is disabled`() {
         System.clearProperty(WORKFLOWS_EGRESS_ENABLED_ENV)
@@ -35,12 +51,8 @@ class WorkflowCatalogTest {
     @Test
     fun `exposes egress actions when the egress feature is enabled`() {
         System.setProperty(WORKFLOWS_EGRESS_ENABLED_ENV, "true")
-        try {
-            val names = WorkflowCatalog.response().steps.map { it.name }
-            assertTrue(names.contains(HTTP_REQUEST_ACTION))
-            assertTrue(names.contains(TRANSFORM_GRAALJS_ACTION))
-        } finally {
-            System.clearProperty(WORKFLOWS_EGRESS_ENABLED_ENV)
-        }
+        val names = WorkflowCatalog.response().steps.map { it.name }
+        assertTrue(names.contains(HTTP_REQUEST_ACTION))
+        assertTrue(names.contains(TRANSFORM_GRAALJS_ACTION))
     }
 }

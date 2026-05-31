@@ -49,6 +49,8 @@ private const val ACTIVITY_TIMEOUT_SECONDS = 30L
 private const val DEFAULT_MAX_ITEMS = 100
 const val MAX_WHILE_ITERATIONS = 2_000
 
+internal fun approvalSignalKey(nodeId: String, approvalId: Int): String = "$nodeId:$approvalId"
+
 @WorkflowInterface
 interface WorkflowInterpreterWorkflow {
     @WorkflowMethod
@@ -111,7 +113,8 @@ class WorkflowInterpreterWorkflowImpl : WorkflowInterpreterWorkflow {
     private val approvalSignals = mutableMapOf<String, WorkflowApprovalSignal>()
 
     override fun approve(input: WorkflowApprovalSignal) {
-        approvalSignals[input.nodeId] = input
+        val approvalId = input.approvalId ?: return
+        approvalSignals[approvalSignalKey(input.nodeId, approvalId)] = input
     }
 
     override fun run(input: WorkflowInterpreterInput): WorkflowInterpreterResult {
@@ -357,8 +360,16 @@ class WorkflowInterpreterWorkflowImpl : WorkflowInterpreterWorkflow {
                 errorMessage = messageText
                 return
             }
-            val signaled = Workflow.await(timeout) { approvalSignals.containsKey(node.id) }
-            val signal = approvalSignals[node.id]
+            val approvalId =
+                result.approvalId ?: run {
+                    val messageText = "Workflow approval request did not return an approval id"
+                    markNodeFailed(node, messageText)
+                    errorMessage = messageText
+                    return
+                }
+            val signalKey = approvalSignalKey(node.id, approvalId)
+            val signaled = Workflow.await(timeout) { approvalSignals.containsKey(signalKey) }
+            val signal = approvalSignals.remove(signalKey)
             val branch =
                 when {
                     !signaled -> "timeout"
@@ -368,7 +379,7 @@ class WorkflowInterpreterWorkflowImpl : WorkflowInterpreterWorkflow {
             markNodeComplete(
                 node,
                 mapOf(
-                    "approval_id" to JsonPrimitive(result.approvalId ?: 0),
+                    "approval_id" to JsonPrimitive(approvalId),
                     "branch" to JsonPrimitive(branch),
                     "comment" to JsonPrimitive(signal?.comment.orEmpty())
                 )

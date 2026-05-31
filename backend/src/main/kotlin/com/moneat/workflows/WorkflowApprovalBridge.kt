@@ -27,6 +27,6 @@ import com.moneat.workflows.engine.temporal.WorkflowApprovalRequestResult
  * notification fan-out. Keeping that boundary here prevents OSS code from needing
  * Enterprise tables while still making approval nodes first-class graph controls.
  */
-interface WorkflowApprovalBridge {
+fun interface WorkflowApprovalBridge {
     suspend fun requestApproval(input: WorkflowApprovalRequestInput): WorkflowApprovalRequestResult
 }
