@@ -444,19 +444,13 @@ class RuleQueryCompiler(
     }
 
     private fun validateAnomalyFilterNode(node: LogQueryParser.QueryNode) {
-        node.binaryChildren()?.let { (left, right) ->
-            validateAnomalyFilterNode(left)
-            validateAnomalyFilterNode(right)
-            return
-        }
         when (node) {
             is LogQueryParser.QueryNode.FieldNode -> requireAnomalyField(node.field)
             is LogQueryParser.QueryNode.RangeNode -> requireAnomalyField(node.field)
             is LogQueryParser.QueryNode.ComparisonNode -> requireAnomalyField(node.field)
             is LogQueryParser.QueryNode.ExistsNode -> requireAnomalyField(node.field)
-            is LogQueryParser.QueryNode.AndNode,
-            is LogQueryParser.QueryNode.OrNode,
-            -> Unit
+            is LogQueryParser.QueryNode.AndNode -> validateAnomalyFilterChildren(node.left, node.right)
+            is LogQueryParser.QueryNode.OrNode -> validateAnomalyFilterChildren(node.left, node.right)
             is LogQueryParser.QueryNode.NotNode -> validateAnomalyFilterNode(node.node)
             is LogQueryParser.QueryNode.FullTextNode,
             is LogQueryParser.QueryNode.TagExistsNode,
@@ -465,12 +459,13 @@ class RuleQueryCompiler(
         }
     }
 
-    private fun LogQueryParser.QueryNode.binaryChildren(): Pair<LogQueryParser.QueryNode, LogQueryParser.QueryNode>? =
-        when (this) {
-            is LogQueryParser.QueryNode.AndNode -> left to right
-            is LogQueryParser.QueryNode.OrNode -> left to right
-            else -> null
-        }
+    private fun validateAnomalyFilterChildren(
+        left: LogQueryParser.QueryNode,
+        right: LogQueryParser.QueryNode,
+    ) {
+        validateAnomalyFilterNode(left)
+        validateAnomalyFilterNode(right)
+    }
 
     private fun requireAnomalyField(field: String) {
         val normalized = when (field.lowercase()) {

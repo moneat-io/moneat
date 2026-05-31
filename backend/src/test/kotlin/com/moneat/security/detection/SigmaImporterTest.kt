@@ -221,6 +221,36 @@ class SigmaImporterTest {
     }
 
     @Test
+    fun `uppercase all of them expands as a quantifier`() {
+        val rule = map(
+            """
+            title: t
+            detection:
+              sel1:
+                Image: a
+              sel2:
+                CommandLine: b
+              condition: ALL OF THEM
+            """.trimIndent()
+        )
+        assertEquals("(@Image:\"a\" AND @CommandLine:\"b\")", rule.filter)
+    }
+
+    @Test
+    fun `all is treated as a selection name when not followed by of`() {
+        val rule = map(
+            """
+            title: t
+            detection:
+              all:
+                Image: a
+              condition: all
+            """.trimIndent()
+        )
+        assertEquals("@Image:\"a\"", rule.filter)
+    }
+
+    @Test
     fun `auth logsource adds a user group key`() {
         val rule = map(
             """

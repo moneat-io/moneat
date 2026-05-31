@@ -155,6 +155,17 @@ class SignalServiceTest {
     }
 
     @Test
+    fun `no-op status and blank note do not create audit rows`() {
+        val created = SignalWriter.upsert(orgId, spec(ruleId = "a", severity = SignalSeverity.HIGH))
+
+        val result = service.triage(orgId, created.signalId, ACTOR, TriageRequest(status = "open", note = " "))
+
+        val ok = assertIs<TriageResult.Ok>(result)
+        assertEquals("open", ok.signal.status)
+        assertTrue(allAuditActions(created.signalId).isEmpty())
+    }
+
+    @Test
     fun `clear_assignee removes the assignee`() {
         val created = SignalWriter.upsert(orgId, spec(ruleId = "a", severity = SignalSeverity.HIGH))
         service.triage(orgId, created.signalId, ACTOR, TriageRequest(assigneeUserId = 42))
