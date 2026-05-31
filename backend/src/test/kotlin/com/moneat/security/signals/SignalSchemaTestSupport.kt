@@ -68,6 +68,12 @@ object SignalSchemaTestSupport {
                 "CREATE INDEX idx_security_signals_triage " +
                     "ON security_signals (organization_id, status, severity, last_seen)"
             )
+            // V119's partial unique index idx_security_signals_open_dedup on
+            // (organization_id, rule_id, dedup_key) WHERE status = 'open' is Postgres-only: H2
+            // cannot express a filtered unique index, and a plain unique index would wrongly
+            // forbid opening a fresh signal after the prior one is archived. Open-signal dedup is
+            // enforced in the SignalWriter transaction (SELECT ... FOR UPDATE), which these tests
+            // exercise; the production index is the concurrency backstop, verified on Postgres.
             exec(
                 """
                 CREATE TABLE security_signal_evidence (
@@ -80,6 +86,10 @@ object SignalSchemaTestSupport {
                         FOREIGN KEY (signal_id) REFERENCES security_signals(id) ON DELETE CASCADE
                 )
                 """.trimIndent()
+            )
+            exec(
+                "CREATE INDEX idx_security_signal_evidence_signal " +
+                    "ON security_signal_evidence (signal_id, id)"
             )
             exec(
                 """
@@ -100,6 +110,10 @@ object SignalSchemaTestSupport {
                         FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
                 )
                 """.trimIndent()
+            )
+            exec(
+                "CREATE INDEX idx_security_signal_audit_signal " +
+                    "ON security_signal_audit (signal_id, id)"
             )
         }
     }
