@@ -17,6 +17,7 @@
 package com.moneat.security.vulnerabilities
 
 import com.moneat.datadog.models.DdSbomPayload
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -24,7 +25,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
 
 private const val MAX_SBOM_BYTES = 5 * 1024 * 1024
 private const val MAX_PACKAGES = 5_000
@@ -33,7 +33,10 @@ private const val MAX_PURL_LENGTH = 2_048
 private const val MAX_LICENSES = 20
 private const val MAX_ECOSYSTEM_LENGTH = 64
 
-class SbomValidationException(message: String) : IllegalArgumentException(message)
+class SbomValidationException(
+    message: String,
+    cause: Throwable? = null,
+) : IllegalArgumentException(message, cause)
 
 object SbomParser {
     private val json = Json {
@@ -95,12 +98,14 @@ object SbomParser {
         }
     }
 
-    private fun parseJson(rawBody: ByteArray): JsonObject =
-        try {
-            json.parseToJsonElement(rawBody.decodeToString()).jsonObject
-        } catch (e: IllegalArgumentException) {
-            throw SbomValidationException("Malformed SBOM JSON")
+    private fun parseJson(rawBody: ByteArray): JsonObject {
+        val element = try {
+            json.parseToJsonElement(rawBody.decodeToString())
+        } catch (e: SerializationException) {
+            throw SbomValidationException("Malformed SBOM JSON", e)
         }
+        return element as? JsonObject ?: throw SbomValidationException("SBOM JSON root must be an object")
+    }
 
     private fun parseCycloneDx(root: JsonObject): ParsedSbom {
         val packages = root.a("components").mapNotNull { element ->

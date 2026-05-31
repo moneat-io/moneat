@@ -138,10 +138,22 @@ class ClickHousePackageInventoryStore(
             """
             SELECT count() AS total_count
             FROM (
-                SELECT package_name, package_version, package_type, target_type, target_name, host, image_name
+                SELECT
+                    package_name,
+                    package_version,
+                    package_type,
+                    ecosystem,
+                    purl,
+                    target_type,
+                    target_name,
+                    host,
+                    image_name,
+                    container_id
                 FROM `${databaseProvider()}`.security_package_inventory
                 WHERE $where
-                GROUP BY package_name, package_version, package_type, target_type, target_name, host, image_name
+                GROUP BY
+                    package_name, package_version, package_type, ecosystem, purl,
+                    target_type, target_name, host, image_name, container_id
             )
             """.trimIndent(),
             "JSONEachRow",

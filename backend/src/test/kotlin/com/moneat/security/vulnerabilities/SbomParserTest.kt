@@ -19,6 +19,7 @@ package com.moneat.security.vulnerabilities
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
 
 class SbomParserTest {
 
@@ -88,5 +89,15 @@ class SbomParserTest {
             SbomParser.parse("""{"components": []}""".encodeToByteArray())
         }
         assertEquals("Unsupported SBOM format", error.message)
+    }
+
+    @Test
+    fun `malformed JSON preserves cause behind sanitized validation message`() {
+        val error = assertFailsWith<SbomValidationException> {
+            SbomParser.parse("""{"bomFormat": "CycloneDX", """.encodeToByteArray())
+        }
+
+        assertEquals("Malformed SBOM JSON", error.message)
+        assertNotNull(error.cause)
     }
 }

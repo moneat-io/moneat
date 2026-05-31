@@ -95,6 +95,7 @@ class SignalWriterTest {
 
     @Test
     fun `repeat within an open signal refreshes entities tags and title`() {
+        // ──── Initial Signal ────
         val first = SignalWriter.upsert(
             orgId,
             spec(
@@ -105,6 +106,7 @@ class SignalWriterTest {
             )
         )
 
+        // ──── Repeat Occurrence ────
         SignalWriter.upsert(
             orgId,
             spec(
@@ -115,6 +117,7 @@ class SignalWriterTest {
             )
         )
 
+        // ──── Refreshed Metadata ────
         transaction {
             val row = SecuritySignals.selectAll().where { SecuritySignals.id eq first.signalId }.single()
             assertEquals("Updated advisory", row[SecuritySignals.ruleName])

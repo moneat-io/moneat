@@ -6,11 +6,25 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-import {useMemo, useState} from 'react'
+import {type KeyboardEvent, useMemo, useState} from 'react'
 import {createFileRoute} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
-import {Download, ExternalLink, Package, Search, ShieldAlert, type LucideIcon} from 'lucide-react'
-import {api, formatErrorForLogging, type VulnerabilityFindingResponse} from '@/lib/api'
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  ExternalLink,
+  Package,
+  Search,
+  ShieldAlert,
+  type LucideIcon,
+} from 'lucide-react'
+import {
+  api,
+  formatErrorForLogging,
+  type VulnerabilityFindingResponse,
+  type VulnerabilityInventoryItem,
+} from '@/lib/api'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
@@ -26,29 +40,57 @@ export const Route = createFileRoute('/security/vulnerabilities')({
 })
 
 type ExportFormat = 'cyclonedx' | 'spdx'
+type SummaryValue = number | 'Loading' | 'Unavailable'
+
+const VULNERABILITY_PAGE_SIZE = 50
 
 function VulnerabilitiesTab() {
   const {toast} = useToast()
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<VulnerabilityFindingResponse | null>(null)
   const [exporting, setExporting] = useState<ExportFormat | null>(null)
+  const [findingsPage, setFindingsPage] = useState(0)
+  const [inventoryPage, setInventoryPage] = useState(0)
 
-  const listParams = useMemo(() => ({search: search || undefined, limit: 100}), [search])
+  const findingsParams = useMemo(
+    () => ({
+      search: search.trim() || undefined,
+      limit: VULNERABILITY_PAGE_SIZE,
+      offset: findingsPage * VULNERABILITY_PAGE_SIZE,
+    }),
+    [findingsPage, search]
+  )
+  const inventoryParams = useMemo(
+    () => ({
+      search: search.trim() || undefined,
+      limit: VULNERABILITY_PAGE_SIZE,
+      offset: inventoryPage * VULNERABILITY_PAGE_SIZE,
+    }),
+    [inventoryPage, search]
+  )
   const summaryQuery = useQuery({
     queryKey: ['security-vulnerability-summary'],
     queryFn: () => api.getVulnerabilitySummary(),
   })
   const inventoryQuery = useQuery({
-    queryKey: ['security-vulnerability-inventory', listParams],
-    queryFn: () => api.listVulnerabilityInventory(listParams),
+    queryKey: ['security-vulnerability-inventory', inventoryParams],
+    queryFn: () => api.listVulnerabilityInventory(inventoryParams),
   })
   const findingsQuery = useQuery({
-    queryKey: ['security-vulnerability-findings', listParams],
-    queryFn: () => api.listVulnerabilityFindings(listParams),
+    queryKey: ['security-vulnerability-findings', findingsParams],
+    queryFn: () => api.listVulnerabilityFindings(findingsParams),
   })
 
   const inventory = inventoryQuery.data?.inventory ?? []
   const findings = findingsQuery.data?.findings ?? []
+  const inventoryTotal = inventoryQuery.data?.total_count ?? 0
+  const findingsTotal = findingsQuery.data?.total_count ?? 0
+
+  function handleSearchChange(value: string) {
+    setSearch(value)
+    setFindingsPage(0)
+    setInventoryPage(0)
+  }
 
   async function exportSbom(format: ExportFormat) {
     setExporting(format)
@@ -64,19 +106,39 @@ function VulnerabilitiesTab() {
 
   return (
     <div className="space-y-3">
-      <div className="grid gap-2 md:grid-cols-4">
-        <MetricCard label="Packages" value={summaryQuery.data?.package_count ?? 0} icon={Package} />
-        <MetricCard label="Findings" value={summaryQuery.data?.finding_count ?? 0} icon={ShieldAlert} />
-        <MetricCard label="Critical" value={summaryQuery.data?.critical_count ?? 0} tone="critical" />
-        <MetricCard label="High" value={summaryQuery.data?.high_count ?? 0} tone="high" />
-      </div>
+      {summaryQuery.isError ? (
+        <SecurityError title="Couldn’t load vulnerability summary" error={summaryQuery.error} />
+      ) : (
+        <div className="grid gap-2 md:grid-cols-4">
+          <MetricCard
+            label="Packages"
+            value={summaryMetricValue(summaryQuery.isLoading, summaryQuery.data?.package_count)}
+            icon={Package}
+          />
+          <MetricCard
+            label="Findings"
+            value={summaryMetricValue(summaryQuery.isLoading, summaryQuery.data?.finding_count)}
+            icon={ShieldAlert}
+          />
+          <MetricCard
+            label="Critical"
+            value={summaryMetricValue(summaryQuery.isLoading, summaryQuery.data?.critical_count)}
+            tone="critical"
+          />
+          <MetricCard
+            label="High"
+            value={summaryMetricValue(summaryQuery.isLoading, summaryQuery.data?.high_count)}
+            tone="high"
+          />
+        </div>
+      )}
 
       <div className="flex flex-col gap-2 md:flex-row md:items-center">
         <div className="relative max-w-md flex-1">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => handleSearchChange(event.target.value)}
             placeholder="Search package, version, target"
             className="pl-9"
           />
@@ -110,10 +172,24 @@ function VulnerabilitiesTab() {
       ) : (
         <Card>
           <CardHeader className="px-2.5 py-1.5">
-            <CardTitle className="text-xs">Findings ({findingsQuery.data?.total_count ?? findings.length})</CardTitle>
+            <CardTitle className="text-xs">
+              Findings ({findingsQuery.isLoading ? 'Loading' : findingsTotal})
+            </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <FindingsTable findings={findings} onSelect={setSelected} />
+            {findingsQuery.isLoading ? (
+              <LoadingTable columns={6} message="Loading vulnerability findings" />
+            ) : (
+              <FindingsTable findings={findings} onSelect={setSelected} />
+            )}
+            <PaginationControls
+              label="Findings"
+              page={findingsPage}
+              pageSize={VULNERABILITY_PAGE_SIZE}
+              totalCount={findingsTotal}
+              isLoading={findingsQuery.isLoading || findingsQuery.isFetching}
+              onPageChange={setFindingsPage}
+            />
           </CardContent>
         </Card>
       )}
@@ -124,11 +200,23 @@ function VulnerabilitiesTab() {
         <Card>
           <CardHeader className="px-2.5 py-1.5">
             <CardTitle className="text-xs">
-              Inventory ({inventoryQuery.data?.total_count ?? inventory.length})
+              Inventory ({inventoryQuery.isLoading ? 'Loading' : inventoryTotal})
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <InventoryTable inventory={inventory} />
+            {inventoryQuery.isLoading ? (
+              <LoadingTable columns={5} message="Loading package inventory" />
+            ) : (
+              <InventoryTable inventory={inventory} />
+            )}
+            <PaginationControls
+              label="Inventory"
+              page={inventoryPage}
+              pageSize={VULNERABILITY_PAGE_SIZE}
+              totalCount={inventoryTotal}
+              isLoading={inventoryQuery.isLoading || inventoryQuery.isFetching}
+              onPageChange={setInventoryPage}
+            />
           </CardContent>
         </Card>
       )}
@@ -145,6 +233,11 @@ function VulnerabilitiesTab() {
   )
 }
 
+function summaryMetricValue(isLoading: boolean, value: number | undefined): SummaryValue {
+  if (isLoading) return 'Loading'
+  return value ?? 'Unavailable'
+}
+
 function MetricCard({
   label,
   value,
@@ -152,7 +245,7 @@ function MetricCard({
   tone,
 }: {
   label: string
-  value: number
+  value: SummaryValue
   icon?: LucideIcon
   tone?: 'critical' | 'high'
 }) {
@@ -168,6 +261,79 @@ function MetricCard({
       </CardContent>
     </Card>
   )
+}
+
+function LoadingTable({columns, message}: {columns: number; message: string}) {
+  return (
+    <Table>
+      <TableBody>
+        <TableRow>
+          <TableCell colSpan={columns} className="py-6 text-center text-muted-foreground">
+            {message}
+          </TableCell>
+        </TableRow>
+      </TableBody>
+    </Table>
+  )
+}
+
+function PaginationControls({
+  label,
+  page,
+  pageSize,
+  totalCount,
+  isLoading,
+  onPageChange,
+}: {
+  label: string
+  page: number
+  pageSize: number
+  totalCount: number
+  isLoading: boolean
+  onPageChange: (page: number) => void
+}) {
+  if (totalCount <= pageSize && page === 0) return null
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+  const canGoPrevious = page > 0 && !isLoading
+  const canGoNext = page + 1 < totalPages && !isLoading
+
+  return (
+    <div className="flex items-center justify-between border-t px-3 py-2 text-xs text-muted-foreground">
+      <span>{pageRange(page, pageSize, totalCount)}</span>
+      <div className="flex gap-1">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-7 w-7"
+          aria-label={`${label} previous page`}
+          onClick={() => onPageChange(Math.max(0, page - 1))}
+          disabled={!canGoPrevious}
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-7 w-7"
+          aria-label={`${label} next page`}
+          onClick={() => onPageChange(Math.min(totalPages - 1, page + 1))}
+          disabled={!canGoNext}
+        >
+          <ChevronRight className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function pageRange(page: number, pageSize: number, totalCount: number): string {
+  if (totalCount === 0) return '0 of 0'
+  const start = page * pageSize + 1
+  const end = Math.min(totalCount, start + pageSize - 1)
+  return `${start}-${end} of ${totalCount}`
 }
 
 function FindingsTable({
@@ -193,8 +359,12 @@ function FindingsTable({
         {findings.map((finding) => (
           <TableRow
             key={finding.signal_id}
-            className="cursor-pointer"
+            role="button"
+            tabIndex={0}
+            aria-label={`Open vulnerability finding ${finding.cve_id ?? finding.advisory_id}`}
+            className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => onSelect(finding)}
+            onKeyDown={(event) => handleFindingRowKeyDown(event, finding, onSelect)}
           >
             <TableCell className="pl-3 font-medium">{finding.cve_id ?? finding.advisory_id}</TableCell>
             <TableCell>
@@ -227,18 +397,20 @@ function FindingsTable({
   )
 }
 
+function handleFindingRowKeyDown(
+  event: KeyboardEvent<HTMLTableRowElement>,
+  finding: VulnerabilityFindingResponse,
+  onSelect: (finding: VulnerabilityFindingResponse) => void
+) {
+  if (event.key !== 'Enter' && event.key !== ' ') return
+  event.preventDefault()
+  onSelect(finding)
+}
+
 function InventoryTable({
   inventory,
 }: {
-  inventory: Array<{
-    package_name: string
-    package_version: string
-    package_type: string
-    target_name: string
-    host: string
-    image_name: string
-    last_seen: string
-  }>
+  inventory: VulnerabilityInventoryItem[]
 }) {
   return (
     <Table>
@@ -253,7 +425,9 @@ function InventoryTable({
       </TableHeader>
       <TableBody>
         {inventory.map((item) => (
-          <TableRow key={`${item.package_name}|${item.package_version}|${item.target_name}`}>
+          <TableRow
+            key={`${item.package_name}|${item.package_version}|${item.ecosystem}|${item.purl}|${item.target_name}`}
+          >
             <TableCell className="pl-3 font-medium">{item.package_name}</TableCell>
             <TableCell className="font-mono text-xs">{item.package_version}</TableCell>
             <TableCell>

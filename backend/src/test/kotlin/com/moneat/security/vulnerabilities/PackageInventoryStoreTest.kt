@@ -41,10 +41,14 @@ class PackageInventoryStoreTest {
 
     @Test
     fun `list query selects and maps finding count`() = runBlocking {
+        var countQuery = ""
         var listQuery = ""
         coEvery {
             ClickHouseClient.executeWithFormat(match { it.contains("SELECT count() AS total_count") }, "JSONEachRow")
-        } returns "{\"total_count\":1}\n"
+        } coAnswers {
+            countQuery = firstArg()
+            "{\"total_count\":1}\n"
+        }
         coEvery {
             ClickHouseClient.executeWithFormat(
                 match {
@@ -61,6 +65,8 @@ class PackageInventoryStoreTest {
         val response = ClickHousePackageInventoryStore { "test_db" }.list(1, InventoryFilters())
 
         assertTrue(listQuery.contains("AS finding_count"))
+        assertTrue(countQuery.contains("package_type, ecosystem, purl"))
+        assertTrue(countQuery.contains("target_type, target_name, host, image_name, container_id"))
         assertEquals(2, response.inventory.single().findingCount)
         assertEquals(1, response.totalCount)
     }
