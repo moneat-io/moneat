@@ -40,9 +40,6 @@ const THEME_CLASSES = [
 const SCREENSHOT_LOCAL_STORAGE = {
   theme: SCREENSHOT_THEME,
   'screenshot-mode': 'true',
-  'beta-banner-dismissed-apm-traces': 'true',
-  'beta-banner-dismissed-profiles': 'true',
-  'beta-banner-dismissed-security': 'true',
 };
 const SCREENSHOT_SESSION_STORAGE = {
   authenticated: 'true',

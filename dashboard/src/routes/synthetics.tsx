@@ -18,7 +18,6 @@ import {createFileRoute, Outlet, redirect} from '@tanstack/react-router'
 import {BookOpen, FlaskConical, Plus} from 'lucide-react'
 import {useState} from 'react'
 import {api} from '@/lib/api'
-import {BetaBanner} from '@/components/BetaBanner'
 import {Button} from '@/components/ui/button'
 import CreateSyntheticTestDialog from '@/components/CreateSyntheticTestDialog'
 
@@ -37,7 +36,6 @@ function SyntheticsLayout() {
 
   return (
     <div className="space-y-2">
-      <BetaBanner pageKey="synthetics" />
       <div className="p-3 space-y-2">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">

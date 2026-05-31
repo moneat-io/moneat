@@ -17,7 +17,6 @@
 import {createFileRoute, Link, Outlet, useRouterState} from '@tanstack/react-router'
 import {ShieldAlert, ShieldCheck} from 'lucide-react'
 import {cn} from '@/lib/utils'
-import {BetaBanner} from '@/components/BetaBanner'
 
 export const Route = createFileRoute('/security')({
   component: SecurityLayout,
@@ -34,7 +33,6 @@ function SecurityLayout() {
 
   return (
     <div className="space-y-2">
-      <BetaBanner pageKey="security" />
       <div className="p-3 space-y-2">
       <div className="flex items-center gap-2">
         <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-gradient-to-br from-red-500 to-orange-600 shrink-0">
