@@ -17,19 +17,22 @@
 import {createFileRoute} from '@tanstack/react-router'
 import {Zap, Activity, Timer, GitBranch, BarChart3, Search} from 'lucide-react'
 import {FeaturePageTemplate, type FeaturePageConfig} from '@/components/landing/FeaturePageTemplate'
+import {getFeaturePageSeoInput} from '@/lib/seo/routes'
+
+const pageSeo = getFeaturePageSeoInput('performance-monitoring')
 
 const config: FeaturePageConfig = {
-  slug: 'performance-monitoring',
-  title: 'APM & Traces',
+  slug: pageSeo.slug,
+  title: pageSeo.title,
   tagline: 'Find slow endpoints fast',
   description: 'Track transactions and spans across your services. Find slow endpoints, database queries, and external calls before your users notice. Distributed tracing with full context.',
-  metaDescription: 'Application performance monitoring with distributed tracing, transaction tracking, and span analysis. Start free with Moneat.',
+  metaDescription: pageSeo.metaDescription,
   icon: Zap,
   iconColor: 'text-amber-400',
   iconBg: 'bg-amber-500/10',
   gradient: 'from-amber-500 to-orange-400',
   accentColor: 'text-amber-400',
-  screenshot: '/screenshots/performance.png',
+  screenshot: pageSeo.image,
   screenshotAlt: 'Performance monitoring dashboard with transaction timings and span waterfall',
   subFeatures: [
     {icon: Activity, title: 'Transaction Tracking', description: 'Automatically capture every HTTP request, background job, and queue consumer as a transaction.', iconColor: 'text-amber-400'},

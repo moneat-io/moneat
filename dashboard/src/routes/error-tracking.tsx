@@ -17,21 +17,24 @@
 import {createFileRoute} from '@tanstack/react-router'
 import {Activity, Fingerprint, Layers, Search, Tag, Workflow} from 'lucide-react'
 import {FeaturePageTemplate, type FeaturePageConfig} from '@/components/landing/FeaturePageTemplate'
+import {getFeaturePageSeoInput} from '@/lib/seo/routes'
+
+const pageSeo = getFeaturePageSeoInput('error-tracking')
 
 const config: FeaturePageConfig = {
-  slug: 'error-tracking',
-  title: 'Error Tracking',
+  slug: pageSeo.slug,
+  title: pageSeo.title,
   tagline: 'Triage production exceptions',
   description:
     'Catch, group, and triage errors with smart fingerprinting. See full stack traces, breadcrumbs, and user ' +
     'context for every exception across all your projects. Works with Sentry-compatible SDKs.',
-  metaDescription: 'Error tracking with smart fingerprinting, stack traces, and breadcrumbs. Compatible with Sentry SDKs. Start free with Moneat.',
+  metaDescription: pageSeo.metaDescription,
   icon: Activity,
   iconColor: 'text-sky-400',
   iconBg: 'bg-sky-500/10',
   gradient: 'from-sky-500 to-cyan-400',
   accentColor: 'text-sky-400',
-  screenshot: '/screenshots/error-tracking.png',
+  screenshot: pageSeo.image,
   screenshotAlt: 'Error tracking dashboard showing issues list with stack traces and context',
   subFeatures: [
     {icon: Fingerprint, title: 'Smart Fingerprinting', description: 'Automatically group similar errors together with intelligent fingerprinting that understands your stack.', iconColor: 'text-sky-400'},

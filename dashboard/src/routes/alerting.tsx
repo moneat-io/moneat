@@ -17,19 +17,22 @@
 import {createFileRoute} from '@tanstack/react-router'
 import {Bell, MessageSquare, Mail, Filter, Workflow, Phone} from 'lucide-react'
 import {FeaturePageTemplate, type FeaturePageConfig} from '@/components/landing/FeaturePageTemplate'
+import {getFeaturePageSeoInput} from '@/lib/seo/routes'
+
+const pageSeo = getFeaturePageSeoInput('alerting')
 
 const config: FeaturePageConfig = {
-  slug: 'alerting',
-  title: 'Alerting & Integrations',
+  slug: pageSeo.slug,
+  title: pageSeo.title,
   tagline: 'Never miss what matters',
   description: 'Multi-channel alerts with Slack, Discord, email, phone, and SMS integrations. Route alerts to the right teams instantly with flexible rules and escalation policies.',
-  metaDescription: 'Alerting with Slack, Discord, email, phone, and SMS. Flexible routing rules and escalation policies. Start free with Moneat.',
+  metaDescription: pageSeo.metaDescription,
   icon: Bell,
   iconColor: 'text-rose-400',
   iconBg: 'bg-rose-500/10',
   gradient: 'from-rose-500 to-pink-400',
   accentColor: 'text-rose-400',
-  screenshot: '/screenshots/alerting.png',
+  screenshot: pageSeo.image,
   screenshotAlt: 'Alerting configuration with multi-channel notification settings',
   subFeatures: [
     {icon: MessageSquare, title: 'Slack & Discord', description: 'Rich alert notifications in Slack and Discord with actionable buttons to acknowledge or resolve.', iconColor: 'text-rose-400'},

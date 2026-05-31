@@ -17,19 +17,22 @@
 import {createFileRoute} from '@tanstack/react-router'
 import {GitBranch, Globe, Palette, RefreshCw, Bell, Shield} from 'lucide-react'
 import {FeaturePageTemplate, type FeaturePageConfig} from '@/components/landing/FeaturePageTemplate'
+import {getFeaturePageSeoInput} from '@/lib/seo/routes'
+
+const pageSeo = getFeaturePageSeoInput('public-status-pages')
 
 const config: FeaturePageConfig = {
-  slug: 'public-status-pages',
-  title: 'Status Pages',
+  slug: pageSeo.slug,
+  title: pageSeo.title,
   tagline: 'Keep your users informed',
   description: 'Beautiful public status pages with custom domains, automated from your monitors. Show your customers real-time service health with zero manual effort. Free on all plans.',
-  metaDescription: 'Public status pages with custom domains, automated from uptime monitors. Free on all plans. Start free with Moneat.',
+  metaDescription: pageSeo.metaDescription,
   icon: GitBranch,
   iconColor: 'text-cyan-400',
   iconBg: 'bg-cyan-500/10',
   gradient: 'from-cyan-500 to-teal-400',
   accentColor: 'text-cyan-400',
-  screenshot: '/screenshots/status-page-public.png',
+  screenshot: pageSeo.image,
   screenshotAlt: 'Public status page showing service health and uptime history',
   subFeatures: [
     {icon: Globe, title: 'Custom Domains', description: 'Host your status page on your own domain like status.yourapp.com with automatic SSL.', iconColor: 'text-cyan-400'},

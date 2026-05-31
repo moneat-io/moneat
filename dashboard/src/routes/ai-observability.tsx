@@ -17,19 +17,22 @@
 import {createFileRoute} from '@tanstack/react-router'
 import {Brain, DollarSign, Clock, Layers, BarChart3, Zap} from 'lucide-react'
 import {FeaturePageTemplate, type FeaturePageConfig} from '@/components/landing/FeaturePageTemplate'
+import {getFeaturePageSeoInput} from '@/lib/seo/routes'
+
+const pageSeo = getFeaturePageSeoInput('ai-observability')
 
 const config: FeaturePageConfig = {
-  slug: 'ai-observability',
-  title: 'AI & LLM Observability',
+  slug: pageSeo.slug,
+  title: pageSeo.title,
   tagline: 'Monitor your AI in production',
   description: 'Monitor LLM calls, token usage, latency, and costs across providers. Track prompts, completions, and model performance to optimize your AI workflows and control spending.',
-  metaDescription: 'AI and LLM observability with token tracking, cost analysis, and prompt monitoring across providers. Start free with Moneat.',
+  metaDescription: pageSeo.metaDescription,
   icon: Brain,
   iconColor: 'text-fuchsia-400',
   iconBg: 'bg-fuchsia-500/10',
   gradient: 'from-fuchsia-500 to-pink-400',
   accentColor: 'text-fuchsia-400',
-  screenshot: '/screenshots/ai.png',
+  screenshot: pageSeo.image,
   screenshotAlt: 'AI observability dashboard showing LLM metrics and token usage',
   subFeatures: [
     {icon: Layers, title: 'Multi-Provider', description: 'Track OpenAI, Anthropic, Google, and any provider in a single unified view.', iconColor: 'text-fuchsia-400'},

@@ -11,17 +11,16 @@
 // excluded from vitest coverage. The pure logic it composes lives in src/lib/seo (fully tested).
 import {renderToStaticMarkup} from 'react-dom/server'
 import {allPosts, type Post} from '@/blog/loader'
-import {allDocs} from '@/docs/loader'
 import {competitorPages} from '@/components/landing/competitorComparisonData'
 import {renderHeadTags} from '@/lib/seo/headTags'
 import {buildSitemapXml} from '@/lib/seo/sitemap'
 import {
-  blogIndexSeo,
   blogPostSeo,
   buildSitemapEntries,
-  compareHubSeo,
   competitorPageSeo,
-  homeSeo,
+  FEATURE_PAGE_SEO_INPUTS,
+  featurePageSeo,
+  STATIC_SEO_PAGES,
 } from '@/lib/seo/routes'
 
 export interface PrerenderedRoute {
@@ -74,11 +73,13 @@ function BlogArticleBody({post}: {readonly post: Post}) {
 
 /** Routes that get static SEO <head> (and, for blog posts, prerendered body HTML). */
 export function getPrerenderRoutes(): PrerenderedRoute[] {
-  const routes: PrerenderedRoute[] = [
-    {path: '/', head: renderHeadTags(homeSeo)},
-    {path: '/blog', head: renderHeadTags(blogIndexSeo)},
-    {path: '/compare', head: renderHeadTags(compareHubSeo)},
-  ]
+  const routes: PrerenderedRoute[] = STATIC_SEO_PAGES.map((seo) => ({
+    path: seo.path,
+    head: renderHeadTags(seo),
+  }))
+  for (const page of FEATURE_PAGE_SEO_INPUTS) {
+    routes.push({path: `/${page.slug}`, head: renderHeadTags(featurePageSeo(page))})
+  }
   for (const page of competitorPages) {
     routes.push({path: page.route, head: renderHeadTags(competitorPageSeo(page))})
   }
@@ -97,7 +98,6 @@ export function getSitemapXml(buildDate: string = new Date().toISOString().slice
   return buildSitemapXml(
     buildSitemapEntries({
       posts: allPosts.map((post) => ({slug: post.slug, date: post.date})),
-      docs: allDocs.map((doc) => ({slug: doc.slug})),
       competitors: competitorPages.map((page) => ({route: page.route})),
       buildDate,
     }),

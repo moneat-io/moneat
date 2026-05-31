@@ -17,19 +17,22 @@
 import {createFileRoute} from '@tanstack/react-router'
 import {ShieldCheck, Package, AlertTriangle, Search, FileText, Shield} from 'lucide-react'
 import {FeaturePageTemplate, type FeaturePageConfig} from '@/components/landing/FeaturePageTemplate'
+import {getFeaturePageSeoInput} from '@/lib/seo/routes'
+
+const pageSeo = getFeaturePageSeoInput('security-sbom')
 
 const config: FeaturePageConfig = {
-  slug: 'security-sbom',
-  title: 'Security & SBOM',
+  slug: pageSeo.slug,
+  title: pageSeo.title,
   tagline: 'Know what you\'re running',
   description: 'Software bill of materials with CVE tracking across all your services. Know exactly what packages are deployed, which versions have known vulnerabilities, and what needs patching.',
-  metaDescription: 'Security monitoring with SBOM inventory and CVE tracking. Know which vulnerabilities affect your services. Start free with Moneat.',
+  metaDescription: pageSeo.metaDescription,
   icon: ShieldCheck,
   iconColor: 'text-emerald-400',
   iconBg: 'bg-emerald-500/10',
   gradient: 'from-emerald-500 to-green-400',
   accentColor: 'text-emerald-400',
-  screenshot: '/screenshots/security.png',
+  screenshot: pageSeo.image,
   screenshotAlt: 'Security dashboard showing SBOM inventory and CVE tracking',
   subFeatures: [
     {icon: Package, title: 'Package Inventory', description: 'Full inventory of every package and version running across all your services and hosts.', iconColor: 'text-emerald-400'},

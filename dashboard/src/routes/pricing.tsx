@@ -18,7 +18,8 @@ import {createFileRoute} from '@tanstack/react-router'
 import {PricingSection} from '@/components/landing/PricingSection'
 import {PricingCalculatorSection} from '@/components/landing/PricingCalculatorSection'
 import {LandingNavbar, LandingFooter} from '@/components/landing/LandingNavbar'
-import {Helmet} from 'react-helmet-async'
+import {SeoHead} from '@/components/SeoHead'
+import {pricingSeo} from '@/lib/seo/routes'
 
 export const Route = createFileRoute('/pricing')({
   component: PricingPage,
@@ -27,14 +28,7 @@ export const Route = createFileRoute('/pricing')({
 function PricingPage() {
   return (
     <article className="min-h-screen bg-white text-slate-950">
-      <Helmet>
-        <title>Pricing | Moneat</title>
-        <meta
-          name="description"
-          content="Simple, transparent pricing for Moneat. Per-type limits so you only pay for what you use. Unlimited team members on every plan. Start free."
-        />
-        <link rel="canonical" href="https://moneat.io/pricing" />
-      </Helmet>
+      <SeoHead seo={pricingSeo} />
 
       <LandingNavbar tone="light" />
 
