@@ -901,9 +901,9 @@ function DashboardPage() {
             )}
           </DashboardSection>
 
-          {/* ── Performance ─────────────────────────────────────────── */}
+          {/* ── Traces ──────────────────────────────────────────────── */}
           <DashboardSection
-            title="Performance"
+            title="Traces"
             icon={Zap}
             to="/performance/traces"
             iconClassName="text-violet-600 dark:text-violet-400"

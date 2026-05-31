@@ -40,6 +40,7 @@ vi.mock('recharts', () => ({
 
 import {Route as PerformanceIndexRoute} from '../performance.index'
 import {Route as PerformanceLayoutRoute} from '../performance'
+import {Route as PerformanceServiceMapRoute} from '../performance.service-map'
 import {Route as PerformanceTracesRoute} from '../performance.traces.index'
 
 const mockOverview = {
@@ -166,15 +167,30 @@ describe('Performance routes', () => {
     })
   })
 
-  it('renders traces as the primary performance tab without transactions', () => {
+  it('renders the traces shell without the service map tab', () => {
     const Component = (PerformanceLayoutRoute as unknown as {component: React.ComponentType}).component
 
     render(<Component />)
 
-    expect(screen.getByText('Traces')).toBeInTheDocument()
-    expect(screen.getByText('Service Map')).toBeInTheDocument()
+    expect(screen.queryByText('Service Map')).not.toBeInTheDocument()
     expect(screen.queryByText('Transactions')).not.toBeInTheDocument()
     expect(screen.getByTestId('performance-outlet')).toBeInTheDocument()
+  })
+
+  it('redirects the legacy performance service map route to infrastructure', () => {
+    const beforeLoad = (PerformanceServiceMapRoute as unknown as {beforeLoad: () => unknown}).beforeLoad
+    let thrown: unknown
+
+    try {
+      beforeLoad()
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(thrown).toMatchObject({
+      __redirect: true,
+      to: '/monitoring/service-map',
+    })
   })
 
   it('renders the traces dashboard analysis surface', async () => {
