@@ -18,6 +18,7 @@ import React from 'react'
 import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
 import {fireEvent, render, screen, waitFor, within} from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import {makeRule, makeSignal} from '@/components/security/__tests__/fixtures'
 
 const {mockApi, mockToast} = vi.hoisted(() => ({
@@ -170,17 +171,19 @@ describe('security routes error states', () => {
   })
 
   it('vulnerabilities: finding rows open from the keyboard', async () => {
+    const user = userEvent.setup()
     mockApi.listVulnerabilityFindings.mockResolvedValue({
       findings: [makeFinding()],
       total_count: 1,
     })
     renderRoute(VulnerabilitiesRoute)
 
-    const row = await screen.findByRole('button', {
+    const openFinding = await screen.findByRole('button', {
       name: 'Open vulnerability finding CVE-2019-10744',
     })
-    expect(row).toHaveAttribute('tabindex', '0')
-    fireEvent.keyDown(row, {key: ' '})
+    openFinding.focus()
+    expect(openFinding).toHaveFocus()
+    await user.keyboard('{Enter}')
 
     expect(await screen.findByText('Fixed in')).toBeInTheDocument()
   })

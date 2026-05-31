@@ -6,7 +6,7 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-import {type KeyboardEvent, useMemo, useState} from 'react'
+import {useMemo, useState} from 'react'
 import {createFileRoute} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {
@@ -43,6 +43,17 @@ type ExportFormat = 'cyclonedx' | 'spdx'
 type SummaryValue = number | 'Loading' | 'Unavailable'
 
 const VULNERABILITY_PAGE_SIZE = 50
+const FINDING_BUTTON_CLASS_NAME = [
+  'bg-transparent',
+  'p-0',
+  'text-left',
+  'font-medium',
+  'text-foreground',
+  'hover:underline',
+  'focus-visible:outline-none',
+  'focus-visible:ring-2',
+  'focus-visible:ring-ring',
+].join(' ')
 
 function VulnerabilitiesTab() {
   const {toast} = useToast()
@@ -359,14 +370,22 @@ function FindingsTable({
         {findings.map((finding) => (
           <TableRow
             key={finding.signal_id}
-            role="button"
-            tabIndex={0}
-            aria-label={`Open vulnerability finding ${finding.cve_id ?? finding.advisory_id}`}
-            className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="cursor-pointer"
             onClick={() => onSelect(finding)}
-            onKeyDown={(event) => handleFindingRowKeyDown(event, finding, onSelect)}
           >
-            <TableCell className="pl-3 font-medium">{finding.cve_id ?? finding.advisory_id}</TableCell>
+            <TableCell className="pl-3">
+              <button
+                type="button"
+                className={FINDING_BUTTON_CLASS_NAME}
+                aria-label={`Open vulnerability finding ${finding.cve_id ?? finding.advisory_id}`}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onSelect(finding)
+                }}
+              >
+                {finding.cve_id ?? finding.advisory_id}
+              </button>
+            </TableCell>
             <TableCell>
               {finding.package_name}
               <span className="ml-1 text-muted-foreground">{finding.package_version}</span>
@@ -395,16 +414,6 @@ function FindingsTable({
       </TableBody>
     </Table>
   )
-}
-
-function handleFindingRowKeyDown(
-  event: KeyboardEvent<HTMLTableRowElement>,
-  finding: VulnerabilityFindingResponse,
-  onSelect: (finding: VulnerabilityFindingResponse) => void
-) {
-  if (event.key !== 'Enter' && event.key !== ' ') return
-  event.preventDefault()
-  onSelect(finding)
 }
 
 function InventoryTable({
