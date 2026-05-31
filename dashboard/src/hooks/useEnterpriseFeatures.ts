@@ -27,7 +27,6 @@ export function useEnterpriseFeatures() {
       return res.json()
     },
     staleTime: 30 * 1000,
-    refetchOnMount: 'always',
     refetchOnWindowFocus: true,
     retry: false,
   })

@@ -934,11 +934,11 @@ function selectedPolicyFallbackLabel(policyId: number | null): string {
 }
 
 function selectedConnectionFallbackLabel(connectionId: number | null): string {
-  return connectionId === null ? 'Select connection...' : 'Unknown connection'
+  return connectionId === null ? 'Select connection...' : `Unknown connection (id: ${connectionId})`
 }
 
 function selectedGroupFallbackLabel(groupId: number | null): string {
-  return groupId === null ? 'Select connection group...' : 'Unknown connection group'
+  return groupId === null ? 'Select connection group...' : `Unknown connection group (id: ${groupId})`
 }
 
 function connectionMatchesAction(connection: WorkflowConnection, connectionType: string | null): boolean {

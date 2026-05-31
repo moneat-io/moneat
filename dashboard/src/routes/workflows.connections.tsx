@@ -78,6 +78,7 @@ function ConnectionManager() {
     queryKey: ['workflow-connections'],
     queryFn: () => api.listWorkflowConnections(),
   })
+  const showEnterpriseUpsell = isError && isEnterpriseConnectionsError(error)
 
   const invalidate = () => queryClient.invalidateQueries({queryKey: ['workflow-connections']})
 
@@ -94,13 +95,17 @@ function ConnectionManager() {
 
   return (
     <div className="connections-page">
-      <PageHeader showEnterpriseBadge={showEnterpriseBadge} onCreate={() => setCreateOpen(true)} />
+      <PageHeader
+        showEnterpriseBadge={showEnterpriseBadge}
+        canCreate={!showEnterpriseUpsell}
+        onCreate={() => setCreateOpen(true)}
+      />
       <div className="px-4 py-4 lg:px-6">
         {isLoading ? (
           <div className="flex h-40 items-center justify-center rounded-md border">
             <Loader2 className="h-5 w-5 animate-spin" />
           </div>
-        ) : isError && isEnterpriseConnectionsError(error) ? (
+        ) : showEnterpriseUpsell ? (
           <EnterpriseUpsell />
         ) : isError ? (
           <ErrorState message={error.message} compact />
@@ -163,9 +168,11 @@ function ErrorState({
 
 function PageHeader({
   showEnterpriseBadge,
+  canCreate,
   onCreate,
 }: {
   showEnterpriseBadge: boolean
+  canCreate: boolean
   onCreate: () => void
 }) {
   return (
@@ -185,7 +192,7 @@ function PageHeader({
             </p>
           </div>
         </div>
-        <Button size="sm" onClick={onCreate} className="gap-1.5">
+        <Button size="sm" onClick={onCreate} disabled={!canCreate} className="gap-1.5">
           <Plus className="h-3.5 w-3.5" />
           New Connection
         </Button>
