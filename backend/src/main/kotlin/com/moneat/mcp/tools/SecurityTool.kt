@@ -730,23 +730,17 @@ class ListComplianceFindingsTool(
         )
 }
 
-interface SecurityQueryExecutor {
-    suspend fun execute(operation: String, sql: String): String
-}
-
-private object ClickHouseSecurityQueryExecutor : SecurityQueryExecutor {
-    override suspend fun execute(operation: String, sql: String): String {
-        val resp = ClickHouseClient.execute(sql)
-        val body = resp.bodyAsText()
-        if (resp.isClickHouseError(body)) {
-            throw securityQueryError(operation, sql, body)
-        }
-        return body
+private suspend fun executeSecurityClickHouseQuery(operation: String, sql: String): String {
+    val resp = ClickHouseClient.execute(sql)
+    val body = resp.bodyAsText()
+    if (resp.isClickHouseError(body)) {
+        throw securityQueryError(operation, sql, body)
     }
+    return body
 }
 
 class SecurityMcpQueryService(
-    private val queryExecutor: SecurityQueryExecutor = ClickHouseSecurityQueryExecutor,
+    private val queryExecutor: suspend (operation: String, sql: String) -> String = ::executeSecurityClickHouseQuery,
 ) {
     private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
 
@@ -909,7 +903,7 @@ class SecurityMcpQueryService(
     }
 
     private suspend fun executeCount(sql: String): Long {
-        val body = queryExecutor.execute("executeCount", sql)
+        val body = queryExecutor("executeCount", sql)
         return body.trim().lines().firstOrNull()?.let {
             json.parseToJsonElement(it).jsonObject["cnt"]?.jsonPrimitive?.content?.toLongOrNull()
         } ?: 0L
@@ -919,7 +913,7 @@ class SecurityMcpQueryService(
         sql: String,
         mapper: (JsonObject) -> JsonObject,
     ): List<JsonObject> {
-        val body = queryExecutor.execute("executeRows", sql)
+        val body = queryExecutor("executeRows", sql)
         return body.trim().lines()
             .filter { it.isNotBlank() }
             .map { line -> mapper(json.parseToJsonElement(line).jsonObject) }

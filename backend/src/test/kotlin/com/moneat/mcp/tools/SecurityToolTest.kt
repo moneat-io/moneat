@@ -284,7 +284,7 @@ class SecurityToolTest {
     @Test
     fun `query service maps security and compliance rows`() = runBlocking {
         val executor = RecordingSecurityQueryExecutor()
-        val service = SecurityMcpQueryService(executor)
+        val service = SecurityMcpQueryService(executor::execute)
 
         val events = service.listSecurityEvents(42, SecurityEventFilters(severity = "high", host = "web"))
         val event = service.getSecurityEvent(42, "evt-1")
@@ -299,6 +299,7 @@ class SecurityToolTest {
         assertTrue(summary.toString().contains("passed"))
         assertTrue(trends.toString().contains("passRate"))
         assertTrue(executor.sql.any { it.contains("organization_id = 42") })
+        assertTrue(executor.operations.contains("executeCount"))
     }
 
     @Test
@@ -651,10 +652,12 @@ private fun vulnerabilityFinding(): VulnerabilityFindingResponse =
         lastSeen = "2026-01-01T00:00:00Z",
     )
 
-private class RecordingSecurityQueryExecutor : SecurityQueryExecutor {
+private class RecordingSecurityQueryExecutor {
     val sql = mutableListOf<String>()
+    val operations = mutableListOf<String>()
 
-    override suspend fun execute(operation: String, sql: String): String {
+    suspend fun execute(operation: String, sql: String): String {
+        operations += operation
         this.sql += sql
         return when {
             "GROUP BY framework, status" in sql -> """{"framework":"cis","status":"passed","cnt":"3"}"""
