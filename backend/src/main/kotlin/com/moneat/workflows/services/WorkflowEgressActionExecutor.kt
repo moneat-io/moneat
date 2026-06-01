@@ -38,6 +38,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import org.graalvm.polyglot.Context
 import org.graalvm.polyglot.HostAccess
+import org.graalvm.polyglot.PolyglotException
 import org.graalvm.polyglot.Value
 import org.graalvm.polyglot.io.IOAccess
 
@@ -129,7 +130,17 @@ class WorkflowEgressActionExecutor(
             params.optionalLong("timeout_seconds")
                 ?.coerceIn(1L, DEFAULT_TRANSFORM_TIMEOUT_SECONDS)
                 ?: DEFAULT_TRANSFORM_TIMEOUT_SECONDS
-        val result = evaluateJavaScript(script, scope, Duration.ofSeconds(timeoutSeconds))
+        val result = try {
+            evaluateJavaScript(script, scope, Duration.ofSeconds(timeoutSeconds))
+        } catch (error: PolyglotException) {
+            if (error.isCancelled) {
+                throw IllegalArgumentException(
+                    "Transform execution exceeds ${timeoutSeconds}s timeout",
+                    error,
+                )
+            }
+            throw error
+        }
         val serialized = workflowJson.encodeToString(JsonElement.serializer(), result)
         require(serialized.length <= MAX_TRANSFORM_OUTPUT_CHARS) {
             "Transform output exceeds $MAX_TRANSFORM_OUTPUT_CHARS characters"

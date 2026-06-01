@@ -40,6 +40,10 @@ import java.io.IOException
 
 private val logger = KotlinLogging.logger {}
 
+private const val COMBINED_INSERT_MODE = "combined"
+private const val SINGLE_INSERT_MODE = "single"
+private const val SUCCESS_STATUS = "success"
+private const val FAILURE_STATUS = "failure"
 private const val BRPOP_TIMEOUT_SECONDS = 5L
 private const val ERROR_DELAY_MS = 1000L
 private const val WORKER_NAME = "DD metric"
@@ -66,6 +70,7 @@ class DatadogMetricIngestionWorker(
     private var jobs: List<Job> = emptyList()
 
     fun start() {
+        registerQueues()
         recoverProcessingQueue()
         logger.info {
             "Starting DatadogMetricIngestionWorker with " +
@@ -253,6 +258,11 @@ class DatadogMetricIngestionWorker(
             return
         }
 
+        OperationalMetrics.recordDatadogMetricInsertFallback(
+            payloadCount = payloads.size,
+            rowCount = totalRows(payloads),
+            cause = combinedResult.exceptionOrNull(),
+        )
         logger.warn(combinedResult.exceptionOrNull()) {
             "Combined Datadog metric insert failed; falling back to per-payload inserts"
         }
@@ -262,18 +272,38 @@ class DatadogMetricIngestionWorker(
     private suspend fun insertCombinedBatch(
         batches: List<QueuedMetricBatch>,
     ): Result<Unit> {
-        return suspendRunCatching {
+        val startedAt = System.nanoTime()
+        val result = suspendRunCatching {
             DatadogMetricService.insertMetricBatches(batches)
         }
+        OperationalMetrics.recordDatadogMetricInsert(
+            mode = COMBINED_INSERT_MODE,
+            status = result.metricStatus(),
+            payloadCount = batches.size,
+            rowCount = batches.sumOf { it.metrics.size },
+            durationSeconds = elapsedSecondsSince(startedAt),
+            cause = result.exceptionOrNull(),
+        )
+        return result
     }
 
     private suspend fun insertSinglePayload(
         workerId: Int,
         payload: DecodedMetricPayload,
     ) {
-        suspendRunCatching {
+        val startedAt = System.nanoTime()
+        val result = suspendRunCatching {
             DatadogMetricService.insertMetricBatch(payload.batch)
-        }.onSuccess {
+        }
+        OperationalMetrics.recordDatadogMetricInsert(
+            mode = SINGLE_INSERT_MODE,
+            status = result.metricStatus(),
+            payloadCount = 1,
+            rowCount = payload.batch.metrics.size,
+            durationSeconds = elapsedSecondsSince(startedAt),
+            cause = result.exceptionOrNull(),
+        )
+        result.onSuccess {
             markProcessed(workerId, listOf(payload))
         }.onFailure { e ->
             pushToDlqAndAck(payload.originalPayload, workerId, e)
@@ -306,7 +336,10 @@ class DatadogMetricIngestionWorker(
     ) {
         runCatching {
             RedisConfig.sync().lrem(processingQueueKey, 1, payload)
+        }.onSuccess {
+            OperationalMetrics.recordDatadogMetricPayloadAck(SUCCESS_STATUS)
         }.onFailure { e ->
+            OperationalMetrics.recordDatadogMetricPayloadAck(FAILURE_STATUS)
             logger.warn(e) {
                 "Failed to acknowledge Datadog metric payload for worker $workerId; " +
                     "payload will be recovered on restart"
@@ -328,18 +361,39 @@ class DatadogMetricIngestionWorker(
             }
             recovered
         }.onSuccess { recovered ->
+            OperationalMetrics.recordDatadogMetricProcessingRecovery(
+                recoveredPayloads = recovered,
+                status = SUCCESS_STATUS,
+            )
             if (recovered > 0) {
                 logger.warn {
                     "Recovered $recovered unacknowledged Datadog metric payloads from $processingQueueKey"
                 }
             }
         }.onFailure { e ->
+            OperationalMetrics.recordDatadogMetricProcessingRecovery(
+                recoveredPayloads = 0,
+                status = FAILURE_STATUS,
+                cause = e,
+            )
             logger.warn(e) {
                 "Failed to recover Datadog metric processing queue $processingQueueKey"
             }
         }
     }
+
+    private fun registerQueues() {
+        OperationalMetrics.registerQueue(WORKER_NAME, queueKey, "primary")
+        OperationalMetrics.registerQueue(WORKER_NAME, processingQueueKey, "processing")
+        OperationalMetrics.registerDlq(WORKER_NAME, dlqKey)
+    }
 }
+
+private fun totalRows(payloads: List<DecodedMetricPayload>): Int =
+    payloads.sumOf { it.batch.metrics.size }
+
+private fun Result<Unit>.metricStatus(): String =
+    if (isSuccess) SUCCESS_STATUS else FAILURE_STATUS
 
 private fun configuredPositiveInt(
     key: String,
@@ -349,3 +403,8 @@ private fun configuredPositiveInt(
         .toIntOrNull()
         ?.takeIf { it > 0 }
         ?: defaultValue
+
+private fun elapsedSecondsSince(startedAt: Long): Double =
+    (System.nanoTime() - startedAt).toDouble() / NANOS_PER_SECOND
+
+private const val NANOS_PER_SECOND = 1_000_000_000
