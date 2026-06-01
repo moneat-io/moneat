@@ -125,6 +125,7 @@ class OperationalMetricsTest {
 
     @Test
     fun `renders datadog metric ingest health metrics`() {
+        // ──── Arrange ────
         OperationalMetrics.registerQueue("DD metric", "moneat:metrics:queue", "primary")
         OperationalMetrics.registerQueue("DD metric", "moneat:metrics:queue:processing", "processing")
         OperationalMetrics.registerDlq("DD metric", "moneat:metrics:dlq")
@@ -161,8 +162,10 @@ class OperationalMetricsTest {
             cause = IllegalStateException("recovery failed"),
         )
 
+        // ──── Act ────
         val rendered = OperationalMetrics.scrape()
 
+        // ──── Assert ────
         assertContains(rendered, "moneat_datadog_metric_payloads_queued_total")
         assertContains(rendered, "moneat_datadog_metric_points_queued_total")
         assertContains(rendered, "moneat_datadog_metric_insert_chunks_total")
