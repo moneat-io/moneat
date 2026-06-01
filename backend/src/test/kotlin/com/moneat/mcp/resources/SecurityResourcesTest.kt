@@ -47,6 +47,8 @@ import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+// ──── Resources tests ────
+
 class SecurityResourcesTest {
     private val context = McpContext(
         organizationId = 42,
@@ -87,6 +89,8 @@ class SecurityResourcesTest {
         assertTrue(requireNotNull(content.text).contains("credential-access"))
     }
 }
+
+// ──── Gateway stub ────
 
 private class SecurityResourceGateway : SecurityResourceGatewayBase() {
     override suspend fun listSignals(
@@ -130,6 +134,8 @@ private class SecurityResourceGateway : SecurityResourceGatewayBase() {
     override suspend fun complianceSummary(organizationId: Int): JsonObject =
         JsonObject(mapOf("failed" to JsonPrimitive(1)))
 }
+
+// ──── Gateway base stub ────
 
 private abstract class SecurityResourceGatewayBase : SecurityMcpGateway {
     override suspend fun listSignals(

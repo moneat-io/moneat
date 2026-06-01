@@ -74,6 +74,7 @@ private const val MAX_SECURITY_LIMIT = 200
 private const val MAX_VULNERABILITY_LIMIT = 500
 private const val SECURITY_QUERY_LOG_SQL_MAX_LEN = 200
 private const val SECURITY_QUERY_LOG_BODY_MAX_LEN = 300
+private const val COMPLIANCE_LOOKBACK_DAYS = 14
 
 private const val SECURITY_SIGNAL_ID = "security_signal_id"
 private const val DETECTION_RULE_ID = "detection_rule_id"
@@ -693,7 +694,7 @@ class GetComplianceTrendsTool(
     private val gateway: SecurityMcpGateway = defaultSecurityGateway,
 ) : McpTool {
     override val name = "get_compliance_trends"
-    override val description = "Get 14-day compliance pass/fail trends by framework"
+    override val description = "Get $COMPLIANCE_LOOKBACK_DAYS-day compliance pass/fail trends by framework"
     override val inputSchema = InputSchema()
 
     override suspend fun execute(args: JsonObject, context: McpContext): ToolCallResult =
@@ -845,7 +846,7 @@ class SecurityMcpQueryService(
                 countIf(status = 'error') as error,
                 count() as total
             FROM `$db`.compliance_findings
-            WHERE $where AND evaluated_at >= now() - INTERVAL 14 DAY
+            WHERE $where AND evaluated_at >= now() - INTERVAL $COMPLIANCE_LOOKBACK_DAYS DAY
             GROUP BY framework, bucket
             ORDER BY framework, bucket
             FORMAT JSONEachRow
@@ -887,7 +888,7 @@ class SecurityMcpQueryService(
     ): List<String> {
         val conditions = mutableListOf(ClickHouseQueryUtils.orgIdClause(organizationId.toLong()))
         filters.severity?.let { conditions.add("severity = '${escapeSql(it)}'") }
-        filters.host?.let { conditions.add("host LIKE '%${escapeSql(it)}%'") }
+        filters.host?.let { conditions.add("position(host, '${escapeSql(it)}') > 0") }
         filters.ruleId?.let { conditions.add("rule_id = '${escapeSql(it)}'") }
         return conditions
     }

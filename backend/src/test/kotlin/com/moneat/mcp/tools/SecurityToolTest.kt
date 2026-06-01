@@ -54,7 +54,11 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
+// ──── Tests ────
+
 class SecurityToolTest {
+    // ──── Fixtures ────
+
     private val context = McpContext(
         organizationId = 42,
         userId = 7,
@@ -286,7 +290,7 @@ class SecurityToolTest {
         val executor = RecordingSecurityQueryExecutor()
         val service = SecurityMcpQueryService(executor::execute)
 
-        val events = service.listSecurityEvents(42, SecurityEventFilters(severity = "high", host = "web"))
+        val events = service.listSecurityEvents(42, SecurityEventFilters(severity = "high", host = "web_%"))
         val event = service.getSecurityEvent(42, "evt-1")
         val findings = service.listComplianceFindings(42, ComplianceFindingFilters(framework = "cis"))
         val summary = service.complianceSummary(42)
@@ -299,6 +303,8 @@ class SecurityToolTest {
         assertTrue(summary.toString().contains("passed"))
         assertTrue(trends.toString().contains("passRate"))
         assertTrue(executor.sql.any { it.contains("organization_id = 42") })
+        assertTrue(executor.sql.any { it.contains("position(host, 'web_%') > 0") })
+        assertTrue(executor.sql.none { it.contains("host LIKE") })
         assertTrue(executor.operations.contains("executeCount"))
     }
 
@@ -313,6 +319,8 @@ class SecurityToolTest {
         assertTrue(result.content.single().text!!.contains("format must be cyclonedx or spdx"))
     }
 }
+
+// ──── Stubs ────
 
 private class RecordingSecurityGateway : TestSecurityGateway() {
     var filters: SignalFilters? = null
@@ -573,6 +581,8 @@ private abstract class TestSecurityGateway : SecurityMcpGateway {
 
     private fun unsupported(): Nothing = throw UnsupportedOperationException("not implemented for this test")
 }
+
+// ──── Helpers ────
 
 private fun signal(
     status: String = "open",

@@ -175,6 +175,8 @@ class McpAuthorizationTest {
         assertTrue(result.content[0].text!!.contains("host not found"))
     }
 
+    // ──── Security object access tests ────
+
     @Test
     fun `owned objects authorize successfully`() = runBlocking {
         val dashboardId = seedDashboard(organizationId = 1)
@@ -203,6 +205,8 @@ class McpAuthorizationTest {
         assertTrue(!result.isError)
         assertTrue(result.content[0].text!!.contains("ok"))
     }
+
+    // ──── Cross-org security object tests ────
 
     @Test
     fun `objects from another org return authorization errors`() = runBlocking {
@@ -353,6 +357,8 @@ class McpAuthorizationTest {
             )
             dataSourceId
         }
+
+    // ──── Security object helpers ────
 
     private fun seedSecuritySignal(organizationId: Int): Int =
         transaction {

@@ -601,39 +601,154 @@ Change signal status, assignment, or add a note.
 ### Detection Rule Tools
 Use these to manage compiler-validated security detection rules.
 
-| Tool | Write | Description |
-|------|-------|-------------|
-| `list_detection_rules` | No | List detection rules |
-| `get_detection_rule` | No | Get one rule by `detection_rule_id` |
-| `create_detection_rule` | Yes | Create a rule from structured rule fields |
-| `update_detection_rule` | Yes | Update a rule by `detection_rule_id` |
-| `delete_detection_rule` | Yes | Delete a rule by `detection_rule_id` |
-| `preview_detection_rule` | No | Preview rule matches without writing signals |
-| `get_detection_coverage` | No | Get MITRE ATT&CK coverage for enabled rules |
-| `list_detection_templates` | No | List starter-pack templates |
-| `install_detection_template` | Yes | Install a template by `template_id` as a disabled rule |
+### `list_detection_rules`
+List detection rules. No parameters.
 
-Rule create/update fields include `name`, `description`, `source`, `filter`, `group_by`, `window_seconds`, `type`,
-`threshold_count`, `severity`, `signal_title`, `signal_message`, `suppressions`, `enabled`, and `tags`.
+### `get_detection_rule`
+Get one rule.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `detection_rule_id` | integer | Yes | - | Detection rule ID |
+
+### ✏️ `create_detection_rule`
+Create a compiler-validated detection rule.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `name` | string | Yes | - | Detection rule name |
+| `description` | string | No | `""` | Detection rule description |
+| `source` | string | No | `logs` | Telemetry source |
+| `filter` | string | No | `""` | Log query filter expression |
+| `group_by` | string[] | No | `[]` | Group-by columns, such as `host`, `service`, or `tags['user']` |
+| `window_seconds` | integer | No | `300` | Evaluation window in seconds |
+| `type` | string | No | `threshold` | `threshold`, `new_value`, or `rate_anomaly` |
+| `threshold_count` | integer | No | `null` | Threshold count for threshold or rate rules |
+| `severity` | string | No | `medium` | `info`, `low`, `medium`, `high`, or `critical` |
+| `signal_title` | string | No | `""` | Signal title template |
+| `signal_message` | string | No | `""` | Signal message template |
+| `suppressions` | string[] | No | `[]` | Suppression keys |
+| `enabled` | boolean | No | `false` | Enable the rule after creation |
+| `tags` | string[] | No | `[]` | Rule tags, such as `mitre:T1059` |
+
+### ✏️ `update_detection_rule`
+Update a compiler-validated detection rule.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `detection_rule_id` | integer | Yes | - | Detection rule ID |
+| `name` | string | No | Current value | Detection rule name |
+| `description` | string | No | Current value | Detection rule description |
+| `source` | string | No | Current value | Telemetry source |
+| `filter` | string | No | Current value | Log query filter expression |
+| `group_by` | string[] | No | Current value | Group-by columns, such as `host`, `service`, or `tags['user']` |
+| `window_seconds` | integer | No | Current value | Evaluation window in seconds |
+| `type` | string | No | Current value | `threshold`, `new_value`, or `rate_anomaly` |
+| `threshold_count` | integer | No | Current value | Threshold count for threshold or rate rules |
+| `severity` | string | No | Current value | `info`, `low`, `medium`, `high`, or `critical` |
+| `signal_title` | string | No | Current value | Signal title template |
+| `signal_message` | string | No | Current value | Signal message template |
+| `suppressions` | string[] | No | Current value | Suppression keys |
+| `enabled` | boolean | No | Current value | Enable or disable the rule |
+| `tags` | string[] | No | Current value | Rule tags, such as `mitre:T1059` |
+
+### ✏️ `delete_detection_rule`
+Delete a detection rule.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `detection_rule_id` | integer | Yes | - | Detection rule ID |
+
+### `preview_detection_rule`
+Preview rule matches without writing signals.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `detection_rule_id` | integer | Yes | - | Detection rule ID |
+
+### `get_detection_coverage`
+Get MITRE ATT&CK coverage for enabled rules. No parameters.
+
+### `list_detection_templates`
+List starter-pack templates. No parameters.
+
+### ✏️ `install_detection_template`
+Install a template as a disabled rule.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `template_id` | string | Yes | - | Detection template ID |
 
 ### Vulnerability Tools
 
-| Tool | Description |
-|------|-------------|
-| `get_vulnerability_summary` | Package and finding counts |
-| `list_vulnerability_inventory` | SBOM package inventory with `search`, `package`, `target`, `limit`, and `offset` |
-| `list_vulnerability_findings` | Findings with `search`, `package`, `severity`, `status`, `limit`, and `offset` |
-| `export_vulnerability_sbom` | Export inventory as `cyclonedx` or `spdx` JSON |
+### `get_vulnerability_summary`
+Get package and finding counts. No parameters.
+
+### `list_vulnerability_inventory`
+List SBOM package inventory with finding counts.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `search` | string | No | - | Search package, version, target, host, image, or purl |
+| `package` | string | No | - | Exact package name filter |
+| `target` | string | No | - | Target name filter |
+| `limit` | integer | No | `100` | Max results, capped at `500` |
+| `offset` | integer | No | `0` | Result offset for pagination |
+
+### `list_vulnerability_findings`
+List vulnerability findings derived from SBOM inventory.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `search` | string | No | - | Search advisory, CVE, package, target, or fixed version |
+| `package` | string | No | - | Exact package name filter |
+| `severity` | string | No | - | `info`, `low`, `medium`, `high`, or `critical` |
+| `status` | string | No | - | `open`, `under_review`, or `archived` |
+| `limit` | integer | No | `100` | Max results, capped at `500` |
+| `offset` | integer | No | `0` | Result offset for pagination |
+
+### `export_vulnerability_sbom`
+Export inventory as CycloneDX or SPDX JSON.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `format` | string | Yes | - | `cyclonedx` or `spdx` |
 
 ### Security Event And Compliance Tools
 
-| Tool | Description |
-|------|-------------|
-| `list_security_events` | Runtime security events with `severity`, `host`, `rule_id`, `limit`, and `offset` |
-| `get_security_event` | Runtime security event by `security_event_id` |
-| `get_compliance_summary` | Finding counts by framework and status |
-| `get_compliance_trends` | 14-day compliance trends by framework |
-| `list_compliance_findings` | Findings with `framework`, `status`, `limit`, and `offset` |
+### `list_security_events`
+List runtime security events.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `severity` | string | No | - | Security event severity |
+| `host` | string | No | - | Literal host substring filter |
+| `rule_id` | string | No | - | Runtime security rule ID |
+| `limit` | integer | No | `50` | Max results, capped at `200` |
+| `offset` | integer | No | `0` | Result offset for pagination |
+
+### `get_security_event`
+Get one runtime security event.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `security_event_id` | string | Yes | - | Runtime security event ID |
+
+### `get_compliance_summary`
+Get finding counts by framework and status. No parameters.
+
+### `get_compliance_trends`
+Get 14-day compliance trends by framework. No parameters.
+
+### `list_compliance_findings`
+List compliance findings.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `framework` | string | No | - | Compliance framework filter |
+| `status` | string | No | - | `passed`, `failed`, `skipped`, or `error` |
+| `limit` | integer | No | `50` | Max results, capped at `200` |
+| `offset` | integer | No | `0` | Result offset for pagination |
 
 ## Infrastructure Tools
 
