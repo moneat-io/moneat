@@ -42,7 +42,7 @@ private const val ERROR_BODY_MAX_LEN = 600
 @Serializable
 data class QueuedMetricBatch(
     @SerialName("organization_id") val organizationId: Long,
-    @SerialName("project_id") val projectId: Long = 0L,
+    @SerialName("project_id") val projectId: Long? = null,
     val metrics: List<QueuedMetricEntry>
 )
 
@@ -60,7 +60,7 @@ data class QueuedMetricEntry(
 
 private data class MetricInsertRow(
     val organizationId: Long,
-    val projectId: Long,
+    val projectId: Long?,
     val metric: QueuedMetricEntry,
 )
 
@@ -82,7 +82,8 @@ private data class MetricJsonEachRow(
 @Serializable
 data class QueuedSketchBatch(
     @SerialName("organization_id") val organizationId: Long,
-    val sketches: List<QueuedSketchEntry>
+    val sketches: List<QueuedSketchEntry>,
+    @SerialName("project_id") val projectId: Long? = null,
 )
 
 @Serializable
@@ -110,7 +111,7 @@ object DatadogMetricService {
     fun mapV1Series(
         organizationId: Long,
         payload: DatadogMetricSeriesV1,
-        projectId: Long = 0L,
+        projectId: Long? = null,
     ): QueuedMetricBatch {
         val metrics = payload.series.flatMap { series ->
             flattenV1Points(series)
@@ -148,7 +149,8 @@ object DatadogMetricService {
 
     fun mapSketches(
         organizationId: Long,
-        payload: DatadogSketchPayload
+        payload: DatadogSketchPayload,
+        projectId: Long? = null,
     ): QueuedSketchBatch {
         val sketches = payload.sketches.flatMap { sketch ->
             val tags = parseDdTagList(sketch.tags)
@@ -171,14 +173,15 @@ object DatadogMetricService {
 
         return QueuedSketchBatch(
             organizationId = organizationId,
-            sketches = sketches
+            sketches = sketches,
+            projectId = projectId,
         )
     }
 
     suspend fun enqueueMetrics(
         organizationId: Long,
         payload: DatadogMetricSeriesV1,
-        projectId: Long = 0L,
+        projectId: Long? = null,
         queueKey: String = METRIC_QUEUE_KEY,
     ): Int {
         val batch = mapV1Series(organizationId, payload, projectId)
@@ -242,7 +245,7 @@ object DatadogMetricService {
     private fun MetricInsertRow.toJsonEachRow(): MetricJsonEachRow =
         MetricJsonEachRow(
             organizationId = organizationId,
-            projectId = projectId,
+            projectId = projectId ?: 0L,
             metricName = metric.name,
             metricType = metric.type,
             timestamp = formatClickHouseDateTime64MillisUtc(metric.timestampMs),
@@ -266,6 +269,7 @@ object DatadogMetricService {
             val nArray = s.n.joinToString(",")
             """(
                 ${batch.organizationId},
+                ${batch.projectId ?: 0L},
                 '${escapeSql(s.name)}',
                 fromUnixTimestamp64Milli(${s.timestampMs}),
                 '${escapeSql(s.host)}',
@@ -282,7 +286,7 @@ object DatadogMetricService {
 
         val insert = """
             INSERT INTO `$db`.metric_sketches (
-                organization_id, metric_name, timestamp, host, tags,
+                organization_id, project_id, metric_name, timestamp, host, tags,
                 sketch_count, sketch_min, sketch_max, sketch_avg,
                 sketch_sum, sketch_k, sketch_n
             ) VALUES $rows

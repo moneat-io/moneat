@@ -159,7 +159,7 @@ class DatadogMetricServiceTest {
 
         val batch = DatadogMetricService.mapV1Series(42L, payload)
         assertEquals(42L, batch.organizationId)
-        assertEquals(0L, batch.projectId)
+        assertNull(batch.projectId)
         assertEquals(1, batch.metrics.size)
     }
 
@@ -244,9 +244,10 @@ class DatadogMetricServiceTest {
             )
         )
 
-        val batch = DatadogMetricService.mapSketches(42L, payload)
+        val batch = DatadogMetricService.mapSketches(42L, payload, projectId = 7L)
 
         assertEquals(42L, batch.organizationId)
+        assertEquals(7L, batch.projectId)
         assertEquals(1, batch.sketches.size)
 
         val sketch = batch.sketches[0]
@@ -328,6 +329,73 @@ class DatadogMetricServiceTest {
             assertEquals("0", row["project_id"]?.jsonPrimitive?.content)
             assertEquals("2023-11-14 22:13:20.123", row["timestamp"]?.jsonPrimitive?.content)
             assertEquals("O'Brien \"prod\"\nline", row["tags"]?.jsonObject?.get("odd")?.jsonPrimitive?.content)
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
+    fun `insertMetricBatch writes non-zero project id in JSONEachRow`() = runBlocking {
+        val queries = mutableListOf<String>()
+        val response = mockk<HttpResponse>()
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "test_db"
+            every { response.status } returns HttpStatusCode.OK
+            coEvery { ClickHouseClient.execute(capture(queries)) } returns response
+
+            DatadogMetricService.insertMetricBatch(
+                QueuedMetricBatch(
+                    organizationId = 42L,
+                    projectId = 7L,
+                    metrics = listOf(
+                        QueuedMetricEntry(
+                            name = "custom.metric",
+                            type = "gauge",
+                            timestampMs = 1_700_000_000_123L,
+                            value = 42.5,
+                        )
+                    )
+                )
+            )
+
+            val query = queries.single { it.contains("INSERT INTO `test_db`.metrics ") }
+            val row = jsonRows(query).single()
+            assertEquals("7", row["project_id"]?.jsonPrimitive?.content)
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
+    fun `insertSketchBatch writes non-zero project id`() = runBlocking {
+        val queries = mutableListOf<String>()
+        val response = mockk<HttpResponse>()
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "test_db"
+            every { response.status } returns HttpStatusCode.OK
+            coEvery { ClickHouseClient.execute(capture(queries)) } returns response
+
+            DatadogMetricService.insertSketchBatch(
+                QueuedSketchBatch(
+                    organizationId = 42L,
+                    sketches = listOf(
+                        QueuedSketchEntry(
+                            name = "latency",
+                            timestampMs = 1_700_000_000_000L,
+                            host = "web-01",
+                            tags = mapOf("env" to "prod"),
+                            count = 10,
+                        )
+                    ),
+                    projectId = 7L,
+                )
+            )
+
+            val query = queries.single { it.contains("INSERT INTO `test_db`.metric_sketches ") }
+            assertTrue(query.contains("organization_id, project_id, metric_name"))
+            assertTrue(Regex("""(?s)\(\s*42,\s*7,\s*'latency'""").containsMatchIn(query))
         } finally {
             unmockkObject(ClickHouseClient)
         }
