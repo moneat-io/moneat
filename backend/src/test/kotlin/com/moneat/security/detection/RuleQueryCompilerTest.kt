@@ -238,6 +238,33 @@ class RuleQueryCompilerTest {
     }
 
     @Test
+    fun `zero resource cap env values fall back to positive defaults`() {
+        val keys = listOf(
+            "DETECTION_QUERY_MAX_EXECUTION_SECONDS",
+            "DETECTION_QUERY_MAX_ROWS_TO_READ",
+            "DETECTION_QUERY_MAX_RESULT_ROWS",
+            "DETECTION_QUERY_MAX_BYTES_TO_READ",
+        )
+        val previous = keys.associateWith { System.getProperty(it) }
+        try {
+            keys.forEach { System.setProperty(it, "0") }
+            val sql = compiler.compile(orgId = 1, input()).sql
+            assertTrue(sql.contains("max_execution_time = 10"), sql)
+            assertTrue(sql.contains("max_rows_to_read = 50000000"), sql)
+            assertTrue(sql.contains("max_result_rows = 10000"), sql)
+            assertTrue(sql.contains("max_bytes_to_read = 10000000000"), sql)
+        } finally {
+            previous.forEach { (key, value) ->
+                if (value == null) {
+                    System.clearProperty(key)
+                } else {
+                    System.setProperty(key, value)
+                }
+            }
+        }
+    }
+
+    @Test
     fun `the compiled where clause carries org and window`() {
         val compiled = compiler.compile(orgId = 3, input(windowSeconds = 600))
         assertTrue(compiled.whereClause.contains("organization_id = 3"))
@@ -292,6 +319,22 @@ class RuleQueryCompilerTest {
         assertTrue(compiled.sql.contains("c.current_count >= 50"), compiled.sql)
         assertTrue(compiled.sql.contains("max_rows_to_read"), compiled.sql)
         assertFalse(compiled.sql.contains("`moneat`.logs"), compiled.sql)
+        assertTrue(compiled.evidenceDescriptor.contains("source=logs"), compiled.evidenceDescriptor)
+        assertTrue(compiled.evidenceDescriptor.contains("rollup_table=security_log_rate_rollup_5m"))
+    }
+
+    @Test
+    fun `rate anomaly rules still reject rollup as an external source`() {
+        assertFailsWith<DetectionCompileException> {
+            compiler.compile(
+                orgId = 1,
+                input(
+                    source = "security_log_rate_rollup_5m",
+                    type = DetectionRuleType.RATE_ANOMALY,
+                    thresholdCount = 10,
+                ),
+            )
+        }
     }
 
     @Test

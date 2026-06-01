@@ -20,6 +20,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
@@ -34,7 +35,7 @@ private const val UPSERT_MAX_ATTEMPTS = 3
 private val signalJson = Json { encodeDefaults = true }
 
 /**
- * Writes signals with **open-signal dedup**: while a signal is `open`, a repeat for the same
+ * Writes signals with **active-signal dedup**: while a signal is `open` or `under_review`, a repeat for the same
  * `(organizationId, ruleId, dedupKey)` folds into it — incrementing the sample count, raising
  * severity to the max seen, bumping `last_seen`, and appending an evidence reference. Once a
  * signal is archived a fresh occurrence opens a new signal.
@@ -42,8 +43,9 @@ private val signalJson = Json { encodeDefaults = true }
  * Race-safety: the fold is decided inside a single transaction against the live row. On Postgres a
  * partial unique index `(organization_id, rule_id, dedup_key) WHERE status = 'open'` makes two
  * concurrent inserts collide; the loser catches the unique violation and retries, on which pass it
- * now sees the winner's open row and folds. H2 (tests) has no partial index, so dedup there rests on
- * the in-transaction lookup, which is sufficient for the single-writer test path.
+ * now sees the winner's active row and folds. Under-review rows are found and locked before insert,
+ * preserving triage ownership instead of opening a duplicate. H2 (tests) has no partial index, so
+ * dedup there rests on the in-transaction lookup, which is sufficient for the single-writer test path.
  */
 object SignalWriter {
 
@@ -62,7 +64,7 @@ object SignalWriter {
      */
     private fun attemptUpsert(organizationId: Int, spec: SignalSpec, lastAttempt: Boolean): SignalOutcome? =
         transaction {
-            val existing = findOpenSignal(organizationId, spec)
+            val existing = findActiveSignal(organizationId, spec)
             if (existing != null) {
                 return@transaction foldIntoExisting(existing, spec)
             }
@@ -79,25 +81,28 @@ object SignalWriter {
 
     private fun foldOrThrow(organizationId: Int, spec: SignalSpec): SignalOutcome =
         transaction {
-            val existing = findOpenSignal(organizationId, spec)
-                ?: error("Open signal dedup race did not resolve for rule ${spec.ruleId}")
+            val existing = findActiveSignal(organizationId, spec)
+                ?: error("Active signal dedup race did not resolve for rule ${spec.ruleId}")
             foldIntoExisting(existing, spec)
         }
 
-    private fun findOpenSignal(organizationId: Int, spec: SignalSpec): OpenSignalRow? =
+    private fun findActiveSignal(organizationId: Int, spec: SignalSpec): ActiveSignalRow? =
         SecuritySignals
             .selectAll()
             .where {
                 (SecuritySignals.organizationId eq organizationId) and
                     (SecuritySignals.ruleId eq spec.ruleId) and
                     (SecuritySignals.dedupKey eq spec.dedupKey) and
-                    (SecuritySignals.status eq SignalStatus.OPEN.wire)
+                    (
+                        (SecuritySignals.status eq SignalStatus.OPEN.wire) or
+                            (SecuritySignals.status eq SignalStatus.UNDER_REVIEW.wire)
+                        )
             }
             .forUpdate()
             .limit(1)
             .firstOrNull()
             ?.let { row ->
-                OpenSignalRow(
+                ActiveSignalRow(
                     id = row[SecuritySignals.id].value,
                     organizationId = row[SecuritySignals.organizationId],
                     severity = SignalSeverity.fromWire(row[SecuritySignals.severity]),
@@ -107,7 +112,7 @@ object SignalWriter {
                 )
             }
 
-    private fun foldIntoExisting(existing: OpenSignalRow, spec: SignalSpec): SignalOutcome {
+    private fun foldIntoExisting(existing: ActiveSignalRow, spec: SignalSpec): SignalOutcome {
         val now = Clock.System.now()
         val occurred = occurrenceTime(spec.occurredAtMs, now)
         val escalated = spec.severity.rank > existing.severity.rank
@@ -214,7 +219,7 @@ object SignalWriter {
         return if (occurred > now) now else occurred
     }
 
-    private data class OpenSignalRow(
+    private data class ActiveSignalRow(
         val id: Int,
         val organizationId: Int,
         val severity: SignalSeverity,

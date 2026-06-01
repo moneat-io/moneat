@@ -94,6 +94,27 @@ class SignalWriterTest {
     }
 
     @Test
+    fun `repeat within an under review signal folds without changing triage status`() {
+        val first = SignalWriter.upsert(orgId, spec(severity = SignalSeverity.MEDIUM))
+        transaction {
+            SecuritySignals.update({ SecuritySignals.id eq first.signalId }) {
+                it[status] = SignalStatus.UNDER_REVIEW.wire
+            }
+        }
+
+        val second = SignalWriter.upsert(orgId, spec(severity = SignalSeverity.MEDIUM))
+
+        assertIs<SignalOutcome.Updated>(second)
+        assertEquals(first.signalId, second.signalId)
+        transaction {
+            val row = SecuritySignals.selectAll().where { SecuritySignals.id eq first.signalId }.single()
+            assertEquals(SignalStatus.UNDER_REVIEW.wire, row[SecuritySignals.status])
+            assertEquals(2, row[SecuritySignals.sampleCount])
+            assertEquals(1, SecuritySignals.selectAll().count())
+        }
+    }
+
+    @Test
     fun `repeat within an open signal refreshes entities tags and title`() {
         // ──── Initial Signal ────
         val first = SignalWriter.upsert(

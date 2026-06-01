@@ -16,6 +16,7 @@
 
 package com.moneat.security.posture
 
+import com.moneat.security.encodeStableKeySegments
 import com.moneat.security.signals.SignalSeverity
 import com.moneat.security.signals.SignalSource
 import com.moneat.security.signals.SignalSpec
@@ -193,8 +194,14 @@ object PostureRegressionAnalyzer {
     }
 
     private fun findingKey(finding: ComplianceFindingInput): String =
-        listOf(finding.framework, finding.ruleId, finding.resourceType, finding.resourceId)
-            .joinToString("|")
+        encodeStableKeySegments(
+            listOf(
+                "framework" to finding.framework,
+                "rule_id" to finding.ruleId,
+                "resource_type" to finding.resourceType,
+                "resource_id" to finding.resourceId,
+            )
+        )
 
     private fun occurrenceTime(timestampMs: Long): Instant {
         val occurred = Instant.fromEpochMilliseconds(timestampMs)

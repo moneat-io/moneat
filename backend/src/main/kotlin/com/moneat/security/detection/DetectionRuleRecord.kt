@@ -16,6 +16,7 @@
 
 package com.moneat.security.detection
 
+import com.moneat.security.encodeStableKeySegments
 import com.moneat.security.signals.SignalSeverity
 import kotlin.time.Instant
 
@@ -79,22 +80,7 @@ object DetectionTemplate {
  * (an empty value encodes as `col=`, a missing one as `col=<sentinel>`). Same inputs → same key.
  */
 internal fun encodeGroupKey(groupBy: List<String>, groupValues: Map<String, String>): String =
-    groupBy.joinToString("|") { col ->
-        val raw = groupValues[col]
-        val value = if (raw == null) MISSING_VALUE_SENTINEL else escapeKeySegment(raw)
-        "${escapeKeySegment(col)}=$value"
-    }
-
-/** Sentinel for an absent group value: a NUL control char that [escapeKeySegment] never emits, so it
- *  can never collide with an escaped real value (the empty string encodes as ""). */
-private const val MISSING_VALUE_SENTINEL = "\u0000"
-
-private fun escapeKeySegment(segment: String): String =
-    segment
-        .replace("\\", "\\\\")
-        .replace(MISSING_VALUE_SENTINEL, "\\0")
-        .replace("|", "\\|")
-        .replace("=", "\\=")
+    encodeStableKeySegments(groupBy, groupValues)
 
 /** Builds the dedup key from a match's group values in the rule's declared column order. */
 internal fun dedupKeyFor(rule: DetectionRuleRecord, groupValues: Map<String, String>): String =

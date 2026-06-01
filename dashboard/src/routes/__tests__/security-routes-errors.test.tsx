@@ -35,6 +35,7 @@ const {mockApi, mockToast} = vi.hoisted(() => ({
     listVulnerabilityInventory: vi.fn(),
     listVulnerabilityFindings: vi.fn(),
     exportVulnerabilitySbom: vi.fn(),
+    getComplianceTrends: vi.fn(),
     get: vi.fn(),
   },
   mockToast: vi.fn(),
@@ -54,12 +55,14 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 import {Route as DetectionsRouteImport} from '../security.detections'
+import {Route as ComplianceRouteImport} from '../security.compliance'
 import {Route as EventsRouteImport} from '../security.events'
 import {Route as SignalsRouteImport} from '../security.signals'
 import {Route as VulnerabilitiesRouteImport} from '../security.vulnerabilities'
 
 type RouteLike = {component: React.ComponentType}
 const DetectionsRoute = DetectionsRouteImport as unknown as RouteLike
+const ComplianceRoute = ComplianceRouteImport as unknown as RouteLike
 const EventsRoute = EventsRouteImport as unknown as RouteLike
 const SignalsRoute = SignalsRouteImport as unknown as RouteLike
 const VulnerabilitiesRoute = VulnerabilitiesRouteImport as unknown as RouteLike
@@ -90,6 +93,7 @@ describe('security routes error states', () => {
     mockApi.listVulnerabilityInventory.mockResolvedValue({inventory: [], total_count: 0})
     mockApi.listVulnerabilityFindings.mockResolvedValue({findings: [], total_count: 0})
     mockApi.exportVulnerabilitySbom.mockResolvedValue('{}')
+    mockApi.getComplianceTrends.mockResolvedValue({frameworks: []})
     mockApi.get.mockResolvedValue({events: [], totalCount: 0})
     mockApi.getSignal.mockResolvedValue({signal: makeSignal(), evidence: [], audit: [], sample_events: []})
   })
@@ -116,6 +120,34 @@ describe('security routes error states', () => {
     expect(await screen.findByText('Couldn’t load signals')).toBeInTheDocument()
     expect(screen.getByText('signals boom')).toBeInTheDocument()
     expect(screen.queryByText(/^Signals \(/)).not.toBeInTheDocument()
+  })
+
+  it('compliance: summary failure shows an error instead of empty metrics', async () => {
+    mockApi.get.mockImplementation((path: string) => {
+      if (path.includes('/summary')) return Promise.reject(new Error('summary boom'))
+      return Promise.resolve({findings: [], totalCount: 0})
+    })
+    renderRoute(ComplianceRoute)
+    expect(await screen.findByText('Couldn’t load compliance summary')).toBeInTheDocument()
+    expect(screen.getByText('summary boom')).toBeInTheDocument()
+  })
+
+  it('compliance: findings failure shows an error instead of an empty table', async () => {
+    mockApi.get.mockImplementation((path: string) => {
+      if (path.includes('/security/compliance?')) return Promise.reject(new Error('findings boom'))
+      return Promise.resolve({summary: []})
+    })
+    renderRoute(ComplianceRoute)
+    expect(await screen.findByText('Couldn’t load compliance findings')).toBeInTheDocument()
+    expect(screen.getByText('findings boom')).toBeInTheDocument()
+    expect(screen.queryByText('No compliance findings')).not.toBeInTheDocument()
+  })
+
+  it('compliance: trends failure shows an error instead of disappearing', async () => {
+    mockApi.getComplianceTrends.mockRejectedValue(new Error('trends boom'))
+    renderRoute(ComplianceRoute)
+    expect(await screen.findByText('Couldn’t load compliance trends')).toBeInTheDocument()
+    expect(screen.getByText('trends boom')).toBeInTheDocument()
   })
 
   it('vulnerabilities: summary failure shows an error instead of zero metric cards', async () => {

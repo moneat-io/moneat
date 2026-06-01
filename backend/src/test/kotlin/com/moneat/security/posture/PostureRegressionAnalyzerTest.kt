@@ -76,9 +76,42 @@ class PostureRegressionAnalyzerTest {
         assertEquals(SignalSource.AGENT_COMPLIANCE, spec.source)
         assertEquals(SignalSeverity.HIGH, spec.severity)
         assertEquals("cis-1.1", spec.ruleId)
-        assertEquals("cis-aws|cis-1.1|aws_account|acct-123", spec.dedupKey)
+        assertEquals(
+            "framework=cis-aws|rule_id=cis-1.1|resource_type=aws_account|resource_id=acct-123",
+            spec.dedupKey,
+        )
         assertEquals("acct-123", spec.entities["resource_id"])
         assertTrue(spec.evidenceReference.contains("previous=passed"))
+    }
+
+    @Test
+    fun `regression dedup keys do not collide when fields contain separators`() {
+        val left = finding(
+            status = "passed",
+            framework = "cis|aws",
+            ruleId = "rule=1",
+            resourceType = "account",
+            resourceId = "prod\\0",
+        )
+        val right = finding(
+            status = "passed",
+            framework = "cis",
+            ruleId = "aws|rule",
+            resourceType = "1|account",
+            resourceId = "prod\\\u0000",
+        )
+        PostureRegressionAnalyzer.analyze(orgId, listOf(left, right))
+
+        val specs = PostureRegressionAnalyzer.analyze(
+            orgId,
+            listOf(left.copy(status = "failed"), right.copy(status = "failed")),
+        )
+
+        val keys = specs.map { it.dedupKey }
+        assertEquals(2, keys.toSet().size)
+        assertTrue(keys.any { it.contains("\\|") })
+        assertTrue(keys.any { it.contains("\\=") })
+        assertTrue(keys.any { it.contains("\\\\") && it.contains("\\0") })
     }
 
     @Test
@@ -130,14 +163,21 @@ class PostureRegressionAnalyzerTest {
         assertEquals(1, originalOrgSpecs.size)
     }
 
-    private fun finding(status: String, timestampMs: Long = 1_700_000_000_000): ComplianceFindingInput =
+    private fun finding(
+        status: String,
+        timestampMs: Long = 1_700_000_000_000,
+        framework: String = "cis-aws",
+        ruleId: String = "cis-1.1",
+        resourceType: String = "aws_account",
+        resourceId: String = "acct-123",
+    ): ComplianceFindingInput =
         ComplianceFindingInput(
-            framework = "cis-aws",
-            ruleId = "cis-1.1",
+            framework = framework,
+            ruleId = ruleId,
             ruleName = "Root MFA",
             status = status,
-            resourceType = "aws_account",
-            resourceId = "acct-123",
+            resourceType = resourceType,
+            resourceId = resourceId,
             resourceName = "prod",
             timestampMs = timestampMs,
         )

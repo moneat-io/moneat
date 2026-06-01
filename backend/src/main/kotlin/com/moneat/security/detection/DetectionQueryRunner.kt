@@ -78,12 +78,6 @@ class DetectionQueryRunner(
         return parseRows(body, aliasToColumn, queryFingerprint(compiled.sql))
     }
 
-    /** Run an arbitrary org-scoped, capped aggregation [sql] with explicit alias→column mapping. */
-    suspend fun runRaw(sql: String, aliasToColumn: Map<String, String>): List<DetectionGroupRow> {
-        val body = execute(sql)
-        return parseRows(body, aliasToColumn, queryFingerprint(sql))
-    }
-
     private fun parseRows(
         body: String,
         aliasToColumn: Map<String, String>,

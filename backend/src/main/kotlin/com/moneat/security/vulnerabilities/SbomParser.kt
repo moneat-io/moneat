@@ -25,6 +25,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 
 private const val MAX_SBOM_BYTES = 5 * 1024 * 1024
 private const val MAX_PACKAGES = 5_000
@@ -113,18 +115,21 @@ object SbomParser {
     private fun parseCycloneDx(root: JsonObject): ParsedSbom {
         val packages = root.a("components").mapNotNull { element ->
             val component = element as? JsonObject ?: return@mapNotNull null
-            val name = clean(component.s("name"))
-            val version = clean(component.s("version"))
+            val purl = cleanPurl(component.s("purl"))
+            val purlParts = parsePurl(purl)
+            val packageType = clean(purlParts.type.ifBlank { component.s("type") })
+            val ecosystem = normalizeEcosystem(packageType)
+            val rawName = clean(component.s("name")).ifBlank { purlParts.name }
+            val version = clean(component.s("version")).ifBlank { purlParts.version }
+            val name = packageIdentity(rawName, component.s("group"), purlParts, ecosystem)
             if (name.isBlank() || version.isBlank()) {
                 return@mapNotNull null
             }
-            val purl = cleanPurl(component.s("purl"))
-            val purlParts = parsePurl(purl)
             SbomPackageRecord(
                 name = name,
                 version = version,
-                packageType = clean(purlParts.type.ifBlank { component.s("type") }),
-                ecosystem = normalizeEcosystem(purlParts.type.ifBlank { component.s("type") }),
+                packageType = packageType,
+                ecosystem = ecosystem,
                 purl = purl,
                 licenses = parseCycloneDxLicenses(component.a("licenses")),
                 supplier = clean(component.obj("supplier")?.s("name") ?: component.s("supplier")),
@@ -141,18 +146,21 @@ object SbomParser {
     private fun parseSpdx(root: JsonObject): ParsedSbom {
         val packages = root.a("packages").mapNotNull { element ->
             val pkg = element as? JsonObject ?: return@mapNotNull null
-            val name = clean(pkg.s("name"))
-            val version = clean(pkg.s("versionInfo"))
+            val purl = spdxPurl(pkg.a("externalRefs"))
+            val purlParts = parsePurl(purl)
+            val packageType = clean(purlParts.type)
+            val ecosystem = normalizeEcosystem(packageType)
+            val rawName = clean(pkg.s("name")).ifBlank { purlParts.name }
+            val version = clean(pkg.s("versionInfo")).ifBlank { purlParts.version }
+            val name = packageIdentity(rawName, "", purlParts, ecosystem)
             if (name.isBlank() || version.isBlank()) {
                 return@mapNotNull null
             }
-            val purl = spdxPurl(pkg.a("externalRefs"))
-            val purlParts = parsePurl(purl)
             SbomPackageRecord(
                 name = name,
                 version = version,
-                packageType = clean(purlParts.type),
-                ecosystem = normalizeEcosystem(purlParts.type),
+                packageType = packageType,
+                ecosystem = ecosystem,
                 purl = purl,
                 licenses = spdxLicenses(pkg),
                 supplier = clean(pkg.s("supplier").removePrefix("Organization:").trim()),
@@ -203,8 +211,65 @@ object SbomParser {
         val typeEnd = withoutPrefix.indexOf('/')
         if (typeEnd <= 0) return PurlParts()
         val rawType = withoutPrefix.substring(0, typeEnd)
-        return PurlParts(type = clean(rawType))
+        val path = withoutPrefix.substring(typeEnd + 1)
+            .substringBefore('#')
+            .substringBefore('?')
+        val lastSlash = path.lastIndexOf('/')
+        val versionStart = path.lastIndexOf('@').takeIf { it > lastSlash }
+        val namePath = versionStart?.let { path.substring(0, it) } ?: path
+        val version = versionStart?.let { decodePurlValue(path.substring(it + 1)) }.orEmpty()
+        val segments = namePath.split('/').filter { it.isNotBlank() }
+        val rawName = segments.lastOrNull().orEmpty()
+        val rawNamespace = segments.dropLast(1).joinToString("/")
+        return PurlParts(
+            type = clean(rawType),
+            namespace = clean(decodePurlValue(rawNamespace)),
+            name = clean(decodePurlValue(rawName)),
+            version = clean(version),
+        )
     }
+
+    private fun packageIdentity(
+        name: String,
+        group: String,
+        purlParts: PurlParts,
+        ecosystem: String,
+    ): String {
+        val componentName = clean(name)
+        val purlName = purlParts.name.ifBlank { name }
+        val namespace = purlParts.namespace.ifBlank { clean(group) }
+        return when (ecosystem) {
+            "npm" -> if (componentName.startsWith("@")) componentName else npmPackageName(purlName, namespace)
+            "maven" -> if (componentName.contains(":") && namespace.isBlank()) {
+                componentName
+            } else {
+                mavenPackageName(purlName, namespace)
+            }
+            else -> componentName.ifBlank { clean(purlName) }
+        }
+    }
+
+    private fun npmPackageName(name: String, namespace: String): String {
+        val packageName = clean(name)
+        if (packageName.startsWith("@")) return packageName
+        val scope = clean(namespace)
+        return if (scope.startsWith("@") && packageName.isNotBlank()) {
+            clean("$scope/$packageName")
+        } else {
+            packageName
+        }
+    }
+
+    private fun mavenPackageName(name: String, namespace: String): String {
+        val artifact = clean(name)
+        val group = clean(namespace)
+        return if (group.isNotBlank() && artifact.isNotBlank()) clean("$group:$artifact") else artifact
+    }
+
+    private fun decodePurlValue(value: String): String =
+        runCatching {
+            URLDecoder.decode(value.replace("+", "%2B"), StandardCharsets.UTF_8)
+        }.getOrDefault(value)
 
     private fun cleanPurl(value: String): String = clean(value, MAX_PURL_LENGTH)
 
@@ -234,5 +299,8 @@ object SbomParser {
 
     private data class PurlParts(
         val type: String = "",
+        val namespace: String = "",
+        val name: String = "",
+        val version: String = "",
     )
 }
