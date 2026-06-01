@@ -306,10 +306,74 @@ class EmailServiceTest {
 
         assertTrue(htmlSlot.captured.contains("GB-Billed Ingestion"))
         assertTrue(htmlSlot.captured.contains("80%"))
+        assertTrue(htmlSlot.captured.contains("aria-label=\"80% used\""))
+        assertTrue(htmlSlot.captured.contains("width=\"80%\""))
+        assertTrue(htmlSlot.captured.contains("white-space:nowrap;word-break:normal;"))
         assertTrue(!htmlSlot.captured.contains("<svg"))
     }
 
-    private fun billingInsightEmailData() =
+    @Test
+    fun `sendBillingInsightsEmail renders progress colors and bounds`() {
+        val service = spyk(EmailService())
+        val htmlSlot = slot<String>()
+        every {
+            service.sendEmail(
+                any(), any(), capture(htmlSlot), any(), any()
+            )
+        } just Runs
+
+        val rows =
+            listOf(
+                EmailService.BillingInsightRow("Overage", "13.31 GB", "10.00 GB", "133.1%", "Over limit"),
+                EmailService.BillingInsightRow("Critical", "0.04 GB", "10.00 GB", "0.4%", "Critical"),
+                EmailService.BillingInsightRow("Approaching", "4.52 GB", "10.00 GB", "45.2%", "Approaching"),
+                EmailService.BillingInsightRow("Unlimited", "12 spans", "Unlimited", "Unlimited", "On track"),
+                EmailService.BillingInsightRow("Unknown", "n/a", "10.00 GB", "not available", "On track"),
+                EmailService.BillingInsightRow("Zero", "0 GB", "10.00 GB", "0%", "On track")
+            )
+
+        service.sendBillingInsightsEmail("owner@example.com", billingInsightEmailData(rows = rows))
+
+        val html = htmlSlot.captured
+        assertTrue(html.contains("background-color:#dc2626;"))
+        assertTrue(html.contains("background-color:#f59e0b;"))
+        assertTrue(html.contains("background-color:#2563eb;"))
+        assertTrue(html.contains("background-color:#38bdf8;"))
+        assertTrue(html.contains("width=\"100%\""))
+        assertTrue(html.contains("width=\"45%\""))
+        assertTrue(html.contains("width=\"2%\""))
+        assertTrue(html.contains("width=\"0%\""))
+        assertTrue(html.contains("aria-label=\"Unlimited used\""))
+        assertTrue(html.contains("aria-label=\"not available used\""))
+    }
+
+    @Test
+    fun `sendBillingInsightsEmail renders empty usage state`() {
+        val service = spyk(EmailService())
+        val htmlSlot = slot<String>()
+        every {
+            service.sendEmail(
+                any(), any(), capture(htmlSlot), any(), any()
+            )
+        } just Runs
+
+        service.sendBillingInsightsEmail("owner@example.com", billingInsightEmailData(rows = emptyList()))
+
+        assertTrue(htmlSlot.captured.contains("No billable usage yet."))
+    }
+
+    private fun billingInsightEmailData(
+        rows: List<EmailService.BillingInsightRow> =
+            listOf(
+                EmailService.BillingInsightRow(
+                    label = "GB-Billed Ingestion",
+                    used = "8.00 GB",
+                    limit = "10.00 GB",
+                    percent = "80%",
+                    status = "Watch"
+                )
+            )
+    ) =
         EmailService.BillingInsightEmailData(
             organizationName = "Billing Org",
             plan = "PRO",
@@ -319,15 +383,7 @@ class EmailServiceTest {
             summary = "GB-billed ingestion is projected to reach the monthly limit.",
             dashboardUrl = "https://app.example/usage-insights",
             settingsUrl = "https://app.example/settings?tab=billing",
-            rows = listOf(
-                EmailService.BillingInsightRow(
-                    label = "GB-Billed Ingestion",
-                    used = "8.00 GB",
-                    limit = "10.00 GB",
-                    percent = "80%",
-                    status = "Watch"
-                )
-            ),
+            rows = rows,
             totalOverage = "\$0.00"
         )
 }

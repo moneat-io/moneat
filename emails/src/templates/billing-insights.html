@@ -10,7 +10,21 @@ settingsUrl: ""
 totalOverage: ""
 ---
 <x-main>
-  <table class="w-full max-w-[600px]" cellpadding="0" cellspacing="0" role="presentation" style="border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1);">
+  <table
+    class="email-shell w-full max-w-[600px]"
+    width="100%"
+    cellpadding="0"
+    cellspacing="0"
+    role="presentation"
+    style="
+      width: 100%;
+      max-width: 600px;
+      table-layout: fixed;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1);
+    "
+  >
     <tr>
       <td>
         <component src="src/components/header.html"></component>
@@ -18,7 +32,7 @@ totalOverage: ""
     </tr>
 
     <tr>
-      <td class="px-8 pt-8 pb-4 bg-white">
+      <td class="email-pad px-8 pt-8 pb-4 bg-white">
         <p class="m-0 text-xs font-semibold uppercase" style="color: #2563eb;">Usage Insights</p>
         <h2 class="m-0 mt-2 text-2xl font-semibold" style="color: #0a0a0a;">{{ headline }}</h2>
         <p class="m-0 mt-2 text-sm" style="color: #525252;">{{ summary }}</p>
@@ -26,38 +40,42 @@ totalOverage: ""
     </tr>
 
     <tr>
-      <td class="px-8 py-4 bg-white">
-        <table class="w-full" cellpadding="0" cellspacing="0" role="presentation">
+      <td class="email-pad px-8 py-4 bg-white">
+        <table
+          class="w-full"
+          width="100%"
+          cellpadding="0"
+          cellspacing="0"
+          role="presentation"
+          style="border-radius: 8px; border: 1px solid #e5e5e5; overflow: hidden; table-layout: fixed;"
+        >
           <tr>
-            <td class="pr-2">
-              <table class="w-full" cellpadding="0" cellspacing="0" role="presentation" style="border-radius: 8px; border: 1px solid #e5e5e5;">
+            <td class="px-4 py-3" style="background-color: #fafafa; border-bottom: 1px solid #e5e5e5;">
+              <table class="w-full" cellpadding="0" cellspacing="0" role="presentation">
                 <tr>
-                  <td class="p-4">
-                    <p class="m-0 text-xs font-medium" style="color: #737373;">Plan</p>
-                    <p class="m-0 mt-1 text-lg font-bold" style="color: #0a0a0a;">{{ plan }}</p>
+                  <td style="vertical-align: top; padding-right: 12px;">
+                    <p class="m-0 text-xs font-medium" style="color: #737373;">Current plan</p>
+                    <p class="m-0 mt-1 text-sm font-bold uppercase" style="color: #0a0a0a;">{{ plan }}</p>
                   </td>
-                </tr>
-              </table>
-            </td>
-            <td class="px-1">
-              <table class="w-full" cellpadding="0" cellspacing="0" role="presentation" style="border-radius: 8px; border: 1px solid #e5e5e5;">
-                <tr>
-                  <td class="p-4">
+                  <td
+                    style="
+                      vertical-align: top;
+                      text-align: right;
+                      padding-left: 12px;
+                      white-space: nowrap;
+                    "
+                  >
                     <p class="m-0 text-xs font-medium" style="color: #737373;">Estimated overage</p>
-                    <p class="m-0 mt-1 text-lg font-bold" style="color: #0a0a0a;">{{ totalOverage }}</p>
+                    <p class="m-0 mt-1 text-sm font-bold" style="color: #0a0a0a;">{{ totalOverage }}</p>
                   </td>
                 </tr>
               </table>
             </td>
-            <td class="pl-2">
-              <table class="w-full" cellpadding="0" cellspacing="0" role="presentation" style="border-radius: 8px; border: 1px solid #e5e5e5;">
-                <tr>
-                  <td class="p-4">
-                    <p class="m-0 text-xs font-medium" style="color: #737373;">Period</p>
-                    <p class="m-0 mt-1 text-sm font-bold" style="color: #0a0a0a;">{{ periodStart }} - {{ periodEnd }}</p>
-                  </td>
-                </tr>
-              </table>
+          </tr>
+          <tr>
+            <td class="px-4 py-3">
+              <p class="m-0 text-xs font-medium" style="color: #737373;">Billing period</p>
+              <p class="m-0 mt-1 text-sm font-bold" style="color: #0a0a0a;">{{ periodStart }} - {{ periodEnd }}</p>
             </td>
           </tr>
         </table>
@@ -65,8 +83,15 @@ totalOverage: ""
     </tr>
 
     <tr>
-      <td class="px-8 pt-4 pb-6 bg-white">
-        <table class="w-full" cellpadding="0" cellspacing="0" role="presentation" style="border-radius: 8px; border: 1px solid #e5e5e5; overflow: hidden;">
+      <td class="email-pad px-8 pt-4 pb-6 bg-white">
+        <table
+          class="w-full"
+          width="100%"
+          cellpadding="0"
+          cellspacing="0"
+          role="presentation"
+          style="border-radius: 8px; border: 1px solid #e5e5e5; overflow: hidden; table-layout: fixed;"
+        >
           <tr>
             <td colspan="2" class="px-4 py-3" style="background-color: #fafafa; border-bottom: 1px solid #e5e5e5;">
               <table class="w-full" cellpadding="0" cellspacing="0" role="presentation">
@@ -75,7 +100,7 @@ totalOverage: ""
                     <p class="m-0 text-sm font-semibold" style="color: #0a0a0a;">Billable usage</p>
                   </td>
                   <td style="text-align: right;">
-                    <p class="m-0 text-xs font-medium" style="color: #737373;">Used</p>
+                    <p class="m-0 text-xs font-medium" style="color: #737373;">Usage</p>
                   </td>
                 </tr>
               </table>
@@ -87,11 +112,30 @@ totalOverage: ""
     </tr>
 
     <tr>
-      <td align="center" class="px-8 pt-2 pb-8 bg-white">
+      <td align="center" class="email-pad px-8 pt-2 pb-8 bg-white">
         <table cellpadding="0" cellspacing="0" role="presentation">
           <tr>
-            <td align="center" style="border-radius: 6px; background-color: #171717; box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);">
-              <a href="{{ dashboardUrl }}" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #fafafa; text-decoration: none; padding: 12px 24px; border-radius: 6px; display: inline-block; font-size: 14px; font-weight: 500;">
+            <td
+              align="center"
+              style="
+                border-radius: 6px;
+                background-color: #171717;
+                box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+              "
+            >
+              <a
+                href="{{ dashboardUrl }}"
+                style="
+                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                  color: #fafafa;
+                  text-decoration: none;
+                  padding: 12px 24px;
+                  border-radius: 6px;
+                  display: inline-block;
+                  font-size: 14px;
+                  font-weight: 500;
+                "
+              >
                 Open Usage Insights &rarr;
               </a>
             </td>

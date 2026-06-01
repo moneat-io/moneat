@@ -40,10 +40,14 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.*
+import kotlin.math.roundToInt
 import kotlin.time.Clock
 import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
+
+private const val DANGER_COLOR = "#dc2626"
+private const val SUCCESS_COLOR = "#16a34a"
 
 /** Escapes HTML special characters for safe inclusion in email templates. */
 private fun String.escapeHtml(): String =
@@ -55,11 +59,28 @@ private fun String.escapeHtml(): String =
 private const val BADGE_STYLE = "margin:0;font-size:0.75rem;font-weight:600;" +
     "display:inline-block;border-radius:4px;padding:1px 8px;"
 private const val BADGE_POSITIVE =
-    "background-color:#f0fdf4;border:1px solid #bbf7d0;color:#16a34a;"
+    "background-color:#f0fdf4;border:1px solid #bbf7d0;color:" + SUCCESS_COLOR + ";"
 private const val BADGE_NEGATIVE =
-    "background-color:#fef2f2;border:1px solid #fecaca;color:#dc2626;"
+    "background-color:#fef2f2;border:1px solid #fecaca;color:" + DANGER_COLOR + ";"
 private const val BADGE_NEUTRAL = "font-weight:500;background-color:#f5f5f5;" +
     "border:1px solid #e5e5e5;color:#737373;"
+private const val BILLING_ROW_CELL_STYLE =
+    "padding:0.875rem 1rem;border-bottom:1px solid #f5f5f5;" +
+        "word-break:normal;overflow-wrap:break-word;"
+private const val BILLING_PERCENT_TEXT_STYLE =
+    "margin:0;font-size:0.875rem;font-weight:700;color:#0a0a0a;" +
+        "white-space:nowrap;word-break:normal;"
+private const val BILLING_STATUS_BADGE_STYLE =
+    "margin:0;font-size:0.6875rem;line-height:1rem;font-weight:600;display:inline-block;" +
+        "border-radius:999px;padding:1px 8px;background-color:#f5f5f5;border:1px solid #e5e5e5;" +
+        "color:#525252;white-space:nowrap;word-break:normal;"
+private const val BILLING_PROGRESS_TRACK_STYLE =
+    "width:100%;height:6px;line-height:6px;font-size:0;background-color:#e5e5e5;" +
+        "border-radius:999px;overflow:hidden;"
+private const val BILLING_PROGRESS_FILL_STYLE =
+    "height:6px;line-height:6px;font-size:0;border-radius:999px;"
+private const val FULL_PROGRESS_PERCENT = 100
+private const val MIN_VISIBLE_PROGRESS_PERCENT = 2
 private const val TOP_ISSUES_COUNT = 5
 private const val SETTINGS_URL_PLACEHOLDER = "{{ settingsUrl }}"
 private const val YEAR_PLACEHOLDER = "{{ year }}"
@@ -650,13 +671,13 @@ class EmailService {
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
             </head>
             <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-                <div style="background-color: #fef2f2; border-left: 4px solid #dc2626; padding: 30px; border-radius: 8px;">
-                    <h1 style="color: #dc2626; margin-bottom: 20px;">🔴 Host Down</h1>
+                <div style="background-color: #fef2f2; border-left: 4px solid $DANGER_COLOR; padding: 30px; border-radius: 8px;">
+                    <h1 style="color: $DANGER_COLOR; margin-bottom: 20px;">🔴 Host Down</h1>
                     <p><strong>Host:</strong> $safeHostName</p>
                     <p><strong>Status:</strong> $safeLastSeenText</p>
                     <p>The monitoring agent has stopped reporting metrics. Please check if the host is online and the agent is running.</p>
                     <div style="margin: 30px 0;">
-                        <a href="$safeHostUrl" style="display: inline-block; background-color: #dc2626; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View</a>
+                        <a href="$safeHostUrl" style="display: inline-block; background-color: $DANGER_COLOR; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View</a>
                     </div>
                     <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
                     <p style="color: #999; font-size: 12px;">Moneat Server Monitoring</p>
@@ -694,9 +715,9 @@ class EmailService {
         val emoji = if (isDown) "🔴" else "✅"
         val subject = "$emoji Uptime Monitor ${if (isDown) "Down" else "Up"}: $monitorName"
         val bgColor = if (isDown) "#fef2f2" else "#f0fdf4"
-        val borderColor = if (isDown) "#dc2626" else "#16a34a"
-        val headingColor = if (isDown) "#dc2626" else "#16a34a"
-        val buttonColor = if (isDown) "#dc2626" else "#16a34a"
+        val borderColor = if (isDown) DANGER_COLOR else SUCCESS_COLOR
+        val headingColor = if (isDown) DANGER_COLOR else SUCCESS_COLOR
+        val buttonColor = if (isDown) DANGER_COLOR else SUCCESS_COLOR
 
         val htmlBody =
             """
@@ -751,12 +772,12 @@ class EmailService {
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
             </head>
             <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-                <div style="background-color: #f0fdf4; border-left: 4px solid #16a34a; padding: 30px; border-radius: 8px;">
-                    <h1 style="color: #16a34a; margin-bottom: 20px;">✅ Host Recovered</h1>
+                <div style="background-color: #f0fdf4; border-left: 4px solid $SUCCESS_COLOR; padding: 30px; border-radius: 8px;">
+                    <h1 style="color: $SUCCESS_COLOR; margin-bottom: 20px;">✅ Host Recovered</h1>
                     <p><strong>Host:</strong> $safeHostName</p>
                     <p>The host is now reporting metrics again.</p>
                     <div style="margin: 30px 0;">
-                        <a href="$safeHostUrl" style="display: inline-block; background-color: #16a34a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View</a>
+                        <a href="$safeHostUrl" style="display: inline-block; background-color: $SUCCESS_COLOR; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View</a>
                     </div>
                     <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
                     <p style="color: #999; font-size: 12px;">Moneat Server Monitoring</p>
@@ -905,7 +926,7 @@ class EmailService {
                           </td>
                           <td style="width:33%;">
                             <p style="margin:0;margin-bottom:0.25rem;font-size:0.75rem;font-weight:500;color:#737373;">Crash-Free</p>
-                            <p style="margin:0;font-size:1.125rem;font-weight:700;color:#16a34a;">${project.crashFree.escapeHtml()}</p>
+                            <p style="margin:0;font-size:1.125rem;font-weight:700;color:$SUCCESS_COLOR;">${project.crashFree.escapeHtml()}</p>
                           </td>
                         </tr>
                       </table>
@@ -984,19 +1005,73 @@ class EmailService {
             """.trimIndent()
         }
         return rows.joinToString("\n") { row ->
+            val progressPercent = billingProgressPercent(row.percent)
+            val remainingPercent = FULL_PROGRESS_PERCENT - progressPercent
+            val progressColor = billingProgressColor(row.status)
             """
             <tr>
-              <td style="padding:0.75rem 1rem;border-bottom:1px solid #f5f5f5;">
-                <p style="margin:0;font-size:0.875rem;font-weight:600;color:#0a0a0a;">${row.label.escapeHtml()}</p>
-                <p style="margin:0.25rem 0 0;font-size:0.75rem;color:#737373;">
-                  ${row.used.escapeHtml()} / ${row.limit.escapeHtml()} &middot; ${row.status.escapeHtml()}
-                </p>
-              </td>
-              <td style="padding:0.75rem 1rem;border-bottom:1px solid #f5f5f5;text-align:right;">
-                <p style="margin:0;font-size:0.875rem;font-weight:700;color:#0a0a0a;">${row.percent.escapeHtml()}</p>
+              <td colspan="2" style="$BILLING_ROW_CELL_STYLE">
+                <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+                  <tr>
+                    <td style="vertical-align:top;padding-right:12px;">
+                      <p style="margin:0;font-size:0.875rem;font-weight:600;color:#0a0a0a;">
+                        ${row.label.escapeHtml()}
+                      </p>
+                    </td>
+                    <td style="vertical-align:top;text-align:right;width:84px;white-space:nowrap;">
+                      <p style="$BILLING_PERCENT_TEXT_STYLE">${row.percent.escapeHtml()}</p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding-top:0.25rem;padding-right:12px;">
+                      <p style="margin:0;font-size:0.75rem;color:#737373;">
+                        ${row.used.escapeHtml()} / ${row.limit.escapeHtml()}
+                      </p>
+                    </td>
+                    <td style="padding-top:0.25rem;text-align:right;white-space:nowrap;">
+                      <p style="$BILLING_STATUS_BADGE_STYLE">${row.status.escapeHtml()}</p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td colspan="2" style="padding-top:0.625rem;">
+                      <table
+                        width="100%"
+                        cellpadding="0"
+                        cellspacing="0"
+                        role="presentation"
+                        aria-label="${row.percent.escapeHtml()} used"
+                        style="$BILLING_PROGRESS_TRACK_STYLE"
+                      >
+                        <tr>
+                          <td
+                            width="$progressPercent%"
+                            style="$BILLING_PROGRESS_FILL_STYLE background-color:$progressColor;"
+                          >&nbsp;</td>
+                          <td width="$remainingPercent%" style="line-height:6px;font-size:0;">&nbsp;</td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
               </td>
             </tr>
             """.trimIndent()
+        }
+    }
+
+    private fun billingProgressPercent(percent: String): Int {
+        if (percent == "Unlimited") return FULL_PROGRESS_PERCENT
+        val numericPercent = percent.removeSuffix("%").toDoubleOrNull() ?: return 0
+        if (numericPercent <= 0.0) return 0
+        return numericPercent.roundToInt().coerceIn(MIN_VISIBLE_PROGRESS_PERCENT, FULL_PROGRESS_PERCENT)
+    }
+
+    private fun billingProgressColor(status: String): String {
+        return when (status) {
+            "Over limit" -> DANGER_COLOR
+            "Critical" -> "#f59e0b"
+            "Approaching" -> "#2563eb"
+            else -> "#38bdf8"
         }
     }
 
@@ -1076,8 +1151,8 @@ class EmailService {
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
             </head>
             <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-                <div style="background-color: #fef2f2; border-left: 4px solid #dc2626; padding: 30px; border-radius: 8px;">
-                    <h1 style="color: #dc2626; margin-bottom: 20px;">Organization Deleted</h1>
+                <div style="background-color: #fef2f2; border-left: 4px solid $DANGER_COLOR; padding: 30px; border-radius: 8px;">
+                    <h1 style="color: $DANGER_COLOR; margin-bottom: 20px;">Organization Deleted</h1>
                     <p>The organization <strong>$organizationName</strong> has been deleted by its owner.</p>
                     <p>Deletion of all projects, events, LLM data, analytics, and associated data has been initiated. Data removal from storage may complete within a short period.</p>
                     <p>Your Moneat account is still active. You can <a href="$frontendUrl/organizations/new" style="color: #2563eb;">create a new organization</a> or join another organization if you have pending invitations.</p>
