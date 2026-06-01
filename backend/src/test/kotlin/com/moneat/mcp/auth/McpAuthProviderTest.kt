@@ -17,8 +17,10 @@
 package com.moneat.mcp.auth
 
 import com.moneat.auth.services.AuthTokenService
+import com.moneat.mcp.services.McpApiKeyService
 import com.moneat.shared.models.AuthTokens
 import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.McpApiKeys
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
@@ -30,6 +32,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.security.MessageDigest
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.time.Clock
@@ -48,7 +51,7 @@ class McpAuthProviderTest {
             )
         }
         TransactionManager.defaultDatabase = db
-        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships, AuthTokens)
+        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships, AuthTokens, McpApiKeys)
     }
 
     @Test
@@ -96,6 +99,29 @@ class McpAuthProviderTest {
         val auth = McpAuthProvider.validateAuthorization(token)
 
         assertNull(auth)
+    }
+
+    @Test
+    fun `mcp api keys do not inherit workflow scopes`() {
+        val (userId, orgId) = seedUserInOrg("primary")
+        val key = McpApiKeyService()
+            .createKey(
+                organizationId = orgId,
+                userId = userId,
+                name = "MCP",
+                enabledTools = listOf("list_workflows"),
+                enabledResources = emptyList(),
+            )
+            .key
+
+        val auth = McpAuthProvider.validateAuthorization("Bearer $key")
+
+        assertNotNull(auth)
+        assertEquals(orgId, auth.organizationId)
+        assertEquals(setOf("list_workflows"), auth.allowedTools)
+        assertFalse(McpScopes.WORKFLOW_READ in auth.scopes)
+        assertFalse(McpScopes.WORKFLOW_WRITE in auth.scopes)
+        assertFalse(McpScopes.WORKFLOW_RUN in auth.scopes)
     }
 
     private fun seedUserInOrg(slug: String): Pair<Int, Int> =

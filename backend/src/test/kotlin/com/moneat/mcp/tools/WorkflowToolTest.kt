@@ -302,6 +302,34 @@ class WorkflowToolTest {
         verify(exactly = 0) { service.listRuns(any(), any(), any()) }
     }
 
+    @Test
+    fun `required integer arguments distinguish missing and malformed values`() = runBlocking {
+        val service = mockk<WorkflowService>()
+
+        val missingWorkflowId = GetWorkflowTool(service).execute(JsonObject(emptyMap()), context)
+        val malformedWorkflowId = GetWorkflowTool(service)
+            .execute(JsonObject(mapOf("workflow_id" to JsonPrimitive("bad"))), context)
+        val malformedRunId = GetWorkflowRunTool(service)
+            .execute(
+                JsonObject(
+                    mapOf(
+                        "workflow_id" to JsonPrimitive(12),
+                        "run_id" to JsonPrimitive("bad"),
+                    )
+                ),
+                context,
+            )
+
+        assertTrue(missingWorkflowId.isError)
+        assertTrue(missingWorkflowId.content.first().text.orEmpty().contains("workflow_id is required"))
+        assertTrue(malformedWorkflowId.isError)
+        assertTrue(malformedWorkflowId.content.first().text.orEmpty().contains("workflow_id must be a valid integer"))
+        assertTrue(malformedRunId.isError)
+        assertTrue(malformedRunId.content.first().text.orEmpty().contains("run_id must be a valid integer"))
+        verify(exactly = 0) { service.getWorkflow(any(), any()) }
+        verify(exactly = 0) { service.getRun(any(), any(), any()) }
+    }
+
     private fun workflowResponse(): WorkflowResponse =
         WorkflowResponse(
             id = 12,

@@ -97,8 +97,7 @@ class GetWorkflowTool(
         args: JsonObject,
         context: McpContext,
     ): ToolCallResult {
-        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD)
-            ?: return errorResult("$WORKFLOW_ID_FIELD is required")
+        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD) { message -> return errorResult(message) }
         val workflow = service.getWorkflow(context.organizationId, workflowId)
             ?: return errorResult("Workflow not found: $workflowId")
         return jsonResult(workflow)
@@ -177,8 +176,7 @@ class UpdateWorkflowTool(
         args: JsonObject,
         context: McpContext,
     ): ToolCallResult {
-        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD)
-            ?: return errorResult("$WORKFLOW_ID_FIELD is required")
+        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD) { message -> return errorResult(message) }
         val request = when (val result = parseUpdateWorkflowRequest(args)) {
             is WorkflowParseResult.Failure -> return errorResult(result.message)
             is WorkflowParseResult.Success -> result.value
@@ -208,8 +206,7 @@ class DeleteWorkflowTool(
         args: JsonObject,
         context: McpContext,
     ): ToolCallResult {
-        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD)
-            ?: return errorResult("$WORKFLOW_ID_FIELD is required")
+        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD) { message -> return errorResult(message) }
         return try {
             if (service.deleteWorkflow(context.organizationId, workflowId)) {
                 textResult("Workflow $workflowId deleted")
@@ -265,8 +262,7 @@ class RunWorkflowTool(
         args: JsonObject,
         context: McpContext,
     ): ToolCallResult {
-        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD)
-            ?: return errorResult("$WORKFLOW_ID_FIELD is required")
+        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD) { message -> return errorResult(message) }
         val scope = when (val result = args.optionalScopeArg()) {
             is WorkflowParseResult.Failure -> return errorResult(result.message)
             is WorkflowParseResult.Success -> result.value
@@ -294,8 +290,7 @@ class CreateWorkflowInstanceTool(
         args: JsonObject,
         context: McpContext,
     ): ToolCallResult {
-        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD)
-            ?: return errorResult("$WORKFLOW_ID_FIELD is required")
+        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD) { message -> return errorResult(message) }
         val scope = when (val result = args.optionalScopeArg()) {
             is WorkflowParseResult.Failure -> return errorResult(result.message)
             is WorkflowParseResult.Success -> result.value
@@ -323,9 +318,8 @@ class CancelWorkflowRunTool(
         args: JsonObject,
         context: McpContext,
     ): ToolCallResult {
-        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD)
-            ?: return errorResult("$WORKFLOW_ID_FIELD is required")
-        val runId = args.requiredIntArg(RUN_ID_FIELD) ?: return errorResult("$RUN_ID_FIELD is required")
+        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD) { message -> return errorResult(message) }
+        val runId = args.requiredIntArg(RUN_ID_FIELD) { message -> return errorResult(message) }
         val canceled = service.cancelRun(context.organizationId, workflowId, runId)
             ?: return errorResult("Workflow run not found: $runId")
         return jsonResult(canceled)
@@ -351,8 +345,7 @@ class ListWorkflowRunsTool(
         args: JsonObject,
         context: McpContext,
     ): ToolCallResult {
-        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD)
-            ?: return errorResult("$WORKFLOW_ID_FIELD is required")
+        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD) { message -> return errorResult(message) }
         val limit = args.optionalLimit(DEFAULT_WORKFLOW_RUN_LIMIT, MAX_WORKFLOW_RUN_LIMIT)
             ?: return errorResult("$LIMIT_FIELD must be a valid integer")
         return jsonResult(mapOf("runs" to service.listRuns(context.organizationId, workflowId, limit)))
@@ -370,9 +363,8 @@ class GetWorkflowRunTool(
         args: JsonObject,
         context: McpContext,
     ): ToolCallResult {
-        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD)
-            ?: return errorResult("$WORKFLOW_ID_FIELD is required")
-        val runId = args.requiredIntArg(RUN_ID_FIELD) ?: return errorResult("$RUN_ID_FIELD is required")
+        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD) { message -> return errorResult(message) }
+        val runId = args.requiredIntArg(RUN_ID_FIELD) { message -> return errorResult(message) }
         val run = service.getRun(context.organizationId, workflowId, runId)
             ?: return errorResult("Workflow run not found: $runId")
         return jsonResult(run)
@@ -469,8 +461,7 @@ class GetWorkflowWebhookSigningTool(
         args: JsonObject,
         context: McpContext,
     ): ToolCallResult {
-        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD)
-            ?: return errorResult("$WORKFLOW_ID_FIELD is required")
+        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD) { message -> return errorResult(message) }
         return try {
             val signing = service.webhookSigningInfo(context.organizationId, workflowId)
                 ?: return errorResult("Webhook signing is only available for webhook-triggered workflows")
@@ -487,8 +478,7 @@ private fun publishStateResult(
     operation: (Int, Int) -> WorkflowResponse?,
     state: String,
 ): ToolCallResult {
-    val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD)
-        ?: return errorResult("$WORKFLOW_ID_FIELD is required")
+    val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD) { message -> return errorResult(message) }
     val workflow = operation(context.organizationId, workflowId)
         ?: return errorResult("Workflow not found: $workflowId")
     return jsonResult(
@@ -702,8 +692,16 @@ private fun JsonObject.optionalLimit(default: Int, max: Int): Int? {
     return value.coerceIn(1, max)
 }
 
-private fun JsonObject.requiredIntArg(name: String): Int? =
-    optionalIntArg(name)
+private inline fun JsonObject.requiredIntArg(
+    name: String,
+    onFailure: (String) -> Nothing,
+): Int {
+    val value = this[name]
+    if (value == null || value == JsonNull) {
+        onFailure("$name is required")
+    }
+    return optionalIntArg(name) ?: onFailure("$name must be a valid integer")
+}
 
 private fun JsonObject.optionalIntArg(name: String): Int? {
     val value = this[name] ?: return null
