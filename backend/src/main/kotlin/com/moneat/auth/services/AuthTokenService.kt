@@ -53,7 +53,9 @@ class AuthTokenService {
                 "sourcemaps:read",
                 "sourcemaps:write",
                 "event:read",
-                "org:read"
+                "org:read",
+                "security:read",
+                "security:write"
             )
 
         // sentry-cli compatible org auth token format: sntrys_{base64_payload}_{base64_secret}

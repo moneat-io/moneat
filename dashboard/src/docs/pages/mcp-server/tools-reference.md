@@ -566,6 +566,75 @@ Delete an alert silence period.
 |-----------|------|----------|-------------|
 | `silence_period_id` | number | Yes | Silence period ID |
 
+## Security Tools
+
+### `list_security_signals`
+List security signals with optional filters.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `status` | string | No | `open`, `under_review`, or `archived` |
+| `severity` | string | No | `info`, `low`, `medium`, `high`, or `critical` |
+| `source` | string | No | Signal source, such as `detection` or `vulnerability` |
+| `from` / `to` | string | No | ISO-8601 time bounds |
+| `limit` / `offset` | integer | No | Pagination controls |
+
+### `get_security_signal`
+Get a security signal with evidence, audit trail, sample events, and threat intel.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `security_signal_id` | integer | Yes | Security signal ID |
+
+### ✏️ `triage_security_signal`
+Change signal status, assignment, or add a note.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `security_signal_id` | integer | Yes | Security signal ID |
+| `status` | string | No | `open`, `under_review`, or `archived` |
+| `reason` | string | No | Archive reason: `true_positive`, `false_positive`, or `benign` |
+| `assignee_user_id` | integer | No | User ID to assign |
+| `clear_assignee` | boolean | No | Clear the current assignee |
+| `note` | string | No | Triage note |
+
+### Detection Rule Tools
+Use these to manage compiler-validated security detection rules.
+
+| Tool | Write | Description |
+|------|-------|-------------|
+| `list_detection_rules` | No | List detection rules |
+| `get_detection_rule` | No | Get one rule by `detection_rule_id` |
+| `create_detection_rule` | Yes | Create a rule from structured rule fields |
+| `update_detection_rule` | Yes | Update a rule by `detection_rule_id` |
+| `delete_detection_rule` | Yes | Delete a rule by `detection_rule_id` |
+| `preview_detection_rule` | No | Preview rule matches without writing signals |
+| `get_detection_coverage` | No | Get MITRE ATT&CK coverage for enabled rules |
+| `list_detection_templates` | No | List starter-pack templates |
+| `install_detection_template` | Yes | Install a template by `template_id` as a disabled rule |
+
+Rule create/update fields include `name`, `description`, `source`, `filter`, `group_by`, `window_seconds`, `type`,
+`threshold_count`, `severity`, `signal_title`, `signal_message`, `suppressions`, `enabled`, and `tags`.
+
+### Vulnerability Tools
+
+| Tool | Description |
+|------|-------------|
+| `get_vulnerability_summary` | Package and finding counts |
+| `list_vulnerability_inventory` | SBOM package inventory with `search`, `package`, `target`, `limit`, and `offset` |
+| `list_vulnerability_findings` | Findings with `search`, `package`, `severity`, `status`, `limit`, and `offset` |
+| `export_vulnerability_sbom` | Export inventory as `cyclonedx` or `spdx` JSON |
+
+### Security Event And Compliance Tools
+
+| Tool | Description |
+|------|-------------|
+| `list_security_events` | Runtime security events with `severity`, `host`, `rule_id`, `limit`, and `offset` |
+| `get_security_event` | Runtime security event by `security_event_id` |
+| `get_compliance_summary` | Finding counts by framework and status |
+| `get_compliance_trends` | 14-day compliance trends by framework |
+| `list_compliance_findings` | Findings with `framework`, `status`, `limit`, and `offset` |
+
 ## Infrastructure Tools
 
 ### `list_containers`
@@ -883,3 +952,6 @@ Resources are read-only data sources available via `resources/list` and `resourc
 | `moneat://uptime/summary` | All uptime monitors with 24h/7d/30d percentages |
 | `moneat://status-pages` | Status pages and current status |
 | `moneat://infrastructure/health` | Quick health: host statuses, alert counts, uptime |
+| `moneat://security/summary` | Open signals, detection coverage, vulnerability counts, and compliance summary |
+| `moneat://security/signals/open` | Open security signals |
+| `moneat://security/detection/coverage` | MITRE ATT&CK coverage for enabled detection rules |
