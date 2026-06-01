@@ -170,6 +170,8 @@ class RuleQueryCompiler(
         validateSource(rule.source)
         val window = validateWindow(rule.windowSeconds)
         if (rule.type == DetectionRuleType.RATE_ANOMALY) {
+            // Rate anomaly is still externally a `logs` rule: the source gate above stays strict.
+            // Only the compiler chooses the logs-derived rollup table so authors cannot pick a table.
             return compileRateAnomaly(orgId, rule, window)
         }
         if (rule.type == DetectionRuleType.THRESHOLD) {
@@ -300,7 +302,7 @@ class RuleQueryCompiler(
             append(SELECT_CLAUSE)
             if (selectItems.isNotBlank()) append("$selectItems, ")
             append("sumMerge(event_count_state) AS current_count")
-            append(" FROM `${clickhouseDb()}`.security_log_rate_rollup_5m")
+            append(" FROM `${clickhouseDb()}`.$RATE_ANOMALY_ROLLUP_TABLE")
             append(WHERE_CLAUSE).append(whereClause)
             append(groupByClause)
         }
@@ -324,7 +326,7 @@ class RuleQueryCompiler(
             append(SELECT_CLAUSE)
             if (selectItems.isNotBlank()) append("$selectItems, ")
             append("bucket_start, sumMerge(event_count_state) AS bucket_count")
-            append(" FROM `${clickhouseDb()}`.security_log_rate_rollup_5m")
+            append(" FROM `${clickhouseDb()}`.$RATE_ANOMALY_ROLLUP_TABLE")
             append(WHERE_CLAUSE).append(whereClause)
             append(innerGroupBy)
         }
@@ -490,13 +492,13 @@ class RuleQueryCompiler(
 
     private fun anomalyEvidenceDescriptor(groupBy: List<String>, windowSeconds: Int): String {
         val groups = if (groupBy.isEmpty()) "-" else groupBy.joinToString(",")
-        return "table=security_log_rate_rollup_5m group_by=$groups window=${windowSeconds}s " +
+        return "source=logs rollup_table=$RATE_ANOMALY_ROLLUP_TABLE group_by=$groups window=${windowSeconds}s " +
             "baseline=${ANOMALY_BASELINE_SECONDS}s"
     }
 
-    /** Coerce an env value to a non-negative long, falling back to [default] if it is not numeric. */
+    /** Coerce an env value to a positive long, falling back to [default] if it is not numeric or disables a cap. */
     private fun asLong(value: String, default: String): Long =
-        value.trim().toLongOrNull()?.takeIf { it >= 0 } ?: default.toLong()
+        value.trim().toLongOrNull()?.takeIf { it > 0 } ?: default.toLong()
 
     /**
      * Sanitize an offending token before placing it in a DSL error: strip to a short, identifier-only
@@ -507,3 +509,4 @@ class RuleQueryCompiler(
 }
 
 private const val TOKEN_PREVIEW_LEN = 40
+private const val RATE_ANOMALY_ROLLUP_TABLE = "security_log_rate_rollup_5m"

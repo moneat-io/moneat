@@ -108,10 +108,15 @@ object AdvisoryParser {
                 val event = eventElement as? JsonObject ?: return@forEach
                 val nextIntroduced = event.s("introduced").takeIf { it.isNotBlank() }
                 val fixed = event.s("fixed").takeIf { it.isNotBlank() }
+                val limit = event.s("limit").takeIf { it.isNotBlank() }
                 val lastAffected = event.s("last_affected").takeIf { it.isNotBlank() }
                 if (nextIntroduced != null) introduced = nextIntroduced
                 if (fixed != null) {
                     parsed.add(AdvisoryRange(type = type, introduced = introduced ?: "0", fixed = fixed))
+                    introduced = null
+                }
+                if (limit != null) {
+                    parsed.add(AdvisoryRange(type = type, introduced = introduced ?: "0", limit = limit))
                     introduced = null
                 }
                 if (lastAffected != null) {

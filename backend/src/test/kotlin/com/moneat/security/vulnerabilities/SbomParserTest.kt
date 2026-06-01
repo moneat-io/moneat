@@ -53,6 +53,56 @@ class SbomParserTest {
     }
 
     @Test
+    fun `parses CycloneDX npm scope from group and purl namespace`() {
+        val parsed = SbomParser.parse(
+            """
+            {
+              "bomFormat": "CycloneDX",
+              "components": [
+                {
+                  "type": "library",
+                  "group": "@babel",
+                  "name": "core",
+                  "version": "7.24.0",
+                  "purl": "pkg:npm/%40babel/core@7.24.0"
+                }
+              ]
+            }
+            """.trimIndent().encodeToByteArray()
+        )
+
+        val pkg = parsed.packages.single()
+        assertEquals("@babel/core", pkg.name)
+        assertEquals("npm", pkg.ecosystem)
+        assertEquals("npm", pkg.packageType)
+    }
+
+    @Test
+    fun `parses CycloneDX Maven group and artifact as advisory coordinate`() {
+        val parsed = SbomParser.parse(
+            """
+            {
+              "bomFormat": "CycloneDX",
+              "components": [
+                {
+                  "type": "library",
+                  "group": "org.apache.commons",
+                  "name": "commons-lang3",
+                  "version": "3.9",
+                  "purl": "pkg:maven/org.apache.commons/commons-lang3@3.9"
+                }
+              ]
+            }
+            """.trimIndent().encodeToByteArray()
+        )
+
+        val pkg = parsed.packages.single()
+        assertEquals("org.apache.commons:commons-lang3", pkg.name)
+        assertEquals("maven", pkg.ecosystem)
+        assertEquals("maven", pkg.packageType)
+    }
+
+    @Test
     fun `parses SPDX package external refs`() {
         val parsed = SbomParser.parse(
             """

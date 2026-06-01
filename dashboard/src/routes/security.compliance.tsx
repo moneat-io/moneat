@@ -19,6 +19,7 @@ import {useQuery} from '@tanstack/react-query'
 import {api, type ComplianceFrameworkTrend} from '@/lib/api'
 import {Badge} from '@/components/ui/badge'
 import {Card, CardContent, CardHeader, CardTitle, CardDescription} from '@/components/ui/card'
+import {SecurityError} from '@/components/security/SecurityError'
 import {cn} from '@/lib/utils'
 
 export const Route = createFileRoute('/security/compliance')({
@@ -48,28 +49,29 @@ interface ComplianceFinding {
 }
 
 function ComplianceFindings() {
-  const {data: summaryData} = useQuery({
+  const summaryQuery = useQuery({
     queryKey: ['compliance-summary'],
     queryFn: () => api.get<{summary?: ComplianceSummary[]}>('/v1/security/compliance/summary'),
   })
 
-  const {data, isLoading} = useQuery({
+  const findingsQuery = useQuery({
     queryKey: ['compliance-findings'],
     queryFn: () => api.get<{findings?: ComplianceFinding[]; totalCount?: number}>('/v1/security/compliance?limit=50'),
   })
-  const {data: trendData} = useQuery({
+  const trendQuery = useQuery({
     queryKey: ['compliance-trends'],
     queryFn: () => api.getComplianceTrends(),
   })
 
-  const findings: ComplianceFinding[] = data?.findings ?? []
-  const summary: ComplianceSummary[] = summaryData?.summary ?? []
-  const trends = trendData?.frameworks ?? []
+  const findings: ComplianceFinding[] = findingsQuery.data?.findings ?? []
+  const summary: ComplianceSummary[] = summaryQuery.data?.summary ?? []
+  const trends = trendQuery.data?.frameworks ?? []
 
   return (
     <div className="space-y-4">
-      {/* Summary */}
-      {summary.length > 0 && (
+      {summaryQuery.isError ? (
+        <SecurityError title="Couldn’t load compliance summary" error={summaryQuery.error} />
+      ) : summary.length > 0 ? (
         <div className="grid gap-2 md:grid-cols-4">
           {['passed', 'failed', 'skipped', 'error'].map(status => {
             const count = summary
@@ -87,19 +89,26 @@ function ComplianceFindings() {
             )
           })}
         </div>
+      ) : null}
+
+      {trendQuery.isError ? (
+        <SecurityError title="Couldn’t load compliance trends" error={trendQuery.error} />
+      ) : (
+        trends.length > 0 && <PassRateTrends trends={trends} />
       )}
 
-      {trends.length > 0 && <PassRateTrends trends={trends} />}
-
-      {/* Findings table */}
-      {isLoading ? (
+      {findingsQuery.isError ? (
+        <SecurityError title="Couldn’t load compliance findings" error={findingsQuery.error} />
+      ) : findingsQuery.isLoading ? (
         <div className="flex justify-center py-8">
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-primary" />
         </div>
       ) : (
         <Card>
           <CardHeader className="py-2 px-3">
-            <CardTitle className="text-sm">Compliance Findings ({data?.totalCount || 0})</CardTitle>
+            <CardTitle className="text-sm">
+              Compliance Findings ({findingsQuery.data?.totalCount || 0})
+            </CardTitle>
             <CardDescription className="text-xs">CIS, PCI, SOC2, HIPAA rule evaluations</CardDescription>
           </CardHeader>
           <CardContent className="p-3 pt-0">

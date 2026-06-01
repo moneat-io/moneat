@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import type {KeyboardEvent} from 'react'
 import type {SignalResponse} from '@/lib/api'
 import {Badge} from '@/components/ui/badge'
 import {cn} from '@/lib/utils'
@@ -26,6 +27,12 @@ interface SignalsTableProps {
 }
 
 export function SignalsTable({signals, selectedId, onSelect}: SignalsTableProps) {
+  function activateSignal(event: KeyboardEvent<HTMLTableRowElement>, signal: SignalResponse) {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    event.preventDefault()
+    onSelect(signal)
+  }
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-xs">
@@ -43,9 +50,14 @@ export function SignalsTable({signals, selectedId, onSelect}: SignalsTableProps)
           {signals.map((s) => (
             <tr
               key={s.id}
+              role="button"
+              tabIndex={0}
+              aria-label={`Open signal ${s.rule_name}`}
               onClick={() => onSelect(s)}
+              onKeyDown={(event) => activateSignal(event, s)}
               className={cn(
-                'cursor-pointer border-b last:border-0 hover:bg-muted/30',
+                'cursor-pointer border-b outline-none last:border-0 hover:bg-muted/30 focus-visible:bg-muted/40',
+                'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                 selectedId === s.id && 'bg-muted/40'
               )}>
               <td className="py-1.5 pr-2">

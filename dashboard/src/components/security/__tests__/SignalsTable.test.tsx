@@ -45,4 +45,18 @@ describe('SignalsTable', () => {
     fireEvent.click(screen.getByText('Repeated failed logins'))
     expect(onSelect).toHaveBeenCalledWith(signal)
   })
+
+  it('activates focused rows with the keyboard', () => {
+    const onSelect = vi.fn()
+    const signal = makeSignal({id: 42})
+    render(<SignalsTable signals={[signal]} onSelect={onSelect} />)
+    const row = screen.getByRole('button', {name: 'Open signal Repeated failed logins'})
+
+    row.focus()
+    fireEvent.keyDown(row, {key: 'Enter'})
+    fireEvent.keyDown(row, {key: ' '})
+
+    expect(onSelect).toHaveBeenCalledTimes(2)
+    expect(onSelect).toHaveBeenCalledWith(signal)
+  })
 })

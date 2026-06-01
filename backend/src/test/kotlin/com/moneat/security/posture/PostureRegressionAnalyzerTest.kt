@@ -82,6 +82,37 @@ class PostureRegressionAnalyzerTest {
     }
 
     @Test
+    fun `regression dedup key uses escaped stable shape when fields contain separators`() {
+        val left = finding(
+            status = "passed",
+            framework = "cis|aws",
+            ruleId = "rule=1",
+            resourceType = "account",
+            resourceId = "prod\\0",
+        )
+        val right = finding(
+            status = "passed",
+            framework = "cis",
+            ruleId = "aws|rule",
+            resourceType = "1|account",
+            resourceId = "prod\\\u0000",
+        )
+        PostureRegressionAnalyzer.analyze(orgId, listOf(left, right))
+
+        val specs = PostureRegressionAnalyzer.analyze(
+            orgId,
+            listOf(left.copy(status = "failed"), right.copy(status = "failed")),
+        )
+
+        val keys = specs.map { it.dedupKey }
+        assertEquals(2, keys.toSet().size)
+        assertTrue(keys.all { it.startsWith("framework=") })
+        assertTrue(keys.any { it.contains("\\|") })
+        assertTrue(keys.any { it.contains("\\=") })
+        assertTrue(keys.any { it.contains("\\\\") && it.contains("\\0") })
+    }
+
+    @Test
     fun `regression signal uses clamped occurrence time`() {
         val futureMs = Clock.System.now().toEpochMilliseconds() + ONE_DAY_MS
         PostureRegressionAnalyzer.analyze(orgId, listOf(finding(status = "passed", timestampMs = futureMs)))
@@ -130,14 +161,21 @@ class PostureRegressionAnalyzerTest {
         assertEquals(1, originalOrgSpecs.size)
     }
 
-    private fun finding(status: String, timestampMs: Long = 1_700_000_000_000): ComplianceFindingInput =
+    private fun finding(
+        status: String,
+        timestampMs: Long = 1_700_000_000_000,
+        framework: String = "cis-aws",
+        ruleId: String = "cis-1.1",
+        resourceType: String = "aws_account",
+        resourceId: String = "acct-123",
+    ): ComplianceFindingInput =
         ComplianceFindingInput(
-            framework = "cis-aws",
-            ruleId = "cis-1.1",
+            framework = framework,
+            ruleId = ruleId,
             ruleName = "Root MFA",
             status = status,
-            resourceType = "aws_account",
-            resourceId = "acct-123",
+            resourceType = resourceType,
+            resourceId = resourceId,
             resourceName = "prod",
             timestampMs = timestampMs,
         )

@@ -86,6 +86,31 @@ class AdvisoryParserTest {
         assertEquals("fallback text", advisories[2].summary)
     }
 
+    @Test
+    fun `parseDocument preserves OSV limit range events`() {
+        val advisories = AdvisoryParser.parseDocument(
+            """
+            {
+              "id": "OSV-2026-0002",
+              "affected": [
+                {
+                  "package": {"ecosystem": "npm", "name": "left-pad"},
+                  "ranges": [
+                    {"type": "SEMVER", "events": [{"introduced": "1.0.0"}, {"limit": "2.0.0"}]}
+                  ]
+                }
+              ]
+            }
+            """.trimIndent()
+        )
+
+        val range = advisories.single().affectedRanges.single()
+        assertEquals("1.0.0", range.introduced)
+        assertEquals("2.0.0", range.limit)
+        assertNull(range.fixed)
+        assertNull(range.lastAffected)
+    }
+
     private fun ghsaRow(vararg parts: String): String =
         parts.joinToString("")
 }
