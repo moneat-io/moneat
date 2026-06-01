@@ -21,6 +21,7 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -111,6 +112,45 @@ class SignalWriterTest {
             assertEquals(SignalStatus.UNDER_REVIEW.wire, row[SecuritySignals.status])
             assertEquals(2, row[SecuritySignals.sampleCount])
             assertEquals(1, SecuritySignals.selectAll().count())
+        }
+    }
+
+    @Test
+    fun `when duplicate active rows exist repeat folds into under review before open`() {
+        val open = SignalWriter.upsert(orgId, spec(severity = SignalSeverity.MEDIUM))
+        val underReviewId = transaction {
+            val earlier = Instant.fromEpochMilliseconds(1_700_000_000_000)
+            SecuritySignals.insertAndGetId {
+                it[SecuritySignals.organizationId] = orgId
+                it[SecuritySignals.signalSource] = SignalSource.AGENT_RUNTIME.wire
+                it[SecuritySignals.ruleId] = "cws-1"
+                it[SecuritySignals.ruleName] = "Suspicious exec"
+                it[SecuritySignals.severity] = SignalSeverity.MEDIUM.wire
+                it[SecuritySignals.status] = SignalStatus.UNDER_REVIEW.wire
+                it[SecuritySignals.dedupKey] = "cws-1|web-01|bash"
+                it[SecuritySignals.entities] = "{}"
+                it[SecuritySignals.sampleCount] = 4
+                it[SecuritySignals.tags] = "[]"
+                it[SecuritySignals.firstSeen] = earlier
+                it[SecuritySignals.lastSeen] = earlier
+                it[SecuritySignals.createdAt] = earlier
+                it[SecuritySignals.updatedAt] = earlier
+            }.value
+        }
+
+        val outcome = SignalWriter.upsert(
+            orgId,
+            spec(severity = SignalSeverity.MEDIUM, occurredAtMs = 1_700_000_060_000),
+        )
+
+        assertIs<SignalOutcome.Updated>(outcome)
+        assertEquals(underReviewId, outcome.signalId)
+        transaction {
+            val openRow = SecuritySignals.selectAll().where { SecuritySignals.id eq open.signalId }.single()
+            val reviewRow = SecuritySignals.selectAll().where { SecuritySignals.id eq underReviewId }.single()
+            assertEquals(1, openRow[SecuritySignals.sampleCount])
+            assertEquals(5, reviewRow[SecuritySignals.sampleCount])
+            assertEquals(SignalStatus.UNDER_REVIEW.wire, reviewRow[SecuritySignals.status])
         }
     }
 

@@ -18,6 +18,7 @@ package com.moneat.security.signals
 
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.or
@@ -99,6 +100,11 @@ object SignalWriter {
                         )
             }
             .forUpdate()
+            .orderBy(
+                SecuritySignals.status to SortOrder.DESC,
+                SecuritySignals.lastSeen to SortOrder.DESC,
+                SecuritySignals.id to SortOrder.DESC,
+            )
             .limit(1)
             .firstOrNull()
             ?.let { row ->

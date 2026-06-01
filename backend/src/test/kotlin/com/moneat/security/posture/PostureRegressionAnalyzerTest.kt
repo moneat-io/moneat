@@ -76,16 +76,13 @@ class PostureRegressionAnalyzerTest {
         assertEquals(SignalSource.AGENT_COMPLIANCE, spec.source)
         assertEquals(SignalSeverity.HIGH, spec.severity)
         assertEquals("cis-1.1", spec.ruleId)
-        assertEquals(
-            "framework=cis-aws|rule_id=cis-1.1|resource_type=aws_account|resource_id=acct-123",
-            spec.dedupKey,
-        )
+        assertEquals("cis-aws|cis-1.1|aws_account|acct-123", spec.dedupKey)
         assertEquals("acct-123", spec.entities["resource_id"])
         assertTrue(spec.evidenceReference.contains("previous=passed"))
     }
 
     @Test
-    fun `regression dedup keys do not collide when fields contain separators`() {
+    fun `regression dedup key uses escaped stable shape when fields contain separators`() {
         val left = finding(
             status = "passed",
             framework = "cis|aws",
@@ -109,6 +106,7 @@ class PostureRegressionAnalyzerTest {
 
         val keys = specs.map { it.dedupKey }
         assertEquals(2, keys.toSet().size)
+        assertTrue(keys.all { it.startsWith("framework=") })
         assertTrue(keys.any { it.contains("\\|") })
         assertTrue(keys.any { it.contains("\\=") })
         assertTrue(keys.any { it.contains("\\\\") && it.contains("\\0") })

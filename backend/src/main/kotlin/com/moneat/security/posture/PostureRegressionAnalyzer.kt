@@ -36,6 +36,7 @@ import kotlin.time.Instant
 
 private const val COMPLIANCE_TABLE = "compliance_findings"
 private const val EVIDENCE_TYPE = "clickhouse_query"
+private val LEGACY_KEY_UNSAFE_CHARS = charArrayOf('|', '=', '\\', '\u0000')
 
 object PostureRegressionAnalyzer {
 
@@ -193,8 +194,18 @@ object PostureRegressionAnalyzer {
         )
     }
 
-    private fun findingKey(finding: ComplianceFindingInput): String =
-        encodeStableKeySegments(
+    private fun findingKey(finding: ComplianceFindingInput): String {
+        val legacySegments = listOf(
+            finding.framework,
+            finding.ruleId,
+            finding.resourceType,
+            finding.resourceId,
+        )
+        if (legacySegments.none(::containsLegacyKeyUnsafeChar)) {
+            return legacySegments.joinToString("|")
+        }
+
+        return encodeStableKeySegments(
             listOf(
                 "framework" to finding.framework,
                 "rule_id" to finding.ruleId,
@@ -202,6 +213,10 @@ object PostureRegressionAnalyzer {
                 "resource_id" to finding.resourceId,
             )
         )
+    }
+
+    private fun containsLegacyKeyUnsafeChar(segment: String): Boolean =
+        segment.any { it in LEGACY_KEY_UNSAFE_CHARS }
 
     private fun occurrenceTime(timestampMs: Long): Instant {
         val occurred = Instant.fromEpochMilliseconds(timestampMs)
