@@ -18,7 +18,6 @@ package com.moneat.monitoring
 
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.monitor.routes.agentApiKeyRoutes
-import com.moneat.security.routes.securityRoutes
 import com.moneat.synthetics.routes.SyntheticsScheduler
 import com.moneat.synthetics.routes.syntheticsRoutes
 import io.ktor.server.application.Application
@@ -28,8 +27,8 @@ import mu.KotlinLogging
 private val logger = KotlinLogging.logger {}
 
 /**
- * Enterprise monitoring module that contributes infra/security/synthetics APIs
- * and the synthetics scheduler background job.
+ * Enterprise monitoring module that contributes agent/synthetics APIs and the
+ * synthetics scheduler background job.
  */
 class MonitoringModule : EnterpriseModule {
     private lateinit var syntheticsScheduler: SyntheticsScheduler
@@ -39,7 +38,6 @@ class MonitoringModule : EnterpriseModule {
     override fun registerRoutes(route: Route) {
         route.apply {
             // Note: infraRoutes() is registered in core Routing.kt, not here
-            securityRoutes()
             syntheticsRoutes()
             agentApiKeyRoutes()
         }

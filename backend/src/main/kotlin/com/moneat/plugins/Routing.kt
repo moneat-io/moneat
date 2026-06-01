@@ -43,6 +43,9 @@ import com.moneat.org.routes.adminRoutes
 import com.moneat.org.routes.orgManagementRoutes
 import com.moneat.otlp.routes.otlpMetricsRoutes
 import com.moneat.otlp.routes.otlpTraceRoutes
+import com.moneat.security.detection.detectionRuleRoutes
+import com.moneat.security.signals.signalRoutes
+import com.moneat.security.vulnerabilities.vulnerabilityRoutes
 import com.moneat.statuspage.routes.statusPageRoutes
 import com.moneat.summary.routes.summaryRoutes
 import com.moneat.uptime.routes.uptimeRoutes
@@ -266,6 +269,26 @@ fun Application.configureRouting() {
             workflowRoutes()
         }
 
+        // Security signals triage surface (OSS core)
+        rateLimit(RateLimitName("api")) {
+            signalRoutes()
+        }
+
+        // Detection rules: scheduled, declarative rules over logs → signals (OSS core)
+        rateLimit(RateLimitName("api")) {
+            detectionRuleRoutes()
+        }
+
+        // Vulnerability/SBOM inventory and findings (OSS core)
+        rateLimit(RateLimitName("api")) {
+            vulnerabilityRoutes(includeAgentRoutes = false)
+        }
+
+        // SBOM compatibility ingest is OSS core so direct package inventory works without EE.
+        rateLimit(RateLimitName("datadog-ingestion")) {
+            vulnerabilityRoutes(includeApiRoutes = false)
+        }
+
         routingLogger.info { "Registering enterprise routes..." }
         // Enterprise modules (SSO, On-Call, etc.) — registered via ServiceLoader
         FeatureRegistry.registerRoutes(this)
@@ -275,7 +298,6 @@ fun Application.configureRouting() {
         McpModule.registerRoutes(this)
         routingLogger.info { "MCP routes registered" }
 
-        // AI chat assistant endpoints
         aiChatRoutes()
 
         // Custom dashboard builder endpoints
