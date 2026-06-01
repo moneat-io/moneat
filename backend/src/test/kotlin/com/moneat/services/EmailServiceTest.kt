@@ -304,6 +304,11 @@ class EmailServiceTest {
 
         service.sendBillingInsightsEmail("owner@example.com", billingInsightEmailData())
 
+        assertTrue(
+            htmlSlot.captured.contains("email-shell"),
+            "HTML should use the packaged Maizzle template instead of the plain fallback"
+        )
+        assertTrue(htmlSlot.captured.contains("https://moneat.io/favicon.svg"))
         assertTrue(htmlSlot.captured.contains("GB-Billed Ingestion"))
         assertTrue(htmlSlot.captured.contains("80%"))
         assertTrue(htmlSlot.captured.contains("aria-label=\"80% used\""))
