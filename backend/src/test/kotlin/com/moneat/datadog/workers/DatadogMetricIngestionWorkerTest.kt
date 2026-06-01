@@ -20,6 +20,7 @@ import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.DatadogMetricService
 import com.moneat.datadog.services.QueuedMetricBatch
 import com.moneat.datadog.services.QueuedMetricEntry
+import com.moneat.monitoring.OperationalMetrics
 import io.lettuce.core.api.sync.RedisCommands
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -30,10 +31,23 @@ import io.mockk.unmockkObject
 import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.SerializationException
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 
 class DatadogMetricIngestionWorkerTest {
+
+    @BeforeTest
+    fun resetMetricsBefore() {
+        OperationalMetrics.resetForTest()
+    }
+
+    @AfterTest
+    fun resetMetricsAfter() {
+        OperationalMetrics.resetForTest()
+    }
 
     // ──── Payload Handling ────
 
@@ -155,6 +169,14 @@ class DatadogMetricIngestionWorkerTest {
             verify(exactly = 1) {
                 redis.lrem("test:dd:metric:queue:processing", 1, "payload-2")
             }
+
+            val rendered = OperationalMetrics.scrape()
+            assertContains(rendered, "moneat_datadog_metric_insert_chunks_total")
+            assertContains(rendered, "mode=\"combined\"")
+            assertContains(rendered, "status=\"success\"")
+            assertContains(rendered, "moneat_datadog_metric_insert_rows_count")
+            assertContains(rendered, "moneat_datadog_metric_insert_payloads_count")
+            assertContains(rendered, "moneat_datadog_metric_payload_acks_total")
         } finally {
             unmockkObject(DatadogMetricService)
             unmockkObject(RedisConfig)
@@ -192,6 +214,12 @@ class DatadogMetricIngestionWorkerTest {
             verify(exactly = 1) {
                 redis.lrem("test:dd:metric:queue:processing", 1, "payload-2")
             }
+
+            val rendered = OperationalMetrics.scrape()
+            assertContains(rendered, "moneat_datadog_metric_insert_chunks_total")
+            assertContains(rendered, "mode=\"combined\"")
+            assertContains(rendered, "status=\"success\"")
+            assertContains(rendered, "moneat_datadog_metric_insert_rows_count")
         } finally {
             unmockkObject(DatadogMetricService)
             unmockkObject(RedisConfig)
@@ -236,6 +264,14 @@ class DatadogMetricIngestionWorkerTest {
             verify(exactly = 1) {
                 redis.lrem("test:dd:metric:queue:processing", 1, "payload-2")
             }
+
+            val rendered = OperationalMetrics.scrape()
+            assertContains(rendered, "moneat_datadog_metric_insert_fallbacks_total")
+            assertContains(rendered, "mode=\"combined\"")
+            assertContains(rendered, "mode=\"single\"")
+            assertContains(rendered, "status=\"failure\"")
+            assertContains(rendered, "status=\"success\"")
+            assertContains(rendered, "exception=\"IllegalStateException\"")
         } finally {
             unmockkObject(DatadogMetricService)
             unmockkObject(RedisConfig)

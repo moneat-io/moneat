@@ -23,6 +23,7 @@ import com.moneat.datadog.models.DatadogMetricV1
 import com.moneat.datadog.models.DatadogSketch
 import com.moneat.datadog.models.DatadogSketchPayload
 import com.moneat.datadog.models.DatadogSketchPoint
+import com.moneat.monitoring.OperationalMetrics
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.HttpStatusCode
 import io.lettuce.core.api.sync.RedisCommands
@@ -36,13 +37,26 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DatadogMetricServiceTest {
+
+    @BeforeEach
+    fun resetMetricsBefore() {
+        OperationalMetrics.resetForTest()
+    }
+
+    @AfterEach
+    fun resetMetricsAfter() {
+        OperationalMetrics.resetForTest()
+    }
 
     @Test
     fun `parseDdTagList parses key-value pairs`() {
@@ -215,6 +229,10 @@ class DatadogMetricServiceTest {
             assertEquals(1, count)
             assertEquals(42L, batch.organizationId)
             assertEquals(7L, batch.projectId)
+
+            val rendered = OperationalMetrics.scrape()
+            assertContains(rendered, "moneat_datadog_metric_payloads_queued_total")
+            assertContains(rendered, "moneat_datadog_metric_points_queued_total")
         } finally {
             unmockkObject(RedisConfig)
         }

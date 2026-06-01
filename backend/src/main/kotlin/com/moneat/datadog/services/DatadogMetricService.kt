@@ -23,6 +23,7 @@ import com.moneat.datadog.models.DatadogMetricV1
 import com.moneat.datadog.models.DatadogSketchPayload
 import com.moneat.monitor.services.InfraMetricRollupRow
 import com.moneat.monitor.services.InfraTelemetryRollups
+import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 import com.moneat.utils.formatClickHouseDateTime64MillisUtc
@@ -188,6 +189,7 @@ object DatadogMetricService {
         if (batch.metrics.isEmpty()) return 0
         val message = json.encodeToString(batch)
         RedisConfig.sync().lpush(queueKey, message)
+        OperationalMetrics.recordDatadogMetricPayloadQueued(batch.metrics.size)
         logger.debug {
             "Enqueued ${batch.metrics.size} DD metrics for org $organizationId"
         }
