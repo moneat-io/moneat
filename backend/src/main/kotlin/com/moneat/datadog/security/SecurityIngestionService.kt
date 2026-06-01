@@ -21,6 +21,12 @@ import com.moneat.config.RedisConfig
 import com.moneat.datadog.models.DdActivityDumpPayload
 import com.moneat.datadog.models.DdCompliancePayload
 import com.moneat.datadog.models.DdSecurityEventPayload
+import com.moneat.security.posture.ComplianceFindingInput
+import com.moneat.security.posture.PostureRegressionAnalyzer
+import com.moneat.security.signals.RuntimeSecurityEventInput
+import com.moneat.security.signals.SignalDerivation
+import com.moneat.security.signals.SignalOutcome
+import com.moneat.security.signals.SignalWriter
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.http.isSuccess
 import kotlinx.serialization.SerialName
@@ -152,11 +158,48 @@ object SecurityIngestionService {
         return entries.size
     }
 
-    suspend fun insertBatch(batch: QueuedSecurityBatch) {
+    /**
+     * Inserts the batch into ClickHouse, then derives security signals from it via [SignalWriter]
+     * (open-signal dedup). Returns the resulting signal outcomes so the caller can drive the
+     * `security.signal` workflow trigger off signal lifecycle rather than per raw event. Both the
+     * ingestion worker and the demo reseed call this, so both populate the triage surface.
+     */
+    suspend fun insertBatch(batch: QueuedSecurityBatch): List<SignalOutcome> {
         when (batch.batchType) {
             "events" -> insertSecurityEvents(batch)
             "dumps" -> insertActivityDumps(batch)
             "findings" -> insertComplianceFindings(batch)
+        }
+        return deriveSignals(batch)
+    }
+
+    /**
+     * Derives signals best-effort: the ClickHouse insert is already durable by this point, so a
+     * problem persisting signals (e.g. a transient Postgres issue) is logged and degrades to "no
+     * signals for this batch" rather than failing the ingest or crashing the worker. Each spec is
+     * upserted independently so one bad row cannot drop the rest.
+     */
+    private fun deriveSignals(batch: QueuedSecurityBatch): List<SignalOutcome> {
+        val specs = runCatching {
+            if (batch.batchType == "findings") {
+                PostureRegressionAnalyzer.analyze(
+                    batch.organizationId,
+                    batch.findings.map { it.toPostureFindingInput() },
+                )
+            } else if (batch.batchType == "events") {
+                val events = batch.events.map { it.toRuntimeSecurityEventInput() }
+                SignalDerivation.fromRuntimeEvents(events)
+            } else {
+                emptyList()
+            }
+        }.getOrElse { e ->
+            logger.warn { "Security signal analysis failed for ${batch.batchType}: ${e.message}" }
+            emptyList()
+        }
+        return specs.mapNotNull { spec ->
+            runCatching { SignalWriter.upsert(batch.organizationId, spec) }
+                .onFailure { logger.warn { "Signal derivation failed for rule ${spec.ruleId}: ${it.message}" } }
+                .getOrNull()
         }
     }
 
@@ -172,7 +215,7 @@ object SecurityIngestionService {
                 else -> "info"
             }
             """(
-                ${batch.organizationId},
+                toUInt64(${batch.organizationId}),
                 '${escapeSql(e.ruleId)}', '${escapeSql(e.ruleName)}',
                 '${escapeSql(e.ruleCategory)}', '$sev',
                 '${escapeSql(e.agentRuleVersion)}',
@@ -198,7 +241,7 @@ object SecurityIngestionService {
         if (batch.dumps.isEmpty()) return
         val rows = batch.dumps.joinToString(",\n") { d ->
             """(
-                ${batch.organizationId},
+                toUInt64(${batch.organizationId}),
                 '${escapeSql(d.activityType)}',
                 '${escapeSql(d.processName)}',
                 '${escapeSql(d.host)}',
@@ -227,7 +270,7 @@ object SecurityIngestionService {
                 else -> "passed"
             }
             """(
-                ${batch.organizationId},
+                toUInt64(${batch.organizationId}),
                 '${escapeSql(f.framework)}',
                 '${escapeSql(f.ruleId)}', '${escapeSql(f.ruleName)}',
                 '$status',
@@ -278,4 +321,27 @@ object SecurityIngestionService {
         }
         return "map($entries)"
     }
+
+    private fun QueuedComplianceEntry.toPostureFindingInput(): ComplianceFindingInput =
+        ComplianceFindingInput(
+            framework = framework,
+            ruleId = ruleId,
+            ruleName = ruleName,
+            status = status,
+            resourceType = resourceType,
+            resourceId = resourceId,
+            resourceName = resourceName,
+            timestampMs = timestampMs,
+        )
+
+    private fun QueuedSecurityEventEntry.toRuntimeSecurityEventInput(): RuntimeSecurityEventInput =
+        RuntimeSecurityEventInput(
+            ruleId = ruleId,
+            ruleName = ruleName,
+            severity = severity,
+            processName = processName,
+            filePath = filePath,
+            host = host,
+            timestampMs = timestampMs,
+        )
 }

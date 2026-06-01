@@ -41,6 +41,7 @@ import com.moneat.datadog.routes.traceDashboardRoutes
 import com.moneat.datadog.routes.traceIngestRoutes
 import com.moneat.datadog.security.SecurityIngestionWorker
 import com.moneat.datadog.security.securityIngestRoutes
+import com.moneat.datadog.security.securityQueryRoutes
 import com.moneat.datadog.services.ProfileStorageService
 import com.moneat.datadog.workers.DatadogEventIngestionWorker
 import com.moneat.datadog.workers.DatadogInfraIngestionWorker
@@ -103,12 +104,15 @@ class DatadogModule : EnterpriseModule {
                 dbmIngestRoutes()
                 debuggerIngestRoutes()
                 telemetryProxyRoutes()
-                miscIngestRoutes()
+                miscIngestRoutes(includeSbomRoutes = false)
                 ndmIngestRoutes()
                 securityIngestRoutes()
             }
 
             // Dashboard / query routes (JWT-protected, not agent ingest)
+            rateLimit(RateLimitName("api")) {
+                securityQueryRoutes()
+            }
             traceDashboardRoutes()
             profileDashboardRoutes()
             datadogEventQueryRoutes()

@@ -25,7 +25,9 @@ const config: FeaturePageConfig = {
   slug: pageSeo.slug,
   title: pageSeo.title,
   tagline: 'Know what you\'re running',
-  description: 'Software bill of materials with CVE tracking across all your services. Know exactly what packages are deployed, which versions have known vulnerabilities, and what needs patching.',
+  description:
+    'Upload CycloneDX or SPDX SBOMs, inventory the packages running across your services, and surface ' +
+    'vulnerability findings with CVSS scores, fix versions, and advisory links.',
   metaDescription: pageSeo.metaDescription,
   icon: ShieldCheck,
   iconColor: 'text-emerald-400',
@@ -33,25 +35,48 @@ const config: FeaturePageConfig = {
   gradient: 'from-emerald-500 to-green-400',
   accentColor: 'text-emerald-400',
   screenshot: pageSeo.image,
-  screenshotAlt: 'Security dashboard showing SBOM inventory and CVE tracking',
+  screenshotAlt: 'Security dashboard concept showing SBOM inventory and CVE tracking',
   subFeatures: [
-    {icon: Package, title: 'Package Inventory', description: 'Full inventory of every package and version running across all your services and hosts.', iconColor: 'text-emerald-400'},
-    {icon: AlertTriangle, title: 'CVE Tracking', description: 'Automatic matching of your packages against known CVEs with severity ratings and remediation links.', iconColor: 'text-red-400'},
-    {icon: Search, title: 'Vulnerability Search', description: 'Search for specific CVEs or packages across your entire infrastructure instantly.', iconColor: 'text-blue-400'},
-    {icon: FileText, title: 'SBOM Export', description: 'Export your software bill of materials in standard formats for compliance and auditing.', iconColor: 'text-violet-400'},
-    {icon: Shield, title: 'Compliance', description: 'Meet supply-chain security requirements with automated SBOM generation and tracking.', iconColor: 'text-amber-400'},
+    {
+      icon: Package,
+      title: 'Package Inventory',
+      description: 'Track packages and versions by service, host, image, or container.',
+      iconColor: 'text-emerald-400',
+    },
+    {
+      icon: AlertTriangle,
+      title: 'CVE Tracking',
+      description: 'Match inventory against a local advisory mirror with severity, CVSS, and fix data.',
+      iconColor: 'text-red-400',
+    },
+    {
+      icon: Search,
+      title: 'Vulnerability Search',
+      description: 'Search by package, target, advisory, or CVE from the Security section.',
+      iconColor: 'text-blue-400',
+    },
+    {
+      icon: FileText,
+      title: 'SBOM Export',
+      description: 'Export the current inventory as CycloneDX or SPDX JSON.',
+      iconColor: 'text-violet-400',
+    },
+    {
+      icon: Shield,
+      title: 'Compliance',
+      description: 'Keep supply-chain evidence close to the findings your team triages.',
+      iconColor: 'text-amber-400',
+    },
     {
       icon: ShieldCheck,
       title: 'Auto-Discovery',
       description:
-        'Packages are discovered automatically from supported infrastructure agents with no manual ' +
-        'inventory work.',
+        'Ingest SBOM payloads from existing agent-compatible paths as well as direct uploads.',
       iconColor: 'text-cyan-400',
     },
   ],
   compatNote:
-    'SBOM data is collected automatically through supported infrastructure agents. No additional scanning pipeline ' +
-    'is required.',
+    'Direct upload works in core. Agent-compatible SBOM ingest uses the same inventory and vulnerability findings.',
 }
 
 export const Route = createFileRoute('/security-sbom')({

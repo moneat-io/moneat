@@ -45,7 +45,6 @@ import {
     LineChart,
     LogOut,
     MessageSquare,
-    Network,
     Package,
     Play,
     Plus,
@@ -208,9 +207,9 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
   const datadogCoreNavItems: NavItem[] = hasEnterpriseModule(features, 'datadog')
     ? [{key: 'profiles', icon: Flame, label: 'Profiles', href: '/profiles', requiresProject: false, group: 'core'}]
     : []
+  // Synthetics stays enterprise-gated; Security (Signals + Detections) is OSS core and lives in baseNavItems.
   const datadogOperationsNavItems: NavItem[] = hasEnterpriseModule(features, 'datadog')
     ? [
-      {key: 'security', icon: ShieldAlert, label: 'Security', href: '/security', requiresProject: false, group: 'operations'},
       {key: 'synthetics', icon: FlaskConical, label: 'Synthetics', href: '/synthetics', requiresProject: false, group: 'operations'},
     ]
     : []
@@ -238,7 +237,6 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
     ...datadogCoreNavItems,
     // Infrastructure & Uptime
     { key: 'monitoring', icon: Server, label: 'Monitoring', href: '/monitoring', requiresProject: false, group: 'infrastructure' },
-    { key: 'service-map', icon: Network, label: 'Service Map', href: '/monitoring/service-map', requiresProject: false, group: 'infrastructure' },
     { key: 'uptime', icon: Activity, label: 'Uptime', href: '/uptime', requiresProject: false, group: 'infrastructure' },
     {
       key: 'status-pages',
@@ -270,7 +268,8 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
     { key: 'feedback', icon: MessageSquare, label: 'Feedback', href: '/feedback', requiresProject: false, group: 'insights' },
     { key: 'releases', icon: Package, label: 'Releases', href: '/releases', requiresProject: false, group: 'insights' },
     { key: 'ai', icon: Brain, label: 'AI', href: '/ai', requiresProject: false, group: 'insights' },
-    // Operations (enterprise)
+    // Operations
+    { key: 'security', icon: ShieldAlert, label: 'Security', href: '/security', requiresProject: false, group: 'operations' },
     ...datadogOperationsNavItems,
     ...onCallNavItems,
     { key: 'workflows', icon: Workflow, label: 'Workflows', href: '/workflows', requiresProject: false, group: 'operations' },

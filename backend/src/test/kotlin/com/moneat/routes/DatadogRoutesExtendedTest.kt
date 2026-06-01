@@ -197,7 +197,7 @@ class DatadogRoutesExtendedTest {
         every { DatadogHostService.upsertFromIntake(any(), any()) } just Runs
         every { DatadogHostService.touchHostLastSeen(any(), any()) } just Runs
         coEvery { DatadogMetricService.enqueueMetrics(any(), any(), any()) } returns 1
-        every { DatadogMetricService.mapSketches(any(), any()) } returns
+        every { DatadogMetricService.mapSketches(any(), any(), any()) } returns
             com.moneat.datadog.services.QueuedSketchBatch(1L, emptyList())
         coEvery { DatadogMetricService.insertSketchBatch(any()) } just Runs
         every { DatadogEventService.mapServiceChecks(any(), any()) } returns
@@ -903,7 +903,7 @@ class DatadogRoutesExtendedTest {
             )
         }
         verify { DatadogHostService.touchHostLastSeen(TEST_ORG_ID, setOf("h1")) }
-        coVerify(exactly = 0) { DatadogMetricService.enqueueMetrics(any(), any()) }
+        coVerify(exactly = 0) { DatadogMetricService.enqueueMetrics(any(), any(), any()) }
     }
 
     @Test

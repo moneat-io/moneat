@@ -258,14 +258,14 @@ class DatadogMetricIngestionWorker(
             return
         }
 
+        logger.warn(combinedResult.exceptionOrNull()) {
+            "Combined Datadog metric insert failed; falling back to per-payload inserts"
+        }
         OperationalMetrics.recordDatadogMetricInsertFallback(
             payloadCount = payloads.size,
             rowCount = totalRows(payloads),
             cause = combinedResult.exceptionOrNull(),
         )
-        logger.warn(combinedResult.exceptionOrNull()) {
-            "Combined Datadog metric insert failed; falling back to per-payload inserts"
-        }
         payloads.forEach { insertSinglePayload(workerId, it) }
     }
 

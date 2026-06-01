@@ -60,7 +60,10 @@ object DatadogAuthMiddleware {
         // Check cache first
         val cached = cache[apiKey]
         if (cached != null) {
-            return cached.organizationId
+            if (now < cached.expiresAt) {
+                return cached.organizationId
+            }
+            cache.remove(apiKey, cached)
         }
 
         val organizationId = DatadogService.validateApiKey(apiKey)
@@ -99,7 +102,12 @@ object DatadogAuthMiddleware {
         }
 
         val cached = contextCache[apiKey]
-        if (cached != null) return cached.context
+        if (cached != null) {
+            if (now < cached.expiresAt) {
+                return cached.context
+            }
+            contextCache.remove(apiKey, cached)
+        }
 
         val validation = DatadogService.validateApiKeyContext(apiKey)
         if (validation == null) {
@@ -131,7 +139,12 @@ object DatadogAuthMiddleware {
         val now = System.currentTimeMillis()
         evictExpiredEntries(now)
         val cached = cache[apiKey]
-        if (cached != null) return cached.organizationId
+        if (cached != null) {
+            if (now < cached.expiresAt) {
+                return cached.organizationId
+            }
+            cache.remove(apiKey, cached)
+        }
         val organizationId = DatadogService.validateApiKey(apiKey) ?: return null
         if (cache.size < MAX_CACHE_SIZE) {
             cache[apiKey] = CachedKey(organizationId, now + CACHE_TTL_MS)

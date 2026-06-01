@@ -72,6 +72,8 @@ import com.moneat.monitor.repositories.HostRepository
 import com.moneat.monitor.repositories.HostRepositoryImpl
 import com.moneat.monitor.services.AgentApiKeyService
 import com.moneat.monitor.services.MonitorAlertService
+import com.moneat.security.detection.DetectionScheduler
+import com.moneat.security.vulnerabilities.VulnerabilityAdvisorySyncJob
 import com.moneat.monitor.services.MonitorService
 import com.moneat.notifications.services.AlertNotificationPreferencesService
 import com.moneat.notifications.services.DiscordService
@@ -243,6 +245,8 @@ val monitorModule = module {
     single { MonitorAlertService(get(), get()) }
     single { AgentApiKeyService() }
     single { SyntheticsService(get(), get()) }
+    single { DetectionScheduler() }
+    single { VulnerabilityAdvisorySyncJob() }
 }
 
 /** Log ingestion and querying. */

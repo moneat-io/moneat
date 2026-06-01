@@ -92,6 +92,7 @@ zstd-jni = { module = "com.github.luben:zstd-jni", version = "1.5.7-9" }
 protobuf-java = { module = "com.google.protobuf:protobuf-java", version = "4.34.2" }
 opentelemetry-proto = { module = "io.opentelemetry.proto:opentelemetry-proto", version = "1.10.0-alpha" }
 jsonpath = { module = "com.jayway.jsonpath:json-path", version = "3.0.0" }
+snakeyaml = { module = "org.yaml:snakeyaml", version = "2.5" }
 
 # Environment
 dotenv-kotlin = { module = "io.github.cdimascio:dotenv-kotlin", version = "6.5.1" }

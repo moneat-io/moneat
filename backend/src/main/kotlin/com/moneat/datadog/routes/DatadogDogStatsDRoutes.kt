@@ -78,7 +78,7 @@ fun Route.datadogDogStatsDRoutes(
                     DatadogMetricService.enqueueMetrics(
                         organizationId = orgId.toLong(),
                         payload = payload,
-                        projectId = authContext.projectId?.toLong() ?: 0L,
+                        projectId = authContext.projectId?.toLong(),
                     )
                 }
 

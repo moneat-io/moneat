@@ -20,11 +20,12 @@ import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.alerts.models.AlertSeverity
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertStatus
-import com.moneat.datadog.security.QueuedSecurityBatch
-import com.moneat.datadog.security.QueuedSecurityEventEntry
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.SlackService
+import com.moneat.security.signals.SignalOutcome
+import com.moneat.security.signals.SignalSeverity
+import com.moneat.security.signals.SignalSource
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
@@ -826,19 +827,50 @@ class WorkflowServiceTest {
             publish(workflow.id)
 
             service.publishSecuritySignals(
-                QueuedSecurityBatch(
-                    organizationId = orgId,
-                    batchType = "runtime",
-                    events = listOf(
-                        securityEvent("rule-low", "low"),
-                        securityEvent("rule-high", "high")
-                    )
+                orgId,
+                listOf(
+                    createdSignal("rule-low", "low"),
+                    createdSignal("rule-high", "high")
                 )
             )
 
             val run = service.listRuns(orgId, workflow.id).single()
             assertEquals("security.signal", run.triggerName)
             assertEquals("security.rule_id=rule-high|security.resource=/tmp/high", run.onceFor)
+        }
+
+    @Test
+    fun `security signal trigger fires only for created and escalated signals`() =
+        runBlocking {
+            val workflow =
+                service.createWorkflow(
+                    orgId,
+                    validRequest(
+                        name = "Security all",
+                        triggerName = "security.signal",
+                        steps = emptyList(),
+                        onceForTemplate = listOf("security.rule_id", "security.resource")
+                    )
+                )
+            publish(workflow.id)
+
+            service.publishSecuritySignals(
+                orgId,
+                listOf(
+                    createdSignal("rule-a", "medium"),
+                    escalatedSignal("rule-b", "high"),
+                    updatedSignal("rule-c", "low")
+                )
+            )
+
+            // The Updated (repeat-fold) signal must not produce a run; only created/escalated do.
+            assertEquals(
+                listOf(
+                    "security.rule_id=rule-a|security.resource=/tmp/medium",
+                    "security.rule_id=rule-b|security.resource=/tmp/high"
+                ).sorted(),
+                service.listRuns(orgId, workflow.id).map { it.onceFor }.sorted()
+            )
         }
 
     @Test
@@ -1251,16 +1283,52 @@ class WorkflowServiceTest {
             moneatUrl = "https://moneat.io/hosts/1"
         )
 
-    private fun securityEvent(
+    private fun createdSignal(
         ruleId: String,
-        severity: String
-    ): QueuedSecurityEventEntry =
-        QueuedSecurityEventEntry(
+        severity: String,
+        resource: String = "/tmp/$severity"
+    ): SignalOutcome.Created =
+        SignalOutcome.Created(
+            signalId = ruleId.hashCode(),
+            organizationId = orgId,
+            source = SignalSource.AGENT_RUNTIME,
             ruleId = ruleId,
             ruleName = "Rule $ruleId",
-            severity = severity,
-            filePath = "/tmp/$severity",
-            timestampMs = 1_700_000_000_000
+            severity = SignalSeverity.fromWire(severity),
+            dedupKey = "$ruleId|host|proc",
+            entities = mapOf("resource" to resource)
+        )
+
+    private fun escalatedSignal(
+        ruleId: String,
+        severity: String,
+        resource: String = "/tmp/$severity"
+    ): SignalOutcome.Escalated =
+        SignalOutcome.Escalated(
+            signalId = ruleId.hashCode(),
+            organizationId = orgId,
+            source = SignalSource.AGENT_RUNTIME,
+            ruleId = ruleId,
+            ruleName = "Rule $ruleId",
+            severity = SignalSeverity.fromWire(severity),
+            dedupKey = "$ruleId|host|proc",
+            entities = mapOf("resource" to resource)
+        )
+
+    private fun updatedSignal(
+        ruleId: String,
+        severity: String,
+        resource: String = "/tmp/$severity"
+    ): SignalOutcome.Updated =
+        SignalOutcome.Updated(
+            signalId = ruleId.hashCode(),
+            organizationId = orgId,
+            source = SignalSource.AGENT_RUNTIME,
+            ruleId = ruleId,
+            ruleName = "Rule $ruleId",
+            severity = SignalSeverity.fromWire(severity),
+            dedupKey = "$ruleId|host|proc",
+            entities = mapOf("resource" to resource)
         )
 
     private fun persistedTemporalIds(runId: Int): PersistedTemporalIds =

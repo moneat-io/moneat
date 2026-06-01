@@ -38,6 +38,7 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 
 class DatadogMetricIngestionWorkerTest {
+
     @BeforeTest
     fun resetMetricsBefore() {
         OperationalMetrics.resetForTest()

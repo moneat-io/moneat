@@ -38,12 +38,11 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import org.graalvm.polyglot.Context
 import org.graalvm.polyglot.HostAccess
-import org.graalvm.polyglot.PolyglotException
 import org.graalvm.polyglot.Value
 import org.graalvm.polyglot.io.IOAccess
 
 private const val DEFAULT_HTTP_TIMEOUT_SECONDS = 15L
-private const val DEFAULT_TRANSFORM_TIMEOUT_SECONDS = 2L
+private const val DEFAULT_TRANSFORM_TIMEOUT_SECONDS = 5L
 private const val DEFAULT_EGRESS_PROXY_PORT = 3128
 private const val MAX_HTTP_BODY_CHARS = 64_000
 private const val MAX_TRANSFORM_OUTPUT_CHARS = 64_000
@@ -130,17 +129,7 @@ class WorkflowEgressActionExecutor(
             params.optionalLong("timeout_seconds")
                 ?.coerceIn(1L, DEFAULT_TRANSFORM_TIMEOUT_SECONDS)
                 ?: DEFAULT_TRANSFORM_TIMEOUT_SECONDS
-        val result = try {
-            evaluateJavaScript(script, scope, Duration.ofSeconds(timeoutSeconds))
-        } catch (error: PolyglotException) {
-            if (error.isCancelled) {
-                throw IllegalArgumentException(
-                    "Transform execution exceeds ${timeoutSeconds}s timeout",
-                    error,
-                )
-            }
-            throw error
-        }
+        val result = evaluateJavaScript(script, scope, Duration.ofSeconds(timeoutSeconds))
         val serialized = workflowJson.encodeToString(JsonElement.serializer(), result)
         require(serialized.length <= MAX_TRANSFORM_OUTPUT_CHARS) {
             "Transform output exceeds $MAX_TRANSFORM_OUTPUT_CHARS characters"

@@ -55,11 +55,19 @@ import {AlertsTab} from '@/components/monitoring/AlertsTab'
 import {Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle} from '@/components/ui/sheet'
 import {getNowDate} from '@/lib/demo'
 import {useTimezone} from '@/hooks/useTimezone'
-import {formatTimeHM} from '@/lib/date-format'
+import {
+    compactHostMetricChartData,
+    formatHostMetricAxisTick,
+    formatHostMetricTooltipLabel,
+    toHostMetricChartTimestamp,
+} from '@/lib/host-metrics-chart'
 
 type TimeRange = '1h' | '6h' | '24h' | '7d' | '30d' | '90d'
 type ContainerViewMode = 'cards' | 'compact'
 type HostMonitoringLimitKind = 'gb' | 'infraMetrics'
+type ChartTooltipValue = number | null | undefined
+type ChartTooltipEntry = { color: string; name: string; value: ChartTooltipValue; dataKey: string }
+type VisibleChartTooltipEntry = ChartTooltipEntry & { value: number }
 
 const CONTAINER_VIEW_MODE_KEY = 'moneat.host-containers.viewMode'
 const BYTES_PER_GB = 1024 * 1024 * 1024
@@ -201,18 +209,24 @@ function ChartTooltip({
   payload,
   label,
   formatter,
+  labelFormatter,
 }: {
   active?: boolean
-  payload?: { color: string; name: string; value: number; dataKey: string }[]
-  label?: string
+  payload?: ChartTooltipEntry[]
+  label?: string | number
   formatter?: (value: number, name: string) => string
+  labelFormatter?: (value: string | number | undefined) => string
 }) {
-  if (!active || !payload?.length) return null
+  const visiblePayload = payload?.filter((entry): entry is VisibleChartTooltipEntry =>
+    typeof entry.value === 'number' && Number.isFinite(entry.value)
+  )
+  if (!active || !visiblePayload?.length) return null
+  const displayLabel = labelFormatter ? labelFormatter(label) : String(label ?? '')
 
   return (
     <div className="bg-popover/95 backdrop-blur-sm border rounded-lg px-3 py-2">
-      <p className="text-xs text-muted-foreground mb-1">{label}</p>
-      {payload.map((entry, idx: number) => (
+      <p className="text-xs text-muted-foreground mb-1">{displayLabel}</p>
+      {visiblePayload.map((entry, idx: number) => (
         <div key={idx} className="flex items-center gap-2 text-sm">
           <div className="h-2 w-2 rounded-full" style={{backgroundColor: entry.color}} />
           <span className="text-muted-foreground">{entry.name}:</span>
@@ -388,45 +402,65 @@ function HostDetailPage() {
   const online = host.isOnline
 
   // Transform metrics data for charts
-  const cpuData =
+  const cpuData = compactHostMetricChartData(
     metrics?.data_points.map((point) => ({
-      time: formatTimeHM(new Date(point.timestamp * 1000), timezone),
-      CPU: point.cpu_percent || 0,
-    })) || []
+      timestamp: toHostMetricChartTimestamp(point.timestamp),
+      CPU: point.cpu_percent ?? null,
+    })) || [],
+    selectedRange.seconds,
+    ['CPU'],
+  )
 
-  const memoryData =
+  const memoryData = compactHostMetricChartData(
     metrics?.data_points.map((point) => ({
-      time: formatTimeHM(new Date(point.timestamp * 1000), timezone),
-      Memory: point.mem_percent || 0,
-    })) || []
+      timestamp: toHostMetricChartTimestamp(point.timestamp),
+      Memory: point.mem_percent ?? null,
+    })) || [],
+    selectedRange.seconds,
+    ['Memory'],
+  )
 
-  const diskData =
+  const diskData = compactHostMetricChartData(
     metrics?.data_points.map((point) => ({
-      time: formatTimeHM(new Date(point.timestamp * 1000), timezone),
-      Disk: point.disk_percent || 0,
-    })) || []
+      timestamp: toHostMetricChartTimestamp(point.timestamp),
+      Disk: point.disk_percent ?? null,
+    })) || [],
+    selectedRange.seconds,
+    ['Disk'],
+  )
 
-  const networkData =
+  const networkData = compactHostMetricChartData(
     metrics?.data_points.map((point) => ({
-      time: formatTimeHM(new Date(point.timestamp * 1000), timezone),
-      Received: point.net_recv_bytes || 0,
-      Sent: point.net_sent_bytes || 0,
-    })) || []
+      timestamp: toHostMetricChartTimestamp(point.timestamp),
+      Received: point.net_recv_bytes ?? null,
+      Sent: point.net_sent_bytes ?? null,
+    })) || [],
+    selectedRange.seconds,
+    ['Received', 'Sent'],
+  )
 
-  const loadData =
+  const loadData = compactHostMetricChartData(
     metrics?.data_points.map((point) => ({
-      time: formatTimeHM(new Date(point.timestamp * 1000), timezone),
-      '1 min': point.load_1 || 0,
-      '5 min': point.load_5 || 0,
-      '15 min': point.load_15 || 0,
-    })) || []
+      timestamp: toHostMetricChartTimestamp(point.timestamp),
+      '1 min': point.load_1 ?? null,
+      '5 min': point.load_5 ?? null,
+      '15 min': point.load_15 ?? null,
+    })) || [],
+    selectedRange.seconds,
+    ['1 min', '5 min', '15 min'],
+  )
 
   const commonXAxis = {
-    dataKey: 'time',
+    dataKey: 'timestamp',
     tick: {fontSize: 11},
     tickLine: false,
     axisLine: false,
     className: 'text-xs fill-muted-foreground',
+    type: 'number' as const,
+    domain: ['dataMin', 'dataMax'] as [string, string],
+    scale: 'time' as const,
+    tickFormatter: (value: string | number) =>
+      formatHostMetricAxisTick(value, selectedRange.seconds, timezone),
   }
 
   const commonYAxis = {
@@ -442,6 +476,8 @@ function HostDetailPage() {
     className: 'stroke-muted/50',
     vertical: false,
   }
+  const chartTooltipLabelFormatter = (value: string | number | undefined) =>
+    formatHostMetricTooltipLabel(value, timezone)
 
   // Get latest data point for metric cards
   const latestPoint = metrics?.data_points[metrics.data_points.length - 1]
@@ -669,6 +705,7 @@ function HostDetailPage() {
                           content={
                             <ChartTooltip
                               formatter={(v) => `${v.toFixed(1)}%`}
+                              labelFormatter={chartTooltipLabelFormatter}
                             />
                           }
                         />
@@ -677,6 +714,7 @@ function HostDetailPage() {
                           dataKey="CPU"
                           stroke="#3b82f6"
                           strokeWidth={2}
+                          connectNulls
                           fillOpacity={1}
                           fill="url(#cpuGradient)"
                         />
@@ -720,6 +758,7 @@ function HostDetailPage() {
                           content={
                             <ChartTooltip
                               formatter={(v) => `${v.toFixed(1)}%`}
+                              labelFormatter={chartTooltipLabelFormatter}
                             />
                           }
                         />
@@ -728,6 +767,7 @@ function HostDetailPage() {
                           dataKey="Memory"
                           stroke="#8b5cf6"
                           strokeWidth={2}
+                          connectNulls
                           fillOpacity={1}
                           fill="url(#memGradient)"
                         />
@@ -771,6 +811,7 @@ function HostDetailPage() {
                           content={
                             <ChartTooltip
                               formatter={(v) => `${v.toFixed(1)}%`}
+                              labelFormatter={chartTooltipLabelFormatter}
                             />
                           }
                         />
@@ -779,6 +820,7 @@ function HostDetailPage() {
                           dataKey="Disk"
                           stroke="#f59e0b"
                           strokeWidth={2}
+                          connectNulls
                           fillOpacity={1}
                           fill="url(#diskGradient)"
                         />
@@ -816,6 +858,7 @@ function HostDetailPage() {
                           content={
                             <ChartTooltip
                               formatter={(v) => v.toFixed(2)}
+                              labelFormatter={chartTooltipLabelFormatter}
                             />
                           }
                         />
@@ -829,6 +872,7 @@ function HostDetailPage() {
                           dataKey="1 min"
                           stroke="#ef4444"
                           strokeWidth={2}
+                          connectNulls
                           dot={false}
                           activeDot={{r: 4, strokeWidth: 0}}
                         />
@@ -837,6 +881,7 @@ function HostDetailPage() {
                           dataKey="5 min"
                           stroke="#f59e0b"
                           strokeWidth={2}
+                          connectNulls
                           dot={false}
                           activeDot={{r: 4, strokeWidth: 0}}
                         />
@@ -845,6 +890,7 @@ function HostDetailPage() {
                           dataKey="15 min"
                           stroke="#10b981"
                           strokeWidth={2}
+                          connectNulls
                           dot={false}
                           activeDot={{r: 4, strokeWidth: 0}}
                         />
@@ -1107,6 +1153,7 @@ function HostDetailPage() {
                         content={
                           <ChartTooltip
                             formatter={(v) => formatBytes(v)}
+                            labelFormatter={chartTooltipLabelFormatter}
                           />
                         }
                       />
@@ -1120,6 +1167,7 @@ function HostDetailPage() {
                         dataKey="Received"
                         stroke="#8b5cf6"
                         strokeWidth={2}
+                        connectNulls
                         fillOpacity={1}
                         fill="url(#netRecvGradient)"
                       />
@@ -1128,6 +1176,7 @@ function HostDetailPage() {
                         dataKey="Sent"
                         stroke="#f59e0b"
                         strokeWidth={2}
+                        connectNulls
                         fillOpacity={1}
                         fill="url(#netSentGradient)"
                       />

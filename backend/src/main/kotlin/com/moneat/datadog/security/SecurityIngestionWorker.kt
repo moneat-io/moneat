@@ -105,8 +105,8 @@ class SecurityIngestionWorker(
     ) {
         suspendRunCatching {
             val batch = SecurityIngestionService.decodeBatch(payload)
-            SecurityIngestionService.insertBatch(batch)
-            workflowService.publishSecuritySignals(batch)
+            val signals = SecurityIngestionService.insertBatch(batch)
+            workflowService.publishSecuritySignals(batch.organizationId, signals)
             logger.debug {
                 "Security worker $workerId processed batch: " +
                     "type=${batch.batchType}"
