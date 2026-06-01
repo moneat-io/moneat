@@ -53,7 +53,10 @@ class AuthTokenService {
                 "sourcemaps:read",
                 "sourcemaps:write",
                 "event:read",
-                "org:read"
+                "org:read",
+                "workflow:read",
+                "workflow:write",
+                "workflow:run"
             )
 
         // sentry-cli compatible org auth token format: sntrys_{base64_payload}_{base64_secret}

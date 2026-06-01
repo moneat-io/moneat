@@ -25,6 +25,9 @@ object McpScopes {
     const val PROJECT_WRITE = "project:write"
     const val RELEASES_READ = "releases:read"
     const val RELEASES_WRITE = "releases:write"
+    const val WORKFLOW_READ = "workflow:read"
+    const val WORKFLOW_WRITE = "workflow:write"
+    const val WORKFLOW_RUN = "workflow:run"
 
     private val telemetryReadTools = listOf(
         "aggregate_logs",
@@ -87,6 +90,17 @@ object McpScopes {
         "list_releases",
     ).associateWith { setOf(RELEASES_READ) }
 
+    private val workflowReadTools = listOf(
+        "get_workflow",
+        "get_workflow_blueprint",
+        "get_workflow_catalog",
+        "get_workflow_run",
+        "list_workflow_audit",
+        "list_workflow_blueprints",
+        "list_workflow_runs",
+        "list_workflows",
+    ).associateWith { setOf(WORKFLOW_READ) }
+
     private val orgReadTools = listOf(
         "get_incident",
         "get_incident_context",
@@ -146,8 +160,24 @@ object McpScopes {
         "replace_dashboard_widgets",
     ).associateWith { setOf(PROJECT_WRITE) }
 
-    private val readScopesByTool = telemetryReadTools + projectReadTools + releaseReadTools + orgReadTools
-    private val writeScopesByTool = writeTools
+    private val workflowWriteTools = listOf(
+        "create_workflow",
+        "delete_workflow",
+        "get_workflow_webhook_signing",
+        "publish_workflow",
+        "unpublish_workflow",
+        "update_workflow",
+    ).associateWith { setOf(WORKFLOW_WRITE) }
+
+    private val workflowRunTools = listOf(
+        "cancel_workflow_run",
+        "create_workflow_instance",
+        "run_workflow",
+    ).associateWith { setOf(WORKFLOW_RUN) }
+
+    private val readScopesByTool =
+        telemetryReadTools + projectReadTools + releaseReadTools + workflowReadTools + orgReadTools
+    private val writeScopesByTool = writeTools + workflowWriteTools + workflowRunTools
 
     fun requiredScopesFor(tool: McpTool): Set<String> {
         val scopesByTool = if (tool.readOnly) readScopesByTool else writeScopesByTool
