@@ -100,7 +100,7 @@ private suspend fun RoutingContext.requireApprovalAdmin(member: WorkflowApproval
 }
 
 private fun RoutingContext.currentOrganizationId(): Int? =
-    call.principal<JWTPrincipal>()?.payload?.getClaim("organizationId")?.asInt()
+    call.principal<JWTPrincipal>()?.payload?.getClaim("orgId")?.asInt()
 
 private fun RoutingContext.currentUserId(): Int? =
     call.principal<JWTPrincipal>()?.payload?.getClaim("userId")?.asInt()
