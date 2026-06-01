@@ -44,8 +44,9 @@ fun Route.datadogDogStatsDRoutes(
     route("/dd") {
         route("/dogstatsd/v2") {
             post("/proxy") {
-                val orgId = DatadogAuthMiddleware.authenticate(call)
+                val authContext = DatadogAuthMiddleware.authenticateContext(call)
                     ?: return@post
+                val orgId = authContext.organizationId
 
                 val contentEncoding =
                     call.request.headers["Content-Encoding"]
@@ -76,7 +77,8 @@ fun Route.datadogDogStatsDRoutes(
                     )
                     DatadogMetricService.enqueueMetrics(
                         organizationId = orgId.toLong(),
-                        payload = payload
+                        payload = payload,
+                        projectId = authContext.projectId?.toLong() ?: 0L,
                     )
                 }
 

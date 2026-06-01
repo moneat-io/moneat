@@ -109,7 +109,8 @@ object DatadogMetricService {
 
     fun mapV1Series(
         organizationId: Long,
-        payload: DatadogMetricSeriesV1
+        payload: DatadogMetricSeriesV1,
+        projectId: Long = 0L,
     ): QueuedMetricBatch {
         val metrics = payload.series.flatMap { series ->
             flattenV1Points(series)
@@ -117,6 +118,7 @@ object DatadogMetricService {
 
         return QueuedMetricBatch(
             organizationId = organizationId,
+            projectId = projectId,
             metrics = metrics
         )
     }
@@ -176,9 +178,10 @@ object DatadogMetricService {
     suspend fun enqueueMetrics(
         organizationId: Long,
         payload: DatadogMetricSeriesV1,
-        queueKey: String = METRIC_QUEUE_KEY
+        projectId: Long = 0L,
+        queueKey: String = METRIC_QUEUE_KEY,
     ): Int {
-        val batch = mapV1Series(organizationId, payload)
+        val batch = mapV1Series(organizationId, payload, projectId)
         if (batch.metrics.isEmpty()) return 0
         val message = json.encodeToString(batch)
         RedisConfig.sync().lpush(queueKey, message)

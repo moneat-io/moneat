@@ -16,6 +16,7 @@
 
 package com.moneat.datadog.workers
 
+import com.moneat.config.EnvConfig
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.DatadogMetricService
 import com.moneat.datadog.services.QueuedMetricBatch
@@ -42,8 +43,10 @@ private val logger = KotlinLogging.logger {}
 private const val BRPOP_TIMEOUT_SECONDS = 5L
 private const val ERROR_DELAY_MS = 1000L
 private const val WORKER_NAME = "DD metric"
-private const val MAX_ROWS = 20_000
-private const val MAX_PAYLOADS = 100
+private const val DEFAULT_MAX_ROWS = 20_000
+private const val DEFAULT_MAX_PAYLOADS = 100
+private const val MAX_ROWS_ENV = "DD_METRIC_BATCH_MAX_ROWS"
+private const val MAX_PAYLOADS_ENV = "DD_METRIC_BATCH_MAX_PAYLOADS"
 
 private data class DecodedMetricPayload(
     val originalPayload: String,
@@ -53,13 +56,17 @@ private data class DecodedMetricPayload(
 class DatadogMetricIngestionWorker(
     private val queueKey: String,
     private val dlqKey: String,
-    private val workerCount: Int
+    private val workerCount: Int,
+    private val processingQueueKey: String = "$queueKey:processing",
+    private val maxRows: Int = configuredPositiveInt(MAX_ROWS_ENV, DEFAULT_MAX_ROWS),
+    private val maxPayloads: Int = configuredPositiveInt(MAX_PAYLOADS_ENV, DEFAULT_MAX_PAYLOADS),
 ) {
     private val scope =
         CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var jobs: List<Job> = emptyList()
 
     fun start() {
+        recoverProcessingQueue()
         logger.info {
             "Starting DatadogMetricIngestionWorker with " +
                 "$workerCount workers, queue=$queueKey"
@@ -83,11 +90,11 @@ class DatadogMetricIngestionWorker(
             val redis = conn.sync()
             while (scope.isActive) {
                 try {
-                    val result = redis.brpop(
+                    val payload = redis.brpoplpush(
                         BRPOP_TIMEOUT_SECONDS,
-                        queueKey
-                    )
-                    val payload = result?.value ?: continue
+                        queueKey,
+                        processingQueueKey,
+                    ) ?: continue
                     processPayloads(
                         workerId,
                         collectPayloadsForProcessing(redis, payload)
@@ -128,7 +135,7 @@ class DatadogMetricIngestionWorker(
         redis: RedisCommands<String, String>,
         firstPayload: String,
     ): List<String> {
-        val payloads = ArrayList<String>(MAX_PAYLOADS)
+        val payloads = ArrayList<String>(maxPayloads)
         payloads.add(firstPayload)
 
         val drainedPayloads = drainQueuedPayloads(redis)
@@ -149,9 +156,16 @@ class DatadogMetricIngestionWorker(
     private fun drainQueuedPayloads(
         redis: RedisCommands<String, String>,
     ): List<String> {
-        val count = MAX_PAYLOADS - 1
+        val count = maxPayloads - 1
+        if (count <= 0) return emptyList()
         return try {
-            redis.rpop(queueKey, count.toLong()).orEmpty()
+            val drainedPayloads = mutableListOf<String>()
+            repeat(count) {
+                val payload = redis.rpoplpush(queueKey, processingQueueKey)
+                    ?: return drainedPayloads
+                drainedPayloads.add(payload)
+            }
+            drainedPayloads
         } catch (e: RedisException) {
             logger.warn(e) {
                 "Failed to drain additional Datadog metric payloads; processing BRPOP payload only"
@@ -170,10 +184,10 @@ class DatadogMetricIngestionWorker(
                 batch = DatadogMetricService.decodeMetricBatch(payload),
             )
         } catch (e: SerializationException) {
-            pushToDlq(logger, dlqKey, payload, workerId, WORKER_NAME, e)
+            pushToDlqAndAck(payload, workerId, e)
             null
         } catch (e: IllegalArgumentException) {
-            pushToDlq(logger, dlqKey, payload, workerId, WORKER_NAME, e)
+            pushToDlqAndAck(payload, workerId, e)
             null
         }
     }
@@ -211,14 +225,14 @@ class DatadogMetricIngestionWorker(
         nextRows: Int,
     ): Boolean {
         return pending.isNotEmpty() &&
-            (pending.size >= MAX_PAYLOADS || pendingRows + nextRows > MAX_ROWS)
+            (pending.size >= maxPayloads || pendingRows + nextRows > maxRows)
     }
 
     private fun shouldFlushAfterAdding(
         pending: List<DecodedMetricPayload>,
         pendingRows: Int,
     ): Boolean {
-        return pending.size >= MAX_PAYLOADS || pendingRows >= MAX_ROWS
+        return pending.size >= maxPayloads || pendingRows >= maxRows
     }
 
     private suspend fun insertPayloadChunk(
@@ -229,23 +243,18 @@ class DatadogMetricIngestionWorker(
 
         val nonEmptyBatches = payloads.map { it.batch }.filter { it.metrics.isNotEmpty() }
         if (nonEmptyBatches.isEmpty()) {
-            payloads.forEach { recordProcessed(workerId) }
+            markProcessed(workerId, payloads)
             return
         }
 
-        if (insertCombinedBatch(nonEmptyBatches).isSuccess) {
-            payloads.forEach { recordProcessed(workerId) }
+        val combinedResult = insertCombinedBatch(nonEmptyBatches)
+        if (combinedResult.isSuccess) {
+            markProcessed(workerId, payloads)
             return
         }
 
-        val retryResult = insertCombinedBatch(nonEmptyBatches)
-        if (retryResult.isSuccess) {
-            payloads.forEach { recordProcessed(workerId) }
-            return
-        }
-
-        logger.warn(retryResult.exceptionOrNull()) {
-            "Combined Datadog metric insert failed after retry; falling back to per-payload inserts"
+        logger.warn(combinedResult.exceptionOrNull()) {
+            "Combined Datadog metric insert failed; falling back to per-payload inserts"
         }
         payloads.forEach { insertSinglePayload(workerId, it) }
     }
@@ -265,13 +274,78 @@ class DatadogMetricIngestionWorker(
         suspendRunCatching {
             DatadogMetricService.insertMetricBatch(payload.batch)
         }.onSuccess {
-            recordProcessed(workerId)
+            markProcessed(workerId, listOf(payload))
         }.onFailure { e ->
-            pushToDlq(logger, dlqKey, payload.originalPayload, workerId, WORKER_NAME, e)
+            pushToDlqAndAck(payload.originalPayload, workerId, e)
+        }
+    }
+
+    private fun markProcessed(
+        workerId: Int,
+        payloads: List<DecodedMetricPayload>,
+    ) {
+        payloads.forEach { payload ->
+            acknowledgePayload(payload.originalPayload, workerId)
+            recordProcessed(workerId)
+        }
+    }
+
+    private fun pushToDlqAndAck(
+        payload: String,
+        workerId: Int,
+        cause: Throwable,
+    ) {
+        if (pushToDlq(logger, dlqKey, payload, workerId, WORKER_NAME, cause)) {
+            acknowledgePayload(payload, workerId)
+        }
+    }
+
+    private fun acknowledgePayload(
+        payload: String,
+        workerId: Int,
+    ) {
+        runCatching {
+            RedisConfig.sync().lrem(processingQueueKey, 1, payload)
+        }.onFailure { e ->
+            logger.warn(e) {
+                "Failed to acknowledge Datadog metric payload for worker $workerId; " +
+                    "payload will be recovered on restart"
+            }
         }
     }
 
     private fun recordProcessed(workerId: Int) {
         OperationalMetrics.recordWorkerMessageProcessed(WORKER_NAME, workerId)
     }
+
+    private fun recoverProcessingQueue() {
+        runCatching {
+            val redis = RedisConfig.sync()
+            var recovered = 0
+            while (true) {
+                redis.rpoplpush(processingQueueKey, queueKey) ?: break
+                recovered += 1
+            }
+            recovered
+        }.onSuccess { recovered ->
+            if (recovered > 0) {
+                logger.warn {
+                    "Recovered $recovered unacknowledged Datadog metric payloads from $processingQueueKey"
+                }
+            }
+        }.onFailure { e ->
+            logger.warn(e) {
+                "Failed to recover Datadog metric processing queue $processingQueueKey"
+            }
+        }
+    }
 }
+
+private fun configuredPositiveInt(
+    key: String,
+    defaultValue: Int,
+): Int =
+    EnvConfig.get(key, defaultValue.toString())
+        .toIntOrNull()
+        ?.takeIf { it > 0 }
+        ?: defaultValue

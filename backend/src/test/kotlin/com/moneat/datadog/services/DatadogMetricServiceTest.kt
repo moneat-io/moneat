@@ -17,6 +17,7 @@
 package com.moneat.datadog.services
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.config.RedisConfig
 import com.moneat.datadog.models.DatadogMetricSeriesV1
 import com.moneat.datadog.models.DatadogMetricV1
 import com.moneat.datadog.models.DatadogSketch
@@ -24,10 +25,12 @@ import com.moneat.datadog.models.DatadogSketchPayload
 import com.moneat.datadog.models.DatadogSketchPoint
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.HttpStatusCode
+import io.lettuce.core.api.sync.RedisCommands
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
+import io.mockk.slot
 import io.mockk.unmockkObject
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -156,7 +159,24 @@ class DatadogMetricServiceTest {
 
         val batch = DatadogMetricService.mapV1Series(42L, payload)
         assertEquals(42L, batch.organizationId)
+        assertEquals(0L, batch.projectId)
         assertEquals(1, batch.metrics.size)
+    }
+
+    @Test
+    fun `mapV1Series preserves project id`() {
+        val payload = DatadogMetricSeriesV1(
+            series = listOf(
+                DatadogMetricV1(
+                    metric = "cpu",
+                    points = listOf(listOf(0.0, 50.0))
+                )
+            )
+        )
+
+        val batch = DatadogMetricService.mapV1Series(42L, payload, projectId = 7L)
+
+        assertEquals(7L, batch.projectId)
     }
 
     @Test
@@ -164,6 +184,40 @@ class DatadogMetricServiceTest {
         val payload = DatadogMetricSeriesV1(series = emptyList())
         val batch = DatadogMetricService.mapV1Series(1L, payload)
         assertEquals(0, batch.metrics.size)
+    }
+
+    @Test
+    fun `enqueueMetrics serializes project id in queued batch`() = runBlocking {
+        val redis = mockk<RedisCommands<String, String>>()
+        val queuedPayload = slot<String>()
+        val payload = DatadogMetricSeriesV1(
+            series = listOf(
+                DatadogMetricV1(
+                    metric = "cpu",
+                    points = listOf(listOf(0.0, 50.0))
+                )
+            )
+        )
+
+        mockkObject(RedisConfig)
+        try {
+            every { RedisConfig.sync() } returns redis
+            every { redis.lpush("test:dd:metric:queue", capture(queuedPayload)) } returns 1L
+
+            val count = DatadogMetricService.enqueueMetrics(
+                organizationId = 42L,
+                payload = payload,
+                projectId = 7L,
+                queueKey = "test:dd:metric:queue",
+            )
+
+            val batch = DatadogMetricService.decodeMetricBatch(queuedPayload.captured)
+            assertEquals(1, count)
+            assertEquals(42L, batch.organizationId)
+            assertEquals(7L, batch.projectId)
+        } finally {
+            unmockkObject(RedisConfig)
+        }
     }
 
     @Test

@@ -18,6 +18,7 @@ package com.moneat.datadog.routes
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.DatadogMetricBillingRequest
+import com.moneat.datadog.auth.DatadogAuthContext
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.decompression.MetricPayloadDecoder
@@ -92,39 +93,41 @@ fun Route.datadogMetricRoutes(
 private suspend fun RoutingContext.handleV1MetricSeries(
     quotaService: BillingQuotaService,
 ) {
-    val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
+    val authContext = DatadogAuthMiddleware.authenticateContext(call) ?: return
     val body = receiveDecompressedBody()
     val payload = decodeV1MetricSeriesJson(body) ?: return
 
-    acceptMetricSeries(quotaService, orgId, body, payload, "V1")
+    acceptMetricSeries(quotaService, authContext, body, payload, "V1")
 }
 
 private suspend fun RoutingContext.handleMetricSeries(
     quotaService: BillingQuotaService,
     apiVersion: String
 ) {
-    val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
+    val authContext = DatadogAuthMiddleware.authenticateContext(call) ?: return
     val contentType = call.request.contentType().toString()
     val body = receiveDecompressedBody()
     val payload = decodeMetricSeriesPayload(body, contentType, apiVersion) ?: return
 
-    acceptMetricSeries(quotaService, orgId, body, payload, apiVersion)
+    acceptMetricSeries(quotaService, authContext, body, payload, apiVersion)
 }
 
 private suspend fun RoutingContext.acceptMetricSeries(
     quotaService: BillingQuotaService,
-    orgId: Int,
+    authContext: DatadogAuthContext,
     body: ByteArray,
     payload: DatadogMetricSeriesV1,
     apiVersion: String
 ) {
+    val orgId = authContext.organizationId
     touchMetricHosts(orgId, payload)
     val billingRequest = metricSeriesBillingRequest(payload, body.size.toLong())
     if (!reserveMetricQuota(quotaService, orgId, billingRequest)) return
 
     val count = DatadogMetricService.enqueueMetrics(
         organizationId = orgId.toLong(),
-        payload = payload
+        payload = payload,
+        projectId = authContext.projectId?.toLong() ?: 0L,
     )
     logger.debug { "Accepted $count DD $apiVersion metrics for org $orgId" }
     call.respondAccepted()

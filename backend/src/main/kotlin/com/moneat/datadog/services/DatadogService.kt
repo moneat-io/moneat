@@ -88,20 +88,31 @@ object DatadogService {
             DdApiKeys.deleteWhere { (id eq keyId) and (DdApiKeys.organizationId eq organizationId) } > 0
         }
 
-    fun validateApiKey(key: String): Int? {
+    data class ApiKeyValidation(
+        val organizationId: Int,
+        val projectId: Int?,
+    )
+
+    fun validateApiKey(key: String): Int? =
+        validateApiKeyContext(key)?.organizationId
+
+    fun validateApiKeyContext(key: String): ApiKeyValidation? {
         val keyHash = hashKey(key)
         return transaction {
-            DdApiKeys
+            val row = DdApiKeys
                 .selectAll()
                 .where { (DdApiKeys.keyHash eq keyHash) and (DdApiKeys.isActive eq true) }
-                .map { it[DdApiKeys.organizationId] }
                 .singleOrNull()
-                ?.also {
-                    // Update last used timestamp
-                    DdApiKeys.update({ DdApiKeys.keyHash eq keyHash }) {
-                        it[lastUsedAt] = Instant.now()
-                    }
-                }
+                ?: return@transaction null
+
+            DdApiKeys.update({ DdApiKeys.keyHash eq keyHash }) {
+                it[lastUsedAt] = Instant.now()
+            }
+
+            ApiKeyValidation(
+                organizationId = row[DdApiKeys.organizationId],
+                projectId = row[DdApiKeys.projectId],
+            )
         }
     }
 

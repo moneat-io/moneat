@@ -20,6 +20,7 @@ import com.moneat.billing.models.BillingUsageResponse
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.QuotaReservationResult
 import com.moneat.config.ClickHouseClient
+import com.moneat.datadog.auth.DatadogAuthContext
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.models.DdApiKeys
 import com.moneat.datadog.models.DdApmErrorsResponse
@@ -187,12 +188,15 @@ class DatadogRoutesExtendedTest {
         coEvery {
             DatadogAuthMiddleware.authenticate(any())
         } returns TEST_ORG_ID
+        coEvery {
+            DatadogAuthMiddleware.authenticateContext(any())
+        } returns DatadogAuthContext(TEST_ORG_ID, null)
 
         // Default stubs for ingest services
         every { DatadogHostService.upsertFromMetadata(any(), any()) } just Runs
         every { DatadogHostService.upsertFromIntake(any(), any()) } just Runs
         every { DatadogHostService.touchHostLastSeen(any(), any()) } just Runs
-        coEvery { DatadogMetricService.enqueueMetrics(any(), any()) } returns 1
+        coEvery { DatadogMetricService.enqueueMetrics(any(), any(), any()) } returns 1
         every { DatadogMetricService.mapSketches(any(), any()) } returns
             com.moneat.datadog.services.QueuedSketchBatch(1L, emptyList())
         coEvery { DatadogMetricService.insertSketchBatch(any()) } just Runs

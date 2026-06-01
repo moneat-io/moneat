@@ -107,7 +107,14 @@ class DatadogIngestRoutesTest {
             OrchestratorIngestionService,
         )
 
-        coEvery { DatadogMetricService.enqueueMetrics(any(), any()) } returns 0
+        every { DatadogService.validateApiKeyContext(any()) } answers {
+            if (firstArg<String>() == VALID_KEY) {
+                DatadogService.ApiKeyValidation(ORG_ID, null)
+            } else {
+                null
+            }
+        }
+        coEvery { DatadogMetricService.enqueueMetrics(any(), any(), any()) } returns 0
         coEvery { DatadogLogService.enqueueLogs(any(), any()) } returns 0
         coEvery { DatadogEventService.enqueueEvents(any(), any()) } returns 0
         every { DatadogEventService.mapServiceChecks(any(), any()) } returns

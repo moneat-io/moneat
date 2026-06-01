@@ -34,6 +34,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class DatadogMetricIngestionWorkerTest {
+
+    // ──── Payload Handling ────
+
     @Test
     fun `processMessage with invalid payload does not throw`() {
         val worker =
@@ -74,18 +77,43 @@ class DatadogMetricIngestionWorkerTest {
     @Test
     fun `collectPayloadsForProcessing drains additional payloads with bounded rpop count`() {
         val redis = mockk<RedisCommands<String, String>>()
-        every { redis.rpop("test:dd:metric:queue", 99L) } returns listOf("payload-2", "payload-3")
+        every {
+            redis.rpoplpush("test:dd:metric:queue", "test:dd:metric:queue:processing")
+        } returnsMany listOf("payload-2", "payload-3")
         val worker =
             DatadogMetricIngestionWorker(
                 "test:dd:metric:queue",
                 "test:dd:metric:dlq",
                 1,
+                maxPayloads = 3,
             )
 
         val payloads = worker.collectPayloadsForProcessing(redis, "payload-1")
 
         assertEquals(listOf("payload-1", "payload-2", "payload-3"), payloads)
+        verify(exactly = 2) {
+            redis.rpoplpush("test:dd:metric:queue", "test:dd:metric:queue:processing")
+        }
     }
+
+    @Test
+    fun `collectPayloadsForProcessing does not drain when max payloads is one`() {
+        val redis = mockk<RedisCommands<String, String>>()
+        val worker =
+            DatadogMetricIngestionWorker(
+                "test:dd:metric:queue",
+                "test:dd:metric:dlq",
+                1,
+                maxPayloads = 1,
+            )
+
+        val payloads = worker.collectPayloadsForProcessing(redis, "payload-1")
+
+        assertEquals(listOf("payload-1"), payloads)
+        verify(exactly = 0) { redis.rpoplpush(any<String>(), any<String>()) }
+    }
+
+    // ──── Insert Batching ────
 
     @Test
     fun `processPayloads combines valid payloads and pushes malformed payloads individually to dlq`() = runBlocking {
@@ -118,6 +146,15 @@ class DatadogMetricIngestionWorkerTest {
             verify(exactly = 1) {
                 redis.rpush("test:dd:metric:dlq", "bad-payload")
             }
+            verify(exactly = 1) {
+                redis.lrem("test:dd:metric:queue:processing", 1, "payload-1")
+            }
+            verify(exactly = 1) {
+                redis.lrem("test:dd:metric:queue:processing", 1, "bad-payload")
+            }
+            verify(exactly = 1) {
+                redis.lrem("test:dd:metric:queue:processing", 1, "payload-2")
+            }
         } finally {
             unmockkObject(DatadogMetricService)
             unmockkObject(RedisConfig)
@@ -125,7 +162,44 @@ class DatadogMetricIngestionWorkerTest {
     }
 
     @Test
-    fun `processPayloads retries combined insert then falls back per payload`() = runBlocking {
+    fun `processPayloads flushes chunks at configured max rows`() = runBlocking {
+        val redis = mockk<RedisCommands<String, String>>(relaxed = true)
+        val firstBatch = metricBatch(1L, "cpu")
+        val secondBatch = metricBatch(2L, "mem")
+        val worker =
+            DatadogMetricIngestionWorker(
+                "test:dd:metric:queue",
+                "test:dd:metric:dlq",
+                1,
+                maxRows = 1,
+            )
+
+        mockkObject(DatadogMetricService)
+        mockkObject(RedisConfig)
+        try {
+            every { DatadogMetricService.decodeMetricBatch("payload-1") } returns firstBatch
+            every { DatadogMetricService.decodeMetricBatch("payload-2") } returns secondBatch
+            every { RedisConfig.sync() } returns redis
+            coEvery { DatadogMetricService.insertMetricBatches(any()) } returns Unit
+
+            worker.processPayloads(1, listOf("payload-1", "payload-2"))
+
+            coVerify(exactly = 1) { DatadogMetricService.insertMetricBatches(listOf(firstBatch)) }
+            coVerify(exactly = 1) { DatadogMetricService.insertMetricBatches(listOf(secondBatch)) }
+            verify(exactly = 1) {
+                redis.lrem("test:dd:metric:queue:processing", 1, "payload-1")
+            }
+            verify(exactly = 1) {
+                redis.lrem("test:dd:metric:queue:processing", 1, "payload-2")
+            }
+        } finally {
+            unmockkObject(DatadogMetricService)
+            unmockkObject(RedisConfig)
+        }
+    }
+
+    @Test
+    fun `processPayloads falls back per payload after combined insert failure`() = runBlocking {
         val redis = mockk<RedisCommands<String, String>>(relaxed = true)
         val firstBatch = metricBatch(1L, "cpu")
         val secondBatch = metricBatch(2L, "mem")
@@ -149,18 +223,26 @@ class DatadogMetricIngestionWorkerTest {
 
             worker.processPayloads(1, listOf("payload-1", "payload-2"))
 
-            coVerify(exactly = 2) {
+            coVerify(exactly = 1) {
                 DatadogMetricService.insertMetricBatches(listOf(firstBatch, secondBatch))
             }
             coVerify(exactly = 1) { DatadogMetricService.insertMetricBatch(firstBatch) }
             coVerify(exactly = 1) { DatadogMetricService.insertMetricBatch(secondBatch) }
             verify(exactly = 0) { redis.rpush("test:dd:metric:dlq", "payload-1") }
             verify(exactly = 0) { redis.rpush("test:dd:metric:dlq", "payload-2") }
+            verify(exactly = 1) {
+                redis.lrem("test:dd:metric:queue:processing", 1, "payload-1")
+            }
+            verify(exactly = 1) {
+                redis.lrem("test:dd:metric:queue:processing", 1, "payload-2")
+            }
         } finally {
             unmockkObject(DatadogMetricService)
             unmockkObject(RedisConfig)
         }
     }
+
+    // ──── Lifecycle ────
 
     @Test
     fun `stop on unstarted worker does not throw`() {
@@ -172,6 +254,8 @@ class DatadogMetricIngestionWorkerTest {
             )
         worker.stop()
     }
+
+    // ──── Helpers ────
 
     private fun metricBatch(
         organizationId: Long,
