@@ -660,6 +660,32 @@ Resume a paused uptime monitor.
 |-----------|------|----------|-------------|
 | `monitor_id` | string | Yes | Monitor UUID |
 
+## Synthetic Test Tools
+
+### `list_synthetic_tests`
+List all synthetic tests in the organization. No parameters.
+
+### `get_synthetic_test`
+Get one synthetic test.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `test_id` | string | Yes | Synthetic test UUID |
+
+### ✏️ `run_synthetic_test`
+Run a synthetic test immediately.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `test_id` | string | Yes | Synthetic test UUID |
+
+### `get_synthetic_test_summary`
+Get the 30-day uptime and latency summary for a synthetic test.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `test_id` | string | Yes | Synthetic test UUID |
+
 ## Status Page Tools
 
 ### `list_status_pages`

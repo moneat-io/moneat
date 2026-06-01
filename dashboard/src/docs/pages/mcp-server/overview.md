@@ -4,7 +4,7 @@ Moneat includes a built-in **Model Context Protocol (MCP) server** that enables 
 
 ## What is MCP?
 
-The [Model Context Protocol](https://modelcontextprotocol.io/) is an open standard that lets AI assistants connect to external data sources and tools. Moneat's MCP server exposes your issues, logs, metrics, traces, dashboards, and alerts as MCP tools and resources.
+The [Model Context Protocol](https://modelcontextprotocol.io/) is an open standard that lets AI assistants connect to external data sources and tools. Moneat's MCP server exposes your issues, logs, metrics, traces, dashboards, alerts, and synthetic tests as MCP tools and resources.
 
 ## Use Cases
 
@@ -26,6 +26,6 @@ Since the module runs inside the application process, MCP tools call existing se
 
 1. Generate an MCP key from **Settings → API Keys → MCP** in Moneat
 2. Configure your MCP client to connect to `https://your-moneat-instance/v1/mcp` with `Authorization: Bearer YOUR_MCP_KEY`
-3. Start using tools like `list_issues`, `query_logs`, `list_hosts`, etc.
+3. Start using tools like `list_issues`, `query_logs`, `list_hosts`, and `list_synthetic_tests`.
 
 See [Setup Guide](./setup) for detailed instructions.

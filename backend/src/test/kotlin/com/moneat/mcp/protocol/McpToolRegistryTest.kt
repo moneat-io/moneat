@@ -33,7 +33,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-private const val EXPECTED_CORE_MCP_TOOL_COUNT = 102
+private const val EXPECTED_CORE_MCP_TOOL_COUNT = 106
 
 class McpToolRegistryTest {
 
@@ -343,6 +343,7 @@ class McpToolRegistryTest {
             "delete_uptime_monitor",
             "pause_uptime_monitor",
             "resume_uptime_monitor",
+            "run_synthetic_test",
             "create_dashboard",
             "create_dashboard_widget",
             "update_dashboard",

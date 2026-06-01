@@ -74,6 +74,8 @@ import com.moneat.mcp.tools.GetRelatedErrorsTool
 import com.moneat.mcp.tools.GetReleaseStatsTool
 import com.moneat.mcp.tools.GetSpanDetailsTool
 import com.moneat.mcp.tools.GetStatusPageTool
+import com.moneat.mcp.tools.GetSyntheticTestSummaryTool
+import com.moneat.mcp.tools.GetSyntheticTestTool
 import com.moneat.mcp.tools.GetTransactionStatsTool
 import com.moneat.mcp.tools.GetTraceTool
 import com.moneat.mcp.tools.GetWeeklyReportTool
@@ -97,6 +99,7 @@ import com.moneat.mcp.tools.ListProfilesTool
 import com.moneat.mcp.tools.ListReleasesTool
 import com.moneat.mcp.tools.ListSilencePeriodsTool
 import com.moneat.mcp.tools.ListStatusPagesTool
+import com.moneat.mcp.tools.ListSyntheticTestsTool
 import com.moneat.mcp.tools.ListTransactionsTool
 import com.moneat.mcp.tools.ListUptimeMonitorsTool
 import com.moneat.mcp.tools.PauseUptimeMonitorTool
@@ -106,6 +109,7 @@ import com.moneat.mcp.tools.QueryLogsTool
 import com.moneat.mcp.tools.ReplaceDashboardWidgetsTool
 import com.moneat.mcp.tools.ResumeUptimeMonitorTool
 import com.moneat.mcp.tools.RevokeFeatureFlagSdkKeyTool
+import com.moneat.mcp.tools.RunSyntheticTestTool
 import com.moneat.mcp.tools.UpdateAlertNotificationChannelsTool
 import com.moneat.mcp.tools.UpdateAlertTool
 import com.moneat.mcp.tools.UpdateDashboardAlertTool
@@ -179,6 +183,12 @@ object McpToolRegistrar {
         toolRegistry.register(DeleteUptimeMonitorTool())
         toolRegistry.register(PauseUptimeMonitorTool())
         toolRegistry.register(ResumeUptimeMonitorTool())
+
+        // Synthetic test tools
+        toolRegistry.register(ListSyntheticTestsTool())
+        toolRegistry.register(GetSyntheticTestTool())
+        toolRegistry.register(GetSyntheticTestSummaryTool())
+        toolRegistry.register(RunSyntheticTestTool())
 
         // Profile tools
         toolRegistry.register(ListProfilesTool())
