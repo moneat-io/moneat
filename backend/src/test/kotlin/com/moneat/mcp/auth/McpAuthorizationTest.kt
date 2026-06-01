@@ -31,6 +31,7 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Users
 import com.moneat.statuspage.models.StatusPages
+import com.moneat.synthetics.routes.SyntheticTests
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.uptime.models.UptimeMonitors
 import kotlinx.coroutines.runBlocking
@@ -176,6 +177,7 @@ class McpAuthorizationTest {
     fun `owned objects authorize successfully`() = runBlocking {
         val dashboardId = seedDashboard(organizationId = 1)
         val monitorId = seedUptimeMonitor(organizationId = 1)
+        val syntheticTestId = seedSyntheticTest(organizationId = 1)
         val pageId = seedStatusPage(organizationId = 1)
         val dataSourceId = seedDataSource(organizationId = 1)
 
@@ -185,6 +187,7 @@ class McpAuthorizationTest {
                 mapOf(
                     "dashboard_id" to JsonPrimitive(dashboardId),
                     "monitor_id" to JsonPrimitive(monitorId.toString()),
+                    "synthetic_test_id" to JsonPrimitive(syntheticTestId.toString()),
                     "page_id" to JsonPrimitive(pageId.toString()),
                     "status_page_id" to JsonPrimitive(pageId.toString()),
                     "data_source_id" to JsonPrimitive(dataSourceId),
@@ -205,6 +208,11 @@ class McpAuthorizationTest {
                 "monitor_id",
                 JsonPrimitive(seedUptimeMonitor(organizationId = 2).toString()),
                 "uptime monitor not found",
+            ),
+            Triple(
+                "synthetic_test_id",
+                JsonPrimitive(seedSyntheticTest(organizationId = 2).toString()),
+                "synthetic test not found",
             ),
             Triple("page_id", JsonPrimitive(seedStatusPage(organizationId = 2).toString()), "status page not found"),
             Triple("data_source_id", JsonPrimitive(seedDataSource(organizationId = 2)), "data source not found"),
@@ -288,6 +296,17 @@ class McpAuthorizationTest {
             monitorId
         }
 
+    private fun seedSyntheticTest(organizationId: Int): UUID =
+        transaction {
+            seedOrganization(organizationId)
+            val testId = UUID.randomUUID()
+            SyntheticTests.insert {
+                it[id] = testId
+                it[SyntheticTests.organizationId] = organizationId
+            }
+            testId
+        }
+
     private fun seedStatusPage(organizationId: Int): UUID =
         transaction {
             seedOrganization(organizationId)
@@ -354,6 +373,7 @@ class McpAuthorizationTest {
                 "dashboards",
                 "custom_data_sources",
                 "uptime_monitors",
+                "synthetic_tests",
                 "status_pages",
             ).forEach { tableName ->
                 exec("DROP TABLE IF EXISTS $tableName")
@@ -397,6 +417,14 @@ class McpAuthorizationTest {
                     url TEXT NULL,
                     created_at TIMESTAMP NOT NULL,
                     updated_at TIMESTAMP NOT NULL
+                )
+                """.trimIndent()
+            )
+            exec(
+                """
+                CREATE TABLE synthetic_tests (
+                    id UUID PRIMARY KEY,
+                    organization_id INT NOT NULL
                 )
                 """.trimIndent()
             )

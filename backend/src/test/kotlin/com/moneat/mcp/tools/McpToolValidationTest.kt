@@ -423,6 +423,11 @@ class McpToolValidationTest {
             ),
             case("create_uptime_name", CreateUptimeMonitorTool(), obj(), "name is required"),
             case("create_uptime_url", CreateUptimeMonitorTool(), obj("name" to "API"), "url is required"),
+            case("get_synthetic_id", GetSyntheticTestTool(), obj(), "synthetic_test_id is required"),
+            case("update_synthetic_id", UpdateSyntheticTestTool(), obj(), "synthetic_test_id is required"),
+            case("delete_synthetic_id", DeleteSyntheticTestTool(), obj(), "synthetic_test_id is required"),
+            case("run_synthetic_id", RunSyntheticTestTool(), obj(), "synthetic_test_id is required"),
+            case("synthetic_summary_id", GetSyntheticTestSummaryTool(), obj(), "synthetic_test_id is required"),
             case("list_transactions_project_id", ListTransactionsTool(), obj(), "project_id is required"),
             case("get_trace_lookup", GetTraceTool(), obj(), "event_id or trace_id is required"),
             case(
