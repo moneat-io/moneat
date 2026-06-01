@@ -30,8 +30,13 @@ import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DatadogMetricServiceTest {
@@ -230,6 +235,51 @@ class DatadogMetricServiceTest {
     }
 
     @Test
+    fun `insertMetricBatch writes raw metrics as JSONEachRow with UTC millis and JSON tags`() = runBlocking {
+        val queries = mutableListOf<String>()
+        val response = mockk<HttpResponse>()
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "test_db"
+            every { response.status } returns HttpStatusCode.OK
+            coEvery { ClickHouseClient.execute(capture(queries)) } returns response
+
+            DatadogMetricService.insertMetricBatch(
+                QueuedMetricBatch(
+                    organizationId = 42L,
+                    metrics = listOf(
+                        QueuedMetricEntry(
+                            name = "custom.metric",
+                            type = "gauge",
+                            timestampMs = 1_700_000_000_123L,
+                            value = 42.5,
+                            host = "web-01",
+                            tags = mapOf("odd" to "O'Brien \"prod\"\nline"),
+                            unit = "%",
+                            sourceTypeName = "agent",
+                        )
+                    )
+                )
+            )
+
+            val query = queries.single { it.contains("INSERT INTO `test_db`.metrics ") }
+            assertTrue(query.contains("FORMAT JSONEachRow"))
+            assertFalse(query.contains("VALUES"))
+            assertFalse(query.contains("fromUnixTimestamp64Milli"))
+            assertFalse(query.contains("map("))
+
+            val row = jsonRows(query).single()
+            assertNull(row["metric_id"])
+            assertEquals("42", row["organization_id"]?.jsonPrimitive?.content)
+            assertEquals("0", row["project_id"]?.jsonPrimitive?.content)
+            assertEquals("2023-11-14 22:13:20.123", row["timestamp"]?.jsonPrimitive?.content)
+            assertEquals("O'Brien \"prod\"\nline", row["tags"]?.jsonObject?.get("odd")?.jsonPrimitive?.content)
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
     fun `insertMetricBatch writes raw metrics and infra rollups for host metrics`() = runBlocking {
         val queries = mutableListOf<String>()
         val response = mockk<HttpResponse>()
@@ -305,4 +355,11 @@ class DatadogMetricServiceTest {
             unmockkObject(ClickHouseClient)
         }
     }
+
+    private fun jsonRows(query: String) =
+        query.lineSequence()
+            .map { it.trim() }
+            .filter { it.startsWith("{") }
+            .map { Json.parseToJsonElement(it).jsonObject }
+            .toList()
 }
