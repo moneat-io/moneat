@@ -45,7 +45,6 @@ import {
     LineChart,
     LogOut,
     MessageSquare,
-    Network,
     Package,
     Play,
     Plus,
@@ -238,7 +237,6 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
     ...datadogCoreNavItems,
     // Infrastructure & Uptime
     { key: 'monitoring', icon: Server, label: 'Monitoring', href: '/monitoring', requiresProject: false, group: 'infrastructure' },
-    { key: 'service-map', icon: Network, label: 'Service Map', href: '/monitoring/service-map', requiresProject: false, group: 'infrastructure' },
     { key: 'uptime', icon: Activity, label: 'Uptime', href: '/uptime', requiresProject: false, group: 'infrastructure' },
     {
       key: 'status-pages',
