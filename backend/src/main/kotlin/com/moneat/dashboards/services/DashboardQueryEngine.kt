@@ -75,6 +75,7 @@ class DashboardQueryEngine {
         )
 
         private val TIME_RANGE_REGEX = Regex("""^now-(\d+)([smhdwMy])$""")
+        private val ORG_SCOPED_TABLES = setOf("logs", "metrics", "containers")
 
         private const val MILLIS_PER_MINUTE = 60_000L
         private const val MILLIS_PER_WEEK = 604_800_000L
@@ -192,7 +193,8 @@ class DashboardQueryEngine {
         dsl: QueryDsl,
         projectId: Long,
         demoEpochMs: Long? = null,
-        retentionDays: Int = 90
+        retentionDays: Int = 90,
+        orgId: Long? = null
     ): String {
         val dataSource = DataSource.fromString(dsl.dataSource)
             ?: throw IllegalArgumentException("Unknown data source: ${dsl.dataSource}")
@@ -205,7 +207,7 @@ class DashboardQueryEngine {
         val tsCol = TIMESTAMP_COLUMNS[dataSource.tableName] ?: "timestamp"
 
         val selectClauses = buildSelectClauses(dsl, tsCol)
-        val whereClauses = buildWhereClauses(dsl, projectId, tsCol, demoEpochMs, retentionDays)
+        val whereClauses = buildWhereClauses(dsl, projectId, tsCol, demoEpochMs, retentionDays, orgId)
         val groupByClauses = buildGroupByClauses(dsl)
         val orderByClause = buildOrderByClause(dsl)
 
@@ -272,11 +274,12 @@ class DashboardQueryEngine {
         projectId: Long,
         tsCol: String,
         demoEpochMs: Long?,
-        retentionDays: Int
+        retentionDays: Int,
+        orgId: Long? = null
     ): List<String> {
         val clauses = mutableListOf<String>()
 
-        clauses.add(ClickHouseQueryUtils.projectIdClause(projectId))
+        clauses.add(buildScopeClause(dsl, projectId, orgId))
         clauses.add(ClickHouseQueryUtils.timestampRetentionClause(tsCol, retentionDays, demoEpochMs))
         clauses.addAll(buildTimeRangeClauses(dsl.timeRange, tsCol, demoEpochMs))
 
@@ -285,6 +288,14 @@ class DashboardQueryEngine {
         }
 
         return clauses
+    }
+
+    internal fun buildScopeClause(dsl: QueryDsl, projectId: Long, orgId: Long?): String {
+        val tableName = DataSource.fromString(dsl.dataSource)?.tableName
+        if (orgId != null && tableName != null && tableName in ORG_SCOPED_TABLES) {
+            return ClickHouseQueryUtils.orgIdClause(orgId)
+        }
+        return ClickHouseQueryUtils.projectIdClause(projectId)
     }
 
     internal fun buildTimeRangeClauses(
@@ -378,14 +389,15 @@ class DashboardQueryEngine {
         dsl: QueryDsl,
         projectId: Long,
         demoEpochMs: Long? = null,
-        retentionDays: Int = 90
+        retentionDays: Int = 90,
+        orgId: Long? = null
     ): List<Map<String, JsonElement>> {
         if (dsl.rawQuery != null) {
             logger.warn { "Skipping raw query execution for security - use query DSL" }
             return emptyList()
         }
 
-        val sql = buildQuery(dsl, projectId, demoEpochMs, retentionDays)
+        val sql = buildQuery(dsl, projectId, demoEpochMs, retentionDays, orgId)
         logger.debug {
             "Executing dashboard query dataSource=${dsl.dataSource} " +
                 "metrics=${dsl.metrics.size} filters=${dsl.filters.size} groupBy=${dsl.groupBy.size}"

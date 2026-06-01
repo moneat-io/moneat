@@ -814,7 +814,7 @@ class DashboardAlertServiceTest {
                 retentionPolicyService.getRetentionDaysForProject(any())
             } returns RECOVERY_RETENTION_DAYS
             coEvery {
-                queryEngine.executeQuery(any(), any(), any(), any())
+                queryEngine.executeQuery(any(), any(), any(), any(), any())
             } returns listOf(mapOf("total" to JsonPrimitive(RECOVERED_TOTAL)))
 
             val dashboardId = seedDashboard()
@@ -878,7 +878,7 @@ class DashboardAlertServiceTest {
                 retentionPolicyService.getRetentionDaysForProject(any())
             } returns RECOVERY_RETENTION_DAYS
             coEvery {
-                queryEngine.executeQuery(any(), any(), any(), any())
+                queryEngine.executeQuery(any(), any(), any(), any(), any())
             } returns listOf(mapOf("total" to JsonPrimitive(90.0)))
 
             val dashboardId = seedDashboard()
@@ -930,7 +930,7 @@ class DashboardAlertServiceTest {
                 retentionPolicyService.getRetentionDaysForProject(any())
             } returns RECOVERY_RETENTION_DAYS
             coEvery {
-                queryEngine.executeQuery(any(), any(), any(), any())
+                queryEngine.executeQuery(any(), any(), any(), any(), any())
             } returns listOf(mapOf("total" to JsonPrimitive(125.0)))
 
             val dashboardId = seedDashboard()
@@ -990,7 +990,7 @@ class DashboardAlertServiceTest {
                 retentionPolicyService.getRetentionDaysForProject(any())
             } returns RECOVERY_RETENTION_DAYS
             coEvery {
-                queryEngine.executeQuery(any(), any(), any(), any())
+                queryEngine.executeQuery(any(), any(), any(), any(), any())
             } returns listOf(mapOf("total" to JsonPrimitive(90.0)))
 
             val dashboardId = seedDashboard()
@@ -1032,7 +1032,7 @@ class DashboardAlertServiceTest {
                 retentionPolicyService.getRetentionDaysForProject(any())
             } returns RECOVERY_RETENTION_DAYS
             coEvery {
-                queryEngine.executeQuery(any(), any(), any(), any())
+                queryEngine.executeQuery(any(), any(), any(), any(), any())
             } returns listOf(mapOf("total" to JsonPrimitive(90.0)))
 
             val dashboardId = seedDashboard()
@@ -1071,7 +1071,7 @@ class DashboardAlertServiceTest {
                 retentionPolicyService.getRetentionDaysForProject(any())
             } returns RECOVERY_RETENTION_DAYS
             coEvery {
-                queryEngine.executeQuery(any(), any(), any(), any())
+                queryEngine.executeQuery(any(), any(), any(), any(), any())
             } returns listOf(mapOf("total" to JsonPrimitive(70.0)))
 
             val dashboardId = seedDashboard()
@@ -1117,7 +1117,7 @@ class DashboardAlertServiceTest {
 
             callPrivateSuspend("evaluateAlerts")
 
-            coVerify(exactly = 0) { queryEngine.executeQuery(any(), any(), any(), any()) }
+            coVerify(exactly = 0) { queryEngine.executeQuery(any(), any(), any(), any(), any()) }
         }
 
     @Test
@@ -1130,7 +1130,7 @@ class DashboardAlertServiceTest {
                 retentionPolicyService.getRetentionDaysForProject(any())
             } returns RECOVERY_RETENTION_DAYS
             coEvery {
-                queryEngine.executeQuery(any(), any(), any(), any())
+                queryEngine.executeQuery(any(), any(), any(), any(), any())
             } throws RuntimeException("query failed")
 
             val dashboardId = seedDashboard()
@@ -1230,7 +1230,7 @@ class DashboardAlertServiceTest {
 
             assertTrue(result.isEmpty())
             coVerify(exactly = 0) {
-                queryEngine.executeQuery(any(), any(), any(), any())
+                queryEngine.executeQuery(any(), any(), any(), any(), any())
             }
         }
 
@@ -1243,7 +1243,7 @@ class DashboardAlertServiceTest {
                 retentionPolicyService.getRetentionDaysForProject(DEFAULT_PROJECT_ID)
             } returns null
             coEvery {
-                queryEngine.executeQuery(query, DEFAULT_PROJECT_ID, null, RECOVERY_RETENTION_DAYS)
+                queryEngine.executeQuery(query, DEFAULT_PROJECT_ID, null, RECOVERY_RETENTION_DAYS, ORG_ID)
             } returns rows
 
             val result = service.executeQueryForAlert(

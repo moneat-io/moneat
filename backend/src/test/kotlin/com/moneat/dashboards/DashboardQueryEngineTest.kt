@@ -364,6 +364,22 @@ class DashboardQueryEngineTest {
     }
 
     @Test
+    fun `buildWhereClauses scopes log queries by organization when org id is available`() {
+        val dsl = QueryDsl(dataSource = "logs")
+        val clauses = engine.buildWhereClauses(dsl, 123, "timestamp", null, 90, orgId = 456)
+        assertTrue(clauses.any { it.contains("organization_id = 456") })
+        assertFalse(clauses.any { it.contains("project_id = 123") })
+    }
+
+    @Test
+    fun `buildWhereClauses keeps event queries project scoped when org id is available`() {
+        val dsl = QueryDsl(dataSource = "events")
+        val clauses = engine.buildWhereClauses(dsl, 123, "timestamp", null, 90, orgId = 456)
+        assertTrue(clauses.any { it.contains("project_id = 123") })
+        assertFalse(clauses.any { it.contains("organization_id = 456") })
+    }
+
+    @Test
     fun `buildWhereClauses includes retention clause`() {
         val dsl = QueryDsl(dataSource = "events")
         val clauses = engine.buildWhereClauses(dsl, 123, "timestamp", null, 90)
