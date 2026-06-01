@@ -98,7 +98,7 @@
     "eslint": "^10.0.0",
     "eslint-plugin-check-file": "^3.3.1",
     "eslint-plugin-react-hooks": "^7.0.0",
-    "eslint-plugin-react-refresh": "^0.4.5",
+    "eslint-plugin-react-refresh": "^0.5.0",
     "globals": "^17.0.0",
     "jsdom": "^29.0.0",
     "msw": "^2.12.10",
