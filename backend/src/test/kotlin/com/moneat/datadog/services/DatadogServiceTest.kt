@@ -91,6 +91,22 @@ class DatadogServiceTest {
     }
 
     @Test
+    fun `validateApiKeyContext returns org and project for valid key`() {
+        val created = DatadogService.createApiKey(
+            organizationId = 42,
+            name = "Project Key",
+            userId = 1,
+            projectId = 7,
+        )
+
+        val context = DatadogService.validateApiKeyContext(created.key)
+
+        assertNotNull(context)
+        assertEquals(42, context.organizationId)
+        assertEquals(7, context.projectId)
+    }
+
+    @Test
     fun `validateApiKey returns null for invalid key`() {
         val orgId = DatadogService.validateApiKey("nonexistent-key")
         assertNull(orgId)

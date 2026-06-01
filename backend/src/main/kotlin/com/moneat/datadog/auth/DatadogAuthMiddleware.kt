@@ -30,11 +30,14 @@ private const val MAX_CACHE_SIZE = 10_000
 
 object DatadogAuthMiddleware {
     private data class CachedKey(val organizationId: Int, val expiresAt: Long)
+    private data class CachedContext(val context: DatadogAuthContext, val expiresAt: Long)
 
     private val cache = ConcurrentHashMap<String, CachedKey>()
+    private val contextCache = ConcurrentHashMap<String, CachedContext>()
 
     private fun evictExpiredEntries(now: Long) {
         cache.entries.removeIf { (_, value) -> now >= value.expiresAt }
+        contextCache.entries.removeIf { (_, value) -> now >= value.expiresAt }
     }
 
     /**
@@ -45,10 +48,7 @@ object DatadogAuthMiddleware {
         val now = System.currentTimeMillis()
         evictExpiredEntries(now)
 
-        val apiKey = call.request.headers["DD-API-KEY"]
-            ?: call.request.headers["DD-Api-Key"]
-            ?: call.request.headers["dd-api-key"]
-            ?: call.request.queryParameters["api_key"]
+        val apiKey = getApiKey(call)
         if (apiKey.isNullOrBlank()) {
             call.respond(
                 HttpStatusCode.Forbidden,
@@ -60,7 +60,10 @@ object DatadogAuthMiddleware {
         // Check cache first
         val cached = cache[apiKey]
         if (cached != null) {
-            return cached.organizationId
+            if (now < cached.expiresAt) {
+                return cached.organizationId
+            }
+            cache.remove(apiKey, cached)
         }
 
         val organizationId = DatadogService.validateApiKey(apiKey)
@@ -85,6 +88,49 @@ object DatadogAuthMiddleware {
         return organizationId
     }
 
+    suspend fun authenticateContext(call: ApplicationCall): DatadogAuthContext? {
+        val now = System.currentTimeMillis()
+        evictExpiredEntries(now)
+
+        val apiKey = getApiKey(call)
+        if (apiKey.isNullOrBlank()) {
+            call.respond(
+                HttpStatusCode.Forbidden,
+                mapOf("errors" to listOf("API key is missing or empty"))
+            )
+            return null
+        }
+
+        val cached = contextCache[apiKey]
+        if (cached != null) {
+            if (now < cached.expiresAt) {
+                return cached.context
+            }
+            contextCache.remove(apiKey, cached)
+        }
+
+        val validation = DatadogService.validateApiKeyContext(apiKey)
+        if (validation == null) {
+            call.respond(
+                HttpStatusCode.Forbidden,
+                mapOf("errors" to listOf("API key is not valid"))
+            )
+            return null
+        }
+
+        val context = DatadogAuthContext(
+            organizationId = validation.organizationId,
+            projectId = validation.projectId,
+        )
+        if (contextCache.size < MAX_CACHE_SIZE) {
+            contextCache[apiKey] = CachedContext(context, now + CACHE_TTL_MS)
+        } else {
+            logger.warn { "Datadog API key context cache reached max size; skipping cache insert" }
+        }
+
+        return context
+    }
+
     /**
      * Resolves an org ID from a DD-API-KEY without performing HTTP responses.
      * Uses the same cache as [authenticate] to avoid redundant DB lookups.
@@ -93,7 +139,12 @@ object DatadogAuthMiddleware {
         val now = System.currentTimeMillis()
         evictExpiredEntries(now)
         val cached = cache[apiKey]
-        if (cached != null) return cached.organizationId
+        if (cached != null) {
+            if (now < cached.expiresAt) {
+                return cached.organizationId
+            }
+            cache.remove(apiKey, cached)
+        }
         val organizationId = DatadogService.validateApiKey(apiKey) ?: return null
         if (cache.size < MAX_CACHE_SIZE) {
             cache[apiKey] = CachedKey(organizationId, now + CACHE_TTL_MS)
@@ -104,5 +155,12 @@ object DatadogAuthMiddleware {
     // For testing
     internal fun clearCache() {
         cache.clear()
+        contextCache.clear()
     }
+
+    private fun getApiKey(call: ApplicationCall): String? =
+        call.request.headers["DD-API-KEY"]
+            ?: call.request.headers["DD-Api-Key"]
+            ?: call.request.headers["dd-api-key"]
+            ?: call.request.queryParameters["api_key"]
 }
