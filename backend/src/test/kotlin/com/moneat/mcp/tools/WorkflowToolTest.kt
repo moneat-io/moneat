@@ -18,12 +18,19 @@ package com.moneat.mcp.tools
 
 import com.moneat.mcp.auth.McpScopes
 import com.moneat.mcp.models.McpContext
+import com.moneat.workflows.engine.WorkflowCatalog
 import com.moneat.workflows.models.CreateWorkflowRequest
 import com.moneat.workflows.models.ManualWorkflowRunRequest
+import com.moneat.workflows.models.UpdateWorkflowRequest
+import com.moneat.workflows.models.WorkflowAuditEventResponse
 import com.moneat.workflows.models.WorkflowGraphConfig
 import com.moneat.workflows.models.WorkflowGraphNode
 import com.moneat.workflows.models.WorkflowResponse
+import com.moneat.workflows.models.WorkflowRunCancelResponse
+import com.moneat.workflows.models.WorkflowRunInstanceRequest
 import com.moneat.workflows.models.WorkflowRunResponse
+import com.moneat.workflows.models.WorkflowWebhookSigningResponse
+import com.moneat.workflows.services.WorkflowGovernanceService
 import com.moneat.workflows.services.WorkflowService
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -32,9 +39,12 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
@@ -172,6 +182,126 @@ class WorkflowToolTest {
         coVerify(exactly = 1) { service.runWorkflow(7, 12, any(), 42) }
     }
 
+    @Test
+    fun `update workflow accepts object arguments`() = runBlocking {
+        val service = mockk<WorkflowService>()
+        val requestSlot = slot<UpdateWorkflowRequest>()
+        every { service.updateWorkflow(7, 12, capture(requestSlot)) } returns workflowResponse()
+
+        val result = UpdateWorkflowTool(service).execute(
+            JsonObject(
+                mapOf(
+                    "workflow_id" to JsonPrimitive(12),
+                    "name" to JsonPrimitive("Updated workflow"),
+                    "enabled" to JsonPrimitive(true),
+                    "conditions" to workflowConditionsElement(),
+                    "steps" to workflowStepsElement(),
+                    "graph" to workflowGraphElement(),
+                    "once_for_template" to JsonArray(listOf(JsonPrimitive("incident.id"))),
+                )
+            ),
+            context,
+        )
+
+        assertFalse(result.isError, result.content.firstOrNull()?.text)
+        assertEquals("Updated workflow", requestSlot.captured.name)
+        assertEquals(true, requestSlot.captured.enabled)
+        assertEquals("incident.severity", requestSlot.captured.conditions?.single()?.reference)
+        assertEquals("slack", requestSlot.captured.steps?.single()?.name)
+        assertEquals("trigger", requestSlot.captured.graph?.nodes?.single()?.id)
+        assertEquals(listOf("incident.id"), requestSlot.captured.onceForTemplate)
+    }
+
+    @Test
+    fun `workflow lifecycle tools delegate to service`() = runBlocking {
+        val service = mockk<WorkflowService>()
+        every { service.listWorkflows(7) } returns listOf(workflowResponse())
+        every { service.getWorkflow(7, 12) } returns workflowResponse()
+        every { service.publishWorkflow(7, 12) } returns workflowResponse()
+        every { service.unpublishWorkflow(7, 12) } returns workflowResponse()
+        every { service.deleteWorkflow(7, 12) } returns true
+
+        val args = JsonObject(mapOf("workflow_id" to JsonPrimitive(12)))
+
+        assertFalse(ListWorkflowsTool(service).execute(JsonObject(emptyMap()), context).isError)
+        assertFalse(GetWorkflowTool(service).execute(args, context).isError)
+        assertFalse(PublishWorkflowTool(service).execute(args, context).isError)
+        assertFalse(UnpublishWorkflowTool(service).execute(args, context).isError)
+        assertFalse(DeleteWorkflowTool(service).execute(args, context).isError)
+
+        verify(exactly = 1) { service.listWorkflows(7) }
+        verify(exactly = 1) { service.getWorkflow(7, 12) }
+        verify(exactly = 1) { service.publishWorkflow(7, 12) }
+        verify(exactly = 1) { service.unpublishWorkflow(7, 12) }
+        verify(exactly = 1) { service.deleteWorkflow(7, 12) }
+    }
+
+    @Test
+    fun `workflow run tools delegate to service and clamp limits`() = runBlocking {
+        val service = mockk<WorkflowService>()
+        val instanceSlot = slot<WorkflowRunInstanceRequest>()
+        every { service.listRuns(7, 12, 100) } returns listOf(workflowRunResponse())
+        every { service.getRun(7, 12, 44) } returns workflowRunResponse()
+        coEvery { service.cancelRun(7, 12, 44) } returns WorkflowRunCancelResponse(id = 44, status = "canceled")
+        coEvery { service.createWorkflowInstance(7, 12, capture(instanceSlot), 42) } returns workflowRunResponse()
+
+        val workflowArgs = JsonObject(mapOf("workflow_id" to JsonPrimitive(12), "limit" to JsonPrimitive(200)))
+        val runArgs = JsonObject(mapOf("workflow_id" to JsonPrimitive(12), "run_id" to JsonPrimitive(44)))
+        val instanceArgs = JsonObject(
+            mapOf(
+                "workflow_id" to JsonPrimitive(12),
+                "scope" to JsonObject(mapOf("dry_run" to JsonPrimitive(true))),
+            )
+        )
+
+        assertFalse(ListWorkflowRunsTool(service).execute(workflowArgs, context).isError)
+        assertFalse(GetWorkflowRunTool(service).execute(runArgs, context).isError)
+        assertFalse(CancelWorkflowRunTool(service).execute(runArgs, context).isError)
+        assertFalse(CreateWorkflowInstanceTool(service).execute(instanceArgs, context).isError)
+        assertEquals(true, instanceSlot.captured.scope["dry_run"]?.jsonPrimitive?.boolean)
+    }
+
+    @Test
+    fun `catalog blueprint audit and webhook tools return data`() = runBlocking {
+        val service = mockk<WorkflowService>()
+        val governanceService = mockk<WorkflowGovernanceService>()
+        every { service.catalog() } returns WorkflowCatalog.response()
+        every { service.webhookSigningInfo(7, 12) } returns webhookSigningResponse()
+        every { governanceService.listAudit(7, 12, 500) } returns listOf(workflowAuditEventResponse())
+
+        val workflowArgs = JsonObject(mapOf("workflow_id" to JsonPrimitive(12)))
+        val auditArgs = JsonObject(mapOf("workflow_id" to JsonPrimitive(12), "limit" to JsonPrimitive(900)))
+
+        assertFalse(GetWorkflowCatalogTool(service).execute(JsonObject(emptyMap()), context).isError)
+        assertFalse(ListWorkflowBlueprintsTool().execute(JsonObject(emptyMap()), context).isError)
+        assertFalse(
+            GetWorkflowBlueprintTool().execute(JsonObject(mapOf("key" to JsonPrimitive("alert_notify_slack"))), context)
+                .isError
+        )
+        assertFalse(ListWorkflowAuditTool(governanceService).execute(auditArgs, context).isError)
+        assertFalse(GetWorkflowWebhookSigningTool(service).execute(workflowArgs, context).isError)
+    }
+
+    @Test
+    fun `workflow tools return useful not found and validation errors`() = runBlocking {
+        val service = mockk<WorkflowService>()
+        every { service.getWorkflow(7, 12) } returns null
+        every { service.deleteWorkflow(7, 12) } returns false
+
+        val workflowArgs = JsonObject(mapOf("workflow_id" to JsonPrimitive(12)))
+        val invalidLimitArgs = JsonObject(mapOf("workflow_id" to JsonPrimitive(12), "limit" to JsonPrimitive("many")))
+
+        assertTrue(GetWorkflowTool(service).execute(workflowArgs, context).isError)
+        assertTrue(DeleteWorkflowTool(service).execute(workflowArgs, context).isError)
+        assertTrue(ListWorkflowRunsTool(service).execute(invalidLimitArgs, context).isError)
+        assertTrue(
+            GetWorkflowBlueprintTool()
+                .execute(JsonObject(mapOf("key" to JsonPrimitive("missing"))), context)
+                .isError
+        )
+        verify(exactly = 0) { service.listRuns(any(), any(), any()) }
+    }
+
     private fun workflowResponse(): WorkflowResponse =
         WorkflowResponse(
             id = 12,
@@ -201,6 +331,61 @@ class WorkflowToolTest {
             status = "pending",
             progress = emptyList(),
             createdAt = "2026-06-01T00:00:00Z",
+        )
+
+    private fun webhookSigningResponse(): WorkflowWebhookSigningResponse =
+        WorkflowWebhookSigningResponse(
+            workflowId = 12,
+            webhookUrl = "https://api.moneat.io/v1/workflows/12/webhook",
+            signingSecret = "whsec_test",
+            signatureHeader = "X-Moneat-Workflow-Signature",
+            signatureFormat = "sha256=<hex>",
+        )
+
+    private fun workflowAuditEventResponse(): WorkflowAuditEventResponse =
+        WorkflowAuditEventResponse(
+            id = 5,
+            workflowId = 12,
+            runId = 44,
+            action = "published",
+            actorUserId = 42,
+            detail = mapOf("version" to "1"),
+            createdAt = "2026-06-01T00:00:00Z",
+        )
+
+    private fun workflowConditionsElement(): JsonElement =
+        JsonArray(
+            listOf(
+                JsonObject(
+                    mapOf(
+                        "reference" to JsonPrimitive("incident.severity"),
+                        "operation" to JsonPrimitive("equals"),
+                        "value" to JsonPrimitive("critical"),
+                    )
+                )
+            )
+        )
+
+    private fun workflowStepsElement(): JsonElement =
+        JsonArray(
+            listOf(
+                JsonObject(
+                    mapOf(
+                        "name" to JsonPrimitive("slack"),
+                        "params" to JsonObject(mapOf("channel" to JsonPrimitive("#ops"))),
+                    )
+                )
+            )
+        )
+
+    private fun workflowGraphElement(): JsonElement =
+        JsonObject(
+            mapOf(
+                "nodes" to JsonArray(
+                    listOf(JsonObject(mapOf("id" to JsonPrimitive("trigger"), "type" to JsonPrimitive("trigger"))))
+                ),
+                "edges" to JsonArray(emptyList()),
+            )
         )
 
     private companion object {
