@@ -42,7 +42,7 @@ import org.graalvm.polyglot.Value
 import org.graalvm.polyglot.io.IOAccess
 
 private const val DEFAULT_HTTP_TIMEOUT_SECONDS = 15L
-private const val DEFAULT_TRANSFORM_TIMEOUT_SECONDS = 2L
+private const val DEFAULT_TRANSFORM_TIMEOUT_SECONDS = 5L
 private const val DEFAULT_EGRESS_PROXY_PORT = 3128
 private const val MAX_HTTP_BODY_CHARS = 64_000
 private const val MAX_TRANSFORM_OUTPUT_CHARS = 64_000
