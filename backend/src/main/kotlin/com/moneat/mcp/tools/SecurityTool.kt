@@ -79,6 +79,9 @@ private const val SECURITY_SIGNAL_ID = "security_signal_id"
 private const val DETECTION_RULE_ID = "detection_rule_id"
 private const val SECURITY_EVENT_ID = "security_event_id"
 private const val TEMPLATE_ID = "template_id"
+private const val SECURITY_LIMIT_DESCRIPTION = "Max results (default 50, max 200)"
+private const val RESULT_OFFSET_DESCRIPTION = "Result offset for pagination"
+private const val DETECTION_RULE_ID_DESCRIPTION = "Detection rule ID"
 
 interface SecurityMcpGateway {
     suspend fun listSignals(
@@ -86,49 +89,48 @@ interface SecurityMcpGateway {
         filters: SignalFilters,
         limit: Int,
         offset: Int,
-    ): SignalListResponse = unsupported()
+    ): SignalListResponse
 
-    suspend fun getSignal(organizationId: Int, signalId: Int): SignalDetailResponse? = unsupported()
+    suspend fun getSignal(organizationId: Int, signalId: Int): SignalDetailResponse?
 
     suspend fun triageSignal(
         organizationId: Int,
         signalId: Int,
         actorUserId: Int,
         request: TriageRequest,
-    ): TriageResult = unsupported()
+    ): TriageResult
 
-    suspend fun listDetectionRules(organizationId: Int): DetectionRuleListResponse = unsupported()
+    suspend fun listDetectionRules(organizationId: Int): DetectionRuleListResponse
 
-    suspend fun getDetectionRule(organizationId: Int, ruleId: Int): DetectionRuleResponse? = unsupported()
+    suspend fun getDetectionRule(organizationId: Int, ruleId: Int): DetectionRuleResponse?
 
     suspend fun createDetectionRule(
         organizationId: Int,
         request: CreateDetectionRuleRequest,
-    ): DetectionRuleResponse = unsupported()
+    ): DetectionRuleResponse
 
     suspend fun updateDetectionRule(
         organizationId: Int,
         ruleId: Int,
         request: UpdateDetectionRuleRequest,
-    ): DetectionRuleResponse? = unsupported()
+    ): DetectionRuleResponse?
 
-    suspend fun deleteDetectionRule(organizationId: Int, ruleId: Int): Boolean = unsupported()
+    suspend fun deleteDetectionRule(organizationId: Int, ruleId: Int): Boolean
 
-    suspend fun previewDetectionRule(organizationId: Int, ruleId: Int): DetectionPreviewResponse? = unsupported()
+    suspend fun previewDetectionRule(organizationId: Int, ruleId: Int): DetectionPreviewResponse?
 
-    suspend fun detectionCoverage(organizationId: Int): DetectionCoverageResponse = unsupported()
+    suspend fun detectionCoverage(organizationId: Int): DetectionCoverageResponse
 
-    suspend fun listDetectionTemplates(): DetectionTemplateListResponse = unsupported()
+    suspend fun listDetectionTemplates(): DetectionTemplateListResponse
 
-    suspend fun installDetectionTemplate(organizationId: Int, templateId: String): DetectionRuleResponse? =
-        unsupported()
+    suspend fun installDetectionTemplate(organizationId: Int, templateId: String): DetectionRuleResponse?
 
-    suspend fun vulnerabilitySummary(organizationId: Int): VulnerabilitySummaryResponse = unsupported()
+    suspend fun vulnerabilitySummary(organizationId: Int): VulnerabilitySummaryResponse
 
     suspend fun listVulnerabilityInventory(
         organizationId: Int,
         filters: InventoryFilters,
-    ): VulnerabilityInventoryResponse = unsupported()
+    ): VulnerabilityInventoryResponse
 
     suspend fun listVulnerabilityFindings(
         organizationId: Int,
@@ -138,28 +140,25 @@ interface SecurityMcpGateway {
         search: String?,
         limit: Int,
         offset: Int,
-    ): VulnerabilityFindingListResponse = unsupported()
+    ): VulnerabilityFindingListResponse
 
-    suspend fun exportVulnerabilitySbom(organizationId: Int, format: SbomFormat): String = unsupported()
+    suspend fun exportVulnerabilitySbom(organizationId: Int, format: SbomFormat): String
 
     suspend fun listSecurityEvents(
         organizationId: Int,
         filters: SecurityEventFilters,
-    ): JsonObject = unsupported()
+    ): JsonObject
 
-    suspend fun getSecurityEvent(organizationId: Int, eventId: String): JsonObject? = unsupported()
+    suspend fun getSecurityEvent(organizationId: Int, eventId: String): JsonObject?
 
-    suspend fun complianceSummary(organizationId: Int): JsonObject = unsupported()
+    suspend fun complianceSummary(organizationId: Int): JsonObject
 
-    suspend fun complianceTrends(organizationId: Int): JsonObject = unsupported()
+    suspend fun complianceTrends(organizationId: Int): JsonObject
 
     suspend fun listComplianceFindings(
         organizationId: Int,
         filters: ComplianceFindingFilters,
-    ): JsonObject = unsupported()
-
-    private fun unsupported(): Nothing =
-        throw UnsupportedOperationException("Security MCP gateway method is not implemented")
+    ): JsonObject
 }
 
 data class SecurityEventFilters(
@@ -299,8 +298,8 @@ class ListSecuritySignalsTool(
                 "source" to schemaString("Signal source, for example detection or vulnerability"),
                 "from" to schemaString("First-seen or last-seen lower bound as an ISO-8601 instant"),
                 "to" to schemaString("First-seen or last-seen upper bound as an ISO-8601 instant"),
-                "limit" to schemaInteger("Max results (default 50, max 200)"),
-                "offset" to schemaInteger("Result offset for pagination"),
+                "limit" to schemaInteger(SECURITY_LIMIT_DESCRIPTION),
+                "offset" to schemaInteger(RESULT_OFFSET_DESCRIPTION),
             )
         )
     )
@@ -396,7 +395,7 @@ class GetDetectionRuleTool(
     override val name = "get_detection_rule"
     override val description = "Get one security detection rule"
     override val inputSchema = InputSchema(
-        properties = JsonObject(mapOf(DETECTION_RULE_ID to schemaInteger("Detection rule ID"))),
+        properties = JsonObject(mapOf(DETECTION_RULE_ID to schemaInteger(DETECTION_RULE_ID_DESCRIPTION))),
         required = listOf(DETECTION_RULE_ID)
     )
 
@@ -460,7 +459,7 @@ class DeleteDetectionRuleTool(
     override val description = "Delete a security detection rule"
     override val readOnly = false
     override val inputSchema = InputSchema(
-        properties = JsonObject(mapOf(DETECTION_RULE_ID to schemaInteger("Detection rule ID"))),
+        properties = JsonObject(mapOf(DETECTION_RULE_ID to schemaInteger(DETECTION_RULE_ID_DESCRIPTION))),
         required = listOf(DETECTION_RULE_ID)
     )
 
@@ -480,7 +479,7 @@ class PreviewDetectionRuleTool(
     override val name = "preview_detection_rule"
     override val description = "Preview matches for a persisted security detection rule without writing signals"
     override val inputSchema = InputSchema(
-        properties = JsonObject(mapOf(DETECTION_RULE_ID to schemaInteger("Detection rule ID"))),
+        properties = JsonObject(mapOf(DETECTION_RULE_ID to schemaInteger(DETECTION_RULE_ID_DESCRIPTION))),
         required = listOf(DETECTION_RULE_ID)
     )
 
@@ -560,7 +559,7 @@ class ListVulnerabilityInventoryTool(
                 "package" to schemaString("Exact package name filter"),
                 "target" to schemaString("Target name filter"),
                 "limit" to schemaInteger("Max results (default 100, max 500)"),
-                "offset" to schemaInteger("Result offset for pagination"),
+                "offset" to schemaInteger(RESULT_OFFSET_DESCRIPTION),
             )
         )
     )
@@ -593,7 +592,7 @@ class ListVulnerabilityFindingsTool(
                 "severity" to schemaEnum("Finding severity", listOf("info", "low", "medium", "high", "critical")),
                 "status" to schemaEnum("Signal status", listOf("open", "under_review", "archived")),
                 "limit" to schemaInteger("Max results (default 100, max 500)"),
-                "offset" to schemaInteger("Result offset for pagination"),
+                "offset" to schemaInteger(RESULT_OFFSET_DESCRIPTION),
             )
         )
     )
@@ -640,8 +639,8 @@ class ListSecurityEventsTool(
                 "severity" to schemaString("Security event severity"),
                 "host" to schemaString("Host substring filter"),
                 "rule_id" to schemaString("Runtime security rule ID"),
-                "limit" to schemaInteger("Max results (default 50, max 200)"),
-                "offset" to schemaInteger("Result offset for pagination"),
+                "limit" to schemaInteger(SECURITY_LIMIT_DESCRIPTION),
+                "offset" to schemaInteger(RESULT_OFFSET_DESCRIPTION),
             )
         )
     )
@@ -711,8 +710,8 @@ class ListComplianceFindingsTool(
             mapOf(
                 "framework" to schemaString("Compliance framework filter"),
                 "status" to schemaEnum("Compliance status", listOf("passed", "failed", "skipped", "error")),
-                "limit" to schemaInteger("Max results (default 50, max 200)"),
-                "offset" to schemaInteger("Result offset for pagination"),
+                "limit" to schemaInteger(SECURITY_LIMIT_DESCRIPTION),
+                "offset" to schemaInteger(RESULT_OFFSET_DESCRIPTION),
             )
         )
     )
@@ -731,7 +730,24 @@ class ListComplianceFindingsTool(
         )
 }
 
-class SecurityMcpQueryService {
+interface SecurityQueryExecutor {
+    suspend fun execute(operation: String, sql: String): String
+}
+
+private object ClickHouseSecurityQueryExecutor : SecurityQueryExecutor {
+    override suspend fun execute(operation: String, sql: String): String {
+        val resp = ClickHouseClient.execute(sql)
+        val body = resp.bodyAsText()
+        if (resp.isClickHouseError(body)) {
+            throw securityQueryError(operation, sql, body)
+        }
+        return body
+    }
+}
+
+class SecurityMcpQueryService(
+    private val queryExecutor: SecurityQueryExecutor = ClickHouseSecurityQueryExecutor,
+) {
     private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
 
     suspend fun listSecurityEvents(organizationId: Int, filters: SecurityEventFilters): JsonObject {
@@ -893,11 +909,7 @@ class SecurityMcpQueryService {
     }
 
     private suspend fun executeCount(sql: String): Long {
-        val resp = ClickHouseClient.execute(sql)
-        val body = resp.bodyAsText()
-        if (resp.isClickHouseError(body)) {
-            throw securityQueryError("executeCount", sql, body)
-        }
+        val body = queryExecutor.execute("executeCount", sql)
         return body.trim().lines().firstOrNull()?.let {
             json.parseToJsonElement(it).jsonObject["cnt"]?.jsonPrimitive?.content?.toLongOrNull()
         } ?: 0L
@@ -907,26 +919,22 @@ class SecurityMcpQueryService {
         sql: String,
         mapper: (JsonObject) -> JsonObject,
     ): List<JsonObject> {
-        val resp = ClickHouseClient.execute(sql)
-        val body = resp.bodyAsText()
-        if (resp.isClickHouseError(body)) {
-            throw securityQueryError("executeRows", sql, body)
-        }
+        val body = queryExecutor.execute("executeRows", sql)
         return body.trim().lines()
             .filter { it.isNotBlank() }
             .map { line -> mapper(json.parseToJsonElement(line).jsonObject) }
     }
+}
 
-    private fun securityQueryError(operation: String, sql: String, body: String): ClickHouseQueryException {
-        securityLogger.error {
-            "ClickHouse error in $operation. SQL: ${sql.take(SECURITY_QUERY_LOG_SQL_MAX_LEN)} " +
-                "Body: ${body.take(SECURITY_QUERY_LOG_BODY_MAX_LEN)}"
-        }
-        return ClickHouseQueryException(
-            isTimeout = false,
-            internalDetail = "Security query failed in $operation: ${body.take(SECURITY_QUERY_LOG_BODY_MAX_LEN)}",
-        )
+private fun securityQueryError(operation: String, sql: String, body: String): ClickHouseQueryException {
+    securityLogger.error {
+        "ClickHouse error in $operation. SQL: ${sql.take(SECURITY_QUERY_LOG_SQL_MAX_LEN)} " +
+            "Body: ${body.take(SECURITY_QUERY_LOG_BODY_MAX_LEN)}"
     }
+    return ClickHouseQueryException(
+        isTimeout = false,
+        internalDetail = "Security query failed in $operation: ${body.take(SECURITY_QUERY_LOG_BODY_MAX_LEN)}",
+    )
 }
 
 private fun securityEventSummary(obj: JsonObject): JsonObject =
@@ -986,7 +994,7 @@ private fun detectionRuleInputSchema(
         "tags" to schemaStringArray("Rule tags such as mitre:T1059"),
     )
     if (includeId) {
-        properties[DETECTION_RULE_ID] = schemaInteger("Detection rule ID")
+        properties[DETECTION_RULE_ID] = schemaInteger(DETECTION_RULE_ID_DESCRIPTION)
     }
     return InputSchema(properties = JsonObject(properties), required = required)
 }

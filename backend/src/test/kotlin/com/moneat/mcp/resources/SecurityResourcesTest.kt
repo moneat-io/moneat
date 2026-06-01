@@ -18,11 +18,31 @@ package com.moneat.mcp.resources
 
 import com.moneat.mcp.auth.McpScopes
 import com.moneat.mcp.models.McpContext
+import com.moneat.mcp.tools.ComplianceFindingFilters
+import com.moneat.mcp.tools.SecurityEventFilters
 import com.moneat.mcp.tools.SecurityMcpGateway
+import com.moneat.security.detection.CreateDetectionRuleRequest
+import com.moneat.security.detection.DetectionCoverageResponse
+import com.moneat.security.detection.DetectionRuleListResponse
+import com.moneat.security.detection.DetectionRuleResponse
+import com.moneat.security.detection.DetectionTemplateListResponse
+import com.moneat.security.detection.MitreTacticCoverageResponse
+import com.moneat.security.detection.UpdateDetectionRuleRequest
+import com.moneat.security.detection.DetectionPreviewResponse
 import com.moneat.security.signals.SignalFilters
+import com.moneat.security.signals.SignalDetailResponse
 import com.moneat.security.signals.SignalListResponse
 import com.moneat.security.signals.SignalResponse
+import com.moneat.security.signals.TriageRequest
+import com.moneat.security.signals.TriageResult
+import com.moneat.security.vulnerabilities.InventoryFilters
+import com.moneat.security.vulnerabilities.SbomFormat
+import com.moneat.security.vulnerabilities.VulnerabilityFindingListResponse
+import com.moneat.security.vulnerabilities.VulnerabilityInventoryResponse
+import com.moneat.security.vulnerabilities.VulnerabilitySummaryResponse
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -43,11 +63,32 @@ class SecurityResourcesTest {
 
         assertEquals(setOf(McpScopes.SECURITY_READ), resource.requiredScopes)
         assertEquals("moneat://security/signals/open", content.uri)
-        assertTrue(content.text!!.contains("Suspicious exec"))
+        assertTrue(requireNotNull(content.text).contains("Suspicious exec"))
+    }
+
+    @Test
+    fun `security summary resource aggregates security sections`() = runBlocking {
+        val resource = SecuritySummaryResource(SecurityResourceGateway())
+        val content = resource.read(context)
+
+        assertEquals(setOf(McpScopes.SECURITY_READ), resource.requiredScopes)
+        val text = requireNotNull(content.text)
+        assertTrue(text.contains("openSignalCount"))
+        assertTrue(text.contains("package_count"))
+        assertTrue(text.contains("compliance"))
+    }
+
+    @Test
+    fun `detection coverage resource returns coverage json`() = runBlocking {
+        val resource = SecurityDetectionCoverageResource(SecurityResourceGateway())
+        val content = resource.read(context)
+
+        assertEquals("moneat://security/detection/coverage", content.uri)
+        assertTrue(requireNotNull(content.text).contains("credential-access"))
     }
 }
 
-private class SecurityResourceGateway : SecurityMcpGateway {
+private class SecurityResourceGateway : SecurityResourceGatewayBase() {
     override suspend fun listSignals(
         organizationId: Int,
         filters: SignalFilters,
@@ -75,4 +116,97 @@ private class SecurityResourceGateway : SecurityMcpGateway {
             ),
             totalCount = 1,
         )
+
+    override suspend fun detectionCoverage(organizationId: Int): DetectionCoverageResponse =
+        DetectionCoverageResponse(
+            enabledRuleCount = 1,
+            tactics = listOf(MitreTacticCoverageResponse("credential-access", 1, 1)),
+            techniques = emptyList(),
+        )
+
+    override suspend fun vulnerabilitySummary(organizationId: Int): VulnerabilitySummaryResponse =
+        VulnerabilitySummaryResponse(packageCount = 2, findingCount = 1, criticalCount = 1, highCount = 0)
+
+    override suspend fun complianceSummary(organizationId: Int): JsonObject =
+        JsonObject(mapOf("failed" to JsonPrimitive(1)))
+}
+
+private abstract class SecurityResourceGatewayBase : SecurityMcpGateway {
+    override suspend fun listSignals(
+        organizationId: Int,
+        filters: SignalFilters,
+        limit: Int,
+        offset: Int,
+    ): SignalListResponse = unsupported()
+
+    override suspend fun getSignal(organizationId: Int, signalId: Int): SignalDetailResponse? = unsupported()
+
+    override suspend fun triageSignal(
+        organizationId: Int,
+        signalId: Int,
+        actorUserId: Int,
+        request: TriageRequest,
+    ): TriageResult = unsupported()
+
+    override suspend fun listDetectionRules(organizationId: Int): DetectionRuleListResponse = unsupported()
+
+    override suspend fun getDetectionRule(organizationId: Int, ruleId: Int): DetectionRuleResponse? = unsupported()
+
+    override suspend fun createDetectionRule(
+        organizationId: Int,
+        request: CreateDetectionRuleRequest,
+    ): DetectionRuleResponse = unsupported()
+
+    override suspend fun updateDetectionRule(
+        organizationId: Int,
+        ruleId: Int,
+        request: UpdateDetectionRuleRequest,
+    ): DetectionRuleResponse? = unsupported()
+
+    override suspend fun deleteDetectionRule(organizationId: Int, ruleId: Int): Boolean = unsupported()
+
+    override suspend fun previewDetectionRule(organizationId: Int, ruleId: Int): DetectionPreviewResponse? =
+        unsupported()
+
+    override suspend fun detectionCoverage(organizationId: Int): DetectionCoverageResponse = unsupported()
+
+    override suspend fun listDetectionTemplates(): DetectionTemplateListResponse = unsupported()
+
+    override suspend fun installDetectionTemplate(organizationId: Int, templateId: String): DetectionRuleResponse? =
+        unsupported()
+
+    override suspend fun vulnerabilitySummary(organizationId: Int): VulnerabilitySummaryResponse = unsupported()
+
+    override suspend fun listVulnerabilityInventory(
+        organizationId: Int,
+        filters: InventoryFilters,
+    ): VulnerabilityInventoryResponse = unsupported()
+
+    override suspend fun listVulnerabilityFindings(
+        organizationId: Int,
+        severity: String?,
+        status: String?,
+        packageName: String?,
+        search: String?,
+        limit: Int,
+        offset: Int,
+    ): VulnerabilityFindingListResponse = unsupported()
+
+    override suspend fun exportVulnerabilitySbom(organizationId: Int, format: SbomFormat): String = unsupported()
+
+    override suspend fun listSecurityEvents(organizationId: Int, filters: SecurityEventFilters): JsonObject =
+        unsupported()
+
+    override suspend fun getSecurityEvent(organizationId: Int, eventId: String): JsonObject? = unsupported()
+
+    override suspend fun complianceSummary(organizationId: Int): JsonObject = unsupported()
+
+    override suspend fun complianceTrends(organizationId: Int): JsonObject = unsupported()
+
+    override suspend fun listComplianceFindings(
+        organizationId: Int,
+        filters: ComplianceFindingFilters,
+    ): JsonObject = unsupported()
+
+    private fun unsupported(): Nothing = throw UnsupportedOperationException("not implemented for this test")
 }
