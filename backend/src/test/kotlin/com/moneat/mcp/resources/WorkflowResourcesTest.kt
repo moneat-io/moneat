@@ -31,20 +31,22 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class WorkflowResourcesTest {
+    // ──── Context ────
     private val context = McpContext(
-        organizationId = 7,
-        userId = 42,
-        tokenId = 99,
+        organizationId = ORGANIZATION_ID,
+        userId = USER_ID,
+        tokenId = TOKEN_ID,
         scopes = setOf(McpScopes.WORKFLOW_READ),
         sessionId = "workflow-resource-test",
     )
 
+    // ──── Tests ────
     @Test
     fun `workflow resources serialize overview usage and catalog data`() = runBlocking {
         val governanceService = mockk<WorkflowGovernanceService>()
         val workflowService = mockk<WorkflowService>()
-        every { governanceService.overview(7, any()) } returns workflowOverview()
-        every { governanceService.usage(7, any()) } returns workflowUsage()
+        every { governanceService.overview(ORGANIZATION_ID, any()) } returns workflowOverview()
+        every { governanceService.usage(ORGANIZATION_ID, any()) } returns workflowUsage()
         every { workflowService.catalog() } returns WorkflowCatalog.response()
 
         val overview = WorkflowsOverviewResource(governanceService).read(context)
@@ -57,22 +59,39 @@ class WorkflowResourcesTest {
         assertTrue(catalog.text.orEmpty().contains("blueprints"))
     }
 
+    // ──── Fixtures ────
     private fun workflowOverview(): WorkflowOverviewResponse =
         WorkflowOverviewResponse(
-            totalWorkflows = 3,
-            enabledWorkflows = 2,
-            publishedWorkflows = 1,
-            runsLast30d = 10,
-            successRate = 90.0,
-            failedLast30d = 1,
+            totalWorkflows = TOTAL_WORKFLOWS,
+            enabledWorkflows = ENABLED_WORKFLOWS,
+            publishedWorkflows = PUBLISHED_WORKFLOWS,
+            runsLast30d = RUNS_LAST_30D,
+            successRate = SUCCESS_RATE,
+            failedLast30d = FAILED_LAST_30D,
         )
 
     private fun workflowUsage(): WorkflowUsageResponse =
         WorkflowUsageResponse(
             period = "2026-06",
-            used = 10,
-            limit = 100,
-            remaining = 90,
+            used = WORKFLOW_USAGE_USED,
+            limit = WORKFLOW_USAGE_LIMIT,
+            remaining = WORKFLOW_USAGE_REMAINING,
             unlimited = false,
         )
+
+    // ──── Constants ────
+    private companion object {
+        private const val ORGANIZATION_ID = 7
+        private const val USER_ID = 42
+        private const val TOKEN_ID = 99
+        private const val TOTAL_WORKFLOWS = 3L
+        private const val ENABLED_WORKFLOWS = 2L
+        private const val PUBLISHED_WORKFLOWS = 1L
+        private const val RUNS_LAST_30D = 10L
+        private const val SUCCESS_RATE = 90.0
+        private const val FAILED_LAST_30D = 1L
+        private const val WORKFLOW_USAGE_USED = 10L
+        private const val WORKFLOW_USAGE_LIMIT = 100
+        private const val WORKFLOW_USAGE_REMAINING = 90
+    }
 }
