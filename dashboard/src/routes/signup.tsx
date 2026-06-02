@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Link, redirect} from '@tanstack/react-router'
+import {createFileRoute, Link} from '@tanstack/react-router'
 import {useState} from 'react'
 import {Github} from 'lucide-react'
 import {api} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
-import {APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
+import {ensureSignupRouteCanLoad} from './-signup-route-guard'
 import {Button} from '@/components/ui/button'
 import {Checkbox} from '@/components/ui/checkbox'
 import {Input} from '@/components/ui/input'
@@ -30,11 +30,7 @@ import {authInputClass, authPrimaryButtonClass, authSecondaryButtonClass} from '
 import {Helmet} from 'react-helmet-async'
 
 export const Route = createFileRoute('/signup')({
-  beforeLoad: () => {
-    if (api.isAuthenticated()) {
-      throw redirect({ to: '/', search: APP_OVERVIEW_SEARCH })
-    }
-  },
+  beforeLoad: ensureSignupRouteCanLoad,
   component: SignupPage,
 })
 
