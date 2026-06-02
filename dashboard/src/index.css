@@ -1,6 +1,14 @@
 @import "tailwindcss";
 @config "../tailwind.config.js";
 
+/* Public-pages brand type (style-guide): geometric display + machine mono.
+   Generates `font-display` and `font-brandmono` utilities; scoped to the
+   marketing pages via wrapper classes, so the app keeps its default type. */
+@theme {
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-brandmono: "Spline Sans Mono", ui-monospace, "SFMono-Regular", menlo, monospace;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;

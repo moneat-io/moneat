@@ -150,11 +150,11 @@ export interface FeatureFlagAuditEvent {
 export interface FeatureFlagAnalytics {
   evaluations: number
   uniqueTargetingKeys: number
-  variants: FeatureFlagVariantAnalytics[]
+  variants: FeatureFlagLandingnalytics[]
   trackingEvents: FeatureFlagTrackingAnalytics[]
 }
 
-export interface FeatureFlagVariantAnalytics {
+export interface FeatureFlagLandingnalytics {
   flagKey: string
   variantKey: string
   evaluations: number

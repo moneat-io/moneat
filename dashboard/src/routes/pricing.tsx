@@ -20,24 +20,27 @@ import {PricingCalculatorSection} from '@/components/landing/PricingCalculatorSe
 import {LandingNavbar, LandingFooter} from '@/components/landing/LandingNavbar'
 import {SeoHead} from '@/components/SeoHead'
 import {pricingSeo} from '@/lib/seo/routes'
+import {useForceDarkTheme} from '@/components/landing/usePublicPageTheme'
 
 export const Route = createFileRoute('/pricing')({
   component: PricingPage,
 })
 
 function PricingPage() {
+  useForceDarkTheme()
+
   return (
-    <article className="min-h-screen bg-white text-slate-950">
+    <article className="min-h-screen bg-[#08090f] font-display text-slate-300">
       <SeoHead seo={pricingSeo} />
 
-      <LandingNavbar tone="light" />
+      <LandingNavbar tone="dark" />
 
       <main>
         <PricingSection />
         <PricingCalculatorSection />
       </main>
 
-      <LandingFooter tone="light" />
+      <LandingFooter tone="dark" />
     </article>
   )
 }

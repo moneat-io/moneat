@@ -19,9 +19,9 @@ import {useState} from 'react'
 import {api} from '@/lib/api'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
-import {Label} from '@/components/ui/label'
-import {Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle} from '@/components/ui/card'
-import {Logo} from '@/components/Logo'
+import {AuthAlert, AuthField, AuthShell} from '@/components/auth/AuthShell'
+import {authInputClass, authPrimaryButtonClass} from '@/components/auth/authStyles'
+import {Helmet} from 'react-helmet-async'
 
 export const Route = createFileRoute('/reset-password')({
   component: ResetPasswordPage,
@@ -60,7 +60,7 @@ function ResetPasswordPage() {
     }
 
     setLoading(true)
-    
+
     try {
       await api.resetPassword(token, password)
       navigate({ to: '/login' })
@@ -72,55 +72,55 @@ function ResetPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center space-y-4">
-          <div className="flex justify-center">
-            <Logo className="h-10" />
-          </div>
-          <div>
-            <CardTitle className="text-2xl">Set new password</CardTitle>
-            <CardDescription className="mt-1">
-              Enter a new password for your account
-            </CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && <div className="text-sm text-destructive">{error}</div>}
-            <div className="space-y-2">
-              <Label htmlFor="password">New Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="At least 8 characters"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                placeholder="Re-enter your password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Resetting...' : 'Reset password'}
-            </Button>
-          </form>
-        </CardContent>
-        <CardFooter className="flex justify-center text-sm text-muted-foreground">
-          <Link to="/login" className="text-primary hover:underline">
-            Back to login
-          </Link>
-        </CardFooter>
-      </Card>
-    </div>
+    <>
+      <Helmet>
+        <title>Set New Password | Moneat</title>
+        <meta name="robots" content="noindex" />
+      </Helmet>
+      <AuthShell
+        kicker="Account recovery"
+        heading="Set a new password"
+        subheading="Choose a strong password for your account."
+        footer={
+          <p className="text-center text-sm text-slate-400">
+            <Link to="/login" className="font-medium text-indigo-300 underline-offset-4 hover:text-white hover:underline">
+              Back to sign in
+            </Link>
+          </p>
+        }
+      >
+        <form onSubmit={handleSubmit} className="grid gap-4">
+          {error && <AuthAlert tone="danger">{error}</AuthAlert>}
+
+          <AuthField id="password" label="New password" required hint="At least 8 characters.">
+            <Input
+              id="password"
+              type="password"
+              placeholder="Create a password"
+              className={authInputClass}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </AuthField>
+
+          <AuthField id="confirmPassword" label="Confirm password" required>
+            <Input
+              id="confirmPassword"
+              type="password"
+              placeholder="Re-enter your password"
+              className={authInputClass}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+            />
+          </AuthField>
+
+          <Button type="submit" className={authPrimaryButtonClass} disabled={loading}>
+            {loading ? 'Resetting…' : 'Reset password'}
+          </Button>
+        </form>
+      </AuthShell>
+    </>
   )
 }
