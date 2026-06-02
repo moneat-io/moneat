@@ -141,6 +141,100 @@ class AlertEpisodeServiceTest {
         assertEquals("moneat-host-alert-1#2", reopened.episode.episodeKey)
     }
 
+    @Test
+    fun `workflow helper opens episode without reserving notification`() {
+        val now = Instant.parse("2026-06-02T12:00:00Z")
+        val event = alertEvent(deduplicationKey = "workflow-helper")
+
+        val helperEpisode = service.ensureOpenEpisodeForWorkflow(event, now)
+        val latestBeforePublish = service.latestEpisodeForWorkflow(
+            organizationId = orgId,
+            source = event.source,
+            deduplicationKey = event.deduplicationKey
+        )
+        val published = service.recordFiring(event, now + 1.hours)
+        val latestAfterPublish = service.latestEpisodeForWorkflow(
+            organizationId = orgId,
+            source = event.source,
+            deduplicationKey = event.deduplicationKey
+        )
+
+        assertNotNull(helperEpisode)
+        assertEquals(0, helperEpisode.notificationCount)
+        assertNull(latestBeforePublish)
+        assertNotNull(published)
+        assertEquals(1, published.notificationSequence)
+        assertNotNull(latestAfterPublish)
+        assertEquals(helperEpisode.id, latestAfterPublish.id)
+    }
+
+    @Test
+    fun `current episode helpers suppress unsuppress and close the open episode`() {
+        val now = Instant.parse("2026-06-02T12:00:00Z")
+        val deduplicationKey = "current-helper"
+        val opened = service.openCurrentEpisode(
+            organizationId = orgId,
+            source = AlertSource.ERROR_ALERT,
+            deduplicationKey = deduplicationKey,
+            now = now
+        )
+
+        assertNotNull(opened)
+        val suppressed = service.suppressCurrentEpisode(
+            organizationId = orgId,
+            source = AlertSource.ERROR_ALERT,
+            deduplicationKey = deduplicationKey,
+            userId = userId,
+            reason = "x".repeat(300),
+            now = now + 1.hours
+        )
+        val unsuppressed = service.unsuppressCurrentEpisode(
+            organizationId = orgId,
+            source = AlertSource.ERROR_ALERT,
+            deduplicationKey = deduplicationKey,
+            now = now + 2.hours
+        )
+        service.closeCurrentEpisode(
+            organizationId = orgId,
+            source = AlertSource.ERROR_ALERT,
+            deduplicationKey = deduplicationKey,
+            now = now + 3.hours
+        )
+        val reopened = service.openCurrentEpisode(
+            organizationId = orgId,
+            source = AlertSource.ERROR_ALERT,
+            deduplicationKey = deduplicationKey,
+            now = now + 4.hours
+        )
+
+        assertNotNull(suppressed)
+        assertNotNull(suppressed.suppressedAt)
+        assertEquals(255, suppressed.suppressReason?.length)
+        assertNotNull(unsuppressed)
+        assertNull(unsuppressed.suppressedAt)
+        assertNotNull(reopened)
+        assertEquals(2, reopened.episodeSeq)
+    }
+
+    @Test
+    fun `listEpisodes filters status and clamps limit`() {
+        val now = Instant.parse("2026-06-02T12:00:00Z")
+        val firing = alertEvent(deduplicationKey = "listed-firing")
+        val resolved = alertEvent(deduplicationKey = "listed-resolved")
+
+        service.recordFiring(firing, now)
+        service.recordFiring(resolved, now + 1.hours)
+        service.recordResolved(resolved.copy(status = AlertStatus.RESOLVED), now + 2.hours)
+
+        val all = service.listEpisodes(orgId, limit = 500)
+        val onlyFiring = service.listEpisodes(orgId, status = "firing", limit = 1)
+
+        assertEquals(2, all.size)
+        assertEquals(1, onlyFiring.size)
+        assertEquals("FIRING", onlyFiring.single().status)
+        assertEquals("listed-firing", onlyFiring.single().deduplicationKey)
+    }
+
     private fun seedUser(): Int =
         transaction {
             Users.insert {
