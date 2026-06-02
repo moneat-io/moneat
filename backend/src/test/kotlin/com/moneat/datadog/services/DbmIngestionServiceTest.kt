@@ -16,16 +16,28 @@
 
 package com.moneat.datadog.services
 
+import com.moneat.config.RedisConfig
 import com.moneat.datadog.models.DdDbmActivityPayload
 import com.moneat.datadog.models.DdDbmActivityRow
+import com.moneat.datadog.models.DdDbmHealthPayload
+import com.moneat.datadog.models.DdDbmMetadataPayload
 import com.moneat.datadog.models.DdDbmMetricRow
 import com.moneat.datadog.models.DdDbmMetricsPayload
 import com.moneat.datadog.models.DdDbmQueryPayload
 import com.moneat.datadog.models.DdDbmQueryRow
+import io.lettuce.core.api.sync.RedisCommands
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.slot
+import io.mockk.unmockkObject
+import io.mockk.verify
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+
+private const val TEST_DBM_QUEUE = "test:dd:dbm:queue"
 
 class DbmIngestionServiceTest {
 
@@ -264,6 +276,236 @@ class DbmIngestionServiceTest {
         assertEquals("activity", decoded.batchType)
         assertEquals(1, decoded.activity.size)
         assertEquals(listOf(1L, 2L), decoded.activity[0].blockingPids)
+    }
+
+    @Test
+    fun `enqueueQueryPayloads writes one combined Redis batch`() {
+        val redis = mockk<RedisCommands<String, String>>()
+        val queuedPayload = slot<String>()
+
+        mockkObject(RedisConfig)
+        try {
+            every { RedisConfig.sync() } returns redis
+            every { redis.lpush(any<String>(), capture(queuedPayload)) } returns 1L
+
+            val count = DbmIngestionService.enqueueQueryPayloads(
+                organizationId = 42,
+                payloads = listOf(
+                    DdDbmQueryPayload(
+                        dbHost = "pg-a",
+                        rows = listOf(DdDbmQueryRow(querySignature = "sig-a", statement = "SELECT 1")),
+                    ),
+                    DdDbmQueryPayload(
+                        dbHost = "pg-b",
+                        rows = listOf(DdDbmQueryRow(querySignature = "sig-b", statement = "SELECT 2")),
+                    ),
+                ),
+            )
+
+            val batch = DbmIngestionService.decodeBatch(queuedPayload.captured)
+            assertEquals(2, count)
+            assertEquals(42, batch.organizationId)
+            assertEquals("queries", batch.batchType)
+            assertEquals(listOf("sig-a", "sig-b"), batch.queries.map { it.querySignature })
+            verify(exactly = 1) { redis.lpush(any<String>(), any<String>()) }
+        } finally {
+            unmockkObject(RedisConfig)
+        }
+    }
+
+    @Test
+    fun `enqueueQueryPayloads skips Redis when batch is empty`() {
+        val redis = mockk<RedisCommands<String, String>>(relaxed = true)
+
+        mockkObject(RedisConfig)
+        try {
+            val count = DbmIngestionService.enqueueQueryPayloads(
+                organizationId = 42,
+                payloads = listOf(DdDbmQueryPayload(rows = emptyList())),
+            )
+
+            assertEquals(0, count)
+            verify(exactly = 0) { RedisConfig.sync() }
+            verify(exactly = 0) { redis.lpush(any<String>(), any<String>()) }
+        } finally {
+            unmockkObject(RedisConfig)
+        }
+    }
+
+    @Test
+    fun `enqueueMetricPayloads writes one combined Redis batch`() {
+        val redis = mockk<RedisCommands<String, String>>()
+        val queuedPayload = slot<String>()
+
+        mockkObject(RedisConfig)
+        try {
+            every { RedisConfig.sync() } returns redis
+            every { redis.lpush(any<String>(), capture(queuedPayload)) } returns 1L
+
+            val count = DbmIngestionService.enqueueMetricPayloads(
+                organizationId = 42,
+                payloads = listOf(
+                    DdDbmMetricsPayload(
+                        dbHost = "pg-a",
+                        rows = listOf(DdDbmMetricRow(dbName = "db-a", querySignature = "sig-a", calls = 10)),
+                    ),
+                    DdDbmMetricsPayload(
+                        dbHost = "pg-b",
+                        rows = listOf(DdDbmMetricRow(dbName = "db-b", querySignature = "sig-b", calls = 20)),
+                    ),
+                ),
+            )
+
+            val batch = DbmIngestionService.decodeBatch(queuedPayload.captured)
+            assertEquals(2, count)
+            assertEquals("metrics", batch.batchType)
+            assertEquals(listOf("sig-a", "sig-b"), batch.metrics.map { it.querySignature })
+            assertEquals(listOf(10L, 20L), batch.metrics.map { it.calls })
+            verify(exactly = 1) { redis.lpush(any<String>(), any<String>()) }
+        } finally {
+            unmockkObject(RedisConfig)
+        }
+    }
+
+    @Test
+    fun `enqueueActivityPayloads writes one combined Redis batch`() {
+        val redis = mockk<RedisCommands<String, String>>()
+        val queuedPayload = slot<String>()
+
+        mockkObject(RedisConfig)
+        try {
+            every { RedisConfig.sync() } returns redis
+            every { redis.lpush(any<String>(), capture(queuedPayload)) } returns 1L
+
+            val count = DbmIngestionService.enqueueActivityPayloads(
+                organizationId = 42,
+                payloads = listOf(
+                    DdDbmActivityPayload(
+                        dbHost = "pg-a",
+                        activity = listOf(
+                            DdDbmActivityRow(querySignature = "sig-a", statement = "SELECT 1", state = "active"),
+                        ),
+                    ),
+                    DdDbmActivityPayload(
+                        dbHost = "pg-b",
+                        activity = listOf(
+                            DdDbmActivityRow(querySignature = "sig-b", statement = "SELECT 2", state = "idle"),
+                        ),
+                    ),
+                ),
+            )
+
+            val batch = DbmIngestionService.decodeBatch(queuedPayload.captured)
+            assertEquals(2, count)
+            assertEquals("activity", batch.batchType)
+            assertEquals(listOf("sig-a", "sig-b"), batch.activity.map { it.querySignature })
+            assertEquals(listOf("active", "idle"), batch.activity.map { it.state })
+            verify(exactly = 1) { redis.lpush(any<String>(), any<String>()) }
+        } finally {
+            unmockkObject(RedisConfig)
+        }
+    }
+
+    @Test
+    fun `enqueueMetadataPayloads writes one combined Redis batch`() {
+        val redis = mockk<RedisCommands<String, String>>()
+        val queuedPayload = slot<String>()
+
+        mockkObject(RedisConfig)
+        try {
+            every { RedisConfig.sync() } returns redis
+            every { redis.lpush(any<String>(), capture(queuedPayload)) } returns 1L
+
+            val count = DbmIngestionService.enqueueMetadataPayloads(
+                organizationId = 42,
+                payloads = listOf(
+                    DdDbmMetadataPayload(host = "pg-a", dbSystem = "postgres", schemaJson = """{"a":1}"""),
+                    DdDbmMetadataPayload(host = "pg-b", dbSystem = "postgres", explainPlanHash = "plan-b"),
+                ),
+            )
+
+            val batch = DbmIngestionService.decodeBatch(queuedPayload.captured)
+            assertEquals(2, count)
+            assertEquals("metadata", batch.batchType)
+            assertEquals(listOf("pg-a", "pg-b"), batch.metadata.map { it.host })
+            assertEquals("plan-b", batch.metadata[1].explainPlanHash)
+            verify(exactly = 1) { redis.lpush(any<String>(), any<String>()) }
+        } finally {
+            unmockkObject(RedisConfig)
+        }
+    }
+
+    @Test
+    fun `enqueueHealthPayloads writes one combined Redis batch`() {
+        val redis = mockk<RedisCommands<String, String>>()
+        val queuedPayload = slot<String>()
+
+        mockkObject(RedisConfig)
+        try {
+            every { RedisConfig.sync() } returns redis
+            every { redis.lpush(any<String>(), capture(queuedPayload)) } returns 1L
+
+            val count = DbmIngestionService.enqueueHealthPayloads(
+                organizationId = 42,
+                payloads = listOf(
+                    DdDbmHealthPayload(host = "pg-a", status = "ok", checksRun = 3),
+                    DdDbmHealthPayload(host = "pg-b", status = "degraded", checksFailed = 1),
+                ),
+            )
+
+            val batch = DbmIngestionService.decodeBatch(queuedPayload.captured)
+            assertEquals(2, count)
+            assertEquals("health", batch.batchType)
+            assertEquals(listOf("pg-a", "pg-b"), batch.health.map { it.host })
+            assertEquals(listOf("ok", "degraded"), batch.health.map { it.status })
+            verify(exactly = 1) { redis.lpush(any<String>(), any<String>()) }
+        } finally {
+            unmockkObject(RedisConfig)
+        }
+    }
+
+    @Test
+    fun `single payload enqueue methods delegate to batch helpers`() {
+        val redis = mockk<RedisCommands<String, String>>()
+
+        mockkObject(RedisConfig)
+        try {
+            every { RedisConfig.sync() } returns redis
+            every { redis.lpush(TEST_DBM_QUEUE, any<String>()) } returns 1L
+
+            val counts = listOf(
+                DbmIngestionService.enqueueQueries(
+                    42,
+                    DdDbmQueryPayload(rows = listOf(DdDbmQueryRow(querySignature = "sig", statement = "SELECT 1"))),
+                    TEST_DBM_QUEUE,
+                ),
+                DbmIngestionService.enqueueMetrics(
+                    42,
+                    DdDbmMetricsPayload(rows = listOf(DdDbmMetricRow(querySignature = "sig", calls = 1))),
+                    TEST_DBM_QUEUE,
+                ),
+                DbmIngestionService.enqueueActivity(
+                    42,
+                    DdDbmActivityPayload(activity = listOf(DdDbmActivityRow(querySignature = "sig"))),
+                    TEST_DBM_QUEUE,
+                ),
+                DbmIngestionService.enqueueMetadata(
+                    42,
+                    DdDbmMetadataPayload(host = "pg-a", dbSystem = "postgres"),
+                    TEST_DBM_QUEUE,
+                ),
+                DbmIngestionService.enqueueHealth(
+                    42,
+                    DdDbmHealthPayload(host = "pg-a", status = "ok"),
+                    TEST_DBM_QUEUE,
+                ),
+            )
+
+            assertEquals(listOf(1, 1, 1, 1, 1), counts)
+            verify(exactly = 5) { redis.lpush(TEST_DBM_QUEUE, any<String>()) }
+        } finally {
+            unmockkObject(RedisConfig)
+        }
     }
 
     // ──── TAG PARSING TESTS ────

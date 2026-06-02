@@ -438,9 +438,7 @@ object ProfileIngestionService {
         val sparkQuery = """
             SELECT
                 service,
-                toUnixTimestamp64Milli(
-                    toStartOfInterval(start_time, INTERVAL $sparkStep SECOND)
-                ) AS ts,
+                ${bucketTimestampMsSql("start_time", sparkStep)} AS ts,
                 count() AS count
             FROM `$clickhouseDb`.profiles
             WHERE $sparkWhere
@@ -516,9 +514,7 @@ object ProfileIngestionService {
         )
         val sql = """
             SELECT
-                toUnixTimestamp64Milli(
-                    toStartOfInterval(start_time, INTERVAL $stepSeconds SECOND)
-                ) AS ts,
+                ${bucketTimestampMsSql("start_time", stepSeconds)} AS ts,
                 count() AS count,
                 sum(size_bytes) AS sizeBytes
             FROM `$clickhouseDb`.profiles
@@ -709,6 +705,9 @@ object ProfileIngestionService {
         val windowSec = (toMs - fromMs) / MILLIS_PER_SECOND_L
         return (windowSec / SPARKLINE_BUCKETS).coerceAtLeast(MIN_BUCKET_SECONDS)
     }
+
+    private fun bucketTimestampMsSql(column: String, stepSeconds: Long): String =
+        "toInt64(toUnixTimestamp(toStartOfInterval($column, INTERVAL $stepSeconds SECOND))) * $MILLIS_PER_SECOND_L"
 
     private data class ExistingSession(
         val profileId: String,

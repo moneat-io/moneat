@@ -49,6 +49,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkAll
+import io.mockk.verify
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import kotlin.test.AfterTest
@@ -129,10 +130,15 @@ class DatadogIngestRoutesTest {
         every { MiscIngestionService.enqueueContainerImage(any(), any()) } returns Unit
         every { MiscIngestionService.enqueueSbom(any(), any()) } returns 0
         every { DbmIngestionService.enqueueQueries(any(), any()) } returns 0
+        every { DbmIngestionService.enqueueQueryPayloads(any(), any()) } returns 0
         every { DbmIngestionService.enqueueMetrics(any(), any()) } returns 0
+        every { DbmIngestionService.enqueueMetricPayloads(any(), any()) } returns 0
         every { DbmIngestionService.enqueueActivity(any(), any()) } returns 0
+        every { DbmIngestionService.enqueueActivityPayloads(any(), any()) } returns 0
         every { DbmIngestionService.enqueueMetadata(any(), any()) } returns 0
+        every { DbmIngestionService.enqueueMetadataPayloads(any(), any()) } returns 0
         every { DbmIngestionService.enqueueHealth(any(), any()) } returns 0
+        every { DbmIngestionService.enqueueHealthPayloads(any(), any()) } returns 0
         every { DebuggerIngestionService.enqueueDebuggerLogs(any(), any()) } returns 0
         every { DebuggerIngestionService.enqueueDiagnostics(any(), any()) } returns 0
         every { OrchestratorIngestionService.enqueueResources(any(), any()) } returns 0
@@ -818,6 +824,53 @@ class DatadogIngestRoutesTest {
     }
 
     @Test
+    fun `dbm databasequery accepts top-level array payload`() = testApplication {
+        every { DatadogService.validateApiKey(VALID_KEY) } returns ORG_ID
+        installRoutes()()
+        val response = client.post("/dd/api/v2/databasequery") {
+            header(DD_API_KEY_HEADER, VALID_KEY)
+            contentType(ContentType.Application.Json)
+            setBody(
+                """
+                [
+                  {
+                    "db_host": "pg-primary",
+                    "db_system": "postgresql",
+                    "rows": [
+                      {
+                        "query_signature": "sig-1",
+                        "statement": "SELECT 1",
+                        "timestamp": 1700000000
+                      }
+                    ]
+                  }
+                ]
+                """.trimIndent()
+            )
+        }
+        assertEquals(HttpStatusCode.Accepted, response.status)
+        verify {
+            DbmIngestionService.enqueueQueryPayloads(
+                ORG_ID,
+                match { it.single().dbHost == "pg-primary" && it.single().rows.single().querySignature == "sig-1" },
+            )
+        }
+    }
+
+    @Test
+    fun `dbm databasequery accepts empty array probe`() = testApplication {
+        every { DatadogService.validateApiKey(VALID_KEY) } returns ORG_ID
+        installRoutes()()
+        val response = client.post("/dd/api/v2/databasequery") {
+            header(DD_API_KEY_HEADER, VALID_KEY)
+            contentType(ContentType.Application.Json)
+            setBody("[{}]")
+        }
+        assertEquals(HttpStatusCode.Accepted, response.status)
+        verify { DbmIngestionService.enqueueQueryPayloads(ORG_ID, match { it.isEmpty() }) }
+    }
+
+    @Test
     fun `dbm dbmmetrics returns 403 when api key is missing`() = testApplication {
         installRoutes()()
         val response = client.post("/dd/api/v2/dbmmetrics") {
@@ -859,6 +912,45 @@ class DatadogIngestRoutesTest {
             setBody("{}")
         }
         assertEquals(HttpStatusCode.Accepted, response.status)
+    }
+
+    @Test
+    fun `dbm dbmactivity accepts top-level array payload`() = testApplication {
+        every { DatadogService.validateApiKey(VALID_KEY) } returns ORG_ID
+        installRoutes()()
+        val response = client.post("/dd/api/v2/dbmactivity") {
+            header(DD_API_KEY_HEADER, VALID_KEY)
+            contentType(ContentType.Application.Json)
+            setBody(
+                """
+                [
+                  {
+                    "db_host": "pg-primary",
+                    "db_system": "postgresql",
+                    "activity": [
+                      {
+                        "db_name": "postgres",
+                        "query_signature": "sig-activity",
+                        "statement": "SELECT pg_sleep(1)",
+                        "state": "active",
+                        "timestamp": 1700000000
+                      }
+                    ]
+                  }
+                ]
+                """.trimIndent()
+            )
+        }
+        assertEquals(HttpStatusCode.Accepted, response.status)
+        verify {
+            DbmIngestionService.enqueueActivityPayloads(
+                ORG_ID,
+                match {
+                    it.single().dbHost == "pg-primary" &&
+                        it.single().activity.single().querySignature == "sig-activity"
+                },
+            )
+        }
     }
 
     @Test
