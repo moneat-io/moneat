@@ -37,6 +37,7 @@ export const workflowPaletteDragDataType = 'application/x-moneat-workflow-node'
 const legacyConditionNodeId = 'conditions'
 const workflowNodeVerticalGap = 80
 const workflowNodeHorizontalGap = 80
+const defaultAlertOnceForTemplate = 'alert.episode_key, alert.notification_sequence'
 
 export interface WorkflowPaletteDragPayload {
   node: Omit<WorkflowGraphNode, 'id'>
@@ -66,7 +67,7 @@ export function emptyWorkflowDraft(catalog?: WorkflowCatalogResponse): WorkflowD
     enabled: true,
     published: false,
     graph: graphFromLegacy(trigger?.name ?? 'alert.triggered', [], []),
-    onceForTemplate: trigger?.default_once_for_template.join(', ') ?? 'alert.deduplication_key',
+    onceForTemplate: trigger?.default_once_for_template.join(', ') ?? defaultAlertOnceForTemplate,
   }
 }
 

@@ -16,12 +16,17 @@
 
 package com.moneat.uptime.services
 
-import com.moneat.billing.services.BillingQuotaService
+import com.moneat.alerts.models.AlertLifecycleEvent
+import com.moneat.alerts.models.AlertSeverity
 import com.moneat.alerts.models.AlertSource
+import com.moneat.alerts.models.AlertStatus
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.incident.services.IncidentService
 import com.moneat.shared.services.TaskLock
 import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 import com.moneat.utils.suspendRunCatching
+import com.moneat.workflows.services.WorkflowService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,7 +44,6 @@ import java.sql.SQLException
 import java.util.*
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
-import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 private val logger = KotlinLogging.logger {}
 
@@ -52,6 +56,7 @@ class UptimeScheduler(
     private val checkExecutor: UptimeCheckExecutor = UptimeCheckExecutor(),
     private val incidentService: IncidentService = IncidentService(),
     private val billingQuotaService: BillingQuotaService = BillingQuotaService(),
+    private val workflowService: WorkflowService = WorkflowService(),
 ) {
     companion object {
         private const val TIMEOUT_BUFFER_MS = 5000L
@@ -224,6 +229,12 @@ class UptimeScheduler(
             }.onFailure { e ->
                 logger.error(e) { "Failed to send status change notification: ${e.message}" }
             }
+        } else if (oldStatus == "down" && newStatus == "down") {
+            suspendRunCatching {
+                publishStillDownWorkflow(monitor, finalResult)
+            }.onFailure { e ->
+                logger.error(e) { "Failed to publish uptime reminder workflow: ${e.message}" }
+            }
         }
     }
 
@@ -294,35 +305,7 @@ class UptimeScheduler(
         // Build an alert lifecycle event; IncidentService applies incident-provider routing.
         suspendRunCatching {
             if (newStatus == "down") {
-                // Get severity from the monitor override or fall back to routing rules.
-                val severityOverride =
-                    monitor.incidentSeverity?.let {
-                        com.moneat.alerts.models.AlertSeverity
-                            .fromString(it)
-                    }
-
-                // Use override severity if set, otherwise use a default that routing rules can override
-                val severity = severityOverride ?: com.moneat.alerts.models.AlertSeverity.HIGH
-
-                val alertLifecycleEvent =
-                    com.moneat.alerts.models.AlertLifecycleEvent(
-                        title = "Uptime Monitor Down: ${monitor.name}",
-                        description = "Monitor '${monitor.name}' (${monitor.type}) is down.\nError: ${result.message}",
-                        severity = severity,
-                        status = com.moneat.alerts.models.AlertStatus.FIRING,
-                        source = com.moneat.alerts.models.AlertSource.UPTIME_MONITOR,
-                        deduplicationKey = "moneat-uptime-${monitor.id}",
-                        organizationId = monitor.organizationId,
-                        metadata =
-                        mapOf(
-                            "monitor_id" to JsonPrimitive(monitor.id.toString()),
-                            "monitor_name" to JsonPrimitive(monitor.name),
-                            "monitor_type" to JsonPrimitive(monitor.type),
-                            "error_message" to JsonPrimitive(result.message),
-                            "response_time_ms" to JsonPrimitive(result.responseTimeMs.toString())
-                        ),
-                        moneatUrl = "$baseUrl/uptime/${monitor.id}"
-                    )
+                val alertLifecycleEvent = uptimeDownEvent(monitor, result, baseUrl)
                 incidentService.fireAlert(alertLifecycleEvent)
             } else if (newStatus == "up") {
                 // Resolve the incident
@@ -338,6 +321,41 @@ class UptimeScheduler(
         }.onFailure { e ->
             logger.error(e) { "Failed to fire/resolve incident provider alert for uptime monitor" }
         }
+    }
+
+    private suspend fun publishStillDownWorkflow(
+        monitor: com.moneat.uptime.models.UptimeMonitorData,
+        result: com.moneat.uptime.models.CheckResult
+    ) {
+        val config = io.ktor.server.config.ApplicationConfig("application.conf")
+        val baseUrl = config.property("email.frontendUrl").getString()
+        workflowService.publishAlertTriggered(uptimeDownEvent(monitor, result, baseUrl))
+    }
+
+    private fun uptimeDownEvent(
+        monitor: com.moneat.uptime.models.UptimeMonitorData,
+        result: com.moneat.uptime.models.CheckResult,
+        baseUrl: String
+    ): AlertLifecycleEvent {
+        val severityOverride = monitor.incidentSeverity?.let { AlertSeverity.fromString(it) }
+        val severity = severityOverride ?: AlertSeverity.HIGH
+        return AlertLifecycleEvent(
+            title = "Uptime Monitor Down: ${monitor.name}",
+            description = "Monitor '${monitor.name}' (${monitor.type}) is down.\nError: ${result.message}",
+            severity = severity,
+            status = AlertStatus.FIRING,
+            source = AlertSource.UPTIME_MONITOR,
+            deduplicationKey = "moneat-uptime-${monitor.id}",
+            organizationId = monitor.organizationId,
+            metadata = mapOf(
+                "monitor_id" to JsonPrimitive(monitor.id.toString()),
+                "monitor_name" to JsonPrimitive(monitor.name),
+                "monitor_type" to JsonPrimitive(monitor.type),
+                "error_message" to JsonPrimitive(result.message),
+                "response_time_ms" to JsonPrimitive(result.responseTimeMs.toString())
+            ),
+            moneatUrl = "$baseUrl/uptime/${monitor.id}"
+        )
     }
 
     private fun incrementUptimeCheckCount(organizationId: Int) {

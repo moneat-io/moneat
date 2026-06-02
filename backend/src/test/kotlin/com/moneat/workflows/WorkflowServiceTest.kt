@@ -17,6 +17,7 @@
 package com.moneat.workflows
 
 import com.moneat.alerts.models.AlertLifecycleEvent
+import com.moneat.alerts.models.AlertEpisodes
 import com.moneat.alerts.models.AlertSeverity
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertStatus
@@ -65,6 +66,7 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import kotlin.test.BeforeTest
@@ -75,6 +77,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 
 class WorkflowServiceTest {
     companion object {
@@ -119,10 +123,11 @@ class WorkflowServiceTest {
             WorkflowRuns,
             WorkflowRunSteps,
             WorkflowAuditEvents,
-            WorkflowUsageEvents
+            WorkflowUsageEvents,
+            AlertEpisodes
         )
         transaction {
-            SchemaUtils.create(Users, Organizations, Memberships, Workflows)
+            SchemaUtils.create(Users, Organizations, Memberships, Workflows, AlertEpisodes)
             exec("DROP TABLE IF EXISTS workflow_runs")
             exec("DROP TABLE IF EXISTS workflow_versions")
             exec(
@@ -266,10 +271,13 @@ class WorkflowServiceTest {
                 .any { it.name == "contains" && it.valueType == "String" }
         )
         assertEquals("alert.triggered", response.triggers.first().name)
-        assertEquals(listOf("alert.deduplication_key"), response.triggers.first().defaultOnceForTemplate)
+        assertEquals(
+            listOf("alert.episode_key", "alert.notification_sequence"),
+            response.triggers.first().defaultOnceForTemplate
+        )
         val resolvedTrigger = response.triggers.first { it.name == "alert.resolved" }
         assertEquals(
-            listOf("alert.deduplication_key", "alert.status"),
+            listOf("alert.episode_key", "alert.status"),
             resolvedTrigger.defaultOnceForTemplate
         )
         assertTrue(response.triggers.any { it.name == "api" })
@@ -775,6 +783,71 @@ class WorkflowServiceTest {
         }
 
     @Test
+    fun `default alert workflows run initially and once per daily episode reminder`() =
+        runBlocking {
+            val workflow =
+                service.createWorkflow(
+                    orgId,
+                    CreateWorkflowRequest(
+                        name = "Default episode notifications",
+                        triggerName = "alert.triggered",
+                        steps = emptyList()
+                    )
+                )
+            publish(workflow.id)
+
+            service.publishAlertTriggered(alertEvent())
+            service.publishAlertTriggered(alertEvent())
+
+            assertEquals(
+                listOf("alert.episode_key=host-1#1|alert.notification_sequence=1"),
+                service.listRuns(orgId, workflow.id).map { it.onceFor }
+            )
+
+            transaction {
+                AlertEpisodes.update({ AlertEpisodes.deduplicationKey eq "host-1" }) {
+                    it[AlertEpisodes.lastNotificationAt] = Clock.System.now() - 25.hours
+                }
+            }
+            service.publishAlertTriggered(alertEvent())
+
+            assertEquals(
+                listOf(
+                    "alert.episode_key=host-1#1|alert.notification_sequence=1",
+                    "alert.episode_key=host-1#1|alert.notification_sequence=2"
+                ),
+                service.listRuns(orgId, workflow.id).map { it.onceFor }.sorted()
+            )
+        }
+
+    @Test
+    fun `re-fired alert episode is not blocked by historical workflow runs`() =
+        runBlocking {
+            val workflow =
+                service.createWorkflow(
+                    orgId,
+                    CreateWorkflowRequest(
+                        name = "Episode-scoped alert notifications",
+                        triggerName = "alert.triggered",
+                        steps = emptyList()
+                    )
+                )
+            publish(workflow.id)
+
+            service.publishAlertTriggered(alertEvent())
+            service.publishAlertTriggered(alertEvent().copy(status = AlertStatus.RESOLVED))
+            service.publishAlertTriggered(alertEvent())
+
+            assertEquals(
+                listOf(
+                    "alert.episode_key=host-1#1|alert.notification_sequence=1",
+                    "alert.episode_key=host-1#2|alert.notification_sequence=1"
+                ),
+                service.listRuns(orgId, workflow.id).map { it.onceFor }.sorted()
+            )
+        }
+
+    @Test
     fun `source specific alert triggers preserve legacy alert workflow behavior`() =
         runBlocking {
             val alertWorkflow =
@@ -1113,6 +1186,12 @@ class WorkflowServiceTest {
                 )
             publish(workflow.id)
 
+            service.publishAlertTriggered(
+                alertEvent().copy(
+                    source = AlertSource.UPTIME_MONITOR,
+                    deduplicationKey = "uptime-1"
+                )
+            )
             service.publishAlertResolved(
                 organizationId = orgId,
                 source = AlertSource.UPTIME_MONITOR.name,
@@ -1120,7 +1199,7 @@ class WorkflowServiceTest {
             )
 
             val queuedRun = service.listRuns(orgId, workflow.id).single()
-            assertEquals("alert.deduplication_key=uptime-1|alert.status=RESOLVED", queuedRun.onceFor)
+            assertEquals("alert.episode_key=uptime-1#1|alert.status=RESOLVED", queuedRun.onceFor)
 
             service.executeRun(queuedRun.id)
 
@@ -1133,6 +1212,56 @@ class WorkflowServiceTest {
             coVerify(exactly = 1) {
                 slackService.sendWorkflowMessage(orgId, "Resolved uptime-1", false)
             }
+        }
+
+    @Test
+    fun `alert workflows run once per episode notification and not historical dedup key`() =
+        runBlocking {
+            val workflow =
+                service.createWorkflow(
+                    orgId,
+                    CreateWorkflowRequest(
+                        name = "Lifecycle notifications",
+                        triggerName = "alert.triggered",
+                        steps = listOf(emailStep()),
+                        onceForTemplate = listOf("alert.episode_key", "alert.notification_sequence")
+                    )
+                )
+            publish(workflow.id)
+
+            service.publishAlertTriggered(alertEvent())
+            service.publishAlertTriggered(alertEvent())
+            assertEquals(listOf("alert.episode_key=host-1#1|alert.notification_sequence=1"), runIdentities(workflow.id))
+
+            transaction {
+                AlertEpisodes.update({ AlertEpisodes.deduplicationKey eq "host-1" }) {
+                    it[lastNotificationAt] = Clock.System.now() - 25.hours
+                }
+            }
+            service.publishAlertTriggered(alertEvent())
+            assertEquals(
+                listOf(
+                    "alert.episode_key=host-1#1|alert.notification_sequence=1",
+                    "alert.episode_key=host-1#1|alert.notification_sequence=2"
+                ),
+                runIdentities(workflow.id)
+            )
+
+            service.publishAlertResolved(
+                organizationId = orgId,
+                source = AlertSource.HOST_ALERT.name,
+                deduplicationKey = "host-1"
+            )
+            service.publishAlertTriggered(alertEvent())
+
+            assertEquals(
+                listOf(
+                    "alert.episode_key=host-1#1|alert.notification_sequence=1",
+                    "alert.episode_key=host-1#1|alert.notification_sequence=2",
+                    "alert.episode_key=host-1#2|alert.notification_sequence=1"
+                ),
+                runIdentities(workflow.id)
+            )
         }
 
     @Test
@@ -1242,6 +1371,9 @@ class WorkflowServiceTest {
     private fun publish(workflowId: Int) {
         assertNotNull(service.publishWorkflow(orgId, workflowId))
     }
+
+    private fun runIdentities(workflowId: Int): List<String> =
+        service.listRuns(orgId, workflowId).map { it.onceFor }.sorted()
 
     private fun emailStep(): WorkflowStepConfig =
         WorkflowStepConfig(

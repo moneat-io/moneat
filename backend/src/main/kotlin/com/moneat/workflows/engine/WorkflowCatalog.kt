@@ -41,6 +41,13 @@ private const val ALERT_WIDGET_TITLE_REFERENCE = "alert.widget.title"
 private const val ALERT_CONDITION_REFERENCE = "alert.condition"
 private const val ALERT_THRESHOLD_REFERENCE = "alert.threshold"
 private const val ALERT_CURRENT_VALUE_REFERENCE = "alert.current_value"
+private const val ALERT_EPISODE_ID_REFERENCE = "alert.episode_id"
+private const val ALERT_EPISODE_KEY_REFERENCE = "alert.episode_key"
+private const val ALERT_EPISODE_SEQ_REFERENCE = "alert.episode_seq"
+private const val ALERT_NOTIFICATION_SEQUENCE_REFERENCE = "alert.notification_sequence"
+private const val ALERT_NOTIFICATION_KIND_REFERENCE = "alert.notification_kind"
+private const val ALERT_OPENED_AT_REFERENCE = "alert.opened_at"
+private const val ALERT_LAST_SEEN_AT_REFERENCE = "alert.last_seen_at"
 private const val ORGANIZATION_ID_REFERENCE = "organization.id"
 private const val WORKFLOW_INPUT_REFERENCE = "workflow.input"
 private const val WORKFLOW_ACTOR_ID_REFERENCE = "workflow.actor_id"
@@ -241,6 +248,13 @@ object WorkflowCatalog {
         WorkflowScopeReferenceDefinition(ALERT_STATUS_REFERENCE, "Status", "AlertStatus"),
         WorkflowScopeReferenceDefinition("alert.source", "Source", "AlertSource"),
         WorkflowScopeReferenceDefinition(ALERT_DEDUPLICATION_KEY_REFERENCE, DEDUPLICATION_KEY_LABEL, "String"),
+        WorkflowScopeReferenceDefinition(ALERT_EPISODE_ID_REFERENCE, "Episode ID", "String"),
+        WorkflowScopeReferenceDefinition(ALERT_EPISODE_KEY_REFERENCE, "Episode key", "String"),
+        WorkflowScopeReferenceDefinition(ALERT_EPISODE_SEQ_REFERENCE, "Episode sequence", "String"),
+        WorkflowScopeReferenceDefinition(ALERT_NOTIFICATION_SEQUENCE_REFERENCE, "Notification sequence", "String"),
+        WorkflowScopeReferenceDefinition(ALERT_NOTIFICATION_KIND_REFERENCE, "Notification kind", "String"),
+        WorkflowScopeReferenceDefinition(ALERT_OPENED_AT_REFERENCE, "Opened at", "String"),
+        WorkflowScopeReferenceDefinition(ALERT_LAST_SEEN_AT_REFERENCE, "Last seen at", "String"),
         WorkflowScopeReferenceDefinition("alert.url", "Moneat URL", "String"),
         WorkflowScopeReferenceDefinition(ALERT_DASHBOARD_TITLE_REFERENCE, "Dashboard title", "String"),
         WorkflowScopeReferenceDefinition(ALERT_WIDGET_TITLE_REFERENCE, "Widget title", "String"),
@@ -277,6 +291,13 @@ object WorkflowCatalog {
         WorkflowScopeReferenceDefinition(INCIDENT_STATUS_REFERENCE, "Incident status", "IncidentStatus"),
         WorkflowScopeReferenceDefinition(INCIDENT_SEVERITY_REFERENCE, "Incident severity", "AlertSeverity"),
         WorkflowScopeReferenceDefinition(ALERT_DEDUPLICATION_KEY_REFERENCE, DEDUPLICATION_KEY_LABEL, "String"),
+        WorkflowScopeReferenceDefinition(ALERT_EPISODE_ID_REFERENCE, "Episode ID", "String"),
+        WorkflowScopeReferenceDefinition(ALERT_EPISODE_KEY_REFERENCE, "Episode key", "String"),
+        WorkflowScopeReferenceDefinition(ALERT_EPISODE_SEQ_REFERENCE, "Episode sequence", "String"),
+        WorkflowScopeReferenceDefinition(ALERT_NOTIFICATION_SEQUENCE_REFERENCE, "Notification sequence", "String"),
+        WorkflowScopeReferenceDefinition(ALERT_NOTIFICATION_KIND_REFERENCE, "Notification kind", "String"),
+        WorkflowScopeReferenceDefinition(ALERT_OPENED_AT_REFERENCE, "Opened at", "String"),
+        WorkflowScopeReferenceDefinition(ALERT_LAST_SEEN_AT_REFERENCE, "Last seen at", "String"),
         WorkflowScopeReferenceDefinition(ORGANIZATION_ID_REFERENCE, ORGANIZATION_ID_LABEL, "String")
     )
 
@@ -294,70 +315,70 @@ object WorkflowCatalog {
             label = "When an alert triggers",
             description = "Runs when Moneat fires an alert lifecycle event.",
             scope = alertScope,
-            defaultOnceForTemplate = listOf(ALERT_DEDUPLICATION_KEY_REFERENCE)
+            defaultOnceForTemplate = listOf(ALERT_EPISODE_KEY_REFERENCE, ALERT_NOTIFICATION_SEQUENCE_REFERENCE)
         ),
         WorkflowTriggerDefinition(
             name = "alert.resolved",
             label = "When an alert resolves",
-            description = "Runs when Moneat resolves an alert by deduplication key.",
+            description = "Runs when Moneat resolves an alert episode.",
             scope = alertScope,
-            defaultOnceForTemplate = listOf(ALERT_DEDUPLICATION_KEY_REFERENCE, ALERT_STATUS_REFERENCE)
+            defaultOnceForTemplate = listOf(ALERT_EPISODE_KEY_REFERENCE, ALERT_STATUS_REFERENCE)
         ),
         WorkflowTriggerDefinition(
             name = "monitor.alerted",
             label = "When a monitor alerts",
             description = "Runs when a host or dashboard monitor fires.",
             scope = alertScope,
-            defaultOnceForTemplate = listOf(ALERT_DEDUPLICATION_KEY_REFERENCE)
+            defaultOnceForTemplate = listOf(ALERT_EPISODE_KEY_REFERENCE, ALERT_NOTIFICATION_SEQUENCE_REFERENCE)
         ),
         WorkflowTriggerDefinition(
             name = "monitor.recovered",
             label = "When a monitor recovers",
             description = "Runs when a host or dashboard monitor recovers.",
             scope = alertScope,
-            defaultOnceForTemplate = listOf(ALERT_DEDUPLICATION_KEY_REFERENCE, ALERT_STATUS_REFERENCE)
+            defaultOnceForTemplate = listOf(ALERT_EPISODE_KEY_REFERENCE, ALERT_STATUS_REFERENCE)
         ),
         WorkflowTriggerDefinition(
             name = "uptime.down",
             label = "When uptime monitor is down",
             description = "Runs when an uptime monitor reports an outage.",
             scope = alertScope,
-            defaultOnceForTemplate = listOf(ALERT_DEDUPLICATION_KEY_REFERENCE)
+            defaultOnceForTemplate = listOf(ALERT_EPISODE_KEY_REFERENCE, ALERT_NOTIFICATION_SEQUENCE_REFERENCE)
         ),
         WorkflowTriggerDefinition(
             name = "uptime.up",
             label = "When uptime monitor recovers",
             description = "Runs when an uptime monitor returns to service.",
             scope = alertScope,
-            defaultOnceForTemplate = listOf(ALERT_DEDUPLICATION_KEY_REFERENCE, ALERT_STATUS_REFERENCE)
+            defaultOnceForTemplate = listOf(ALERT_EPISODE_KEY_REFERENCE, ALERT_STATUS_REFERENCE)
         ),
         WorkflowTriggerDefinition(
             name = "synthetic.failed",
             label = "When a synthetic test fails",
             description = "Runs when a synthetic test reports a failed run.",
             scope = alertScope,
-            defaultOnceForTemplate = listOf(ALERT_DEDUPLICATION_KEY_REFERENCE)
+            defaultOnceForTemplate = listOf(ALERT_EPISODE_KEY_REFERENCE, ALERT_NOTIFICATION_SEQUENCE_REFERENCE)
         ),
         WorkflowTriggerDefinition(
             name = "synthetic.passed",
             label = "When a synthetic test passes",
             description = "Runs when a synthetic test recovers after failures.",
             scope = alertScope,
-            defaultOnceForTemplate = listOf(ALERT_DEDUPLICATION_KEY_REFERENCE, ALERT_STATUS_REFERENCE)
+            defaultOnceForTemplate = listOf(ALERT_EPISODE_KEY_REFERENCE, ALERT_STATUS_REFERENCE)
         ),
         WorkflowTriggerDefinition(
             name = "incident.created",
             label = "When an incident is created",
             description = "Runs when incident routing creates or pages a response event.",
             scope = incidentScope,
-            defaultOnceForTemplate = listOf(ALERT_DEDUPLICATION_KEY_REFERENCE)
+            defaultOnceForTemplate = listOf(ALERT_EPISODE_KEY_REFERENCE)
         ),
         WorkflowTriggerDefinition(
             name = "incident.resolved",
             label = "When an incident resolves",
             description = "Runs when incident routing resolves a response event.",
             scope = incidentScope,
-            defaultOnceForTemplate = listOf(ALERT_DEDUPLICATION_KEY_REFERENCE, INCIDENT_STATUS_REFERENCE)
+            defaultOnceForTemplate = listOf(ALERT_EPISODE_KEY_REFERENCE, INCIDENT_STATUS_REFERENCE)
         ),
         WorkflowTriggerDefinition(
             name = "security.signal",

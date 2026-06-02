@@ -41,7 +41,14 @@ fun Map<String, JsonElement>.workflowStringView(): Map<String, String> =
 fun JsonElement.workflowStringValue(): String =
     when (this) {
         is JsonNull -> ""
-        is JsonPrimitive -> booleanOrNull?.toString() ?: doubleOrNull?.toString() ?: contentOrNull.orEmpty()
+        is JsonPrimitive -> {
+            val rawJson = toString()
+            if (rawJson.startsWith("\"")) {
+                contentOrNull.orEmpty()
+            } else {
+                booleanOrNull?.toString() ?: doubleOrNull?.toString().orEmpty()
+            }
+        }
         else -> workflowJson.encodeToString(this)
     }
 

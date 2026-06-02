@@ -16,18 +16,19 @@
 
 package com.moneat.incident.services
 
+import com.moneat.alerts.models.AlertLifecycleEvent
+import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertSource
+import com.moneat.alerts.models.AlertStatus
 import com.moneat.config.EnvConfig
 import com.moneat.enterprise.FeatureRegistry
-import com.moneat.alerts.models.AlertSource
-import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.incident.models.IncidentEventLog
 import com.moneat.incident.models.IncidentProviderConfigs
 import com.moneat.incident.models.IncidentRoutingRules
-import com.moneat.alerts.models.AlertSeverity
-import com.moneat.alerts.models.AlertStatus
 import com.moneat.incident.models.ProviderConfig
 import com.moneat.shared.models.EscalationPolicies
 import com.moneat.shared.models.EscalationPolicyAlertSources
+import com.moneat.utils.suspendRunCatching
 import com.moneat.workflows.services.WorkflowService
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -41,7 +42,6 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.slf4j.LoggerFactory
 import kotlin.time.Clock
-import com.moneat.utils.suspendRunCatching
 
 /**
  * Middleware service for dispatching incident alerts to configured providers.
@@ -170,6 +170,7 @@ class IncidentService(
             suspendRunCatching {
                 workflowService.publishIncidentResolved(
                     organizationId = organizationId,
+                    source = source,
                     deduplicationKey = deduplicationKey,
                     title = title
                 )

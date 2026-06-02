@@ -148,3 +148,28 @@ export interface CreateSilencePeriodRequest {
   starts_at: number
   ends_at: number
 }
+
+export interface AlertEpisode {
+  id: number
+  organization_id: number
+  source: string
+  deduplication_key: string
+  episode_seq: number
+  episode_key: string
+  status: string
+  opened_at: string
+  last_seen_at: string
+  resolved_at?: string | null
+  last_notification_at?: string | null
+  notification_count: number
+  suppressed_at?: string | null
+  suppressed_by_user_id?: number | null
+  suppress_reason?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AlertLifecycleListParams {
+  status?: string
+  limit?: number
+}

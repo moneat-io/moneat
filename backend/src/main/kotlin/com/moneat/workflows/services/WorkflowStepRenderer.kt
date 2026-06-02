@@ -65,6 +65,13 @@ internal const val ALERT_WIDGET_TITLE_REFERENCE = "alert.widget.title"
 internal const val ALERT_CONDITION_REFERENCE = "alert.condition"
 internal const val ALERT_THRESHOLD_REFERENCE = "alert.threshold"
 internal const val ALERT_CURRENT_VALUE_REFERENCE = "alert.current_value"
+internal const val ALERT_EPISODE_ID_REFERENCE = "alert.episode_id"
+internal const val ALERT_EPISODE_KEY_REFERENCE = "alert.episode_key"
+internal const val ALERT_EPISODE_SEQ_REFERENCE = "alert.episode_seq"
+internal const val ALERT_NOTIFICATION_SEQUENCE_REFERENCE = "alert.notification_sequence"
+internal const val ALERT_NOTIFICATION_KIND_REFERENCE = "alert.notification_kind"
+internal const val ALERT_OPENED_AT_REFERENCE = "alert.opened_at"
+internal const val ALERT_LAST_SEEN_AT_REFERENCE = "alert.last_seen_at"
 private const val ALERT_COLOR_RED = "#E01E5A"
 private const val ALERT_COLOR_GREEN = "#2EB67D"
 private const val ALERT_COLOR_YELLOW = "#ECB22E"
@@ -108,6 +115,13 @@ class WorkflowStepRenderer {
             ALERT_STATUS_REFERENCE to status,
             ALERT_SOURCE_REFERENCE to "DASHBOARD_ALERT",
             ALERT_DEDUPLICATION_KEY_REFERENCE to "moneat-dashboard-alert-preview",
+            ALERT_EPISODE_ID_REFERENCE to "42",
+            ALERT_EPISODE_KEY_REFERENCE to "moneat-dashboard-alert-preview#3",
+            ALERT_EPISODE_SEQ_REFERENCE to "3",
+            ALERT_NOTIFICATION_SEQUENCE_REFERENCE to "1",
+            ALERT_NOTIFICATION_KIND_REFERENCE to if (resolved) "resolved" else "initial",
+            ALERT_OPENED_AT_REFERENCE to "2026-06-02T12:00:00Z",
+            ALERT_LAST_SEEN_AT_REFERENCE to "2026-06-02T12:05:00Z",
             ALERT_URL_REFERENCE to "https://moneat.io/dashboards/13",
             ALERT_DASHBOARD_TITLE_REFERENCE to "Moneat Backend System Health",
             ALERT_WIDGET_TITLE_REFERENCE to "Worker failures [1h]",
@@ -153,6 +167,13 @@ class WorkflowStepRenderer {
             "incident.status" to status,
             "incident.severity" to AlertSeverity.HIGH.name,
             ALERT_DEDUPLICATION_KEY_REFERENCE to "incident-checkout-latency",
+            ALERT_EPISODE_ID_REFERENCE to "42",
+            ALERT_EPISODE_KEY_REFERENCE to "incident-checkout-latency#3",
+            ALERT_EPISODE_SEQ_REFERENCE to "3",
+            ALERT_NOTIFICATION_SEQUENCE_REFERENCE to "1",
+            ALERT_NOTIFICATION_KIND_REFERENCE to status,
+            ALERT_OPENED_AT_REFERENCE to "2026-06-02T12:00:00Z",
+            ALERT_LAST_SEEN_AT_REFERENCE to "2026-06-02T12:05:00Z",
             ORGANIZATION_ID_REFERENCE to "1"
         )
     }

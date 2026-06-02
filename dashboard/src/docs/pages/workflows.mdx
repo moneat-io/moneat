@@ -31,7 +31,7 @@ Triggers decide when a workflow is considered for execution. Moneat currently su
 | Trigger | When it runs |
 |---------|--------------|
 | **When an alert triggers** | When Moneat fires an alert lifecycle event. |
-| **When an alert resolves** | When Moneat resolves an alert by deduplication key. |
+| **When an alert resolves** | When Moneat resolves an alert episode. |
 
 The trigger also defines which alert fields are available to conditions, messages, and run identity.
 
@@ -48,7 +48,12 @@ Available alert references include:
 | `alert.severity` | Alert severity |
 | `alert.status` | Firing or resolved state |
 | `alert.source` | Source system, such as host alerts or uptime monitors |
-| `alert.deduplication_key` | Alert deduplication key |
+| `alert.deduplication_key` | Stable key for the underlying alert condition |
+| `alert.episode_key` | Key for the current alert episode |
+| `alert.notification_sequence` | Notification number within the current episode |
+| `alert.notification_kind` | Initial, reminder, or resolved notification |
+| `alert.opened_at` | When the current episode opened |
+| `alert.last_seen_at` | Last time Moneat saw the episode still active |
 | `alert.url` | Link back to the alert in Moneat |
 | `organization.id` | Organization identifier |
 
@@ -82,7 +87,7 @@ Navigate to **Workflows** in the sidebar, then click **New Workflow**.
     },
     {
       title: 'Set run identity',
-      content: 'Use "Run once per" to control idempotency. The default alert deduplication key prevents repeated executions for the same alert.',
+      content: 'Use "Run once per" to control idempotency. The default alert identity runs once per episode notification.',
     },
     {
       title: 'Add conditions',
@@ -101,14 +106,17 @@ Navigate to **Workflows** in the sidebar, then click **New Workflow**.
 
 ## Run once per
 
-The **Run once per** setting controls how often a workflow can run for matching events. By default, alert workflows run once per `alert.deduplication_key`.
+The **Run once per** setting controls how often a workflow can run for matching events. By default,
+firing alert workflows run once per `alert.episode_key` and `alert.notification_sequence`.
 
-For resolved-alert workflows, the default identity includes `alert.status` as well, so triggered and resolved events do not collapse into the same run.
+For resolved-alert workflows, the default identity includes `alert.episode_key` and `alert.status`,
+so triggered and resolved events do not collapse into the same run.
 
 You can include multiple references separated by commas in the editor. Moneat combines those values into the workflow run identity.
 
-:::tip[Use the deduplication key for alert workflows]
-Keep `alert.deduplication_key` in the run identity unless you intentionally want the same alert to run the workflow multiple times.
+:::tip[Use episode identity for alert workflows]
+Use `alert.episode_key` for alert notification idempotency. `alert.deduplication_key` stays stable
+across recoveries, so using it alone suppresses future episodes of the same underlying condition.
 :::
 
 ## Message variables

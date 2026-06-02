@@ -17,6 +17,7 @@
 package com.moneat.di
 
 import com.moneat.ai.AiChatService
+import com.moneat.alerts.services.AlertEpisodeService
 import com.moneat.analytics.services.AnalyticsService
 import com.moneat.analytics.services.GeoIpService
 import com.moneat.analytics.services.SessionHashService
@@ -72,9 +73,9 @@ import com.moneat.monitor.repositories.HostRepository
 import com.moneat.monitor.repositories.HostRepositoryImpl
 import com.moneat.monitor.services.AgentApiKeyService
 import com.moneat.monitor.services.MonitorAlertService
+import com.moneat.monitor.services.MonitorService
 import com.moneat.security.detection.DetectionScheduler
 import com.moneat.security.vulnerabilities.VulnerabilityAdvisorySyncJob
-import com.moneat.monitor.services.MonitorService
 import com.moneat.notifications.services.AlertNotificationPreferencesService
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
@@ -132,6 +133,7 @@ val sharedModule = module {
     single { SlackService() }
     single { DiscordService() }
     single { AlertNotificationPreferencesService() }
+    single { AlertEpisodeService() }
     single { WorkflowStepRenderer() }
     single {
         WorkflowTrustedActionExecutor(
@@ -150,7 +152,7 @@ val sharedModule = module {
     single { ExecuteEgressActionActivityImpl(get()) }
     single { TemporalClientProvider() }
     single<WorkflowExecutionEngine> { TemporalWorkflowExecutionEngine(get()) }
-    single { WorkflowService(get(), get(), get(), get(), get(), get(), get()) }
+    single { WorkflowService(get(), get(), get(), get(), get(), get(), get(), get()) }
     single { WorkflowGovernanceService(get()) }
     single { IncidentService(get()) }
 
@@ -265,7 +267,7 @@ val uptimeModule = module {
 
     single { UptimeService(get(), get()) }
     single { UptimeCheckExecutor() }
-    single { UptimeScheduler(get(), get(), get(), get()) }
+    single { UptimeScheduler(get(), get(), get(), get(), get()) }
     single { StatusPageService(get()) }
 }
 

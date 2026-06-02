@@ -16,16 +16,20 @@
 
 package com.moneat.synthetics.routes
 
+import com.moneat.alerts.models.AlertLifecycleEvent
+import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertSource
+import com.moneat.alerts.models.AlertStatus
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
-import com.moneat.alerts.models.AlertSource
-import com.moneat.alerts.models.AlertLifecycleEvent
-import com.moneat.alerts.models.AlertSeverity
-import com.moneat.alerts.models.AlertStatus
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
+import com.moneat.utils.suspendRunCatching
 import com.moneat.workflows.services.WorkflowService
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.CoroutineScope
@@ -48,10 +52,6 @@ import java.util.UUID
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
-import com.moneat.utils.suspendRunCatching
-import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
-import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
-import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 /** Manages synthetic HTTP checks, variables, execution, and ClickHouse result storage. */
 class SyntheticsService(
@@ -313,16 +313,24 @@ class SyntheticsService(
             }
         }
 
-        // Alert on transition from passing to failing
+        // Workflow episode gating handles initial notifications and daily reminders.
         if (test.alertOnFailure &&
-            result.status == "failed" &&
-            oldStatus != "failed"
+            result.status == "failed"
         ) {
             suspendRunCatching {
                 sendFailureAlert(test, result)
             }.getOrElse { e ->
                 logger.error(e) {
                     "Failed to send alert for synthetic test ${test.id}"
+                }
+            }
+        }
+        if (test.alertOnFailure && oldStatus == "failed" && result.status == "passed") {
+            suspendRunCatching {
+                sendRecoveryAlert(test)
+            }.getOrElse { e ->
+                logger.error(e) {
+                    "Failed to send recovery alert for synthetic test ${test.id}"
                 }
             }
         }
@@ -384,6 +392,25 @@ class SyntheticsService(
                 description = message,
                 severity = AlertSeverity.HIGH,
                 status = AlertStatus.FIRING,
+                source = AlertSource.SYNTHETIC_TEST,
+                deduplicationKey = "moneat-synthetic-${test.id}",
+                organizationId = test.organizationId,
+                moneatUrl = "$frontendUrl/synthetics/${test.id}"
+            )
+        )
+    }
+
+    private suspend fun sendRecoveryAlert(test: SyntheticTestData) {
+        val frontendUrl = EnvConfig.get(
+            "FRONTEND_URL",
+            "https://moneat.io"
+        )
+        workflowService.publishAlertTriggered(
+            AlertLifecycleEvent(
+                title = "Synthetic test recovered: ${test.name}",
+                description = "Test '${test.name}' (${test.testType}) passed after previous failures.",
+                severity = AlertSeverity.LOW,
+                status = AlertStatus.RESOLVED,
                 source = AlertSource.SYNTHETIC_TEST,
                 deduplicationKey = "moneat-synthetic-${test.id}",
                 organizationId = test.organizationId,
