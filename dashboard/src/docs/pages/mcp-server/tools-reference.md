@@ -566,6 +566,190 @@ Delete an alert silence period.
 |-----------|------|----------|-------------|
 | `silence_period_id` | number | Yes | Silence period ID |
 
+## Security Tools
+
+### `list_security_signals`
+List security signals with optional filters.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `status` | string | No | `open`, `under_review`, or `archived` |
+| `severity` | string | No | `info`, `low`, `medium`, `high`, or `critical` |
+| `source` | string | No | Signal source, such as `detection` or `vulnerability` |
+| `from` / `to` | string | No | ISO-8601 time bounds |
+| `limit` / `offset` | integer | No | Pagination controls |
+
+### `get_security_signal`
+Get a security signal with evidence, audit trail, sample events, and threat intel.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `security_signal_id` | integer | Yes | Security signal ID |
+
+### ✏️ `triage_security_signal`
+Change signal status, assignment, or add a note.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `security_signal_id` | integer | Yes | Security signal ID |
+| `status` | string | No | `open`, `under_review`, or `archived` |
+| `reason` | string | No | Archive reason: `true_positive`, `false_positive`, or `benign` |
+| `assignee_user_id` | integer | No | User ID to assign |
+| `clear_assignee` | boolean | No | Clear the current assignee |
+| `note` | string | No | Triage note |
+
+### Detection Rule Tools
+Use these to manage compiler-validated security detection rules.
+
+### `list_detection_rules`
+List detection rules. No parameters.
+
+### `get_detection_rule`
+Get one rule.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `detection_rule_id` | integer | Yes | - | Detection rule ID |
+
+### ✏️ `create_detection_rule`
+Create a compiler-validated detection rule.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `name` | string | Yes | - | Detection rule name |
+| `description` | string | No | `""` | Detection rule description |
+| `source` | string | No | `logs` | Telemetry source |
+| `filter` | string | No | `""` | Log query filter expression |
+| `group_by` | string[] | No | `[]` | Group-by columns, such as `host`, `service`, or `tags['user']` |
+| `window_seconds` | integer | No | `300` | Evaluation window in seconds |
+| `type` | string | No | `threshold` | `threshold`, `new_value`, or `rate_anomaly` |
+| `threshold_count` | integer | No | `null` | Threshold count for threshold or rate rules |
+| `severity` | string | No | `medium` | `info`, `low`, `medium`, `high`, or `critical` |
+| `signal_title` | string | No | `""` | Signal title template |
+| `signal_message` | string | No | `""` | Signal message template |
+| `suppressions` | string[] | No | `[]` | Suppression keys |
+| `enabled` | boolean | No | `false` | Enable the rule after creation |
+| `tags` | string[] | No | `[]` | Rule tags, such as `mitre:T1059` |
+
+### ✏️ `update_detection_rule`
+Update a compiler-validated detection rule.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `detection_rule_id` | integer | Yes | - | Detection rule ID |
+| `name` | string | No | Current value | Detection rule name |
+| `description` | string | No | Current value | Detection rule description |
+| `source` | string | No | Current value | Telemetry source |
+| `filter` | string | No | Current value | Log query filter expression |
+| `group_by` | string[] | No | Current value | Group-by columns, such as `host`, `service`, or `tags['user']` |
+| `window_seconds` | integer | No | Current value | Evaluation window in seconds |
+| `type` | string | No | Current value | `threshold`, `new_value`, or `rate_anomaly` |
+| `threshold_count` | integer | No | Current value | Threshold count for threshold or rate rules |
+| `severity` | string | No | Current value | `info`, `low`, `medium`, `high`, or `critical` |
+| `signal_title` | string | No | Current value | Signal title template |
+| `signal_message` | string | No | Current value | Signal message template |
+| `suppressions` | string[] | No | Current value | Suppression keys |
+| `enabled` | boolean | No | Current value | Enable or disable the rule |
+| `tags` | string[] | No | Current value | Rule tags, such as `mitre:T1059` |
+
+### ✏️ `delete_detection_rule`
+Delete a detection rule.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `detection_rule_id` | integer | Yes | - | Detection rule ID |
+
+### `preview_detection_rule`
+Preview rule matches without writing signals.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `detection_rule_id` | integer | Yes | - | Detection rule ID |
+
+### `get_detection_coverage`
+Get MITRE ATT&CK coverage for enabled rules. No parameters.
+
+### `list_detection_templates`
+List starter-pack templates. No parameters.
+
+### ✏️ `install_detection_template`
+Install a template as a disabled rule.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `template_id` | string | Yes | - | Detection template ID |
+
+### Vulnerability Tools
+
+### `get_vulnerability_summary`
+Get package and finding counts. No parameters.
+
+### `list_vulnerability_inventory`
+List SBOM package inventory with finding counts.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `search` | string | No | - | Search package, version, target, host, image, or purl |
+| `package` | string | No | - | Exact package name filter |
+| `target` | string | No | - | Target name filter |
+| `limit` | integer | No | `100` | Max results, capped at `500` |
+| `offset` | integer | No | `0` | Result offset for pagination |
+
+### `list_vulnerability_findings`
+List vulnerability findings derived from SBOM inventory.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `search` | string | No | - | Search advisory, CVE, package, target, or fixed version |
+| `package` | string | No | - | Exact package name filter |
+| `severity` | string | No | - | `info`, `low`, `medium`, `high`, or `critical` |
+| `status` | string | No | - | `open`, `under_review`, or `archived` |
+| `limit` | integer | No | `100` | Max results, capped at `500` |
+| `offset` | integer | No | `0` | Result offset for pagination |
+
+### `export_vulnerability_sbom`
+Export inventory as CycloneDX or SPDX JSON.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `format` | string | Yes | - | `cyclonedx` or `spdx` |
+
+### Security Event And Compliance Tools
+
+### `list_security_events`
+List runtime security events.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `severity` | string | No | - | Security event severity |
+| `host` | string | No | - | Literal host substring filter |
+| `rule_id` | string | No | - | Runtime security rule ID |
+| `limit` | integer | No | `50` | Max results, capped at `200` |
+| `offset` | integer | No | `0` | Result offset for pagination |
+
+### `get_security_event`
+Get one runtime security event.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `security_event_id` | string | Yes | - | Runtime security event ID |
+
+### `get_compliance_summary`
+Get finding counts by framework and status. No parameters.
+
+### `get_compliance_trends`
+Get 14-day compliance trends by framework. No parameters.
+
+### `list_compliance_findings`
+List compliance findings.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `framework` | string | No | - | Compliance framework filter |
+| `status` | string | No | - | `passed`, `failed`, `skipped`, or `error` |
+| `limit` | integer | No | `50` | Max results, capped at `200` |
+| `offset` | integer | No | `0` | Result offset for pagination |
+
 ## Infrastructure Tools
 
 ### `list_containers`
@@ -883,3 +1067,6 @@ Resources are read-only data sources available via `resources/list` and `resourc
 | `moneat://uptime/summary` | All uptime monitors with 24h/7d/30d percentages |
 | `moneat://status-pages` | Status pages and current status |
 | `moneat://infrastructure/health` | Quick health: host statuses, alert counts, uptime |
+| `moneat://security/summary` | Open signals, detection coverage, vulnerability counts, and compliance summary |
+| `moneat://security/signals/open` | Open security signals |
+| `moneat://security/detection/coverage` | MITRE ATT&CK coverage for enabled detection rules |
