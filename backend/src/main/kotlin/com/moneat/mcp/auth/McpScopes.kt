@@ -28,6 +28,8 @@ object McpScopes {
     const val WORKFLOW_READ = "workflow:read"
     const val WORKFLOW_WRITE = "workflow:write"
     const val WORKFLOW_RUN = "workflow:run"
+    const val SECURITY_READ = "security:read"
+    const val SECURITY_WRITE = "security:write"
 
     private val telemetryReadTools = listOf(
         "aggregate_logs",
@@ -100,6 +102,25 @@ object McpScopes {
         "list_workflow_runs",
         "list_workflows",
     ).associateWith { setOf(WORKFLOW_READ) }
+
+    private val securityReadTools = listOf(
+        "export_vulnerability_sbom",
+        "get_compliance_summary",
+        "get_compliance_trends",
+        "get_detection_coverage",
+        "get_detection_rule",
+        "get_security_event",
+        "get_security_signal",
+        "get_vulnerability_summary",
+        "list_compliance_findings",
+        "list_detection_rules",
+        "list_detection_templates",
+        "list_security_events",
+        "list_security_signals",
+        "list_vulnerability_findings",
+        "list_vulnerability_inventory",
+        "preview_detection_rule",
+    ).associateWith { setOf(SECURITY_READ) }
 
     private val orgReadTools = listOf(
         "get_incident",
@@ -175,9 +196,22 @@ object McpScopes {
         "run_workflow",
     ).associateWith { setOf(WORKFLOW_RUN) }
 
+    private val securityWriteTools = listOf(
+        "create_detection_rule",
+        "delete_detection_rule",
+        "install_detection_template",
+        "triage_security_signal",
+        "update_detection_rule",
+    ).associateWith { setOf(SECURITY_WRITE) }
+
     private val readScopesByTool =
-        telemetryReadTools + projectReadTools + releaseReadTools + workflowReadTools + orgReadTools
-    private val writeScopesByTool = writeTools + workflowWriteTools + workflowRunTools
+        telemetryReadTools +
+            projectReadTools +
+            releaseReadTools +
+            workflowReadTools +
+            securityReadTools +
+            orgReadTools
+    private val writeScopesByTool = writeTools + workflowWriteTools + workflowRunTools + securityWriteTools
 
     fun requiredScopesFor(tool: McpTool): Set<String> {
         val scopesByTool = if (tool.readOnly) readScopesByTool else writeScopesByTool

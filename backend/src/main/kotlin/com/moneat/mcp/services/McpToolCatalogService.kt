@@ -42,6 +42,7 @@ private val SECTION_ORDER = listOf(
     ToolSection("status-pages", "Status pages", "Manage status pages, monitors, and public incidents."),
     ToolSection("projects", "Projects", "List, create, and inspect projects."),
     ToolSection("feature-flags", "Feature flags", "Manage flags, environments, targeting, and SDK keys."),
+    ToolSection("security", "Security", "Triage signals, manage detections, and inspect security posture."),
     ToolSection("on-call", "On-call", "Inspect incidents and schedules."),
     ToolSection("data-sources", "Data sources", "Manage custom data sources and execute data-source queries."),
     ToolSection("summaries", "Summaries and search", "Use summaries, correlated context, and global search."),
@@ -118,6 +119,10 @@ object McpToolCatalogService {
             name.contains("uptime") || name.contains("heartbeat") || name.contains("monitor") -> "uptime"
             name.contains("project") -> "projects"
             name.contains("feature_flag") -> "feature-flags"
+            name.contains("security") ||
+                name.contains("detection") ||
+                name.contains("vulnerability") ||
+                name.contains("compliance") -> "security"
             name.contains("incident") || name.contains("schedule") -> "on-call"
             name.contains("datasource") -> "data-sources"
             else -> "summaries"

@@ -56,7 +56,9 @@ class AuthTokenService {
                 "org:read",
                 "workflow:read",
                 "workflow:write",
-                "workflow:run"
+                "workflow:run",
+                "security:read",
+                "security:write"
             )
 
         // sentry-cli compatible org auth token format: sntrys_{base64_payload}_{base64_secret}

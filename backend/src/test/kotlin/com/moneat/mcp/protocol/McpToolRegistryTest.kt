@@ -19,11 +19,13 @@ package com.moneat.mcp.protocol
 import com.moneat.mcp.McpToolRegistrar
 import com.moneat.mcp.auth.McpScopes
 import com.moneat.mcp.models.McpContext
+import com.moneat.mcp.tools.CreateDetectionRuleTool
 import com.moneat.mcp.tools.CreateWorkflowTool
 import com.moneat.mcp.tools.GetFeatureFlagAnalyticsTool
 import com.moneat.mcp.tools.GetFeatureFlagTool
 import com.moneat.mcp.tools.GetWorkflowTool
 import com.moneat.mcp.tools.GetWorkflowWebhookSigningTool
+import com.moneat.mcp.tools.ListSecuritySignalsTool
 import com.moneat.mcp.tools.RunWorkflowTool
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -37,7 +39,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-private const val EXPECTED_CORE_MCP_TOOL_COUNT = 119
+private const val EXPECTED_CORE_MCP_TOOL_COUNT = 140
 
 class McpToolRegistryTest {
 
@@ -57,6 +59,8 @@ class McpToolRegistryTest {
             "workflow:read",
             "workflow:write",
             "workflow:run",
+            "security:read",
+            "security:write",
         ),
         sessionId = "test-session"
     )
@@ -194,6 +198,12 @@ class McpToolRegistryTest {
         )
         assertEquals(setOf(McpScopes.WORKFLOW_RUN), RunWorkflowTool().requiredScopes)
         assertFalse(GetWorkflowWebhookSigningTool().readOnly)
+    }
+
+    @Test
+    fun `security tools use least privilege security scopes`() {
+        assertEquals(setOf(McpScopes.SECURITY_READ), McpScopes.requiredScopesFor(ListSecuritySignalsTool()))
+        assertEquals(setOf(McpScopes.SECURITY_WRITE), McpScopes.requiredScopesFor(CreateDetectionRuleTool()))
     }
 
     @Test
@@ -409,6 +419,11 @@ class McpToolRegistryTest {
             "run_workflow",
             "unpublish_workflow",
             "update_workflow",
+            "create_detection_rule",
+            "delete_detection_rule",
+            "install_detection_template",
+            "triage_security_signal",
+            "update_detection_rule",
         )
 
         assertEquals(EXPECTED_CORE_MCP_TOOL_COUNT, toolsByName.size)

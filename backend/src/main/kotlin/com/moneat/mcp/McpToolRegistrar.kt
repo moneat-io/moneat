@@ -28,6 +28,7 @@ import com.moneat.mcp.tools.CreateFeatureFlagEnvironmentTool
 import com.moneat.mcp.tools.CreateFeatureFlagSdkKeyTool
 import com.moneat.mcp.tools.CreateFeatureFlagTool
 import com.moneat.mcp.tools.CreateAgentKeyTool
+import com.moneat.mcp.tools.CreateDetectionRuleTool
 import com.moneat.mcp.tools.CreateProjectTool
 import com.moneat.mcp.tools.CreateSilencePeriodTool
 import com.moneat.mcp.tools.CreateStatusPageIncidentTool
@@ -40,21 +41,27 @@ import com.moneat.mcp.tools.DeleteAlertTool
 import com.moneat.mcp.tools.DeleteDashboardAlertTool
 import com.moneat.mcp.tools.DeleteDashboardTool
 import com.moneat.mcp.tools.DeleteDashboardWidgetTool
+import com.moneat.mcp.tools.DeleteDetectionRuleTool
 import com.moneat.mcp.tools.DeleteFeatureFlagSegmentTool
 import com.moneat.mcp.tools.DeleteFeatureFlagTool
 import com.moneat.mcp.tools.DeleteHostTool
 import com.moneat.mcp.tools.DeleteSilencePeriodTool
 import com.moneat.mcp.tools.DeleteUptimeMonitorTool
 import com.moneat.mcp.tools.DeleteWorkflowTool
+import com.moneat.mcp.tools.ExportVulnerabilitySbomTool
 import com.moneat.mcp.tools.GetAlertConfigTool
 import com.moneat.mcp.tools.ExecuteDataSourceQueryTool
 import com.moneat.mcp.tools.ExecuteDashboardQueryTool
 import com.moneat.mcp.tools.GetAlertNotificationChannelsTool
+import com.moneat.mcp.tools.GetComplianceSummaryTool
+import com.moneat.mcp.tools.GetComplianceTrendsTool
 import com.moneat.mcp.tools.GetContainerMetricsTool
 import com.moneat.mcp.tools.GetDashboardTemplatesTool
 import com.moneat.mcp.tools.GetDashboardTool
 import com.moneat.mcp.tools.GetDataSourceSchemaTool
 import com.moneat.mcp.tools.GetDbmQueriesTool
+import com.moneat.mcp.tools.GetDetectionCoverageTool
+import com.moneat.mcp.tools.GetDetectionRuleTool
 import com.moneat.mcp.tools.GetFeatureFlagAnalyticsTool
 import com.moneat.mcp.tools.GetFeatureFlagTool
 import com.moneat.mcp.tools.GetHostLogsTool
@@ -76,10 +83,13 @@ import com.moneat.mcp.tools.GetProjectStatsTool
 import com.moneat.mcp.tools.GetProjectTool
 import com.moneat.mcp.tools.GetRelatedErrorsTool
 import com.moneat.mcp.tools.GetReleaseStatsTool
+import com.moneat.mcp.tools.GetSecurityEventTool
+import com.moneat.mcp.tools.GetSecuritySignalTool
 import com.moneat.mcp.tools.GetSpanDetailsTool
 import com.moneat.mcp.tools.GetStatusPageTool
 import com.moneat.mcp.tools.GetTransactionStatsTool
 import com.moneat.mcp.tools.GetTraceTool
+import com.moneat.mcp.tools.GetVulnerabilitySummaryTool
 import com.moneat.mcp.tools.GetWeeklyReportTool
 import com.moneat.mcp.tools.GetWorkflowBlueprintTool
 import com.moneat.mcp.tools.GetWorkflowCatalogTool
@@ -88,10 +98,14 @@ import com.moneat.mcp.tools.GetWorkflowTool
 import com.moneat.mcp.tools.GetWorkflowWebhookSigningTool
 import com.moneat.mcp.tools.GlobalSearchTool
 import com.moneat.mcp.tools.ImportDashboardTool
+import com.moneat.mcp.tools.InstallDetectionTemplateTool
 import com.moneat.mcp.tools.ListAlertsTool
+import com.moneat.mcp.tools.ListComplianceFindingsTool
 import com.moneat.mcp.tools.ListContainersTool
 import com.moneat.mcp.tools.ListDashboardsTool
 import com.moneat.mcp.tools.ListDataSourcesTool
+import com.moneat.mcp.tools.ListDetectionRulesTool
+import com.moneat.mcp.tools.ListDetectionTemplatesTool
 import com.moneat.mcp.tools.ListFeedbackTool
 import com.moneat.mcp.tools.ListFeatureFlagAuditEventsTool
 import com.moneat.mcp.tools.ListFeatureFlagEnvironmentsTool
@@ -104,16 +118,21 @@ import com.moneat.mcp.tools.ListProjectsTool
 import com.moneat.mcp.tools.ListProcessesTool
 import com.moneat.mcp.tools.ListProfilesTool
 import com.moneat.mcp.tools.ListReleasesTool
+import com.moneat.mcp.tools.ListSecurityEventsTool
+import com.moneat.mcp.tools.ListSecuritySignalsTool
 import com.moneat.mcp.tools.ListSilencePeriodsTool
 import com.moneat.mcp.tools.ListStatusPagesTool
 import com.moneat.mcp.tools.ListTransactionsTool
 import com.moneat.mcp.tools.ListUptimeMonitorsTool
+import com.moneat.mcp.tools.ListVulnerabilityFindingsTool
+import com.moneat.mcp.tools.ListVulnerabilityInventoryTool
 import com.moneat.mcp.tools.ListWorkflowAuditTool
 import com.moneat.mcp.tools.ListWorkflowBlueprintsTool
 import com.moneat.mcp.tools.ListWorkflowRunsTool
 import com.moneat.mcp.tools.ListWorkflowsTool
 import com.moneat.mcp.tools.PauseUptimeMonitorTool
 import com.moneat.mcp.tools.PostIncidentUpdateTool
+import com.moneat.mcp.tools.PreviewDetectionRuleTool
 import com.moneat.mcp.tools.PreviewDashboardWidgetQueryTool
 import com.moneat.mcp.tools.PublishWorkflowTool
 import com.moneat.mcp.tools.QueryLogsTool
@@ -121,12 +140,14 @@ import com.moneat.mcp.tools.ReplaceDashboardWidgetsTool
 import com.moneat.mcp.tools.ResumeUptimeMonitorTool
 import com.moneat.mcp.tools.RevokeFeatureFlagSdkKeyTool
 import com.moneat.mcp.tools.RunWorkflowTool
+import com.moneat.mcp.tools.TriageSecuritySignalTool
 import com.moneat.mcp.tools.UnpublishWorkflowTool
 import com.moneat.mcp.tools.UpdateAlertNotificationChannelsTool
 import com.moneat.mcp.tools.UpdateAlertTool
 import com.moneat.mcp.tools.UpdateDashboardAlertTool
 import com.moneat.mcp.tools.UpdateDashboardTool
 import com.moneat.mcp.tools.UpdateDashboardWidgetTool
+import com.moneat.mcp.tools.UpdateDetectionRuleTool
 import com.moneat.mcp.tools.UpdateFeatureFlagConfigTool
 import com.moneat.mcp.tools.UpdateFeatureFlagTool
 import com.moneat.mcp.tools.UpdateIssueStatusTool
@@ -249,6 +270,29 @@ object McpToolRegistrar {
         toolRegistry.register(RevokeFeatureFlagSdkKeyTool())
         toolRegistry.register(ListFeatureFlagAuditEventsTool())
         toolRegistry.register(GetFeatureFlagAnalyticsTool())
+
+        // Security tools
+        toolRegistry.register(ListSecuritySignalsTool())
+        toolRegistry.register(GetSecuritySignalTool())
+        toolRegistry.register(TriageSecuritySignalTool())
+        toolRegistry.register(ListDetectionRulesTool())
+        toolRegistry.register(GetDetectionRuleTool())
+        toolRegistry.register(CreateDetectionRuleTool())
+        toolRegistry.register(UpdateDetectionRuleTool())
+        toolRegistry.register(DeleteDetectionRuleTool())
+        toolRegistry.register(PreviewDetectionRuleTool())
+        toolRegistry.register(GetDetectionCoverageTool())
+        toolRegistry.register(ListDetectionTemplatesTool())
+        toolRegistry.register(InstallDetectionTemplateTool())
+        toolRegistry.register(GetVulnerabilitySummaryTool())
+        toolRegistry.register(ListVulnerabilityInventoryTool())
+        toolRegistry.register(ListVulnerabilityFindingsTool())
+        toolRegistry.register(ExportVulnerabilitySbomTool())
+        toolRegistry.register(ListSecurityEventsTool())
+        toolRegistry.register(GetSecurityEventTool())
+        toolRegistry.register(GetComplianceSummaryTool())
+        toolRegistry.register(GetComplianceTrendsTool())
+        toolRegistry.register(ListComplianceFindingsTool())
 
         // Dashboard alert tools (Phase 1)
         toolRegistry.register(CreateDashboardAlertTool())

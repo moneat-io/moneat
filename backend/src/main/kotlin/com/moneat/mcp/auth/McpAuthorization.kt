@@ -23,6 +23,8 @@ import com.moneat.events.services.DashboardQueryHelper
 import com.moneat.events.services.IssueService
 import com.moneat.events.services.TransactionService
 import com.moneat.mcp.models.McpContext
+import com.moneat.security.detection.DetectionRules
+import com.moneat.security.signals.SecuritySignals
 import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Projects
 import com.moneat.shared.services.ProjectIdResolver
@@ -66,6 +68,8 @@ object McpAuthorization {
         args.uuidValue("page_id")?.let { requireStatusPageAccess(it, context) }
         args.uuidValue("status_page_id")?.let { requireStatusPageAccess(it, context) }
         args.longValue("data_source_id")?.let { requireDataSourceAccess(it, context) }
+        args.intValue("security_signal_id")?.let { requireSecuritySignalAccess(it, context) }
+        args.intValue("detection_rule_id")?.let { requireDetectionRuleAccess(it, context) }
     }
 
     fun requireProjectAccess(projectId: Long, context: McpContext) {
@@ -159,6 +163,32 @@ object McpAuthorization {
         }
         ensureAuthorized(hasAccess, "$AUTHORIZATION_ERROR: data source not found")
     }
+
+    private fun requireSecuritySignalAccess(signalId: Int, context: McpContext) {
+        val hasAccess = transaction {
+            SecuritySignals
+                .selectAll()
+                .where {
+                    (SecuritySignals.id eq signalId) and
+                        (SecuritySignals.organizationId eq context.organizationId)
+                }
+                .count() > 0
+        }
+        ensureAuthorized(hasAccess, "$AUTHORIZATION_ERROR: security signal not found")
+    }
+
+    private fun requireDetectionRuleAccess(ruleId: Int, context: McpContext) {
+        val hasAccess = transaction {
+            DetectionRules
+                .selectAll()
+                .where {
+                    (DetectionRules.id eq ruleId) and
+                        (DetectionRules.organizationId eq context.organizationId)
+                }
+                .count() > 0
+        }
+        ensureAuthorized(hasAccess, "$AUTHORIZATION_ERROR: detection rule not found")
+    }
 }
 
 private fun ensureAuthorized(condition: Boolean, message: String) {
@@ -175,6 +205,11 @@ private fun JsonObject.longValue(name: String): Long? {
         else -> null
     }
 }
+
+private fun JsonObject.intValue(name: String): Int? =
+    longValue(name)
+        ?.takeIf { it in Int.MIN_VALUE.toLong()..Int.MAX_VALUE.toLong() }
+        ?.toInt()
 
 private fun JsonObject.projectIdValue(name: String): Long? =
     stringValue(name)?.let(McpAuthorization::resolveProjectId)

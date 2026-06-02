@@ -264,5 +264,7 @@ class AuthTokenServiceTest {
         assertTrue(AuthTokenService.VALID_SCOPES.contains("workflow:read"))
         assertTrue(AuthTokenService.VALID_SCOPES.contains("workflow:write"))
         assertTrue(AuthTokenService.VALID_SCOPES.contains("workflow:run"))
+        assertTrue(AuthTokenService.VALID_SCOPES.contains("security:read"))
+        assertTrue(AuthTokenService.VALID_SCOPES.contains("security:write"))
     }
 }
