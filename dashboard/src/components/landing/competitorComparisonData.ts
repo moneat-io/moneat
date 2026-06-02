@@ -739,6 +739,67 @@ export const competitorPageBySlug = new Map(
   competitorPages.map((page) => [page.slug, page]),
 )
 
+export type MarkKind = 'yes' | 'partial' | 'no'
+export type CellValue = MarkKind | string
+
+export const COMPARE_ORDER: CompetitorSlug[] = ['datadog', 'sentry', 'signoz', 'better-stack']
+
+export const compareColumns = COMPARE_ORDER.map((slug) => competitorPages.find((c) => c.slug === slug))
+  .filter((page): page is (typeof competitorPages)[number] => Boolean(page))
+  .map((page) => ({slug: page.slug, name: page.name, route: page.route}))
+
+export const compareRows: Array<{
+  label: string
+  moneat: CellValue
+  values: Record<CompetitorSlug, CellValue>
+}> = [
+  {
+    label: 'Error tracking',
+    moneat: 'yes',
+    values: {datadog: 'yes', sentry: 'yes', signoz: 'partial', 'better-stack': 'partial'},
+  },
+  {
+    label: 'Log management',
+    moneat: 'yes',
+    values: {datadog: 'yes', sentry: 'partial', signoz: 'yes', 'better-stack': 'yes'},
+  },
+  {
+    label: 'APM & distributed tracing',
+    moneat: 'yes',
+    values: {datadog: 'yes', sentry: 'yes', signoz: 'yes', 'better-stack': 'partial'},
+  },
+  {
+    label: 'Infrastructure & host metrics',
+    moneat: 'yes',
+    values: {datadog: 'yes', sentry: 'no', signoz: 'yes', 'better-stack': 'partial'},
+  },
+  {
+    label: 'Uptime & status pages',
+    moneat: 'yes',
+    values: {datadog: 'partial', sentry: 'partial', signoz: 'partial', 'better-stack': 'yes'},
+  },
+  {
+    label: 'On-call & incidents',
+    moneat: 'yes',
+    values: {datadog: 'yes', sentry: 'no', signoz: 'no', 'better-stack': 'yes'},
+  },
+  {
+    label: 'Open source & self-host',
+    moneat: 'yes',
+    values: {datadog: 'no', sentry: 'partial', signoz: 'yes', 'better-stack': 'no'},
+  },
+  {
+    label: 'Pricing model',
+    moneat: 'Tiered — no per-host fee',
+    values: {
+      datadog: 'Per-host + per-product',
+      sentry: 'Per-event volume',
+      signoz: 'Usage or self-host',
+      'better-stack': 'Per-monitor + seat',
+    },
+  },
+]
+
 export function getCompetitorPage(slug: CompetitorSlug): CompetitorPageData {
   const page = competitorPageBySlug.get(slug)
   if (!page) {

@@ -6,7 +6,7 @@
    marketing pages via wrapper classes, so the app keeps its default type. */
 @theme {
   --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
-  --font-brandmono: "Spline Sans Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --font-brandmono: "Spline Sans Mono", ui-monospace, "SFMono-Regular", menlo, monospace;
 }
 
 @layer base {

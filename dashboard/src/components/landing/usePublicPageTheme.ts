@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useEffect} from 'react'
+import {useLayoutEffect} from 'react'
 
 // The public marketing pages are dark-first (style-guide). Hold the document in
 // dark mode while such a page is mounted, and restore the prior theme when the
 // visitor navigates back into the (light-by-default) app.
 export function useForceDarkTheme() {
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = document.documentElement
     const hadDark = root.classList.contains('dark')
     const prevColorScheme = root.style.colorScheme

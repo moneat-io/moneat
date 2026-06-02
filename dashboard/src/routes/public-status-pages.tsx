@@ -26,6 +26,7 @@ const pageSeo = getFeaturePageSeoInput('public-status-pages')
 // 90 daily uptime bars for a single component row.
 // Each entry: 'up' | 'deg' | 'down'
 type BarState = 'up' | 'deg' | 'down'
+const UPTIME_HISTORY_DAYS = 90
 
 function UptimeBars({bars}: {readonly bars: readonly BarState[]}) {
   return (
@@ -44,7 +45,7 @@ function UptimeBars({bars}: {readonly bars: readonly BarState[]}) {
 }
 
 function mkBars(degradedAt: number[], downAt: number[] = []): BarState[] {
-  return Array.from({length: 30}, (_, i) =>
+  return Array.from({length: UPTIME_HISTORY_DAYS}, (_, i) =>
     downAt.includes(i) ? 'down' : degradedAt.includes(i) ? 'deg' : 'up',
   )
 }
@@ -120,14 +121,14 @@ function StatusPageHero() {
 
           {/* Footer stat row */}
           <div className="grid grid-cols-3 gap-2.5">
-            <StatTile label="uptime 90d" value="99.98%" accent />
+            <StatTile label={`uptime ${UPTIME_HISTORY_DAYS}d`} value="99.98%" accent />
             <StatTile label="incidents 30d" value="2" />
             <StatTile label="subscribers" value="1,204" />
           </div>
 
           {/* Footer label */}
           <div className="text-right font-brandmono text-[10px] text-slate-500">
-            Uptime 99.98% over 90 days
+            Uptime 99.98% over {UPTIME_HISTORY_DAYS} days
           </div>
         </div>
       </WindowFrame>

@@ -31,7 +31,7 @@ import {
 } from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {cn} from '@/lib/utils'
-import {competitorPages, SOURCE_REVIEW_DATE, type CompetitorSlug} from './competitorComparisonData'
+import {compareColumns, compareRows, SOURCE_REVIEW_DATE, type CellValue} from './competitorComparisonData'
 
 // ── Brand signal: one violet→indigo→cyan gradient (style-guide) ──────────────
 const GRADIENT_BG = 'bg-[linear-gradient(115deg,#8B5CF6_0%,#6366F1_48%,#22D3EE_100%)]'
@@ -572,34 +572,6 @@ function EventLog({rows}: {readonly rows: Array<[string, string, string]>}) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Comparison — Moneat vs. the four alternatives. Vendor headers deep-link out.
 // ─────────────────────────────────────────────────────────────────────────────
-type MarkKind = 'yes' | 'partial' | 'no'
-type CellValue = MarkKind | string
-
-const COMPARE_ORDER: CompetitorSlug[] = ['datadog', 'sentry', 'signoz', 'better-stack']
-const compareColumns = COMPARE_ORDER.map((slug) => competitorPages.find((c) => c.slug === slug))
-  .filter((p): p is (typeof competitorPages)[number] => Boolean(p))
-  .map((p) => ({slug: p.slug, name: p.name, route: p.route}))
-
-const compareRows: Array<{label: string; moneat: CellValue; values: Record<CompetitorSlug, CellValue>}> = [
-  {label: 'Error tracking', moneat: 'yes', values: {datadog: 'yes', sentry: 'yes', signoz: 'partial', 'better-stack': 'partial'}},
-  {label: 'Log management', moneat: 'yes', values: {datadog: 'yes', sentry: 'partial', signoz: 'yes', 'better-stack': 'yes'}},
-  {label: 'APM & distributed tracing', moneat: 'yes', values: {datadog: 'yes', sentry: 'yes', signoz: 'yes', 'better-stack': 'partial'}},
-  {label: 'Infrastructure & host metrics', moneat: 'yes', values: {datadog: 'yes', sentry: 'no', signoz: 'yes', 'better-stack': 'partial'}},
-  {label: 'Uptime & status pages', moneat: 'yes', values: {datadog: 'partial', sentry: 'partial', signoz: 'partial', 'better-stack': 'yes'}},
-  {label: 'On-call & incidents', moneat: 'yes', values: {datadog: 'yes', sentry: 'no', signoz: 'no', 'better-stack': 'yes'}},
-  {label: 'Open source & self-host', moneat: 'yes', values: {datadog: 'no', sentry: 'partial', signoz: 'yes', 'better-stack': 'no'}},
-  {
-    label: 'Pricing model',
-    moneat: 'Tiered — no per-host fee',
-    values: {
-      datadog: 'Per-host + per-product',
-      sentry: 'Per-event volume',
-      signoz: 'Usage or self-host',
-      'better-stack': 'Per-monitor + seat',
-    },
-  },
-]
-
 function CompareValue({value, highlight}: {readonly value: CellValue; readonly highlight: boolean}) {
   if (value === 'yes') {
     return <Check className={cn('mx-auto size-4', highlight ? 'text-cyan-300' : 'text-emerald-400')} aria-label="Yes" />

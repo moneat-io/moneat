@@ -64,7 +64,7 @@ function BlogArticleBody({post}: {readonly post: Post}) {
           <span>{post.readingTime}</span>
         </div>
       </header>
-      <div className="prose prose-invert max-w-none prose-headings:text-white prose-p:text-slate-300 prose-li:text-slate-300 prose-strong:text-white prose-a:text-indigo-300 prose-code:font-brandmono prose-code:text-slate-200 prose-pre:bg-[#07080e] prose-pre:border prose-pre:border-white/10">
+      <div className="prose prose-invert max-w-none prose-headings:text-white prose-p:text-slate-300 prose-li:text-slate-300 prose-strong:text-white prose-a:text-indigo-300 hover:prose-a:text-indigo-200 prose-th:text-white prose-td:text-slate-300 prose-table:border-collapse prose-th:border prose-th:border-white/10 prose-th:bg-white/[0.04] prose-th:px-3 prose-th:py-2 prose-td:border prose-td:border-white/[0.06] prose-td:px-3 prose-td:py-2 prose-code:font-brandmono prose-code:text-slate-200 prose-pre:bg-[#07080e] prose-pre:border prose-pre:border-white/10">
         <Component />
       </div>
     </article>

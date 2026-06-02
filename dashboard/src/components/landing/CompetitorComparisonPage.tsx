@@ -44,9 +44,12 @@ import {
 } from './Landing'
 import {
   SOURCE_REVIEW_DATE,
+  compareColumns as allCompareColumns,
+  compareRows,
   competitorPages,
   getCompetitorPage,
   moneatPricingSummary,
+  type CellValue,
   type CompetitorPageData,
   type CompetitorSlug,
 } from './competitorComparisonData'
@@ -564,34 +567,6 @@ function FinalCtaSection({page}: {readonly page: CompetitorPageData}) {
 }
 
 // ── Comparison table (centerpiece) ────────────────────────────────────────────
-type MarkKind = 'yes' | 'partial' | 'no'
-type CellValue = MarkKind | string
-
-const COMPARE_ORDER: CompetitorSlug[] = ['datadog', 'sentry', 'signoz', 'better-stack']
-const allCompareColumns = COMPARE_ORDER.map((slug) => competitorPages.find((c) => c.slug === slug))
-  .filter((p): p is (typeof competitorPages)[number] => Boolean(p))
-  .map((p) => ({slug: p.slug, name: p.name, route: p.route}))
-
-const compareRows: Array<{label: string; moneat: CellValue; values: Record<CompetitorSlug, CellValue>}> = [
-  {label: 'Error tracking', moneat: 'yes', values: {datadog: 'yes', sentry: 'yes', signoz: 'partial', 'better-stack': 'partial'}},
-  {label: 'Log management', moneat: 'yes', values: {datadog: 'yes', sentry: 'partial', signoz: 'yes', 'better-stack': 'yes'}},
-  {label: 'APM & distributed tracing', moneat: 'yes', values: {datadog: 'yes', sentry: 'yes', signoz: 'yes', 'better-stack': 'partial'}},
-  {label: 'Infrastructure & host metrics', moneat: 'yes', values: {datadog: 'yes', sentry: 'no', signoz: 'yes', 'better-stack': 'partial'}},
-  {label: 'Uptime & status pages', moneat: 'yes', values: {datadog: 'partial', sentry: 'partial', signoz: 'partial', 'better-stack': 'yes'}},
-  {label: 'On-call & incidents', moneat: 'yes', values: {datadog: 'yes', sentry: 'no', signoz: 'no', 'better-stack': 'yes'}},
-  {label: 'Open source & self-host', moneat: 'yes', values: {datadog: 'no', sentry: 'partial', signoz: 'yes', 'better-stack': 'no'}},
-  {
-    label: 'Pricing model',
-    moneat: 'Tiered — no per-host fee',
-    values: {
-      datadog: 'Per-host + per-product',
-      sentry: 'Per-event volume',
-      signoz: 'Usage or self-host',
-      'better-stack': 'Per-monitor + seat',
-    },
-  },
-]
-
 function CompareValue({value, highlight}: {readonly value: CellValue; readonly highlight: boolean}) {
   if (value === 'yes') {
     return <Check className={cn('mx-auto size-4', highlight ? 'text-cyan-300' : 'text-emerald-400')} aria-label="Yes" />

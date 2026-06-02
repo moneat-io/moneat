@@ -246,11 +246,23 @@ function SignupPage() {
             />
             <span>
               I agree to the{' '}
-              <Link to="/legal/terms" target="_blank" rel="noreferrer" className="text-indigo-300 underline-offset-4 hover:underline">
+              <Link
+                to="/legal/terms"
+                target="_blank"
+                rel="noreferrer"
+                onClick={(event) => event.stopPropagation()}
+                className="text-indigo-300 underline-offset-4 hover:underline"
+              >
                 Terms of Use
               </Link>{' '}
               and{' '}
-              <Link to="/legal/privacy" target="_blank" rel="noreferrer" className="text-indigo-300 underline-offset-4 hover:underline">
+              <Link
+                to="/legal/privacy"
+                target="_blank"
+                rel="noreferrer"
+                onClick={(event) => event.stopPropagation()}
+                className="text-indigo-300 underline-offset-4 hover:underline"
+              >
                 Privacy Policy
               </Link>
               .
