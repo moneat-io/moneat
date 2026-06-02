@@ -12,8 +12,8 @@ export function ProfilingEmptyState() {
   return (
     <div className="rounded-xl border border-dashed py-10 px-4 max-w-lg mx-auto bg-card">
       <div className="flex flex-col items-center text-center">
-        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-violet-500/20 to-orange-500/20 border border-violet-500/20 flex items-center justify-center mb-3">
-          <Layers className="h-5 w-5 text-violet-500 dark:text-violet-400" />
+        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary/20 to-[hsl(var(--chart-6)/0.2)] border border-primary/20 flex items-center justify-center mb-3">
+          <Layers className="h-5 w-5 text-primary" />
         </div>
         <p className="font-semibold text-sm text-foreground">No profiles yet</p>
         <p className="text-xs text-muted-foreground mt-1 max-w-sm">

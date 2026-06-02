@@ -34,9 +34,9 @@ export function ConfirmationCard({
   const argPreview = JSON.stringify(confirmation.args, null, 2)
 
   return (
-    <div className="rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2">
+    <div className="rounded-md border border-warning-border bg-warning-bg px-3 py-2">
       <div className="flex items-center gap-2 text-xs font-medium">
-        <AlertTriangle className="h-3.5 w-3.5 text-amber-700" />
+        <AlertTriangle className="h-3.5 w-3.5 text-warning-fg" />
         Confirmation required for `{confirmation.tool}`
       </div>
       <pre className="mt-2 overflow-x-auto rounded bg-background/70 p-2 text-[11px] text-muted-foreground">

@@ -22,10 +22,13 @@ import { useProject } from '@/contexts/ProjectContext'
 import { StatsCard } from '@/components/charts/StatsCard'
 import { EventsChart } from '@/components/charts/EventsChart'
 import { BarChart } from '@/components/charts/BarChart'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { PageHeader } from '@/components/ui/page-header'
+import { SectionCard } from '@/components/ui/section-card'
+import { EmptyState } from '@/components/ui/empty-state'
 import { Brain, Coins, Clock, AlertTriangle, Hash, Zap, BookOpen, ArrowRight, TrendingUp } from 'lucide-react'
 import { ProviderLogo } from '@/components/icons/AiProviders'
 
@@ -61,8 +64,12 @@ function AiOverviewPage() {
 
   if (!selectedProjectId) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-muted-foreground">Select a project to view AI observability data.</p>
+      <div className="p-3">
+        <EmptyState
+          icon={Brain}
+          title="No project selected"
+          description="Select a project to view AI observability data."
+        />
       </div>
     )
   }
@@ -83,45 +90,39 @@ function AiOverviewPage() {
   })
 
   return (
-    <div className="space-y-2 p-3">
-      {/* Header: title, links, time selector in one compact row */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
-          <h1 className="text-lg font-bold flex items-center gap-1.5 whitespace-nowrap">
-            <Brain className="h-4 w-4" />
-            AI Observability
-          </h1>
-          <p className="text-muted-foreground text-xs hidden sm:inline">
-            Monitor your LLM applications, trace agent executions, and track costs.
-          </p>
-          <Link to="/ai/generations" className="text-xs text-primary hover:underline">
-            View All Generations →
-          </Link>
-        </div>
-        <div className="flex items-center gap-2">
-          <a
-            href="/docs/ai-observability"
-            className="inline-flex items-center gap-1 bg-primary text-primary-foreground px-2 py-1 rounded text-xs font-medium hover:bg-primary/90 transition-colors"
-          >
-            <BookOpen className="h-3 w-3" />
-            Get Started
-            <ArrowRight className="h-3 w-3" />
-          </a>
-          <Select value={range} onValueChange={setRange}>
-            <SelectTrigger className="w-full sm:w-28 h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="1h">Last 1h</SelectItem>
-              <SelectItem value="6h">Last 6h</SelectItem>
-              <SelectItem value="24h">Last 24h</SelectItem>
-              <SelectItem value="7d">Last 7d</SelectItem>
-              <SelectItem value="14d">Last 14d</SelectItem>
-              <SelectItem value="30d">Last 30d</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+    <div className="space-y-3 p-3">
+      <PageHeader
+        icon={Brain}
+        title="AI Observability"
+        description="Monitor your LLM applications, trace agent executions, and track costs."
+        actions={
+          <>
+            <Link to="/ai/generations" className="text-xs text-primary hover:underline">
+              View all generations
+            </Link>
+            <Button asChild size="sm">
+              <a href="/docs/ai-observability">
+                <BookOpen className="h-3.5 w-3.5" />
+                Get started
+                <ArrowRight className="h-3.5 w-3.5" />
+              </a>
+            </Button>
+            <Select value={range} onValueChange={setRange}>
+              <SelectTrigger className="w-full sm:w-28 h-9 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1h">Last 1h</SelectItem>
+                <SelectItem value="6h">Last 6h</SelectItem>
+                <SelectItem value="24h">Last 24h</SelectItem>
+                <SelectItem value="7d">Last 7d</SelectItem>
+                <SelectItem value="14d">Last 14d</SelectItem>
+                <SelectItem value="30d">Last 30d</SelectItem>
+              </SelectContent>
+            </Select>
+          </>
+        }
+      />
 
       {/* Stats Row */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-1.5">
@@ -175,12 +176,7 @@ function AiOverviewPage() {
       </div>
 
       {/* Top Models Table */}
-      <Card>
-        <CardHeader className="px-3 py-1.5 flex flex-row items-center gap-1.5">
-          <TrendingUp className="h-3 w-3 text-muted-foreground" />
-          <CardTitle className="text-xs">Top Models</CardTitle>
-        </CardHeader>
-        <CardContent className="px-3 pb-1.5 pt-0 overflow-x-auto">
+      <SectionCard title="Top Models" icon={TrendingUp} flushBody bodyClassName="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -228,8 +224,7 @@ function AiOverviewPage() {
               )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+      </SectionCard>
     </div>
   )
 }

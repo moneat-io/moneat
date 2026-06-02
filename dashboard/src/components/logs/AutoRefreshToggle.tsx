@@ -36,7 +36,7 @@ interface AutoRefreshToggleProps {
 export function AutoRefreshToggle({interval, onIntervalChange}: AutoRefreshToggleProps) {
   return (
     <div className="flex items-center gap-1.5">
-      <RefreshCw className={cn('h-3.5 w-3.5 text-muted-foreground', interval && 'animate-spin text-emerald-500')} style={interval ? {animationDuration: '2s'} : undefined} />
+      <RefreshCw className={cn('h-3.5 w-3.5 text-muted-foreground', interval && 'animate-spin text-success-fg')} style={interval ? {animationDuration: '2s'} : undefined} />
       <span className="text-xs text-muted-foreground hidden sm:inline">Refresh</span>
       <div className="flex items-center rounded-md border bg-card/80">
         {INTERVAL_OPTIONS.map((option) => (
@@ -49,7 +49,7 @@ export function AutoRefreshToggle({interval, onIntervalChange}: AutoRefreshToggl
               'h-7 rounded-none px-2 text-xs font-mono',
               'first:rounded-l-md last:rounded-r-md',
               interval === option.value
-                ? 'bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white'
+                ? 'bg-success-solid text-white hover:bg-success-solid/90 hover:text-white'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >

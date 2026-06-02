@@ -55,18 +55,16 @@ function formatAbsoluteTime(ns: number): string {
 }
 
 const SERVICE_COLORS = [
-  'bg-blue-500',
-  'bg-emerald-500',
-  'bg-violet-500',
-  'bg-amber-500',
-  'bg-cyan-500',
-  'bg-rose-500',
-  'bg-indigo-500',
-  'bg-teal-500',
-  'bg-orange-500',
-  'bg-pink-500',
-  'bg-lime-500',
-  'bg-fuchsia-500',
+  'bg-chart-1',
+  'bg-chart-2',
+  'bg-chart-3',
+  'bg-chart-4',
+  'bg-chart-5',
+  'bg-chart-6',
+  'bg-chart-7',
+  'bg-chart-8',
+  'bg-chart-9',
+  'bg-chart-10',
 ]
 
 const TRACE_LIST_COLUMNS_CLASS =
@@ -75,8 +73,8 @@ const TRACE_LIST_COLUMNS_CLASS =
 function getDurationColor(ns: number, maxNs: number): string {
   if (maxNs === 0) return 'text-foreground'
   const ratio = ns / maxNs
-  if (ratio > 0.8) return 'text-red-500'
-  if (ratio > 0.5) return 'text-amber-500'
+  if (ratio > 0.8) return 'text-danger-fg'
+  if (ratio > 0.5) return 'text-warning-fg'
   return 'text-foreground'
 }
 
@@ -258,7 +256,7 @@ export function TraceList({serviceFilter: externalService, envFilter, basePath}:
                       <span
                         className={cn(
                           'w-2 h-2 rounded-full shrink-0',
-                          serviceColorMap.get(trace.rootService) ?? 'bg-gray-500'
+                          serviceColorMap.get(trace.rootService) ?? 'bg-muted-foreground'
                         )}
                       />
                       <span className="font-medium text-sm truncate group-hover:text-primary transition-colors">
@@ -296,10 +294,10 @@ export function TraceList({serviceFilter: externalService, envFilter, basePath}:
                           className={cn(
                             'h-full rounded-full transition-all',
                             trace.durationNs / maxDuration > 0.8
-                              ? 'bg-red-500/70'
+                              ? 'bg-danger-solid/70'
                               : trace.durationNs / maxDuration > 0.5
-                                ? 'bg-amber-500/70'
-                                : 'bg-blue-500/60'
+                                ? 'bg-warning-solid/70'
+                                : 'bg-chart-2/60'
                           )}
                           style={{width: `${Math.max(durationPct, 2)}%`}}
                         />
@@ -333,7 +331,7 @@ export function TraceList({serviceFilter: externalService, envFilter, basePath}:
                       ) : (
                         <Badge
                           variant="outline"
-                          className="text-[11px] h-5 text-green-600 border-green-600/30"
+                          className="text-[11px] h-5 text-success-fg border-success-border"
                         >
                           OK
                         </Badge>

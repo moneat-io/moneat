@@ -17,9 +17,10 @@
 import {createFileRoute, Link} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api, type SyntheticResultResponse, type SyntheticTestResponse} from '@/lib/api'
-import {Badge} from '@/components/ui/badge'
+import {Badge, type BadgeProps} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
-import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import {SectionCard} from '@/components/ui/section-card'
+import {EmptyState} from '@/components/ui/empty-state'
 import {Input} from '@/components/ui/input'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {Checkbox} from '@/components/ui/checkbox'
@@ -34,7 +35,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import {cn} from '@/lib/utils'
-import {Play, Trash2, Pause, Search, Filter} from 'lucide-react'
+import {Play, Trash2, Pause, Search, Filter, FlaskConical} from 'lucide-react'
 import {useToast} from '@/hooks/useToast'
 import {useState, useMemo} from 'react'
 
@@ -42,28 +43,25 @@ export const Route = createFileRoute('/synthetics/')({
   component: SyntheticResults,
 })
 
-const resultStatusColors: Record<string, string> = {
-  passed: 'bg-green-500/15 text-green-500 border-green-500/30',
-  failed: 'bg-red-500/15 text-red-500 border-red-500/30',
-  skipped: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
+// Pass/fail/skip mapped onto the shared status language.
+function resultStatusVariant(status?: string): BadgeProps['variant'] {
+  switch ((status ?? '').toLowerCase()) {
+    case 'passed':
+    case 'passing':
+      return 'success'
+    case 'failed':
+    case 'failing':
+      return 'danger'
+    case 'running':
+      return 'info'
+    default:
+      return 'neutral'
+  }
 }
 
-const testStatusColors: Record<string, string> = {
-  pending: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
-  running: 'bg-blue-500/15 text-blue-500 border-blue-500/30',
-  passed: 'bg-green-500/15 text-green-500 border-green-500/30',
-  passing: 'bg-green-500/15 text-green-500 border-green-500/30',
-  failed: 'bg-red-500/15 text-red-500 border-red-500/30',
-  failing: 'bg-red-500/15 text-red-500 border-red-500/30',
-}
-
-const testTypeColors: Record<string, string> = {
-  api: 'bg-violet-500/15 text-violet-500 border-violet-500/30',
-  multistep: 'bg-blue-500/15 text-blue-500 border-blue-500/30',
-  ssl: 'bg-amber-500/15 text-amber-500 border-amber-500/30',
-  dns: 'bg-cyan-500/15 text-cyan-500 border-cyan-500/30',
-  tcp: 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30',
-  udp: 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30',
+// Test type is a neutral categorical label.
+function testTypeVariant(): BadgeProps['variant'] {
+  return 'neutral'
 }
 
 function formatLastRun(timestamp: number | null | undefined): string {
@@ -80,7 +78,7 @@ function Sparkline({results, testId}: {results: SyntheticResultResponse[]; testI
       {testResults.map((r, i) => (
         <div
           key={i}
-          className={cn('flex-1 rounded-sm min-w-[2px]', r.status === 'passed' ? 'bg-green-500' : 'bg-red-500')}
+          className={cn('flex-1 rounded-sm min-w-[2px]', r.status === 'passed' ? 'bg-success-solid' : 'bg-danger-solid')}
           style={{height: `${Math.max((r.durationMs / max) * 100, 10)}%`}}
           title={`${r.durationMs}ms`}
         />
@@ -263,28 +261,29 @@ function SyntheticResults() {
   }
 
   return (
-    <div className="space-y-2">
-      <Card>
-        <CardHeader className="py-2 px-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm">Tests</CardTitle>
-            {selectedTests.size > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">{selectedTests.size} selected</span>
-                <Button variant="outline" size="sm" onClick={handleBulkPause}>
-                  <Pause className="h-3.5 w-3.5 mr-1" />Pause
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleBulkResume}>
-                  <Play className="h-3.5 w-3.5 mr-1" />Resume
-                </Button>
-                <Button variant="destructive" size="sm" onClick={() => setBulkDeleteConfirm(true)}>
-                  <Trash2 className="h-3.5 w-3.5 mr-1" />Delete
-                </Button>
-              </div>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="px-3 pb-3 pt-0">
+    <div className="space-y-4">
+      <SectionCard
+        title="Tests"
+        icon={FlaskConical}
+        iconTone="accent"
+        count={filteredTests.length}
+        actions={
+          selectedTests.size > 0 ? (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{selectedTests.size} selected</span>
+              <Button variant="outline" size="sm" onClick={handleBulkPause}>
+                <Pause className="h-3.5 w-3.5 mr-1" />Pause
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleBulkResume}>
+                <Play className="h-3.5 w-3.5 mr-1" />Resume
+              </Button>
+              <Button variant="destructive" size="sm" onClick={() => setBulkDeleteConfirm(true)}>
+                <Trash2 className="h-3.5 w-3.5 mr-1" />Delete
+              </Button>
+            </div>
+          ) : undefined
+        }
+      >
           {/* Filter bar */}
           <div className="flex items-center gap-1.5 mb-2 flex-wrap">
             <div className="relative flex-1 min-w-40">
@@ -338,35 +337,35 @@ function SyntheticResults() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="pb-1.5 pr-2 w-7">
+                <tr className="border-b bg-muted/40 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                  <th className="px-2 py-2 w-7">
                     <Checkbox
                       checked={selectedTests.size === filteredTests.length && filteredTests.length > 0}
                       onCheckedChange={toggleSelectAll}
                     />
                   </th>
-                  <th className="pb-1.5 pr-2 font-medium">Name</th>
-                  <th className="pb-1.5 pr-2 font-medium">Type</th>
-                  <th className="pb-1.5 pr-2 font-medium">Status</th>
-                  <th className="pb-1.5 pr-2 font-medium">Uptime</th>
-                  <th className="pb-1.5 pr-2 font-medium">Response</th>
-                  <th className="pb-1.5 pr-2 font-medium">Last Run</th>
-                  <th className="pb-1.5 pr-2 font-medium">Interval</th>
-                  <th className="pb-1.5 font-medium">Actions</th>
+                  <th className="px-2 py-2 font-medium">Name</th>
+                  <th className="px-2 py-2 font-medium">Type</th>
+                  <th className="px-2 py-2 font-medium">Status</th>
+                  <th className="px-2 py-2 font-medium">Uptime</th>
+                  <th className="px-2 py-2 font-medium">Response</th>
+                  <th className="px-2 py-2 font-medium">Last Run</th>
+                  <th className="px-2 py-2 font-medium">Interval</th>
+                  <th className="px-2 py-2 font-medium">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-border/40">
                 {filteredTests.map((t) => (
-                  <tr key={t.id} className="border-b last:border-0 hover:bg-muted/30">
-                    <td className="py-1.5 pr-2">
+                  <tr key={t.id} className="transition-colors hover:bg-accent/40">
+                    <td className="px-2 py-1.5">
                       <Checkbox
                         checked={selectedTests.has(t.id)}
                         onCheckedChange={() => toggleSelect(t.id)}
                       />
                     </td>
-                    <td className="py-1.5 pr-2">
+                    <td className="px-2 py-1.5">
                       <Link
                         to="/synthetics/$testId"
                         params={{testId: t.id}}
@@ -377,30 +376,30 @@ function SyntheticResults() {
                       {t.tags && t.tags.length > 0 && (
                         <div className="flex gap-1 mt-0.5">
                           {t.tags.map((tag) => (
-                            <Badge key={tag} variant="secondary" className="text-[10px] px-1 py-0">{tag}</Badge>
+                            <Badge key={tag} variant="neutral" size="sm">{tag}</Badge>
                           ))}
                         </div>
                       )}
                     </td>
-                    <td className="py-1.5 pr-2">
-                      <Badge variant="outline" className={cn('text-[10px]', testTypeColors[t.testType] || '')}>
+                    <td className="px-2 py-1.5">
+                      <Badge variant={testTypeVariant()} size="sm" className="uppercase">
                         {t.testType}
                       </Badge>
                     </td>
-                    <td className="py-1.5 pr-2">
-                      <Badge variant="outline" className={cn('text-[10px]', testStatusColors[t.lastStatus ?? t.status] || '')}>
+                    <td className="px-2 py-1.5">
+                      <Badge variant={resultStatusVariant(t.lastStatus ?? t.status)} size="sm">
                         {t.lastStatus || t.status || 'pending'}
                       </Badge>
                     </td>
-                    <td className="py-1.5 pr-2 font-medium">
+                    <td className="px-2 py-1.5 font-medium tabular-nums">
                       {computeUptime(results, t.id)}
                     </td>
-                    <td className="py-1.5 pr-2">
+                    <td className="px-2 py-1.5">
                       <Sparkline results={results} testId={t.id} />
                     </td>
-                    <td className="py-1.5 pr-2 text-muted-foreground">{formatLastRun(t.lastRunAt)}</td>
-                    <td className="py-1.5 pr-2 text-muted-foreground">Every {Math.round((t.intervalSeconds ?? 0) / 60)} min</td>
-                    <td className="py-1.5">
+                    <td className="px-2 py-1.5 text-muted-foreground">{formatLastRun(t.lastRunAt)}</td>
+                    <td className="px-2 py-1.5 text-muted-foreground">Every {Math.round((t.intervalSeconds ?? 0) / 60)} min</td>
+                    <td className="px-2 py-1.5">
                       <div className="flex items-center gap-1">
                         <Button
                           variant="ghost"
@@ -419,7 +418,7 @@ function SyntheticResults() {
                           onClick={() => togglePauseMutation.mutate({testId: t.id, active: !t.active})}
                           title={t.active ? 'Pause' : 'Resume'}
                         >
-                          <Pause className={cn('h-3.5 w-3.5', !t.active && 'text-amber-500')} />
+                          <Pause className={cn('h-3.5 w-3.5', !t.active && 'text-warning-fg')} />
                         </Button>
                         <Button
                           variant="ghost"
@@ -435,61 +434,65 @@ function SyntheticResults() {
                     </td>
                   </tr>
                 ))}
-                {filteredTests.length === 0 && (
-                  <tr>
-                    <td colSpan={9} className="py-6 text-center text-muted-foreground">
-                      {tests.length === 0
-                        ? 'No synthetic tests configured. Click "New Test" to create one.'
-                        : 'No tests match your filters.'}
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
+            {filteredTests.length === 0 && (
+              <div className="py-4">
+                <EmptyState
+                  icon={tests.length === 0 ? FlaskConical : Search}
+                  title={tests.length === 0 ? 'No synthetic tests yet' : 'No tests match your filters'}
+                  description={
+                    tests.length === 0
+                      ? 'Create a synthetic test to monitor uptime and response times from your probes.'
+                      : 'Try adjusting your search or filters.'
+                  }
+                />
+              </div>
+            )}
           </div>
-        </CardContent>
-      </Card>
+      </SectionCard>
 
-      <Card>
-        <CardHeader className="py-2 px-3"><CardTitle className="text-sm">Recent Results</CardTitle></CardHeader>
-        <CardContent className="px-3 pb-3 pt-0">
+      <SectionCard title="Recent results" icon={FlaskConical} iconTone="muted" flushBody>
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="pb-1.5 pr-2 font-medium">Test Name</th>
-                  <th className="pb-1.5 pr-2 font-medium">Type</th>
-                  <th className="pb-1.5 pr-2 font-medium">Status</th>
-                  <th className="pb-1.5 pr-2 font-medium">Duration</th>
-                  <th className="pb-1.5 pr-2 font-medium">Probe</th>
-                  <th className="pb-1.5 font-medium">Time</th>
+                <tr className="border-b bg-muted/40 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                  <th className="px-4 py-2 font-medium">Test Name</th>
+                  <th className="px-4 py-2 font-medium">Type</th>
+                  <th className="px-4 py-2 font-medium">Status</th>
+                  <th className="px-4 py-2 font-medium">Duration</th>
+                  <th className="px-4 py-2 font-medium">Probe</th>
+                  <th className="px-4 py-2 font-medium">Time</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-border/40">
                 {results.slice(0, 50).map((r) => (
-                  <tr key={r.resultId} className="border-b last:border-0 hover:bg-muted/30">
-                    <td className="py-1.5 pr-2 font-medium">{r.testName}</td>
-                    <td className="py-1.5 pr-2"><Badge variant="outline" className="text-[10px]">{r.testType}</Badge></td>
-                    <td className="py-1.5 pr-2">
-                      <Badge variant="outline" className={cn('text-[10px]', resultStatusColors[r.status] || '')}>
+                  <tr key={r.resultId} className="transition-colors hover:bg-accent/40">
+                    <td className="px-4 py-1.5 font-medium">{r.testName}</td>
+                    <td className="px-4 py-1.5"><Badge variant="neutral" size="sm" className="uppercase">{r.testType}</Badge></td>
+                    <td className="px-4 py-1.5">
+                      <Badge variant={resultStatusVariant(r.status)} size="sm">
                         {r.status}
                       </Badge>
                     </td>
-                    <td className="py-1.5 pr-2">{r.durationMs}ms</td>
-                    <td className="py-1.5 pr-2">{r.probeDc}</td>
-                    <td className="py-1.5 text-muted-foreground">{r.timestamp}</td>
+                    <td className="px-4 py-1.5 tabular-nums">{r.durationMs}ms</td>
+                    <td className="px-4 py-1.5">{r.probeDc}</td>
+                    <td className="px-4 py-1.5 tabular-nums text-muted-foreground">{r.timestamp}</td>
                   </tr>
                 ))}
-                {results.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="py-6 text-center text-muted-foreground">No synthetic test results</td>
-                  </tr>
-                )}
               </tbody>
             </table>
+            {results.length === 0 && (
+              <div className="py-4">
+                <EmptyState
+                  icon={FlaskConical}
+                  title="No synthetic test results"
+                  description="Results will appear here once your tests run."
+                />
+              </div>
+            )}
           </div>
-        </CardContent>
-      </Card>
+      </SectionCard>
 
       {/* Delete confirmation dialog */}
       <AlertDialog open={deleteConfirm !== null} onOpenChange={() => setDeleteConfirm(null)}>

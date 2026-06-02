@@ -21,6 +21,9 @@ import {formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
+import {StatCard} from '@/components/ui/stat-card'
+import {StatusDot} from '@/components/ui/status-dot'
+import {EmptyState} from '@/components/ui/empty-state'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {
@@ -71,6 +74,16 @@ type VisibleChartTooltipEntry = ChartTooltipEntry & { value: number }
 
 const CONTAINER_VIEW_MODE_KEY = 'moneat.host-containers.viewMode'
 const BYTES_PER_GB = 1024 * 1024 * 1024
+
+// Categorical chart colors from the shared palette (style guide chart-1..10).
+const CHART_CPU = 'hsl(var(--chart-1))'
+const CHART_MEM = 'hsl(var(--chart-2))'
+const CHART_DISK = 'hsl(var(--chart-3))'
+const CHART_LOAD_1 = 'hsl(var(--chart-4))'
+const CHART_LOAD_5 = 'hsl(var(--chart-5))'
+const CHART_LOAD_15 = 'hsl(var(--chart-6))'
+const CHART_NET_RECV = 'hsl(var(--chart-2))'
+const CHART_NET_SENT = 'hsl(var(--chart-3))'
 
 interface HostMonitoringLimitState {
   kind: HostMonitoringLimitKind
@@ -142,10 +155,10 @@ function formatPercent(value: number | undefined): string {
 
 function getPercentColor(value: number | undefined): string {
   if (value === undefined) return 'text-muted-foreground'
-  if (value >= 90) return 'text-red-500'
-  if (value >= 75) return 'text-orange-500'
-  if (value >= 50) return 'text-yellow-500'
-  return 'text-emerald-500'
+  if (value >= 90) return 'text-danger-fg'
+  if (value >= 75) return 'text-warning-fg'
+  if (value >= 50) return 'text-info-fg'
+  return 'text-success-fg'
 }
 
 function getHostMonitoringLimitState(usage: BillingUsage | undefined): HostMonitoringLimitState | null {
@@ -239,75 +252,21 @@ function ChartTooltip({
   )
 }
 
-function Skeleton({className}: {className?: string}) {
-  return <div className={`animate-pulse rounded-md bg-muted ${className ?? ''}`} />
-}
-
-function MetricCard({
-  title,
-  value,
-  subtitle,
-  icon: Icon,
-  iconColor,
-  gradientFrom,
-  gradientTo,
-  borderColor,
-  loading,
-}: {
-  title: string
-  value: string
-  subtitle: string
-  icon: React.ComponentType<{ className?: string }>
-  iconColor: string
-  gradientFrom: string
-  gradientTo: string
-  borderColor: string
-  loading?: boolean
-}) {
-  return (
-    <Card className={`relative overflow-hidden bg-gradient-to-br ${gradientFrom} ${gradientTo} ${borderColor}`}>
-      <CardContent className="pt-2.5 pb-2 px-3">
-        <div className="flex items-center justify-between gap-1.5">
-          <div className="space-y-0.5 min-w-0">
-            <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider">
-              {title}
-            </p>
-            {loading ? (
-              <>
-                <Skeleton className="h-5 w-14" />
-                <Skeleton className="h-2 w-20 mt-0.5" />
-              </>
-            ) : (
-              <>
-                <p className="text-lg font-bold tracking-tight">{value}</p>
-                <p className="text-[10px] text-muted-foreground truncate">{subtitle}</p>
-              </>
-            )}
-          </div>
-          <div className={`flex items-center justify-center h-7 w-7 rounded-md shrink-0 ${iconColor} bg-opacity-15`}>
-            <Icon className="h-3.5 w-3.5" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
 function HostMonitoringLimitBanner({state}: {state: HostMonitoringLimitState}) {
   return (
-    <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+    <div className="rounded-lg border border-warning-border bg-warning-bg px-4 py-3">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="flex gap-3">
-          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-amber-500/15">
-            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-warning-bg">
+            <AlertTriangle className="h-4 w-4 text-warning-fg" />
           </div>
           <div className="space-y-1">
-            <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">{state.title}</p>
-            <p className="text-sm text-amber-900/80 dark:text-amber-100/80">{state.message}</p>
+            <p className="text-sm font-semibold text-warning-fg">{state.title}</p>
+            <p className="text-sm text-warning-fg/90">{state.message}</p>
             <p className="text-xs text-muted-foreground">{state.detail}</p>
           </div>
         </div>
-        <Button asChild size="sm" variant="outline" className="shrink-0 border-amber-500/40">
+        <Button asChild size="sm" variant="outline" className="shrink-0 border-warning-border">
           <Link to="/settings" search={{tab: 'billing'}}>
             View Billing
           </Link>
@@ -497,8 +456,8 @@ function HostDetailPage() {
               <div
                 className={`flex items-center justify-center h-10 w-10 rounded-lg shrink-0 ${
                   online
-                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                    : 'bg-red-500/10 text-red-600 dark:text-red-400'
+                    ? 'bg-success-bg text-success-fg'
+                    : 'bg-danger-bg text-danger-fg'
                 }`}
               >
                 <Server className="h-5 w-5" />
@@ -506,19 +465,8 @@ function HostDetailPage() {
               <div className="min-w-0 flex-1">
                 <h1 className="text-xl font-bold tracking-tight truncate">{host.hostname}</h1>
                 <div className="flex items-center gap-2.5 text-xs text-muted-foreground mt-0.5 flex-wrap">
-                  <Badge
-                    variant="secondary"
-                    className={`text-xs ${
-                      online
-                        ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
-                        : 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/20'
-                    }`}
-                  >
-                    <div
-                      className={`h-1.5 w-1.5 rounded-full mr-1.5 ${
-                        online ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
-                      }`}
-                    />
+                  <Badge variant={online ? 'success' : 'danger'} size="sm" className="gap-1.5">
+                    <StatusDot tone={online ? 'success' : 'danger'} size="sm" pulse={online} />
                     {online ? 'Online' : 'Offline'}
                   </Badge>
                   {host.os && (
@@ -534,10 +482,7 @@ function HostDetailPage() {
                     </span>
                   )}
                   {host.agentVersion && (
-                    <Badge
-                      variant="outline"
-                      className="text-[10px] font-medium font-mono border-violet-500/30 text-violet-600 dark:text-violet-400 bg-violet-500/5"
-                    >
+                    <Badge variant="neutral" size="sm" className="font-mono">
                       Agent v{host.agentVersion}
                     </Badge>
                   )}
@@ -624,50 +569,34 @@ function HostDetailPage() {
 
           <TabsContent value="overview" className="space-y-4">
             {/* Metric Summary Cards */}
-            <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
-              <MetricCard
-                title="CPU Usage"
-                value={formatPercent(latestPoint?.cpu_percent)}
-                subtitle={`${host.cpuCores} cores · ${host.processor || 'Unknown'}`}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatCard
+                label="CPU Usage"
+                tone="info"
                 icon={Cpu}
-                iconColor="text-blue-500"
-                gradientFrom="from-blue-500/5"
-                gradientTo="to-cyan-500/5"
-                borderColor="border-blue-500/10"
-                loading={metricsLoading}
+                value={metricsLoading ? '—' : formatPercent(latestPoint?.cpu_percent)}
+                subtitle={`${host.cpuCores} cores · ${host.processor || 'Unknown'}`}
               />
-              <MetricCard
-                title="Memory"
-                value={formatPercent(latestPoint?.mem_percent)}
-                subtitle={`Total: ${formatBytesKb(host.memoryTotalKb)}`}
+              <StatCard
+                label="Memory"
+                tone="accent"
                 icon={MemoryStick}
-                iconColor="text-violet-500"
-                gradientFrom="from-violet-500/5"
-                gradientTo="to-purple-500/5"
-                borderColor="border-violet-500/10"
-                loading={metricsLoading}
+                value={metricsLoading ? '—' : formatPercent(latestPoint?.mem_percent)}
+                subtitle={`Total: ${formatBytesKb(host.memoryTotalKb)}`}
               />
-              <MetricCard
-                title="Disk Usage"
-                value={formatPercent(latestPoint?.disk_percent)}
-                subtitle="Disk utilization"
+              <StatCard
+                label="Disk Usage"
+                tone="warning"
                 icon={HardDrive}
-                iconColor="text-amber-500"
-                gradientFrom="from-amber-500/5"
-                gradientTo="to-orange-500/5"
-                borderColor="border-amber-500/10"
-                loading={metricsLoading}
+                value={metricsLoading ? '—' : formatPercent(latestPoint?.disk_percent)}
+                subtitle="Disk utilization"
               />
-              <MetricCard
-                title="Load Average"
-                value={latestPoint?.load_1 ? latestPoint.load_1.toFixed(2) : 'N/A'}
-                subtitle="1 min load average"
+              <StatCard
+                label="Load Average"
+                tone="success"
                 icon={Activity}
-                iconColor="text-emerald-500"
-                gradientFrom="from-emerald-500/5"
-                gradientTo="to-teal-500/5"
-                borderColor="border-emerald-500/10"
-                loading={metricsLoading}
+                value={metricsLoading ? '—' : (latestPoint?.load_1 ? latestPoint.load_1.toFixed(2) : 'N/A')}
+                subtitle="1 min load average"
               />
             </div>
 
@@ -677,8 +606,8 @@ function HostDetailPage() {
               <Card>
                 <CardHeader className="py-2 px-3 pb-0.5">
                   <div className="flex items-center gap-1.5">
-                    <div className="flex items-center justify-center h-5 w-5 rounded bg-blue-500/10 shrink-0">
-                      <Cpu className="h-2.5 w-2.5 text-blue-500" />
+                    <div className="flex items-center justify-center h-5 w-5 rounded bg-muted shrink-0">
+                      <Cpu className="h-2.5 w-2.5 text-chart-1" />
                     </div>
                     <div className="min-w-0">
                       <CardTitle className="text-xs">CPU Usage</CardTitle>
@@ -694,8 +623,8 @@ function HostDetailPage() {
                       <AreaChart data={cpuData}>
                         <defs>
                           <linearGradient id="cpuGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.25} />
-                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                            <stop offset="5%" stopColor={CHART_CPU} stopOpacity={0.25} />
+                            <stop offset="95%" stopColor={CHART_CPU} stopOpacity={0} />
                           </linearGradient>
                         </defs>
                         <CartesianGrid {...commonGrid} />
@@ -712,7 +641,7 @@ function HostDetailPage() {
                         <Area
                           type="monotone"
                           dataKey="CPU"
-                          stroke="#3b82f6"
+                          stroke={CHART_CPU}
                           strokeWidth={2}
                           connectNulls
                           fillOpacity={1}
@@ -730,8 +659,8 @@ function HostDetailPage() {
               <Card>
                 <CardHeader className="py-2 px-3 pb-0.5">
                   <div className="flex items-center gap-1.5">
-                    <div className="flex items-center justify-center h-5 w-5 rounded bg-violet-500/10 shrink-0">
-                      <MemoryStick className="h-2.5 w-2.5 text-violet-500" />
+                    <div className="flex items-center justify-center h-5 w-5 rounded bg-muted shrink-0">
+                      <MemoryStick className="h-2.5 w-2.5 text-chart-2" />
                     </div>
                     <div className="min-w-0">
                       <CardTitle className="text-xs">Memory Usage</CardTitle>
@@ -747,8 +676,8 @@ function HostDetailPage() {
                       <AreaChart data={memoryData}>
                         <defs>
                           <linearGradient id="memGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.25} />
-                            <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                            <stop offset="5%" stopColor={CHART_MEM} stopOpacity={0.25} />
+                            <stop offset="95%" stopColor={CHART_MEM} stopOpacity={0} />
                           </linearGradient>
                         </defs>
                         <CartesianGrid {...commonGrid} />
@@ -765,7 +694,7 @@ function HostDetailPage() {
                         <Area
                           type="monotone"
                           dataKey="Memory"
-                          stroke="#8b5cf6"
+                          stroke={CHART_MEM}
                           strokeWidth={2}
                           connectNulls
                           fillOpacity={1}
@@ -783,8 +712,8 @@ function HostDetailPage() {
               <Card>
                 <CardHeader className="py-2 px-3 pb-0.5">
                   <div className="flex items-center gap-1.5">
-                    <div className="flex items-center justify-center h-5 w-5 rounded bg-amber-500/10 shrink-0">
-                      <HardDrive className="h-2.5 w-2.5 text-amber-500" />
+                    <div className="flex items-center justify-center h-5 w-5 rounded bg-muted shrink-0">
+                      <HardDrive className="h-2.5 w-2.5 text-chart-3" />
                     </div>
                     <div className="min-w-0">
                       <CardTitle className="text-xs">Disk Usage</CardTitle>
@@ -800,8 +729,8 @@ function HostDetailPage() {
                       <AreaChart data={diskData}>
                         <defs>
                           <linearGradient id="diskGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.25} />
-                            <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                            <stop offset="5%" stopColor={CHART_DISK} stopOpacity={0.25} />
+                            <stop offset="95%" stopColor={CHART_DISK} stopOpacity={0} />
                           </linearGradient>
                         </defs>
                         <CartesianGrid {...commonGrid} />
@@ -818,7 +747,7 @@ function HostDetailPage() {
                         <Area
                           type="monotone"
                           dataKey="Disk"
-                          stroke="#f59e0b"
+                          stroke={CHART_DISK}
                           strokeWidth={2}
                           connectNulls
                           fillOpacity={1}
@@ -836,8 +765,8 @@ function HostDetailPage() {
               <Card>
                 <CardHeader className="py-2 px-3 pb-0.5">
                   <div className="flex items-center gap-1.5">
-                    <div className="flex items-center justify-center h-5 w-5 rounded bg-emerald-500/10 shrink-0">
-                      <Activity className="h-2.5 w-2.5 text-emerald-500" />
+                    <div className="flex items-center justify-center h-5 w-5 rounded bg-muted shrink-0">
+                      <Activity className="h-2.5 w-2.5 text-chart-4" />
                     </div>
                     <div className="min-w-0">
                       <CardTitle className="text-xs">Load Average</CardTitle>
@@ -870,7 +799,7 @@ function HostDetailPage() {
                         <Line
                           type="monotone"
                           dataKey="1 min"
-                          stroke="#ef4444"
+                          stroke={CHART_LOAD_1}
                           strokeWidth={2}
                           connectNulls
                           dot={false}
@@ -879,7 +808,7 @@ function HostDetailPage() {
                         <Line
                           type="monotone"
                           dataKey="5 min"
-                          stroke="#f59e0b"
+                          stroke={CHART_LOAD_5}
                           strokeWidth={2}
                           connectNulls
                           dot={false}
@@ -888,7 +817,7 @@ function HostDetailPage() {
                         <Line
                           type="monotone"
                           dataKey="15 min"
-                          stroke="#10b981"
+                          stroke={CHART_LOAD_15}
                           strokeWidth={2}
                           connectNulls
                           dot={false}
@@ -917,14 +846,12 @@ function HostDetailPage() {
                           key={container.containerId}
                           onClick={() => setSelectedContainer(container)}
                           className={`relative overflow-hidden cursor-pointer hover:border-primary/50 transition-colors ${
-                            isRunning ? 'border-emerald-500/10' : 'border-muted'
+                            isRunning ? 'border-success-border' : 'border-muted'
                           }`}
                         >
                           <div
                             className={`absolute top-0 left-0 right-0 h-0.5 ${
-                              isRunning
-                                ? 'bg-gradient-to-r from-emerald-500 to-teal-500'
-                                : 'bg-gradient-to-r from-zinc-400 to-zinc-500'
+                              isRunning ? 'bg-success-solid' : 'bg-muted-foreground/40'
                             }`}
                           />
                           <CardHeader className="pb-3 pt-5">
@@ -933,7 +860,7 @@ function HostDetailPage() {
                                 <div
                                   className={`flex items-center justify-center h-8 w-8 rounded-lg shrink-0 ${
                                     isRunning
-                                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                      ? 'bg-success-bg text-success-fg'
                                       : 'bg-muted text-muted-foreground'
                                   }`}
                                 >
@@ -944,14 +871,7 @@ function HostDetailPage() {
                                   <p className="text-xs text-muted-foreground truncate">{container.image}</p>
                                 </div>
                               </div>
-                              <Badge
-                                variant="secondary"
-                                className={`text-xs shrink-0 ${
-                                  isRunning
-                                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
-                                    : 'bg-zinc-500/15 text-zinc-700 dark:text-zinc-300 border-zinc-500/20'
-                                }`}
-                              >
+                              <Badge variant={isRunning ? 'success' : 'neutral'} size="sm" className="shrink-0">
                                 {container.state}
                               </Badge>
                             </div>
@@ -960,7 +880,7 @@ function HostDetailPage() {
                             <div className="grid grid-cols-2 gap-4">
                               <div className="space-y-1">
                                 <div className="flex items-center gap-1.5">
-                                  <Cpu className="h-3 w-3 text-blue-500" />
+                                  <Cpu className="h-3 w-3 text-chart-1" />
                                   <span className="text-xs text-muted-foreground">CPU</span>
                                 </div>
                                 <p className={`text-lg font-semibold ${getPercentColor(container.cpuPercent)}`}>
@@ -969,7 +889,7 @@ function HostDetailPage() {
                               </div>
                               <div className="space-y-1">
                                 <div className="flex items-center gap-1.5">
-                                  <MemoryStick className="h-3 w-3 text-violet-500" />
+                                  <MemoryStick className="h-3 w-3 text-chart-2" />
                                   <span className="text-xs text-muted-foreground">Memory</span>
                                 </div>
                                 <p className="text-lg font-semibold">
@@ -981,7 +901,7 @@ function HostDetailPage() {
                               </div>
                               <div className="space-y-1">
                                 <div className="flex items-center gap-1.5">
-                                  <Network className="h-3 w-3 text-sky-500" />
+                                  <Network className="h-3 w-3 text-chart-3" />
                                   <span className="text-xs text-muted-foreground">Net In</span>
                                 </div>
                                 <p className="text-lg font-semibold">
@@ -990,7 +910,7 @@ function HostDetailPage() {
                               </div>
                               <div className="space-y-1">
                                 <div className="flex items-center gap-1.5">
-                                  <Network className="h-3 w-3 text-indigo-500 rotate-180" />
+                                  <Network className="h-3 w-3 text-chart-4 rotate-180" />
                                   <span className="text-xs text-muted-foreground">Net Out</span>
                                 </div>
                                 <p className="text-lg font-semibold">
@@ -1031,7 +951,7 @@ function HostDetailPage() {
                                     <div
                                       className={`flex items-center justify-center h-6 w-6 rounded shrink-0 ${
                                         isRunning
-                                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                          ? 'bg-success-bg text-success-fg'
                                           : 'bg-muted text-muted-foreground'
                                       }`}
                                     >
@@ -1044,14 +964,7 @@ function HostDetailPage() {
                                   </div>
                                 </td>
                                 <td className="py-3 px-4">
-                                  <Badge
-                                    variant="secondary"
-                                    className={`text-xs ${
-                                      isRunning
-                                        ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
-                                        : 'bg-zinc-500/15 text-zinc-700 dark:text-zinc-300 border-zinc-500/20'
-                                    }`}
-                                  >
+                                  <Badge variant={isRunning ? 'success' : 'neutral'} size="sm">
                                     {container.state}
                                   </Badge>
                                 </td>
@@ -1080,36 +993,15 @@ function HostDetailPage() {
                 )}
               </>
             ) : (
-              <Card className="border-dashed bg-gradient-to-br from-cyan-500/5 via-background to-blue-500/5">
-                <CardContent className="py-12">
-                  <div className="mx-auto max-w-2xl text-center">
-                    <div
-                      className={[
-                        'mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl',
-                        hostMonitoringLimitState
-                          ? 'bg-amber-500/10 border border-amber-500/20'
-                          : 'bg-cyan-500/10 border border-cyan-500/20',
-                      ].join(' ')}
-                    >
-                      {hostMonitoringLimitState ? (
-                        <AlertTriangle className="h-8 w-8 text-amber-600 dark:text-amber-400" />
-                      ) : (
-                        <Box className="h-8 w-8 text-cyan-600 dark:text-cyan-400" />
-                      )}
-                    </div>
-                    <h3 className="text-xl font-semibold mb-2">
-                      {hostMonitoringLimitState
-                        ? hostMonitoringLimitState.title
-                        : 'No containers detected'}
-                    </h3>
-                    <p className="text-muted-foreground text-sm mb-6">
-                      {hostMonitoringLimitState
-                        ? hostMonitoringLimitState.emptyMessage
-                        : 'Enable container monitoring by mounting the Docker socket when deploying the agent.'}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+              <EmptyState
+                icon={hostMonitoringLimitState ? AlertTriangle : Box}
+                title={hostMonitoringLimitState ? hostMonitoringLimitState.title : 'No containers detected'}
+                description={
+                  hostMonitoringLimitState
+                    ? hostMonitoringLimitState.emptyMessage
+                    : 'Enable container monitoring by mounting the Docker socket when deploying the agent.'
+                }
+              />
             )}
           </TabsContent>
 
@@ -1117,8 +1009,8 @@ function HostDetailPage() {
             <Card>
               <CardHeader className="py-2 px-3 pb-0.5">
                 <div className="flex items-center gap-1.5">
-                  <div className="flex items-center justify-center h-5 w-5 rounded bg-indigo-500/10 shrink-0">
-                    <Network className="h-2.5 w-2.5 text-indigo-500" />
+                  <div className="flex items-center justify-center h-5 w-5 rounded bg-muted shrink-0">
+                    <Network className="h-2.5 w-2.5 text-chart-2" />
                   </div>
                   <div className="min-w-0">
                     <CardTitle className="text-xs">Network Throughput</CardTitle>
@@ -1134,12 +1026,12 @@ function HostDetailPage() {
                     <AreaChart data={networkData}>
                       <defs>
                         <linearGradient id="netRecvGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.2} />
-                          <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                          <stop offset="5%" stopColor={CHART_NET_RECV} stopOpacity={0.2} />
+                          <stop offset="95%" stopColor={CHART_NET_RECV} stopOpacity={0} />
                         </linearGradient>
                         <linearGradient id="netSentGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.2} />
-                          <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                          <stop offset="5%" stopColor={CHART_NET_SENT} stopOpacity={0.2} />
+                          <stop offset="95%" stopColor={CHART_NET_SENT} stopOpacity={0} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid {...commonGrid} />
@@ -1165,7 +1057,7 @@ function HostDetailPage() {
                       <Area
                         type="monotone"
                         dataKey="Received"
-                        stroke="#8b5cf6"
+                        stroke={CHART_NET_RECV}
                         strokeWidth={2}
                         connectNulls
                         fillOpacity={1}
@@ -1174,7 +1066,7 @@ function HostDetailPage() {
                       <Area
                         type="monotone"
                         dataKey="Sent"
-                        stroke="#f59e0b"
+                        stroke={CHART_NET_SENT}
                         strokeWidth={2}
                         connectNulls
                         fillOpacity={1}
@@ -1207,7 +1099,7 @@ function HostDetailPage() {
                   <div className="flex items-center gap-3">
                     <div className={`flex items-center justify-center h-10 w-10 rounded-xl ${
                       selectedContainer.state === 'running'
-                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                        ? 'bg-success-bg text-success-fg'
                         : 'bg-muted text-muted-foreground'
                     }`}>
                       <Box className="h-5 w-5" />
@@ -1227,7 +1119,7 @@ function HostDetailPage() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                      <div className="p-3 border rounded-lg bg-card/50">
                         <div className="text-xs text-muted-foreground mb-1">Status</div>
-                        <Badge variant="secondary" className={selectedContainer.state === 'running' ? 'text-emerald-500 bg-emerald-500/10' : ''}>
+                        <Badge variant={selectedContainer.state === 'running' ? 'success' : 'neutral'} size="sm">
                           {selectedContainer.state}
                         </Badge>
                      </div>
@@ -1284,7 +1176,7 @@ function EmptyChart({
       style={{height}}
     >
       {limitState ? (
-        <AlertTriangle className="h-5 w-5 text-amber-500 opacity-80" />
+        <AlertTriangle className="h-5 w-5 text-warning-fg opacity-80" />
       ) : (
         <Activity className="h-5 w-5 opacity-30" />
       )}

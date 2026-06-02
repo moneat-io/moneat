@@ -395,10 +395,10 @@ export function SsoTab({
       </Card>
 
       {formData.requireSso && (
-        <Card className="border-yellow-500/50 bg-yellow-500/5">
+        <Card className="border-warning-border bg-warning-bg">
           <CardContent className="py-3 px-4">
             <div className="flex gap-2">
-              <AlertCircle className="h-4 w-4 text-yellow-500 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="h-4 w-4 text-warning-fg flex-shrink-0 mt-0.5" />
               <div className="space-y-0.5">
                 <p className="text-sm font-medium">SSO Enforcement Enabled</p>
                 <p className="text-xs text-muted-foreground">

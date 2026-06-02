@@ -17,8 +17,9 @@
 import {useMemo, useState} from 'react'
 import {createFileRoute} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
+import {AlertTriangle} from 'lucide-react'
 import {api, formatErrorForLogging, type SignalResponse, type TriageRequest} from '@/lib/api'
-import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import {SectionCard} from '@/components/ui/section-card'
 import {Sheet, SheetContent, SheetHeader, SheetTitle} from '@/components/ui/sheet'
 import {useToast} from '@/hooks/useToast'
 import {SignalFilterBar, type SignalFilters} from '@/components/security/SignalFilterBar'
@@ -78,14 +79,15 @@ function SignalsTab() {
       ) : isError ? (
         <SecurityError title="Couldn’t load signals" error={error} />
       ) : (
-        <Card>
-          <CardHeader className="px-2.5 py-1.5">
-            <CardTitle className="text-xs">Signals ({data?.total_count ?? signals.length})</CardTitle>
-          </CardHeader>
-          <CardContent className="p-2.5 pt-0">
-            <SignalsTable signals={signals} selectedId={selected?.id} onSelect={setSelected} />
-          </CardContent>
-        </Card>
+        <SectionCard
+          title="Signals"
+          icon={AlertTriangle}
+          iconTone="warning"
+          count={data?.total_count ?? signals.length}
+          flushBody
+        >
+          <SignalsTable signals={signals} selectedId={selected?.id} onSelect={setSelected} />
+        </SectionCard>
       )}
 
       <Sheet open={selected != null} onOpenChange={(open) => !open && setSelected(null)}>

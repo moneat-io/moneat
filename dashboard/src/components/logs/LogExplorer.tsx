@@ -621,13 +621,13 @@ export function LogExplorer({
   const showEmptyState = !isInitialLoadingState && logs.length === 0 && !query && facetFilters.length === 0 && !hasCustomLevelFilter && (totalCount === 0 || totalCount === null)
 
   return (
-    <div className={cn("flex flex-col overflow-hidden bg-gradient-to-br from-background via-background to-blue-500/[0.03]", className)}>
+    <div className={cn("flex flex-col overflow-hidden bg-gradient-to-br from-background via-background to-[hsl(var(--primary)/0.03)]", className)}>
       {/* Header bar */}
       <div className="shrink-0 border-b bg-background/95 backdrop-blur-sm z-20">
           <div className="flex items-center gap-2 px-2 py-1.5 sm:px-3 lg:px-4">
             <div className="flex items-center gap-2 shrink-0">
-              <div className="rounded-md bg-gradient-to-br from-blue-500/15 to-violet-500/15 p-1 ring-1 ring-blue-500/20">
-                <TerminalSquare className="h-3.5 w-3.5 text-blue-500" />
+              <div className="rounded-md bg-gradient-to-br from-primary/15 to-[hsl(var(--chart-3)/0.15)] p-1 ring-1 ring-primary/20">
+                <TerminalSquare className="h-3.5 w-3.5 text-primary" />
               </div>
               <h2 className="text-xs font-semibold leading-tight hidden sm:block">Log Explorer</h2>
             </div>
@@ -874,7 +874,7 @@ export function LogExplorer({
                     {(isLoadingMore || isFetching) && logPage?.hasMore ? (
                       <div className="flex items-center justify-center gap-2 py-2">
                         <div className="h-1 w-full max-w-xs overflow-hidden rounded-full bg-muted">
-                          <div className="h-full w-1/2 animate-pulse bg-blue-500" style={{animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite'}} />
+                          <div className="h-full w-1/2 animate-pulse bg-primary" style={{animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite'}} />
                         </div>
                       </div>
                     ) : logPage?.hasMore ? (

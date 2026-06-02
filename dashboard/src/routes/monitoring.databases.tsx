@@ -10,7 +10,8 @@ import {createFileRoute} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {Badge} from '@/components/ui/badge'
-import {Card, CardContent} from '@/components/ui/card'
+import {SectionCard} from '@/components/ui/section-card'
+import {EmptyState} from '@/components/ui/empty-state'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Input} from '@/components/ui/input'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
@@ -61,22 +62,16 @@ function DatabaseMonitoring() {
           </div>
         </div>
       ) : queries.length === 0 ? (
-        <Card className="border-dashed">
-          <CardContent className="py-16 text-center">
-            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500/10 to-teal-500/10">
-              <Database className="h-8 w-8 text-emerald-500" />
-            </div>
-            <h3 className="text-lg font-semibold mb-2">No queries recorded yet</h3>
-            <p className="text-muted-foreground max-w-sm mx-auto">
-              Database query data will appear here once collected by the agent.
-            </p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={Database}
+          title="No queries recorded yet"
+          description="Database query data will appear here once collected by the agent."
+        />
       ) : (
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5 text-sm">
-              <Database className="h-3.5 w-3.5 text-emerald-500" />
+              <Database className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="font-semibold tabular-nums">{queries.length}</span>
               <span className="text-muted-foreground text-xs">queries</span>
             </div>
@@ -93,13 +88,13 @@ function DatabaseMonitoring() {
           </div>
 
           {filtered.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <p className="font-medium">No queries match your search</p>
-              <p className="text-sm mt-1">Try adjusting your search query.</p>
-            </div>
+            <EmptyState
+              icon={Search}
+              title="No queries match your search"
+              description="Try adjusting your search query."
+            />
           ) : (
-            <Card className="overflow-hidden border-border/60">
-              <CardContent className="p-0">
+            <SectionCard title="Queries" icon={Database} iconTone="muted" count={filtered.length} flushBody>
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent bg-muted/30">
@@ -143,10 +138,10 @@ function DatabaseMonitoring() {
                         </TableCell>
                         <TableCell className="text-sm">{q.dbHost}</TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="text-xs font-normal">{q.dbName}</Badge>
+                          <Badge variant="neutral" size="sm">{q.dbName}</Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="text-xs tabular-nums font-mono">
+                          <Badge variant="neutral" size="sm" className="tabular-nums font-mono">
                             {((q.durationNs ?? 0) / 1e6).toFixed(1)}ms
                           </Badge>
                         </TableCell>
@@ -155,8 +150,7 @@ function DatabaseMonitoring() {
                     ))}
                   </TableBody>
                 </Table>
-              </CardContent>
-            </Card>
+            </SectionCard>
           )}
         </div>
       )}

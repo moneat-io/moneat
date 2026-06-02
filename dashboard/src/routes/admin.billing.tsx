@@ -763,7 +763,7 @@ function AdminBillingPage() {
                       <TableCell>{formatInterval(plan.tier.monitorIntervalSeconds)}</TableCell>
                       <TableCell>
                         {plan.tier.paygEnabled ? (
-                          <Badge variant="outline" className="text-emerald-600 border-emerald-300">
+                          <Badge variant="success">
                             Enabled
                           </Badge>
                         ) : (
@@ -825,7 +825,7 @@ function AdminBillingPage() {
             {/* Event Limits Section Header */}
             <div className="bg-muted/30 border border-border rounded-md p-3">
               <div className="flex items-start gap-2">
-                <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                <Info className="h-4 w-4 text-info-fg mt-0.5 flex-shrink-0" />
                 <div className="text-xs text-muted-foreground">
                   <strong>Event limits are for internal abuse prevention only.</strong> Stripe metering currently bills non-LLM/non-log overage in unit-based streams.
                   Keep these limits aligned with your Stripe overage policy (use -1 for unlimited replay sessions).
@@ -1653,9 +1653,9 @@ function AdminBillingPage() {
                 <p><strong>Overage:</strong> ${(createForm.overageRateCentsPerGb / 100).toFixed(2)}/GB logs, ${(createForm.errorOverageRateCentsPer1k / 100).toFixed(2)}/1K errors, ${(createForm.replayOverageRateCentsPerGb / 100).toFixed(2)}/GB replays, ${(createForm.llmOverageRateCentsPer1k / 100).toFixed(2)}/1K LLM</p>
                 <p><strong>On-Call:</strong> {createForm.oncallEnabled ? `$${(createForm.oncallPerUserMonthlyCents / 100).toFixed(2)}/user/mo` : 'Disabled'}</p>
               </div>
-              <div className="flex items-start gap-2 rounded border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950 p-3">
-                <Info className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                <p className="text-sm text-amber-800 dark:text-amber-200">
+              <div className="flex items-start gap-2 rounded border border-warning-border bg-warning-bg p-3">
+                <Info className="h-4 w-4 text-warning-fg mt-0.5 shrink-0" />
+                <p className="text-sm text-warning-fg">
                   Existing subscribers will <strong>not</strong> be affected until you run a migration.
                 </p>
               </div>
@@ -1925,9 +1925,9 @@ function AdminBillingPage() {
 
             {/* Dry run result */}
             {dryRunResult && (
-              <div className="flex items-start gap-2 rounded border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950 p-3">
-                <Info className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
-                <p className="text-sm text-blue-800 dark:text-blue-200">
+              <div className="flex items-start gap-2 rounded border border-info-border bg-info-bg p-3">
+                <Info className="h-4 w-4 text-info-fg mt-0.5 shrink-0" />
+                <p className="text-sm text-info-fg">
                   Dry run result: <strong>{dryRunResult.affected} subscription(s)</strong> would be
                   migrated to v{dryRunResult.version}.
                 </p>
@@ -1970,7 +1970,7 @@ function AdminBillingPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                <AlertTriangle className="h-5 w-5 text-warning-fg" />
                 Confirm Migration
               </DialogTitle>
               <DialogDescription>
@@ -2327,9 +2327,9 @@ function ChangeSummary({current, form}: {current: BillingTierConfig; form: Creat
         {changes.map((c) => (
           <div key={c.field} className="text-sm flex items-center gap-2">
             <span className="text-muted-foreground w-36 shrink-0">{c.field}:</span>
-            <span className="text-red-600 dark:text-red-400 line-through">{c.from}</span>
+            <span className="text-danger-fg line-through">{c.from}</span>
             <span className="text-muted-foreground">&rarr;</span>
-            <span className="text-emerald-600 dark:text-emerald-400 font-medium">{c.to}</span>
+            <span className="text-success-fg font-medium">{c.to}</span>
           </div>
         ))}
       </div>
@@ -2349,11 +2349,11 @@ function PricingPreviewGrid({
       {cards.map((tier) => (
         <Card
           key={tier.tierName}
-          className={tier.highlight ? 'relative border-sky-500/50' : 'border-border/60'}
+          className={tier.highlight ? 'relative border-primary/50' : 'border-border/60'}
         >
           {tier.highlight && (
             <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-              <span className="inline-flex items-center rounded-full bg-gradient-to-r from-sky-500 to-cyan-400 px-3 py-1 text-[10px] font-semibold text-white">
+              <span className="inline-flex items-center rounded-full bg-primary px-3 py-1 text-[10px] font-semibold text-primary-foreground">
                 Most popular
               </span>
             </div>
@@ -2375,8 +2375,8 @@ function PricingPreviewGrid({
             <ul className="space-y-1.5">
               {tier.features.slice(0, 6).map((feature) => (
                 <li key={feature} className="flex items-start gap-2">
-                  <div className={`mt-0.5 rounded-full p-0.5 ${tier.highlight ? 'bg-sky-500/10' : 'bg-emerald-500/10'}`}>
-                    <Check className={`h-3 w-3 ${tier.highlight ? 'text-sky-500' : 'text-emerald-500'}`} />
+                  <div className={`mt-0.5 rounded-full p-0.5 ${tier.highlight ? 'bg-[hsl(var(--primary)/0.12)]' : 'bg-success-bg'}`}>
+                    <Check className={`h-3 w-3 ${tier.highlight ? 'text-primary' : 'text-success-fg'}`} />
                   </div>
                   <span className="text-xs leading-tight">{feature}</span>
                 </li>
@@ -2384,7 +2384,7 @@ function PricingPreviewGrid({
             </ul>
             <div className="pt-2 text-center">
               <Button
-                className={`w-full ${tier.highlight ? 'bg-sky-500 hover:bg-sky-400 text-white' : ''}`}
+                className="w-full"
                 variant={tier.highlight ? 'default' : 'outline'}
                 size="sm"
                 disabled

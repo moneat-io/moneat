@@ -7,8 +7,10 @@
 // (at your option) any later version.
 
 import {createFileRoute, redirect} from '@tanstack/react-router'
+import {Network} from 'lucide-react'
 import {api} from '@/lib/api'
 import {ServiceMap} from '@/components/apm/ServiceMap'
+import {PageHeader} from '@/components/ui/page-header'
 
 export const Route = createFileRoute('/monitoring/service-map')({
   beforeLoad: () => {
@@ -22,12 +24,11 @@ export const Route = createFileRoute('/monitoring/service-map')({
 function MonitoringServiceMapPage() {
   return (
     <div className="container mx-auto px-4 py-4 space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Service Map</h1>
-        <p className="text-muted-foreground text-sm mt-0.5">
-          Service dependency graph from trace telemetry
-        </p>
-      </div>
+      <PageHeader
+        icon={Network}
+        title="Service map"
+        description="Service dependency graph from trace telemetry"
+      />
       <ServiceMap />
     </div>
   )

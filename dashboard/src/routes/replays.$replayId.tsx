@@ -553,7 +553,7 @@ function ReplayDetailPage() {
         {/* Compact header bar */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
           <div className="flex items-center gap-2">
-            <Play className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />
+            <Play className="h-4 w-4 text-primary" />
             <span className="font-semibold text-base">
               {replay.user?.email || replay.user?.username || replay.user?.id || 'Anonymous'}
             </span>
@@ -583,7 +583,7 @@ function ReplayDetailPage() {
             {formatRelativeTime(replay.startedAt)}
           </span>
           <span className="inline-flex items-center gap-1.5 text-xs">
-            <span className="font-semibold text-indigo-600 dark:text-indigo-400">{formatDuration(durationMs)}</span>
+            <span className="font-semibold text-primary tabular-nums">{formatDuration(durationMs)}</span>
             <span className="text-muted-foreground">duration</span>
           </span>
         </div>
@@ -816,7 +816,7 @@ function ReplayDetailPage() {
             {replay.errorIds && replay.errorIds.length > 0 && (
               <div className="rounded-lg border bg-card p-3">
                 <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
-                  <AlertCircle className="h-3.5 w-3.5 text-red-500" />
+                  <AlertCircle className="h-3.5 w-3.5 text-danger-fg" />
                   Errors ({replay.errorIds.length})
                 </div>
                 <div className="space-y-1.5 max-h-[160px] overflow-auto">

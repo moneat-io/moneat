@@ -17,7 +17,7 @@
 import {useMemo, useState} from 'react'
 import {createFileRoute} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
-import {Plus} from 'lucide-react'
+import {ListFilter, Plus, ShieldCheck} from 'lucide-react'
 import {
   api,
   formatErrorForLogging,
@@ -25,7 +25,8 @@ import {
   type DetectionCoverageResponse,
   type DetectionRuleResponse,
 } from '@/lib/api'
-import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import {SectionCard} from '@/components/ui/section-card'
+import {EmptyState} from '@/components/ui/empty-state'
 import {Button} from '@/components/ui/button'
 import {Badge} from '@/components/ui/badge'
 import {Sheet, SheetContent, SheetHeader, SheetTitle} from '@/components/ui/sheet'
@@ -110,10 +111,10 @@ function DetectionsTab() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">Rules that turn matching logs into signals.</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground">Rules that turn matching logs into signals.</p>
         <Button size="sm" onClick={() => setEditing({mode: 'create'})}>
-          <Plus className="h-3 w-3" />
+          <Plus className="h-4 w-4" />
           New rule
         </Button>
       </div>
@@ -127,11 +128,28 @@ function DetectionsTab() {
       ) : isError ? (
         <SecurityError title="Couldn’t load detection rules" error={error} />
       ) : (
-        <Card>
-          <CardHeader className="px-2.5 py-1.5">
-            <CardTitle className="text-xs">Detection Rules ({data?.total_count ?? rules.length})</CardTitle>
-          </CardHeader>
-          <CardContent className="p-2.5 pt-0">
+        <SectionCard
+          title="Detection rules"
+          icon={ListFilter}
+          iconTone="accent"
+          count={data?.total_count ?? rules.length}
+          flushBody
+        >
+          {rules.length === 0 ? (
+            <div className="p-4">
+              <EmptyState
+                icon={ListFilter}
+                title="No detection rules yet"
+                description="Create a rule to turn matching logs into security signals."
+                action={
+                  <Button size="sm" onClick={() => setEditing({mode: 'create'})}>
+                    <Plus className="h-4 w-4" />
+                    New rule
+                  </Button>
+                }
+              />
+            </div>
+          ) : (
             <RuleList
               rules={rules}
               onEdit={(rule) => setEditing({mode: 'edit', rule})}
@@ -139,8 +157,8 @@ function DetectionsTab() {
               onDelete={(rule) => setPendingDelete(rule)}
               togglingId={toggle.isPending ? toggle.variables?.rule.id : undefined}
             />
-          </CardContent>
-        </Card>
+          )}
+        </SectionCard>
       )}
 
       <Sheet open={editing != null} onOpenChange={(open) => !open && setEditing(null)}>
@@ -190,40 +208,39 @@ function CoveragePanel({coverage}: {coverage: DetectionCoverageResponse}) {
   const topTechniques = coverage.techniques.slice(0, 6)
   const topTactics = coverage.tactics.slice(0, 8)
   return (
-    <Card>
-      <CardHeader className="px-2.5 py-1.5">
-        <CardTitle className="text-xs">
-          MITRE ATT&CK Coverage ({coverage.techniques.length} techniques)
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2 p-2.5 pt-0">
-        <div className="flex flex-wrap gap-1">
-          {topTactics.length === 0 ? (
-            <span className="text-xs text-muted-foreground">No enabled rules with ATT&CK tags</span>
-          ) : (
-            topTactics.map((tactic) => (
-              <Badge key={tactic.tactic} variant="outline" className="text-[10px]">
-                {tactic.tactic.replace(/-/g, ' ')} - {tactic.rule_count}
-              </Badge>
-            ))
-          )}
-        </div>
-        {topTechniques.length > 0 && (
-          <div className="grid gap-1 md:grid-cols-2">
-            {topTechniques.map((technique) => (
-              <div key={technique.technique_id} className="rounded border p-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono text-xs">{technique.technique_id}</span>
-                  <Badge variant="outline" className="text-[10px]">{technique.rule_count} rules</Badge>
-                </div>
-                <div className="mt-1 truncate text-[10px] text-muted-foreground">
-                  {technique.tactics.map((tactic) => tactic.replace(/-/g, ' ')).join(', ')}
-                </div>
-              </div>
-            ))}
-          </div>
+    <SectionCard
+      title="MITRE ATT&CK coverage"
+      icon={ShieldCheck}
+      iconTone="info"
+      count={`${coverage.techniques.length} techniques`}
+      bodyClassName="space-y-2"
+    >
+      <div className="flex flex-wrap gap-1">
+        {topTactics.length === 0 ? (
+          <span className="text-xs text-muted-foreground">No enabled rules with ATT&CK tags</span>
+        ) : (
+          topTactics.map((tactic) => (
+            <Badge key={tactic.tactic} variant="neutral" size="sm">
+              {tactic.tactic.replace(/-/g, ' ')} - {tactic.rule_count}
+            </Badge>
+          ))
         )}
-      </CardContent>
-    </Card>
+      </div>
+      {topTechniques.length > 0 && (
+        <div className="grid gap-1 md:grid-cols-2">
+          {topTechniques.map((technique) => (
+            <div key={technique.technique_id} className="rounded-md border p-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono text-xs">{technique.technique_id}</span>
+                <Badge variant="neutral" size="sm">{technique.rule_count} rules</Badge>
+              </div>
+              <div className="mt-1 truncate text-[10px] text-muted-foreground">
+                {technique.tactics.map((tactic) => tactic.replace(/-/g, ' ')).join(', ')}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </SectionCard>
   )
 }

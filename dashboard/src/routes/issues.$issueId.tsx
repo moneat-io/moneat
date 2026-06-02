@@ -24,13 +24,17 @@ import {formatRelativeTime} from '@/lib/utils'
 import {useToast} from '@/hooks/useToast'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
-import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import {SectionCard} from '@/components/ui/section-card'
+import {StatCard} from '@/components/ui/stat-card'
+import {StatusDot} from '@/components/ui/status-dot'
+import {EmptyState} from '@/components/ui/empty-state'
 import {Checkbox} from '@/components/ui/checkbox'
 import {Label} from '@/components/ui/label'
 import {DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger} from '@/components/ui/dropdown-menu'
 import {SpanWaterfall} from '@/components/SpanWaterfall'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {EmbeddedLogs} from '@/components/logs/EmbeddedLogs'
+import {levelBadgeVariant, levelTone} from '@/lib/severity'
 import {
     Activity,
     AlertCircle,
@@ -56,6 +60,7 @@ import {
     Tag,
     TerminalSquare,
     Timer,
+    Users,
     Zap,
 } from 'lucide-react'
 import {useTimezone} from '@/hooks/useTimezone'
@@ -88,24 +93,6 @@ interface Breadcrumb {
   message?: string
   data?: Record<string, unknown>
   level?: string
-}
-
-// Helper function to get level color
-function getLevelColor(level: string): string {
-  switch (level.toLowerCase()) {
-    case 'fatal':
-      return 'bg-red-900 text-red-100 hover:bg-red-900'
-    case 'error':
-      return 'bg-red-600 text-white hover:bg-red-600'
-    case 'warning':
-      return 'bg-orange-500 text-white hover:bg-orange-500'
-    case 'info':
-      return 'bg-blue-500 text-white hover:bg-blue-500'
-    case 'debug':
-      return 'bg-gray-500 text-white hover:bg-gray-500'
-    default:
-      return 'bg-secondary text-secondary-foreground'
-  }
 }
 
 function formatDuration(ms: number) {
@@ -192,8 +179,39 @@ function IssueDetailPage() {
     },
   })
 
-  if (isLoading) return <div className="p-8">Loading...</div>
-  if (!issue) return <div className="p-8">Issue not found</div>
+  if (isLoading) {
+    return (
+      <div className="px-3 py-3 lg:px-5 lg:py-4">
+        <div className="h-4 w-48 animate-pulse rounded bg-muted" />
+        <div className="mt-3 h-28 animate-pulse rounded-lg border bg-card" />
+        <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="h-[88px] animate-pulse rounded-lg border bg-card" />
+          ))}
+        </div>
+        <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-5">
+          <div className="h-72 animate-pulse rounded-lg border bg-card lg:col-span-3" />
+          <div className="h-72 animate-pulse rounded-lg border bg-card lg:col-span-2" />
+        </div>
+      </div>
+    )
+  }
+  if (!issue) {
+    return (
+      <div className="px-3 py-10 lg:px-5">
+        <EmptyState
+          icon={AlertCircle}
+          title="Issue not found"
+          description="This issue may have been deleted or merged, or you may not have access to it."
+          action={
+            <Button asChild variant="secondary" size="sm">
+              <Link to="/issues">Back to issues</Link>
+            </Button>
+          }
+        />
+      </div>
+    )
+  }
 
   const latestEvent = events[0] || issue.latestEvent
   const latestEventTags = latestEvent?.tags ?? {}
@@ -225,38 +243,53 @@ function IssueDetailPage() {
           </span>
         </nav>
 
-        {/* Issue Header - compact */}
-        <div className={`mb-3 bg-card rounded-lg border border-t-2 px-4 py-3 sm:px-5 sm:py-3.5 ${issue.level.toLowerCase() === 'fatal' || issue.level.toLowerCase() === 'error' ? 'border-t-red-500' : issue.level.toLowerCase() === 'warning' ? 'border-t-amber-500' : issue.level.toLowerCase() === 'info' ? 'border-t-blue-500' : 'border-t-muted-foreground/40'}`}>
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        {/* Issue header */}
+        <div className="mb-3 overflow-hidden rounded-lg border bg-card">
+          <div
+            className={`h-1 w-full ${
+              levelTone(issue.level) === 'danger'
+                ? 'bg-danger-solid'
+                : levelTone(issue.level) === 'warning'
+                  ? 'bg-warning-solid'
+                  : levelTone(issue.level) === 'info'
+                    ? 'bg-info-solid'
+                    : 'bg-muted-foreground/40'
+            }`}
+            aria-hidden
+          />
+          <div className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-start sm:justify-between sm:px-5">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                <Badge className={getLevelColor(issue.level)}>
-                  {issue.level.toUpperCase()}
-                </Badge>
-                <Badge variant="outline">{issue.platform}</Badge>
+                <span className="inline-flex items-center gap-1.5">
+                  <StatusDot tone={levelTone(issue.level)} pulse={levelTone(issue.level) === 'danger'} />
+                  <Badge variant={levelBadgeVariant(issue.level)}>
+                    {issue.level.toUpperCase()}
+                  </Badge>
+                </span>
+                <Badge variant="neutral">{issue.platform}</Badge>
                 {issue.status === 'resolved' && (
-                  <Badge variant="default" className="bg-green-500">
-                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                  <Badge variant="success">
+                    <CheckCircle2 className="h-3 w-3" />
                     Resolved
                   </Badge>
                 )}
                 {issue.status === 'ignored' && (
-                  <Badge variant="secondary">
-                    <EyeOff className="h-3 w-3 mr-1" />
+                  <Badge variant="neutral">
+                    <EyeOff className="h-3 w-3" />
                     Ignored
                   </Badge>
                 )}
                 {issue.status === 'resolvedInNextRelease' && (
-                  <Badge variant="outline" className="border-blue-500 text-blue-600 dark:text-blue-400">
-                    <Timer className="h-3 w-3 mr-1" />
-                    Resolves in Next Release
+                  <Badge variant="info">
+                    <Timer className="h-3 w-3" />
+                    Resolves in next release
                   </Badge>
                 )}
               </div>
-              <h2 className="text-lg sm:text-xl font-bold leading-tight mb-1 break-words [overflow-wrap:anywhere]">
+              <h1 className="text-lg sm:text-xl font-semibold leading-tight mb-1 break-words [overflow-wrap:anywhere]">
                 {issue.title}
-              </h2>
-              <p className="text-sm text-muted-foreground break-words [overflow-wrap:anywhere]">{issue.culprit}</p>
+              </h1>
+              <p className="font-mono text-xs text-muted-foreground break-words [overflow-wrap:anywhere]">{issue.culprit}</p>
             </div>
             <div className="flex gap-2 flex-shrink-0">
               {issue.status === 'resolved' && (
@@ -325,24 +358,26 @@ function IssueDetailPage() {
             </div>
           </div>
 
-          {/* Compact inline stats */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2.5 pt-2.5 border-t text-sm">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="font-semibold text-blue-600 dark:text-blue-400">{issue.eventCount}</span>
-              <span className="text-muted-foreground">events</span>
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="font-semibold text-violet-600 dark:text-violet-400">{issue.userCount}</span>
-              <span className="text-muted-foreground">users</span>
-            </span>
-            <span className="text-muted-foreground/40 hidden sm:inline">|</span>
-            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-              First <span className="text-foreground font-medium">{formatRelativeTime(issue.firstSeen)}</span>
-            </span>
-            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-              Last <span className="text-foreground font-medium">{formatRelativeTime(issue.lastSeen)}</span>
-            </span>
-          </div>
+        </div>
+
+        {/* Headline metrics */}
+        <div className="mb-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatCard label="Events" value={(issue.eventCount ?? 0).toLocaleString()} icon={Activity} tone="info" />
+          <StatCard label="Users affected" value={(issue.userCount ?? 0).toLocaleString()} icon={Users} tone="accent" />
+          <StatCard
+            label="First seen"
+            value={formatRelativeTime(issue.firstSeen)}
+            icon={Clock3}
+            tone="neutral"
+            subtitle={formatDateTime(new Date(issue.firstSeen), timezone)}
+          />
+          <StatCard
+            label="Last seen"
+            value={formatRelativeTime(issue.lastSeen)}
+            icon={Clock3}
+            tone="neutral"
+            subtitle={formatDateTime(new Date(issue.lastSeen), timezone)}
+          />
         </div>
 
         {/* Two-column layout: main content + sidebar */}
@@ -352,90 +387,61 @@ function IssueDetailPage() {
             {/* Exception */}
             {latestEvent && (
               <>
-                <Card>
-                  <CardHeader className="pb-2 px-3 pt-3">
-                    <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                      <AlertCircle className="h-4 w-4 text-red-500 dark:text-red-400" />
-                      Exception
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="px-3 pb-3">
-                    {latestEvent.exception ? (
-                      <div>
-                        <StackTraceViewer exception={latestEvent.exception} />
-                      </div>
-                    ) : (
-                      <p className="text-muted-foreground text-sm">No stack trace available</p>
-                    )}
-                  </CardContent>
-                </Card>
+                <SectionCard title="Exception" icon={AlertCircle} iconTone="danger">
+                  {latestEvent.exception ? (
+                    <StackTraceViewer exception={latestEvent.exception} />
+                  ) : (
+                    <p className="text-muted-foreground text-sm">No stack trace available</p>
+                  )}
+                </SectionCard>
 
                 {latestEvent.breadcrumbs && (
-                  <Card>
-                    <CardHeader className="pb-2 px-3 pt-3">
-                      <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                        <Navigation className="h-4 w-4 text-amber-500 dark:text-amber-400" />
-                        Breadcrumbs
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="px-3 pb-3">
-                      <BreadcrumbsViewer breadcrumbs={latestEvent.breadcrumbs} />
-                    </CardContent>
-                  </Card>
+                  <SectionCard title="Breadcrumbs" icon={Navigation} iconTone="warning">
+                    <BreadcrumbsViewer breadcrumbs={latestEvent.breadcrumbs} />
+                  </SectionCard>
                 )}
 
-                {/* Logs Context */}
-                <Card>
-                  <CardHeader className="pb-2 px-3 pt-3">
-                    <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                      <TerminalSquare className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />
-                      Logs Context
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="px-0 pb-0">
-                    <EmbeddedLogs
-                      projectId={issue.projectResourceId}
-                      centerTimestamp={latestEvent.timestamp}
-                      contextMinutes={5}
-                      environment={latestEvent.environment}
-                      service={latestEventTags.service}
-                      maxHeight="500px"
-                      showHeader={false}
-                      className="border-0 rounded-none"
-                    />
-                  </CardContent>
-                </Card>
+                <SectionCard title="Logs context" icon={TerminalSquare} iconTone="info" flushBody>
+                  <EmbeddedLogs
+                    projectId={issue.projectResourceId}
+                    centerTimestamp={latestEvent.timestamp}
+                    contextMinutes={5}
+                    environment={latestEvent.environment}
+                    service={latestEventTags.service}
+                    maxHeight="500px"
+                    showHeader={false}
+                    className="border-0 rounded-none"
+                  />
+                </SectionCard>
               </>
             )}
 
             {/* Spans Preview - wide content, keep in main column */}
             {primaryTransactionSpans && (
-              <Card>
-                <CardHeader className="pb-2 px-3 pt-3">
-                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                    <DatabaseZap className="h-4 w-4 text-cyan-500 dark:text-cyan-400" />
-                    Spans Preview ({primaryTransactionSpans.spans.length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-3 pb-3 space-y-3">
-                  <div className="max-h-[350px] overflow-auto">
-                    <SpanWaterfall
-                      transaction={primaryTransactionSpans.transaction}
-                      spans={primaryTransactionSpans.spans}
-                    />
-                  </div>
-                  {primaryTransactionSpans.transaction.traceId && (
-                    <Link
-                      to="/performance/traces/$traceId"
-                      params={{ traceId: primaryTransactionSpans.transaction.traceId }}
-                      className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-                    >
-                      Open Full Trace
-                      <ArrowUpRight className="h-3.5 w-3.5" />
-                    </Link>
-                  )}
-                </CardContent>
-              </Card>
+              <SectionCard
+                title="Spans preview"
+                icon={DatabaseZap}
+                iconTone="accent"
+                count={primaryTransactionSpans.spans.length}
+                bodyClassName="space-y-3"
+              >
+                <div className="max-h-[350px] overflow-auto">
+                  <SpanWaterfall
+                    transaction={primaryTransactionSpans.transaction}
+                    spans={primaryTransactionSpans.spans}
+                  />
+                </div>
+                {primaryTransactionSpans.transaction.traceId && (
+                  <Link
+                    to="/performance/traces/$traceId"
+                    params={{ traceId: primaryTransactionSpans.transaction.traceId }}
+                    className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                  >
+                    Open full trace
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                  </Link>
+                )}
+              </SectionCard>
             )}
           </div>
 
@@ -443,14 +449,7 @@ function IssueDetailPage() {
           <div className="lg:col-span-2 space-y-3">
             {/* Event Details */}
             {latestEvent && (
-              <Card>
-                <CardHeader className="pb-2 px-3 pt-3">
-                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                    <Activity className="h-4 w-4 text-slate-500 dark:text-slate-400" />
-                    Event Details
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-3 pb-3">
+              <SectionCard title="Event details" icon={Activity} iconTone="neutral">
                   <div className="space-y-1.5 text-sm">
                     <div className="flex items-start justify-between gap-2">
                       <span className="text-muted-foreground flex-shrink-0">Event ID</span>
@@ -479,20 +478,12 @@ function IssueDetailPage() {
                       </div>
                     )}
                   </div>
-                </CardContent>
-              </Card>
+              </SectionCard>
             )}
 
             {/* Tags & Context */}
             {latestEvent && (Object.keys(latestEventTags).length > 0 || contextEntries.length > 0) && (
-              <Card>
-                <CardHeader className="pb-2 px-3 pt-3">
-                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                    <Info className="h-4 w-4 text-blue-500 dark:text-blue-400" />
-                    Tags & Context
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-3 pb-3 space-y-3">
+              <SectionCard title="Tags & context" icon={Info} iconTone="info" bodyClassName="space-y-3">
                   <div>
                     <div className="mb-2 flex items-center justify-between">
                       <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -544,9 +535,9 @@ function IssueDetailPage() {
                       : null
                     if (!traceId) return null
                     return (
-                      <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 px-4 py-3 flex items-center justify-between gap-3">
+                      <div className="rounded-lg border border-info-border bg-info-bg px-4 py-3 flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2 text-sm">
-                          <Activity className="h-4 w-4 text-blue-500" />
+                          <Activity className="h-4 w-4 text-info-fg" />
                           <span className="text-muted-foreground">
                             This error has an associated APM trace
                           </span>
@@ -613,20 +604,12 @@ function IssueDetailPage() {
                       </div>
                     )}
                   </div>
-                </CardContent>
-              </Card>
+              </SectionCard>
             )}
 
             {/* Related Traces */}
             {relatedTraceTransactions.length > 0 && (
-              <Card>
-                <CardHeader className="pb-2 px-3 pt-3">
-                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                    <Activity className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />
-                    Traces ({relatedTraceTransactions.length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-3 pb-3">
+              <SectionCard title="Traces" icon={Activity} iconTone="accent" count={relatedTraceTransactions.length}>
                   <div className="space-y-1.5 max-h-[300px] overflow-auto">
                     {relatedTraceTransactions.map((tx) => (
                       <Link
@@ -652,20 +635,12 @@ function IssueDetailPage() {
                       </Link>
                     ))}
                   </div>
-                </CardContent>
-              </Card>
+              </SectionCard>
             )}
 
             {/* Session Replays */}
             {linkedReplays.length > 0 && (
-              <Card>
-                <CardHeader className="pb-2 px-3 pt-3">
-                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                    <Play className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
-                    Replays ({linkedReplays.length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-3 pb-3">
+              <SectionCard title="Replays" icon={Play} iconTone="success" count={linkedReplays.length}>
                   <div className="space-y-1.5 max-h-[300px] overflow-auto">
                     {linkedReplays.map((replay) => (
                       <Link
@@ -680,7 +655,7 @@ function IssueDetailPage() {
                               {replay.user?.email || replay.user?.username || replay.user?.id || 'Anonymous'}
                             </span>
                             {replay.errorCount > 0 && (
-                              <Badge variant="destructive" className="text-[10px] px-1.5 py-0 flex items-center gap-0.5">
+                              <Badge variant="danger" className="text-[10px] px-1.5 py-0 flex items-center gap-0.5">
                                 <AlertCircle className="h-2.5 w-2.5" />
                                 {replay.errorCount}
                               </Badge>
@@ -698,20 +673,12 @@ function IssueDetailPage() {
                       </Link>
                     ))}
                   </div>
-                </CardContent>
-              </Card>
+              </SectionCard>
             )}
 
             {/* Recent Events */}
             {events.length > 1 && (
-              <Card>
-                <CardHeader className="pb-2 px-3 pt-3">
-                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                    <Activity className="h-4 w-4 text-violet-500 dark:text-violet-400" />
-                    Recent Events ({events.length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="px-3 pb-3">
+              <SectionCard title="Recent events" icon={Activity} iconTone="accent" count={events.length}>
                   <div className="space-y-1.5 max-h-[300px] overflow-auto">
                     {events.map((event) => (
                       <div
@@ -728,8 +695,7 @@ function IssueDetailPage() {
                       </div>
                     ))}
                   </div>
-                </CardContent>
-              </Card>
+              </SectionCard>
             )}
           </div>
         </div>
@@ -748,7 +714,7 @@ function formatAsStackTrace(exception: unknown): ReactElement[] {
       
       return (
         <div key={exIdx}>
-          <div className="text-red-600 dark:text-red-400 font-semibold mb-1 break-words [overflow-wrap:anywhere]">
+          <div className="text-danger-fg font-semibold mb-1 break-words [overflow-wrap:anywhere]">
             {value.type}: {value.value}
           </div>
           {frames.map((frame: StackFrameData, idx: number) => {
@@ -760,10 +726,10 @@ function formatAsStackTrace(exception: unknown): ReactElement[] {
             return (
               <div key={idx} className="pl-4 break-words [overflow-wrap:anywhere]">
                 <span className="text-muted-foreground">at </span>
-                <span className="text-blue-600 dark:text-blue-400 [overflow-wrap:anywhere]">{module}{method}</span>
+                <span className="text-info-fg [overflow-wrap:anywhere]">{module}{method}</span>
                 <span className="text-muted-foreground">(</span>
-                <span className="text-amber-600 dark:text-amber-400 break-all">{file}</span>
-                {line && <span className="text-green-600 dark:text-green-400">{line}</span>}
+                <span className="text-warning-fg break-all">{file}</span>
+                {line && <span className="text-success-fg">{line}</span>}
                 <span className="text-muted-foreground">)</span>
               </div>
             )
@@ -870,7 +836,7 @@ function StackTraceViewer({ exception }: { exception: string }) {
         <div className="space-y-6">
           {(exceptions as ExceptionValue[]).map((value: ExceptionValue, idx: number) => (
             <div key={idx}>
-              <div className="font-semibold text-red-600 dark:text-red-400 mb-4 text-lg break-words [overflow-wrap:anywhere]">
+              <div className="font-semibold text-danger-fg mb-4 text-lg break-words [overflow-wrap:anywhere]">
                 {value.type}: {value.value}
               </div>
               {value.stacktrace?.frames && value.stacktrace.frames.length > 0 ? (
@@ -924,7 +890,7 @@ function StackFrame({ frame }: { frame: StackFrameData }) {
                   {line}
                 </div>
               ))}
-              <div className="bg-red-500/10 text-red-600 dark:text-red-400 px-2 py-0.5 -ml-3 pl-3 font-semibold leading-relaxed border-l-2 border-red-500 break-words [overflow-wrap:anywhere]">
+              <div className="bg-danger-bg text-danger-fg px-2 py-0.5 -ml-3 pl-3 font-semibold leading-relaxed border-l-2 border-danger-solid break-words [overflow-wrap:anywhere]">
                 → {frame.context_line}
               </div>
               {frame.post_context?.map((line: string, i: number) => (
@@ -1016,18 +982,26 @@ function ContextSection({ name, data, depth = 0, defaultOpen = true }: { name: s
   )
 }
 
-// Helper to get color classes for breadcrumb category
-function getBreadcrumbCategoryColor(category: string): { border: string; icon: string; badge: string; dot: string; line: string } {
-  if (!category) return { border: 'border-slate-300 dark:border-slate-700', icon: 'text-slate-500', badge: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300', dot: 'bg-slate-400 dark:bg-slate-500 ring-slate-400/20 dark:ring-slate-500/20', line: 'bg-slate-300 dark:bg-slate-700' }
-  const cat = category.toLowerCase()
-  if (cat.includes('lifecycle')) return { border: 'border-emerald-300 dark:border-emerald-700', icon: 'text-emerald-600 dark:text-emerald-400', badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300', dot: 'bg-emerald-500 dark:bg-emerald-400 ring-emerald-500/20 dark:ring-emerald-400/20', line: 'bg-emerald-300 dark:bg-emerald-700' }
-  if (cat.includes('click') || cat.includes('touch')) return { border: 'border-violet-300 dark:border-violet-700', icon: 'text-violet-600 dark:text-violet-400', badge: 'bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-300', dot: 'bg-violet-500 dark:bg-violet-400 ring-violet-500/20 dark:ring-violet-400/20', line: 'bg-violet-300 dark:bg-violet-700' }
-  if (cat.includes('navigation')) return { border: 'border-blue-300 dark:border-blue-700', icon: 'text-blue-600 dark:text-blue-400', badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300', dot: 'bg-blue-500 dark:bg-blue-400 ring-blue-500/20 dark:ring-blue-400/20', line: 'bg-blue-300 dark:bg-blue-700' }
-  if (cat.includes('action')) return { border: 'border-amber-300 dark:border-amber-700', icon: 'text-amber-600 dark:text-amber-400', badge: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300', dot: 'bg-amber-500 dark:bg-amber-400 ring-amber-500/20 dark:ring-amber-400/20', line: 'bg-amber-300 dark:bg-amber-700' }
-  if (cat.includes('http') || cat.includes('network')) return { border: 'border-cyan-300 dark:border-cyan-700', icon: 'text-cyan-600 dark:text-cyan-400', badge: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/50 dark:text-cyan-300', dot: 'bg-cyan-500 dark:bg-cyan-400 ring-cyan-500/20 dark:ring-cyan-400/20', line: 'bg-cyan-300 dark:bg-cyan-700' }
-  if (cat.includes('device')) return { border: 'border-orange-300 dark:border-orange-700', icon: 'text-orange-600 dark:text-orange-400', badge: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300', dot: 'bg-orange-500 dark:bg-orange-400 ring-orange-500/20 dark:ring-orange-400/20', line: 'bg-orange-300 dark:bg-orange-700' }
-  if (cat.includes('message') || cat.includes('log')) return { border: 'border-pink-300 dark:border-pink-700', icon: 'text-pink-600 dark:text-pink-400', badge: 'bg-pink-100 text-pink-800 dark:bg-pink-900/50 dark:text-pink-300', dot: 'bg-pink-500 dark:bg-pink-400 ring-pink-500/20 dark:ring-pink-400/20', line: 'bg-pink-300 dark:bg-pink-700' }
-  return { border: 'border-slate-300 dark:border-slate-700', icon: 'text-slate-500', badge: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300', dot: 'bg-slate-400 dark:bg-slate-500 ring-slate-400/20 dark:ring-slate-500/20', line: 'bg-slate-300 dark:bg-slate-700' }
+// Breadcrumb categories are differentiated with the categorical chart palette
+// (style guide); badges stay neutral so the timeline dot/icon carries the color.
+type BreadcrumbColors = { border: string; icon: string; badge: string; dot: string; line: string }
+function getBreadcrumbCategoryColor(category: string): BreadcrumbColors {
+  const make = (icon: string, dot: string): BreadcrumbColors => ({
+    border: 'border-border',
+    icon,
+    badge: 'bg-muted text-muted-foreground',
+    dot,
+    line: 'bg-border',
+  })
+  const cat = (category || '').toLowerCase()
+  if (cat.includes('lifecycle')) return make('text-chart-4', 'bg-chart-4 ring-[hsl(var(--chart-4)/0.2)]')
+  if (cat.includes('click') || cat.includes('touch')) return make('text-chart-1', 'bg-chart-1 ring-[hsl(var(--chart-1)/0.2)]')
+  if (cat.includes('navigation')) return make('text-chart-2', 'bg-chart-2 ring-[hsl(var(--chart-2)/0.2)]')
+  if (cat.includes('action')) return make('text-chart-5', 'bg-chart-5 ring-[hsl(var(--chart-5)/0.2)]')
+  if (cat.includes('http') || cat.includes('network')) return make('text-chart-3', 'bg-chart-3 ring-[hsl(var(--chart-3)/0.2)]')
+  if (cat.includes('device')) return make('text-chart-6', 'bg-chart-6 ring-[hsl(var(--chart-6)/0.2)]')
+  if (cat.includes('message') || cat.includes('log')) return make('text-chart-7', 'bg-chart-7 ring-[hsl(var(--chart-7)/0.2)]')
+  return make('text-muted-foreground', 'bg-muted-foreground ring-[hsl(var(--muted-foreground)/0.2)]')
 }
 
 // Helper to get icon for breadcrumb category

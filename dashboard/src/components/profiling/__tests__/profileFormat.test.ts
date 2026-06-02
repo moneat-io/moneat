@@ -45,8 +45,8 @@ describe('profileFormat', () => {
   })
 
   it('maps known profile types to themed badge classes', () => {
-    expect(profileTypeBadgeClass('cpu')).toContain('orange')
-    expect(profileTypeBadgeClass('heap')).toContain('green')
+    expect(profileTypeBadgeClass('cpu')).toContain('chart-6')
+    expect(profileTypeBadgeClass('heap')).toContain('chart-4')
     expect(profileTypeBadgeClass('jfr')).toBe('bg-secondary text-secondary-foreground')
   })
 })

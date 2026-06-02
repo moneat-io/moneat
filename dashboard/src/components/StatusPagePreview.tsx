@@ -38,30 +38,27 @@ type StatusConfigItem = {
   textColor: string
 }
 
+// The status families use the shared status tokens, which adapt to the preview's
+// own theme via the `dark` class applied to its container below.
 const STATUS_CONFIG_LIGHT: Record<StatusValue, StatusConfigItem> = {
-  operational: {icon: CheckCircle2, title: 'All Systems Operational', bg: 'bg-emerald-50', border: 'border-emerald-200', iconColor: 'text-emerald-600', textColor: 'text-emerald-800'},
-  degraded: {icon: AlertTriangle, title: 'Partial System Outage', bg: 'bg-amber-50', border: 'border-amber-200', iconColor: 'text-amber-600', textColor: 'text-amber-800'},
-  down: {icon: XCircle, title: 'Major System Outage', bg: 'bg-red-50', border: 'border-red-200', iconColor: 'text-red-600', textColor: 'text-red-800'},
-  unknown: {icon: AlertCircle, title: 'Status Unknown', bg: 'bg-slate-50', border: 'border-slate-200', iconColor: 'text-slate-500', textColor: 'text-slate-700'},
+  operational: {icon: CheckCircle2, title: 'All Systems Operational', bg: 'bg-success-bg', border: 'border-success-border', iconColor: 'text-success-fg', textColor: 'text-success-fg'},
+  degraded: {icon: AlertTriangle, title: 'Partial System Outage', bg: 'bg-warning-bg', border: 'border-warning-border', iconColor: 'text-warning-fg', textColor: 'text-warning-fg'},
+  down: {icon: XCircle, title: 'Major System Outage', bg: 'bg-danger-bg', border: 'border-danger-border', iconColor: 'text-danger-fg', textColor: 'text-danger-fg'},
+  unknown: {icon: AlertCircle, title: 'Status Unknown', bg: 'bg-muted', border: 'border-border', iconColor: 'text-muted-foreground', textColor: 'text-muted-foreground'},
 }
 
-const STATUS_CONFIG_DARK: Record<StatusValue, StatusConfigItem> = {
-  operational: {icon: CheckCircle2, title: 'All Systems Operational', bg: 'bg-emerald-950/40', border: 'border-emerald-900/50', iconColor: 'text-emerald-400', textColor: 'text-emerald-300'},
-  degraded: {icon: AlertTriangle, title: 'Partial System Outage', bg: 'bg-amber-950/40', border: 'border-amber-900/50', iconColor: 'text-amber-400', textColor: 'text-amber-300'},
-  down: {icon: XCircle, title: 'Major System Outage', bg: 'bg-red-950/40', border: 'border-red-900/50', iconColor: 'text-red-400', textColor: 'text-red-300'},
-  unknown: {icon: AlertCircle, title: 'Status Unknown', bg: 'bg-slate-900', border: 'border-slate-700', iconColor: 'text-slate-400', textColor: 'text-slate-300'},
+const STATUS_CONFIG_DARK: Record<StatusValue, StatusConfigItem> = STATUS_CONFIG_LIGHT
+
+function getBarColor(uptime: number) {
+  if (uptime >= 99) return 'bg-success-solid'
+  if (uptime >= 90) return 'bg-warning-solid'
+  return 'bg-danger-solid'
 }
 
-function getBarColor(uptime: number, isDarkMode: boolean) {
-  if (uptime >= 99) return isDarkMode ? 'bg-emerald-500/70' : 'bg-emerald-400'
-  if (uptime >= 90) return isDarkMode ? 'bg-amber-500/70' : 'bg-amber-400'
-  return isDarkMode ? 'bg-red-500/70' : 'bg-red-400'
-}
-
-function getUptimeColor(uptime: number, isDarkMode: boolean): string {
-  if (uptime >= 99) return isDarkMode ? 'text-emerald-400' : 'text-emerald-600'
-  if (uptime >= 90) return isDarkMode ? 'text-amber-400' : 'text-amber-600'
-  return isDarkMode ? 'text-red-400' : 'text-red-600'
+function getUptimeColor(uptime: number): string {
+  if (uptime >= 99) return 'text-success-fg'
+  if (uptime >= 90) return 'text-warning-fg'
+  return 'text-danger-fg'
 }
 
 function computeOverallStatus(monitors: StatusPageMonitorEntry[]): StatusValue {
@@ -73,33 +70,25 @@ function computeOverallStatus(monitors: StatusPageMonitorEntry[]): StatusValue {
 }
 
 const STATUS_DOT_COLORS_DARK: Record<string, string> = {
-  operational: 'bg-emerald-400',
-  degraded: 'bg-amber-400',
-  down: 'bg-red-400',
+  operational: 'bg-success-solid',
+  degraded: 'bg-warning-solid',
+  down: 'bg-danger-solid',
 }
 
-const STATUS_DOT_COLORS_LIGHT: Record<string, string> = {
-  operational: 'bg-emerald-500',
-  degraded: 'bg-amber-500',
-  down: 'bg-red-500',
-}
+const STATUS_DOT_COLORS_LIGHT: Record<string, string> = STATUS_DOT_COLORS_DARK
 
 const STATUS_TEXT_COLORS_DARK: Record<string, string> = {
-  operational: 'text-emerald-400',
-  degraded: 'text-amber-400',
-  down: 'text-red-400',
+  operational: 'text-success-fg',
+  degraded: 'text-warning-fg',
+  down: 'text-danger-fg',
 }
 
-const STATUS_TEXT_COLORS_LIGHT: Record<string, string> = {
-  operational: 'text-emerald-600',
-  degraded: 'text-amber-600',
-  down: 'text-red-600',
-}
+const STATUS_TEXT_COLORS_LIGHT: Record<string, string> = STATUS_TEXT_COLORS_DARK
 
 function getTooltipUptimeColor(uptime: number): string {
-  if (uptime >= 99) return 'text-emerald-600 dark:text-emerald-400'
-  if (uptime >= 90) return 'text-amber-600 dark:text-amber-400'
-  return 'text-red-600 dark:text-red-400'
+  if (uptime >= 99) return 'text-success-fg'
+  if (uptime >= 90) return 'text-warning-fg'
+  return 'text-danger-fg'
 }
 
 function UptimeHistoryBar({
@@ -120,7 +109,7 @@ function UptimeHistoryBar({
           <Tooltip key={point.date}>
             <TooltipTrigger asChild>
               <div
-                className={`flex-1 rounded-[2px] ${getBarColor(point.uptime, isDarkMode)} transition-opacity hover:opacity-80 cursor-default min-w-[2px]`}
+                className={`flex-1 rounded-[2px] ${getBarColor(point.uptime)} transition-opacity hover:opacity-80 cursor-default min-w-[2px]`}
               />
             </TooltipTrigger>
             <TooltipContent side="top" className="text-xs">
@@ -179,7 +168,7 @@ export function StatusPageMonitorRow({
 }) {
   const statusDotColors = isDarkMode ? STATUS_DOT_COLORS_DARK : STATUS_DOT_COLORS_LIGHT
   const statusColors = isDarkMode ? STATUS_TEXT_COLORS_DARK : STATUS_TEXT_COLORS_LIGHT
-  const uptimeColor = getUptimeColor(monitor.uptimePercentage, isDarkMode)
+  const uptimeColor = getUptimeColor(monitor.uptimePercentage)
   const dotColor = statusDotColors[monitor.status] ?? 'bg-slate-400'
   const textColor = statusColors[monitor.status] ?? (isDarkMode ? 'text-slate-400' : 'text-slate-500')
   const hoverBg = isDarkMode ? 'hover:bg-slate-900/50' : 'hover:bg-slate-50/80'

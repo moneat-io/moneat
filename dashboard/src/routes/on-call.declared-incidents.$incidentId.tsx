@@ -17,9 +17,10 @@
 import {createFileRoute, useNavigate} from '@tanstack/react-router'
 import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query'
 import {api, type IncidentTimeline} from '@/lib/api'
-import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {Button} from '@/components/ui/button'
-import {Badge} from '@/components/ui/badge'
+import {Badge, type BadgeProps} from '@/components/ui/badge'
+import {SectionCard} from '@/components/ui/section-card'
+import {EmptyState} from '@/components/ui/empty-state'
 import {Textarea} from '@/components/ui/textarea'
 import {
   Dialog,
@@ -63,33 +64,37 @@ export const Route = createFileRoute('/on-call/declared-incidents/$incidentId')(
   component: DeclaredIncidentDetailComponent,
 })
 
-const getPriorityConfig = (priority: string) => {
-  if (priority.startsWith('P0')) return {color: 'bg-red-500/15 text-red-400 border-red-500/30', label: 'Critical'}
-  if (priority.startsWith('P1')) return {color: 'bg-orange-500/15 text-orange-400 border-orange-500/30', label: 'High'}
-  if (priority.startsWith('P2')) return {color: 'bg-amber-500/15 text-amber-400 border-amber-500/30', label: 'Medium'}
-  if (priority.startsWith('P3')) return {color: 'bg-blue-500/15 text-blue-400 border-blue-500/30', label: 'Low'}
-  return {color: 'bg-muted text-muted-foreground', label: priority}
+// Priority / status mapped onto the shared status language.
+function priorityBadgeVariant(priority: string): BadgeProps['variant'] {
+  if (priority.startsWith('P0') || priority.startsWith('P1')) return 'danger'
+  if (priority.startsWith('P2')) return 'warning'
+  if (priority.startsWith('P3')) return 'info'
+  return 'neutral'
 }
 
-const getStatusConfig = (status: string) => {
-  if (status === 'OPEN') return {color: 'bg-red-500/15 text-red-400 border-red-500/30', icon: Zap, label: 'Open', accent: 'text-red-500'}
-  if (status === 'RESOLVED') return {color: 'bg-green-500/15 text-green-400 border-green-500/30', icon: CheckCircle2, label: 'Resolved', accent: 'text-green-500'}
-  return {color: 'bg-muted text-muted-foreground', icon: Clock, label: status, accent: 'text-muted-foreground'}
+const getStatusConfig = (
+  status: string,
+): {variant: BadgeProps['variant']; icon: typeof Zap; label: string} => {
+  if (status === 'OPEN') return {variant: 'danger', icon: Zap, label: 'Open'}
+  if (status === 'RESOLVED') return {variant: 'success', icon: CheckCircle2, label: 'Resolved'}
+  return {variant: 'neutral', icon: Clock, label: status}
 }
 
+// Timeline event icons keep distinct categorical tints from the shared palette
+// (literal classes so Tailwind emits them); status-laden events use status tokens.
 const EVENT_CONFIG: Record<string, {icon: typeof Zap; color: string; bgColor: string; label: string}> = {
-  DECLARED: {icon: Zap, color: 'text-red-500', bgColor: 'bg-red-500/15', label: 'Incident declared'},
-  RESOLVED: {icon: CheckCircle2, color: 'text-green-500', bgColor: 'bg-green-500/15', label: 'Incident resolved'},
-  NOTE_ADDED: {icon: MessageSquare, color: 'text-slate-400', bgColor: 'bg-slate-500/15', label: 'Note added'},
-  ALERT_LINKED: {icon: LinkIcon, color: 'text-violet-500', bgColor: 'bg-violet-500/15', label: 'Alert linked'},
+  DECLARED: {icon: Zap, color: 'text-danger-fg', bgColor: 'bg-danger-bg', label: 'Incident declared'},
+  RESOLVED: {icon: CheckCircle2, color: 'text-success-fg', bgColor: 'bg-success-bg', label: 'Incident resolved'},
+  NOTE_ADDED: {icon: MessageSquare, color: 'text-muted-foreground', bgColor: 'bg-muted', label: 'Note added'},
+  ALERT_LINKED: {icon: LinkIcon, color: 'text-chart-5', bgColor: 'bg-chart-5/15', label: 'Alert linked'},
   // Alert-level events
-  TRIGGERED: {icon: Zap, color: 'text-red-500', bgColor: 'bg-red-500/15', label: 'Alert triggered'},
-  ESCALATED: {icon: Bell, color: 'text-orange-500', bgColor: 'bg-orange-500/15', label: 'Escalated'},
-  ACKNOWLEDGED: {icon: CheckCircle, color: 'text-blue-500', bgColor: 'bg-blue-500/15', label: 'Acknowledged'},
-  REASSIGNED: {icon: UserPlus, color: 'text-violet-500', bgColor: 'bg-violet-500/15', label: 'Reassigned'},
-  STEP_TIMEOUT: {icon: Clock, color: 'text-orange-500', bgColor: 'bg-orange-500/15', label: 'Step timed out'},
-  NOTIFICATION_SENT: {icon: Send, color: 'text-cyan-500', bgColor: 'bg-cyan-500/15', label: 'Notification sent'},
-  VIEWED: {icon: Eye, color: 'text-slate-400', bgColor: 'bg-slate-500/10', label: 'Viewed'},
+  TRIGGERED: {icon: Zap, color: 'text-danger-fg', bgColor: 'bg-danger-bg', label: 'Alert triggered'},
+  ESCALATED: {icon: Bell, color: 'text-warning-fg', bgColor: 'bg-warning-bg', label: 'Escalated'},
+  ACKNOWLEDGED: {icon: CheckCircle, color: 'text-info-fg', bgColor: 'bg-info-bg', label: 'Acknowledged'},
+  REASSIGNED: {icon: UserPlus, color: 'text-chart-5', bgColor: 'bg-chart-5/15', label: 'Reassigned'},
+  STEP_TIMEOUT: {icon: Clock, color: 'text-warning-fg', bgColor: 'bg-warning-bg', label: 'Step timed out'},
+  NOTIFICATION_SENT: {icon: Send, color: 'text-chart-6', bgColor: 'bg-chart-6/15', label: 'Notification sent'},
+  VIEWED: {icon: Eye, color: 'text-muted-foreground', bgColor: 'bg-muted', label: 'Viewed'},
 }
 
 function timeAgo(date: string) {
@@ -183,22 +188,22 @@ function DeclaredIncidentDetailComponent() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-red-500" />
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-primary" />
       </div>
     )
   }
 
   if (!incident) {
     return (
-      <div className="text-center py-16">
-        <AlertTriangle className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-        <p className="text-lg font-medium">Incident not found</p>
-      </div>
+      <EmptyState
+        icon={AlertTriangle}
+        title="Incident not found"
+        description="This incident may have been removed or you may not have access to it."
+      />
     )
   }
 
   const statusCfg = getStatusConfig(incident.status)
-  const priorityCfg = getPriorityConfig(incident.priorityLevel)
   const StatusIcon = statusCfg.icon
 
   return (
@@ -210,11 +215,11 @@ function DeclaredIncidentDetailComponent() {
         </Button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 mb-2">
-            <Badge variant="outline" className={cn('text-xs gap-1', statusCfg.color)}>
+            <Badge variant={statusCfg.variant} size="sm" className="gap-1">
               <StatusIcon className="h-3 w-3" />
               {statusCfg.label}
             </Badge>
-            <Badge variant="outline" className={cn('text-xs', priorityCfg.color)}>
+            <Badge variant={priorityBadgeVariant(incident.priorityLevel)} size="sm">
               {incident.priorityLevel}
             </Badge>
             <span className="text-xs text-muted-foreground font-mono">#{incident.id}</span>
@@ -228,16 +233,10 @@ function DeclaredIncidentDetailComponent() {
 
       {/* Action Banner */}
       {incident.status !== 'RESOLVED' && (
-        <div className={cn(
-          'flex items-center justify-between p-4 rounded-xl border',
-          'bg-red-500/5 border-red-500/20'
-        )}>
+        <div className="flex items-center justify-between p-4 rounded-xl border bg-danger-bg border-danger-border">
           <div className="flex items-center gap-3">
-            <div className={cn(
-              'flex items-center justify-center h-10 w-10 rounded-full',
-              'bg-red-500/15'
-            )}>
-              <StatusIcon className={cn('h-5 w-5', statusCfg.accent)} />
+            <div className="flex items-center justify-center h-10 w-10 rounded-full bg-danger-bg">
+              <StatusIcon className="h-5 w-5 text-danger-fg" />
             </div>
             <div>
               <p className="font-medium text-sm">
@@ -251,12 +250,9 @@ function DeclaredIncidentDetailComponent() {
           <div className="flex flex-col items-end gap-1">
              <Dialog open={resolveOpen} onOpenChange={setResolveOpen}>
               <DialogTrigger asChild>
-                <Button
-                  className="bg-green-600 hover:bg-green-700"
-                  size="sm"
-                >
+                <Button size="sm">
                   <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Resolve Incident
+                  Resolve incident
                 </Button>
               </DialogTrigger>
               <DialogContent>
@@ -292,53 +288,44 @@ function DeclaredIncidentDetailComponent() {
         <div className="lg:col-span-2 space-y-6">
           {/* Description */}
           {incident.description && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Description</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground leading-relaxed">{incident.description}</p>
-              </CardContent>
-            </Card>
+            <SectionCard title="Description" icon={MessageSquare} iconTone="muted">
+              <p className="text-sm text-muted-foreground leading-relaxed">{incident.description}</p>
+            </SectionCard>
           )}
 
           {/* Linked Alerts */}
           {incident.alerts && incident.alerts.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Linked Alerts</CardTitle>
-                <CardDescription>{incident.alerts.length} alert{incident.alerts.length !== 1 ? 's' : ''} linked to this incident</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {incident.alerts.map((alert: {id: number; title: string; status: string}) => (
-                  <div key={alert.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">{alert.title}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Alert #{alert.id} · {alert.status}
-                      </p>
-                    </div>
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => navigate({to: '/on-call/incidents/$incidentId', params: {incidentId: String(alert.id)}})}
-                    >
-                      View
-                    </Button>
+            <SectionCard
+              title="Linked alerts"
+              icon={LinkIcon}
+              iconTone="accent"
+              count={incident.alerts.length}
+              bodyClassName="space-y-2"
+            >
+              {incident.alerts.map((alert: {id: number; title: string; status: string}) => (
+                <div key={alert.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent/40 transition-colors">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">{alert.title}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Alert #{alert.id} · {alert.status}
+                    </p>
                   </div>
-                ))}
-              </CardContent>
-            </Card>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate({to: '/on-call/incidents/$incidentId', params: {incidentId: String(alert.id)}})}
+                  >
+                    View
+                  </Button>
+                </div>
+              ))}
+            </SectionCard>
           )}
 
           {/* Timeline */}
           {timeline && timeline.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Timeline</CardTitle>
-                <CardDescription>Incident history and linked alert events</CardDescription>
-              </CardHeader>
-              <CardContent>
+            <SectionCard title="Timeline" icon={Clock} iconTone="muted">
+                <p className="-mt-1 mb-3 text-xs text-muted-foreground">Incident history and linked alert events</p>
                 <div className="relative">
                   {timeline.map((event: DeclaredIncidentTimelineEvent, idx: number) => {
                     const config = EVENT_CONFIG[event.eventType] || {
@@ -391,16 +378,11 @@ function DeclaredIncidentDetailComponent() {
                     )
                   })}
                 </div>
-              </CardContent>
-            </Card>
+            </SectionCard>
           )}
 
           {/* Add Note */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Add Note</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
+          <SectionCard title="Add note" icon={MessageSquare} iconTone="accent" bodyClassName="space-y-3">
               <Textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
@@ -414,29 +396,24 @@ function DeclaredIncidentDetailComponent() {
                 size="sm"
               >
                 <MessageSquare className="h-4 w-4 mr-2" />
-                {addNoteMutation.isPending ? 'Adding...' : 'Add Note'}
+                {addNoteMutation.isPending ? 'Adding...' : 'Add note'}
               </Button>
-            </CardContent>
-          </Card>
+          </SectionCard>
         </div>
 
         {/* Sidebar */}
         <div className="space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <SectionCard title="Details" bodyClassName="space-y-4">
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Status</p>
-                <Badge variant="outline" className={cn('gap-1', statusCfg.color)}>
+                <Badge variant={statusCfg.variant} className="gap-1">
                   <StatusIcon className="h-3 w-3" />
                   {statusCfg.label}
                 </Badge>
               </div>
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Priority</p>
-                <Badge variant="outline" className={cn(priorityCfg.color)}>
+                <Badge variant={priorityBadgeVariant(incident.priorityLevel)}>
                   {incident.priorityLevel}
                 </Badge>
               </div>
@@ -466,8 +443,7 @@ function DeclaredIncidentDetailComponent() {
                   </span>
                 </div>
               )}
-            </CardContent>
-          </Card>
+          </SectionCard>
         </div>
       </div>
     </div>

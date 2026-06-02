@@ -32,16 +32,17 @@ interface MonitorCompactTableProps {
 }
 
 function getMonitorIconClass(status: string, isOnline: boolean): string {
-  if (isOnline) return 'flex h-6 w-6 shrink-0 items-center justify-center rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-  if (status === 'down') return 'flex h-6 w-6 shrink-0 items-center justify-center rounded bg-red-500/10 text-red-600 dark:text-red-400'
-  if (status === 'pending') return 'flex h-6 w-6 shrink-0 items-center justify-center rounded bg-blue-500/10 text-blue-600 dark:text-blue-400'
-  return 'flex h-6 w-6 shrink-0 items-center justify-center rounded bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
+  const base = 'flex h-6 w-6 shrink-0 items-center justify-center rounded'
+  if (isOnline) return `${base} bg-success-bg text-success-fg`
+  if (status === 'down') return `${base} bg-danger-bg text-danger-fg`
+  if (status === 'pending') return `${base} bg-info-bg text-info-fg`
+  return `${base} bg-muted text-muted-foreground`
 }
 
 function getUptimeClass(uptime: number): string {
-  if (uptime >= 99) return 'text-emerald-600 dark:text-emerald-400'
-  if (uptime >= 95) return 'text-yellow-600 dark:text-yellow-400'
-  return 'text-red-600 dark:text-red-400'
+  if (uptime >= 99) return 'text-success-fg'
+  if (uptime >= 95) return 'text-warning-fg'
+  return 'text-danger-fg'
 }
 
 function MonitorRow({monitor}: {readonly monitor: UptimeMonitor}) {

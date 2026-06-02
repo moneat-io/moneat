@@ -38,17 +38,17 @@ interface SpanNode {
 }
 
 const SERVICE_COLORS: Record<string, string> = {
-  web: 'bg-emerald-500',
-  http: 'bg-blue-500',
-  db: 'bg-amber-500',
-  cache: 'bg-violet-500',
-  grpc: 'bg-cyan-500',
-  custom: 'bg-gray-500',
-  SERVER: 'bg-blue-500',
-  CLIENT: 'bg-emerald-500',
-  INTERNAL: 'bg-gray-500',
-  PRODUCER: 'bg-orange-500',
-  CONSUMER: 'bg-pink-500',
+  web: 'bg-chart-3',
+  http: 'bg-chart-2',
+  db: 'bg-chart-5',
+  cache: 'bg-chart-6',
+  grpc: 'bg-chart-9',
+  custom: 'bg-muted-foreground',
+  SERVER: 'bg-chart-2',
+  CLIENT: 'bg-chart-3',
+  INTERNAL: 'bg-muted-foreground',
+  PRODUCER: 'bg-chart-6',
+  CONSUMER: 'bg-chart-7',
 }
 
 
@@ -123,7 +123,7 @@ function CopyButton({text}: {text: string}) {
       aria-label="Copy to clipboard"
     >
       {copied ? (
-        <Check className="h-3 w-3 text-green-500" />
+        <Check className="h-3 w-3 text-success-fg" />
       ) : (
         <Copy className="h-3 w-3 text-muted-foreground" />
       )}
@@ -320,7 +320,7 @@ export function SpanWaterfall({spans, highlightSpanId}: Props) {
                     className={cn(
                       'absolute top-1.5 h-3 rounded-sm transition-opacity',
                       span.error > 0
-                        ? 'bg-red-500/70'
+                        ? 'bg-danger-solid/70'
                         : getSpanColor(getSpanColorKey(span)),
                       span.error === 0 && 'opacity-70',
                       isSelected && 'opacity-100'
@@ -541,7 +541,7 @@ function SpanDetailPanel({
 
         {/* Error indicator */}
         {span.error > 0 && (
-          <div className="mx-3 mt-3 flex items-center gap-1.5 text-xs text-red-500/90">
+          <div className="mx-3 mt-3 flex items-center gap-1.5 text-xs text-danger-fg">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
             <span>Span errored</span>
           </div>

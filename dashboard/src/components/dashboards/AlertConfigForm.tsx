@@ -169,7 +169,7 @@ export function AlertConfigForm({
               {metricLabels[alert.metric_index] || 'metric'} {formatAlertThresholdSummary(alert)}
             </span>
             {alert.last_triggered_at && (
-              <span className="text-xs text-orange-500 shrink-0">
+              <span className="text-xs text-warning-fg shrink-0">
                 {alert.last_triggered_level ?? 'FIRING'}
               </span>
             )}
@@ -243,7 +243,7 @@ export function AlertConfigForm({
                   htmlFor="alert-warning-threshold"
                   className="mb-0.5 flex items-center gap-1.5 text-xs text-muted-foreground"
                 >
-                  <span className="h-2 w-2 rounded-full bg-amber-500" />
+                  <span className="h-2 w-2 rounded-full bg-warning-solid" />
                   Warning<span className="sr-only"> threshold</span>
                 </label>
                 <input

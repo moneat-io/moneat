@@ -18,7 +18,10 @@ import {createFileRoute, Link, Outlet, useRouterState} from '@tanstack/react-rou
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {Card, CardContent} from '@/components/ui/card'
-import {Badge} from '@/components/ui/badge'
+import {Badge, type BadgeProps} from '@/components/ui/badge'
+import {EmptyState} from '@/components/ui/empty-state'
+import {StatusDot, type StatusTone} from '@/components/ui/status-dot'
+import {PageHeader} from '@/components/ui/page-header'
 import {
   Select,
   SelectContent,
@@ -26,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {Filter, Zap, Clock, CheckCircle2, ChevronRight, FileText} from 'lucide-react'
+import {Filter, Zap, Clock, CheckCircle2, ChevronRight, FileText, ShieldAlert} from 'lucide-react'
 import {useState} from 'react'
 import {cn} from '@/lib/utils'
 
@@ -36,19 +39,31 @@ export const Route = createFileRoute('/on-call/declared-incidents')({
 
 const DEFAULT_DECLARED_INCIDENT_STATUS_FILTER = 'OPEN'
 
-const getPriorityConfig = (priority: string) => {
-  if (priority.startsWith('P0')) return {color: 'bg-red-500/15 text-red-400 border-red-500/30', dot: 'bg-red-500', label: 'Critical'}
-  if (priority.startsWith('P1')) return {color: 'bg-orange-500/15 text-orange-400 border-orange-500/30', dot: 'bg-orange-500', label: 'High'}
-  if (priority.startsWith('P2')) return {color: 'bg-amber-500/15 text-amber-400 border-amber-500/30', dot: 'bg-amber-500', label: 'Medium'}
-  if (priority.startsWith('P3')) return {color: 'bg-blue-500/15 text-blue-400 border-blue-500/30', dot: 'bg-blue-500', label: 'Low'}
-  if (priority.startsWith('P4')) return {color: 'bg-slate-500/15 text-slate-400 border-slate-500/30', dot: 'bg-slate-500', label: 'Info'}
-  return {color: 'bg-muted text-muted-foreground', dot: 'bg-muted-foreground', label: 'Unknown'}
+// Priority / status mapped onto the shared status language.
+function priorityTone(priority: string): StatusTone {
+  if (priority.startsWith('P0') || priority.startsWith('P1')) return 'danger'
+  if (priority.startsWith('P2')) return 'warning'
+  if (priority.startsWith('P3')) return 'info'
+  return 'neutral'
 }
 
-const getStatusConfig = (status: string) => {
-  if (status === 'OPEN') return {color: 'bg-red-500/15 text-red-400 border-red-500/30', icon: Zap, label: 'Open'}
-  if (status === 'RESOLVED') return {color: 'bg-green-500/15 text-green-400 border-green-500/30', icon: CheckCircle2, label: 'Resolved'}
-  return {color: 'bg-muted text-muted-foreground', icon: Clock, label: status}
+function priorityBadgeVariant(priority: string): BadgeProps['variant'] {
+  switch (priorityTone(priority)) {
+    case 'danger':
+      return 'danger'
+    case 'warning':
+      return 'warning'
+    case 'info':
+      return 'info'
+    default:
+      return 'neutral'
+  }
+}
+
+const getStatusConfig = (status: string): {variant: BadgeProps['variant']; icon: typeof Zap; label: string} => {
+  if (status === 'OPEN') return {variant: 'danger', icon: Zap, label: 'Open'}
+  if (status === 'RESOLVED') return {variant: 'success', icon: CheckCircle2, label: 'Resolved'}
+  return {variant: 'neutral', icon: Clock, label: status}
 }
 
 function timeAgo(date: string) {
@@ -88,12 +103,11 @@ function DeclaredIncidents() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-xl font-bold tracking-tight">Incidents</h2>
-          <p className="text-muted-foreground text-xs mt-0.5">Manage user-declared incidents</p>
-        </div>
-      </div>
+      <PageHeader
+        icon={ShieldAlert}
+        title="Incidents"
+        description="Manage user-declared incidents"
+      />
 
       {/* Stats Row */}
       {!isLoading && incidents && incidents.length > 0 && (
@@ -101,9 +115,9 @@ function DeclaredIncidents() {
           <button
             onClick={() => setStatusFilter(statusFilter === 'OPEN' ? 'all' : 'OPEN')}
             className={cn(
-              'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all',
+              'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors',
               statusFilter === 'OPEN'
-                ? 'bg-red-500/15 border-red-500/40 text-red-400'
+                ? 'bg-danger-bg border-danger-border text-danger-fg'
                 : 'hover:bg-muted/60'
             )}
           >
@@ -113,9 +127,9 @@ function DeclaredIncidents() {
           <button
             onClick={() => setStatusFilter(statusFilter === 'RESOLVED' ? 'all' : 'RESOLVED')}
             className={cn(
-              'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all',
+              'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors',
               statusFilter === 'RESOLVED'
-                ? 'bg-green-500/15 border-green-500/40 text-green-400'
+                ? 'bg-success-bg border-success-border text-success-fg'
                 : 'hover:bg-muted/60'
             )}
           >
@@ -172,12 +186,11 @@ function DeclaredIncidents() {
       {/* Incidents List */}
       {isLoading ? (
         <div className="flex items-center justify-center py-10">
-          <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-red-500" />
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-primary" />
         </div>
       ) : incidents && incidents.length > 0 ? (
         <div className="space-y-2">
           {incidents.map((incident) => {
-            const priorityCfg = getPriorityConfig(incident.priorityLevel)
             const statusCfg = getStatusConfig(incident.status)
             const StatusIcon = statusCfg.icon
             return (
@@ -188,14 +201,14 @@ function DeclaredIncidents() {
                 className="block group"
               >
                 <Card className={cn(
-                  'transition-all border-l-4',
-                  incident.status === 'OPEN' && 'border-l-red-500 hover:border-red-500/40',
+                  'transition-colors border-l-[3px]',
+                  incident.status === 'OPEN' && 'border-l-danger-solid hover:border-danger-border',
                   incident.status === 'RESOLVED' && 'border-l-transparent hover:border-muted-foreground/20',
                 )}>
                   <CardContent className="p-3">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-3 min-w-0">
-                        <div className={cn('flex-shrink-0 h-2.5 w-2.5 rounded-full mt-2', priorityCfg.dot)} />
+                        <StatusDot tone={priorityTone(incident.priorityLevel)} className="mt-2" />
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <h3 className="font-semibold text-sm group-hover:text-foreground truncate">
@@ -216,17 +229,17 @@ function DeclaredIncidents() {
                             {incident.resolvedByName && (
                               <>
                                 <span className="text-muted-foreground/40">·</span>
-                                <span className="text-green-400">Resolved by {incident.resolvedByName}</span>
+                                <span className="text-success-fg">Resolved by {incident.resolvedByName}</span>
                               </>
                             )}
                           </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        <Badge variant="outline" className={cn('text-xs', priorityCfg.color)}>
+                        <Badge variant={priorityBadgeVariant(incident.priorityLevel)} size="sm">
                           {incident.priorityLevel}
                         </Badge>
-                        <Badge variant="outline" className={cn('text-xs gap-1', statusCfg.color)}>
+                        <Badge variant={statusCfg.variant} size="sm" className="gap-1">
                           <StatusIcon className="h-3 w-3" />
                           {statusCfg.label}
                         </Badge>
@@ -240,17 +253,15 @@ function DeclaredIncidents() {
           })}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-12 border border-dashed rounded-xl">
-          <div className="inline-flex items-center justify-center h-11 w-11 rounded-full bg-muted/60 mb-3">
-            <FileText className="h-5 w-5 text-muted-foreground" />
-          </div>
-          <h3 className="text-sm font-semibold mb-0.5">No incidents found</h3>
-          <p className="text-xs text-muted-foreground text-center max-w-sm">
-            {statusFilter !== 'all' || priorityFilter !== 'all'
+        <EmptyState
+          icon={FileText}
+          title="No incidents found"
+          description={
+            statusFilter !== 'all' || priorityFilter !== 'all'
               ? 'No incidents match your current filters. Try adjusting or clearing filters.'
-              : 'User-declared incidents will appear here.'}
-          </p>
-        </div>
+              : 'User-declared incidents will appear here.'
+          }
+        />
       )}
     </div>
   )

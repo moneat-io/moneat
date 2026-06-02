@@ -27,6 +27,8 @@ import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
 import {Card} from '@/components/ui/card'
+import {PageHeader} from '@/components/ui/page-header'
+import {levelBadgeVariant, levelBorderClass} from '@/lib/severity'
 import {Checkbox} from '@/components/ui/checkbox'
 import {DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger} from '@/components/ui/dropdown-menu'
 import {
@@ -47,42 +49,15 @@ import {
 import {useEffect, useMemo, useState} from 'react'
 import {useToast} from '@/hooks/useToast'
 import {getNow} from '@/lib/demo'
-// Helper function to get level color for badges
-function getLevelColor(level: string): string {
-  switch (level.toLowerCase()) {
-    case 'fatal':
-      return 'bg-red-900 text-red-100 hover:bg-red-900'
-    case 'error':
-      return 'bg-red-600 text-white hover:bg-red-600'
-    case 'warning':
-      return 'bg-orange-500 text-white hover:bg-orange-500'
-    case 'info':
-      return 'bg-blue-500 text-white hover:bg-blue-500'
-    case 'debug':
-      return 'bg-gray-500 text-white hover:bg-gray-500'
-    default:
-      return 'bg-secondary text-secondary-foreground'
-  }
-}
-
-// Get color for level left-border indicator
-function getLevelBorderColor(level: string): string {
-  switch (level.toLowerCase()) {
-    case 'fatal': return 'border-l-red-800'
-    case 'error': return 'border-l-red-500'
-    case 'warning': return 'border-l-amber-500'
-    case 'info': return 'border-l-blue-500'
-    case 'debug': return 'border-l-gray-400'
-    default: return 'border-l-border'
-  }
-}
+// Level → Badge variant and left-border indicator come from the shared severity
+// helper (@/lib/severity) so every surface uses the same status language.
 
 // Get freshness color based on how recently the last event occurred
 function getLastSeenColor(lastSeen: string): string {
   const diff = getNow() - new Date(lastSeen).getTime()
   const hours = diff / (1000 * 60 * 60)
-  if (hours < 1) return 'text-red-500 dark:text-red-400'
-  if (hours < 24) return 'text-amber-600 dark:text-amber-400'
+  if (hours < 1) return 'text-danger-fg'
+  if (hours < 24) return 'text-warning-fg'
   return 'text-muted-foreground'
 }
 
@@ -464,12 +439,12 @@ function DashboardPage() {
         <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <div>
-              <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
+              <h2 className="text-xl font-semibold tracking-tight">Dashboard</h2>
               {currentProject && (
                 <p className="text-sm text-muted-foreground">{currentProject.name}</p>
               )}
             </div>
-            <span className="hidden sm:inline-flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" aria-hidden />
+            <span className="hidden sm:inline-flex h-2 w-2 rounded-full bg-success-solid animate-pulse" aria-hidden />
           </div>
           {hasProjects && (
             <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -499,8 +474,8 @@ function DashboardPage() {
           <Card className="p-12 text-center border-primary/20 bg-gradient-to-b from-card to-primary/5">
             <div className="max-w-md mx-auto space-y-4">
               <div className="flex justify-center">
-                <div className="rounded-full bg-violet-500/15 p-4 ring-2 ring-violet-500/20">
-                  <FolderKanban className="h-10 w-10 text-violet-600 dark:text-violet-400" />
+                <div className="rounded-full bg-primary/15 p-4 ring-2 ring-primary/20">
+                  <FolderKanban className="h-10 w-10 text-primary" />
                 </div>
               </div>
               <div>
@@ -543,7 +518,7 @@ function DashboardPage() {
                       <Button
                         disabled={bulkPending}
                         size="sm"
-                        className="bg-green-600 hover:bg-green-700 h-7 ml-2"
+                        className="h-7 ml-2"
                       >
                         {bulkPending ? 'Updating...' : 'Actions'}
                         <ChevronDown className="h-3 w-3 ml-1" />
@@ -598,14 +573,14 @@ function DashboardPage() {
                 Failed to load issues: {issuesErrorObj instanceof Error ? issuesErrorObj.message : 'Unknown error'}
               </div>
             ) : filteredIssues.length === 0 ? (
-              <Card className="p-12 text-center border-blue-500/20 bg-gradient-to-b from-card to-blue-500/5">
+              <Card className="p-12 text-center border-info-border/50 bg-gradient-to-b from-card to-info-bg">
                 <div className="max-w-md mx-auto space-y-4">
                   <div className="flex justify-center">
-                    <div className="rounded-full bg-blue-500/10 p-4">
+                    <div className="rounded-full bg-info-bg p-4">
                       {searchQuery || statusFilter !== 'unresolved' ? (
-                        <Search className="h-10 w-10 text-blue-600 dark:text-blue-400" />
+                        <Search className="h-10 w-10 text-info-fg" />
                       ) : (
-                        <AlertCircle className="h-10 w-10 text-blue-600 dark:text-blue-400" />
+                        <AlertCircle className="h-10 w-10 text-info-fg" />
                       )}
                     </div>
                   </div>
@@ -627,8 +602,8 @@ function DashboardPage() {
               <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
                 {/* Table header */}
                 <div className="hidden md:flex items-center gap-3 py-2 px-4 bg-muted/40 border-b border-border/40 text-[11px] font-medium text-muted-foreground uppercase tracking-wider select-none">
-                  <div className="w-5 shrink-0" />
-                  <div className="w-14 shrink-0">Level</div>
+                  <div className="w-4 shrink-0" />
+                  <div className="w-[4.5rem] shrink-0">Level</div>
                   <div className="flex-1 min-w-0">Issue</div>
                   <div className="hidden lg:block w-20 shrink-0">Platform</div>
                   <div className="hidden lg:block w-20 shrink-0 text-center">Trend</div>
@@ -641,7 +616,7 @@ function DashboardPage() {
                   {filteredIssues.map((issue) => (
                     <div
                       key={issue.id}
-                      className={`hover:bg-accent/40 transition border-l-[3px] ${getLevelBorderColor(issue.level)}`}
+                      className={`hover:bg-accent/40 transition border-l-[3px] ${levelBorderClass(issue.level)}`}
                     >
                       <div className="flex items-center gap-2 sm:gap-3 py-2 sm:py-2.5 px-2 sm:px-4">
                         <Checkbox
@@ -656,10 +631,12 @@ function DashboardPage() {
                           params={{ issueId: issue.id }}
                           className="flex-1 flex items-center gap-2 sm:gap-3 min-w-0"
                         >
-                          <Badge className={`${getLevelColor(issue.level)} shrink-0 text-[10px] sm:text-[11px] px-1 sm:px-1.5 py-0 w-12 sm:w-14 justify-center`}>
-                            {issue.level.toUpperCase().slice(0, 3)}
-                            <span className="hidden sm:inline">{issue.level.toUpperCase().slice(3)}</span>
-                          </Badge>
+                          <div className="w-12 sm:w-[4.5rem] shrink-0">
+                            <Badge variant={levelBadgeVariant(issue.level)} className="text-[10px] sm:text-[11px] px-1.5 py-0">
+                              <span className="sm:hidden">{issue.level.toUpperCase().slice(0, 3)}</span>
+                              <span className="hidden sm:inline">{issue.level.toUpperCase()}</span>
+                            </Badge>
+                          </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                               <span className="font-semibold truncate flex-1 min-w-0 text-sm sm:text-base" title={getIssueDisplayTitle(issue)}>
@@ -667,24 +644,24 @@ function DashboardPage() {
                               </span>
                               <div className="flex items-center gap-2 shrink-0">
                                 {isNewIssue(issue.firstSeen) && (
-                                  <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded uppercase">
+                                  <span className="text-[10px] font-bold text-success-fg bg-success-bg px-1.5 py-0.5 rounded uppercase">
                                     New
                                   </span>
                                 )}
                                 {issue.status === 'resolved' && (
-                                  <Badge variant="default" className="bg-green-600 text-[11px] px-1.5 py-0">
+                                  <Badge variant="success" className="text-[11px] px-1.5 py-0">
                                     Resolved
                                   </Badge>
                                 )}
                                 {issue.status === 'ignored' && (
                                   <Badge variant="secondary" className="text-[11px] px-1.5 py-0">
-                                    <EyeOff className="h-3 w-3 mr-0.5" />
+                                    <EyeOff className="h-3 w-3" />
                                     Ignored
                                   </Badge>
                                 )}
                                 {issue.status === 'resolvedInNextRelease' && (
-                                  <Badge variant="outline" className="border-blue-500 text-blue-600 dark:text-blue-400 text-[11px] px-1.5 py-0">
-                                    <Timer className="h-3 w-3 mr-0.5" />
+                                  <Badge variant="info" className="text-[11px] px-1.5 py-0">
+                                    <Timer className="h-3 w-3" />
                                     Next Release
                                   </Badge>
                                 )}
@@ -812,26 +789,25 @@ function ApmErrorsTab({ isActive }: { isActive: boolean }) {
 
   return (
     <div className="px-6 py-4">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">APM Errors</h2>
-          <p className="text-sm text-muted-foreground">
-            Application performance errors from traces
-          </p>
-        </div>
-        <Select value={timeRange} onValueChange={handleTimeRangeChange}>
-          <SelectTrigger className="h-9 w-[110px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {APM_TIME_RANGE_OPTIONS.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <PageHeader
+        className="mb-4"
+        title="APM Errors"
+        description="Application performance errors from traces"
+        actions={
+          <Select value={timeRange} onValueChange={handleTimeRangeChange}>
+            <SelectTrigger className="h-9 w-[110px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {APM_TIME_RANGE_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        }
+      />
 
       {(services.length > 0 || selectedService !== 'all') && (
         <div className="flex items-end gap-0 mb-4 border-b border-border/60">
@@ -895,11 +871,11 @@ function ApmErrorsTab({ isActive }: { isActive: boolean }) {
           Loading APM errors...
         </div>
       ) : errors.length === 0 ? (
-        <Card className="p-12 text-center border-blue-500/20 bg-gradient-to-b from-card to-blue-500/5">
+        <Card className="p-12 text-center border-info-border/50 bg-gradient-to-b from-card to-info-bg">
           <div className="max-w-md mx-auto space-y-4">
             <div className="flex justify-center">
-              <div className="rounded-full bg-blue-500/10 p-4">
-                <AlertTriangle className="h-10 w-10 text-blue-600 dark:text-blue-400" />
+              <div className="rounded-full bg-info-bg p-4">
+                <AlertTriangle className="h-10 w-10 text-info-fg" />
               </div>
             </div>
             <div>

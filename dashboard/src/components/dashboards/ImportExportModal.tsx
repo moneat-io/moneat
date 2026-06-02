@@ -376,7 +376,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
           <h2 className="text-lg font-semibold flex items-center gap-2">
             {mode === 'import' ? 'Import Dashboard' : 'Export Dashboard'}
             {mode === 'import' && (
-              <span className="text-xs font-normal px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+              <span className="text-xs font-normal px-2 py-0.5 rounded bg-warning-bg text-warning-fg border border-warning-border">
                 Experimental
               </span>
             )}
@@ -459,11 +459,11 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
 
               {/* Warnings */}
               {warnings.length > 0 && (
-                <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950 p-3">
-                  <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 text-xs font-medium mb-1">
+                <div className="rounded-md border border-warning-border bg-warning-bg p-3">
+                  <div className="flex items-center gap-2 text-warning-fg text-xs font-medium mb-1">
                     <AlertTriangle className="h-3.5 w-3.5" /> Import Warnings
                   </div>
-                  <ul className="text-xs text-amber-700 dark:text-amber-300 space-y-0.5">
+                  <ul className="text-xs text-warning-fg/90 space-y-0.5">
                     {warnings.map((w, i) => (
                       <li key={i}>• {w}</li>
                     ))}
@@ -473,10 +473,10 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
 
               {/* Success */}
               {importSuccess && (
-                <div className="rounded-md border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950 p-3 flex items-center justify-between">
+                <div className="rounded-md border border-success-border bg-success-bg p-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
-                    <span className="text-xs text-green-700 dark:text-green-300">
+                    <Check className="h-4 w-4 text-success-fg" />
+                    <span className="text-xs text-success-fg">
                       Dashboard imported successfully!
                     </span>
                   </div>

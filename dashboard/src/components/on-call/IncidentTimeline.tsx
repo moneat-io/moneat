@@ -34,47 +34,47 @@ const EVENT_CONFIG: Record<string, { icon: typeof Circle; label: string; color: 
   TRIGGERED: {
     icon: AlertTriangle,
     label: 'Incident Triggered',
-    color: 'text-red-500',
+    color: 'text-danger-fg',
   },
   ESCALATED: {
     icon: Bell,
     label: 'Escalated',
-    color: 'text-orange-500',
+    color: 'text-warning-fg',
   },
   ACKNOWLEDGED: {
     icon: CheckCircle2,
     label: 'Acknowledged',
-    color: 'text-blue-500',
+    color: 'text-info-fg',
   },
   RESOLVED: {
     icon: CheckCircle2,
     label: 'Resolved',
-    color: 'text-green-500',
+    color: 'text-success-fg',
   },
   REASSIGNED: {
     icon: UserPlus,
     label: 'Reassigned',
-    color: 'text-purple-500',
+    color: 'text-chart-5',
   },
   NOTE_ADDED: {
     icon: MessageSquare,
     label: 'Note Added',
-    color: 'text-gray-500',
+    color: 'text-muted-foreground',
   },
   STEP_TIMEOUT: {
     icon: Clock,
     label: 'Step Timeout',
-    color: 'text-orange-500',
+    color: 'text-warning-fg',
   },
   NOTIFICATION_SENT: {
     icon: Send,
     label: 'Notification Sent',
-    color: 'text-blue-400',
+    color: 'text-chart-6',
   },
   VIEWED: {
     icon: Eye,
     label: 'Viewed',
-    color: 'text-gray-400',
+    color: 'text-muted-foreground',
   },
 }
 

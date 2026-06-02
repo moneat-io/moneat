@@ -328,10 +328,10 @@ describe('workflow graph labels and defaults', () => {
 
   it('formats references and statuses', () => {
     expect(splitReferences('alert.id, , alert.source')).toEqual(['alert.id', 'alert.source'])
-    expect(statusClass('complete')).toContain('emerald')
-    expect(statusClass('failed')).toContain('red')
-    expect(statusClass('running')).toContain('blue')
-    expect(statusClass('pending')).toContain('amber')
+    expect(statusClass('complete')).toContain('success')
+    expect(statusClass('failed')).toContain('danger')
+    expect(statusClass('running')).toContain('info')
+    expect(statusClass('pending')).toContain('warning')
   })
 })
 

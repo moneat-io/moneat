@@ -19,10 +19,12 @@ import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api, type LlmGenerationDetail } from '@/lib/api'
 import { useProject } from '@/contexts/ProjectContext'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { StatsCard } from '@/components/charts/StatsCard'
-import { Brain, Clock, Coins, Hash } from 'lucide-react'
+import { PageHeader } from '@/components/ui/page-header'
+import { SectionCard } from '@/components/ui/section-card'
+import { EmptyState } from '@/components/ui/empty-state'
+import { Brain, Clock, Coins, Hash, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/ai/traces/$traceId')({
@@ -46,16 +48,18 @@ function formatCost(usd: number): string {
   return `$${usd.toFixed(2)}`
 }
 
+// Categorical span-type hues from the shared chart palette (literal classes so
+// Tailwind emits them); these encode type, not status.
 function typeColor(type: string): string {
   switch (type) {
-    case 'chat': return 'bg-blue-500'
-    case 'completion': return 'bg-emerald-500'
-    case 'embedding': return 'bg-violet-500'
-    case 'tool_call': return 'bg-amber-500'
-    case 'agent': return 'bg-pink-500'
-    case 'chain': return 'bg-cyan-500'
-    case 'retriever': return 'bg-orange-500'
-    default: return 'bg-slate-500'
+    case 'chat': return 'bg-chart-1'
+    case 'completion': return 'bg-chart-2'
+    case 'embedding': return 'bg-chart-3'
+    case 'tool_call': return 'bg-chart-4'
+    case 'agent': return 'bg-chart-5'
+    case 'chain': return 'bg-chart-6'
+    case 'retriever': return 'bg-chart-7'
+    default: return 'bg-muted-foreground'
   }
 }
 
@@ -129,7 +133,11 @@ function TraceDetailPage() {
   })
 
   if (projectId === null || projectId === undefined) {
-    return <div className="p-6 text-muted-foreground">Select a project to view this trace.</div>
+    return (
+      <div className="p-6">
+        <EmptyState icon={Brain} title="No project selected" description="Select a project to view this trace." />
+      </div>
+    )
   }
 
   if (isLoading) {
@@ -137,7 +145,11 @@ function TraceDetailPage() {
   }
 
   if (!trace) {
-    return <div className="p-6 text-muted-foreground">Trace not found.</div>
+    return (
+      <div className="p-6">
+        <EmptyState icon={AlertTriangle} title="Trace not found" description="This trace could not be found." />
+      </div>
+    )
   }
 
   const tree = buildTree(trace.generations)
@@ -148,17 +160,13 @@ function TraceDetailPage() {
   const totalSpan = maxTs - minTs || 1
 
   return (
-    <div className="space-y-6 p-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Brain className="h-6 w-6" />
-          Trace {traceId.slice(0, 16)}...
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {trace.generations.length} generation(s) in this trace
-        </p>
-      </div>
+    <div className="space-y-4 p-6">
+      <PageHeader
+        icon={Brain}
+        eyebrow="AI Trace"
+        title={<span className="font-mono text-lg">{traceId.slice(0, 16)}…</span>}
+        description={`${trace.generations.length} generation(s) in this trace`}
+      />
 
       {/* Summary Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -171,28 +179,17 @@ function TraceDetailPage() {
       {/* Waterfall + Detail Panel */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Waterfall */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="px-4 py-3">
-            <CardTitle className="text-sm">Span Waterfall</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4 pt-0">
+        <SectionCard title="Span Waterfall" className="lg:col-span-2">
             <div className="space-y-0.5">
               {renderNodes(tree, 0, minTs, totalSpan, selectedGen, setSelectedGen)}
             </div>
             {trace.generations.length === 0 && (
               <p className="text-center text-muted-foreground py-8">No generations in this trace.</p>
             )}
-          </CardContent>
-        </Card>
+        </SectionCard>
 
         {/* Detail Panel */}
-        <Card>
-          <CardHeader className="px-4 py-3">
-            <CardTitle className="text-sm">
-              {selectedGen ? selectedGen.name || 'Generation Detail' : 'Select a span'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4 pt-0">
+        <SectionCard title={selectedGen ? selectedGen.name || 'Generation Detail' : 'Select a span'}>
             {selectedGen ? (
               <div className="space-y-3 text-sm">
                 <div className="grid grid-cols-2 gap-2">
@@ -225,8 +222,7 @@ function TraceDetailPage() {
             ) : (
               <p className="text-muted-foreground text-sm py-4">Click a span in the waterfall to see details.</p>
             )}
-          </CardContent>
-        </Card>
+        </SectionCard>
       </div>
     </div>
   )

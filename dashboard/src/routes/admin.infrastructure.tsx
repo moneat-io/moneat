@@ -46,10 +46,10 @@ function AdminInfrastructurePage() {
 
   const storageColor =
     data.storageUsedPercent >= 90
-      ? 'text-red-600 dark:text-red-400'
+      ? 'text-danger-fg'
       : data.storageUsedPercent >= 70
-        ? 'text-amber-600 dark:text-amber-400'
-        : 'text-emerald-600 dark:text-emerald-400'
+        ? 'text-warning-fg'
+        : 'text-success-fg'
 
   // Find the largest table for relative bar sizing
   const maxTableBytes = Math.max(...data.clickhouseTables.map((t) => t.bytesOnDisk), 1)
@@ -63,20 +63,20 @@ function AdminInfrastructurePage() {
 
       {/* Scaling Alerts */}
       {data.scalingTriggerAlerts.length > 0 && (
-        <Card className="border-red-200 dark:border-red-900 bg-red-50/50 dark:bg-red-950/30">
+        <Card className="border-danger-border bg-danger-bg/50">
           <CardContent className="pt-6">
             <div className="flex gap-3">
-              <div className="rounded-lg bg-red-100 dark:bg-red-950 p-2 h-fit">
-                <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
+              <div className="rounded-lg bg-danger-bg p-2 h-fit">
+                <AlertTriangle className="h-4 w-4 text-danger-fg" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-red-700 dark:text-red-400 mb-1">
+                <p className="text-sm font-semibold text-danger-fg mb-1">
                   Scaling Alerts
                 </p>
                 <ul className="space-y-1">
                   {data.scalingTriggerAlerts.map((msg, i) => (
-                    <li key={i} className="text-sm text-red-600 dark:text-red-400 flex items-start gap-1.5">
-                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />
+                    <li key={i} className="text-sm text-danger-fg flex items-start gap-1.5">
+                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-danger-solid shrink-0" />
                       {msg}
                     </li>
                   ))}
@@ -114,16 +114,16 @@ function AdminInfrastructurePage() {
           value={formatNumber(data.totalRows)}
           subtitle="across all tables"
           icon={Rows3}
-          iconColor="text-blue-600 dark:text-blue-400"
-          iconBg="bg-blue-100 dark:bg-blue-950"
+          iconColor="text-chart-1"
+          iconBg="bg-chart-1/15"
         />
         <MetricCard
           title="ClickHouse Tables"
           value={data.clickhouseTables.length}
           subtitle="active tables"
           icon={Database}
-          iconColor="text-violet-600 dark:text-violet-400"
-          iconBg="bg-violet-100 dark:bg-violet-950"
+          iconColor="text-chart-4"
+          iconBg="bg-chart-4/15"
         />
       </div>
 
@@ -159,7 +159,7 @@ function AdminInfrastructurePage() {
                         <TableCell>
                           <div className="h-2 rounded-full bg-muted overflow-hidden">
                             <div
-                              className="h-full rounded-full bg-blue-500/70 transition-all duration-500"
+                              className="h-full rounded-full bg-primary/70 transition-all duration-500"
                               style={{ width: `${pct}%` }}
                             />
                           </div>
