@@ -17,6 +17,7 @@
 import {createFileRoute, useNavigate} from '@tanstack/react-router'
 import {useState, useEffect} from 'react'
 import {api} from '@/lib/api'
+import {APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
 import {Button} from '@/components/ui/button'
 import {AuthAlert, AuthShell} from '@/components/auth/AuthShell'
 import {authPrimaryButtonClass, authSecondaryButtonClass} from '@/components/auth/authStyles'
@@ -42,7 +43,7 @@ function VerifyEmailRequired() {
 
         // If they're verified, redirect to home
         if (user.emailVerified) {
-          navigate({ to: '/' })
+          navigate({ to: '/', search: APP_OVERVIEW_SEARCH })
         }
       } catch (error) {
         console.error('Failed to load user:', error)
@@ -75,7 +76,7 @@ function VerifyEmailRequired() {
     try {
       const user = await api.getCurrentUser()
       if (user.emailVerified) {
-        navigate({ to: '/' })
+        navigate({ to: '/', search: APP_OVERVIEW_SEARCH })
       } else {
         setResendMessage('Email not verified yet. Please check your inbox and click the verification link.')
       }

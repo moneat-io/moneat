@@ -20,6 +20,7 @@ import {Loader2} from 'lucide-react'
 import {api} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
 import {useAuth} from '@/hooks/useAuth'
+import {APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
 import {Button} from '@/components/ui/button'
 import {AuthAlert, AuthShell} from '@/components/auth/AuthShell'
 import {authPrimaryButtonClass, authSecondaryButtonClass} from '@/components/auth/authStyles'
@@ -89,7 +90,7 @@ function AcceptInvitePage() {
 
       // Redirect to dashboard after a short delay
       setTimeout(() => {
-        navigate({ to: '/' })
+        navigate({ to: '/', search: APP_OVERVIEW_SEARCH })
       }, 2000)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to accept invitation')

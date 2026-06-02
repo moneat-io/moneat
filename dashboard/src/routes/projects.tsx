@@ -16,6 +16,7 @@
 
 import {createFileRoute, Navigate, Outlet, redirect, useMatches} from '@tanstack/react-router'
 import {api} from '@/lib/api'
+import {APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
 import {Code2, Globe, Terminal} from 'lucide-react'
 
 const platformAliases: Record<string, string> = {
@@ -485,5 +486,5 @@ function ProjectsLayout() {
   }
 
   // /projects base path now redirects to dashboard - project list is in the sidebar
-  return <Navigate to="/" />
+  return <Navigate to="/" search={APP_OVERVIEW_SEARCH} />
 }

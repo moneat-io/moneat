@@ -19,6 +19,7 @@ import {useState} from 'react'
 import {Github} from 'lucide-react'
 import {api} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
+import {APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
 import {Button} from '@/components/ui/button'
 import {Checkbox} from '@/components/ui/checkbox'
 import {Input} from '@/components/ui/input'
@@ -31,7 +32,7 @@ import {Helmet} from 'react-helmet-async'
 export const Route = createFileRoute('/signup')({
   beforeLoad: () => {
     if (api.isAuthenticated()) {
-      throw redirect({ to: '/' })
+      throw redirect({ to: '/', search: APP_OVERVIEW_SEARCH })
     }
   },
   component: SignupPage,

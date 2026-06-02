@@ -17,6 +17,7 @@
 import {createFileRoute, useNavigate} from '@tanstack/react-router'
 import {useEffect, useMemo} from 'react'
 import {Logo} from '@/components/Logo'
+import {APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
 
 export const Route = createFileRoute('/auth/oauth/callback')({
   component: OAuthCallbackPage,
@@ -44,7 +45,7 @@ function OAuthCallbackPage() {
     // Auth token is now set as httpOnly cookie by the backend redirect
     sessionStorage.setItem('authenticated', 'true')
     const timer = setTimeout(() => {
-      navigate({ to: '/' })
+      navigate({ to: '/', search: APP_OVERVIEW_SEARCH })
     }, 500)
     return () => clearTimeout(timer)
   }, [navigate, error])

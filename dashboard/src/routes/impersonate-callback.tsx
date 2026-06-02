@@ -16,6 +16,7 @@
 
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect } from 'react'
+import { APP_OVERVIEW_SEARCH } from '@/lib/overview-route'
 
 export const Route = createFileRoute('/impersonate-callback')({
   component: ImpersonateCallback,
@@ -26,13 +27,13 @@ function ImpersonateCallback() {
 
   useEffect(() => {
     if (!window.opener) {
-      navigate({ to: '/' })
+      navigate({ to: '/', search: APP_OVERVIEW_SEARCH })
       return
     }
 
     const expectedOrigin = window.location.origin
     const timeoutId = window.setTimeout(() => {
-      navigate({ to: '/' })
+      navigate({ to: '/', search: APP_OVERVIEW_SEARCH })
     }, 10000)
 
     const handleTokenMessage = (event: MessageEvent) => {
@@ -44,7 +45,7 @@ function ImpersonateCallback() {
       sessionStorage.setItem('impersonate_token', event.data.token)
       window.clearTimeout(timeoutId)
       window.removeEventListener('message', handleTokenMessage)
-      navigate({ to: '/' })
+      navigate({ to: '/', search: APP_OVERVIEW_SEARCH })
     }
 
     window.addEventListener('message', handleTokenMessage)

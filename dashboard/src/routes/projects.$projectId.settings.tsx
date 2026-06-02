@@ -33,6 +33,7 @@ import {
 } from 'lucide-react'
 import {api} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
+import {APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
 import {useProject} from '@/contexts/ProjectContext'
 import {getPlatformInfo, platforms, type PlatformType} from '@/routes/projects'
 import {Badge} from '@/components/ui/badge'
@@ -158,7 +159,7 @@ project=${project.slug}` : null
         title: 'Project deleted',
         description: `"${project.name}" has been deleted.`,
       })
-      navigate({ to: '/' })
+      navigate({ to: '/', search: APP_OVERVIEW_SEARCH })
     },
     onError: (err: Error) => {
       toast({

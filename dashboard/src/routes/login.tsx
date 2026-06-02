@@ -19,6 +19,7 @@ import {useState} from 'react'
 import {Github} from 'lucide-react'
 import {api} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
+import {APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
 import {cn} from '@/lib/utils'
@@ -64,7 +65,7 @@ export const Route = createFileRoute('/login')({
 
     // If authenticated with no special params, redirect to home
     if (api.isAuthenticated()) {
-      throw redirect({ to: '/' })
+      throw redirect({ to: '/', search: APP_OVERVIEW_SEARCH })
     }
   },
   component: LoginPage,
@@ -135,7 +136,7 @@ function LoginPage() {
         // Redirect back to the page the user was trying to access (e.g. from email link)
         window.location.href = postLoginRedirect
       } else {
-        navigate({ to: '/' })
+        navigate({ to: '/', search: APP_OVERVIEW_SEARCH })
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err)

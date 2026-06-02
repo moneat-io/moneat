@@ -19,6 +19,7 @@ import {type ReactElement, useState} from 'react'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
+import {APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
 import {formatRelativeTime} from '@/lib/utils'
 import {useToast} from '@/hooks/useToast'
 import {Badge} from '@/components/ui/badge'
@@ -205,6 +206,7 @@ function IssueDetailPage() {
         <nav className="mb-3 flex items-center gap-2 text-sm">
           <Link
             to="/"
+            search={APP_OVERVIEW_SEARCH}
             className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
           >
             <ChevronLeft className="h-3.5 w-3.5" />
