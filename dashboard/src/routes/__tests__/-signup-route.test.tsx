@@ -18,17 +18,10 @@ vi.mock('@/lib/demo', () => ({
 }))
 
 vi.mock('@tanstack/react-router', () => ({
-  createFileRoute: () => (options: Record<string, unknown>) => ({
-    ...options,
-    options,
-  }),
-  Link: ({children}: {children: unknown}) => children,
   redirect: (opts: Record<string, unknown>) => ({...opts, __redirect: true}),
 }))
 
-import {Route as SignupRoute} from '../signup'
-
-const beforeLoad = (SignupRoute as unknown as {beforeLoad: () => Promise<void>}).beforeLoad
+import {ensureSignupRouteCanLoad} from '../-signup-route-guard'
 
 describe('signup route guard', () => {
   beforeEach(() => {
@@ -39,7 +32,7 @@ describe('signup route guard', () => {
   })
 
   it('lets unauthenticated visitors load signup', async () => {
-    await expect(beforeLoad()).resolves.toBeUndefined()
+    await expect(ensureSignupRouteCanLoad()).resolves.toBeUndefined()
 
     expect(mockApi.logout).not.toHaveBeenCalled()
   })
@@ -48,7 +41,7 @@ describe('signup route guard', () => {
     mockApi.isAuthenticated.mockReturnValue(true)
     mockIsDemo.mockReturnValue(true)
 
-    await expect(beforeLoad()).resolves.toBeUndefined()
+    await expect(ensureSignupRouteCanLoad()).resolves.toBeUndefined()
 
     expect(mockApi.logout).toHaveBeenCalledTimes(1)
   })
@@ -56,7 +49,7 @@ describe('signup route guard', () => {
   it('redirects signed-in non-demo users to the app overview', async () => {
     mockApi.isAuthenticated.mockReturnValue(true)
 
-    await expect(beforeLoad()).rejects.toMatchObject({
+    await expect(ensureSignupRouteCanLoad()).rejects.toMatchObject({
       __redirect: true,
       to: '/',
       search: APP_OVERVIEW_SEARCH,
