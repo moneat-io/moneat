@@ -566,6 +566,317 @@ Delete an alert silence period.
 |-----------|------|----------|-------------|
 | `silence_period_id` | number | Yes | Silence period ID |
 
+## Workflow Tools
+
+### `list_workflows`
+List workflows in the organization. No parameters.
+
+### `get_workflow`
+Get a workflow, including the latest graph.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workflow_id` | integer | Yes | Workflow ID |
+
+### ✏️ `create_workflow`
+Create a workflow draft.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | string | Yes | Workflow name |
+| `trigger_name` | string | Yes | Trigger from `get_workflow_catalog` |
+| `enabled` | boolean | No | Whether the workflow is enabled |
+| `graph` / `graph_json` | object/string | No | Graph definition with nodes and edges |
+| `conditions` / `conditions_json` | array/string | No | Legacy condition array |
+| `steps` / `steps_json` | array/string | No | Legacy step array |
+| `once_for_template` / `once_for_template_json` | array/string | No | Deduplication references |
+
+### ✏️ `update_workflow`
+Update workflow metadata or create a new draft version.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workflow_id` | integer | Yes | Workflow ID |
+| `name` | string | No | Updated workflow name |
+| `enabled` | boolean | No | Whether the workflow is enabled |
+| `graph` / `graph_json` | object/string | No | Replacement graph definition |
+| `conditions` / `conditions_json` | array/string | No | Replacement legacy condition array |
+| `steps` / `steps_json` | array/string | No | Replacement legacy step array |
+| `once_for_template` / `once_for_template_json` | array/string | No | Replacement deduplication references |
+
+### ✏️ `delete_workflow`
+Delete a workflow.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workflow_id` | integer | Yes | Workflow ID |
+
+### ✏️ `publish_workflow`
+Publish the latest workflow version so it can run for matching triggers.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workflow_id` | integer | Yes | Workflow ID |
+
+### ✏️ `unpublish_workflow`
+Unpublish the latest workflow version.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workflow_id` | integer | Yes | Workflow ID |
+
+### ✏️ `run_workflow`
+Start a manual workflow run.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workflow_id` | integer | Yes | Workflow ID |
+| `scope` / `scope_json` | object/string | No | Additional workflow scope |
+
+### ✏️ `create_workflow_instance`
+Create an API-triggered workflow instance.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workflow_id` | integer | Yes | API-triggered workflow ID |
+| `scope` / `scope_json` | object/string | No | Instance scope |
+
+### ✏️ `cancel_workflow_run`
+Cancel a workflow run.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workflow_id` | integer | Yes | Workflow ID |
+| `run_id` | integer | Yes | Run ID |
+
+### `list_workflow_runs`
+List recent workflow runs.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workflow_id` | integer | Yes | Workflow ID |
+| `limit` | integer | No | Max runs (default 50, max 100) |
+
+### `get_workflow_run`
+Get a workflow run with step progress.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workflow_id` | integer | Yes | Workflow ID |
+| `run_id` | integer | Yes | Run ID |
+
+### `get_workflow_catalog`
+Get workflow triggers, resources, actions, and graph node types. No parameters.
+
+### `list_workflow_blueprints`
+List curated workflow blueprints. No parameters.
+
+### `get_workflow_blueprint`
+Get one workflow blueprint with its graph.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `key` | string | Yes | Blueprint key |
+
+### `list_workflow_audit`
+List workflow audit events.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workflow_id` | integer | No | Filter to one workflow |
+| `limit` | integer | No | Max events (default 100, max 500) |
+
+### `get_workflow_webhook_signing`
+Get the signed webhook ingress URL and signing secret for a webhook-triggered workflow.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workflow_id` | integer | Yes | Webhook-triggered workflow ID |
+
+## Security Tools
+
+### `list_security_signals`
+List security signals with optional filters.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `status` | string | No | `open`, `under_review`, or `archived` |
+| `severity` | string | No | `info`, `low`, `medium`, `high`, or `critical` |
+| `source` | string | No | Signal source, such as `detection` or `vulnerability` |
+| `from` / `to` | string | No | ISO-8601 time bounds |
+| `limit` / `offset` | integer | No | Pagination controls |
+
+### `get_security_signal`
+Get a security signal with evidence, audit trail, sample events, and threat intel.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `security_signal_id` | integer | Yes | Security signal ID |
+
+### ✏️ `triage_security_signal`
+Change signal status, assignment, or add a note.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `security_signal_id` | integer | Yes | Security signal ID |
+| `status` | string | No | `open`, `under_review`, or `archived` |
+| `reason` | string | No | Archive reason: `true_positive`, `false_positive`, or `benign` |
+| `assignee_user_id` | integer | No | User ID to assign |
+| `clear_assignee` | boolean | No | Clear the current assignee |
+| `note` | string | No | Triage note |
+
+### Detection Rule Tools
+Use these to manage compiler-validated security detection rules.
+
+### `list_detection_rules`
+List detection rules. No parameters.
+
+### `get_detection_rule`
+Get one rule.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `detection_rule_id` | integer | Yes | - | Detection rule ID |
+
+### ✏️ `create_detection_rule`
+Create a compiler-validated detection rule.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `name` | string | Yes | - | Detection rule name |
+| `description` | string | No | `""` | Detection rule description |
+| `source` | string | No | `logs` | Telemetry source |
+| `filter` | string | No | `""` | Log query filter expression |
+| `group_by` | string[] | No | `[]` | Group-by columns, such as `host`, `service`, or `tags['user']` |
+| `window_seconds` | integer | No | `300` | Evaluation window in seconds |
+| `type` | string | No | `threshold` | `threshold`, `new_value`, or `rate_anomaly` |
+| `threshold_count` | integer | No | `null` | Threshold count for threshold or rate rules |
+| `severity` | string | No | `medium` | `info`, `low`, `medium`, `high`, or `critical` |
+| `signal_title` | string | No | `""` | Signal title template |
+| `signal_message` | string | No | `""` | Signal message template |
+| `suppressions` | string[] | No | `[]` | Suppression keys |
+| `enabled` | boolean | No | `false` | Enable the rule after creation |
+| `tags` | string[] | No | `[]` | Rule tags, such as `mitre:T1059` |
+
+### ✏️ `update_detection_rule`
+Update a compiler-validated detection rule.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `detection_rule_id` | integer | Yes | - | Detection rule ID |
+| `name` | string | No | Current value | Detection rule name |
+| `description` | string | No | Current value | Detection rule description |
+| `source` | string | No | Current value | Telemetry source |
+| `filter` | string | No | Current value | Log query filter expression |
+| `group_by` | string[] | No | Current value | Group-by columns, such as `host`, `service`, or `tags['user']` |
+| `window_seconds` | integer | No | Current value | Evaluation window in seconds |
+| `type` | string | No | Current value | `threshold`, `new_value`, or `rate_anomaly` |
+| `threshold_count` | integer | No | Current value | Threshold count for threshold or rate rules |
+| `severity` | string | No | Current value | `info`, `low`, `medium`, `high`, or `critical` |
+| `signal_title` | string | No | Current value | Signal title template |
+| `signal_message` | string | No | Current value | Signal message template |
+| `suppressions` | string[] | No | Current value | Suppression keys |
+| `enabled` | boolean | No | Current value | Enable or disable the rule |
+| `tags` | string[] | No | Current value | Rule tags, such as `mitre:T1059` |
+
+### ✏️ `delete_detection_rule`
+Delete a detection rule.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `detection_rule_id` | integer | Yes | - | Detection rule ID |
+
+### `preview_detection_rule`
+Preview rule matches without writing signals.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `detection_rule_id` | integer | Yes | - | Detection rule ID |
+
+### `get_detection_coverage`
+Get MITRE ATT&CK coverage for enabled rules. No parameters.
+
+### `list_detection_templates`
+List starter-pack templates. No parameters.
+
+### ✏️ `install_detection_template`
+Install a template as a disabled rule.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `template_id` | string | Yes | - | Detection template ID |
+
+### Vulnerability Tools
+
+### `get_vulnerability_summary`
+Get package and finding counts. No parameters.
+
+### `list_vulnerability_inventory`
+List SBOM package inventory with finding counts.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `search` | string | No | - | Search package, version, target, host, image, or purl |
+| `package` | string | No | - | Exact package name filter |
+| `target` | string | No | - | Target name filter |
+| `limit` | integer | No | `100` | Max results, capped at `500` |
+| `offset` | integer | No | `0` | Result offset for pagination |
+
+### `list_vulnerability_findings`
+List vulnerability findings derived from SBOM inventory.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `search` | string | No | - | Search advisory, CVE, package, target, or fixed version |
+| `package` | string | No | - | Exact package name filter |
+| `severity` | string | No | - | `info`, `low`, `medium`, `high`, or `critical` |
+| `status` | string | No | - | `open`, `under_review`, or `archived` |
+| `limit` | integer | No | `100` | Max results, capped at `500` |
+| `offset` | integer | No | `0` | Result offset for pagination |
+
+### `export_vulnerability_sbom`
+Export inventory as CycloneDX or SPDX JSON.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `format` | string | Yes | - | `cyclonedx` or `spdx` |
+
+### Security Event And Compliance Tools
+
+### `list_security_events`
+List runtime security events.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `severity` | string | No | - | Security event severity |
+| `host` | string | No | - | Literal host substring filter |
+| `rule_id` | string | No | - | Runtime security rule ID |
+| `limit` | integer | No | `50` | Max results, capped at `200` |
+| `offset` | integer | No | `0` | Result offset for pagination |
+
+### `get_security_event`
+Get one runtime security event.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `security_event_id` | string | Yes | - | Runtime security event ID |
+
+### `get_compliance_summary`
+Get finding counts by framework and status. No parameters.
+
+### `get_compliance_trends`
+Get 14-day compliance trends by framework. No parameters.
+
+### `list_compliance_findings`
+List compliance findings.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `framework` | string | No | - | Compliance framework filter |
+| `status` | string | No | - | `passed`, `failed`, `skipped`, or `error` |
+| `limit` | integer | No | `50` | Max results, capped at `200` |
+| `offset` | integer | No | `0` | Result offset for pagination |
+
 ## Infrastructure Tools
 
 ### `list_containers`
@@ -660,31 +971,73 @@ Resume a paused uptime monitor.
 |-----------|------|----------|-------------|
 | `monitor_id` | string | Yes | Monitor UUID |
 
-## Synthetic Test Tools
+## Synthetics Tools
+
+Synthetic test payload fields use the existing API casing: `testType`, `intervalSeconds`, `timeoutSeconds`,
+and `alertOnFailure`. Keep IDs such as `synthetic_test_id` in snake_case.
 
 ### `list_synthetic_tests`
-List all synthetic tests in the organization. No parameters.
+List all synthetic browser and API tests. No parameters.
 
 ### `get_synthetic_test`
-Get one synthetic test.
+Get a synthetic test.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `test_id` | string | Yes | Synthetic test UUID |
+| `synthetic_test_id` | string | Yes | Synthetic test UUID |
+
+### `get_synthetic_test_summary`
+Get 30-day uptime and latency summary for a synthetic test.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `synthetic_test_id` | string | Yes | Synthetic test UUID |
+
+### ✏️ `create_synthetic_test`
+Create a synthetic browser or API test.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | string | Yes | Test name |
+| `testType` | string | No | `api`, `browser`, or protocol-specific type |
+| `url` | string | No | Target URL |
+| `method` | string | No | HTTP method |
+| `intervalSeconds` | number | No | Run interval in seconds |
+| `timeoutSeconds` | number | No | Timeout in seconds |
+| `assertions` | array | No | Synthetic assertion objects |
+| `steps` | array | No | Browser or multistep API step objects |
+| `tags` | array | No | Tags |
+| `alertOnFailure` | boolean | No | Alert when the test transitions to failed |
+
+### ✏️ `update_synthetic_test`
+Update a synthetic browser or API test.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `synthetic_test_id` | string | Yes | Synthetic test UUID |
+| `name` | string | No | Test name |
+| `active` | boolean | No | Enable or disable the test |
+| `url` | string | No | Target URL |
+| `method` | string | No | HTTP method |
+| `intervalSeconds` | number | No | Run interval in seconds |
+| `timeoutSeconds` | number | No | Timeout in seconds |
+| `assertions` | array | No | Synthetic assertion objects |
+| `steps` | array | No | Browser or multistep API step objects |
+| `tags` | array | No | Tags |
+
+### ✏️ `delete_synthetic_test`
+Delete a synthetic test.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `synthetic_test_id` | string | Yes | Synthetic test UUID |
 
 ### ✏️ `run_synthetic_test`
 Run a synthetic test immediately.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `test_id` | string | Yes | Synthetic test UUID |
-
-### `get_synthetic_test_summary`
-Get the 30-day uptime and latency summary for a synthetic test.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `test_id` | string | Yes | Synthetic test UUID |
+| `synthetic_test_id` | string | Yes | Synthetic test UUID |
 
 ## Status Page Tools
 
@@ -909,3 +1262,9 @@ Resources are read-only data sources available via `resources/list` and `resourc
 | `moneat://uptime/summary` | All uptime monitors with 24h/7d/30d percentages |
 | `moneat://status-pages` | Status pages and current status |
 | `moneat://infrastructure/health` | Quick health: host statuses, alert counts, uptime |
+| `moneat://workflows/overview` | Workflow counts, recent runs, success rate, and top workflows |
+| `moneat://workflows/usage` | Workflow execution usage for the current billing period |
+| `moneat://workflows/catalog` | Workflow triggers, actions, graph node types, and blueprints |
+| `moneat://security/summary` | Open signals, detection coverage, vulnerability counts, and compliance summary |
+| `moneat://security/signals/open` | Open security signals |
+| `moneat://security/detection/coverage` | MITRE ATT&CK coverage for enabled detection rules |

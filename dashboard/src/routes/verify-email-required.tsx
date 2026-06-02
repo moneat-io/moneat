@@ -16,10 +16,10 @@
 
 import {createFileRoute, useNavigate} from '@tanstack/react-router'
 import {useState, useEffect} from 'react'
-import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
-import {Button} from '@/components/ui/button'
-import {Logo} from '@/components/Logo'
 import {api} from '@/lib/api'
+import {Button} from '@/components/ui/button'
+import {AuthAlert, AuthShell} from '@/components/auth/AuthShell'
+import {authPrimaryButtonClass, authSecondaryButtonClass} from '@/components/auth/authStyles'
 import {Helmet} from 'react-helmet-async'
 
 export const Route = createFileRoute('/verify-email-required')({
@@ -39,7 +39,7 @@ function VerifyEmailRequired() {
       try {
         const user = await api.getCurrentUser()
         setEmail(user.email)
-        
+
         // If they're verified, redirect to home
         if (user.emailVerified) {
           navigate({ to: '/' })
@@ -50,13 +50,13 @@ function VerifyEmailRequired() {
         navigate({ to: '/login' })
       }
     }
-    
+
     loadUserEmail()
   }, [navigate])
 
   const handleResendEmail = async () => {
     if (!email) return
-    
+
     setResending(true)
     setResendMessage('')
 
@@ -92,67 +92,56 @@ function VerifyEmailRequired() {
   }
 
   return (
-    <div>
+    <>
       <Helmet>
         <title>Verify Your Email | Moneat</title>
         <meta name="robots" content="noindex" />
       </Helmet>
-      <div className="flex min-h-screen items-center justify-center px-4 bg-background">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center space-y-4">
-            <div className="flex justify-center">
-              <Logo className="h-10" />
-            </div>
-            <CardTitle>Verify your email</CardTitle>
-            <CardDescription>
-              We sent a verification link to <strong>{email}</strong>
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="text-sm text-muted-foreground text-center">
-              Please check your email and click the verification link to continue. You must verify your email before you can use Moneat.
-            </div>
+      <AuthShell
+        kicker="One more step"
+        heading="Verify your email"
+        subheading={
+          email ? (
+            <>
+              We sent a verification link to <span className="font-medium text-slate-200">{email}</span>. Confirm it to
+              start using Moneat.
+            </>
+          ) : (
+            'Confirm your email address to start using Moneat.'
+          )
+        }
+      >
+        <div className="grid gap-5">
+          {resendMessage && (
+            <AuthAlert tone={resendMessage.includes('sent') ? 'success' : 'danger'}>{resendMessage}</AuthAlert>
+          )}
 
-            {resendMessage && (
-              <div className={`text-sm text-center ${resendMessage.includes('sent') ? 'text-green-600' : 'text-destructive'}`}>
-                {resendMessage}
-              </div>
-            )}
+          <div className="grid gap-2.5">
+            <Button className={authPrimaryButtonClass} onClick={handleCheckStatus} disabled={checking}>
+              {checking ? 'Checking…' : "I've verified my email"}
+            </Button>
+            <Button
+              variant="outline"
+              className={authSecondaryButtonClass}
+              onClick={handleResendEmail}
+              disabled={resending || !email}
+            >
+              {resending ? 'Sending…' : 'Resend verification email'}
+            </Button>
+            <Button
+              variant="ghost"
+              className="h-11 w-full text-slate-400 hover:bg-white/[0.05] hover:text-white"
+              onClick={handleLogout}
+            >
+              Sign out
+            </Button>
+          </div>
 
-            <div className="space-y-2">
-              <Button 
-                onClick={handleCheckStatus} 
-                disabled={checking}
-                className="w-full"
-                variant="default"
-              >
-                {checking ? 'Checking...' : 'I\'ve verified my email'}
-              </Button>
-
-              <Button
-                onClick={handleResendEmail}
-                disabled={resending || !email}
-                className="w-full"
-                variant="outline"
-              >
-                {resending ? 'Sending...' : 'Resend verification email'}
-              </Button>
-
-              <Button
-                onClick={handleLogout}
-                className="w-full"
-                variant="ghost"
-              >
-                Sign out
-              </Button>
-            </div>
-
-            <div className="text-xs text-muted-foreground text-center pt-4">
-              Make sure to check your spam folder if you don't see the email.
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+          <p className="text-center text-xs text-slate-500">
+            Don&apos;t see it? Check your spam folder — delivery can take a minute.
+          </p>
+        </div>
+      </AuthShell>
+    </>
   )
 }

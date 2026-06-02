@@ -14,23 +14,27 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {VariantA} from './VariantA'
+import {Landing} from './Landing'
 import {LandingNavbar, LandingFooter} from './LandingNavbar'
+import {useForceDarkTheme} from './usePublicPageTheme'
 import {SeoHead} from '@/components/SeoHead'
 import {homeSeo} from '@/lib/seo/routes'
 
 export function LandingPage() {
+  // The public home page is dark-first (style-guide).
+  useForceDarkTheme()
+
   return (
-    <article className="min-h-screen bg-white text-slate-950">
+    <article className="min-h-screen bg-[#08090f] font-display text-slate-300">
       <SeoHead seo={homeSeo} />
 
-      <LandingNavbar tone="light" />
+      <LandingNavbar tone="dark" />
 
       <main>
-        <VariantA />
+        <Landing />
       </main>
 
-      <LandingFooter tone="light" />
+      <LandingFooter tone="dark" />
     </article>
   )
 }

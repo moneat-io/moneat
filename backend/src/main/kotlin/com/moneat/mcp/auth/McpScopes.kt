@@ -25,6 +25,11 @@ object McpScopes {
     const val PROJECT_WRITE = "project:write"
     const val RELEASES_READ = "releases:read"
     const val RELEASES_WRITE = "releases:write"
+    const val WORKFLOW_READ = "workflow:read"
+    const val WORKFLOW_WRITE = "workflow:write"
+    const val WORKFLOW_RUN = "workflow:run"
+    const val SECURITY_READ = "security:read"
+    const val SECURITY_WRITE = "security:write"
 
     private val telemetryReadTools = listOf(
         "aggregate_logs",
@@ -90,6 +95,36 @@ object McpScopes {
         "list_releases",
     ).associateWith { setOf(RELEASES_READ) }
 
+    private val workflowReadTools = listOf(
+        "get_workflow",
+        "get_workflow_blueprint",
+        "get_workflow_catalog",
+        "get_workflow_run",
+        "list_workflow_audit",
+        "list_workflow_blueprints",
+        "list_workflow_runs",
+        "list_workflows",
+    ).associateWith { setOf(WORKFLOW_READ) }
+
+    private val securityReadTools = listOf(
+        "export_vulnerability_sbom",
+        "get_compliance_summary",
+        "get_compliance_trends",
+        "get_detection_coverage",
+        "get_detection_rule",
+        "get_security_event",
+        "get_security_signal",
+        "get_vulnerability_summary",
+        "list_compliance_findings",
+        "list_detection_rules",
+        "list_detection_templates",
+        "list_security_events",
+        "list_security_signals",
+        "list_vulnerability_findings",
+        "list_vulnerability_inventory",
+        "preview_detection_rule",
+    ).associateWith { setOf(SECURITY_READ) }
+
     private val orgReadTools = listOf(
         "get_incident",
         "get_incident_context",
@@ -116,6 +151,7 @@ object McpScopes {
         "create_silence_period",
         "create_status_page",
         "create_status_page_incident",
+        "create_synthetic_test",
         "create_uptime_monitor",
         "delete_alert",
         "delete_dashboard",
@@ -125,6 +161,7 @@ object McpScopes {
         "delete_feature_flag_segment",
         "delete_host",
         "delete_silence_period",
+        "delete_synthetic_test",
         "delete_uptime_monitor",
         "execute_dashboard_query",
         "execute_datasource_query",
@@ -145,13 +182,43 @@ object McpScopes {
         "update_notification_preferences",
         "update_status_page",
         "update_status_page_incident",
+        "update_synthetic_test",
         "update_uptime_monitor",
         "upsert_feature_flag_segment",
         "replace_dashboard_widgets",
     ).associateWith { setOf(PROJECT_WRITE) }
 
-    private val readScopesByTool = telemetryReadTools + projectReadTools + releaseReadTools + orgReadTools
-    private val writeScopesByTool = writeTools
+    private val workflowWriteTools = listOf(
+        "create_workflow",
+        "delete_workflow",
+        "get_workflow_webhook_signing",
+        "publish_workflow",
+        "unpublish_workflow",
+        "update_workflow",
+    ).associateWith { setOf(WORKFLOW_WRITE) }
+
+    private val workflowRunTools = listOf(
+        "cancel_workflow_run",
+        "create_workflow_instance",
+        "run_workflow",
+    ).associateWith { setOf(WORKFLOW_RUN) }
+
+    private val securityWriteTools = listOf(
+        "create_detection_rule",
+        "delete_detection_rule",
+        "install_detection_template",
+        "triage_security_signal",
+        "update_detection_rule",
+    ).associateWith { setOf(SECURITY_WRITE) }
+
+    private val readScopesByTool =
+        telemetryReadTools +
+            projectReadTools +
+            releaseReadTools +
+            workflowReadTools +
+            securityReadTools +
+            orgReadTools
+    private val writeScopesByTool = writeTools + workflowWriteTools + workflowRunTools + securityWriteTools
 
     fun requiredScopesFor(tool: McpTool): Set<String> {
         val scopesByTool = if (tool.readOnly) readScopesByTool else writeScopesByTool

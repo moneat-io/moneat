@@ -500,7 +500,7 @@ class DashboardAlertService(
         val builtInProjectId = projectId ?: return emptyList()
         val retentionDays =
             retentionPolicyService.getRetentionDaysForProject(builtInProjectId) ?: DEFAULT_RETENTION_DAYS
-        return queryEngine.executeQuery(queryDsl, builtInProjectId, null, retentionDays)
+        return queryEngine.executeQuery(queryDsl, builtInProjectId, null, retentionDays, orgId)
     }
 
     private fun resolveCustomDataSource(

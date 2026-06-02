@@ -38,6 +38,12 @@ private val authJson = Json {
     explicitNulls = false
 }
 
+private val mcpApiKeyGrantedScopes = AuthTokenService.VALID_SCOPES - setOf(
+    McpScopes.WORKFLOW_READ,
+    McpScopes.WORKFLOW_WRITE,
+    McpScopes.WORKFLOW_RUN,
+)
+
 /**
  * MCP authentication provider using existing API token validation.
  * Requires bearer tokens for MCP requests.
@@ -75,7 +81,7 @@ object McpAuthProvider {
                 userId = mcpValidation.userId,
                 tokenId = -mcpValidation.keyId,
                 mcpApiKeyId = mcpValidation.keyId,
-                scopes = AuthTokenService.VALID_SCOPES,
+                scopes = mcpApiKeyGrantedScopes,
                 allowedTools = mcpValidation.enabledTools,
                 allowedResources = mcpValidation.enabledResources,
             )
