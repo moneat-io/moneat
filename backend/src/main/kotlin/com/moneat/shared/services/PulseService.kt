@@ -221,7 +221,7 @@ class PulseService(
 
     companion object {
         private const val PULSE_INTERVAL_MS = 60_000L
-        private const val DEFAULT_VERSION = "dev"
+        private const val DEFAULT_VERSION = ""
 
         fun isEnabled(): Boolean {
             val selfHost = EnvConfig.SelfHost.enabled
