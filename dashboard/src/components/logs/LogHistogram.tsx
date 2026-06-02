@@ -38,16 +38,27 @@ interface HistogramPoint {
   [key: string]: string | number
 }
 
+// Level fills use the shared status language; non-level groups fall back to the
+// categorical chart palette (style guide).
 const LEVEL_COLORS: Record<string, string> = {
-  fatal: '#e11d48',
-  error: '#ef4444',
-  warn: '#f59e0b',
-  info: '#6366f1',
-  debug: '#14b8a6',
-  trace: '#a1a1aa',
+  fatal: 'hsl(var(--danger-solid))',
+  error: 'hsl(var(--chart-8))',
+  warn: 'hsl(var(--warning-solid))',
+  info: 'hsl(var(--info-solid))',
+  debug: 'hsl(var(--chart-3))',
+  trace: 'hsl(var(--muted-foreground))',
 }
 
-const GROUP_COLORS = ['#ef4444', '#f59e0b', '#6366f1', '#14b8a6', '#a855f7', '#22c55e', '#ec4899', '#0ea5e9']
+const GROUP_COLORS = [
+  'hsl(var(--chart-1))',
+  'hsl(var(--chart-2))',
+  'hsl(var(--chart-3))',
+  'hsl(var(--chart-4))',
+  'hsl(var(--chart-6))',
+  'hsl(var(--chart-7))',
+  'hsl(var(--chart-9))',
+  'hsl(var(--chart-10))',
+]
 const MAX_BAR_WIDTH_PX = 14
 
 const levelOrder = ['fatal', 'error', 'warn', 'info', 'debug', 'trace']

@@ -39,12 +39,12 @@ type TimeRulerProps = {
 
 function opColorClass(op: string) {
   const normalized = op.toLowerCase()
-  if (normalized.includes('db')) return 'bg-blue-500/85'
-  if (normalized.includes('http') || normalized.includes('network')) return 'bg-emerald-500/85'
-  if (normalized.includes('render') || normalized.includes('serialize')) return 'bg-amber-500/85'
-  if (normalized.includes('cache') || normalized.includes('redis')) return 'bg-violet-500/85'
-  if (normalized.includes('ui')) return 'bg-pink-500/85'
-  return 'bg-slate-500/80'
+  if (normalized.includes('db')) return 'bg-chart-2/85'
+  if (normalized.includes('http') || normalized.includes('network')) return 'bg-chart-3/85'
+  if (normalized.includes('render') || normalized.includes('serialize')) return 'bg-chart-5/85'
+  if (normalized.includes('cache') || normalized.includes('redis')) return 'bg-chart-6/85'
+  if (normalized.includes('ui')) return 'bg-chart-7/85'
+  return 'bg-muted-foreground/80'
 }
 
 function buildTree(spans: Span[]): SpanNode[] {

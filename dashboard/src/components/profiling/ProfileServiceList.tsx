@@ -143,7 +143,7 @@ function ServiceCard({service}: {service: ProfileServiceSummary}) {
             <span
               className={cn(
                 'h-1.5 w-1.5 rounded-full shrink-0',
-                isLive ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground/30',
+                isLive ? 'bg-success-solid animate-pulse' : 'bg-muted-foreground/30',
               )}
               title={isLive ? 'Receiving profiles' : 'Idle'}
             />

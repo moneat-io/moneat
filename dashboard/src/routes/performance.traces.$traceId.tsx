@@ -13,9 +13,11 @@ import {SpanWaterfall} from '@/components/apm/SpanWaterfall'
 import {SourceBadge} from '@/components/apm/SourceBadge'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
+import {StatCard} from '@/components/ui/stat-card'
+import {SectionCard} from '@/components/ui/section-card'
+import {EmptyState} from '@/components/ui/empty-state'
 import {
   ArrowLeft,
-  Loader2,
   Clock,
   Layers,
   Server,
@@ -67,11 +69,31 @@ function CopyableId({value}: {value: string}) {
     >
       <span className="font-mono text-xs">{value}</span>
       {copied ? (
-        <Check className="h-3 w-3 text-green-500" />
+        <Check className="h-3 w-3 text-success-fg" />
       ) : (
         <Copy className="h-3 w-3" />
       )}
     </button>
+  )
+}
+
+function TraceNotFound({title}: {title: string}) {
+  return (
+    <div className="p-6">
+      <EmptyState
+        icon={AlertTriangle}
+        title={title}
+        description="The trace may have expired out of the retention window, or the ID may be incorrect."
+        action={
+          <Button asChild variant="secondary" size="sm">
+            <Link to="/performance/traces">
+              <ArrowLeft className="h-4 w-4" />
+              Back to traces
+            </Link>
+          </Button>
+        }
+      />
+    </div>
   )
 }
 
@@ -86,82 +108,65 @@ function PerformanceTraceDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6 flex flex-col items-center justify-center py-24 gap-3">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        <span className="text-sm text-muted-foreground">Loading trace...</span>
+      <div className="p-6 space-y-5">
+        <div className="h-4 w-40 animate-pulse rounded bg-muted" />
+        <div className="h-7 w-72 animate-pulse rounded bg-muted" />
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="h-[88px] animate-pulse rounded-lg border bg-card" />
+          ))}
+        </div>
+        <div className="h-96 animate-pulse rounded-lg border bg-card" />
       </div>
     )
   }
 
-  if (!data) {
-    return (
-      <div className="p-6 flex flex-col items-center justify-center py-24 gap-3">
-        <div className="rounded-full bg-muted p-3">
-          <AlertTriangle className="h-6 w-6 text-muted-foreground" />
-        </div>
-        <p className="text-muted-foreground font-medium">Trace not found</p>
-        <Button variant="outline" size="sm" asChild>
-          <Link to="/performance/traces">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to traces
-          </Link>
-        </Button>
-      </div>
-    )
-  }
+  if (!data) return <TraceNotFound title="Trace not found" />
 
   const spans = data.spans ?? []
-  if (spans.length === 0) {
-    return (
-      <div className="p-6 flex flex-col items-center justify-center py-24 gap-3">
-        <div className="rounded-full bg-muted p-3">
-          <AlertTriangle className="h-6 w-6 text-muted-foreground" />
-        </div>
-        <p className="text-muted-foreground font-medium">Trace has no spans</p>
-        <Button variant="outline" size="sm" asChild>
-          <Link to="/performance/traces">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to traces
-          </Link>
-        </Button>
-      </div>
-    )
-  }
+  if (spans.length === 0) return <TraceNotFound title="Trace has no spans" />
+
   const rootSpan = spans.find((s) => s.parentId === '0') ?? spans[0]
   const totalDuration = rootSpan?.durationNs ?? 0
   const services = [...new Set(spans.map((s) => s.service))]
   const errorCount = spans.filter((s) => s.error > 0).length
+  const serviceSummary =
+    services.slice(0, 3).join(', ') + (services.length > 3 ? ` +${services.length - 3}` : '')
 
   return (
     <div className="p-6 space-y-5">
-      {/* Header */}
-      <div className="flex items-start gap-3">
-        <Button variant="ghost" size="icon" className="mt-0.5 shrink-0" asChild>
-          <Link to="/performance/traces">
-            <ArrowLeft className="h-4 w-4" />
+      {/* Breadcrumb + header */}
+      <div className="flex flex-col gap-3">
+        <nav className="flex items-center gap-2 text-sm">
+          <Link
+            to="/performance/traces"
+            className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Traces
           </Link>
-        </Button>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-xl font-bold tracking-tight">
+          <span className="text-muted-foreground/50">/</span>
+          <span className="truncate font-mono text-xs text-foreground" title={traceId}>
+            {traceId}
+          </span>
+        </nav>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-xl font-semibold tracking-tight">
               {rootSpan?.service}
-              <span className="text-muted-foreground font-normal mx-1">.</span>
+              <span className="mx-1 font-normal text-muted-foreground">·</span>
               {rootSpan?.name}
             </h1>
             <SourceBadge source={rootSpan?.source ?? ''} />
-            {rootSpan?.env && (
-              <Badge variant="outline" className="text-xs">
-                {rootSpan.env}
-              </Badge>
-            )}
+            {rootSpan?.env && <Badge variant="neutral">{rootSpan.env}</Badge>}
             {errorCount > 0 && (
-              <Badge variant="destructive" className="gap-1 text-xs">
+              <Badge variant="danger" className="gap-1">
                 <AlertTriangle className="h-3 w-3" />
                 {errorCount} {errorCount === 1 ? 'error' : 'errors'}
               </Badge>
             )}
           </div>
-          <div className="flex items-center gap-3 mt-1">
+          <div className="mt-1.5 flex items-center gap-3">
             <CopyableId value={traceId} />
             {rootSpan && (
               <span className="text-xs text-muted-foreground">
@@ -173,100 +178,50 @@ function PerformanceTraceDetailPage() {
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <StatCard label="Duration" value={formatDuration(totalDuration)} icon={Clock} tone="accent" />
+        <StatCard label="Spans" value={spans.length} icon={Layers} tone="info" />
         <StatCard
-          icon={<Clock className="h-4 w-4" />}
-          label="Duration"
-          value={formatDuration(totalDuration)}
-          mono
-        />
-        <StatCard
-          icon={<Layers className="h-4 w-4" />}
-          label="Spans"
-          value={String(spans.length)}
-        />
-        <StatCard
-          icon={<Server className="h-4 w-4" />}
           label="Services"
-          value={String(services.length)}
-          badges={services}
+          value={services.length}
+          icon={Server}
+          tone="neutral"
+          subtitle={serviceSummary}
         />
         <StatCard
-          icon={<AlertTriangle className="h-4 w-4" />}
           label="Errors"
-          value={String(errorCount)}
-          variant={errorCount > 0 ? 'error' : 'success'}
+          value={
+            <span className={errorCount > 0 ? 'text-danger-fg' : 'text-success-fg'}>{errorCount}</span>
+          }
+          icon={AlertTriangle}
+          tone={errorCount > 0 ? 'danger' : 'success'}
         />
       </div>
 
       {/* Resource */}
       {rootSpan?.resource && (
-        <div className="border rounded-lg px-4 py-3">
-          <span className="text-[11px] text-muted-foreground uppercase font-medium tracking-wider">
+        <div className="rounded-lg border bg-card px-4 py-3">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Resource
           </span>
-          <p className="font-mono text-sm mt-1 break-all">
-            {rootSpan.resource}
-          </p>
+          <p className="mt-1 break-all font-mono text-sm">{rootSpan.resource}</p>
         </div>
       )}
 
       {/* Span waterfall */}
-      <div>
-        <h2 className="text-base font-semibold mb-3 flex items-center gap-2">
-          Span Waterfall
-          <span className="text-xs font-normal text-muted-foreground">
-            {spans.length} spans across {services.length} services
+      <SectionCard
+        title="Span waterfall"
+        icon={Layers}
+        iconTone="accent"
+        count={spans.length}
+        actions={
+          <span className="text-xs text-muted-foreground">
+            {services.length} {services.length === 1 ? 'service' : 'services'}
           </span>
-        </h2>
+        }
+      >
         <SpanWaterfall spans={spans} />
-      </div>
-    </div>
-  )
-}
-
-function StatCard({
-  icon,
-  label,
-  value,
-  mono,
-  variant,
-  badges,
-}: {
-  icon: React.ReactNode
-  label: string
-  value: string
-  mono?: boolean
-  variant?: 'error' | 'success'
-  badges?: string[]
-}) {
-  return (
-    <div className="rounded-lg border bg-card px-4 py-3">
-      <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
-        {icon}
-        <span className="text-xs font-medium">{label}</span>
-      </div>
-      {badges ? (
-        <div className="flex flex-wrap gap-1 mt-1">
-          {badges.map((b) => (
-            <Badge key={b} variant="secondary" className="text-xs">
-              {b}
-            </Badge>
-          ))}
-        </div>
-      ) : (
-        <span
-          className={`text-xl font-bold tabular-nums tracking-tight ${mono ? 'font-mono' : ''} ${
-            variant === 'error'
-              ? 'text-red-500'
-              : variant === 'success'
-                ? 'text-green-600'
-                : ''
-          }`}
-        >
-          {value}
-        </span>
-      )}
+      </SectionCard>
     </div>
   )
 }

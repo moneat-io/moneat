@@ -14,6 +14,7 @@ import {Card, CardContent} from '@/components/ui/card'
 import {CopyBlock} from '@/components/ui/copy-block'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
+import {EmptyState} from '@/components/ui/empty-state'
 import {
   ArrowRight, BarChart3, BookOpen, FileText, Globe, Laptop, LogIn, LogOut, MapPin, Megaphone,
   MousePointerClick, Plus, Share2, Target, Trash2,
@@ -159,8 +160,8 @@ function AnalyticsOverview() {
 
   if (!projectId) {
     return (
-      <div className="text-center py-20">
-        <p className="text-muted-foreground">Select a project to view analytics</p>
+      <div className="py-10">
+        <EmptyState icon={BarChart3} title="No project selected" description="Select a project to view analytics." />
       </div>
     )
   }
@@ -224,7 +225,7 @@ function AnalyticsOverview() {
                   <AnalyticsBreakdownTable
                     title="Top Pages"
                     icon={FileText}
-                    iconColor="text-blue-500"
+                    iconColor="text-chart-1"
                     data={pages}
                     isLoading={pagesLoading}
                     showBounceRate
@@ -237,7 +238,7 @@ function AnalyticsOverview() {
                   <AnalyticsBreakdownTable
                     title="Entry Pages"
                     icon={LogIn}
-                    iconColor="text-emerald-500"
+                    iconColor="text-chart-2"
                     data={entryPages}
                     isLoading={entryPagesLoading}
                     showBounceRate
@@ -249,7 +250,7 @@ function AnalyticsOverview() {
                   <AnalyticsBreakdownTable
                     title="Exit Pages"
                     icon={LogOut}
-                    iconColor="text-rose-500"
+                    iconColor="text-chart-3"
                     data={exitPages}
                     isLoading={exitPagesLoading}
                     onRowClick={addFilterFromRow('exit_page')}
@@ -260,7 +261,7 @@ function AnalyticsOverview() {
                   <AnalyticsBreakdownTable
                     title="Top Sources"
                     icon={Share2}
-                    iconColor="text-violet-500"
+                    iconColor="text-chart-4"
                     data={sources}
                     isLoading={sourcesLoading}
                     onRowClick={addFilterFromRow('referrer_source')}
@@ -271,7 +272,7 @@ function AnalyticsOverview() {
                   <AnalyticsBreakdownTable
                     title="Countries"
                     icon={MapPin}
-                    iconColor="text-amber-500"
+                    iconColor="text-chart-5"
                     data={locations}
                     isLoading={locationsLoading}
                     onRowClick={addFilterFromRow('country_code')}
@@ -283,7 +284,7 @@ function AnalyticsOverview() {
                     <AnalyticsBreakdownTable
                       title="Browsers"
                       icon={Globe}
-                      iconColor="text-blue-500"
+                      iconColor="text-chart-1"
                       data={browsers}
                       isLoading={browsersLoading}
                       onRowClick={addFilterFromRow('browser')}
@@ -291,7 +292,7 @@ function AnalyticsOverview() {
                     <AnalyticsBreakdownTable
                       title="Operating Systems"
                       icon={Laptop}
-                      iconColor="text-emerald-500"
+                      iconColor="text-chart-2"
                       data={operatingSystems}
                       isLoading={osLoading}
                       onRowClick={addFilterFromRow('os')}
@@ -299,7 +300,7 @@ function AnalyticsOverview() {
                     <AnalyticsBreakdownTable
                       title="Device Types"
                       icon={Laptop}
-                      iconColor="text-violet-500"
+                      iconColor="text-chart-4"
                       data={deviceTypes}
                       isLoading={deviceTypesLoading}
                       onRowClick={addFilterFromRow('device_type')}
@@ -311,7 +312,7 @@ function AnalyticsOverview() {
                   <AnalyticsBreakdownTable
                     title="UTM Sources"
                     icon={Megaphone}
-                    iconColor="text-cyan-500"
+                    iconColor="text-chart-6"
                     data={utmSources}
                     isLoading={utmSourcesLoading}
                   />
@@ -321,7 +322,7 @@ function AnalyticsOverview() {
                   <AnalyticsBreakdownTable
                     title="Custom Events"
                     icon={MousePointerClick}
-                    iconColor="text-orange-500"
+                    iconColor="text-chart-7"
                     data={customEvents}
                     isLoading={customEventsLoading}
                   />
@@ -359,8 +360,8 @@ function WebAnalyticsEmptyState({project}: {project?: Project}) {
     <div className="flex flex-col items-center justify-center py-6">
       <div className="max-w-2xl w-full space-y-4">
         <div className="text-center">
-          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-500/10 mb-3">
-            <BarChart3 className="h-6 w-6 text-blue-500" />
+          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-[hsl(var(--primary)/0.12)] mb-3">
+            <BarChart3 className="h-6 w-6 text-primary" />
           </div>
           <h2 className="text-lg font-semibold mb-1.5">Get Started with Analytics</h2>
           <p className="text-muted-foreground text-sm max-w-md mx-auto">
@@ -433,7 +434,7 @@ function ProductAnalyticsTab({projectId, params}: {projectId: string; params: An
         <AnalyticsBreakdownTable
           title="Product Events"
           icon={MousePointerClick}
-          iconColor="text-orange-500"
+          iconColor="text-chart-7"
           data={productEvents}
           isLoading={productEventsLoading}
         />
@@ -469,7 +470,7 @@ function ProductFunnelPanel({projectId, params}: {projectId: string; params: Ana
       <CardContent className="p-3 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 text-xs font-medium">
-            <Target className="h-3.5 w-3.5 text-emerald-500" />
+            <Target className="h-3.5 w-3.5 text-success-fg" />
             Activation Funnel
           </div>
           <Button
@@ -552,7 +553,7 @@ function ProductFunnelResults({
             </div>
             <div className="h-2 rounded bg-muted">
               <div
-                className="h-2 rounded bg-emerald-500"
+                className="h-2 rounded bg-primary"
                 style={{width: `${Math.max((step.visitors / maxVisitors) * 100, step.visitors > 0 ? 2 : 0)}%`}}
               />
             </div>
@@ -595,8 +596,8 @@ function ProductAnalyticsEmptyState({project, projectId}: {project?: Project; pr
     <div className="flex flex-col items-center justify-center py-6">
       <div className="max-w-3xl w-full space-y-4">
         <div className="text-center">
-          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-500/10 mb-3">
-            <Target className="h-6 w-6 text-blue-500" />
+          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-[hsl(var(--primary)/0.12)] mb-3">
+            <Target className="h-6 w-6 text-primary" />
           </div>
           <h2 className="text-lg font-semibold mb-1.5">Get Started with Product Analytics</h2>
           <p className="text-muted-foreground text-sm max-w-md mx-auto">

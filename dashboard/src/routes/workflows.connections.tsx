@@ -22,6 +22,8 @@ import {api} from '@/lib/api'
 import type {WorkflowConnection} from '@/lib/api'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
+import {PageHeader} from '@/components/ui/page-header'
+import {EmptyState} from '@/components/ui/empty-state'
 import {
   Dialog,
   DialogContent,
@@ -51,18 +53,12 @@ function ConnectionsPage() {
 
 function EnterpriseUpsell() {
   return (
-    <div className="mx-auto max-w-xl px-4 py-16 text-center">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-        <Lock className="h-6 w-6" />
-      </div>
-      <h1 className="mt-4 text-lg font-bold tracking-tight">Connections are an Enterprise feature</h1>
-      <p className="mt-2 text-sm text-muted-foreground">
-        The connection vault securely stores third-party credentials for workflow actions. Upgrade to enable it.
-      </p>
-      <Badge variant="outline" className="mt-4">
-        Enterprise
-      </Badge>
-    </div>
+    <EmptyState
+      icon={Lock}
+      title="Connections are an Enterprise feature"
+      description="The connection vault securely stores third-party credentials for workflow actions. Upgrade to enable it."
+      action={<Badge variant="accent">Enterprise</Badge>}
+    />
   )
 }
 
@@ -95,12 +91,12 @@ function ConnectionManager() {
 
   return (
     <div className="connections-page">
-      <PageHeader
+      <ConnectionsHeader
         showEnterpriseBadge={showEnterpriseBadge}
         canCreate={!showEnterpriseUpsell}
         onCreate={() => setCreateOpen(true)}
       />
-      <div className="px-4 py-4 lg:px-6">
+      <div className="px-6 py-4">
         {isLoading ? (
           <div className="flex h-40 items-center justify-center rounded-md border">
             <Loader2 className="h-5 w-5 animate-spin" />
@@ -110,9 +106,17 @@ function ConnectionManager() {
         ) : isError ? (
           <ErrorState message={error.message} compact />
         ) : connections.length === 0 ? (
-          <div className="rounded-md border border-dashed bg-background p-6 text-sm text-muted-foreground">
-            No connections yet. Add one to use it from workflow actions.
-          </div>
+          <EmptyState
+            icon={KeyRound}
+            title="No connections yet"
+            description="Add a connection to use it from workflow actions."
+            action={
+              <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-1.5">
+                <Plus className="h-4 w-4" />
+                New connection
+              </Button>
+            }
+          />
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {connections.map((connection) => (
@@ -159,14 +163,14 @@ function ErrorState({
   compact?: boolean
 }) {
   return (
-    <div className={compact ? 'rounded-md border p-4' : 'mx-auto max-w-xl px-4 py-16'}>
+    <div className={compact ? 'rounded-md border bg-card/40 p-4' : 'mx-auto max-w-xl px-4 py-16'}>
       <div className="text-sm font-semibold">{title}</div>
       <p className="mt-1 text-sm text-muted-foreground">{message}</p>
     </div>
   )
 }
 
-function PageHeader({
+function ConnectionsHeader({
   showEnterpriseBadge,
   canCreate,
   onCreate,
@@ -176,27 +180,23 @@ function PageHeader({
   onCreate: () => void
 }) {
   return (
-    <div className="border-b bg-card/50">
-      <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between lg:px-6">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-            <KeyRound className="h-4 w-4" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold tracking-tight">Connections</h1>
-              {showEnterpriseBadge && <Badge variant="outline">Enterprise</Badge>}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Encrypted credentials for workflow actions. Secrets are entered once and never shown again.
-            </p>
-          </div>
-        </div>
-        <Button size="sm" onClick={onCreate} disabled={!canCreate} className="gap-1.5">
-          <Plus className="h-3.5 w-3.5" />
-          New Connection
-        </Button>
-      </div>
+    <div className="border-b bg-card/50 px-6 py-4">
+      <PageHeader
+        icon={KeyRound}
+        title={
+          <span className="flex items-center gap-2">
+            Connections
+            {showEnterpriseBadge && <Badge variant="accent" size="sm">Enterprise</Badge>}
+          </span>
+        }
+        description="Encrypted credentials for workflow actions. Secrets are entered once and never shown again."
+        actions={
+          <Button size="sm" onClick={onCreate} disabled={!canCreate} className="gap-1.5">
+            <Plus className="h-4 w-4" />
+            New connection
+          </Button>
+        }
+      />
     </div>
   )
 }
@@ -227,7 +227,7 @@ function ConnectionCard({
       {tags.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
           {tags.map(([key, value]) => (
-            <Badge key={key} variant="outline" className="text-[11px]">
+            <Badge key={key} variant="neutral" size="sm" className="font-mono">
               {key}={value}
             </Badge>
           ))}

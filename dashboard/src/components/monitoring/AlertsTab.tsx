@@ -44,15 +44,15 @@ interface AlertsTabProps {
 }
 
 const METRIC_OPTIONS = [
-  {value: 'cpu_percent', label: 'CPU Usage (%)', color: 'text-blue-500'},
-  {value: 'mem_percent', label: 'Memory Usage (%)', color: 'text-violet-500'},
-  {value: 'disk_percent', label: 'Disk Usage (%)', color: 'text-amber-500'},
-  {value: 'load_1', label: 'Load Average (1m)', color: 'text-emerald-500'},
-  {value: 'load_5', label: 'Load Average (5m)', color: 'text-emerald-500'},
-  {value: 'load_15', label: 'Load Average (15m)', color: 'text-emerald-500'},
-  {value: 'temp_max', label: 'Max Temperature (°C)', color: 'text-rose-500'},
-  {value: 'gpu_percent', label: 'GPU Usage (%)', color: 'text-teal-500'},
-  {value: 'battery_percent', label: 'Battery Level (%)', color: 'text-yellow-500'},
+  {value: 'cpu_percent', label: 'CPU Usage (%)', color: 'text-chart-1'},
+  {value: 'mem_percent', label: 'Memory Usage (%)', color: 'text-chart-2'},
+  {value: 'disk_percent', label: 'Disk Usage (%)', color: 'text-chart-5'},
+  {value: 'load_1', label: 'Load Average (1m)', color: 'text-chart-4'},
+  {value: 'load_5', label: 'Load Average (5m)', color: 'text-chart-4'},
+  {value: 'load_15', label: 'Load Average (15m)', color: 'text-chart-4'},
+  {value: 'temp_max', label: 'Max Temperature (°C)', color: 'text-chart-8'},
+  {value: 'gpu_percent', label: 'GPU Usage (%)', color: 'text-chart-3'},
+  {value: 'battery_percent', label: 'Battery Level (%)', color: 'text-chart-5'},
 ]
 
 const CONDITION_OPTIONS = [
@@ -200,8 +200,8 @@ export function AlertsTab({hostId}: AlertsTabProps) {
         <CardHeader className="py-3 px-4 pb-2">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-amber-500/10 shrink-0">
-                <BellRing className="h-4 w-4 text-amber-500" />
+              <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-warning-bg shrink-0">
+                <BellRing className="h-4 w-4 text-warning-fg" />
               </div>
               <div className="min-w-0">
                 <CardTitle className="text-base">Alert Rules</CardTitle>
@@ -249,7 +249,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                      <Zap className="h-5 w-5 text-amber-500" />
+                      <Zap className="h-5 w-5 text-warning-fg" />
                       Create Alert Rule
                     </DialogTitle>
                     <DialogDescription>
@@ -366,13 +366,13 @@ export function AlertsTab({hostId}: AlertsTabProps) {
         </CardHeader>
 
         <CardContent className="pt-0 px-4 pb-4">
-          <div className="mb-4 rounded-md bg-blue-500/10 p-3 text-xs text-blue-500 flex items-start gap-2 border border-blue-500/20">
+          <div className="mb-4 rounded-md bg-info-bg p-3 text-xs text-info-fg flex items-start gap-2 border border-info-border">
             <BellRing className="h-4 w-4 shrink-0 mt-0.5" />
             <div className="space-y-0.5 min-w-0">
               <p className="font-medium">Notification Channels</p>
-              <p className="text-blue-500/80">
+              <p className="text-info-fg/80">
                 Configure which channels (Email, Slack, Discord) receive these alerts in{' '}
-                <Link to="/settings" search={{ tab: 'notifications' }} className="underline hover:text-blue-400">
+                <Link to="/settings" search={{ tab: 'notifications' }} className="underline hover:text-info-fg/90">
                   Settings &gt; Notifications
                 </Link>.
               </p>
@@ -423,7 +423,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
                     </div>
                     <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                       {alert.lastTriggeredAt ? (
-                        <span className="flex items-center gap-0.5 text-orange-500">
+                        <span className="flex items-center gap-0.5 text-warning-fg">
                           <BellRing className="h-2.5 w-2.5" />
                           Triggered {formatRelativeTime(alert.lastTriggeredAt)}
                         </span>
@@ -467,8 +467,8 @@ export function AlertsTab({hostId}: AlertsTabProps) {
             </div>
           ) : (
             <div className="text-center py-10">
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/10">
-                <Bell className="h-6 w-6 text-amber-500" />
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-warning-bg">
+                <Bell className="h-6 w-6 text-warning-fg" />
               </div>
               <h3 className="text-base font-medium mb-0.5">No rules in this scope</h3>
               <p className="text-muted-foreground text-xs mb-4 max-w-sm mx-auto">
@@ -487,7 +487,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Edit className="h-5 w-5 text-blue-500" />
+              <Edit className="h-5 w-5 text-info-fg" />
               Edit Alert Rule
             </DialogTitle>
             <DialogDescription>Update the alert rule configuration.</DialogDescription>

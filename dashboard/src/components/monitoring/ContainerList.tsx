@@ -26,6 +26,7 @@ export interface MergedContainer {
 }
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Badge} from '@/components/ui/badge'
+import {StatusDot} from '@/components/ui/status-dot'
 import {Card, CardContent} from '@/components/ui/card'
 import {Input} from '@/components/ui/input'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
@@ -63,31 +64,31 @@ function formatBytes(bytes: number): string {
 }
 
 function getCpuColor(value: number): string {
-  if (value >= 80) return 'text-red-500'
-  if (value >= 50) return 'text-orange-500'
-  if (value >= 25) return 'text-yellow-500'
-  return 'text-emerald-500'
+  if (value >= 80) return 'text-danger-fg'
+  if (value >= 50) return 'text-chart-6'
+  if (value >= 25) return 'text-warning-fg'
+  return 'text-success-fg'
 }
 
 function getCpuBarColor(value: number): string {
-  if (value >= 80) return 'bg-red-500'
-  if (value >= 50) return 'bg-orange-500'
-  if (value >= 25) return 'bg-yellow-500'
-  return 'bg-emerald-500'
+  if (value >= 80) return 'bg-danger-solid'
+  if (value >= 50) return 'bg-chart-6'
+  if (value >= 25) return 'bg-warning-solid'
+  return 'bg-success-solid'
 }
 
 function getMemColor(percent: number): string {
-  if (percent >= 90) return 'text-red-500'
-  if (percent >= 75) return 'text-orange-500'
-  if (percent >= 50) return 'text-yellow-500'
-  return 'text-emerald-500'
+  if (percent >= 90) return 'text-danger-fg'
+  if (percent >= 75) return 'text-chart-6'
+  if (percent >= 50) return 'text-warning-fg'
+  return 'text-success-fg'
 }
 
 function getMemBarColor(percent: number): string {
-  if (percent >= 90) return 'bg-red-500'
-  if (percent >= 75) return 'bg-orange-500'
-  if (percent >= 50) return 'bg-yellow-500'
-  return 'bg-emerald-500'
+  if (percent >= 90) return 'bg-danger-solid'
+  if (percent >= 75) return 'bg-chart-6'
+  if (percent >= 50) return 'bg-warning-solid'
+  return 'bg-success-solid'
 }
 
 type StateFilter = 'all' | 'running' | 'stopped'
@@ -95,24 +96,24 @@ type StateFilter = 'all' | 'running' | 'stopped'
 function StateIcon({state}: {state: string}) {
   switch (state) {
     case 'running':
-      return <CircleCheck className="h-3.5 w-3.5 text-emerald-500" />
+      return <CircleCheck className="h-3.5 w-3.5 text-success-fg" />
     case 'exited':
     case 'dead':
-      return <CircleX className="h-3.5 w-3.5 text-red-500" />
+      return <CircleX className="h-3.5 w-3.5 text-danger-fg" />
     default:
-      return <CirclePause className="h-3.5 w-3.5 text-yellow-500" />
+      return <CirclePause className="h-3.5 w-3.5 text-warning-fg" />
   }
 }
 
-function stateBadgeClasses(state: string): string {
+function stateBadgeVariant(state: string): 'success' | 'danger' | 'warning' {
   switch (state) {
     case 'running':
-      return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20 hover:bg-emerald-500/20'
+      return 'success'
     case 'exited':
     case 'dead':
-      return 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/20 hover:bg-red-500/20'
+      return 'danger'
     default:
-      return 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-300 border-yellow-500/20 hover:bg-yellow-500/20'
+      return 'warning'
   }
 }
 
@@ -188,31 +189,31 @@ export function ContainerList() {
         {!isLoading && containers.length > 0 && (
           <div className="flex items-center gap-3 text-sm flex-wrap">
             <div className="flex items-center gap-1.5">
-              <Boxes className="h-3.5 w-3.5 text-blue-500" />
+              <Boxes className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="font-semibold tabular-nums">{containers.length}</span>
               <span className="text-muted-foreground text-xs">total</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <CircleCheck className="h-3.5 w-3.5 text-emerald-500" />
+              <CircleCheck className="h-3.5 w-3.5 text-success-fg" />
               <span className="font-semibold tabular-nums">{runningCount}</span>
               <span className="text-muted-foreground text-xs">running</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <CircleX className="h-3.5 w-3.5 text-red-500" />
+              <CircleX className="h-3.5 w-3.5 text-danger-fg" />
               <span className="font-semibold tabular-nums">{stoppedCount}</span>
               <span className="text-muted-foreground text-xs">stopped</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <Cpu className="h-3.5 w-3.5 text-violet-500" />
+              <Cpu className="h-3.5 w-3.5 text-chart-1" />
               <span className="font-semibold tabular-nums">{totalCpu.toFixed(1)}%</span>
               <span className="text-muted-foreground text-xs">CPU</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <MemoryStick className="h-3.5 w-3.5 text-sky-500" />
+              <MemoryStick className="h-3.5 w-3.5 text-chart-3" />
               <span className="font-semibold tabular-nums">{formatBytes(totalMem)}</span>
               <span className="text-muted-foreground text-xs">memory</span>
             </div>
@@ -242,9 +243,9 @@ export function ContainerList() {
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
               )}
             >
-              {f === 'running' && <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />}
-              {f === 'stopped' && <div className="h-1.5 w-1.5 rounded-full bg-red-500" />}
-              {f === 'all' && <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />}
+              {f === 'running' && <StatusDot tone="success" size="sm" />}
+              {f === 'stopped' && <StatusDot tone="danger" size="sm" />}
+              {f === 'all' && <StatusDot tone="neutral" size="sm" />}
               <span className="capitalize">{f}</span>
               <span className="ml-0.5 text-[10px] text-muted-foreground">
                 {f === 'all'
@@ -274,8 +275,8 @@ export function ContainerList() {
       ) : containers.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="py-16 text-center">
-            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/10 to-violet-500/10">
-              <Box className="h-10 w-10 text-blue-500" />
+            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+              <Box className="h-10 w-10" />
             </div>
             <h3 className="text-xl font-semibold mb-2">No containers found</h3>
             <p className="text-muted-foreground mb-2 max-w-sm mx-auto">
@@ -318,10 +319,10 @@ export function ContainerList() {
                             className={cn(
                               'flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
                               c.state === 'running'
-                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                ? 'bg-success-bg text-success-fg'
                                 : c.state === 'exited' || c.state === 'dead'
-                                  ? 'bg-red-500/10 text-red-600 dark:text-red-400'
-                                  : 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
+                                  ? 'bg-danger-bg text-danger-fg'
+                                  : 'bg-warning-bg text-warning-fg'
                             )}
                           >
                             <Box className="h-4 w-4" />
@@ -348,8 +349,8 @@ export function ContainerList() {
 
                       <TableCell>
                         <Badge
-                          variant="secondary"
-                          className={cn('text-xs gap-1.5', stateBadgeClasses(c.state))}
+                          variant={stateBadgeVariant(c.state)}
+                          className="text-xs gap-1.5"
                         >
                           <StateIcon state={c.state} />
                           {c.state}
@@ -378,13 +379,7 @@ export function ContainerList() {
                       </TableCell>
 
                       <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            'text-[10px] font-medium',
-                            'border-violet-500/30 text-violet-600 dark:text-violet-400 bg-violet-500/5'
-                          )}
-                        >
+                        <Badge variant="neutral" className="text-[10px] font-medium">
                           Datadog
                         </Badge>
                       </TableCell>
@@ -424,11 +419,11 @@ export function ContainerList() {
 
                       <TableCell>
                         <div className="text-xs font-medium tabular-nums leading-5">
-                          <div className="flex items-center gap-1 text-sky-600 dark:text-sky-400">
+                          <div className="flex items-center gap-1 text-chart-3">
                             <ArrowDownToLine className="h-3 w-3" />
                             {formatBytes(c.netRxBytes)}
                           </div>
-                          <div className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400">
+                          <div className="flex items-center gap-1 text-chart-6">
                             <ArrowUpFromLine className="h-3 w-3" />
                             {formatBytes(c.netTxBytes)}
                           </div>

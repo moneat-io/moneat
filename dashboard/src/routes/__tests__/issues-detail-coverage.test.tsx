@@ -188,11 +188,11 @@ describe('Issue Detail - full data coverage', () => {
     expect(screen.getByText('javascript')).toBeInTheDocument()
     expect(screen.getByText('app.main')).toBeInTheDocument()
 
-    // Event stats
+    // Event stats (KPI tiles)
     expect(screen.getByText('42')).toBeInTheDocument()
-    expect(screen.getByText('events')).toBeInTheDocument()
+    expect(screen.getByText('Events')).toBeInTheDocument()
     expect(screen.getByText('7')).toBeInTheDocument()
-    expect(screen.getByText('users')).toBeInTheDocument()
+    expect(screen.getByText('Users affected')).toBeInTheDocument()
 
     // Resolve button for unresolved
     expect(screen.getByText('Resolve')).toBeInTheDocument()
@@ -209,33 +209,33 @@ describe('Issue Detail - full data coverage', () => {
     expect(screen.getAllByText('Chrome').length).toBeGreaterThan(0)
 
     // Event details
-    expect(screen.getByText('Event Details')).toBeInTheDocument()
+    expect(screen.getByText('Event details')).toBeInTheDocument()
     expect(screen.getByText('production')).toBeInTheDocument()
     expect(screen.getByText('v1.2.3')).toBeInTheDocument()
     expect(screen.getByText('test@example.com')).toBeInTheDocument()
 
     // Traces
-    expect(screen.getByText('Traces (1)')).toBeInTheDocument()
+    expect(screen.getByText('Traces')).toBeInTheDocument()
     expect(screen.getByText('GET /api/data')).toBeInTheDocument()
     expect(screen.getByText('1.50s')).toBeInTheDocument()
 
     // Replays
-    expect(screen.getByText('Replays (2)')).toBeInTheDocument()
+    expect(screen.getByText('Replays')).toBeInTheDocument()
     expect(screen.getByText('user@example.com')).toBeInTheDocument()
     expect(screen.getByText('Anonymous')).toBeInTheDocument()
 
     // Recent events (2 events triggers this section)
-    expect(screen.getByText('Recent Events (2)')).toBeInTheDocument()
+    expect(screen.getByText('Recent events')).toBeInTheDocument()
 
-    // Logs Context
-    expect(screen.getByText('Logs Context')).toBeInTheDocument()
+    // Logs context
+    expect(screen.getByText('Logs context')).toBeInTheDocument()
 
     // Spans (loaded via secondary query after transactions)
-    expect(await screen.findByText(/Spans Preview/)).toBeInTheDocument()
+    expect(await screen.findByText(/Spans preview/)).toBeInTheDocument()
     expect(screen.getByText('span-waterfall')).toBeInTheDocument()
 
     // Context sections
-    expect(screen.getByText('Tags & Context')).toBeInTheDocument()
+    expect(screen.getByText('Tags & context')).toBeInTheDocument()
     expect(screen.getByText('This error has an associated APM trace')).toBeInTheDocument()
     expect(screen.getByText('View trace')).toBeInTheDocument()
   })
@@ -263,7 +263,7 @@ describe('Issue Detail - full data coverage', () => {
 
     renderRoute(IssueDetailRoute)
 
-    expect(await screen.findByText('Resolves in Next Release')).toBeInTheDocument()
+    expect(await screen.findByText('Resolves in next release')).toBeInTheDocument()
   })
 
   it('renders event with no exception as "No stack trace available"', async () => {
@@ -344,6 +344,8 @@ describe('Issue Detail - full data coverage', () => {
 
     renderRoute(IssueDetailRoute)
 
-    expect(screen.getByText('Loading...')).toBeInTheDocument()
+    // The loading state renders skeleton placeholders rather than the issue body.
+    expect(document.querySelector('.animate-pulse')).not.toBeNull()
+    expect(screen.queryByText('Resolve')).not.toBeInTheDocument()
   })
 })

@@ -31,9 +31,12 @@ import {api, type BillingContributor, type BillingInsightDimension} from '@/lib/
 import {useIsSelfHosted} from '@/hooks/useEnterpriseFeatures'
 import {useTimezone} from '@/hooks/useTimezone'
 import {formatDate} from '@/lib/date-format'
-import {Badge} from '@/components/ui/badge'
+import {Badge, type BadgeProps} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
+import {PageHeader} from '@/components/ui/page-header'
+import {SectionCard} from '@/components/ui/section-card'
+import {EmptyState} from '@/components/ui/empty-state'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Alert, AlertDescription, AlertTitle} from '@/components/ui/alert'
 import {cn} from '@/lib/utils'
@@ -106,33 +109,27 @@ function UsageInsightsPage() {
 
   return (
     <div className="container mx-auto flex max-w-7xl flex-col gap-6 px-4 py-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <div className="rounded-md bg-primary/10 p-2">
-              <LineChart className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold">Usage Insights</h1>
-              <p className="text-sm text-muted-foreground">{periodLabel}</p>
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link to="/settings" search={{tab: 'usage'}}>
-              <Layers data-icon="inline-start" />
-              Usage Summary
-            </Link>
-          </Button>
-          <Button asChild size="sm">
-            <Link to="/settings" search={{tab: 'billing'}}>
-              <ArrowUpRight data-icon="inline-start" />
-              Billing
-            </Link>
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        icon={LineChart}
+        title="Usage Insights"
+        description={periodLabel}
+        actions={
+          <>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/settings" search={{tab: 'usage'}}>
+                <Layers data-icon="inline-start" />
+                Usage Summary
+              </Link>
+            </Button>
+            <Button asChild size="sm">
+              <Link to="/settings" search={{tab: 'billing'}}>
+                <ArrowUpRight data-icon="inline-start" />
+                Billing
+              </Link>
+            </Button>
+          </>
+        }
+      />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <SummaryMetric
@@ -166,12 +163,7 @@ function UsageInsightsPage() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
-        <Card className="overflow-hidden">
-          <CardHeader>
-            <CardTitle className="text-base">Forecast Timeline</CardTitle>
-            <CardDescription>Current usage, period-end projection, and threshold dates.</CardDescription>
-          </CardHeader>
-          <CardContent>
+        <SectionCard title="Forecast Timeline" icon={LineChart} flushBody>
             <div className="w-full overflow-x-auto">
               <Table className="min-w-[640px]">
                 <TableHeader>
@@ -211,15 +203,9 @@ function UsageInsightsPage() {
                 </TableBody>
               </Table>
             </div>
-          </CardContent>
-        </Card>
+        </SectionCard>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Top Contributors</CardTitle>
-            <CardDescription>Largest current contributors across billable dimensions.</CardDescription>
-          </CardHeader>
-          <CardContent>
+        <SectionCard title="Top Contributors" icon={TrendingUp}>
             <div className="flex flex-col divide-y">
               {topContributors.length > 0 ? topContributors.map(({dimension, contributor}) => (
                 <ContributorRow
@@ -231,16 +217,10 @@ function UsageInsightsPage() {
                 <p className="text-sm text-muted-foreground">No billable usage recorded for this period.</p>
               )}
             </div>
-          </CardContent>
-        </Card>
+        </SectionCard>
       </div>
 
-      <Card className="overflow-hidden">
-        <CardHeader>
-          <CardTitle className="text-base">APM Span Sources</CardTitle>
-          <CardDescription>Span volume by source, service, operation, and project.</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <SectionCard title="APM Span Sources" icon={Layers} flushBody>
           {apmGroups.length > 0 ? (
             <div className="w-full overflow-x-auto">
               <Table className="min-w-[760px]">
@@ -285,10 +265,11 @@ function UsageInsightsPage() {
               </Table>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No APM spans stored for this billing period.</p>
+            <div className="px-4 py-3">
+              <EmptyState icon={Layers} title="No APM spans" description="No APM spans stored for this billing period." />
+            </div>
           )}
-        </CardContent>
-      </Card>
+      </SectionCard>
     </div>
   )
 }
@@ -358,7 +339,7 @@ function ForecastCard({
             <CardTitle className="text-sm">{dimension.label}</CardTitle>
             <CardDescription>{forecastWindowLabel(dimension.forecast.window)}</CardDescription>
           </div>
-          <Badge className={cn(riskBadgeClass(risk), 'shrink-0 whitespace-nowrap')}>{riskLabel(risk)}</Badge>
+          <Badge variant={riskBadgeVariant(risk)} className="shrink-0 whitespace-nowrap">{riskLabel(risk)}</Badge>
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -490,8 +471,8 @@ function boundedPercent(value: number): number {
 }
 
 function barClass(percent: number): string {
-  if (percent >= MAX_BAR_PERCENT) return 'bg-destructive'
-  if (percent >= 80) return 'bg-amber-500'
+  if (percent >= MAX_BAR_PERCENT) return 'bg-danger-solid'
+  if (percent >= 80) return 'bg-warning-solid'
   return 'bg-primary'
 }
 
@@ -509,11 +490,11 @@ function riskLabel(risk: string): string {
   return 'On track'
 }
 
-function riskBadgeClass(risk: string): string {
-  if (risk === 'critical') return 'bg-destructive text-destructive-foreground'
-  if (risk === 'warning') return 'bg-amber-500 text-white'
-  if (risk === 'watch') return 'bg-primary text-primary-foreground'
-  return 'bg-secondary text-secondary-foreground'
+function riskBadgeVariant(risk: string): BadgeProps['variant'] {
+  if (risk === 'critical') return 'dangerSolid'
+  if (risk === 'warning') return 'warningSolid'
+  if (risk === 'watch') return 'accent'
+  return 'neutral'
 }
 
 function forecastWindowLabel(window: string): string {

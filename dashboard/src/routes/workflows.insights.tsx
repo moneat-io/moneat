@@ -16,7 +16,7 @@
 
 import {createFileRoute, Link, redirect} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
-import {ArrowLeft, Gauge, Loader2} from 'lucide-react'
+import {ArrowLeft, ClipboardList, Gauge, LayoutGrid, Loader2} from 'lucide-react'
 import {api} from '@/lib/api'
 import type {WorkflowBlueprintSummary} from '@/lib/api'
 import {BlueprintGallery} from '@/components/workflows/BlueprintGallery'
@@ -24,6 +24,8 @@ import {WorkflowAuditTimeline} from '@/components/workflows/WorkflowAuditTimelin
 import {WorkflowOverviewCards} from '@/components/workflows/WorkflowOverviewCards'
 import {WorkflowUsagePanel} from '@/components/workflows/WorkflowUsagePanel'
 import {Button} from '@/components/ui/button'
+import {PageHeader} from '@/components/ui/page-header'
+import {SectionCard} from '@/components/ui/section-card'
 import {useToast} from '@/hooks/useToast'
 
 const AUDIT_LIMIT = 25
@@ -41,37 +43,25 @@ export const Route = createFileRoute('/workflows/insights')({
 function InsightsPage() {
   return (
     <div className="workflows-insights-page">
-      <PageHeader />
-      <div className="space-y-6 px-4 py-4 lg:px-6">
+      <div className="border-b bg-card/50 px-6 py-4">
+        <PageHeader
+          icon={Gauge}
+          title="Automation insights"
+          description="Overview, run usage, blueprints, and the audit trail for your automations."
+          actions={
+            <Button size="sm" variant="outline" asChild className="gap-1.5">
+              <Link to="/workflows">
+                <ArrowLeft className="h-4 w-4" />
+                Back to workflows
+              </Link>
+            </Button>
+          }
+        />
+      </div>
+      <div className="space-y-4 px-6 py-4">
         <InsightsSection />
         <BlueprintsSection />
         <AuditSection />
-      </div>
-    </div>
-  )
-}
-
-function PageHeader() {
-  return (
-    <div className="border-b bg-card/50">
-      <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between lg:px-6">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-            <Gauge className="h-4 w-4" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold tracking-tight">Automation insights</h1>
-            <p className="text-xs text-muted-foreground">
-              Overview, run usage, blueprints, and the audit trail for your automations.
-            </p>
-          </div>
-        </div>
-        <Button size="sm" variant="outline" asChild className="gap-1.5">
-          <Link to="/workflows">
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Back to workflows
-          </Link>
-        </Button>
       </div>
     </div>
   )
@@ -87,7 +77,7 @@ function LoadingBox() {
 
 function SectionError({message}: {message: string}) {
   return (
-    <div className="rounded-md border p-4 text-sm">
+    <div className="rounded-md border bg-card/40 p-4 text-sm">
       <p className="font-semibold">Unable to load this section</p>
       <p className="mt-1 text-muted-foreground">{message}</p>
     </div>
@@ -105,13 +95,12 @@ function InsightsSection() {
   })
 
   return (
-    <section className="space-y-3">
-      <h2 className="text-sm font-semibold">Overview</h2>
+    <SectionCard title="Overview" icon={Gauge} iconTone="accent">
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
         <OverviewBlock query={overviewQuery} />
         <UsageBlock query={usageQuery} />
       </div>
-    </section>
+    </SectionCard>
   )
 }
 
@@ -151,8 +140,7 @@ function BlueprintsSection() {
   })
 
   return (
-    <section className="space-y-3">
-      <h2 className="text-sm font-semibold">Blueprints</h2>
+    <SectionCard title="Blueprints" icon={LayoutGrid} iconTone="info">
       {isLoading ? (
         <LoadingBox />
       ) : isError ? (
@@ -165,7 +153,7 @@ function BlueprintsSection() {
           onUseBlueprint={(blueprint) => instantiate.mutate(blueprint)}
         />
       )}
-    </section>
+    </SectionCard>
   )
 }
 
@@ -176,8 +164,7 @@ function AuditSection() {
   })
 
   return (
-    <section className="space-y-3">
-      <h2 className="text-sm font-semibold">Audit trail</h2>
+    <SectionCard title="Audit trail" icon={ClipboardList} iconTone="muted">
       {isLoading ? (
         <LoadingBox />
       ) : isError ? (
@@ -185,6 +172,6 @@ function AuditSection() {
       ) : (
         <WorkflowAuditTimeline entries={entries} />
       )}
-    </section>
+    </SectionCard>
   )
 }

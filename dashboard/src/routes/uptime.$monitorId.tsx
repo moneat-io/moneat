@@ -21,6 +21,8 @@ import {formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import {StatCard} from '@/components/ui/stat-card'
+import {EmptyState} from '@/components/ui/empty-state'
 import {Separator} from '@/components/ui/separator'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Activity, ArrowLeft, CheckCircle2, Clock, Pause, Pencil, Play, Trash2} from 'lucide-react'
@@ -103,7 +105,17 @@ function UptimeDetailPage() {
   if (!monitor) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <p>Monitor not found</p>
+        <EmptyState
+          icon={Activity}
+          title="Monitor not found"
+          description="This monitor may have been deleted."
+          action={
+            <Button variant="outline" size="sm" onClick={() => navigate({to: '/uptime'})}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to monitors
+            </Button>
+          }
+        />
       </div>
     )
   }
@@ -163,7 +175,7 @@ function UptimeDetailPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
                 onClick={() => {
                   if (confirm(`Delete monitor "${monitor.name}"?`)) {
                     deleteMutation.mutate()
@@ -181,41 +193,25 @@ function UptimeDetailPage() {
       <div className="container mx-auto px-4 py-6 space-y-6">
         {/* Stats Grid */}
         <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
-          <Card className="bg-gradient-to-br from-emerald-500/5 to-emerald-600/10 border-emerald-500/10">
-            <CardContent className="p-4 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">24h Uptime</p>
-                <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                  {monitor.uptime24h !== undefined ? `${monitor.uptime24h.toFixed(2)}%` : 'N/A'}
-                </div>
-              </div>
-              <CheckCircle2 className="h-8 w-8 text-emerald-500/20" />
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-gradient-to-br from-blue-500/5 to-blue-600/10 border-blue-500/10">
-            <CardContent className="p-4 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">7d Uptime</p>
-                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                  {monitor.uptime7d !== undefined ? `${monitor.uptime7d.toFixed(2)}%` : 'N/A'}
-                </div>
-              </div>
-              <Activity className="h-8 w-8 text-blue-500/20" />
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-gradient-to-br from-violet-500/5 to-violet-600/10 border-violet-500/10">
-            <CardContent className="p-4 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">Avg Response</p>
-                <div className="text-2xl font-bold text-violet-600 dark:text-violet-400">
-                  {monitor.avgResponseTime !== undefined ? `${monitor.avgResponseTime}ms` : 'N/A'}
-                </div>
-              </div>
-              <Clock className="h-8 w-8 text-violet-500/20" />
-            </CardContent>
-          </Card>
+          <StatCard
+            label="24h Uptime"
+            tone="success"
+            icon={CheckCircle2}
+            value={monitor.uptime24h !== undefined ? `${monitor.uptime24h.toFixed(2)}%` : 'N/A'}
+          />
+          <StatCard
+            label="7d Uptime"
+            tone="info"
+            icon={Activity}
+            value={monitor.uptime7d !== undefined ? `${monitor.uptime7d.toFixed(2)}%` : 'N/A'}
+          />
+          <StatCard
+            label="Avg Response"
+            tone="accent"
+            icon={Clock}
+            value={monitor.avgResponseTime !== undefined ? monitor.avgResponseTime : 'N/A'}
+            unit={monitor.avgResponseTime !== undefined ? 'ms' : undefined}
+          />
         </div>
 
         {/* Heartbeat Bar */}
@@ -312,9 +308,9 @@ function UptimeDetailPage() {
                       </TableCell>
                       <TableCell>
                         {heartbeat.status === 1 ? (
-                          <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/20 text-[10px] h-5 px-1.5">Up</Badge>
+                          <Badge variant="success" size="sm" className="h-5">Up</Badge>
                         ) : (
-                          <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20 hover:bg-red-500/20 text-[10px] h-5 px-1.5">Down</Badge>
+                          <Badge variant="danger" size="sm" className="h-5">Down</Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-right font-mono text-xs">

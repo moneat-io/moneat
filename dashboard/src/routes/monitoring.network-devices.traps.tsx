@@ -9,23 +9,31 @@
 import {createFileRoute} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
-import {Badge} from '@/components/ui/badge'
-import {Card, CardContent} from '@/components/ui/card'
+import {Badge, type BadgeProps} from '@/components/ui/badge'
+import {SectionCard} from '@/components/ui/section-card'
+import {EmptyState} from '@/components/ui/empty-state'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Input} from '@/components/ui/input'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
 import {AlertTriangle, Loader2, Search} from 'lucide-react'
-import {cn} from '@/lib/utils'
 import {useMemo, useState} from 'react'
 
 export const Route = createFileRoute('/monitoring/network-devices/traps')({
   component: NdmTraps,
 })
 
-const severityColors: Record<string, string> = {
-  critical: 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/20',
-  warning: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/20',
-  info: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/20',
+// Trap severity mapped onto the shared status language.
+function severityVariant(severity?: string): BadgeProps['variant'] {
+  switch ((severity ?? '').toLowerCase()) {
+    case 'critical':
+      return 'danger'
+    case 'warning':
+      return 'warning'
+    case 'info':
+      return 'info'
+    default:
+      return 'neutral'
+  }
 }
 
 interface NetworkTrap {
@@ -71,17 +79,11 @@ function NdmTraps() {
 
   if (traps.length === 0) {
     return (
-      <Card className="border-dashed">
-        <CardContent className="py-16 text-center">
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/10 to-orange-500/10">
-            <AlertTriangle className="h-8 w-8 text-amber-500" />
-          </div>
-          <h3 className="text-lg font-semibold mb-2">No traps received</h3>
-          <p className="text-muted-foreground max-w-sm mx-auto">
-            SNMP trap data will appear here once received by the agent.
-          </p>
-        </CardContent>
-      </Card>
+      <EmptyState
+        icon={AlertTriangle}
+        title="No traps received"
+        description="SNMP trap data will appear here once received by the agent."
+      />
     )
   }
 
@@ -89,7 +91,7 @@ function NdmTraps() {
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-1.5 text-sm">
-          <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+          <AlertTriangle className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="font-semibold tabular-nums">{traps.length}</span>
           <span className="text-muted-foreground text-xs">traps</span>
         </div>
@@ -106,13 +108,13 @@ function NdmTraps() {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <p className="font-medium">No traps match your search</p>
-          <p className="text-sm mt-1">Try adjusting your search query.</p>
-        </div>
+        <EmptyState
+          icon={Search}
+          title="No traps match your search"
+          description="Try adjusting your search query."
+        />
       ) : (
-        <Card className="overflow-hidden border-border/60">
-          <CardContent className="p-0">
+        <SectionCard title="Traps" icon={AlertTriangle} iconTone="warning" count={filtered.length} flushBody>
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent bg-muted/30">
@@ -129,10 +131,7 @@ function NdmTraps() {
                     <TableCell className="pl-4 font-mono text-xs">{t.deviceIp}</TableCell>
                     <TableCell className="font-mono text-xs">{t.oid}</TableCell>
                     <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={cn('text-xs', severityColors[t.severity ?? ''] || '')}
-                      >
+                      <Badge variant={severityVariant(t.severity)} size="sm">
                         {t.severity}
                       </Badge>
                     </TableCell>
@@ -155,8 +154,7 @@ function NdmTraps() {
                 ))}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
+        </SectionCard>
       )}
     </div>
   )

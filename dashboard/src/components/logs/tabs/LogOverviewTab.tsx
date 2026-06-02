@@ -107,8 +107,8 @@ export function LogOverviewTab({log, projectId}: LogOverviewTabProps) {
       ) : (exceptionType || exceptionMessage) && (
         <div className="space-y-1.5">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Exception</span>
-          <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 font-mono text-xs">
-            {exceptionType && <div className="font-semibold text-red-700 dark:text-red-400">{exceptionType}</div>}
+          <div className="rounded-lg border border-danger-border bg-danger-bg px-3 py-2 font-mono text-xs">
+            {exceptionType && <div className="font-semibold text-danger-fg">{exceptionType}</div>}
             {exceptionMessage && <div className="mt-0.5 text-foreground/80">{exceptionMessage}</div>}
           </div>
         </div>

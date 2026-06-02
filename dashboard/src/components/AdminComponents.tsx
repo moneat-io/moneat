@@ -29,15 +29,15 @@ const planConfig: Record<string, { label: string; className: string }> = {
   },
   pro: {
     label: 'Pro',
-    className: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+    className: 'bg-chart-1/15 text-chart-1 border-chart-1/30',
   },
   team: {
     label: 'Team',
-    className: 'bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300 border-violet-200 dark:border-violet-800',
+    className: 'bg-chart-7/15 text-chart-7 border-chart-7/30',
   },
   business: {
     label: 'Business',
-    className: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+    className: 'bg-chart-5/15 text-chart-5 border-chart-5/30',
   },
 }
 
@@ -97,12 +97,12 @@ export function MetricCard({
 
 function getThresholdColors(percent: number) {
   if (percent >= 90) {
-    return {bar: 'bg-red-500', stroke: 'stroke-red-500', label: 'text-red-600 dark:text-red-400'}
+    return {bar: 'bg-danger-solid', stroke: 'stroke-danger-solid', label: 'text-danger-fg'}
   }
   if (percent >= 70) {
-    return {bar: 'bg-amber-500', stroke: 'stroke-amber-500', label: 'text-amber-600 dark:text-amber-400'}
+    return {bar: 'bg-warning-solid', stroke: 'stroke-warning-solid', label: 'text-warning-fg'}
   }
-  return {bar: 'bg-emerald-500', stroke: 'stroke-emerald-500', label: 'text-muted-foreground'}
+  return {bar: 'bg-success-solid', stroke: 'stroke-success-solid', label: 'text-muted-foreground'}
 }
 
 interface QuotaBarProps {

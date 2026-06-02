@@ -91,12 +91,12 @@ const REFRESH_OPTIONS = [
 ] as const
 
 const SERVICE_DOTS = [
-  'bg-rose-500',
-  'bg-violet-500',
-  'bg-blue-500',
-  'bg-emerald-500',
-  'bg-amber-500',
-  'bg-cyan-500',
+  'bg-chart-1',
+  'bg-chart-2',
+  'bg-chart-3',
+  'bg-chart-4',
+  'bg-chart-6',
+  'bg-chart-7',
 ]
 
 type TraceStatusSelect = 'all' | ApmStatusFilter
@@ -565,7 +565,7 @@ function KpiCard({
         {series.length > 1 && (
           <MiniSparkline
             values={series}
-            className="h-10 w-20 text-violet-500"
+            className="h-10 w-20 text-primary"
           />
         )}
       </CardContent>
@@ -681,9 +681,9 @@ function LatencyPanel({
           Latency distribution (ms)
         </CardTitle>
         <div className="flex items-center gap-4 text-xs text-muted-foreground">
-          <LegendDot className="bg-violet-500" label="p50" />
-          <LegendDot className="bg-blue-500" label="p95" />
-          <LegendDot className="bg-teal-500" label="p99" />
+          <LegendDot className="bg-chart-1" label="p50" />
+          <LegendDot className="bg-chart-2" label="p95" />
+          <LegendDot className="bg-chart-3" label="p99" />
         </div>
       </CardHeader>
       <CardContent className="h-[242px] px-3 pb-3 pt-0">
@@ -707,9 +707,9 @@ function LatencyPanel({
                 labelClassName="text-xs"
                 contentStyle={{fontSize: 12, borderRadius: 8}}
               />
-              <Line type="monotone" dataKey="p50" stroke="#8b5cf6" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="p95" stroke="#3b82f6" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="p99" stroke="#14b8a6" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="p50" stroke="hsl(var(--chart-1))" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="p95" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="p99" stroke="hsl(var(--chart-3))" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -971,7 +971,7 @@ function AllErroringResourceRow({resource}: {resource: ApmResourceStatsItem}) {
         {resource.service}
       </TableCell>
       <TableCell className="text-right tabular-nums">{formatCount(resource.totalHits)}</TableCell>
-      <TableCell className="text-right tabular-nums text-rose-600 dark:text-rose-400">
+      <TableCell className="text-right tabular-nums text-danger-fg">
         {formatCount(resource.totalErrors)}
       </TableCell>
       <TableCell className="text-right">
@@ -1068,7 +1068,7 @@ function ErrorGroupTable({
               <TableCell className="max-w-[160px] truncate text-xs text-muted-foreground">
                 {error.service}
               </TableCell>
-              <TableCell className="text-right tabular-nums text-rose-600 dark:text-rose-400">
+              <TableCell className="text-right tabular-nums text-danger-fg">
                 {formatCount(error.count)}
               </TableCell>
               <TableCell className="pr-4 text-right">
@@ -1309,10 +1309,10 @@ function SkeletonBlock({className}: {className?: string}) {
 
 function ErrorMeter({rate}: {rate: number}) {
   const pct = rate * 100
-  const color = pct >= 5 ? 'bg-rose-500' : pct > 0 ? 'bg-amber-500' : 'bg-emerald-500'
+  const color = pct >= 5 ? 'bg-danger-solid' : pct > 0 ? 'bg-warning-solid' : 'bg-success-solid'
   return (
     <div className="flex items-center justify-end gap-2">
-      <span className={cn('tabular-nums', pct > 0 && 'text-rose-600 dark:text-rose-400')}>
+      <span className={cn('tabular-nums', pct > 0 && 'text-danger-fg')}>
         {formatPercent(rate)}
       </span>
       <span className="h-1.5 w-12 overflow-hidden rounded-full bg-muted">
@@ -1324,7 +1324,7 @@ function ErrorMeter({rate}: {rate: number}) {
 
 function DurationMeter({value}: {value: number}) {
   const ratio = Math.min(1, value / DURATION_BAR_MAX_NS)
-  const color = ratio > 0.75 ? 'bg-rose-500' : ratio > 0.3 ? 'bg-amber-500' : 'bg-emerald-500'
+  const color = ratio > 0.75 ? 'bg-danger-solid' : ratio > 0.3 ? 'bg-warning-solid' : 'bg-success-solid'
   return (
     <div className="flex items-center justify-end gap-2">
       <span className="tabular-nums">{formatDuration(value)}</span>
@@ -1345,7 +1345,7 @@ function TraceStatusBadge({hasError}: {hasError: boolean}) {
     )
   }
   return (
-    <Badge variant="outline" className="gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
+    <Badge variant="outline" className="gap-1 text-[11px] text-success-fg">
       <CheckCircle2 className="h-3 w-3" />
       OK
     </Badge>
@@ -1367,7 +1367,7 @@ function Delta({
   const rawDelta = (current - previous) / previous
   const good = inverted ? rawDelta <= 0 : rawDelta >= 0
   return (
-    <div className={cn('mt-1 text-xs tabular-nums', good ? 'text-emerald-600' : 'text-rose-600')}>
+    <div className={cn('mt-1 text-xs tabular-nums', good ? 'text-success-fg' : 'text-danger-fg')}>
       {rawDelta >= 0 ? '+' : ''}
       {(rawDelta * 100).toFixed(1)}% vs previous
     </div>
@@ -1509,7 +1509,7 @@ function formatRelativeTime(ns: number): string {
 }
 
 function serviceDot(index: number): string {
-  return SERVICE_DOTS[index % SERVICE_DOTS.length] ?? 'bg-slate-500'
+  return SERVICE_DOTS[index % SERVICE_DOTS.length] ?? 'bg-muted-foreground'
 }
 
 function serviceDotFromName(service: string): string {

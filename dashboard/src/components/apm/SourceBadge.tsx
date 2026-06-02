@@ -20,11 +20,11 @@ import {cn} from '@/lib/utils'
 const SOURCE_CONFIG: Record<string, {label: string; className: string}> = {
   datadog: {
     label: 'Datadog',
-    className: 'text-violet-600 border-violet-600/30 dark:text-violet-400 dark:border-violet-400/30',
+    className: 'text-chart-6 border-chart-6/30',
   },
   otlp: {
     label: 'OTEL',
-    className: 'text-teal-600 border-teal-600/30 dark:text-teal-400 dark:border-teal-400/30',
+    className: 'text-chart-3 border-chart-3/30',
   },
   sdk: {
     label: 'SDK',

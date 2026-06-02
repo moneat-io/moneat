@@ -23,9 +23,11 @@ import {useProject} from '@/contexts/ProjectContext'
 import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
 import {formatRelativeTime} from '@/lib/utils'
 import {APP_OVERVIEW_VIEW, normalizeAppOverviewSearch} from '@/lib/overview-route'
-import {Badge} from '@/components/ui/badge'
+import {Badge, type BadgeProps} from '@/components/ui/badge'
+import {levelBadgeVariant, levelBorderClass} from '@/lib/severity'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import {PageHeader} from '@/components/ui/page-header'
 import HeartbeatBar from '@/components/uptime/HeartbeatBar'
 import {
   Activity,
@@ -54,21 +56,17 @@ import {StatsCard, StatsCardSkeleton} from '@/components/charts/StatsCard'
 import {EventsChart, EventsChartSkeleton} from '@/components/charts/EventsChart'
 import {getNow, isDemo} from '@/lib/demo'
 
-// ─── Subtle badge colors ─────────────────────────────────────────────
-function getLevelBadge(level: string): string {
-  switch (level.toLowerCase()) {
-    case 'fatal':
-      return 'border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/50 dark:text-red-300'
-    case 'error':
-      return 'border-red-200 bg-red-50/80 text-red-700 dark:border-red-800/60 dark:bg-red-950/30 dark:text-red-400'
-    case 'warning':
-      return 'border-amber-200 bg-amber-50/80 text-amber-700 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-400'
-    case 'info':
-      return 'border-blue-200 bg-blue-50/80 text-blue-700 dark:border-blue-800/60 dark:bg-blue-950/30 dark:text-blue-400'
-    case 'debug':
-      return 'border-zinc-200 bg-zinc-50/80 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/30 dark:text-zinc-400'
+// ─── Incident status → badge variant ─────────────────────────────────
+function incidentStatusVariant(status: string): BadgeProps['variant'] {
+  switch (status) {
+    case 'TRIGGERED':
+      return 'danger'
+    case 'ACKNOWLEDGED':
+      return 'warning'
+    case 'RESOLVED':
+      return 'success'
     default:
-      return 'border-border bg-muted text-muted-foreground'
+      return 'neutral'
   }
 }
 
@@ -79,29 +77,16 @@ function formatCount(n: number): string {
   return n.toLocaleString()
 }
 
-function getIncidentStatusBadge(status: string) {
-  switch (status) {
-    case 'TRIGGERED':
-      return 'border-red-200 bg-red-50/80 text-red-700 dark:border-red-800/60 dark:bg-red-950/30 dark:text-red-400'
-    case 'ACKNOWLEDGED':
-      return 'border-amber-200 bg-amber-50/80 text-amber-700 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-400'
-    case 'RESOLVED':
-      return 'border-emerald-200 bg-emerald-50/80 text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-950/30 dark:text-emerald-400'
-    default:
-      return 'border-border bg-muted text-muted-foreground'
-  }
-}
-
 function getPriorityColor(priority: string) {
   switch (priority) {
     case 'P0':
-      return 'text-red-600 dark:text-red-400'
+      return 'text-danger-fg'
     case 'P1':
-      return 'text-orange-600 dark:text-orange-400'
+      return 'text-[hsl(var(--chart-6))]'
     case 'P2':
-      return 'text-amber-600 dark:text-amber-400'
+      return 'text-warning-fg'
     case 'P3':
-      return 'text-blue-600 dark:text-blue-400'
+      return 'text-info-fg'
     default:
       return 'text-muted-foreground'
   }
@@ -110,13 +95,13 @@ function getPriorityColor(priority: string) {
 function getStatusDot(status: string) {
   switch (status) {
     case 'up':
-      return 'bg-emerald-400 dark:bg-emerald-500'
+      return 'bg-success-solid'
     case 'down':
-      return 'bg-red-400 dark:bg-red-500'
+      return 'bg-danger-solid'
     case 'degraded':
-      return 'bg-amber-400 dark:bg-amber-500'
+      return 'bg-warning-solid'
     default:
-      return 'bg-zinc-300 dark:bg-zinc-600'
+      return 'bg-muted-foreground/40'
   }
 }
 
@@ -314,9 +299,9 @@ function normalizePercent(value?: number | null): number | null {
 
 function getUtilizationFillColor(percent: number | null): string {
   if (percent == null) return 'bg-muted-foreground/30'
-  if (percent >= 85) return 'bg-red-500/80'
-  if (percent >= 70) return 'bg-amber-500/80'
-  return 'bg-emerald-500/75'
+  if (percent >= 85) return 'bg-danger-solid/80'
+  if (percent >= 70) return 'bg-warning-solid/80'
+  return 'bg-success-solid/75'
 }
 
 function UtilizationBar({
@@ -488,12 +473,11 @@ function DashboardPage() {
     <div className="min-h-screen">
       <div className="px-6 py-3">
         {/* Header */}
-        <div className="mb-3">
-          <h2 className="text-xl font-bold tracking-tight">Overview</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Overview of your systems, applications, and incidents
-          </p>
-        </div>
+        <PageHeader
+          className="mb-3"
+          title="Overview"
+          description="Overview of your systems, applications, and incidents"
+        />
 
         {/* ── Top-level stats ──────────────────────────────────────── */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-4">
@@ -581,13 +565,13 @@ function DashboardPage() {
             title="On-Call"
             icon={Bell}
             to={"/on-call" as string}
-            iconClassName="text-amber-600 dark:text-amber-400"
-            iconBgClassName="bg-amber-100 dark:bg-amber-900/20"
+            iconClassName="text-warning-fg"
+            iconBgClassName="bg-warning-bg"
             headerRight={
               (triggeredIncidents.length > 0 || activeIncidents.length > 0) ? (
                 <div className="flex items-center gap-3 text-xs font-medium">
                   {triggeredIncidents.length > 0 && (
-                    <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
+                    <div className="flex items-center gap-1.5 text-danger-fg">
                       <Bell className="h-3.5 w-3.5" />
                       <span>{triggeredIncidents.length} Triggered</span>
                     </div>
@@ -635,7 +619,7 @@ function DashboardPage() {
                       href="/on-call"
                       className="grid grid-cols-[7.75rem_auto_minmax(0,1fr)_auto] items-center gap-2 py-2 px-2.5 rounded-md hover:bg-muted/50 transition"
                     >
-                      <Badge variant="outline" className={`${getIncidentStatusBadge(incident.status)} w-full justify-center text-[10px] px-1.5 py-0 shrink-0`}>
+                      <Badge variant={incidentStatusVariant(incident.status)} className="w-full justify-center text-[10px] px-1.5 py-0 shrink-0">
                         {incident.status}
                       </Badge>
                       <span className={`text-[11px] font-semibold ${getPriorityColor(incident.priorityLevel)} shrink-0 tabular-nums`}>
@@ -657,8 +641,8 @@ function DashboardPage() {
             title="Issues"
             icon={AlertCircle}
             to="/issues"
-            iconClassName="text-red-600 dark:text-red-400"
-            iconBgClassName="bg-red-100 dark:bg-red-900/20"
+            iconClassName="text-danger-fg"
+            iconBgClassName="bg-danger-bg"
             headerRight={
               unresolvedIssues.length > 0 ? (
                 <div className="flex items-center gap-3 text-xs font-medium">
@@ -667,13 +651,13 @@ function DashboardPage() {
                     <span>{unresolvedIssues.length} Total</span>
                   </div>
                   {issueLevelCounts['fatal'] > 0 && (
-                    <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
+                    <div className="flex items-center gap-1.5 text-danger-fg">
                       <XCircle className="h-3.5 w-3.5" />
                       <span>{issueLevelCounts['fatal']} Fatal</span>
                     </div>
                   )}
                   {issueLevelCounts['error'] > 0 && (
-                    <div className="flex items-center gap-1.5 text-red-500 dark:text-red-500">
+                    <div className="flex items-center gap-1.5 text-danger-fg">
                       <AlertTriangle className="h-3.5 w-3.5" />
                       <span>{issueLevelCounts['error']} Error</span>
                     </div>
@@ -689,13 +673,7 @@ function DashboardPage() {
             ) : (
               <div className="space-y-0.5">
                 {unresolvedIssues.slice(0, 6).map(issue => {
-                  const levelAccent = {
-                    fatal: 'border-l-red-500',
-                    error: 'border-l-orange-400',
-                    warning: 'border-l-amber-400',
-                    info: 'border-l-blue-400',
-                    debug: 'border-l-gray-400',
-                  }[issue.level.toLowerCase()] ?? 'border-l-gray-300'
+                  const levelAccent = levelBorderClass(issue.level)
 
                   const platformInfo = issue.platform?.toLowerCase().includes('cocoa') || issue.platform?.toLowerCase().includes('ios')
                     ? { Icon: Smartphone, label: 'iOS' }
@@ -714,7 +692,7 @@ function DashboardPage() {
                       params={{issueId: issue.id}}
                       className={`flex items-center gap-2 py-2 px-2.5 rounded-md border-l-2 ${levelAccent} hover:bg-muted/50 transition`}
                     >
-                      <Badge variant="outline" className={`${getLevelBadge(issue.level)} text-[10px] px-1.5 py-0 w-14 justify-center shrink-0`}>
+                      <Badge variant={levelBadgeVariant(issue.level)} className="text-[10px] px-1.5 py-0 w-14 justify-center shrink-0">
                         {issue.level.toUpperCase()}
                       </Badge>
                       <div className="flex flex-col gap-0.5 min-w-0 flex-1">
@@ -748,19 +726,19 @@ function DashboardPage() {
             title="Uptime"
             icon={HeartPulse}
             to="/uptime"
-            iconClassName="text-emerald-600 dark:text-emerald-400"
-            iconBgClassName="bg-emerald-100 dark:bg-emerald-900/20"
+            iconClassName="text-success-fg"
+            iconBgClassName="bg-success-bg"
             headerRight={
               uptimeMonitors.length > 0 ? (
                 <div className="flex items-center gap-3 text-xs font-medium">
                   {uptimeDown > 0 && (
-                    <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
+                    <div className="flex items-center gap-1.5 text-danger-fg">
                       <ArrowDown className="h-3.5 w-3.5" />
                       <span>{uptimeDown} Down</span>
                     </div>
                   )}
                   {uptimeUp > 0 && (
-                    <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-500">
+                    <div className="flex items-center gap-1.5 text-success-fg">
                       <ArrowUp className="h-3.5 w-3.5" />
                       <span>{uptimeUp} Up</span>
                     </div>
@@ -798,7 +776,7 @@ function DashboardPage() {
                         <span className={`h-2 w-2 rounded-full shrink-0 ${getStatusDot(monitor.status)}`} />
                         <span className="text-sm truncate">{monitor.name}</span>
                         {!isHeartbeatFresh && monitor.active && monitor.status !== 'paused' && (
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-300/60 text-amber-700 dark:text-amber-400">
+                          <Badge variant="warning" className="text-[10px] px-1.5 py-0">
                             stale
                           </Badge>
                         )}
@@ -843,19 +821,19 @@ function DashboardPage() {
             title="Infrastructure"
             icon={Server}
             to="/monitoring"
-            iconClassName="text-blue-600 dark:text-blue-400"
-            iconBgClassName="bg-blue-100 dark:bg-blue-900/20"
+            iconClassName="text-chart-2"
+            iconBgClassName="bg-chart-2/15"
             headerRight={
               monitorHosts.length > 0 ? (
                 <div className="flex items-center gap-3 text-xs font-medium">
                   {hostsDown > 0 && (
-                    <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
+                    <div className="flex items-center gap-1.5 text-danger-fg">
                       <ArrowDown className="h-3.5 w-3.5" />
                       <span>{hostsDown} Offline</span>
                     </div>
                   )}
                   {hostsUp > 0 && (
-                    <div className="flex items-center gap-1.5 text-blue-600 dark:text-blue-500">
+                    <div className="flex items-center gap-1.5 text-chart-2">
                       <ArrowUp className="h-3.5 w-3.5" />
                       <span>{hostsUp} Online</span>
                     </div>
@@ -910,12 +888,12 @@ function DashboardPage() {
             title="Traces"
             icon={Zap}
             to="/performance/traces"
-            iconClassName="text-violet-600 dark:text-violet-400"
-            iconBgClassName="bg-violet-100 dark:bg-violet-900/20"
+            iconClassName="text-primary"
+            iconBgClassName="bg-[hsl(var(--primary)/0.12)]"
             headerRight={
               perfStats ? (
                 <div className="flex items-center gap-3 text-xs font-medium">
-                  <div className="flex items-center gap-1.5 text-violet-600 dark:text-violet-400">
+                  <div className="flex items-center gap-1.5 text-primary">
                     <Activity className="h-3.5 w-3.5" />
                     <span>{perfStats.apdex.toFixed(2)} Apdex</span>
                   </div>
@@ -958,12 +936,12 @@ function DashboardPage() {
             title="Status Pages"
             icon={Globe}
             to="/status-pages"
-            iconClassName="text-indigo-600 dark:text-indigo-400"
-            iconBgClassName="bg-indigo-100 dark:bg-indigo-900/20"
+            iconClassName="text-chart-7"
+            iconBgClassName="bg-chart-7/15"
             headerRight={
               statusPages.length > 0 ? (
                 <div className="flex items-center gap-3 text-xs font-medium">
-                  <div className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400">
+                  <div className="flex items-center gap-1.5 text-chart-7">
                     <Globe className="h-3.5 w-3.5" />
                     <span>{statusPages.filter(p => p.isPublic).length} Public</span>
                   </div>
@@ -992,10 +970,10 @@ function DashboardPage() {
                   const monitorStatusBadgeClass = !monitorSummary || monitorSummary.total === 0
                     ? 'text-muted-foreground'
                     : monitorSummary.down > 0
-                      ? 'border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400'
+                      ? 'border-danger-border bg-danger-bg text-danger-fg'
                       : monitorSummary.pending > 0
-                        ? 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                        : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                        ? 'border-warning-border bg-warning-bg text-warning-fg'
+                        : 'border-success-border bg-success-bg text-success-fg'
 
                   return (
                     <Link
@@ -1049,8 +1027,8 @@ function DashboardPage() {
             title="Releases"
             icon={Package}
             to="/releases"
-            iconClassName="text-blue-600 dark:text-blue-400"
-            iconBgClassName="bg-blue-100 dark:bg-blue-900/20"
+            iconClassName="text-info-fg"
+            iconBgClassName="bg-info-bg"
             headerRight={
               releases.length > 0 ? (
                 <div className="flex items-center gap-3 text-xs font-medium">
@@ -1099,13 +1077,13 @@ function DashboardPage() {
             title="Replays"
             icon={Play}
             to="/replays"
-            iconClassName="text-cyan-600 dark:text-cyan-400"
-            iconBgClassName="bg-cyan-100 dark:bg-cyan-900/20"
+            iconClassName="text-chart-3"
+            iconBgClassName="bg-chart-3/15"
             headerRight={
               replays.length > 0 ? (
                 <div className="flex items-center gap-3 text-xs font-medium">
                   {replaysWithErrors > 0 && (
-                    <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
+                    <div className="flex items-center gap-1.5 text-danger-fg">
                       <AlertCircle className="h-3.5 w-3.5" />
                       <span>{replaysWithErrors} Errors</span>
                     </div>
@@ -1137,7 +1115,7 @@ function DashboardPage() {
                     </span>
                     <div className="flex items-center gap-2 shrink-0 text-[11px] text-muted-foreground tabular-nums">
                       {replay.errorCount > 0 && (
-                        <span className="text-red-600/70 dark:text-red-400/70">{replay.errorCount} errors</span>
+                        <span className="text-danger-fg/80">{replay.errorCount} errors</span>
                       )}
                       <span>{Math.round(replay.durationMs / 1000)}s</span>
                       {replay.browserName && (
@@ -1155,13 +1133,13 @@ function DashboardPage() {
             title="Feedback"
             icon={MessageSquare}
             to="/feedback"
-            iconClassName="text-teal-600 dark:text-teal-400"
-            iconBgClassName="bg-teal-100 dark:bg-teal-900/20"
+            iconClassName="text-info-fg"
+            iconBgClassName="bg-info-bg"
             headerRight={
               feedback.length > 0 ? (
                 <div className="flex items-center gap-3 text-xs font-medium">
                   {newFeedback > 0 && (
-                    <div className="flex items-center gap-1.5 text-teal-600 dark:text-teal-400">
+                    <div className="flex items-center gap-1.5 text-info-fg">
                       <MessageSquare className="h-3.5 w-3.5" />
                       <span>{newFeedback} New</span>
                     </div>

@@ -50,6 +50,7 @@ import {
 import {Checkbox} from '@/components/ui/checkbox'
 import {Label} from '@/components/ui/label'
 import {Switch} from '@/components/ui/switch'
+import {SectionHeader} from '@/components/AdminComponents'
 import {ChevronLeft, ChevronRight, Search, Shield, User, Mail, CheckCircle, XCircle, Trash2} from 'lucide-react'
 import {useState} from 'react'
 
@@ -150,14 +151,10 @@ function AdminUsersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">User Management</h2>
-          <p className="text-muted-foreground">View and manage all registered users</p>
-        </div>
+      <SectionHeader title="User Management" description="View and manage all registered users">
         {selectedUsers.size > 0 && (
-          <Button 
-            variant="destructive" 
+          <Button
+            variant="destructive"
             onClick={() => setShowDeleteConfirm(true)}
             className="gap-2"
           >
@@ -165,7 +162,7 @@ function AdminUsersPage() {
             Delete {selectedUsers.size} {selectedUsers.size === 1 ? 'User' : 'Users'}
           </Button>
         )}
-      </div>
+      </SectionHeader>
 
       <Card>
         <CardHeader>
@@ -251,9 +248,9 @@ function AdminUsersPage() {
                           <div className="flex flex-col gap-1">
                             <div className="flex items-center gap-1.5">
                               {user.emailVerified ? (
-                                <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+                                <CheckCircle className="h-3.5 w-3.5 text-success-fg" />
                               ) : (
-                                <XCircle className="h-3.5 w-3.5 text-amber-600" />
+                                <XCircle className="h-3.5 w-3.5 text-warning-fg" />
                               )}
                               <span className="text-sm">
                                 {user.emailVerified ? 'Verified' : 'Unverified'}

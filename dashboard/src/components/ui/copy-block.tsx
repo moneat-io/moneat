@@ -49,7 +49,7 @@ export function CopyBlock({code, language}: CopyBlockProps) {
         >
           {copied ? (
             <>
-              <Check className="h-3 w-3 text-emerald-500" />
+              <Check className="h-3 w-3 text-success-fg" />
               Copied
             </>
           ) : (

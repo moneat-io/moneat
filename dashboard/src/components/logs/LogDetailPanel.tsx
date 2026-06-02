@@ -20,6 +20,7 @@ import {Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle} from '@/
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import type {LogEntry} from '@/lib/api'
 import {cn} from '@/lib/utils'
+import {logLevelBadgeClass} from '@/lib/severity'
 import {Check, Copy, ExternalLink, Eye} from 'lucide-react'
 import {useCallback, useState} from 'react'
 import {useTimezone} from '@/hooks/useTimezone'
@@ -35,15 +36,6 @@ interface LogDetailPanelProps {
   onClose: () => void
   onViewInContext?: (log: LogEntry) => void
   projectId?: string | number
-}
-
-const levelStyles: Record<string, string> = {
-  trace: 'bg-zinc-500/15 text-zinc-700 dark:text-zinc-300 border-zinc-500/25',
-  debug: 'bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-500/25',
-  info: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/25',
-  warn: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/25',
-  error: 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/25',
-  fatal: 'bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-500/30',
 }
 
 // --- Shared helpers exported for use by tab components ---
@@ -71,7 +63,7 @@ export function CopyButton({value, label}: {value: string; label?: string}) {
       title={label ? `Copy ${label}` : 'Copy to clipboard'}
       aria-label={label ? `Copy ${label}` : 'Copy to clipboard'}
     >
-      {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+      {copied ? <Check className="h-3 w-3 text-success-fg" /> : <Copy className="h-3 w-3" />}
     </button>
   )
 }
@@ -137,17 +129,17 @@ export function LogDetailPanel({log, open, onClose, onViewInContext, projectId}:
           <div className="flex flex-wrap items-center gap-2">
             <Badge
               variant="outline"
-              className={cn('font-mono text-xs uppercase', levelStyles[normalizedLevel] || levelStyles.info)}
+              className={cn('font-mono text-xs uppercase', logLevelBadgeClass(normalizedLevel))}
             >
               {normalizedLevel}
             </Badge>
             {log.service && (
-              <Badge variant="secondary" className="font-mono text-xs bg-violet-500/10 text-violet-700 dark:text-violet-300 border border-violet-500/20">
+              <Badge variant="accent" className="font-mono text-xs">
                 {log.service}
               </Badge>
             )}
             {log.environment && (
-              <Badge variant="secondary" className="font-mono text-xs bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+              <Badge variant="success" className="font-mono text-xs">
                 {log.environment}
               </Badge>
             )}

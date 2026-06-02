@@ -91,11 +91,11 @@ export default function MonitorListItem({monitor}: MonitorListItemProps) {
   })
 
   const statusColor = {
-    up: 'border-l-emerald-500',
-    down: 'border-l-red-500',
-    paused: 'border-l-yellow-500',
-    pending: 'border-l-gray-300',
-  }[monitor.status] || 'border-l-gray-300'
+    up: 'border-l-success-solid',
+    down: 'border-l-danger-solid',
+    paused: 'border-l-warning-solid',
+    pending: 'border-l-border',
+  }[monitor.status] || 'border-l-border'
 
   return (
     <Card className={cn("overflow-hidden border-l-4", statusColor)}>
@@ -195,7 +195,7 @@ export default function MonitorListItem({monitor}: MonitorListItemProps) {
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-7 px-1.5 text-xs text-red-500 hover:text-red-600 hover:bg-red-50"
+                className="h-7 px-1.5 text-xs text-destructive hover:text-destructive/90"
                 onClick={() => {
                   if (confirm(`Delete monitor "${monitor.name}"?`)) {
                     deleteMutation.mutate(monitor.id)

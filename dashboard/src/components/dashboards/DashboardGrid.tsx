@@ -384,12 +384,12 @@ function WidgetCard({
             const severity = firingAlert?.incident_severity
             const dotColor = firing
               ? firingAlert?.last_triggered_level === 'ERROR'
-                ? 'bg-red-500'
+                ? 'bg-danger-solid'
                 : firingAlert?.last_triggered_level === 'WARNING'
-                  ? 'bg-orange-500'
+                  ? 'bg-warning-solid'
                   : severity === 'CRITICAL' || severity === 'HIGH'
-                    ? 'bg-red-500'
-                    : 'bg-orange-500'
+                    ? 'bg-danger-solid'
+                    : 'bg-warning-solid'
               : 'bg-muted-foreground/40'
             return (
               <span className="relative shrink-0" title={firing ? `Alert firing` : `${widgetAlerts.length} alert(s) configured`}>

@@ -29,8 +29,8 @@ function AnalyticsLayoutInner() {
     <div className="p-3 space-y-2">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-600">
-            <BarChart3 className="h-3.5 w-3.5 text-white" />
+          <div className="flex items-center justify-center h-7 w-7 rounded-md bg-muted text-muted-foreground">
+            <BarChart3 className="h-3.5 w-3.5" />
           </div>
           <div>
             <h1 className="text-lg font-semibold leading-tight">Analytics</h1>

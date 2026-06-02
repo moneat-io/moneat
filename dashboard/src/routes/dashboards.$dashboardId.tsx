@@ -27,6 +27,8 @@ import {useWidgetClipboard} from '@/components/dashboards/useWidgetClipboard'
 import {useCallback, useEffect, useRef, useState} from 'react'
 import {useProject} from '@/contexts/ProjectContext'
 import {isDemo} from '@/lib/demo'
+import {EmptyState} from '@/components/ui/empty-state'
+import {LayoutDashboard} from 'lucide-react'
 
 interface DashboardSearch {
   edit?: boolean
@@ -299,8 +301,12 @@ function DashboardViewPage() {
 
   if (!dashboard) {
     return (
-      <div className="p-6 flex items-center justify-center py-16 text-muted-foreground">
-        Dashboard not found
+      <div className="p-6">
+        <EmptyState
+          icon={LayoutDashboard}
+          title="Dashboard not found"
+          description="This dashboard may have been deleted or you may not have access to it."
+        />
       </div>
     )
   }

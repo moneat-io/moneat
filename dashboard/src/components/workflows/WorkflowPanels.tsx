@@ -56,7 +56,7 @@ export function ValidationPanel({issues}: {issues: WorkflowValidationIssue[]}) {
     <div className="rounded-md border bg-muted/20 p-3">
       <div className="mb-2 flex items-center gap-2">
         {errors.length === 0 ? (
-          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          <CheckCircle2 className="h-4 w-4 text-success-fg" />
         ) : (
           <XCircle className="h-4 w-4 text-destructive" />
         )}

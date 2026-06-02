@@ -25,15 +25,16 @@ import {
   type VulnerabilityFindingResponse,
   type VulnerabilityInventoryItem,
 } from '@/lib/api'
-import {Badge} from '@/components/ui/badge'
+import {Badge, type BadgeProps} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
-import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import {SectionCard} from '@/components/ui/section-card'
+import {StatCard} from '@/components/ui/stat-card'
 import {Input} from '@/components/ui/input'
 import {Sheet, SheetContent, SheetHeader, SheetTitle} from '@/components/ui/sheet'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {useToast} from '@/hooks/useToast'
 import {SecurityError} from '@/components/security/SecurityError'
-import {colorFor, severityColors, statusColors, STATUS_LABELS} from '@/components/security/securityChips'
+import {STATUS_LABELS} from '@/components/security/securityChips'
 
 export const Route = createFileRoute('/security/vulnerabilities')({
   component: VulnerabilitiesTab,
@@ -41,6 +42,34 @@ export const Route = createFileRoute('/security/vulnerabilities')({
 
 type ExportFormat = 'cyclonedx' | 'spdx'
 type SummaryValue = number | 'Loading' | 'Unavailable'
+
+// Map vulnerability severity / triage status onto the shared status language so
+// these chips match the rest of the app rather than a private palette.
+function severityBadgeVariant(severity?: string | null): BadgeProps['variant'] {
+  switch ((severity ?? '').toLowerCase()) {
+    case 'critical':
+      return 'dangerSolid'
+    case 'high':
+      return 'danger'
+    case 'medium':
+      return 'warning'
+    case 'low':
+      return 'info'
+    default:
+      return 'neutral'
+  }
+}
+
+function statusBadgeVariant(status?: string | null): BadgeProps['variant'] {
+  switch ((status ?? '').toLowerCase()) {
+    case 'open':
+      return 'info'
+    case 'under_review':
+      return 'warning'
+    default:
+      return 'neutral'
+  }
+}
 
 const VULNERABILITY_PAGE_SIZE = 50
 const FINDING_BUTTON_CLASS_NAME = [
@@ -120,26 +149,30 @@ function VulnerabilitiesTab() {
       {summaryQuery.isError ? (
         <SecurityError title="Couldn’t load vulnerability summary" error={summaryQuery.error} />
       ) : (
-        <div className="grid gap-2 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <MetricCard
             label="Packages"
             value={summaryMetricValue(summaryQuery.isLoading, summaryQuery.data?.package_count)}
             icon={Package}
+            tone="info"
           />
           <MetricCard
             label="Findings"
             value={summaryMetricValue(summaryQuery.isLoading, summaryQuery.data?.finding_count)}
             icon={ShieldAlert}
+            tone="accent"
           />
           <MetricCard
             label="Critical"
             value={summaryMetricValue(summaryQuery.isLoading, summaryQuery.data?.critical_count)}
-            tone="critical"
+            icon={ShieldAlert}
+            tone="danger"
           />
           <MetricCard
             label="High"
             value={summaryMetricValue(summaryQuery.isLoading, summaryQuery.data?.high_count)}
-            tone="high"
+            icon={ShieldAlert}
+            tone="warning"
           />
         </div>
       )}
@@ -181,55 +214,53 @@ function VulnerabilitiesTab() {
       {findingsQuery.isError ? (
         <SecurityError title="Couldn’t load vulnerability findings" error={findingsQuery.error} />
       ) : (
-        <Card>
-          <CardHeader className="px-2.5 py-1.5">
-            <CardTitle className="text-xs">
-              Findings ({findingsQuery.isLoading ? 'Loading' : findingsTotal})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {findingsQuery.isLoading ? (
-              <LoadingTable columns={6} message="Loading vulnerability findings" />
-            ) : (
-              <FindingsTable findings={findings} onSelect={setSelected} />
-            )}
-            <PaginationControls
-              label="Findings"
-              page={findingsPage}
-              pageSize={VULNERABILITY_PAGE_SIZE}
-              totalCount={findingsTotal}
-              isLoading={findingsQuery.isLoading || findingsQuery.isFetching}
-              onPageChange={setFindingsPage}
-            />
-          </CardContent>
-        </Card>
+        <SectionCard
+          title="Findings"
+          icon={ShieldAlert}
+          iconTone="danger"
+          count={findingsQuery.isLoading ? 'Loading' : findingsTotal}
+          flushBody
+        >
+          {findingsQuery.isLoading ? (
+            <LoadingTable columns={6} message="Loading vulnerability findings" />
+          ) : (
+            <FindingsTable findings={findings} onSelect={setSelected} />
+          )}
+          <PaginationControls
+            label="Findings"
+            page={findingsPage}
+            pageSize={VULNERABILITY_PAGE_SIZE}
+            totalCount={findingsTotal}
+            isLoading={findingsQuery.isLoading || findingsQuery.isFetching}
+            onPageChange={setFindingsPage}
+          />
+        </SectionCard>
       )}
 
       {inventoryQuery.isError ? (
         <SecurityError title="Couldn’t load package inventory" error={inventoryQuery.error} />
       ) : (
-        <Card>
-          <CardHeader className="px-2.5 py-1.5">
-            <CardTitle className="text-xs">
-              Inventory ({inventoryQuery.isLoading ? 'Loading' : inventoryTotal})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {inventoryQuery.isLoading ? (
-              <LoadingTable columns={5} message="Loading package inventory" />
-            ) : (
-              <InventoryTable inventory={inventory} />
-            )}
-            <PaginationControls
-              label="Inventory"
-              page={inventoryPage}
-              pageSize={VULNERABILITY_PAGE_SIZE}
-              totalCount={inventoryTotal}
-              isLoading={inventoryQuery.isLoading || inventoryQuery.isFetching}
-              onPageChange={setInventoryPage}
-            />
-          </CardContent>
-        </Card>
+        <SectionCard
+          title="Inventory"
+          icon={Package}
+          iconTone="info"
+          count={inventoryQuery.isLoading ? 'Loading' : inventoryTotal}
+          flushBody
+        >
+          {inventoryQuery.isLoading ? (
+            <LoadingTable columns={5} message="Loading package inventory" />
+          ) : (
+            <InventoryTable inventory={inventory} />
+          )}
+          <PaginationControls
+            label="Inventory"
+            page={inventoryPage}
+            pageSize={VULNERABILITY_PAGE_SIZE}
+            totalCount={inventoryTotal}
+            isLoading={inventoryQuery.isLoading || inventoryQuery.isFetching}
+            onPageChange={setInventoryPage}
+          />
+        </SectionCard>
       )}
 
       <Sheet open={selected != null} onOpenChange={(open) => !open && setSelected(null)}>
@@ -253,25 +284,14 @@ function MetricCard({
   label,
   value,
   icon: Icon,
-  tone,
+  tone = 'accent',
 }: {
   label: string
   value: SummaryValue
   icon?: LucideIcon
-  tone?: 'critical' | 'high'
+  tone?: 'info' | 'accent' | 'danger' | 'warning'
 }) {
-  const toneClass = tone ? colorFor(severityColors, tone) : ''
-  return (
-    <Card>
-      <CardContent className="flex items-center justify-between px-3 py-2">
-        <div>
-          <p className="text-xs text-muted-foreground">{label}</p>
-          <p className="text-lg font-semibold tabular-nums">{value}</p>
-        </div>
-        {Icon ? <Icon className="h-4 w-4 text-muted-foreground" /> : <Badge className={toneClass}>{label}</Badge>}
-      </CardContent>
-    </Card>
-  )
+  return <StatCard label={label} value={value} icon={Icon} tone={tone} />
 }
 
 function LoadingTable({columns, message}: {columns: number; message: string}) {
@@ -392,12 +412,12 @@ function FindingsTable({
             </TableCell>
             <TableCell>{finding.target_name || 'Unscoped'}</TableCell>
             <TableCell>
-              <Badge variant="outline" className={colorFor(severityColors, finding.severity)}>
+              <Badge variant={severityBadgeVariant(finding.severity)} size="sm" className="capitalize">
                 {finding.severity}
               </Badge>
             </TableCell>
             <TableCell>
-              <Badge variant="outline" className={colorFor(statusColors, finding.status)}>
+              <Badge variant={statusBadgeVariant(finding.status)} size="sm">
                 {STATUS_LABELS[finding.status]}
               </Badge>
             </TableCell>
@@ -440,7 +460,7 @@ function InventoryTable({
             <TableCell className="pl-3 font-medium">{item.package_name}</TableCell>
             <TableCell className="font-mono text-xs">{item.package_version}</TableCell>
             <TableCell>
-              <Badge variant="outline">{item.package_type || 'package'}</Badge>
+              <Badge variant="neutral" size="sm">{item.package_type || 'package'}</Badge>
             </TableCell>
             <TableCell>{item.target_name || item.host || item.image_name || 'Unscoped'}</TableCell>
             <TableCell className="pr-3 text-muted-foreground">{item.last_seen}</TableCell>

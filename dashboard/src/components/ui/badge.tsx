@@ -20,7 +20,7 @@ import {cva, type VariantProps} from "class-variance-authority"
 import {cn} from "@/lib/utils"
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  "inline-flex items-center gap-1 border font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
   {
     variants: {
       variant: {
@@ -31,10 +31,33 @@ const badgeVariants = cva(
         destructive:
           "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
         outline: "text-foreground",
+        // Soft status badges — one status language (style guide).
+        success: "border-success-border bg-success-bg text-success-fg",
+        warning: "border-warning-border bg-warning-bg text-warning-fg",
+        danger: "border-danger-border bg-danger-bg text-danger-fg",
+        info: "border-info-border bg-info-bg text-info-fg",
+        accent:
+          "border-[hsl(var(--primary)/0.3)] bg-[hsl(var(--primary)/0.12)] text-primary",
+        neutral: "border-border bg-muted text-muted-foreground",
+        // Solid status badges — for the strongest emphasis (e.g. Fatal, Down).
+        successSolid: "border-transparent bg-success-solid text-white",
+        warningSolid: "border-transparent bg-warning-solid text-[#161922]",
+        dangerSolid: "border-transparent bg-danger-solid text-white",
+        infoSolid: "border-transparent bg-info-solid text-white",
+      },
+      size: {
+        sm: "px-1.5 py-0 text-[10px] leading-4",
+        default: "px-2.5 py-0.5 text-xs",
+      },
+      shape: {
+        default: "rounded-md",
+        pill: "rounded-full",
       },
     },
     defaultVariants: {
       variant: "default",
+      size: "default",
+      shape: "default",
     },
   }
 )

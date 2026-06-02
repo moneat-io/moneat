@@ -170,8 +170,12 @@ describe('security routes error states', () => {
 
     renderRoute(VulnerabilitiesRoute)
 
-    expect(await screen.findByText('Findings (51)')).toBeInTheDocument()
-    expect(screen.getByText('Inventory (51)')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('button', {name: 'Findings next page'})
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', {name: 'Inventory next page'})
+    ).toBeInTheDocument()
     expect(mockApi.listVulnerabilityFindings).toHaveBeenCalledWith({
       search: undefined,
       limit: 50,
@@ -232,15 +236,16 @@ describe('security routes error states', () => {
 
   it('detections: renders the list (not the error) on success', async () => {
     renderRoute(DetectionsRoute)
-    expect(await screen.findByText(/Detection Rules \(/)).toBeInTheDocument()
+    expect(await screen.findByText('Detection rules')).toBeInTheDocument()
     expect(screen.queryByText('Couldn’t load detection rules')).not.toBeInTheDocument()
   })
 
   it('detections: creating a rule calls createDetectionRule and toasts success', async () => {
     mockApi.createDetectionRule.mockResolvedValue({id: 5, name: 'Failed logins'})
     renderRoute(DetectionsRoute)
-    await screen.findByText(/Detection Rules \(/)
-    fireEvent.click(screen.getByRole('button', {name: /New rule/i}))
+    await screen.findByText('Detection rules')
+    // Empty state and the toolbar each render a "New rule" CTA; use the toolbar (first).
+    fireEvent.click(screen.getAllByRole('button', {name: /New rule/i})[0])
     fireEvent.change(await screen.findByLabelText('Name'), {target: {value: 'Failed logins'}})
     fireEvent.change(screen.getByPlaceholderText(/status:/), {target: {value: 'status:failed'}})
     fireEvent.click(screen.getByRole('button', {name: 'Create rule'}))

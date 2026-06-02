@@ -24,6 +24,9 @@ import {Input} from '@/components/ui/input'
 import {Badge} from '@/components/ui/badge'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
 import {StatsCard} from '@/components/charts/StatsCard'
+import {PageHeader} from '@/components/ui/page-header'
+import {EmptyState} from '@/components/ui/empty-state'
+import {StatusDot} from '@/components/ui/status-dot'
 import {Activity, AlertCircle, Flame, Package, Search, ShieldCheck, Users} from 'lucide-react'
 
 export const Route = createFileRoute('/releases')({
@@ -146,35 +149,27 @@ function ReleasesPage() {
 
   return (
     <div>
-      <div className="container mx-auto px-4 py-4">
-        <div className="mb-3">
-          <h2 className="text-xl font-bold">Releases</h2>
-          <p className="text-muted-foreground text-xs mt-0.5">
-            Track release health, new issues, and crash-free rates
-          </p>
-        </div>
+      <div className="container mx-auto px-4 py-4 space-y-3">
+        <PageHeader
+          icon={Package}
+          title="Releases"
+          description="Track release health, new issues, and crash-free rates"
+        />
 
         {!projects || projects.length === 0 ? (
-          <Card className="p-8 text-center">
-            <div className="max-w-md mx-auto space-y-4">
-              <p className="text-muted-foreground">
-                No projects yet. Create a project to view releases.
-              </p>
-            </div>
-          </Card>
+          <EmptyState
+            icon={Package}
+            title="No projects yet"
+            description="Create a project to view releases."
+          />
         ) : isLoading ? (
           <div className="p-6 text-center text-sm">Loading releases...</div>
         ) : !releases || releases.length === 0 ? (
-          <Card className="p-8 text-center">
-            <div className="max-w-md mx-auto space-y-3">
-              <Package className="h-10 w-10 mx-auto text-muted-foreground" />
-              <h3 className="text-base font-semibold">No releases detected</h3>
-              <p className="text-sm text-muted-foreground">
-                Releases are auto-detected when events include a release version.
-                Configure your SDK with a release version to start tracking.
-              </p>
-            </div>
-          </Card>
+          <EmptyState
+            icon={Package}
+            title="No releases detected"
+            description="Releases are auto-detected when events include a release version. Configure your SDK with a release version to start tracking."
+          />
         ) : (
           <div className="space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
@@ -257,21 +252,22 @@ function ReleasesPage() {
                   <CardContent className="p-2">
                     <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:justify-between">
                       <div className="flex min-w-0 items-start gap-2 sm:gap-3">
-                        <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-primary/10 shrink-0">
-                          <Package className="h-3 w-3 text-primary" />
+                        <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-muted shrink-0">
+                          <Package className="h-3 w-3 text-muted-foreground" />
                         </div>
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="font-semibold text-sm break-all">{release.version}</span>
+                            <span className="font-mono font-semibold text-sm break-all">{release.version}</span>
                             {release.version === summary.latestVersion && (
-                              <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-primary/20 text-primary font-medium">
+                              <Badge variant="accent" size="sm" shape="pill">
                                 Latest
-                              </span>
+                              </Badge>
                             )}
                             {release.newIssueCount > 0 && (
                               <Badge
-                                variant="outline"
-                                className="max-w-full whitespace-normal break-words text-amber-700 border-amber-400/50 text-[11px] py-0"
+                                variant="warning"
+                                size="sm"
+                                className="max-w-full whitespace-normal break-words"
                               >
                                 Regression risk
                               </Badge>
@@ -296,13 +292,23 @@ function ReleasesPage() {
                         </div>
                         {release.crashFreeRate != null && (
                           <div className="flex items-center gap-1.5 text-xs">
+                            <StatusDot
+                              size="sm"
+                              tone={
+                                release.crashFreeRate >= 99
+                                  ? 'success'
+                                  : release.crashFreeRate >= 95
+                                    ? 'warning'
+                                    : 'danger'
+                              }
+                            />
                             <span
                               className={
                                 release.crashFreeRate >= 99
-                                  ? 'text-emerald-600'
+                                  ? 'text-success-fg'
                                   : release.crashFreeRate >= 95
-                                    ? 'text-amber-600'
-                                    : 'text-red-600'
+                                    ? 'text-warning-fg'
+                                    : 'text-danger-fg'
                               }
                             >
                               {release.crashFreeRate.toFixed(1)}% crash-free

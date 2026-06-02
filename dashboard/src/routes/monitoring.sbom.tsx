@@ -10,7 +10,8 @@ import {createFileRoute} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {Badge} from '@/components/ui/badge'
-import {Card, CardContent} from '@/components/ui/card'
+import {SectionCard} from '@/components/ui/section-card'
+import {EmptyState} from '@/components/ui/empty-state'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Input} from '@/components/ui/input'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
@@ -66,22 +67,16 @@ function SbomDashboard() {
           </div>
         </div>
       ) : packages.length === 0 ? (
-        <Card className="border-dashed">
-          <CardContent className="py-16 text-center">
-            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/10 to-orange-500/10">
-              <Package className="h-8 w-8 text-amber-500" />
-            </div>
-            <h3 className="text-lg font-semibold mb-2">No SBOM data collected</h3>
-            <p className="text-muted-foreground max-w-sm mx-auto">
-              Package inventory will appear here once collected by the agent.
-            </p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={Package}
+          title="No SBOM data collected"
+          description="Package inventory will appear here once collected by the agent."
+        />
       ) : (
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5 text-sm">
-              <Package className="h-3.5 w-3.5 text-amber-500" />
+              <Package className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="font-semibold tabular-nums">{packages.length}</span>
               <span className="text-muted-foreground text-xs">packages</span>
             </div>
@@ -89,8 +84,8 @@ function SbomDashboard() {
               <>
                 <div className="h-4 w-px bg-border" />
                 <div className="flex items-center gap-1.5 text-sm">
-                  <ShieldAlert className="h-3.5 w-3.5 text-red-500" />
-                  <span className="font-semibold tabular-nums text-red-600 dark:text-red-400">{cveTotal}</span>
+                  <ShieldAlert className="h-3.5 w-3.5 text-danger-fg" />
+                  <span className="font-semibold tabular-nums text-danger-fg">{cveTotal}</span>
                   <span className="text-muted-foreground text-xs">CVEs</span>
                 </div>
               </>
@@ -108,13 +103,13 @@ function SbomDashboard() {
           </div>
 
           {filtered.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <p className="font-medium">No packages match your search</p>
-              <p className="text-sm mt-1">Try adjusting your search query.</p>
-            </div>
+            <EmptyState
+              icon={Search}
+              title="No packages match your search"
+              description="Try adjusting your search query."
+            />
           ) : (
-            <Card className="overflow-hidden border-border/60">
-              <CardContent className="p-0">
+            <SectionCard title="Packages" icon={Package} iconTone="warning" count={filtered.length} flushBody>
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent bg-muted/30">
@@ -178,8 +173,7 @@ function SbomDashboard() {
                     })}
                   </TableBody>
                 </Table>
-              </CardContent>
-            </Card>
+            </SectionCard>
           )}
         </div>
       )}

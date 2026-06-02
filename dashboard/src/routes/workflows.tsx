@@ -56,15 +56,16 @@ import {
   nextAppendedNodePosition,
   nextNodeId,
   removeGraphNode,
-  statusClass,
   triggerNodeId,
   updateGraphNode,
   validateDraft,
   type WorkflowPaletteDragPayload,
   type WorkflowDraft,
 } from '@/components/workflows/workflowGraph'
-import {Badge} from '@/components/ui/badge'
+import {Badge, type BadgeProps} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
+import {PageHeader} from '@/components/ui/page-header'
+import {EmptyState} from '@/components/ui/empty-state'
 import {
   Dialog,
   DialogContent,
@@ -91,6 +92,20 @@ export const Route = createFileRoute('/workflows')({
 })
 
 const noop = () => undefined
+
+// Map a workflow run status onto the shared status language.
+function runStatusBadgeVariant(status: string): BadgeProps['variant'] {
+  switch (status) {
+    case 'complete':
+      return 'success'
+    case 'failed':
+      return 'danger'
+    case 'running':
+      return 'info'
+    default:
+      return 'warning'
+  }
+}
 
 function WorkflowsLayout() {
   const pathname = useRouterState({select: (state) => state.location.pathname})
@@ -210,8 +225,8 @@ function WorkflowsPage() {
 
   return (
     <div className="workflows-page">
-      <PageHeader onCreate={openCreate} />
-      <div className="grid gap-4 px-4 py-4 lg:grid-cols-[320px_minmax(0,1fr)] lg:px-6">
+      <WorkflowsHeader onCreate={openCreate} />
+      <div className="grid gap-4 px-6 py-4 lg:grid-cols-[320px_minmax(0,1fr)]">
         <WorkflowList
           workflows={workflows}
           catalog={catalog}
@@ -260,47 +275,43 @@ function WorkflowsPage() {
   )
 }
 
-function PageHeader({onCreate}: {onCreate: () => void}) {
+function WorkflowsHeader({onCreate}: {onCreate: () => void}) {
   const {data: features} = useEnterpriseFeatures()
   const showConnectionsEnterpriseBadge =
     features !== undefined && !hasEnterpriseModule(features, 'workflows_advanced')
 
   return (
-    <div className="border-b bg-card/50">
-      <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between lg:px-6">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-            <WorkflowIcon className="h-4 w-4" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold tracking-tight">Workflows</h1>
-            <p className="text-xs text-muted-foreground">Build automation graphs for telemetry-driven response.</p>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" asChild className="gap-1.5">
-            <Link to="/workflows/insights">
-              <Gauge className="h-3.5 w-3.5" />
-              Insights
-            </Link>
-          </Button>
-          <Button size="sm" variant="outline" asChild className="gap-1.5">
-            <Link to="/workflows/connections">
-              <KeyRound className="h-3.5 w-3.5" />
-              Connections
-              {showConnectionsEnterpriseBadge && (
-                <Badge variant="outline" className="ml-1 text-[10px]">
-                  Enterprise
-                </Badge>
-              )}
-            </Link>
-          </Button>
-          <Button size="sm" onClick={onCreate} className="gap-1.5">
-            <Plus className="h-3.5 w-3.5" />
-            New Workflow
-          </Button>
-        </div>
-      </div>
+    <div className="border-b bg-card/50 px-6 py-4">
+      <PageHeader
+        icon={WorkflowIcon}
+        title="Workflows"
+        description="Build automation graphs for telemetry-driven response."
+        actions={
+          <>
+            <Button size="sm" variant="outline" asChild className="gap-1.5">
+              <Link to="/workflows/insights">
+                <Gauge className="h-4 w-4" />
+                Insights
+              </Link>
+            </Button>
+            <Button size="sm" variant="outline" asChild className="gap-1.5">
+              <Link to="/workflows/connections">
+                <KeyRound className="h-4 w-4" />
+                Connections
+                {showConnectionsEnterpriseBadge && (
+                  <Badge variant="neutral" size="sm" className="ml-1">
+                    Enterprise
+                  </Badge>
+                )}
+              </Link>
+            </Button>
+            <Button size="sm" onClick={onCreate} className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              New workflow
+            </Button>
+          </>
+        }
+      />
     </div>
   )
 }
@@ -323,9 +334,11 @@ function WorkflowList({
   }
   if (workflows.length === 0) {
     return (
-      <div className="rounded-md border border-dashed bg-background p-6 text-sm text-muted-foreground">
-        No workflows yet.
-      </div>
+      <EmptyState
+        icon={WorkflowIcon}
+        title="No workflows yet"
+        description="Create your first automation to respond to telemetry events."
+      />
     )
   }
   return (
@@ -349,7 +362,7 @@ function WorkflowList({
                   {trigger?.label ?? workflow.trigger_name}
                 </p>
               </div>
-              <Badge variant={workflow.published ? 'default' : 'secondary'} className="shrink-0">
+              <Badge variant={workflow.published ? 'success' : 'neutral'} className="shrink-0">
                 {workflow.published ? 'Published' : 'Draft'}
               </Badge>
             </div>
@@ -395,7 +408,13 @@ function WorkflowDetail({
   onOpenActivity: () => void
 }) {
   if (!workflow) {
-    return <div className="rounded-md border bg-background p-6 text-sm text-muted-foreground">Select a workflow.</div>
+    return (
+      <EmptyState
+        icon={WorkflowIcon}
+        title="Select a workflow"
+        description="Choose a workflow from the list to view its graph and recent runs."
+      />
+    )
   }
   const trigger = catalog?.triggers.find((item) => item.name === workflow.trigger_name)
   return (
@@ -405,8 +424,8 @@ function WorkflowDetail({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-base font-semibold">{workflow.name}</h2>
-              <Badge variant={workflow.enabled ? 'default' : 'secondary'}>{workflow.enabled ? 'Enabled' : 'Paused'}</Badge>
-              {workflow.system_key && <Badge variant="outline">Default</Badge>}
+              <Badge variant={workflow.enabled ? 'success' : 'neutral'}>{workflow.enabled ? 'Enabled' : 'Paused'}</Badge>
+              {workflow.system_key && <Badge variant="neutral">Default</Badge>}
             </div>
             <p className="mt-1 text-sm text-muted-foreground">{trigger?.description ?? workflow.trigger_name}</p>
           </div>
@@ -478,10 +497,10 @@ function RunsPanel({
             key={run.id}
             type="button"
             onClick={() => onDebugRun(run)}
-            className="w-full rounded-md border bg-background p-3 text-left hover:bg-muted/40"
+            className="w-full rounded-md border bg-background p-3 text-left hover:bg-accent/40"
           >
             <div className="flex items-center justify-between gap-2">
-              <Badge variant="outline" className={statusClass(run.status)}>{run.status}</Badge>
+              <Badge variant={runStatusBadgeVariant(run.status)} size="sm">{run.status}</Badge>
               <Bug className="h-4 w-4 text-muted-foreground" />
             </div>
             <p className="mt-2 truncate text-xs text-muted-foreground">{run.once_for}</p>

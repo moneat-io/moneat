@@ -19,13 +19,15 @@ import {useQuery} from '@tanstack/react-query'
 import {useState} from 'react'
 import {api} from '@/lib/api'
 import {useProject} from '@/contexts/ProjectContext'
-import {Card, CardContent} from '@/components/ui/card'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Dialog, DialogContent, DialogHeader, DialogTitle} from '@/components/ui/dialog'
 import {Input} from '@/components/ui/input'
+import {PageHeader} from '@/components/ui/page-header'
+import {SectionCard} from '@/components/ui/section-card'
+import {EmptyState} from '@/components/ui/empty-state'
 import {Brain, ChevronLeft, ChevronRight} from 'lucide-react'
 import {ProviderLogo} from '@/components/icons/AiProviders'
 import {useTimezone} from '@/hooks/useTimezone'
@@ -77,8 +79,12 @@ function GenerationsPage() {
 
   if (!selectedProjectId) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-muted-foreground">Select a project to view generations.</p>
+      <div className="p-3">
+        <EmptyState
+          icon={Brain}
+          title="No project selected"
+          description="Select a project to view generations."
+        />
       </div>
     )
   }
@@ -86,12 +92,11 @@ function GenerationsPage() {
   const totalPages = data ? Math.ceil(data.total / data.pageSize) : 0
 
   return (
-    <div className="space-y-2 p-3">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-        <h1 className="text-lg font-bold flex items-center gap-1.5">
-          <Brain className="h-4 w-4" />
-          Generations
-        </h1>
+    <div className="space-y-3 p-3">
+      <PageHeader
+        icon={Brain}
+        title="Generations"
+        actions={
         <div className="flex flex-wrap gap-1.5">
           <Input
             placeholder="Filter by model..."
@@ -136,10 +141,10 @@ function GenerationsPage() {
             </SelectContent>
           </Select>
         </div>
-      </div>
+        }
+      />
 
-      <Card>
-        <CardContent className="p-0 overflow-x-auto">
+      <SectionCard title="Generations" icon={Brain} count={data?.total} flushBody bodyClassName="overflow-x-auto">
           <Table className="[&_th]:h-8 [&_th]:px-1.5 [&_th]:text-xs [&_td]:py-1.5 [&_td]:px-1.5">
             <TableHeader>
               <TableRow>
@@ -216,8 +221,7 @@ function GenerationsPage() {
               )}
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+      </SectionCard>
 
       {/* Pagination */}
       {totalPages > 1 && (

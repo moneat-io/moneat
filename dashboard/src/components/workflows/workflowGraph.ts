@@ -296,10 +296,10 @@ export function formatDate(value?: string | null): string {
 }
 
 export function statusClass(status: string): string {
-  if (status === 'complete') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600'
-  if (status === 'failed') return 'border-red-500/30 bg-red-500/10 text-red-600'
-  if (status === 'running') return 'border-blue-500/30 bg-blue-500/10 text-blue-600'
-  return 'border-amber-500/30 bg-amber-500/10 text-amber-600'
+  if (status === 'complete') return 'border-success-border bg-success-bg text-success-fg'
+  if (status === 'failed') return 'border-danger-border bg-danger-bg text-danger-fg'
+  if (status === 'running') return 'border-info-border bg-info-bg text-info-fg'
+  return 'border-warning-border bg-warning-bg text-warning-fg'
 }
 
 export function defaultParamsForStep(step: WorkflowStepDefinition): Record<string, WorkflowJsonValue> {

@@ -256,10 +256,7 @@ function AdminOrgDetailPage() {
             <h2 className="text-2xl font-bold tracking-tight">{org.name}</h2>
             <PlanBadge plan={org.plan} />
             {org.subscriptionStatus && org.subscriptionStatus !== 'active' && (
-              <Badge
-                variant="outline"
-                className="text-amber-600 border-amber-300 dark:text-amber-400 dark:border-amber-700"
-              >
+              <Badge variant="warning">
                 {org.subscriptionStatus}
               </Badge>
             )}
@@ -283,23 +280,23 @@ function AdminOrgDetailPage() {
           title="Events This Month"
           value={formatNumber(org.eventCountThisMonth)}
           icon={Zap}
-          iconColor="text-orange-600 dark:text-orange-400"
-          iconBg="bg-orange-100 dark:bg-orange-950"
+          iconColor="text-chart-7"
+          iconBg="bg-chart-7/15"
         />
         <MetricCard
           title="Bytes Ingested"
           value={formatBytes(org.bytesIngestedThisMonth)}
           subtitle="This month"
           icon={HardDrive}
-          iconColor="text-blue-600 dark:text-blue-400"
-          iconBg="bg-blue-100 dark:bg-blue-950"
+          iconColor="text-chart-1"
+          iconBg="bg-chart-1/15"
         />
         <MetricCard
           title="Members"
           value={org.memberCount}
           icon={Users}
-          iconColor="text-violet-600 dark:text-violet-400"
-          iconBg="bg-violet-100 dark:bg-violet-950"
+          iconColor="text-chart-4"
+          iconBg="bg-chart-4/15"
         />
         <Card className="relative overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -403,7 +400,7 @@ function AdminOrgDetailPage() {
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
           <Card className="px-4 py-3">
             <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-              <AlertCircle className="h-3 w-3 text-red-500" />
+              <AlertCircle className="h-3 w-3 text-danger-fg" />
               Errors
             </div>
             <div className="text-lg font-bold tabular-nums">{formatNumber(usageByType.error)}</div>
@@ -416,7 +413,7 @@ function AdminOrgDetailPage() {
           </Card>
           <Card className="px-4 py-3">
             <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-              <ArrowRightLeft className="h-3 w-3 text-blue-500" />
+              <ArrowRightLeft className="h-3 w-3 text-chart-1" />
               Transactions
             </div>
             <div className="text-lg font-bold tabular-nums">{formatNumber(usageByType.transaction)}</div>
@@ -429,7 +426,7 @@ function AdminOrgDetailPage() {
           </Card>
           <Card className="px-4 py-3">
             <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-              <MonitorPlay className="h-3 w-3 text-violet-500" />
+              <MonitorPlay className="h-3 w-3 text-chart-4" />
               Replays
             </div>
             <div className="text-lg font-bold tabular-nums">{formatNumber(usageByType.replay)}</div>
@@ -442,7 +439,7 @@ function AdminOrgDetailPage() {
           </Card>
           <Card className="px-4 py-3">
             <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-              <MessageSquare className="h-3 w-3 text-amber-500" />
+              <MessageSquare className="h-3 w-3 text-chart-5" />
               Feedback
             </div>
             <div className="text-lg font-bold tabular-nums">{formatNumber(usageByType.feedback)}</div>
@@ -455,7 +452,7 @@ function AdminOrgDetailPage() {
           </Card>
           <Card className="px-4 py-3">
             <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-              <FileText className="h-3 w-3 text-cyan-500" />
+              <FileText className="h-3 w-3 text-chart-6" />
               Logs
             </div>
             <div className="text-lg font-bold tabular-nums">{formatNumber(usageByType.log)}</div>

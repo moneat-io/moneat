@@ -35,6 +35,7 @@ import {Switch} from '@/components/ui/switch'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle} from '@/components/ui/dialog'
 import {Badge} from '@/components/ui/badge'
+import type {StatusTone} from '@/components/ui/status-dot'
 import {Separator} from '@/components/ui/separator'
 import {Tooltip, TooltipContent, TooltipTrigger} from '@/components/ui/tooltip'
 import type {LucideIcon} from 'lucide-react'
@@ -197,8 +198,8 @@ function StatusPageDetailPage() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <h1 className="text-xl font-bold tracking-tight">{statusPage.name}</h1>
                   <Badge
-                    variant={statusPage.isPublic ? 'default' : 'secondary'}
-                    className={`gap-0.5 text-[11px] px-1.5 py-0 ${statusPage.isPublic ? 'bg-emerald-500/90 hover:bg-emerald-600 text-white' : ''}`}
+                    variant={statusPage.isPublic ? 'success' : 'neutral'}
+                    className="gap-0.5 text-[11px] px-1.5 py-0"
                   >
                     {statusPage.isPublic ? (
                       <><Unlock className="h-2.5 w-2.5" /> Public</>
@@ -216,7 +217,7 @@ function StatusPageDetailPage() {
                     <TooltipTrigger asChild>
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={copyPublicUrl}>
                         {copiedUrl ? (
-                          <Check className="h-3.5 w-3.5 text-green-600" />
+                          <Check className="h-3.5 w-3.5 text-success-fg" />
                         ) : (
                           <Copy className="h-3.5 w-3.5" />
                         )}
@@ -244,8 +245,8 @@ function StatusPageDetailPage() {
           {/* Quick Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4">
             <div className="bg-background rounded-lg border p-2 flex items-center gap-2">
-              <div className="h-7 w-7 rounded-md bg-blue-500/10 flex items-center justify-center shrink-0">
-                <Activity className="h-3.5 w-3.5 text-blue-500" />
+              <div className="h-7 w-7 rounded-md bg-info-bg flex items-center justify-center shrink-0">
+                <Activity className="h-3.5 w-3.5 text-info-fg" />
               </div>
               <div>
                 <p className="text-base font-bold">{statusPage.monitors.length}</p>
@@ -253,8 +254,8 @@ function StatusPageDetailPage() {
               </div>
             </div>
             <div className="bg-background rounded-lg border p-2 flex items-center gap-2">
-              <div className="h-7 w-7 rounded-md bg-orange-500/10 flex items-center justify-center shrink-0">
-                <AlertTriangle className="h-3.5 w-3.5 text-orange-500" />
+              <div className="h-7 w-7 rounded-md bg-warning-bg flex items-center justify-center shrink-0">
+                <AlertTriangle className="h-3.5 w-3.5 text-warning-fg" />
               </div>
               <div>
                 <p className="text-base font-bold">0</p>
@@ -262,8 +263,8 @@ function StatusPageDetailPage() {
               </div>
             </div>
             <div className="bg-background rounded-lg border p-2 flex items-center gap-2">
-              <div className="h-7 w-7 rounded-md bg-purple-500/10 flex items-center justify-center shrink-0">
-                <Link2 className="h-3.5 w-3.5 text-purple-500" />
+              <div className="h-7 w-7 rounded-md bg-muted flex items-center justify-center shrink-0">
+                <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
               </div>
               <div>
                 <p className="text-base font-bold">{statusPage.customDomains.length}</p>
@@ -271,9 +272,9 @@ function StatusPageDetailPage() {
               </div>
             </div>
             <div className="bg-background rounded-lg border p-2 flex items-center gap-2">
-              <div className="h-7 w-7 rounded-md bg-emerald-500/10 flex items-center justify-center shrink-0">
+              <div className="h-7 w-7 rounded-md bg-success-bg flex items-center justify-center shrink-0">
                 {statusPage.showUptimeHistory ? (
-                  <Eye className="h-3.5 w-3.5 text-emerald-500" />
+                  <Eye className="h-3.5 w-3.5 text-success-fg" />
                 ) : (
                   <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
                 )}
@@ -439,8 +440,8 @@ function OverviewTab({statusPage, onUpdate, isSaving, showPreview}: {statusPage:
           <Card>
             <CardHeader className="pb-2 pt-3 px-4">
               <CardTitle className="flex items-center gap-2 text-sm">
-                <div className="h-6 w-6 rounded-md bg-blue-500/10 flex items-center justify-center">
-                  <Layout className="h-3.5 w-3.5 text-blue-500" />
+                <div className="h-6 w-6 rounded-md bg-muted flex items-center justify-center">
+                  <Layout className="h-3.5 w-3.5 text-muted-foreground" />
                 </div>
                 Basic Information
               </CardTitle>
@@ -472,8 +473,8 @@ function OverviewTab({statusPage, onUpdate, isSaving, showPreview}: {statusPage:
           <Card>
             <CardHeader className="pb-2 pt-3 px-4">
               <CardTitle className="flex items-center gap-2 text-sm">
-                <div className="h-6 w-6 rounded-md bg-slate-500/10 flex items-center justify-center">
-                  <Settings className="h-3.5 w-3.5 text-slate-500" />
+                <div className="h-6 w-6 rounded-md bg-muted flex items-center justify-center">
+                  <Settings className="h-3.5 w-3.5 text-muted-foreground" />
                 </div>
                 Settings
               </CardTitle>
@@ -483,7 +484,7 @@ function OverviewTab({statusPage, onUpdate, isSaving, showPreview}: {statusPage:
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <Label htmlFor="isPublic" className="text-sm flex items-center gap-2">
-                    {formData.isPublic ? <Unlock className="h-4 w-4 text-emerald-500" /> : <Lock className="h-4 w-4 text-muted-foreground" />}
+                    {formData.isPublic ? <Unlock className="h-4 w-4 text-success-fg" /> : <Lock className="h-4 w-4 text-muted-foreground" />}
                     Public Access
                   </Label>
                   <p className="text-sm text-muted-foreground">Allow anyone to view this status page</p>
@@ -498,7 +499,7 @@ function OverviewTab({statusPage, onUpdate, isSaving, showPreview}: {statusPage:
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <Label htmlFor="showHistory" className="text-sm flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-blue-500" />
+                    <Clock className="h-4 w-4 text-muted-foreground" />
                     Show Uptime History
                   </Label>
                   <p className="text-sm text-muted-foreground">Display uptime bar charts on public page</p>
@@ -510,7 +511,7 @@ function OverviewTab({statusPage, onUpdate, isSaving, showPreview}: {statusPage:
                 />
               </div>
               {formData.showUptimeHistory && (
-                <div className="space-y-2 pt-2 pl-6 border-l-2 border-blue-500/20">
+                <div className="space-y-2 pt-2 pl-6 border-l-2 border-primary/20">
                   <Label htmlFor="historyDays">History Days</Label>
                   <div className="flex items-center gap-2">
                     <Input
@@ -533,8 +534,8 @@ function OverviewTab({statusPage, onUpdate, isSaving, showPreview}: {statusPage:
           <Card>
             <CardHeader className="pb-2 pt-3 px-4">
               <CardTitle className="flex items-center gap-2 text-sm">
-                <div className="h-6 w-6 rounded-md bg-purple-500/10 flex items-center justify-center">
-                  <Palette className="h-3.5 w-3.5 text-purple-500" />
+                <div className="h-6 w-6 rounded-md bg-muted flex items-center justify-center">
+                  <Palette className="h-3.5 w-3.5 text-muted-foreground" />
                 </div>
                 Branding
               </CardTitle>
@@ -626,7 +627,7 @@ function OverviewTab({statusPage, onUpdate, isSaving, showPreview}: {statusPage:
             )}
             {!hasChanges && (
               <p className="text-sm text-muted-foreground flex items-center gap-2">
-                <Check className="h-3.5 w-3.5 text-emerald-500" />
+                <Check className="h-3.5 w-3.5 text-success-fg" />
                 All changes saved
               </p>
             )}
@@ -652,8 +653,8 @@ function OverviewTab({statusPage, onUpdate, isSaving, showPreview}: {statusPage:
             <Card>
               <CardHeader className="pb-2 pt-3 px-4">
                 <CardTitle className="flex items-center gap-2 text-sm">
-                  <div className="h-6 w-6 rounded-md bg-emerald-500/10 flex items-center justify-center">
-                    <Eye className="h-3.5 w-3.5 text-emerald-500" />
+                  <div className="h-6 w-6 rounded-md bg-success-bg flex items-center justify-center">
+                    <Eye className="h-3.5 w-3.5 text-success-fg" />
                   </div>
                   Live Preview
                 </CardTitle>
@@ -756,8 +757,8 @@ function MonitorsTab({pageId, statusPage}: {pageId: string; statusPage: StatusPa
         <CardHeader className="pb-2 pt-3 px-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                <Activity className="h-4 w-4 text-blue-500" />
+              <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center">
+                <Activity className="h-4 w-4 text-muted-foreground" />
               </div>
               <div>
                 <CardTitle className="text-base">Monitors</CardTitle>
@@ -773,8 +774,8 @@ function MonitorsTab({pageId, statusPage}: {pageId: string; statusPage: StatusPa
         <CardContent>
           {statusPage.monitors.length === 0 ? (
             <div className="text-center py-10 border-2 border-dashed rounded-lg">
-              <div className="bg-blue-500/10 h-10 w-10 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Activity className="h-5 w-5 text-blue-500" />
+              <div className="bg-muted h-10 w-10 rounded-full flex items-center justify-center mx-auto mb-3">
+                <Activity className="h-5 w-5 text-muted-foreground" />
               </div>
               <h3 className="text-base font-semibold mb-1">No monitors added</h3>
               <p className="text-muted-foreground text-sm mb-4 max-w-sm mx-auto">
@@ -795,7 +796,7 @@ function MonitorsTab({pageId, statusPage}: {pageId: string; statusPage: StatusPa
                     </div>
                     <div className="min-w-0">
                       <p className="font-medium flex items-center gap-2">
-                        <Zap className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                        <Zap className="h-3.5 w-3.5 text-success-fg shrink-0" />
                         <span className="truncate">{monitor.displayName || monitor.monitorName}</span>
                       </p>
                       <p className="text-sm text-muted-foreground flex items-center gap-2 mt-0.5">
@@ -952,8 +953,8 @@ function IncidentsTab({pageId}: {pageId: string}) {
         <CardHeader className="pb-2 pt-3 px-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg bg-orange-500/10 flex items-center justify-center">
-                <AlertCircle className="h-4 w-4 text-orange-500" />
+              <div className="h-8 w-8 rounded-lg bg-warning-bg flex items-center justify-center">
+                <AlertCircle className="h-4 w-4 text-warning-fg" />
               </div>
               <div>
                 <CardTitle className="text-base">Incidents & Maintenance</CardTitle>
@@ -969,8 +970,8 @@ function IncidentsTab({pageId}: {pageId: string}) {
         <CardContent>
           {incidents.length === 0 ? (
             <div className="text-center py-10 border-2 border-dashed rounded-lg">
-              <div className="bg-emerald-500/10 h-10 w-10 rounded-full flex items-center justify-center mx-auto mb-3">
-                <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+              <div className="bg-success-bg h-10 w-10 rounded-full flex items-center justify-center mx-auto mb-3">
+                <CheckCircle2 className="h-5 w-5 text-success-fg" />
               </div>
               <h3 className="text-base font-semibold mb-1">All systems operational</h3>
               <p className="text-muted-foreground text-sm mb-4 max-w-sm mx-auto">
@@ -993,7 +994,7 @@ function IncidentsTab({pageId}: {pageId: string}) {
               {activeIncidents.length > 0 && (
                 <div>
                   <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <CircleDot className="h-3.5 w-3.5 text-orange-500" />
+                    <CircleDot className="h-3.5 w-3.5 text-warning-fg" />
                     Active ({activeIncidents.length})
                   </h3>
                   <div className="space-y-3">
@@ -1008,7 +1009,7 @@ function IncidentsTab({pageId}: {pageId: string}) {
               {resolvedIncidents.length > 0 && (
                 <div>
                   <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                    <CheckCircle2 className="h-3.5 w-3.5 text-success-fg" />
                     Resolved ({resolvedIncidents.length})
                   </h3>
                   <div className="space-y-3">
@@ -1029,9 +1030,9 @@ function IncidentsTab({pageId}: {pageId: string}) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {newIncident.type === 'maintenance' ? (
-                <><Wrench className="h-5 w-5 text-blue-500" /> Schedule Maintenance</>
+                <><Wrench className="h-5 w-5 text-info-fg" /> Schedule Maintenance</>
               ) : (
-                <><AlertTriangle className="h-5 w-5 text-orange-500" /> Report Incident</>
+                <><AlertTriangle className="h-5 w-5 text-warning-fg" /> Report Incident</>
               )}
             </DialogTitle>
             <DialogDescription>
@@ -1143,7 +1144,7 @@ function IncidentCard({incident}: {incident: StatusPageIncident}) {
   const impactConfig = getIncidentImpactConfig(incident.impact)
 
   return (
-    <Card className="border-l-4 overflow-hidden" style={{borderLeftColor: statusConfig.borderColor}}>
+    <Card className={`border-l-4 overflow-hidden ${statusConfig.borderClass}`}>
       <div className="p-3">
         <div className="flex items-start justify-between mb-2">
           <div className="flex items-start gap-3">
@@ -1157,10 +1158,10 @@ function IncidentCard({incident}: {incident: StatusPageIncident}) {
             <div>
               <h4 className="font-semibold text-sm">{incident.title}</h4>
               <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                <Badge variant="outline" className={`${statusConfig.badgeClass} border-transparent text-[11px]`}>
+                <Badge variant={statusConfig.badgeVariant} size="sm">
                   {incident.status.replace('_', ' ')}
                 </Badge>
-                <Badge variant="outline" className={`${impactConfig.badgeClass} border-transparent text-[11px]`}>
+                <Badge variant={impactConfig.badgeVariant} size="sm">
                   {impactConfig.icon && <impactConfig.icon className="h-3 w-3 mr-1" />}
                   {incident.impact}
                 </Badge>
@@ -1246,8 +1247,8 @@ function DomainsTab({pageId, statusPage}: {pageId: string; statusPage: StatusPag
         <CardHeader className="pb-2 pt-3 px-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                <Link2 className="h-4 w-4 text-purple-500" />
+              <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center">
+                <Link2 className="h-4 w-4 text-muted-foreground" />
               </div>
               <div>
                 <CardTitle className="text-base">Custom Domains</CardTitle>
@@ -1263,8 +1264,8 @@ function DomainsTab({pageId, statusPage}: {pageId: string; statusPage: StatusPag
         <CardContent>
           {statusPage.customDomains.length === 0 ? (
             <div className="text-center py-10 border-2 border-dashed rounded-lg">
-              <div className="bg-purple-500/10 h-10 w-10 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Link2 className="h-5 w-5 text-purple-500" />
+              <div className="bg-muted h-10 w-10 rounded-full flex items-center justify-center mx-auto mb-3">
+                <Link2 className="h-5 w-5 text-muted-foreground" />
               </div>
               <h3 className="text-base font-semibold mb-1">No custom domains</h3>
               <p className="text-muted-foreground text-sm mb-4 max-w-sm mx-auto">
@@ -1278,30 +1279,23 @@ function DomainsTab({pageId, statusPage}: {pageId: string; statusPage: StatusPag
           ) : (
             <div className="space-y-3">
               {statusPage.customDomains.map((domain) => (
-                <Card key={domain.id} className={`border-l-4 ${domain.verified ? 'border-l-emerald-500' : 'border-l-yellow-500'}`}>
+                <Card key={domain.id} className={`border-l-4 ${domain.verified ? 'border-l-success-solid' : 'border-l-warning-solid'}`}>
                   <div className="p-3">
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-start gap-3">
                         <div className={`h-7 w-7 rounded-md flex items-center justify-center shrink-0 ${
-                          domain.verified ? 'bg-emerald-500/10' : 'bg-yellow-500/10'
+                          domain.verified ? 'bg-success-bg' : 'bg-warning-bg'
                         }`}>
                           {domain.verified ? (
-                            <ShieldCheck className="h-5 w-5 text-emerald-500" />
+                            <ShieldCheck className="h-5 w-5 text-success-fg" />
                           ) : (
-                            <ShieldAlert className="h-5 w-5 text-yellow-500" />
+                            <ShieldAlert className="h-5 w-5 text-warning-fg" />
                           )}
                         </div>
                         <div>
                           <p className="font-semibold text-sm">{domain.domain}</p>
                           <div className="flex items-center gap-2 mt-1">
-                            <Badge
-                              variant="outline"
-                              className={`text-[11px] ${
-                                domain.verified
-                                  ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20'
-                                  : 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20'
-                              }`}
-                            >
+                            <Badge variant={domain.verified ? 'success' : 'warning'} size="sm">
                               {domain.verified ? (
                                 <><CheckCircle2 className="h-3 w-3 mr-1" /> Verified</>
                               ) : (
@@ -1309,7 +1303,7 @@ function DomainsTab({pageId, statusPage}: {pageId: string; statusPage: StatusPag
                               )}
                             </Badge>
                             {domain.sslProvisioned && (
-                              <Badge variant="outline" className="text-[11px] bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20">
+                              <Badge variant="info" size="sm">
                                 <Lock className="h-3 w-3 mr-1" /> SSL Active
                               </Badge>
                             )}
@@ -1343,7 +1337,7 @@ function DomainsTab({pageId, statusPage}: {pageId: string; statusPage: StatusPag
                     {!domain.verified && (
                       <div className="bg-muted/50 p-3 rounded-lg border space-y-2 mt-2">
                         <div className="flex items-center gap-2 mb-2">
-                          <Info className="h-4 w-4 text-blue-500" />
+                          <Info className="h-4 w-4 text-info-fg" />
                           <p className="font-medium text-sm">DNS Configuration Required</p>
                         </div>
                         <div className="grid gap-3 sm:grid-cols-2">
@@ -1417,79 +1411,85 @@ function DomainsTab({pageId, statusPage}: {pageId: string; statusPage: StatusPag
 // HELPER FUNCTIONS
 // ==========================================
 
-function getIncidentStatusConfig(status: string) {
-  const configs: Record<string, {borderColor: string; iconBg: string; iconColor: string; icon: LucideIcon; badgeClass: string}> = {
+type BadgeVariant = 'success' | 'warning' | 'danger' | 'info' | 'accent' | 'neutral'
+
+type IncidentStatusConfig = {
+  tone: StatusTone
+  iconBg: string
+  iconColor: string
+  icon: LucideIcon
+  badgeVariant: BadgeVariant
+  borderClass: string
+}
+
+function getIncidentStatusConfig(status: string): IncidentStatusConfig {
+  const configs: Record<string, IncidentStatusConfig> = {
     investigating: {
-      borderColor: '#ef4444',
-      iconBg: 'bg-red-500/10',
-      iconColor: 'text-red-500',
+      tone: 'danger',
+      iconBg: 'bg-danger-bg',
+      iconColor: 'text-danger-fg',
       icon: AlertTriangle,
-      badgeClass: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200',
+      badgeVariant: 'danger',
+      borderClass: 'border-l-danger-solid',
     },
     identified: {
-      borderColor: '#f97316',
-      iconBg: 'bg-orange-500/10',
-      iconColor: 'text-orange-500',
+      tone: 'warning',
+      iconBg: 'bg-warning-bg',
+      iconColor: 'text-warning-fg',
       icon: AlertCircle,
-      badgeClass: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-200',
+      badgeVariant: 'warning',
+      borderClass: 'border-l-warning-solid',
     },
     monitoring: {
-      borderColor: '#3b82f6',
-      iconBg: 'bg-blue-500/10',
-      iconColor: 'text-blue-500',
+      tone: 'info',
+      iconBg: 'bg-info-bg',
+      iconColor: 'text-info-fg',
       icon: Eye,
-      badgeClass: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200',
+      badgeVariant: 'info',
+      borderClass: 'border-l-info-solid',
     },
     resolved: {
-      borderColor: '#10b981',
-      iconBg: 'bg-emerald-500/10',
-      iconColor: 'text-emerald-500',
+      tone: 'success',
+      iconBg: 'bg-success-bg',
+      iconColor: 'text-success-fg',
       icon: CheckCircle2,
-      badgeClass: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200',
+      badgeVariant: 'success',
+      borderClass: 'border-l-success-solid',
     },
     scheduled: {
-      borderColor: '#8b5cf6',
-      iconBg: 'bg-purple-500/10',
-      iconColor: 'text-purple-500',
+      tone: 'accent',
+      iconBg: 'bg-[hsl(var(--primary)/0.12)]',
+      iconColor: 'text-primary',
       icon: Clock,
-      badgeClass: 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200',
+      badgeVariant: 'accent',
+      borderClass: 'border-l-primary',
     },
     in_progress: {
-      borderColor: '#3b82f6',
-      iconBg: 'bg-blue-500/10',
-      iconColor: 'text-blue-500',
+      tone: 'info',
+      iconBg: 'bg-info-bg',
+      iconColor: 'text-info-fg',
       icon: Settings,
-      badgeClass: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200',
+      badgeVariant: 'info',
+      borderClass: 'border-l-info-solid',
     },
     completed: {
-      borderColor: '#10b981',
-      iconBg: 'bg-emerald-500/10',
-      iconColor: 'text-emerald-500',
+      tone: 'success',
+      iconBg: 'bg-success-bg',
+      iconColor: 'text-success-fg',
       icon: CheckCircle2,
-      badgeClass: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200',
+      badgeVariant: 'success',
+      borderClass: 'border-l-success-solid',
     },
   }
   return configs[status] || configs.investigating
 }
 
-function getIncidentImpactConfig(impact: string) {
-  const configs: Record<string, {badgeClass: string; icon: LucideIcon | null}> = {
-    none: {
-      badgeClass: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
-      icon: null,
-    },
-    minor: {
-      badgeClass: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200',
-      icon: AlertTriangle,
-    },
-    major: {
-      badgeClass: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-200',
-      icon: AlertTriangle,
-    },
-    critical: {
-      badgeClass: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200',
-      icon: XCircle,
-    },
+function getIncidentImpactConfig(impact: string): {badgeVariant: BadgeVariant; icon: LucideIcon | null} {
+  const configs: Record<string, {badgeVariant: BadgeVariant; icon: LucideIcon | null}> = {
+    none: {badgeVariant: 'neutral', icon: null},
+    minor: {badgeVariant: 'warning', icon: AlertTriangle},
+    major: {badgeVariant: 'warning', icon: AlertTriangle},
+    critical: {badgeVariant: 'danger', icon: XCircle},
   }
   return configs[impact] || configs.none
 }

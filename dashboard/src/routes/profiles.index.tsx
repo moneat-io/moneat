@@ -10,6 +10,7 @@ import {createFileRoute} from '@tanstack/react-router'
 import {useState} from 'react'
 import {ProfileServiceList} from '@/components/profiling/ProfileServiceList'
 import {ProfileList} from '@/components/profiling/ProfileList'
+import {PageHeader} from '@/components/ui/page-header'
 import {cn} from '@/lib/utils'
 
 export const Route = createFileRoute('/profiles/')({
@@ -25,22 +26,20 @@ function ProfilesIndexPage() {
 
   return (
     <div className="p-3 space-y-2">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <h1 className="text-lg font-bold tracking-tight">Profiles</h1>
-          <p className="text-muted-foreground text-xs mt-0.5">
-            Continuous profiling data from your applications
-          </p>
-        </div>
-        <div className="inline-flex rounded-md border p-0.5 text-xs shrink-0">
-          <ViewToggle active={view === 'services'} onClick={() => setView('services')}>
-            Services
-          </ViewToggle>
-          <ViewToggle active={view === 'all'} onClick={() => setView('all')}>
-            All profiles
-          </ViewToggle>
-        </div>
-      </div>
+      <PageHeader
+        title="Profiles"
+        description="Continuous profiling data from your applications"
+        actions={
+          <div className="inline-flex rounded-md border p-0.5 text-xs shrink-0">
+            <ViewToggle active={view === 'services'} onClick={() => setView('services')}>
+              Services
+            </ViewToggle>
+            <ViewToggle active={view === 'all'} onClick={() => setView('all')}>
+              All profiles
+            </ViewToggle>
+          </div>
+        }
+      />
 
       {view === 'services' ? (
         <ProfileServiceList

@@ -41,18 +41,18 @@ export function RuleList({rules, onEdit, onToggle, onDelete, togglingId}: RuleLi
       <table className="w-full text-xs">
         <thead>
           <tr className="border-b text-left text-muted-foreground">
-            <th className="pb-1.5 pr-2 font-medium">Name</th>
-            <th className="pb-1.5 pr-2 font-medium">Type</th>
-            <th className="pb-1.5 pr-2 font-medium">Severity</th>
-            <th className="pb-1.5 pr-2 font-medium">Enabled</th>
-            <th className="pb-1.5 pr-2 font-medium">Updated</th>
-            <th className="pb-1.5 font-medium text-right">Actions</th>
+            <th className="px-4 py-2 font-medium">Name</th>
+            <th className="px-4 py-2 font-medium">Type</th>
+            <th className="px-4 py-2 font-medium">Severity</th>
+            <th className="px-4 py-2 font-medium">Enabled</th>
+            <th className="px-4 py-2 font-medium">Updated</th>
+            <th className="px-4 py-2 font-medium text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
           {rules.map((rule) => (
             <tr key={rule.id} className="border-b last:border-0 hover:bg-muted/30">
-              <td className="py-1.5 pr-2">
+              <td className="px-4 py-2">
                 <button
                   type="button"
                   onClick={() => onEdit(rule)}
@@ -63,13 +63,13 @@ export function RuleList({rules, onEdit, onToggle, onDelete, togglingId}: RuleLi
                   <div className="text-[10px] text-muted-foreground">{rule.description}</div>
                 )}
               </td>
-              <td className="py-1.5 pr-2 text-muted-foreground">{TYPE_LABELS[rule.type] ?? rule.type}</td>
-              <td className="py-1.5 pr-2">
+              <td className="px-4 py-2 text-muted-foreground">{TYPE_LABELS[rule.type] ?? rule.type}</td>
+              <td className="px-4 py-2">
                 <Badge variant="outline" className={cn('text-[10px]', colorFor(severityColors, rule.severity))}>
                   {rule.severity}
                 </Badge>
               </td>
-              <td className="py-1.5 pr-2">
+              <td className="px-4 py-2">
                 <Switch
                   checked={rule.enabled}
                   disabled={togglingId === rule.id}
@@ -77,8 +77,8 @@ export function RuleList({rules, onEdit, onToggle, onDelete, togglingId}: RuleLi
                   aria-label={`Toggle ${rule.name}`}
                 />
               </td>
-              <td className="py-1.5 pr-2 text-muted-foreground">{rule.updated_at}</td>
-              <td className="py-1.5 text-right">
+              <td className="px-4 py-2 text-muted-foreground">{rule.updated_at}</td>
+              <td className="px-4 py-2 text-right">
                 <Button size="sm" variant="ghost" onClick={() => onEdit(rule)}>
                   Edit
                 </Button>

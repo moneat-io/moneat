@@ -55,8 +55,8 @@ function AdminTelemetryPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-violet-100 dark:bg-violet-950 p-2">
-                <Server className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+              <div className="rounded-lg bg-chart-4/15 p-2">
+                <Server className="h-5 w-5 text-chart-4" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{formatNumber(deploymentCount)}</p>
@@ -68,8 +68,8 @@ function AdminTelemetryPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-emerald-100 dark:bg-emerald-950 p-2">
-                <Activity className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              <div className="rounded-lg bg-success-bg p-2">
+                <Activity className="h-5 w-5 text-success-fg" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{formatNumber(deployments.reduce((s, d) => s + d.eventCount, 0))}</p>
@@ -81,8 +81,8 @@ function AdminTelemetryPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-sky-100 dark:bg-sky-950 p-2">
-                <Radio className="h-5 w-5 text-sky-600 dark:text-sky-400" />
+              <div className="rounded-lg bg-chart-6/15 p-2">
+                <Radio className="h-5 w-5 text-chart-6" />
               </div>
               <div>
                 <p className="text-sm font-medium">{lastSeenAt ? formatDateTime(new Date(lastSeenAt), timezone) : '—'}</p>
@@ -200,7 +200,7 @@ function AdminTelemetryPage() {
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
             <div>
-              <p className="font-medium mb-2 text-emerald-700 dark:text-emerald-400">✓ Collected</p>
+              <p className="font-medium mb-2 text-success-fg">✓ Collected</p>
               <ul className="space-y-1 text-muted-foreground">
                 <li>• CPU count, memory usage, OS name &amp; architecture</li>
                 <li>• JVM version</li>
@@ -210,7 +210,7 @@ function AdminTelemetryPage() {
               </ul>
             </div>
             <div>
-              <p className="font-medium mb-2 text-red-700 dark:text-red-400">✗ Never Collected</p>
+              <p className="font-medium mb-2 text-danger-fg">✗ Never Collected</p>
               <ul className="space-y-1 text-muted-foreground">
                 <li>• User emails, names, or personal data</li>
                 <li>• Event contents, stack traces, or session replays</li>

@@ -17,9 +17,12 @@
 import {createFileRoute} from '@tanstack/react-router'
 import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query'
 import {api, type OnCallSchedule, type OrganizationIntegration} from '@/lib/api'
-import {Card, CardContent} from '@/components/ui/card'
+import {Card} from '@/components/ui/card'
 import {Button} from '@/components/ui/button'
-import {Badge} from '@/components/ui/badge'
+import {Badge, type BadgeProps} from '@/components/ui/badge'
+import {PageHeader} from '@/components/ui/page-header'
+import {EmptyState} from '@/components/ui/empty-state'
+import {StatusDot} from '@/components/ui/status-dot'
 import {Avatar, AvatarFallback} from '@/components/ui/avatar'
 import {
   Dialog,
@@ -51,15 +54,18 @@ const rotationIcons: Record<string, typeof RotateCcw> = {
   CUSTOM: RotateCcw,
 }
 
-const rotationColors: Record<string, string> = {
-  DAILY: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  WEEKLY: 'bg-violet-500/15 text-violet-400 border-violet-500/30',
-  CUSTOM: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+// Rotation type is a neutral categorical label — use the accent/info tones so it
+// reads as informational metadata, not a health state.
+const rotationVariants: Record<string, BadgeProps['variant']> = {
+  DAILY: 'info',
+  WEEKLY: 'accent',
+  CUSTOM: 'neutral',
 }
 
+// Categorical avatar tints from the shared chart palette (literal classes).
 const avatarColors = [
-  'bg-blue-600', 'bg-violet-600', 'bg-emerald-600', 'bg-amber-600',
-  'bg-rose-600', 'bg-cyan-600', 'bg-indigo-600', 'bg-pink-600',
+  'bg-chart-1', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4',
+  'bg-chart-5', 'bg-chart-6', 'bg-chart-7', 'bg-chart-8',
 ]
 
 function getInitials(name: string) {
@@ -179,20 +185,21 @@ function OnCallSchedules() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-xl font-bold">On-Call Schedules</h2>
-          <p className="text-muted-foreground text-xs">Manage rotation schedules and participants</p>
-        </div>
-        <Button size="sm" onClick={() => {setEditingSchedule(null); setShowEditor(true)}} className="bg-violet-600 hover:bg-violet-700 gap-1.5 shrink-0">
-          <Plus className="h-3 w-3" />
-          Create Schedule
-        </Button>
-      </div>
+      <PageHeader
+        icon={Calendar}
+        title="On-call schedules"
+        description="Manage rotation schedules and participants"
+        actions={
+          <Button size="sm" onClick={() => {setEditingSchedule(null); setShowEditor(true)}} className="gap-1.5 shrink-0">
+            <Plus className="h-4 w-4" />
+            Create schedule
+          </Button>
+        }
+      />
 
       {isLoading ? (
         <div className="flex items-center justify-center py-10">
-          <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-violet-500" />
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-primary" />
         </div>
       ) : schedules && schedules.length > 0 ? (
         <div className="space-y-3">
@@ -200,7 +207,7 @@ function OnCallSchedules() {
             const RotIcon = rotationIcons[schedule.rotationType] || RotateCcw
             const isExpanded = expandedId === schedule.id
             return (
-              <Card key={schedule.id} className="overflow-hidden transition-all hover:border-violet-500/30">
+              <Card key={schedule.id} className="overflow-hidden transition-colors hover:border-primary/30">
                 <div className="p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3 min-w-0">
@@ -213,15 +220,15 @@ function OnCallSchedules() {
                       <div className="min-w-0">
                         <h3 className="font-semibold text-base">{schedule.name}</h3>
                         <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                          <Badge variant="outline" className={cn('text-xs gap-1', rotationColors[schedule.rotationType])}>
+                          <Badge variant={rotationVariants[schedule.rotationType] ?? 'neutral'} size="sm" className="gap-1">
                             <RotIcon className="h-3 w-3" />
                             {schedule.rotationType} rotation
                           </Badge>
-                          <Badge variant="outline" className="text-xs gap-1 text-muted-foreground">
+                          <Badge variant="neutral" size="sm" className="gap-1">
                             <Globe className="h-3 w-3" />
                             {schedule.timezone}
                           </Badge>
-                          <Badge variant="outline" className="text-xs gap-1 text-muted-foreground">
+                          <Badge variant="neutral" size="sm" className="gap-1">
                             <Clock className="h-3 w-3" />
                             Handoff at {schedule.handoffTime.slice(0, 5)}
                           </Badge>
@@ -231,12 +238,9 @@ function OnCallSchedules() {
 
                     <div className="flex items-center gap-2 flex-shrink-0">
                       {schedule.currentOnCall && (
-                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-green-500/10 border border-green-500/20">
-                          <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
-                          </span>
-                          <span className="text-xs font-medium text-green-400">{schedule.currentOnCall.userName}</span>
+                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-success-bg border border-success-border">
+                          <StatusDot tone="success" pulse />
+                          <span className="text-xs font-medium text-success-fg">{schedule.currentOnCall.userName}</span>
                         </div>
                       )}
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(schedule)}>
@@ -296,7 +300,7 @@ function OnCallSchedules() {
                           .sort((a, b) => a.position - b.position)
                           .map((participant, pIdx) => (
                             <div key={participant.id} className="flex items-center gap-2 p-1.5 rounded-md bg-background border">
-                              <Badge variant="outline" className="h-6 w-6 flex items-center justify-center p-0 text-xs">
+                              <Badge variant="neutral" size="sm" className="h-6 w-6 flex items-center justify-center p-0">
                                 {pIdx + 1}
                               </Badge>
                               <Avatar className="h-6 w-6">
@@ -306,7 +310,7 @@ function OnCallSchedules() {
                               </Avatar>
                               <span className="text-xs font-medium">{participant.userName}</span>
                               {schedule.currentOnCall?.userId === participant.userId && (
-                                <Badge className="text-xs bg-green-500/15 text-green-400 border-green-500/30 ml-auto" variant="outline">
+                                <Badge variant="success" size="sm" className="ml-auto">
                                   On call
                                 </Badge>
                               )}
@@ -322,9 +326,9 @@ function OnCallSchedules() {
                         <h4 className="text-xs font-medium mb-1.5">Active Overrides</h4>
                         <div className="space-y-1.5 ml-4">
                           {schedule.overrides.map((override) => (
-                            <div key={override.id} className="flex items-center justify-between p-1.5 rounded-md bg-amber-500/5 border border-amber-500/20">
+                            <div key={override.id} className="flex items-center justify-between p-1.5 rounded-md bg-warning-bg border border-warning-border">
                               <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="text-xs bg-amber-500/15 text-amber-400 border-amber-500/30">
+                                <Badge variant="warning" size="sm">
                                   Override
                                 </Badge>
                                 <span className="text-sm">{override.userName}</span>
@@ -347,9 +351,9 @@ function OnCallSchedules() {
                         </h4>
                         <div className="ml-4">
                           {schedule.slackUsergroupId ? (
-                            <div className="flex items-center justify-between p-1.5 rounded-md bg-blue-500/5 border border-blue-500/20">
+                            <div className="flex items-center justify-between p-1.5 rounded-md bg-info-bg border border-info-border">
                               <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="text-xs bg-blue-500/15 text-blue-400 border-blue-500/30">
+                                <Badge variant="info" size="sm">
                                   @{schedule.slackUsergroupHandle}
                                 </Badge>
                                 <span className="text-xs text-muted-foreground">Auto-syncing current on-call user</span>
@@ -408,21 +412,17 @@ function OnCallSchedules() {
           })}
         </div>
       ) : (
-        <Card className="border-2 border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-10">
-            <div className="inline-flex items-center justify-center h-12 w-12 rounded-full bg-violet-500/10 mb-3">
-              <Calendar className="h-6 w-6 text-violet-500" />
-            </div>
-            <h3 className="text-base font-semibold mb-0.5">No On-Call Schedules</h3>
-            <p className="text-xs text-muted-foreground text-center mb-4 max-w-md">
-              Create your first on-call schedule to define who's responsible for responding to incidents and when.
-            </p>
-            <Button size="sm" onClick={() => setShowEditor(true)} className="bg-violet-600 hover:bg-violet-700 gap-1.5">
-              <Plus className="h-3 w-3" />
-              Create Your First Schedule
+        <EmptyState
+          icon={Calendar}
+          title="No on-call schedules"
+          description="Create your first on-call schedule to define who's responsible for responding to incidents and when."
+          action={
+            <Button size="sm" onClick={() => setShowEditor(true)} className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              Create your first schedule
             </Button>
-          </CardContent>
-        </Card>
+          }
+        />
       )}
 
       {/* Schedule Editor Dialog */}
