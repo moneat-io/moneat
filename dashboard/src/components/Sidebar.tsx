@@ -72,7 +72,7 @@ import {
 import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,} from '@/components/ui/dialog'
 import {Logo} from '@/components/Logo'
 import {isSidebarItemVisible} from '@/lib/sidebar-config'
-import {APP_OVERVIEW_HREF, APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
+import {APP_OVERVIEW_HREF, APP_OVERVIEW_SEARCH, isAppOverviewSearch} from '@/lib/overview-route'
 import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
 import {useCommandPalette} from '@/hooks/useCommandPalette'
 import {
@@ -519,7 +519,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
               <div className={cn('space-y-1')}>
                 {group.items.map((item) => {
                   const isActive = item.href === APP_OVERVIEW_HREF
-                    ? currentPath === '/'
+                    ? currentPath === '/' && isAppOverviewSearch(router.location.search)
                     : currentPath === item.href ||
                       (currentPath.startsWith(item.href + '/') &&
                         !navItems.some(
