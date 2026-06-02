@@ -20,6 +20,7 @@ import {Github} from 'lucide-react'
 import {api} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
 import {APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
+import {isDemo} from '@/lib/demo'
 import {Button} from '@/components/ui/button'
 import {Checkbox} from '@/components/ui/checkbox'
 import {Input} from '@/components/ui/input'
@@ -29,12 +30,21 @@ import {AuthAlert, AuthDivider, AuthField, AuthShell} from '@/components/auth/Au
 import {authInputClass, authPrimaryButtonClass, authSecondaryButtonClass} from '@/components/auth/authStyles'
 import {Helmet} from 'react-helmet-async'
 
+async function ensureSignupRouteCanLoad() {
+  if (!api.isAuthenticated()) {
+    return
+  }
+
+  if (isDemo()) {
+    await api.logout()
+    return
+  }
+
+  throw redirect({ to: '/', search: APP_OVERVIEW_SEARCH })
+}
+
 export const Route = createFileRoute('/signup')({
-  beforeLoad: () => {
-    if (api.isAuthenticated()) {
-      throw redirect({ to: '/', search: APP_OVERVIEW_SEARCH })
-    }
-  },
+  beforeLoad: ensureSignupRouteCanLoad,
   component: SignupPage,
 })
 
