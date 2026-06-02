@@ -16,13 +16,16 @@
 
 import {createFileRoute, Link, redirect, useNavigate} from '@tanstack/react-router'
 import {useState} from 'react'
+import {Github} from 'lucide-react'
 import {api} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
 import {APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
-import {Logo} from '@/components/Logo'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
-import {Label} from '@/components/ui/label'
+import {cn} from '@/lib/utils'
+import {GRADIENT_TEXT} from '@/components/landing/Landing'
+import {AuthAlert, AuthDivider, AuthField, AuthShell} from '@/components/auth/AuthShell'
+import {authInputClass, authPrimaryButtonClass, authSecondaryButtonClass} from '@/components/auth/authStyles'
 import {Helmet} from 'react-helmet-async'
 
 function normalizePostLoginRedirect(value: unknown): string | undefined {
@@ -168,160 +171,132 @@ function LoginPage() {
   }
 
   return (
-    <div>
+    <>
       <Helmet>
         <title>Sign In | Moneat</title>
         <meta name="robots" content="noindex" />
       </Helmet>
-      <div className="mx-auto flex min-h-screen max-w-6xl overflow-hidden border-x border-border">
-        <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative flex-col justify-between p-10">
-          <div className="text-white">
-            <Logo className="h-10 text-white" />
-          </div>
-          <div>
-            <h2 className="text-3xl font-bold text-white mb-3">
-              Error monitoring
-              <br />
-              that just works.
-            </h2>
-            <p className="text-slate-400 text-sm leading-relaxed max-w-xs">
-              Track, triage, and resolve issues before your users even notice.
+      <AuthShell
+        kicker="Welcome back"
+        heading="Sign in to Moneat"
+        subheading="Continue with your email, GitHub, or your company's SSO."
+        panelHeadline={
+          <>
+            Your whole stack, behind <span className={GRADIENT_TEXT}>one login.</span>
+          </>
+        }
+        panelLede="Errors, logs, traces, infrastructure, uptime, and on-call — together in one workspace your team already knows how to read."
+        footer={
+          <div className="flex flex-col items-center gap-2 text-sm">
+            <p className="text-slate-400">
+              Don&apos;t have an account?{' '}
+              <Link to="/signup" className="font-medium text-indigo-300 underline-offset-4 hover:text-white hover:underline">
+                Create one
+              </Link>
             </p>
+            <Link to="/demo" className="font-brandmono text-xs text-slate-500 underline-offset-4 hover:text-slate-300 hover:underline">
+              Explore the live demo →
+            </Link>
           </div>
-          <svg viewBox="0 0 400 60" className="absolute bottom-0 left-0 right-0 opacity-10" aria-hidden="true">
-            <polyline points="0,40 60,40 80,10 120,50 160,10 200,40 400,40" fill="none" stroke="#38bdf8" strokeWidth="2" />
-          </svg>
-        </div>
+        }
+      >
+        <form onSubmit={handleSubmit} className="grid gap-4">
+          {error && <AuthAlert tone="danger">{error}</AuthAlert>}
 
-        <div className="flex-1 flex items-center justify-center px-8 py-12 lg:px-16 bg-background">
-          <div className="w-full max-w-md">
-            <div className="lg:hidden flex justify-center mb-8">
-              <Logo className="h-10" />
+          <AuthField id="email" label="Email">
+            <Input
+              id="email"
+              type="email"
+              placeholder="you@company.com"
+              className={authInputClass}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </AuthField>
+
+          <AuthField id="password" label="Password">
+            <Input
+              id="password"
+              type="password"
+              placeholder="Enter your password"
+              className={authInputClass}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+            <div className="text-right">
+              <Link
+                to="/forgot-password"
+                className="text-xs text-slate-400 underline-offset-4 hover:text-indigo-300 hover:underline"
+              >
+                Forgot password?
+              </Link>
             </div>
+          </AuthField>
 
-            <h1 className="text-2xl font-bold mb-1">Welcome back</h1>
-            <p className="text-sm text-muted-foreground mb-8">Sign in to your account</p>
+          <Button type="submit" className={authPrimaryButtonClass} disabled={loading}>
+            {loading ? 'Signing in…' : 'Sign in'}
+          </Button>
+        </form>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {error && <div className="text-sm text-destructive">{error}</div>}
+        <div className="mt-6 grid gap-4">
+          <AuthDivider label="or continue with" />
 
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+          <Button
+            type="button"
+            variant="outline"
+            className={authSecondaryButtonClass}
+            onClick={() => {
+              const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io'
+              window.location.href = `${backendUrl}/auth/github`
+            }}
+          >
+            <Github />
+            GitHub
+          </Button>
+
+          {!showSsoInput ? (
+            <button
+              type="button"
+              className="font-brandmono text-xs uppercase tracking-[0.14em] text-slate-500 transition-colors hover:text-indigo-300"
+              onClick={() => setShowSsoInput(true)}
+            >
+              Sign in with SSO instead
+            </button>
+          ) : (
+            <form onSubmit={handleSsoLogin} className="grid gap-3 rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
+              <AuthField id="sso-email" label="Work email">
                 <Input
-                  id="email"
+                  id="sso-email"
                   type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@company.com"
+                  className={authInputClass}
+                  value={ssoEmail}
+                  onChange={(e) => setSsoEmail(e.target.value)}
                   required
                 />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-                <div className="text-right">
-                  <Link to="/forgot-password" className="text-sm text-primary hover:underline">
-                    Forgot password?
-                  </Link>
-                </div>
-              </div>
-
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? 'Signing in...' : 'Sign in'}
-              </Button>
-            </form>
-
-            <div className="mt-6">
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-border"></div>
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
-                </div>
-              </div>
-
-              <div className="mt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => {
-                    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io'
-                    window.location.href = `${backendUrl}/auth/github`
-                  }}
-                >
-                  <svg className="mr-2 h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path fillRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clipRule="evenodd" />
-                  </svg>
-                  GitHub
+              </AuthField>
+              <div className="flex gap-2">
+                <Button type="submit" className={cn(authPrimaryButtonClass, 'flex-1')} disabled={ssoLoading}>
+                  {ssoLoading ? 'Redirecting…' : 'Continue with SSO'}
                 </Button>
-              </div>
-
-              {!showSsoInput ? (
                 <Button
                   type="button"
                   variant="ghost"
-                  className="w-full mt-3 text-sm"
-                  onClick={() => setShowSsoInput(true)}
+                  className="h-11 text-slate-400 hover:bg-white/[0.05] hover:text-white"
+                  onClick={() => {
+                    setShowSsoInput(false)
+                    setSsoEmail('')
+                  }}
                 >
-                  Or login with SSO
+                  Cancel
                 </Button>
-              ) : (
-                <form onSubmit={handleSsoLogin} className="mt-3 space-y-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="sso-email">Work Email</Label>
-                    <Input
-                      id="sso-email"
-                      type="email"
-                      placeholder="you@company.com"
-                      value={ssoEmail}
-                      onChange={(e) => setSsoEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button type="submit" className="flex-1" disabled={ssoLoading}>
-                      {ssoLoading ? 'Redirecting...' : 'Continue with SSO'}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => {
-                        setShowSsoInput(false)
-                        setSsoEmail('')
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
-              )}
-            </div>
-
-            <div className="mt-6 flex justify-center text-sm text-muted-foreground">
-              Don't have an account?
-              <Link to="/signup" className="ml-1 text-primary hover:underline">
-                Sign up
-              </Link>
-            </div>
-            
-            <div className="mt-2 flex justify-center text-sm text-muted-foreground">
-              <Link to="/demo" className="text-primary hover:underline">
-                Try live demo
-              </Link>
-            </div>
-          </div>
+              </div>
+            </form>
+          )}
         </div>
-      </div>
-    </div>
+      </AuthShell>
+    </>
   )
 }

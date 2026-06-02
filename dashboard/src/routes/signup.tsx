@@ -16,15 +16,17 @@
 
 import {createFileRoute, Link, redirect} from '@tanstack/react-router'
 import {useState} from 'react'
+import {Github} from 'lucide-react'
 import {api} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
 import {APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
 import {Button} from '@/components/ui/button'
 import {Checkbox} from '@/components/ui/checkbox'
 import {Input} from '@/components/ui/input'
-import {Label} from '@/components/ui/label'
 import {LEGAL_PRIVACY_VERSION, LEGAL_TERMS_VERSION} from '@/lib/legal'
-import {Logo} from '@/components/Logo'
+import {GRADIENT_TEXT} from '@/components/landing/Landing'
+import {AuthAlert, AuthDivider, AuthField, AuthShell} from '@/components/auth/AuthShell'
+import {authInputClass, authPrimaryButtonClass, authSecondaryButtonClass} from '@/components/auth/authStyles'
 import {Helmet} from 'react-helmet-async'
 
 export const Route = createFileRoute('/signup')({
@@ -102,200 +104,206 @@ function SignupPage() {
     }
   }
 
+  const panelHeadline = (
+    <>
+      Start shipping with <span className={GRADIENT_TEXT}>fewer surprises.</span>
+    </>
+  )
+  const panelLede =
+    'Create your account, point your existing SDKs and agents at Moneat, and watch every signal land in one workspace. 1 GB free to start.'
+
+  if (success) {
+    return (
+      <>
+        <Helmet>
+          <title>Sign Up | Moneat</title>
+          <meta name="robots" content="noindex" />
+        </Helmet>
+        <AuthShell
+          kicker="Check your inbox"
+          heading="Verify your email"
+          subheading={
+            <>
+              We sent a verification link to <span className="font-medium text-slate-200">{email}</span>. Confirm it to
+              activate your account.
+            </>
+          }
+          panelHeadline={panelHeadline}
+          panelLede={panelLede}
+          footer={
+            <p className="text-center text-sm text-slate-400">
+              Already verified?{' '}
+              <Link to="/login" className="font-medium text-indigo-300 underline-offset-4 hover:text-white hover:underline">
+                Sign in
+              </Link>
+            </p>
+          }
+        >
+          <div className="grid gap-5">
+            {resendMessage && (
+              <AuthAlert tone={resendMessage.includes('sent') ? 'success' : 'danger'}>{resendMessage}</AuthAlert>
+            )}
+
+            <Button asChild className={authPrimaryButtonClass}>
+              <Link to="/login">Go to sign in</Link>
+            </Button>
+
+            <p className="text-center text-sm text-slate-400">
+              Didn&apos;t get the email?{' '}
+              <button
+                onClick={handleResendEmail}
+                disabled={resending}
+                className="font-medium text-indigo-300 underline-offset-4 hover:text-white hover:underline disabled:opacity-50"
+              >
+                {resending ? 'Sending…' : 'Resend it'}
+              </button>
+            </p>
+          </div>
+        </AuthShell>
+      </>
+    )
+  }
+
   return (
-    <div>
+    <>
       <Helmet>
         <title>Sign Up | Moneat</title>
         <meta name="robots" content="noindex" />
       </Helmet>
-      <div className="mx-auto flex min-h-screen max-w-6xl overflow-hidden border-x border-border">
-        <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative flex-col justify-between p-10">
-          <div className="text-white">
-            <Logo className="h-10 text-white" />
-          </div>
-          <div>
-            <h2 className="text-3xl font-bold text-white mb-3">
-              Error monitoring
-              <br />
-              that just works.
-            </h2>
-            <p className="text-slate-400 text-sm leading-relaxed max-w-xs">
-              Track, triage, and resolve issues before your users even notice.
-            </p>
-          </div>
-          <svg viewBox="0 0 400 60" className="absolute bottom-0 left-0 right-0 opacity-10" aria-hidden="true">
-            <polyline points="0,40 60,40 80,10 120,50 160,10 200,40 400,40" fill="none" stroke="#38bdf8" strokeWidth="2" />
-          </svg>
+      <AuthShell
+        kicker="Get started"
+        heading="Create your account"
+        subheading="Free to start — no credit card required."
+        panelHeadline={panelHeadline}
+        panelLede={panelLede}
+        footer={
+          <p className="text-center text-sm text-slate-400">
+            Already have an account?{' '}
+            <Link to="/login" className="font-medium text-indigo-300 underline-offset-4 hover:text-white hover:underline">
+              Sign in
+            </Link>
+          </p>
+        }
+      >
+        <form onSubmit={handleSubmit} className="grid gap-4">
+          {error && <AuthAlert tone="danger">{error}</AuthAlert>}
+
+          <AuthField id="name" label="Name" hint="Optional — shown to teammates you invite.">
+            <Input
+              id="name"
+              type="text"
+              placeholder="Your name"
+              className={authInputClass}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </AuthField>
+
+          <AuthField id="email" label="Email" required>
+            <Input
+              id="email"
+              type="email"
+              placeholder="you@company.com"
+              className={authInputClass}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </AuthField>
+
+          <AuthField id="password" label="Password" required hint="At least 8 characters.">
+            <Input
+              id="password"
+              type="password"
+              placeholder="Create a password"
+              className={authInputClass}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </AuthField>
+
+          <AuthField id="confirmPassword" label="Confirm password" required>
+            <Input
+              id="confirmPassword"
+              type="password"
+              placeholder="Re-enter your password"
+              className={authInputClass}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+            />
+          </AuthField>
+
+          <label
+            htmlFor="accept-legal"
+            className="flex cursor-pointer items-start gap-3 rounded-lg border border-white/[0.08] bg-white/[0.02] p-3.5 text-sm leading-relaxed text-slate-300"
+          >
+            <Checkbox
+              id="accept-legal"
+              checked={acceptedLegal}
+              onCheckedChange={(checked) => setAcceptedLegal(checked === true)}
+              className="mt-0.5 border-white/30 data-[state=checked]:border-indigo-400 data-[state=checked]:bg-indigo-500 data-[state=checked]:text-white"
+            />
+            <span>
+              I agree to the{' '}
+              <Link
+                to="/legal/terms"
+                target="_blank"
+                rel="noreferrer"
+                onClick={(event) => event.stopPropagation()}
+                className="text-indigo-300 underline-offset-4 hover:underline"
+              >
+                Terms of Use
+              </Link>{' '}
+              and{' '}
+              <Link
+                to="/legal/privacy"
+                target="_blank"
+                rel="noreferrer"
+                onClick={(event) => event.stopPropagation()}
+                className="text-indigo-300 underline-offset-4 hover:underline"
+              >
+                Privacy Policy
+              </Link>
+              .
+            </span>
+          </label>
+
+          <Button type="submit" className={authPrimaryButtonClass} disabled={!acceptedLegal}>
+            Create account
+          </Button>
+        </form>
+
+        <div className="mt-6 grid gap-4">
+          <AuthDivider label="or continue with" />
+
+          <Button
+            type="button"
+            variant="outline"
+            className={authSecondaryButtonClass}
+            onClick={() => {
+              const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io'
+              window.location.href = `${backendUrl}/auth/github`
+            }}
+          >
+            <Github />
+            GitHub
+          </Button>
+
+          <p className="text-center text-xs leading-relaxed text-slate-500">
+            By continuing with GitHub you agree to our{' '}
+            <Link to="/legal/terms" target="_blank" rel="noreferrer" className="text-slate-400 underline-offset-4 hover:text-indigo-300 hover:underline">
+              Terms of Use
+            </Link>{' '}
+            and{' '}
+            <Link to="/legal/privacy" target="_blank" rel="noreferrer" className="text-slate-400 underline-offset-4 hover:text-indigo-300 hover:underline">
+              Privacy Policy
+            </Link>
+            .
+          </p>
         </div>
-
-        <div className="flex-1 flex items-center justify-center px-8 py-12 lg:px-16 bg-background">
-          <div className="w-full max-w-md">
-            <div className="lg:hidden flex justify-center mb-8">
-              <Logo className="h-10" />
-            </div>
-
-            {success ? (
-              <>
-                <h1 className="text-2xl font-bold mb-1">Check your email</h1>
-                <p className="text-sm text-muted-foreground mb-8">
-                  We sent a verification link to {email}. Verify your email before signing in.
-                </p>
-
-                <div className="space-y-4">
-                  {resendMessage && (
-                    <div className={`text-sm ${resendMessage.includes('sent') ? 'text-green-600' : 'text-destructive'}`}>
-                      {resendMessage}
-                    </div>
-                  )}
-
-                  <p className="text-sm text-muted-foreground">
-                    Didn&apos;t receive the email?{' '}
-                    <button
-                      onClick={handleResendEmail}
-                      disabled={resending}
-                      className="text-primary hover:underline disabled:opacity-50"
-                    >
-                      {resending ? 'Sending...' : 'Resend verification email'}
-                    </button>
-                  </p>
-
-                  <Link to="/login">
-                    <Button className="w-full">Go to Sign In</Button>
-                  </Link>
-                </div>
-              </>
-            ) : (
-              <>
-                <h1 className="text-2xl font-bold mb-1">Create an account</h1>
-                <p className="text-sm text-muted-foreground mb-8">Sign up to get started</p>
-
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  {error && <div className="text-sm text-destructive">{error}</div>}
-
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Name (optional)</Label>
-                    <Input
-                      id="name"
-                      type="text"
-                      placeholder="Your name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="you@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      placeholder="Create a password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Must be at least 8 characters
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">Confirm Password</Label>
-                    <Input
-                      id="confirmPassword"
-                      type="password"
-                      placeholder="Confirm your password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div className="flex items-start gap-3 rounded-md border border-border/60 p-3">
-                    <Checkbox
-                      id="accept-legal"
-                      checked={acceptedLegal}
-                      onCheckedChange={(checked) => setAcceptedLegal(checked === true)}
-                      className="mt-0.5"
-                    />
-                    <Label htmlFor="accept-legal" className="text-sm font-normal leading-relaxed">
-                      I agree to the{' '}
-                      <Link to="/legal/terms" target="_blank" rel="noreferrer" className="text-primary hover:underline">
-                        Terms of Use
-                      </Link>{' '}
-                      and{' '}
-                      <Link to="/legal/privacy" target="_blank" rel="noreferrer" className="text-primary hover:underline">
-                        Privacy Policy
-                      </Link>.
-                    </Label>
-                  </div>
-
-                  <Button type="submit" className="w-full" disabled={!acceptedLegal}>
-                    Sign up
-                  </Button>
-                </form>
-
-                <div className="mt-6">
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-border"></div>
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
-                    </div>
-                  </div>
-
-                  <div className="mt-4">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => {
-                        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io'
-                        window.location.href = `${backendUrl}/auth/github`
-                      }}
-                    >
-                      <svg className="mr-2 h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                        <path fillRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clipRule="evenodd" />
-                      </svg>
-                      GitHub
-                    </Button>
-                  </div>
-                  
-                  <p className="mt-4 text-xs text-center text-muted-foreground">
-                    By signing up with GitHub, you agree to our{' '}
-                    <Link to="/legal/terms" target="_blank" rel="noreferrer" className="text-primary hover:underline">
-                      Terms of Use
-                    </Link>{' '}
-                    and{' '}
-                    <Link to="/legal/privacy" target="_blank" rel="noreferrer" className="text-primary hover:underline">
-                      Privacy Policy
-                    </Link>
-                  </p>
-                </div>
-
-                <div className="mt-6 flex justify-center text-sm text-muted-foreground">
-                  Already have an account?
-                  <Link to="/login" className="ml-1 text-primary hover:underline">
-                    Sign in
-                  </Link>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+      </AuthShell>
+    </>
   )
 }

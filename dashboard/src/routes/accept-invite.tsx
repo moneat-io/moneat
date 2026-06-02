@@ -15,19 +15,33 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute, useNavigate} from '@tanstack/react-router'
-import {useEffect, useState} from 'react'
-import {api} from '../lib/api'
-import {trackEvent} from '../lib/analytics'
-import {useAuth} from '../hooks/useAuth'
-import {APP_OVERVIEW_SEARCH} from '../lib/overview-route'
-import {Button} from '../components/ui/button'
-import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '../components/ui/card'
-import {Alert, AlertDescription} from '../components/ui/alert'
-import {AlertCircle, Check, Loader2, Users} from 'lucide-react'
+import {useEffect, useState, type ReactNode} from 'react'
+import {Loader2} from 'lucide-react'
+import {api} from '@/lib/api'
+import {trackEvent} from '@/lib/analytics'
+import {useAuth} from '@/hooks/useAuth'
+import {APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
+import {Button} from '@/components/ui/button'
+import {AuthAlert, AuthShell} from '@/components/auth/AuthShell'
+import {authPrimaryButtonClass, authSecondaryButtonClass} from '@/components/auth/authStyles'
+import {Helmet} from 'react-helmet-async'
 
 export const Route = createFileRoute('/accept-invite')({
   component: AcceptInvitePage,
 })
+
+function InviteCard({children}: {readonly children: ReactNode}) {
+  return <div className="grid gap-2.5 rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">{children}</div>
+}
+
+function InviteRow({label, value, capitalize}: {readonly label: string; readonly value: string; readonly capitalize?: boolean}) {
+  return (
+    <div className="flex items-center justify-between gap-3 text-sm">
+      <span className="text-slate-400">{label}</span>
+      <span className={capitalize ? 'font-medium capitalize text-slate-100' : 'font-medium text-slate-100'}>{value}</span>
+    </div>
+  )
+}
 
 function AcceptInvitePage() {
   const navigate = useNavigate()
@@ -73,7 +87,7 @@ function AcceptInvitePage() {
       await api.acceptInvitation(token)
       trackEvent('Invite Accept', { role: inviteDetails?.role || 'unknown' })
       setSuccess(true)
-      
+
       // Redirect to dashboard after a short delay
       setTimeout(() => {
         navigate({ to: '/', search: APP_OVERVIEW_SEARCH })
@@ -84,212 +98,126 @@ function AcceptInvitePage() {
     }
   }
 
+  let body: ReactNode
+  let kicker = 'Invitation'
+  let heading: ReactNode
+  let subheading: ReactNode
+
   if (loading || authLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600">Loading invitation...</p>
+    heading = 'Loading invitation'
+    subheading = 'One moment while we pull up the details.'
+    body = (
+      <div className="flex items-center gap-3 text-sm text-slate-400">
+        <Loader2 className="size-4 animate-spin text-indigo-300" />
+        Loading invitation…
+      </div>
+    )
+  } else if (error || !inviteDetails) {
+    heading = 'Invalid invitation'
+    subheading = 'This link can no longer be used.'
+    body = (
+      <div className="grid gap-5">
+        <AuthAlert tone="danger">{error || 'This invitation link is not valid.'}</AuthAlert>
+        <Button className={authPrimaryButtonClass} onClick={() => navigate({ to: '/login' })}>
+          Go to sign in
+        </Button>
+      </div>
+    )
+  } else if (!inviteDetails.valid) {
+    heading = 'Invitation expired'
+    subheading = 'This invitation has expired or has already been used.'
+    body = (
+      <div className="grid gap-5">
+        <AuthAlert tone="danger">
+          Ask {inviteDetails.invitedBy} to send you a new invitation.
+        </AuthAlert>
+        <Button className={authPrimaryButtonClass} onClick={() => navigate({ to: '/login' })}>
+          Go to sign in
+        </Button>
+      </div>
+    )
+  } else if (success) {
+    kicker = 'Welcome aboard'
+    heading = "You're in"
+    subheading = (
+      <>
+        You&apos;ve joined <span className="font-medium text-slate-200">{inviteDetails.orgName}</span>.
+      </>
+    )
+    body = <AuthAlert tone="success">Redirecting you to the dashboard…</AuthAlert>
+  } else if (!user) {
+    kicker = "You're invited"
+    heading = `Join ${inviteDetails.orgName}`
+    subheading = (
+      <>
+        <span className="font-medium text-slate-200">{inviteDetails.invitedBy}</span> invited you to join their
+        organization.
+      </>
+    )
+    body = (
+      <div className="grid gap-5">
+        <InviteCard>
+          <InviteRow label="Organization" value={inviteDetails.orgName} />
+          <InviteRow label="Role" value={inviteDetails.role} capitalize />
+          <InviteRow label="Invited by" value={inviteDetails.invitedBy} />
+        </InviteCard>
+        <p className="text-sm text-slate-400">Sign in or create an account to accept this invitation.</p>
+        <div className="grid gap-2.5">
+          <Button
+            className={authPrimaryButtonClass}
+            onClick={() => navigate({ to: '/login', search: { inviteToken: token } })}
+          >
+            Sign in
+          </Button>
+          <Button
+            variant="outline"
+            className={authSecondaryButtonClass}
+            onClick={() => navigate({ to: '/signup', search: { inviteToken: token } })}
+          >
+            Create account
+          </Button>
         </div>
       </div>
     )
-  }
-
-  if (error || !inviteDetails) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50 p-4">
-        <Card className="max-w-md w-full">
-          <CardHeader>
-            <div className="flex items-center justify-center mb-4">
-              <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center">
-                <AlertCircle className="h-6 w-6 text-red-600" />
-              </div>
-            </div>
-            <CardTitle className="text-center">Invalid Invitation</CardTitle>
-            <CardDescription className="text-center">
-              {error || 'This invitation link is not valid'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              onClick={() => navigate({ to: '/login' })}
-              className="w-full"
-            >
-              Go to Login
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+  } else {
+    kicker = "You're invited"
+    heading = `Join ${inviteDetails.orgName}?`
+    subheading = (
+      <>
+        <span className="font-medium text-slate-200">{inviteDetails.invitedBy}</span> invited you to their organization.
+      </>
     )
-  }
-
-  if (!inviteDetails.valid) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50 p-4">
-        <Card className="max-w-md w-full">
-          <CardHeader>
-            <div className="flex items-center justify-center mb-4">
-              <div className="h-12 w-12 rounded-full bg-yellow-100 flex items-center justify-center">
-                <AlertCircle className="h-6 w-6 text-yellow-600" />
-              </div>
-            </div>
-            <CardTitle className="text-center">Invitation Expired</CardTitle>
-            <CardDescription className="text-center">
-              This invitation has expired or has already been used.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-gray-600 text-center">
-              Please contact {inviteDetails.invitedBy} to send you a new invitation.
-            </p>
-            <Button
-              onClick={() => navigate({ to: '/login' })}
-              className="w-full"
-            >
-              Go to Login
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  if (success) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50 p-4">
-        <Card className="max-w-md w-full">
-          <CardHeader>
-            <div className="flex items-center justify-center mb-4">
-              <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
-                <Check className="h-6 w-6 text-green-600" />
-              </div>
-            </div>
-            <CardTitle className="text-center">Welcome!</CardTitle>
-            <CardDescription className="text-center">
-              You've successfully joined {inviteDetails.orgName}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-gray-600 text-center">
-              Redirecting to dashboard...
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  if (!user) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50 p-4">
-        <Card className="max-w-md w-full">
-          <CardHeader>
-            <div className="flex items-center justify-center mb-4">
-              <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                <Users className="h-6 w-6 text-blue-600" />
-              </div>
-            </div>
-            <CardTitle className="text-center">You've Been Invited!</CardTitle>
-            <CardDescription className="text-center">
-              {inviteDetails.invitedBy} invited you to join {inviteDetails.orgName}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Organization:</span>
-                <span className="font-medium">{inviteDetails.orgName}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Role:</span>
-                <span className="font-medium capitalize">{inviteDetails.role}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Invited by:</span>
-                <span className="font-medium">{inviteDetails.invitedBy}</span>
-              </div>
-            </div>
-
-            <Alert>
-              <AlertDescription className="text-sm">
-                To accept this invitation, you need to sign in or create an account.
-              </AlertDescription>
-            </Alert>
-
-            <div className="space-y-2">
-              <Button
-                onClick={() => navigate({ to: '/login', search: { inviteToken: token } })}
-                className="w-full"
-              >
-                Sign In
-              </Button>
-              <Button
-                onClick={() => navigate({ to: '/signup', search: { inviteToken: token } })}
-                variant="outline"
-                className="w-full"
-              >
-                Create Account
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  // User is logged in - show accept button
-  return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-50 p-4">
-      <Card className="max-w-md w-full">
-        <CardHeader>
-          <div className="flex items-center justify-center mb-4">
-            <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-              <Users className="h-6 w-6 text-blue-600" />
-            </div>
-          </div>
-          <CardTitle className="text-center">Join {inviteDetails.orgName}?</CardTitle>
-          <CardDescription className="text-center">
-            {inviteDetails.invitedBy} invited you to join their organization
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Organization:</span>
-              <span className="font-medium">{inviteDetails.orgName}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Role:</span>
-              <span className="font-medium capitalize">{inviteDetails.role}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Your email:</span>
-              <span className="font-medium">{user.email}</span>
-            </div>
-          </div>
-
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
+    body = (
+      <div className="grid gap-5">
+        <InviteCard>
+          <InviteRow label="Organization" value={inviteDetails.orgName} />
+          <InviteRow label="Role" value={inviteDetails.role} capitalize />
+          <InviteRow label="Your email" value={user.email} />
+        </InviteCard>
+        {error && <AuthAlert tone="danger">{error}</AuthAlert>}
+        <Button className={authPrimaryButtonClass} onClick={handleAccept} disabled={accepting}>
+          {accepting ? (
+            <>
+              <Loader2 className="size-4 animate-spin" />
+              Accepting…
+            </>
+          ) : (
+            'Accept invitation'
           )}
+        </Button>
+      </div>
+    )
+  }
 
-          <Button
-            onClick={handleAccept}
-            disabled={accepting}
-            className="w-full"
-          >
-            {accepting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Accepting...
-              </>
-            ) : (
-              'Accept Invitation'
-            )}
-          </Button>
-        </CardContent>
-      </Card>
-    </div>
+  return (
+    <>
+      <Helmet>
+        <title>Accept Invitation | Moneat</title>
+        <meta name="robots" content="noindex" />
+      </Helmet>
+      <AuthShell kicker={kicker} heading={heading} subheading={subheading}>
+        {body}
+      </AuthShell>
+    </>
   )
 }
