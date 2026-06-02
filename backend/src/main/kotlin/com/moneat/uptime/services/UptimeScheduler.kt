@@ -23,6 +23,8 @@ import com.moneat.alerts.models.AlertStatus
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.incident.services.IncidentService
 import com.moneat.shared.services.TaskLock
+import com.moneat.uptime.models.CheckResult
+import com.moneat.uptime.models.UptimeMonitorData
 import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 import com.moneat.utils.suspendRunCatching
@@ -41,7 +43,8 @@ import kotlinx.serialization.json.JsonPrimitive
 import mu.KotlinLogging
 import java.io.IOException
 import java.sql.SQLException
-import java.util.*
+import java.util.Collections
+import java.util.UUID
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
@@ -144,56 +147,77 @@ class UptimeScheduler(
      * Perform a check for a specific monitor.
      */
     private suspend fun performCheck(monitorId: UUID) {
-        // Get latest monitor data from the list we already fetched
+        val monitor = loadMonitorForCheck(monitorId) ?: return
+
+        if (monitor.type.lowercase() == "push") {
+            return
+        }
+
+        val result = executeCheckWithTimeout(monitor, "Check execution failed", "Check execution failed")
+        val finalResult = result.withRetriesIfNeeded(monitor)
+        val oldStatus = monitor.status
+        recordCheckOutcome(monitor, finalResult)
+        publishLifecycleIfNeeded(monitor, oldStatus, finalResult)
+    }
+
+    private suspend fun loadMonitorForCheck(monitorId: UUID): UptimeMonitorData? {
         val monitor =
             suspendRunCatching {
                 uptimeService.getMonitorsDueForCheck().find { it.id == monitorId }
             }.getOrElse { e ->
                 logger.error(e) { "Failed to fetch monitor $monitorId: ${e.message}" }
-                return
+                return null
             }
 
         if (monitor == null) {
             logger.warn { "Monitor $monitorId not found or not active" }
-            return
         }
 
-        // Skip push monitors (they don't have active checks)
-        if (monitor.type.lowercase() == "push") {
-            return
+        return monitor
+    }
+
+    private suspend fun executeCheckWithTimeout(
+        monitor: UptimeMonitorData,
+        failureLogPrefix: String,
+        failureMessagePrefix: String
+    ): CheckResult =
+        try {
+            withTimeout(monitor.timeoutSeconds * MILLIS_PER_SECOND_LONG + TIMEOUT_BUFFER_MS) {
+                checkExecutor.executeCheck(monitor)
+            }
+        } catch (e: TimeoutCancellationException) {
+            failedCheckResult(monitor, e, failureLogPrefix, failureMessagePrefix)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: IOException) {
+            failedCheckResult(monitor, e, failureLogPrefix, failureMessagePrefix)
+        } catch (e: IllegalStateException) {
+            failedCheckResult(monitor, e, failureLogPrefix, failureMessagePrefix)
+        } catch (e: SQLException) {
+            failedCheckResult(monitor, e, failureLogPrefix, failureMessagePrefix)
         }
 
-        // Execute the check
-        val result =
-            try {
-                withTimeout(monitor.timeoutSeconds * MILLIS_PER_SECOND_LONG + TIMEOUT_BUFFER_MS) { // Add 5s buffer
-                    checkExecutor.executeCheck(monitor)
-                }
-            } catch (e: TimeoutCancellationException) {
-                logger.error(e) { "Check execution failed for monitor ${monitor.id}: ${e.message}" }
-                com.moneat.uptime.models.CheckResult(0, -1, 0, "Check execution failed: ${e.message}")
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: IOException) {
-                logger.error(e) { "Check execution failed for monitor ${monitor.id}: ${e.message}" }
-                com.moneat.uptime.models.CheckResult(0, -1, 0, "Check execution failed: ${e.message}")
-            } catch (e: IllegalStateException) {
-                logger.error(e) { "Check execution failed for monitor ${monitor.id}: ${e.message}" }
-                com.moneat.uptime.models.CheckResult(0, -1, 0, "Check execution failed: ${e.message}")
-            } catch (e: SQLException) {
-                logger.error(e) { "Check execution failed for monitor ${monitor.id}: ${e.message}" }
-                com.moneat.uptime.models.CheckResult(0, -1, 0, "Check execution failed: ${e.message}")
-            }
+    private fun failedCheckResult(
+        monitor: UptimeMonitorData,
+        exception: Exception,
+        failureLogPrefix: String,
+        failureMessagePrefix: String
+    ): CheckResult {
+        logger.error(exception) { "$failureLogPrefix for monitor ${monitor.id}: ${exception.message}" }
+        return CheckResult(0, -1, 0, "$failureMessagePrefix: ${exception.message}")
+    }
 
-        // Handle retries for failed checks
-        val finalResult =
-            if (result.status == 0 && monitor.retries > 0) {
-                handleRetries(monitor, result)
-            } else {
-                result
-            }
+    private suspend fun CheckResult.withRetriesIfNeeded(monitor: UptimeMonitorData): CheckResult =
+        if (status == 0 && monitor.retries > 0) {
+            handleRetries(monitor, this)
+        } else {
+            this
+        }
 
-        // Record heartbeat
+    private suspend fun recordCheckOutcome(
+        monitor: UptimeMonitorData,
+        finalResult: CheckResult
+    ) {
         suspendRunCatching {
             uptimeService.recordHeartbeat(monitor.id, finalResult)
         }.getOrElse { e ->
@@ -206,22 +230,17 @@ class UptimeScheduler(
             logger.debug(e) { "Failed to increment uptime check count for org ${monitor.organizationId}" }
         }
 
-        // Update monitor status
-        val oldStatus = monitor.status
         uptimeService.updateMonitorStatus(monitor.id, finalResult)
+    }
 
-        // Detect status changes (up -> down or down -> up)
-        val newStatus =
-            when (finalResult.status) {
-                1 -> "up"
-                0 -> "down"
-                else -> "pending"
-            }
+    private suspend fun publishLifecycleIfNeeded(
+        monitor: UptimeMonitorData,
+        oldStatus: String,
+        finalResult: CheckResult
+    ) {
+        val newStatus = statusFromResult(finalResult)
 
-        if (oldStatus != newStatus &&
-            (oldStatus == "up" || oldStatus == "down") &&
-            (newStatus == "up" || newStatus == "down")
-        ) {
+        if (isUptimeStatusTransition(oldStatus, newStatus)) {
             logger.info { "Monitor ${monitor.name} status changed: $oldStatus -> $newStatus" }
 
             suspendRunCatching {
@@ -229,7 +248,10 @@ class UptimeScheduler(
             }.onFailure { e ->
                 logger.error(e) { "Failed to send status change notification: ${e.message}" }
             }
-        } else if (oldStatus == "down" && newStatus == "down") {
+            return
+        }
+
+        if (oldStatus == "down" && newStatus == "down") {
             suspendRunCatching {
                 publishStillDownWorkflow(monitor, finalResult)
             }.onFailure { e ->
@@ -238,38 +260,31 @@ class UptimeScheduler(
         }
     }
 
+    private fun statusFromResult(result: CheckResult): String =
+        when (result.status) {
+            1 -> "up"
+            0 -> "down"
+            else -> "pending"
+        }
+
+    private fun isUptimeStatusTransition(oldStatus: String, newStatus: String): Boolean =
+        oldStatus != newStatus && oldStatus.isUptimeStatus() && newStatus.isUptimeStatus()
+
+    private fun String.isUptimeStatus(): Boolean = this == "up" || this == "down"
+
     /**
      * Handle retries for failed checks.
      */
     private suspend fun handleRetries(
-        monitor: com.moneat.uptime.models.UptimeMonitorData,
-        initialResult: com.moneat.uptime.models.CheckResult
-    ): com.moneat.uptime.models.CheckResult {
+        monitor: UptimeMonitorData,
+        initialResult: CheckResult
+    ): CheckResult {
         var lastResult = initialResult
 
         for (retry in 1..monitor.retries) {
             delay(monitor.retryIntervalSeconds * MILLIS_PER_SECOND_LONG)
 
-            val retryResult =
-                try {
-                    withTimeout(monitor.timeoutSeconds * MILLIS_PER_SECOND_LONG + TIMEOUT_BUFFER_MS) {
-                        checkExecutor.executeCheck(monitor)
-                    }
-                } catch (e: TimeoutCancellationException) {
-                    logger.error(e) { "Retry $retry failed for monitor ${monitor.id}: ${e.message}" }
-                    com.moneat.uptime.models.CheckResult(0, -1, 0, "Retry failed: ${e.message}")
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: IOException) {
-                    logger.error(e) { "Retry $retry failed for monitor ${monitor.id}: ${e.message}" }
-                    com.moneat.uptime.models.CheckResult(0, -1, 0, "Retry failed: ${e.message}")
-                } catch (e: IllegalStateException) {
-                    logger.error(e) { "Retry $retry failed for monitor ${monitor.id}: ${e.message}" }
-                    com.moneat.uptime.models.CheckResult(0, -1, 0, "Retry failed: ${e.message}")
-                } catch (e: SQLException) {
-                    logger.error(e) { "Retry $retry failed for monitor ${monitor.id}: ${e.message}" }
-                    com.moneat.uptime.models.CheckResult(0, -1, 0, "Retry failed: ${e.message}")
-                }
+            val retryResult = executeCheckWithTimeout(monitor, "Retry $retry failed", "Retry failed")
 
             lastResult = retryResult
 
@@ -287,10 +302,10 @@ class UptimeScheduler(
      * Notify about status changes.
      */
     private suspend fun notifyStatusChange(
-        monitor: com.moneat.uptime.models.UptimeMonitorData,
+        monitor: UptimeMonitorData,
         oldStatus: String,
         newStatus: String,
-        result: com.moneat.uptime.models.CheckResult
+        result: CheckResult
     ) {
         logger.info {
             "Uptime alert: Monitor '${monitor.name}' (${monitor.type}) changed from $oldStatus to $newStatus. " +
@@ -324,8 +339,8 @@ class UptimeScheduler(
     }
 
     private suspend fun publishStillDownWorkflow(
-        monitor: com.moneat.uptime.models.UptimeMonitorData,
-        result: com.moneat.uptime.models.CheckResult
+        monitor: UptimeMonitorData,
+        result: CheckResult
     ) {
         val config = io.ktor.server.config.ApplicationConfig("application.conf")
         val baseUrl = config.property("email.frontendUrl").getString()
@@ -333,8 +348,8 @@ class UptimeScheduler(
     }
 
     private fun uptimeDownEvent(
-        monitor: com.moneat.uptime.models.UptimeMonitorData,
-        result: com.moneat.uptime.models.CheckResult,
+        monitor: UptimeMonitorData,
+        result: CheckResult,
         baseUrl: String
     ): AlertLifecycleEvent {
         val severityOverride = monitor.incidentSeverity?.let { AlertSeverity.fromString(it) }
