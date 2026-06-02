@@ -569,6 +569,19 @@ class McpToolValidationTest {
                 ),
                 "variants must be an array",
             ),
+            case("create_workflow_name", CreateWorkflowTool(), obj(), "name is required"),
+            case("update_workflow_id", UpdateWorkflowTool(), obj(), "workflow_id is required"),
+            case("delete_workflow_id", DeleteWorkflowTool(), obj(), "workflow_id is required"),
+            case("publish_workflow_id", PublishWorkflowTool(), obj(), "workflow_id is required"),
+            case("run_workflow_id", RunWorkflowTool(), obj(), "workflow_id is required"),
+            case(
+                "cancel_workflow_run_id",
+                CancelWorkflowRunTool(),
+                obj("workflow_id" to 1),
+                "run_id is required",
+            ),
+            case("list_workflow_runs_id", ListWorkflowRunsTool(), obj(), "workflow_id is required"),
+            case("get_workflow_blueprint_key", GetWorkflowBlueprintTool(), obj(), "key is required"),
         )
     }
 

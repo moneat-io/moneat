@@ -98,6 +98,7 @@ const AUTH_TOKEN_SCOPES = [
   { group: 'Source Maps', scopes: ['sourcemaps:read', 'sourcemaps:write'] },
   { group: 'Events', scopes: ['event:read'] },
   { group: 'Organization', scopes: ['org:read'] },
+  { group: 'Workflows', scopes: ['workflow:read', 'workflow:write', 'workflow:run'] },
 ] as const
 
 const SCOPE_DESCRIPTIONS: Record<string, string> = {
@@ -109,6 +110,9 @@ const SCOPE_DESCRIPTIONS: Record<string, string> = {
   'sourcemaps:write': 'Upload source maps and symbol files for symbolication.',
   'event:read': 'Read error and transaction event data.',
   'org:read': 'View organization information.',
+  'workflow:read': 'List workflows, runs, audit events, catalog entries, and usage.',
+  'workflow:write': 'Create, update, publish, unpublish, and delete workflows.',
+  'workflow:run': 'Start and cancel workflow runs.',
 }
 
 const EXPIRATION_OPTIONS = [
