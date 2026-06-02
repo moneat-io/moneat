@@ -77,6 +77,7 @@ private val adminJson = Json { ignoreUnknownKeys = true }
 data class ReceivedPulse(
     val deploymentId: String,
     val receivedAt: String,
+    val version: String,
     val cpuCount: Int,
     val memTotalBytes: Long,
     val memUsedBytes: Long,
@@ -103,6 +104,7 @@ private suspend fun queryReceivedTelemetry(): ReceivedTelemetryStatus {
         SELECT
             deployment_id,
             toString(argMax(received_at, received_at)) AS last_seen,
+            argMax(version, received_at)          AS version,
             argMax(cpu_count, received_at)       AS cpu_count,
             argMax(mem_total_bytes, received_at) AS mem_total_bytes,
             argMax(mem_used_bytes, received_at)  AS mem_used_bytes,
@@ -138,6 +140,7 @@ private suspend fun queryReceivedTelemetry(): ReceivedTelemetryStatus {
                 ReceivedPulse(
                     deploymentId = obj["deployment_id"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null,
                     receivedAt = obj["last_seen"]?.jsonPrimitive?.contentOrNull ?: "",
+                    version = obj["version"]?.jsonPrimitive?.contentOrNull ?: "",
                     cpuCount = obj["cpu_count"]?.jsonPrimitive?.intOrNull ?: 0,
                     memTotalBytes = obj["mem_total_bytes"]?.jsonPrimitive?.longOrNull ?: 0,
                     memUsedBytes = obj["mem_used_bytes"]?.jsonPrimitive?.longOrNull ?: 0,

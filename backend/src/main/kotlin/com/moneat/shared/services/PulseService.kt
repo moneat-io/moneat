@@ -43,12 +43,10 @@ import kotlin.time.Duration.Companion.hours
 private val logger = KotlinLogging.logger {}
 
 /**
- * PulseService collects anonymous, aggregated telemetry from self-hosted Moneat
- * deployments. This helps us understand how Moneat is used in the wild so we can
- * prioritise features, resource requirements, and compatibility.
+ * PulseService sends the small self-hosted usage pulse described by PulsePayload.
+ * It reports version adoption and rough instance size.
  *
  * - Only active when SELF_HOSTED=true and TELEMETRY_ENABLED=true (the default).
- * - No personally-identifiable information is ever collected.
  * - Set TELEMETRY_ENABLED=false to disable.
  *
  * @see <a href="https://moneat.io/docs/self-hosting/telemetry">Telemetry docs</a>
@@ -102,6 +100,7 @@ class PulseService(
 
         return PulsePayload(
             deploymentId = getOrCreateDeploymentId(),
+            version = resolveVersion(),
             // System
             cpuCount = runtime.availableProcessors(),
             memTotalBytes = runtime.maxMemory(),
@@ -209,8 +208,20 @@ class PulseService(
         return backendUrl.startsWith("https://") || frontendUrl.startsWith("https://")
     }
 
+    private fun resolveVersion(): String {
+        return sequenceOf(
+            EnvConfig.get("MONEAT_VERSION"),
+            EnvConfig.get("RELEASE_VERSION"),
+            System.getProperty("app.version")
+        )
+            .mapNotNull { it?.trim() }
+            .firstOrNull { it.isNotBlank() }
+            ?: DEFAULT_VERSION
+    }
+
     companion object {
         private const val PULSE_INTERVAL_MS = 60_000L
+        private const val DEFAULT_VERSION = "dev"
 
         fun isEnabled(): Boolean {
             val selfHost = EnvConfig.SelfHost.enabled
@@ -252,6 +263,7 @@ class PulseService(
 @Serializable
 data class PulsePayload(
     val deploymentId: String,
+    val version: String = "",
     // System metrics
     val cpuCount: Int = 0,
     val memTotalBytes: Long = 0,

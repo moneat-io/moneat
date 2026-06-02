@@ -567,6 +567,7 @@ class SharedServicesTest {
     fun `PulsePayload serializes and deserializes correctly`() {
         val payload = PulsePayload(
             deploymentId = "test-id-123",
+            version = "v1.2.3",
             cpuCount = 4,
             memTotalBytes = 8_000_000_000,
             memUsedBytes = 4_000_000_000,
@@ -586,6 +587,7 @@ class SharedServicesTest {
         val decoded = json.decodeFromString(PulsePayload.serializer(), encoded)
 
         assertEquals(payload.deploymentId, decoded.deploymentId)
+        assertEquals(payload.version, decoded.version)
         assertEquals(payload.cpuCount, decoded.cpuCount)
         assertEquals(payload.memTotalBytes, decoded.memTotalBytes)
         assertEquals(payload.memUsedBytes, decoded.memUsedBytes)
@@ -599,6 +601,7 @@ class SharedServicesTest {
         val payload = PulsePayload(deploymentId = "minimal")
 
         assertEquals(0, payload.cpuCount)
+        assertEquals("", payload.version)
         assertEquals(0L, payload.memTotalBytes)
         assertEquals("", payload.osName)
         assertEquals(0L, payload.projectCount)

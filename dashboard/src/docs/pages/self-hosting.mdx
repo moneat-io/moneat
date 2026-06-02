@@ -73,4 +73,8 @@ Database migrations run automatically on backend startup.
 
 ## Telemetry
 
-Self-hosted deployments collect anonymous usage telemetry (aggregate event counts, deployment config). No personal data or event contents are collected. Opt out by setting `TELEMETRY_ENABLED=false` in your `.env`.
+Self-hosted deployments send a periodic telemetry pulse. These are the exact fields included:
+Moneat version, CPU count, memory usage, OS name and architecture, JVM version, aggregate
+project/user/event/issue counts, SSL enabled status, and a random deployment ID. No other fields
+are included in the telemetry payload. Turn it off by setting
+`TELEMETRY_ENABLED=false` in your `.env`.
