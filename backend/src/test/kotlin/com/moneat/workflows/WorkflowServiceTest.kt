@@ -1265,6 +1265,74 @@ class WorkflowServiceTest {
         }
 
     @Test
+    fun `incident workflows use alert episode identity`() =
+        runBlocking {
+            val createdWorkflow =
+                service.createWorkflow(
+                    orgId,
+                    CreateWorkflowRequest(
+                        name = "Incident created",
+                        triggerName = "incident.created",
+                        steps = emptyList()
+                    )
+                )
+            val resolvedWorkflow =
+                service.createWorkflow(
+                    orgId,
+                    CreateWorkflowRequest(
+                        name = "Incident resolved",
+                        triggerName = "incident.resolved",
+                        steps = emptyList()
+                    )
+                )
+            publish(createdWorkflow.id)
+            publish(resolvedWorkflow.id)
+
+            service.publishIncidentCreated(alertEvent())
+            service.publishIncidentCreated(alertEvent())
+
+            assertEquals(listOf("alert.episode_key=host-1#1"), runIdentities(createdWorkflow.id))
+            assertEquals(emptyList(), runIdentities(resolvedWorkflow.id))
+
+            service.publishAlertTriggered(alertEvent())
+            service.publishIncidentResolved(
+                organizationId = orgId,
+                source = AlertSource.HOST_ALERT,
+                deduplicationKey = "host-1",
+                title = "CPU restored",
+                severity = AlertSeverity.HIGH
+            )
+
+            assertEquals(
+                listOf("alert.episode_key=host-1#1|incident.status=resolved"),
+                runIdentities(resolvedWorkflow.id)
+            )
+        }
+
+    @Test
+    fun `publishAlertResolved ignores unknown alert source`() =
+        runBlocking {
+            val workflow =
+                service.createWorkflow(
+                    orgId,
+                    CreateWorkflowRequest(
+                        name = "Resolved alerts",
+                        triggerName = "alert.resolved",
+                        steps = emptyList()
+                    )
+                )
+            publish(workflow.id)
+
+            service.publishAlertResolved(
+                organizationId = orgId,
+                source = "UNKNOWN_SOURCE",
+                deduplicationKey = "host-1"
+            )
+
+            assertEquals(emptyList(), runIdentities(workflow.id))
+        }
+
+    @Test
     fun `non matching and disabled workflows do not create runs`() =
         runBlocking {
             val disabled =
