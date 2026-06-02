@@ -973,6 +973,9 @@ Resume a paused uptime monitor.
 
 ## Synthetics Tools
 
+Synthetic test payload fields use the existing API casing: `testType`, `intervalSeconds`, `timeoutSeconds`,
+and `alertOnFailure`. Keep IDs such as `synthetic_test_id` in snake_case.
+
 ### `list_synthetic_tests`
 List all synthetic browser and API tests. No parameters.
 
