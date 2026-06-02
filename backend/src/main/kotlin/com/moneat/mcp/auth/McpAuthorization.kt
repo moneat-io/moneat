@@ -29,6 +29,7 @@ import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Projects
 import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.statuspage.models.StatusPages
+import com.moneat.synthetics.routes.SyntheticTests
 import com.moneat.uptime.models.UptimeMonitors
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -36,6 +37,7 @@ import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.UUID
@@ -65,6 +67,7 @@ object McpAuthorization {
         args.stringValue("host_id")?.toIntOrNull()?.let { requireHostAccess(it, context) }
         args.longValue("dashboard_id")?.let { requireDashboardAccess(it, context) }
         args.uuidValue("monitor_id")?.let { requireUptimeMonitorAccess(it, context) }
+        args.uuidValue("synthetic_test_id")?.let { requireSyntheticTestAccess(it, context) }
         args.uuidValue("page_id")?.let { requireStatusPageAccess(it, context) }
         args.uuidValue("status_page_id")?.let { requireStatusPageAccess(it, context) }
         args.longValue("data_source_id")?.let { requireDataSourceAccess(it, context) }
@@ -136,6 +139,19 @@ object McpAuthorization {
                 .count() > 0
         }
         ensureAuthorized(hasAccess, "$AUTHORIZATION_ERROR: uptime monitor not found")
+    }
+
+    private fun requireSyntheticTestAccess(testId: UUID, context: McpContext) {
+        val hasAccess = transaction {
+            SyntheticTests
+                .select(SyntheticTests.id)
+                .where {
+                    (SyntheticTests.id eq testId) and
+                        (SyntheticTests.organizationId eq context.organizationId)
+                }
+                .count() > 0
+        }
+        ensureAuthorized(hasAccess, "$AUTHORIZATION_ERROR: synthetic test not found")
     }
 
     private fun requireStatusPageAccess(pageId: UUID, context: McpContext) {

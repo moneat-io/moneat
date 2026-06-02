@@ -33,6 +33,7 @@ import com.moneat.mcp.tools.CreateProjectTool
 import com.moneat.mcp.tools.CreateSilencePeriodTool
 import com.moneat.mcp.tools.CreateStatusPageIncidentTool
 import com.moneat.mcp.tools.CreateStatusPageTool
+import com.moneat.mcp.tools.CreateSyntheticTestTool
 import com.moneat.mcp.tools.CreateUptimeMonitorTool
 import com.moneat.mcp.tools.CancelWorkflowRunTool
 import com.moneat.mcp.tools.CreateWorkflowInstanceTool
@@ -46,6 +47,7 @@ import com.moneat.mcp.tools.DeleteFeatureFlagSegmentTool
 import com.moneat.mcp.tools.DeleteFeatureFlagTool
 import com.moneat.mcp.tools.DeleteHostTool
 import com.moneat.mcp.tools.DeleteSilencePeriodTool
+import com.moneat.mcp.tools.DeleteSyntheticTestTool
 import com.moneat.mcp.tools.DeleteUptimeMonitorTool
 import com.moneat.mcp.tools.DeleteWorkflowTool
 import com.moneat.mcp.tools.ExportVulnerabilitySbomTool
@@ -87,6 +89,8 @@ import com.moneat.mcp.tools.GetSecurityEventTool
 import com.moneat.mcp.tools.GetSecuritySignalTool
 import com.moneat.mcp.tools.GetSpanDetailsTool
 import com.moneat.mcp.tools.GetStatusPageTool
+import com.moneat.mcp.tools.GetSyntheticTestSummaryTool
+import com.moneat.mcp.tools.GetSyntheticTestTool
 import com.moneat.mcp.tools.GetTransactionStatsTool
 import com.moneat.mcp.tools.GetTraceTool
 import com.moneat.mcp.tools.GetVulnerabilitySummaryTool
@@ -122,6 +126,7 @@ import com.moneat.mcp.tools.ListSecurityEventsTool
 import com.moneat.mcp.tools.ListSecuritySignalsTool
 import com.moneat.mcp.tools.ListSilencePeriodsTool
 import com.moneat.mcp.tools.ListStatusPagesTool
+import com.moneat.mcp.tools.ListSyntheticTestsTool
 import com.moneat.mcp.tools.ListTransactionsTool
 import com.moneat.mcp.tools.ListUptimeMonitorsTool
 import com.moneat.mcp.tools.ListVulnerabilityFindingsTool
@@ -139,6 +144,7 @@ import com.moneat.mcp.tools.QueryLogsTool
 import com.moneat.mcp.tools.ReplaceDashboardWidgetsTool
 import com.moneat.mcp.tools.ResumeUptimeMonitorTool
 import com.moneat.mcp.tools.RevokeFeatureFlagSdkKeyTool
+import com.moneat.mcp.tools.RunSyntheticTestTool
 import com.moneat.mcp.tools.RunWorkflowTool
 import com.moneat.mcp.tools.TriageSecuritySignalTool
 import com.moneat.mcp.tools.UnpublishWorkflowTool
@@ -154,6 +160,7 @@ import com.moneat.mcp.tools.UpdateIssueStatusTool
 import com.moneat.mcp.tools.UpdateNotificationPreferencesTool
 import com.moneat.mcp.tools.UpdateStatusPageIncidentTool
 import com.moneat.mcp.tools.UpdateStatusPageTool
+import com.moneat.mcp.tools.UpdateSyntheticTestTool
 import com.moneat.mcp.tools.UpsertFeatureFlagSegmentTool
 import com.moneat.mcp.tools.UpdateUptimeMonitorTool
 import com.moneat.mcp.tools.UpdateWorkflowTool
@@ -236,6 +243,15 @@ object McpToolRegistrar {
         toolRegistry.register(DeleteUptimeMonitorTool())
         toolRegistry.register(PauseUptimeMonitorTool())
         toolRegistry.register(ResumeUptimeMonitorTool())
+
+        // Synthetics tools
+        toolRegistry.register(ListSyntheticTestsTool())
+        toolRegistry.register(GetSyntheticTestTool())
+        toolRegistry.register(CreateSyntheticTestTool())
+        toolRegistry.register(UpdateSyntheticTestTool())
+        toolRegistry.register(DeleteSyntheticTestTool())
+        toolRegistry.register(RunSyntheticTestTool())
+        toolRegistry.register(GetSyntheticTestSummaryTool())
 
         // Profile tools
         toolRegistry.register(ListProfilesTool())

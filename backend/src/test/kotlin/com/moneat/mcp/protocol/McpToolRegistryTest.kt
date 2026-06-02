@@ -39,7 +39,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-private const val EXPECTED_CORE_MCP_TOOL_COUNT = 140
+private const val EXPECTED_CORE_MCP_TOOL_COUNT = 147
 
 class McpToolRegistryTest {
 
@@ -397,6 +397,10 @@ class McpToolRegistryTest {
             "create_status_page_incident",
             "update_status_page_incident",
             "post_incident_update",
+            "create_synthetic_test",
+            "update_synthetic_test",
+            "delete_synthetic_test",
+            "run_synthetic_test",
             "update_notification_preferences",
             "create_datasource",
             "execute_datasource_query",

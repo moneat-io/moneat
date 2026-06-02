@@ -971,6 +971,74 @@ Resume a paused uptime monitor.
 |-----------|------|----------|-------------|
 | `monitor_id` | string | Yes | Monitor UUID |
 
+## Synthetics Tools
+
+Synthetic test payload fields use the existing API casing: `testType`, `intervalSeconds`, `timeoutSeconds`,
+and `alertOnFailure`. Keep IDs such as `synthetic_test_id` in snake_case.
+
+### `list_synthetic_tests`
+List all synthetic browser and API tests. No parameters.
+
+### `get_synthetic_test`
+Get a synthetic test.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `synthetic_test_id` | string | Yes | Synthetic test UUID |
+
+### `get_synthetic_test_summary`
+Get 30-day uptime and latency summary for a synthetic test.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `synthetic_test_id` | string | Yes | Synthetic test UUID |
+
+### ✏️ `create_synthetic_test`
+Create a synthetic browser or API test.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | string | Yes | Test name |
+| `testType` | string | No | `api`, `browser`, or protocol-specific type |
+| `url` | string | No | Target URL |
+| `method` | string | No | HTTP method |
+| `intervalSeconds` | number | No | Run interval in seconds |
+| `timeoutSeconds` | number | No | Timeout in seconds |
+| `assertions` | array | No | Synthetic assertion objects |
+| `steps` | array | No | Browser or multistep API step objects |
+| `tags` | array | No | Tags |
+| `alertOnFailure` | boolean | No | Alert when the test transitions to failed |
+
+### ✏️ `update_synthetic_test`
+Update a synthetic browser or API test.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `synthetic_test_id` | string | Yes | Synthetic test UUID |
+| `name` | string | No | Test name |
+| `active` | boolean | No | Enable or disable the test |
+| `url` | string | No | Target URL |
+| `method` | string | No | HTTP method |
+| `intervalSeconds` | number | No | Run interval in seconds |
+| `timeoutSeconds` | number | No | Timeout in seconds |
+| `assertions` | array | No | Synthetic assertion objects |
+| `steps` | array | No | Browser or multistep API step objects |
+| `tags` | array | No | Tags |
+
+### ✏️ `delete_synthetic_test`
+Delete a synthetic test.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `synthetic_test_id` | string | Yes | Synthetic test UUID |
+
+### ✏️ `run_synthetic_test`
+Run a synthetic test immediately.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `synthetic_test_id` | string | Yes | Synthetic test UUID |
+
 ## Status Page Tools
 
 ### `list_status_pages`

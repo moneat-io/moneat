@@ -38,6 +38,7 @@ private val SECTION_ORDER = listOf(
     ToolSection("alerts", "Alerts", "List, create, update, and silence alerts."),
     ToolSection("workflows", "Workflows", "List, author, publish, run, and audit workflows."),
     ToolSection("uptime", "Uptime", "Manage uptime monitors and heartbeats."),
+    ToolSection("synthetics", "Synthetics", "Manage synthetic browser and API tests."),
     ToolSection("dashboards", "Dashboards", "List, query, create, and update dashboards."),
     ToolSection("status-pages", "Status pages", "Manage status pages, monitors, and public incidents."),
     ToolSection("projects", "Projects", "List, create, and inspect projects."),
@@ -116,6 +117,7 @@ object McpToolCatalogService {
                 name.contains("dbm") ||
                 name.contains("agent") -> "infrastructure"
             name.contains("alert") || name.contains("silence") || name.contains("notification") -> "alerts"
+            name.contains("synthetic") -> "synthetics"
             name.contains("uptime") || name.contains("heartbeat") || name.contains("monitor") -> "uptime"
             name.contains("project") -> "projects"
             name.contains("feature_flag") -> "feature-flags"
