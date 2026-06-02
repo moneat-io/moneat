@@ -72,6 +72,7 @@ import {
 import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,} from '@/components/ui/dialog'
 import {Logo} from '@/components/Logo'
 import {isSidebarItemVisible} from '@/lib/sidebar-config'
+import {APP_OVERVIEW_HREF, APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
 import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
 import {useCommandPalette} from '@/hooks/useCommandPalette'
 import {
@@ -230,7 +231,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
 
   const baseNavItems: NavItem[] = [
     // Core Observability
-    { key: 'overview', icon: Home, label: 'Overview', href: '/', requiresProject: false, group: 'core' },
+    { key: 'overview', icon: Home, label: 'Overview', href: APP_OVERVIEW_HREF, requiresProject: false, group: 'core' },
     { key: 'issues', icon: AlertCircle, label: 'Issues', href: '/issues', requiresProject: false, group: 'core' },
     { key: 'performance', icon: Timer, label: 'Traces', href: '/performance/traces', requiresProject: false, group: 'core' },
     { key: 'logs', icon: ScrollText, label: 'Logs', href: '/logs', requiresProject: false, group: 'core' },
@@ -313,7 +314,11 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
     <>
       {/* Logo at top */}
       <div className={cn('shrink-0 border-b flex items-center justify-center py-2', isExpanded ? 'px-2.5' : 'px-1.5')}>
-        <Link to="/" className="flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-ring rounded">
+        <Link
+          to="/"
+          search={APP_OVERVIEW_SEARCH}
+          className="flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-ring rounded"
+        >
           {isExpanded ? <Logo className="h-6" /> : <Logo markOnly className="h-6 w-8" />}
         </Link>
       </div>
@@ -513,7 +518,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
               )}
               <div className={cn('space-y-1')}>
                 {group.items.map((item) => {
-                  const isActive = item.href === '/'
+                  const isActive = item.href === APP_OVERVIEW_HREF
                     ? currentPath === '/'
                     : currentPath === item.href ||
                       (currentPath.startsWith(item.href + '/') &&
@@ -598,7 +603,16 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" side="right" className="w-48">
-                <DropdownMenuItem onClick={() => navigate({ to: activeProjectId ? `/projects/${activeProjectId}` : '/' })}>
+                <DropdownMenuItem
+                  onClick={() => {
+                    if (activeProjectId) {
+                      navigate({to: `/projects/${activeProjectId}`})
+                      return
+                    }
+
+                    navigate({to: '/', search: APP_OVERVIEW_SEARCH})
+                  }}
+                >
                   <Rocket className="h-4 w-4 mr-2" />
                   Source setup
                 </DropdownMenuItem>
@@ -676,7 +690,16 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" side="right" className="w-48">
-                <DropdownMenuItem onClick={() => navigate({ to: activeProjectId ? `/projects/${activeProjectId}` : '/' })}>
+                <DropdownMenuItem
+                  onClick={() => {
+                    if (activeProjectId) {
+                      navigate({to: `/projects/${activeProjectId}`})
+                      return
+                    }
+
+                    navigate({to: '/', search: APP_OVERVIEW_SEARCH})
+                  }}
+                >
                   <Rocket className="h-4 w-4 mr-2" />
                   Source setup
                 </DropdownMenuItem>

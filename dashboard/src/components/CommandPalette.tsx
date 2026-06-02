@@ -63,6 +63,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
+import {APP_OVERVIEW_HREF} from '@/lib/overview-route'
 
 const PAGE_ITEMS: Array<{
   label: string
@@ -71,7 +72,13 @@ const PAGE_ITEMS: Array<{
   icon: React.ComponentType<{className?: string}>
   keywords?: string[]
 }> = [
-  {label: 'Overview', description: 'Project metrics and key stats', href: '/', icon: Home, keywords: ['home']},
+  {
+    label: 'Overview',
+    description: 'Project metrics and key stats',
+    href: APP_OVERVIEW_HREF,
+    icon: Home,
+    keywords: ['home'],
+  },
   {label: 'Issues', description: 'Errors and exceptions', href: '/issues', icon: AlertCircle, keywords: ['errors', 'bugs']},
   {label: 'Traces', description: 'Distributed traces and service latency', href: '/performance/traces', icon: Timer, keywords: ['performance', 'traces', 'services', 'latency']},
   {label: 'APM Traces', description: 'Application performance traces and spans', href: '/apm-traces', icon: Cpu, keywords: ['apm', 'traces', 'spans', 'distributed tracing']},

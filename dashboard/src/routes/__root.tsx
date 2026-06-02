@@ -22,7 +22,8 @@ import {CommandPalette} from '../components/CommandPalette'
 import {CommandPaletteProvider} from '../contexts/CommandPaletteProvider'
 import {Toaster} from '../components/ui/toaster'
 import {api} from '../lib/api'
-import {setDemoEpoch} from '../lib/demo'
+import {isDemo, setDemoEpoch} from '../lib/demo'
+import {APP_OVERVIEW_SEARCH, isAppOverviewSearch} from '../lib/overview-route'
 import {DemoBanner} from '../components/demo/DemoBanner'
 import {AiFloatingPanel} from '../components/AiFloatingPanel'
 import {AiSplitPanel} from '../components/AiSplitPanel'
@@ -151,10 +152,10 @@ function formatEntityId(rawValue: string): string {
   return decoded
 }
 
-function getDocumentTitle(pathname: string, isAuthenticated: boolean): string {
+function getDocumentTitle(pathname: string, isPublicLandingPage: boolean): string {
   const normalizedPath = normalizePath(pathname)
 
-  if (!isAuthenticated && normalizedPath === '/') {
+  if (isPublicLandingPage && normalizedPath === '/') {
     return 'Moneat | Error, Performance, and Replay Monitoring'
   }
 
@@ -225,6 +226,7 @@ function NotFoundPage() {
       <div className="flex items-center gap-4">
         <Link
           to="/"
+          search={APP_OVERVIEW_SEARCH}
           className="px-5 py-2.5 text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 rounded-lg transition-colors"
         >
           Go to overview
@@ -267,6 +269,9 @@ function RootComponent() {
     queryFn: () => api.getCurrentUser(),
     enabled: isAuthenticated,
   })
+  const isOverviewView = isAppOverviewSearch(router.location.search)
+  const isDemoSession = isAuthenticated && isDemo()
+  const isLandingPage = currentPath === '/' && (!isAuthenticated || (isDemoSession && !isOverviewView))
 
   // Initialize demo mode when user data is loaded
   useEffect(() => {
@@ -276,8 +281,8 @@ function RootComponent() {
   }, [user?.demoEpochMs])
 
   useEffect(() => {
-    document.title = getDocumentTitle(currentPath, isAuthenticated)
-  }, [currentPath, isAuthenticated])
+    document.title = getDocumentTitle(currentPath, isLandingPage)
+  }, [currentPath, isLandingPage])
 
   // Centralized authentication and user status check
   useEffect(() => {
@@ -337,7 +342,6 @@ function RootComponent() {
   
   // Don't show sidebar on auth pages, landing page (when logged out), or public status pages
   const isAuthPage = ['/login', '/signup', '/verify-email', '/verify-email-required', '/forgot-password', '/reset-password', '/onboarding'].includes(currentPath)
-  const isLandingPage = currentPath === '/' && !isAuthenticated
   const isPublicStatusPage = currentPath.startsWith('/s/')
   const isFeaturePage = (FEATURE_ROUTES as readonly string[]).includes(currentPath)
   const showSidebar = isAuthenticated && !isAuthPage && !isLandingPage && !isPublicStatusPage && !isFeaturePage

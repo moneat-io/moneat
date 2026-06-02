@@ -20,6 +20,7 @@ import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/compo
 import {Button} from '@/components/ui/button'
 import {Logo} from '@/components/Logo'
 import {api} from '@/lib/api'
+import {APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
 import {Helmet} from 'react-helmet-async'
 
 export const Route = createFileRoute('/verify-email-required')({
@@ -42,7 +43,7 @@ function VerifyEmailRequired() {
         
         // If they're verified, redirect to home
         if (user.emailVerified) {
-          navigate({ to: '/' })
+          navigate({ to: '/', search: APP_OVERVIEW_SEARCH })
         }
       } catch (error) {
         console.error('Failed to load user:', error)
@@ -75,7 +76,7 @@ function VerifyEmailRequired() {
     try {
       const user = await api.getCurrentUser()
       if (user.emailVerified) {
-        navigate({ to: '/' })
+        navigate({ to: '/', search: APP_OVERVIEW_SEARCH })
       } else {
         setResendMessage('Email not verified yet. Please check your inbox and click the verification link.')
       }

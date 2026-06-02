@@ -22,6 +22,7 @@ import {api, type StatusPageDetail, type UptimeHeartbeat} from '@/lib/api'
 import {useProject} from '@/contexts/ProjectContext'
 import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
 import {formatRelativeTime} from '@/lib/utils'
+import {APP_OVERVIEW_VIEW, normalizeAppOverviewSearch} from '@/lib/overview-route'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
@@ -51,7 +52,7 @@ import {
 } from 'lucide-react'
 import {StatsCard, StatsCardSkeleton} from '@/components/charts/StatsCard'
 import {EventsChart, EventsChartSkeleton} from '@/components/charts/EventsChart'
-import {getNow} from '@/lib/demo'
+import {getNow, isDemo} from '@/lib/demo'
 
 // ─── Subtle badge colors ─────────────────────────────────────────────
 function getLevelBadge(level: string): string {
@@ -203,10 +204,12 @@ function isRecentHeartbeat(
 }
 
 export const Route = createFileRoute('/')({
+  validateSearch: normalizeAppOverviewSearch,
   component: IndexPage,
 })
 
 function IndexPage() {
+  const {view} = Route.useSearch()
   const [isAuthenticated, setIsAuthenticated] = useState(api.isAuthenticated())
   const [isChecking, setIsChecking] = useState(true)
   const { data: features, isLoading: featuresLoading } = useEnterpriseFeatures()
@@ -228,7 +231,8 @@ function IndexPage() {
     return null
   }
 
-  if (!isAuthenticated) {
+  const showPublicLandingPage = !isAuthenticated || (isDemo() && view !== APP_OVERVIEW_VIEW)
+  if (showPublicLandingPage) {
     if (features?.selfHost) {
       return <Navigate to="/login" />
     }

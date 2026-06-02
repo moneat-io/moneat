@@ -35,6 +35,7 @@ import {
   serializeTelemetrySourceIds,
   storeTelemetrySourceIdsForProject,
 } from '@/lib/telemetry-sources'
+import {APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
 
 export const Route = createFileRoute('/onboarding')({
   beforeLoad: ({ location }) => {
@@ -261,7 +262,7 @@ function OnboardingPage() {
               submittingLabel="Creating..."
               submitLabel="Create Project"
               cancelLabel="Skip for now"
-              onCancel={() => navigate({ to: '/' })}
+              onCancel={() => navigate({ to: '/', search: APP_OVERVIEW_SEARCH })}
               onSubmit={(submission) => {
                 setProjectError('')
                 createProjectMutation.mutate(submission)
