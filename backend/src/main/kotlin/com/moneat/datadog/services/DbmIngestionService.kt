@@ -195,54 +195,94 @@ object DbmIngestionService {
     }
 
     fun enqueueQueries(organizationId: Int, payload: DdDbmQueryPayload, queueKey: String = DBM_QUEUE_KEY): Int {
-        val batch = mapQueries(organizationId, payload)
-        if (batch.queries.isEmpty()) return 0
-        RedisConfig.sync().lpush(queueKey, json.encodeToString(batch))
-        return batch.queries.size
+        return enqueueQueryPayloads(organizationId, listOf(payload), queueKey)
+    }
+
+    fun enqueueQueryPayloads(
+        organizationId: Int,
+        payloads: List<DdDbmQueryPayload>,
+        queueKey: String = DBM_QUEUE_KEY,
+    ): Int {
+        val queries = payloads.flatMap { mapQueries(organizationId, it).queries }
+        return enqueueBatch(QueuedDbmBatch(organizationId, "queries", queries = queries), queries.size, queueKey)
     }
 
     fun enqueueMetrics(organizationId: Int, payload: DdDbmMetricsPayload, queueKey: String = DBM_QUEUE_KEY): Int {
-        val batch = mapMetrics(organizationId, payload)
-        if (batch.metrics.isEmpty()) return 0
-        RedisConfig.sync().lpush(queueKey, json.encodeToString(batch))
-        return batch.metrics.size
+        return enqueueMetricPayloads(organizationId, listOf(payload), queueKey)
+    }
+
+    fun enqueueMetricPayloads(
+        organizationId: Int,
+        payloads: List<DdDbmMetricsPayload>,
+        queueKey: String = DBM_QUEUE_KEY,
+    ): Int {
+        val metrics = payloads.flatMap { mapMetrics(organizationId, it).metrics }
+        return enqueueBatch(QueuedDbmBatch(organizationId, "metrics", metrics = metrics), metrics.size, queueKey)
     }
 
     fun enqueueActivity(organizationId: Int, payload: DdDbmActivityPayload, queueKey: String = DBM_QUEUE_KEY): Int {
-        val batch = mapActivity(organizationId, payload)
-        if (batch.activity.isEmpty()) return 0
-        RedisConfig.sync().lpush(queueKey, json.encodeToString(batch))
-        return batch.activity.size
+        return enqueueActivityPayloads(organizationId, listOf(payload), queueKey)
+    }
+
+    fun enqueueActivityPayloads(
+        organizationId: Int,
+        payloads: List<DdDbmActivityPayload>,
+        queueKey: String = DBM_QUEUE_KEY,
+    ): Int {
+        val activity = payloads.flatMap { mapActivity(organizationId, it).activity }
+        return enqueueBatch(QueuedDbmBatch(organizationId, "activity", activity = activity), activity.size, queueKey)
     }
 
     fun enqueueMetadata(organizationId: Int, payload: DdDbmMetadataPayload, queueKey: String = DBM_QUEUE_KEY): Int {
-        val entry = QueuedDbmMetadataEntry(
-            host = payload.host,
-            dbSystem = payload.dbSystem,
-            schemaJson = payload.schemaJson,
-            explainPlanHash = payload.explainPlanHash,
-            explainPlan = payload.explainPlan,
-            timestampMs = System.currentTimeMillis(),
-        )
-        val batch = QueuedDbmBatch(organizationId, "metadata", metadata = listOf(entry))
-        RedisConfig.sync().lpush(queueKey, json.encodeToString(batch))
-        return 1
+        return enqueueMetadataPayloads(organizationId, listOf(payload), queueKey)
+    }
+
+    fun enqueueMetadataPayloads(
+        organizationId: Int,
+        payloads: List<DdDbmMetadataPayload>,
+        queueKey: String = DBM_QUEUE_KEY,
+    ): Int {
+        val metadata = payloads.map { payload ->
+            QueuedDbmMetadataEntry(
+                host = payload.host,
+                dbSystem = payload.dbSystem,
+                schemaJson = payload.schemaJson,
+                explainPlanHash = payload.explainPlanHash,
+                explainPlan = payload.explainPlan,
+                timestampMs = System.currentTimeMillis(),
+            )
+        }
+        return enqueueBatch(QueuedDbmBatch(organizationId, "metadata", metadata = metadata), metadata.size, queueKey)
     }
 
     fun enqueueHealth(organizationId: Int, payload: DdDbmHealthPayload, queueKey: String = DBM_QUEUE_KEY): Int {
-        val entry = QueuedDbmHealthEntry(
-            host = payload.host,
-            dbSystem = payload.dbSystem,
-            agentVersion = payload.agentVersion,
-            status = payload.status,
-            checksRun = payload.checksRun,
-            checksFailed = payload.checksFailed,
-            hostName = payload.hostName,
-            timestampMs = System.currentTimeMillis(),
-        )
-        val batch = QueuedDbmBatch(organizationId, "health", health = listOf(entry))
+        return enqueueHealthPayloads(organizationId, listOf(payload), queueKey)
+    }
+
+    fun enqueueHealthPayloads(
+        organizationId: Int,
+        payloads: List<DdDbmHealthPayload>,
+        queueKey: String = DBM_QUEUE_KEY,
+    ): Int {
+        val health = payloads.map { payload ->
+            QueuedDbmHealthEntry(
+                host = payload.host,
+                dbSystem = payload.dbSystem,
+                agentVersion = payload.agentVersion,
+                status = payload.status,
+                checksRun = payload.checksRun,
+                checksFailed = payload.checksFailed,
+                hostName = payload.hostName,
+                timestampMs = System.currentTimeMillis(),
+            )
+        }
+        return enqueueBatch(QueuedDbmBatch(organizationId, "health", health = health), health.size, queueKey)
+    }
+
+    private fun enqueueBatch(batch: QueuedDbmBatch, entryCount: Int, queueKey: String): Int {
+        if (entryCount == 0) return 0
         RedisConfig.sync().lpush(queueKey, json.encodeToString(batch))
-        return 1
+        return entryCount
     }
 
     suspend fun insertBatch(batch: QueuedDbmBatch) {

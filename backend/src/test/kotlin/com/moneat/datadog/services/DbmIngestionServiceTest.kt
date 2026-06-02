@@ -16,12 +16,20 @@
 
 package com.moneat.datadog.services
 
+import com.moneat.config.RedisConfig
 import com.moneat.datadog.models.DdDbmActivityPayload
 import com.moneat.datadog.models.DdDbmActivityRow
 import com.moneat.datadog.models.DdDbmMetricRow
 import com.moneat.datadog.models.DdDbmMetricsPayload
 import com.moneat.datadog.models.DdDbmQueryPayload
 import com.moneat.datadog.models.DdDbmQueryRow
+import io.lettuce.core.api.sync.RedisCommands
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.slot
+import io.mockk.unmockkObject
+import io.mockk.verify
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -264,6 +272,42 @@ class DbmIngestionServiceTest {
         assertEquals("activity", decoded.batchType)
         assertEquals(1, decoded.activity.size)
         assertEquals(listOf(1L, 2L), decoded.activity[0].blockingPids)
+    }
+
+    @Test
+    fun `enqueueQueryPayloads writes one combined Redis batch`() {
+        val redis = mockk<RedisCommands<String, String>>()
+        val queuedPayload = slot<String>()
+
+        mockkObject(RedisConfig)
+        try {
+            every { RedisConfig.sync() } returns redis
+            every { redis.lpush("test:dd:dbm:queue", capture(queuedPayload)) } returns 1L
+
+            val count = DbmIngestionService.enqueueQueryPayloads(
+                organizationId = 42,
+                payloads = listOf(
+                    DdDbmQueryPayload(
+                        dbHost = "pg-a",
+                        rows = listOf(DdDbmQueryRow(querySignature = "sig-a", statement = "SELECT 1")),
+                    ),
+                    DdDbmQueryPayload(
+                        dbHost = "pg-b",
+                        rows = listOf(DdDbmQueryRow(querySignature = "sig-b", statement = "SELECT 2")),
+                    ),
+                ),
+                queueKey = "test:dd:dbm:queue",
+            )
+
+            val batch = DbmIngestionService.decodeBatch(queuedPayload.captured)
+            assertEquals(2, count)
+            assertEquals(42, batch.organizationId)
+            assertEquals("queries", batch.batchType)
+            assertEquals(listOf("sig-a", "sig-b"), batch.queries.map { it.querySignature })
+            verify(exactly = 1) { redis.lpush("test:dd:dbm:queue", any<String>()) }
+        } finally {
+            unmockkObject(RedisConfig)
+        }
     }
 
     // ──── TAG PARSING TESTS ────

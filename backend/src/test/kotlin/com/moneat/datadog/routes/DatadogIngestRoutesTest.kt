@@ -130,10 +130,15 @@ class DatadogIngestRoutesTest {
         every { MiscIngestionService.enqueueContainerImage(any(), any()) } returns Unit
         every { MiscIngestionService.enqueueSbom(any(), any()) } returns 0
         every { DbmIngestionService.enqueueQueries(any(), any()) } returns 0
+        every { DbmIngestionService.enqueueQueryPayloads(any(), any()) } returns 0
         every { DbmIngestionService.enqueueMetrics(any(), any()) } returns 0
+        every { DbmIngestionService.enqueueMetricPayloads(any(), any()) } returns 0
         every { DbmIngestionService.enqueueActivity(any(), any()) } returns 0
+        every { DbmIngestionService.enqueueActivityPayloads(any(), any()) } returns 0
         every { DbmIngestionService.enqueueMetadata(any(), any()) } returns 0
+        every { DbmIngestionService.enqueueMetadataPayloads(any(), any()) } returns 0
         every { DbmIngestionService.enqueueHealth(any(), any()) } returns 0
+        every { DbmIngestionService.enqueueHealthPayloads(any(), any()) } returns 0
         every { DebuggerIngestionService.enqueueDebuggerLogs(any(), any()) } returns 0
         every { DebuggerIngestionService.enqueueDiagnostics(any(), any()) } returns 0
         every { OrchestratorIngestionService.enqueueResources(any(), any()) } returns 0
@@ -845,9 +850,9 @@ class DatadogIngestRoutesTest {
         }
         assertEquals(HttpStatusCode.Accepted, response.status)
         verify {
-            DbmIngestionService.enqueueQueries(
+            DbmIngestionService.enqueueQueryPayloads(
                 ORG_ID,
-                match { it.dbHost == "pg-primary" && it.rows.single().querySignature == "sig-1" },
+                match { it.single().dbHost == "pg-primary" && it.single().rows.single().querySignature == "sig-1" },
             )
         }
     }
@@ -862,7 +867,7 @@ class DatadogIngestRoutesTest {
             setBody("[{}]")
         }
         assertEquals(HttpStatusCode.Accepted, response.status)
-        verify(exactly = 0) { DbmIngestionService.enqueueQueries(any(), any()) }
+        verify { DbmIngestionService.enqueueQueryPayloads(ORG_ID, match { it.isEmpty() }) }
     }
 
     @Test
@@ -938,9 +943,12 @@ class DatadogIngestRoutesTest {
         }
         assertEquals(HttpStatusCode.Accepted, response.status)
         verify {
-            DbmIngestionService.enqueueActivity(
+            DbmIngestionService.enqueueActivityPayloads(
                 ORG_ID,
-                match { it.dbHost == "pg-primary" && it.activity.single().querySignature == "sig-activity" },
+                match {
+                    it.single().dbHost == "pg-primary" &&
+                        it.single().activity.single().querySignature == "sig-activity"
+                },
             )
         }
     }

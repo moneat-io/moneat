@@ -466,6 +466,7 @@ class ProfileIngestionServiceTest {
             assertTrue(queries.any { it.contains("now() - INTERVAL") })
             val sparkQuery = queries.single { it.contains("GROUP BY service, ts") }
             assertTrue(sparkQuery.contains("toUnixTimestamp(toStartOfInterval"))
+            assertTrue(sparkQuery.contains("* 1000"))
             assertTrue(!sparkQuery.contains("toUnixTimestamp64Milli("))
         } finally {
             unmockkObject(ClickHouseClient)
@@ -504,6 +505,7 @@ class ProfileIngestionServiceTest {
             assertTrue(sql.contains("profile_type = 'cpu'"))
             assertTrue(sql.contains("host = 'host-a'"))
             assertTrue(sql.contains("toUnixTimestamp(toStartOfInterval"))
+            assertTrue(sql.contains("* 1000"))
             assertTrue(!sql.contains("toUnixTimestamp64Milli("))
         } finally {
             unmockkObject(ClickHouseClient)

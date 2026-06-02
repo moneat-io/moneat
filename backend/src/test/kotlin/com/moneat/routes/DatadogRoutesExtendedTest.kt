@@ -213,10 +213,15 @@ class DatadogRoutesExtendedTest {
         every { MiscIngestionService.enqueueContainerImage(any(), any()) } just Runs
         every { MiscIngestionService.enqueueSbom(any(), any()) } returns 1
         every { DbmIngestionService.enqueueQueries(any(), any()) } returns 1
+        every { DbmIngestionService.enqueueQueryPayloads(any(), any()) } returns 1
         every { DbmIngestionService.enqueueMetrics(any(), any()) } returns 1
+        every { DbmIngestionService.enqueueMetricPayloads(any(), any()) } returns 1
         every { DbmIngestionService.enqueueActivity(any(), any()) } returns 1
+        every { DbmIngestionService.enqueueActivityPayloads(any(), any()) } returns 1
         every { DbmIngestionService.enqueueMetadata(any(), any()) } returns 1
+        every { DbmIngestionService.enqueueMetadataPayloads(any(), any()) } returns 1
         every { DbmIngestionService.enqueueHealth(any(), any()) } returns 1
+        every { DbmIngestionService.enqueueHealthPayloads(any(), any()) } returns 1
         every { OrchestratorIngestionService.enqueueResources(any(), any()) } returns 1
         every { OrchestratorIngestionService.enqueueManifests(any(), any()) } returns 1
         every { DebuggerIngestionService.enqueueDebuggerLogs(any(), any()) } returns 1

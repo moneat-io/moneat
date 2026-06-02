@@ -87,7 +87,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmQueries(
 
         val payloads = decodeDbmPayloads<DdDbmQueryPayload>(body)
         if (!reserveDbmQuota(quotaService, organizationId, payloads.sumOf { it.rows.size }, bytes)) return
-        val count = payloads.sumOf { DbmIngestionService.enqueueQueries(organizationId, it) }
+        val count = DbmIngestionService.enqueueQueryPayloads(organizationId, payloads)
 
         logger.debug { "Enqueued $count DBM queries for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
@@ -108,7 +108,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmMetrics(
 
         val payloads = decodeDbmPayloads<DdDbmMetricsPayload>(body)
         if (!reserveDbmQuota(quotaService, organizationId, payloads.sumOf { it.rows.size }, bytes)) return
-        val count = payloads.sumOf { DbmIngestionService.enqueueMetrics(organizationId, it) }
+        val count = DbmIngestionService.enqueueMetricPayloads(organizationId, payloads)
 
         logger.debug { "Enqueued $count DBM metrics for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
@@ -129,7 +129,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmActivity(
 
         val payloads = decodeDbmPayloads<DdDbmActivityPayload>(body)
         if (!reserveDbmQuota(quotaService, organizationId, payloads.sumOf { it.activity.size }, bytes)) return
-        val count = payloads.sumOf { DbmIngestionService.enqueueActivity(organizationId, it) }
+        val count = DbmIngestionService.enqueueActivityPayloads(organizationId, payloads)
 
         logger.debug { "Enqueued $count DBM activity for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
@@ -150,7 +150,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmMetadata(
 
         val payloads = decodeDbmPayloads<DdDbmMetadataPayload>(body)
         if (!reserveDbmQuota(quotaService, organizationId, payloads.size, bytes)) return
-        val count = payloads.sumOf { DbmIngestionService.enqueueMetadata(organizationId, it) }
+        val count = DbmIngestionService.enqueueMetadataPayloads(organizationId, payloads)
 
         logger.debug { "Enqueued $count DBM metadata for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
@@ -171,7 +171,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmHealth(
 
         val payloads = decodeDbmPayloads<DdDbmHealthPayload>(body)
         if (!reserveDbmQuota(quotaService, organizationId, payloads.size, bytes)) return
-        val count = payloads.sumOf { DbmIngestionService.enqueueHealth(organizationId, it) }
+        val count = DbmIngestionService.enqueueHealthPayloads(organizationId, payloads)
 
         logger.debug { "Enqueued $count DBM health for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
