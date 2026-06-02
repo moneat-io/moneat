@@ -34,6 +34,9 @@ import com.moneat.mcp.tools.CreateSilencePeriodTool
 import com.moneat.mcp.tools.CreateStatusPageIncidentTool
 import com.moneat.mcp.tools.CreateStatusPageTool
 import com.moneat.mcp.tools.CreateUptimeMonitorTool
+import com.moneat.mcp.tools.CancelWorkflowRunTool
+import com.moneat.mcp.tools.CreateWorkflowInstanceTool
+import com.moneat.mcp.tools.CreateWorkflowTool
 import com.moneat.mcp.tools.DeleteAlertTool
 import com.moneat.mcp.tools.DeleteDashboardAlertTool
 import com.moneat.mcp.tools.DeleteDashboardTool
@@ -44,6 +47,7 @@ import com.moneat.mcp.tools.DeleteFeatureFlagTool
 import com.moneat.mcp.tools.DeleteHostTool
 import com.moneat.mcp.tools.DeleteSilencePeriodTool
 import com.moneat.mcp.tools.DeleteUptimeMonitorTool
+import com.moneat.mcp.tools.DeleteWorkflowTool
 import com.moneat.mcp.tools.ExportVulnerabilitySbomTool
 import com.moneat.mcp.tools.GetAlertConfigTool
 import com.moneat.mcp.tools.ExecuteDataSourceQueryTool
@@ -87,6 +91,11 @@ import com.moneat.mcp.tools.GetTransactionStatsTool
 import com.moneat.mcp.tools.GetTraceTool
 import com.moneat.mcp.tools.GetVulnerabilitySummaryTool
 import com.moneat.mcp.tools.GetWeeklyReportTool
+import com.moneat.mcp.tools.GetWorkflowBlueprintTool
+import com.moneat.mcp.tools.GetWorkflowCatalogTool
+import com.moneat.mcp.tools.GetWorkflowRunTool
+import com.moneat.mcp.tools.GetWorkflowTool
+import com.moneat.mcp.tools.GetWorkflowWebhookSigningTool
 import com.moneat.mcp.tools.GlobalSearchTool
 import com.moneat.mcp.tools.ImportDashboardTool
 import com.moneat.mcp.tools.InstallDetectionTemplateTool
@@ -117,15 +126,22 @@ import com.moneat.mcp.tools.ListTransactionsTool
 import com.moneat.mcp.tools.ListUptimeMonitorsTool
 import com.moneat.mcp.tools.ListVulnerabilityFindingsTool
 import com.moneat.mcp.tools.ListVulnerabilityInventoryTool
+import com.moneat.mcp.tools.ListWorkflowAuditTool
+import com.moneat.mcp.tools.ListWorkflowBlueprintsTool
+import com.moneat.mcp.tools.ListWorkflowRunsTool
+import com.moneat.mcp.tools.ListWorkflowsTool
 import com.moneat.mcp.tools.PauseUptimeMonitorTool
 import com.moneat.mcp.tools.PostIncidentUpdateTool
 import com.moneat.mcp.tools.PreviewDetectionRuleTool
 import com.moneat.mcp.tools.PreviewDashboardWidgetQueryTool
+import com.moneat.mcp.tools.PublishWorkflowTool
 import com.moneat.mcp.tools.QueryLogsTool
 import com.moneat.mcp.tools.ReplaceDashboardWidgetsTool
 import com.moneat.mcp.tools.ResumeUptimeMonitorTool
 import com.moneat.mcp.tools.RevokeFeatureFlagSdkKeyTool
+import com.moneat.mcp.tools.RunWorkflowTool
 import com.moneat.mcp.tools.TriageSecuritySignalTool
+import com.moneat.mcp.tools.UnpublishWorkflowTool
 import com.moneat.mcp.tools.UpdateAlertNotificationChannelsTool
 import com.moneat.mcp.tools.UpdateAlertTool
 import com.moneat.mcp.tools.UpdateDashboardAlertTool
@@ -140,6 +156,7 @@ import com.moneat.mcp.tools.UpdateStatusPageIncidentTool
 import com.moneat.mcp.tools.UpdateStatusPageTool
 import com.moneat.mcp.tools.UpsertFeatureFlagSegmentTool
 import com.moneat.mcp.tools.UpdateUptimeMonitorTool
+import com.moneat.mcp.tools.UpdateWorkflowTool
 
 object McpToolRegistrar {
     // Keep registration in one ordered catalog so core and contributor MCP tools are easy to audit.
@@ -184,6 +201,25 @@ object McpToolRegistrar {
         toolRegistry.register(DeleteAlertTool())
         toolRegistry.register(CreateSilencePeriodTool())
         toolRegistry.register(DeleteSilencePeriodTool())
+
+        // Workflow tools
+        toolRegistry.register(ListWorkflowsTool())
+        toolRegistry.register(GetWorkflowTool())
+        toolRegistry.register(CreateWorkflowTool())
+        toolRegistry.register(UpdateWorkflowTool())
+        toolRegistry.register(DeleteWorkflowTool())
+        toolRegistry.register(PublishWorkflowTool())
+        toolRegistry.register(UnpublishWorkflowTool())
+        toolRegistry.register(RunWorkflowTool())
+        toolRegistry.register(CreateWorkflowInstanceTool())
+        toolRegistry.register(CancelWorkflowRunTool())
+        toolRegistry.register(ListWorkflowRunsTool())
+        toolRegistry.register(GetWorkflowRunTool())
+        toolRegistry.register(GetWorkflowCatalogTool())
+        toolRegistry.register(ListWorkflowBlueprintsTool())
+        toolRegistry.register(GetWorkflowBlueprintTool())
+        toolRegistry.register(ListWorkflowAuditTool())
+        toolRegistry.register(GetWorkflowWebhookSigningTool())
 
         // Infrastructure tools
         toolRegistry.register(ListContainersTool())

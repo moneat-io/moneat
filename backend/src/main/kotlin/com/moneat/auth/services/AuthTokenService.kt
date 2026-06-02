@@ -54,6 +54,9 @@ class AuthTokenService {
                 "sourcemaps:write",
                 "event:read",
                 "org:read",
+                "workflow:read",
+                "workflow:write",
+                "workflow:run",
                 "security:read",
                 "security:write"
             )

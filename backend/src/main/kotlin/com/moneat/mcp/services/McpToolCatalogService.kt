@@ -36,6 +36,7 @@ private val SECTION_ORDER = listOf(
     ToolSection("apm", "APM and traces", "Inspect transactions, traces, spans, profiles, and releases."),
     ToolSection("infrastructure", "Infrastructure", "Inspect hosts, containers, Kubernetes, processes, and networks."),
     ToolSection("alerts", "Alerts", "List, create, update, and silence alerts."),
+    ToolSection("workflows", "Workflows", "List, author, publish, run, and audit workflows."),
     ToolSection("uptime", "Uptime", "Manage uptime monitors and heartbeats."),
     ToolSection("dashboards", "Dashboards", "List, query, create, and update dashboards."),
     ToolSection("status-pages", "Status pages", "Manage status pages, monitors, and public incidents."),
@@ -97,6 +98,7 @@ object McpToolCatalogService {
 
     private fun sectionIdForTool(name: String): String {
         return when {
+            name.contains("workflow") -> "workflows"
             name.contains("issue") || name.contains("feedback") || name.contains("error") -> "issues"
             name.contains("log") -> "logs"
             name.contains("trace") ||

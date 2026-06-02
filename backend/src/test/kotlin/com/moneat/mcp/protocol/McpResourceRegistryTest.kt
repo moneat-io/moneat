@@ -16,7 +16,11 @@
 
 package com.moneat.mcp.protocol
 
+import com.moneat.mcp.auth.McpScopes
 import com.moneat.mcp.models.McpContext
+import com.moneat.mcp.resources.WorkflowCatalogResource
+import com.moneat.mcp.resources.WorkflowsOverviewResource
+import com.moneat.mcp.resources.WorkflowsUsageResource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.BeforeEach
@@ -83,6 +87,19 @@ class McpResourceRegistryTest {
 
         assertTrue(registry.hasResource("test://exists"))
         assertFalse(registry.hasResource("test://nope"))
+    }
+
+    @Test
+    fun `workflow resources require workflow read scope`() {
+        val workflowResources = listOf(
+            WorkflowsOverviewResource(),
+            WorkflowsUsageResource(),
+            WorkflowCatalogResource(),
+        )
+
+        workflowResources.forEach { resource ->
+            assertEquals(setOf(McpScopes.WORKFLOW_READ), resource.requiredScopes)
+        }
     }
 
     @Test

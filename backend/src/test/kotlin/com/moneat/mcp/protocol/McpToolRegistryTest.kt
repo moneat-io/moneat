@@ -20,9 +20,13 @@ import com.moneat.mcp.McpToolRegistrar
 import com.moneat.mcp.auth.McpScopes
 import com.moneat.mcp.models.McpContext
 import com.moneat.mcp.tools.CreateDetectionRuleTool
+import com.moneat.mcp.tools.CreateWorkflowTool
 import com.moneat.mcp.tools.GetFeatureFlagAnalyticsTool
 import com.moneat.mcp.tools.GetFeatureFlagTool
+import com.moneat.mcp.tools.GetWorkflowTool
+import com.moneat.mcp.tools.GetWorkflowWebhookSigningTool
 import com.moneat.mcp.tools.ListSecuritySignalsTool
+import com.moneat.mcp.tools.RunWorkflowTool
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -35,7 +39,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-private const val EXPECTED_CORE_MCP_TOOL_COUNT = 123
+private const val EXPECTED_CORE_MCP_TOOL_COUNT = 140
 
 class McpToolRegistryTest {
 
@@ -52,6 +56,9 @@ class McpToolRegistryTest {
             "project:write",
             "releases:read",
             "releases:write",
+            "workflow:read",
+            "workflow:write",
+            "workflow:run",
             "security:read",
             "security:write",
         ),
@@ -179,6 +186,18 @@ class McpToolRegistryTest {
 
         assertEquals(expectedScope, McpScopes.requiredScopesFor(GetFeatureFlagTool()))
         assertEquals(expectedScope, McpScopes.requiredScopesFor(GetFeatureFlagAnalyticsTool()))
+    }
+
+    @Test
+    fun `workflow tools use least privilege workflow scopes`() {
+        assertEquals(setOf(McpScopes.WORKFLOW_READ), McpScopes.requiredScopesFor(GetWorkflowTool()))
+        assertEquals(setOf(McpScopes.WORKFLOW_WRITE), McpScopes.requiredScopesFor(CreateWorkflowTool()))
+        assertEquals(
+            setOf(McpScopes.WORKFLOW_WRITE),
+            McpScopes.requiredScopesFor(GetWorkflowWebhookSigningTool())
+        )
+        assertEquals(setOf(McpScopes.WORKFLOW_RUN), RunWorkflowTool().requiredScopes)
+        assertFalse(GetWorkflowWebhookSigningTool().readOnly)
     }
 
     @Test
@@ -391,6 +410,15 @@ class McpToolRegistryTest {
             "update_feature_flag_config",
             "upsert_feature_flag_segment",
             "create_project",
+            "cancel_workflow_run",
+            "create_workflow",
+            "create_workflow_instance",
+            "delete_workflow",
+            "get_workflow_webhook_signing",
+            "publish_workflow",
+            "run_workflow",
+            "unpublish_workflow",
+            "update_workflow",
             "create_detection_rule",
             "delete_detection_rule",
             "install_detection_template",

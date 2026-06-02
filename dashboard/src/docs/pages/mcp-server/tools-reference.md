@@ -566,6 +566,133 @@ Delete an alert silence period.
 |-----------|------|----------|-------------|
 | `silence_period_id` | number | Yes | Silence period ID |
 
+## Workflow Tools
+
+### `list_workflows`
+List workflows in the organization. No parameters.
+
+### `get_workflow`
+Get a workflow, including the latest graph.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workflow_id` | integer | Yes | Workflow ID |
+
+### ✏️ `create_workflow`
+Create a workflow draft.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | string | Yes | Workflow name |
+| `trigger_name` | string | Yes | Trigger from `get_workflow_catalog` |
+| `enabled` | boolean | No | Whether the workflow is enabled |
+| `graph` / `graph_json` | object/string | No | Graph definition with nodes and edges |
+| `conditions` / `conditions_json` | array/string | No | Legacy condition array |
+| `steps` / `steps_json` | array/string | No | Legacy step array |
+| `once_for_template` / `once_for_template_json` | array/string | No | Deduplication references |
+
+### ✏️ `update_workflow`
+Update workflow metadata or create a new draft version.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workflow_id` | integer | Yes | Workflow ID |
+| `name` | string | No | Updated workflow name |
+| `enabled` | boolean | No | Whether the workflow is enabled |
+| `graph` / `graph_json` | object/string | No | Replacement graph definition |
+| `conditions` / `conditions_json` | array/string | No | Replacement legacy condition array |
+| `steps` / `steps_json` | array/string | No | Replacement legacy step array |
+| `once_for_template` / `once_for_template_json` | array/string | No | Replacement deduplication references |
+
+### ✏️ `delete_workflow`
+Delete a workflow.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workflow_id` | integer | Yes | Workflow ID |
+
+### ✏️ `publish_workflow`
+Publish the latest workflow version so it can run for matching triggers.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workflow_id` | integer | Yes | Workflow ID |
+
+### ✏️ `unpublish_workflow`
+Unpublish the latest workflow version.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workflow_id` | integer | Yes | Workflow ID |
+
+### ✏️ `run_workflow`
+Start a manual workflow run.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workflow_id` | integer | Yes | Workflow ID |
+| `scope` / `scope_json` | object/string | No | Additional workflow scope |
+
+### ✏️ `create_workflow_instance`
+Create an API-triggered workflow instance.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workflow_id` | integer | Yes | API-triggered workflow ID |
+| `scope` / `scope_json` | object/string | No | Instance scope |
+
+### ✏️ `cancel_workflow_run`
+Cancel a workflow run.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workflow_id` | integer | Yes | Workflow ID |
+| `run_id` | integer | Yes | Run ID |
+
+### `list_workflow_runs`
+List recent workflow runs.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workflow_id` | integer | Yes | Workflow ID |
+| `limit` | integer | No | Max runs (default 50, max 100) |
+
+### `get_workflow_run`
+Get a workflow run with step progress.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workflow_id` | integer | Yes | Workflow ID |
+| `run_id` | integer | Yes | Run ID |
+
+### `get_workflow_catalog`
+Get workflow triggers, resources, actions, and graph node types. No parameters.
+
+### `list_workflow_blueprints`
+List curated workflow blueprints. No parameters.
+
+### `get_workflow_blueprint`
+Get one workflow blueprint with its graph.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `key` | string | Yes | Blueprint key |
+
+### `list_workflow_audit`
+List workflow audit events.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workflow_id` | integer | No | Filter to one workflow |
+| `limit` | integer | No | Max events (default 100, max 500) |
+
+### `get_workflow_webhook_signing`
+Get the signed webhook ingress URL and signing secret for a webhook-triggered workflow.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workflow_id` | integer | Yes | Webhook-triggered workflow ID |
+
 ## Security Tools
 
 ### `list_security_signals`
@@ -1067,6 +1194,9 @@ Resources are read-only data sources available via `resources/list` and `resourc
 | `moneat://uptime/summary` | All uptime monitors with 24h/7d/30d percentages |
 | `moneat://status-pages` | Status pages and current status |
 | `moneat://infrastructure/health` | Quick health: host statuses, alert counts, uptime |
+| `moneat://workflows/overview` | Workflow counts, recent runs, success rate, and top workflows |
+| `moneat://workflows/usage` | Workflow execution usage for the current billing period |
+| `moneat://workflows/catalog` | Workflow triggers, actions, graph node types, and blueprints |
 | `moneat://security/summary` | Open signals, detection coverage, vulnerability counts, and compliance summary |
 | `moneat://security/signals/open` | Open security signals |
 | `moneat://security/detection/coverage` | MITRE ATT&CK coverage for enabled detection rules |
