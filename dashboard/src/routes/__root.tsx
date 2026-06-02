@@ -22,8 +22,8 @@ import {CommandPalette} from '../components/CommandPalette'
 import {CommandPaletteProvider} from '../contexts/CommandPaletteProvider'
 import {Toaster} from '../components/ui/toaster'
 import {api} from '../lib/api'
-import {isDemo, setDemoEpoch} from '../lib/demo'
-import {APP_OVERVIEW_SEARCH, isAppOverviewSearch} from '../lib/overview-route'
+import {setDemoEpoch} from '../lib/demo'
+import {APP_OVERVIEW_SEARCH, isPublicLandingRoute} from '../lib/overview-route'
 import {DemoBanner} from '../components/demo/DemoBanner'
 import {AiFloatingPanel} from '../components/AiFloatingPanel'
 import {AiSplitPanel} from '../components/AiSplitPanel'
@@ -269,9 +269,15 @@ function RootComponent() {
     queryFn: () => api.getCurrentUser(),
     enabled: isAuthenticated,
   })
-  const isOverviewView = isAppOverviewSearch(router.location.search)
-  const isDemoSession = isAuthenticated && isDemo()
-  const isLandingPage = currentPath === '/' && (!isAuthenticated || (isDemoSession && !isOverviewView))
+  const isLandingPage = isPublicLandingRoute(currentPath, router.location.search)
+  const isPublicRoute = (
+    isLandingPage ||
+    PUBLIC_ROUTES.has(currentPath) ||
+    currentPath.startsWith('/s/') ||
+    currentPath.startsWith('/auth/') ||
+    currentPath.startsWith('/legal/') ||
+    currentPath.startsWith('/docs')
+  )
 
   // Initialize demo mode when user data is loaded
   useEffect(() => {
@@ -290,7 +296,7 @@ function RootComponent() {
 
     async function checkUserStatus() {
       // Skip check on public routes and status pages
-      if (PUBLIC_ROUTES.has(currentPath) || currentPath.startsWith('/s/') || currentPath.startsWith('/auth/') || currentPath.startsWith('/legal/') || currentPath.startsWith('/docs')) {
+      if (isPublicRoute) {
         setOnboardingChecked(true)
         setAuthCheckComplete(true)
         return
@@ -316,19 +322,11 @@ function RootComponent() {
     return () => {
       cancelled = true
     }
-  }, [isAuthenticated, currentPath, navigate])
+  }, [isAuthenticated, isPublicRoute])
 
   useEffect(() => {
     if (!isAuthenticated || !user) return
-    if (
-      PUBLIC_ROUTES.has(currentPath) ||
-      currentPath.startsWith('/s/') ||
-      currentPath.startsWith('/auth/') ||
-      currentPath.startsWith('/legal/') ||
-      currentPath.startsWith('/docs')
-    ) {
-      return
-    }
+    if (isPublicRoute) return
 
     if (!user.emailVerified && currentPath !== '/verify-email-required') {
       navigate({ to: '/verify-email-required' })
@@ -338,17 +336,24 @@ function RootComponent() {
     if (!user.onboardingCompleted && currentPath !== '/onboarding') {
       navigate({ to: '/onboarding' })
     }
-  }, [currentPath, isAuthenticated, navigate, user])
+  }, [currentPath, isAuthenticated, isPublicRoute, navigate, user])
   
-  // Don't show sidebar on auth pages, landing page (when logged out), or public status pages
-  const isAuthPage = ['/login', '/signup', '/verify-email', '/verify-email-required', '/forgot-password', '/reset-password', '/onboarding'].includes(currentPath)
+  // Don't show sidebar on auth pages, landing page, or public status pages
+  const isAuthPage = [
+    '/login',
+    '/signup',
+    '/verify-email',
+    '/verify-email-required',
+    '/forgot-password',
+    '/reset-password',
+    '/onboarding',
+  ].includes(currentPath)
   const isPublicStatusPage = currentPath.startsWith('/s/')
   const isFeaturePage = (FEATURE_ROUTES as readonly string[]).includes(currentPath)
   const showSidebar = isAuthenticated && !isAuthPage && !isLandingPage && !isPublicStatusPage && !isFeaturePage
   const sidebarWidth = isSidebarExpanded ? SIDEBAR_EXPANDED_WIDTH : SIDEBAR_COLLAPSED_WIDTH
 
   // Show loading state while checking auth and onboarding
-  const isPublicRoute = PUBLIC_ROUTES.has(currentPath) || currentPath.startsWith('/s/') || currentPath.startsWith('/auth/') || currentPath.startsWith('/legal/') || currentPath.startsWith('/docs')
   if (!authCheckComplete && !isPublicRoute) {
     return null
   }
@@ -380,7 +385,7 @@ function RootComponent() {
           className="transition-[margin-left] duration-300"
           style={{ marginLeft: 0 }}
         >
-          <DemoBanner />
+          {isAuthenticated && !isPublicRoute && <DemoBanner />}
           <Outlet />
         </div>
       )}

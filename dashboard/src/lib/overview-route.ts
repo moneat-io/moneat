@@ -37,3 +37,12 @@ export function isAppOverviewSearch(search: unknown): boolean {
     search.view === APP_OVERVIEW_VIEW
   )
 }
+
+function normalizeRoutePath(pathname: string): string {
+  if (!pathname || pathname === '/') return '/'
+  return pathname.replace(/\/+$/, '') || '/'
+}
+
+export function isPublicLandingRoute(pathname: string, search: unknown): boolean {
+  return normalizeRoutePath(pathname) === '/' && !isAppOverviewSearch(search)
+}

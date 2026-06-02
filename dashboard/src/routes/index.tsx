@@ -22,7 +22,7 @@ import {api, type StatusPageDetail, type UptimeHeartbeat} from '@/lib/api'
 import {useProject} from '@/contexts/ProjectContext'
 import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
 import {formatRelativeTime} from '@/lib/utils'
-import {APP_OVERVIEW_VIEW, normalizeAppOverviewSearch} from '@/lib/overview-route'
+import {APP_OVERVIEW_SEARCH, APP_OVERVIEW_VIEW, normalizeAppOverviewSearch} from '@/lib/overview-route'
 import {Badge, type BadgeProps} from '@/components/ui/badge'
 import {levelBadgeVariant, levelBorderClass} from '@/lib/severity'
 import {Button} from '@/components/ui/button'
@@ -54,7 +54,7 @@ import {
 } from 'lucide-react'
 import {StatsCard, StatsCardSkeleton} from '@/components/charts/StatsCard'
 import {EventsChart, EventsChartSkeleton} from '@/components/charts/EventsChart'
-import {getNow, isDemo} from '@/lib/demo'
+import {getNow} from '@/lib/demo'
 
 // ─── Incident status → badge variant ─────────────────────────────────
 function incidentStatusVariant(status: string): BadgeProps['variant'] {
@@ -216,9 +216,13 @@ function IndexPage() {
     return null
   }
 
-  const showPublicLandingPage = !isAuthenticated || (isDemo() && view !== APP_OVERVIEW_VIEW)
+  const isOverviewView = view === APP_OVERVIEW_VIEW
+  const showPublicLandingPage = !isAuthenticated || !isOverviewView
   if (showPublicLandingPage) {
     if (features?.selfHost) {
+      if (isAuthenticated) {
+        return <Navigate to="/" search={APP_OVERVIEW_SEARCH} />
+      }
       return <Navigate to="/login" />
     }
     return <LandingPage />
