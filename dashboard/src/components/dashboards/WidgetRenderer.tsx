@@ -47,6 +47,7 @@ import type {ValueMapping} from './formatValue'
 import {formatValue} from './formatValue'
 import {pivotData, valueKeySeries} from './widgetSeries'
 import {isWarningThresholdValid, type AlertThresholdPreview} from './alertThresholds'
+import {widgetQueryFingerprint} from './widgetQueryFingerprint'
 
 const COLORS = [
   'hsl(var(--chart-1))',
@@ -146,8 +147,7 @@ export const WidgetRenderer = memo(function WidgetRenderer({
   const queries = widget.query_configs?.length > 0 ? widget.query_configs : []
   const isBatch = queries.length > 1
   const isExtendedWidget = isExtendedWidgetType(widgetType)
-  // Include query config fingerprint so datasource/query changes trigger refetch
-  const queryFingerprint = JSON.stringify(queries.map(q => ({d: q.dataSource, r: q.rawQuery || ''})))
+  const queryFingerprint = widgetQueryFingerprint(queries)
 
   const {data, isLoading, error} = useQuery({
     queryKey: ['widget-data', widget.id, dashboardId, projectId, timeRange, queryFingerprint, variables],
