@@ -18,14 +18,17 @@ import {createFileRoute} from '@tanstack/react-router'
 import {PricingCalculatorSection} from '@/components/landing/PricingCalculatorSection'
 import {LandingNavbar, LandingFooter} from '@/components/landing/LandingNavbar'
 import {Helmet} from 'react-helmet-async'
+import {useForceDarkTheme} from '@/components/landing/usePublicPageTheme'
 
 export const Route = createFileRoute('/pricing-calculator')({
   component: PricingCalculatorPage,
 })
 
 function PricingCalculatorPage() {
+  useForceDarkTheme()
+
   return (
-    <article className="min-h-screen bg-white text-slate-950">
+    <article className="min-h-screen bg-[#08090f] font-display text-slate-300">
       <Helmet>
         <title>Pricing Calculator | Moneat</title>
         <meta
@@ -35,13 +38,13 @@ function PricingCalculatorPage() {
         <link rel="canonical" href="https://moneat.io/pricing-calculator" />
       </Helmet>
 
-      <LandingNavbar tone="light" />
+      <LandingNavbar tone="dark" />
 
       <main>
         <PricingCalculatorSection standalone />
       </main>
 
-      <LandingFooter tone="light" />
+      <LandingFooter tone="dark" />
     </article>
   )
 }

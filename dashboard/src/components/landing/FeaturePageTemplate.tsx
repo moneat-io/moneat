@@ -14,13 +14,22 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import type {ReactNode} from 'react'
 import {Link} from '@tanstack/react-router'
-import {ArrowRight, Check, Database, ShieldCheck, type LucideIcon} from 'lucide-react'
+import {ArrowRight, Check, Database, Play, ShieldCheck, type LucideIcon} from 'lucide-react'
 import {Button} from '@/components/ui/button'
-import {ScreenshotFrame} from './VariantA'
+import {cn} from '@/lib/utils'
+import {
+  GRADIENT_BG,
+  SectionHeading,
+  WindowFrame,
+  SignalChart,
+  StatTile,
+} from './Landing'
 import {LandingNavbar, LandingFooter} from './LandingNavbar'
 import {SeoHead} from '@/components/SeoHead'
 import {featurePageSeo} from '@/lib/seo/routes'
+import {useForceDarkTheme} from '@/components/landing/usePublicPageTheme'
 
 interface SubFeature {
   icon: LucideIcon
@@ -44,21 +53,70 @@ export interface FeaturePageConfig {
   screenshotAlt: string
   subFeatures: SubFeature[]
   compatNote?: string
+  /** Feature-specific faux product UI for the hero. Falls back to the generic
+   *  dashboard when a page hasn't supplied its own. */
+  heroVisual?: ReactNode
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Faux hero product surface — built UI using the shared WindowFrame/SignalChart/
+// StatTile primitives. Title comes from the page config so each feature page
+// gets a distinct label while staying on-system visually.
+// ─────────────────────────────────────────────────────────────────────────────
+function FeatureHeroDashboard({config}: {readonly config: FeaturePageConfig}) {
+  return (
+    <div className="relative">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -inset-x-10 -bottom-12 top-8 bg-[radial-gradient(closest-side,rgba(124,92,246,0.28),rgba(34,211,238,0.05)_60%,transparent)] blur-2xl"
+      />
+      <WindowFrame title={`moneat · ${config.tagline}`} live className="relative">
+        <div className="grid gap-3">
+          <div className="flex items-center justify-between">
+            <span className="font-brandmono text-[11px] uppercase tracking-[0.12em] text-slate-500">
+              {config.title}
+            </span>
+            <span className="font-brandmono text-[11px] text-slate-500">live</span>
+          </div>
+          <SignalChart heightClass="h-36 sm:h-44" />
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+            <StatTile label="p95" value="148ms" accent />
+            <StatTile label="uptime" value="99.97%" />
+            <StatTile label="events" value="4.1k/s" />
+            <StatTile label="errors" value="3 open" />
+          </div>
+          <div className="grid gap-px overflow-hidden rounded-md border border-white/[0.07] sm:grid-cols-3">
+            {[
+              ['Errors', '3 open', 'bg-rose-400'],
+              ['Traces', '148ms p95', 'bg-cyan-400'],
+              ['Uptime', '99.97%', 'bg-emerald-400'],
+            ].map(([label, value, dot]) => (
+              <div key={label} className="flex items-center justify-between gap-3 bg-white/[0.02] px-3 py-2.5">
+                <span className="flex items-center gap-2 text-sm text-slate-400">
+                  <span className={cn('size-2 rounded-full', dot)} />
+                  {label}
+                </span>
+                <span className="font-brandmono text-sm text-slate-100">{value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </WindowFrame>
+    </div>
+  )
 }
 
 export function FeaturePageTemplate({config}: {readonly config: FeaturePageConfig}) {
-  const proofItems: {
-    icon: LucideIcon
-    label: string
-    value: string
-  }[] = [
+  useForceDarkTheme()
+
+  const proofItems: {icon: LucideIcon; label: string; value: string}[] = [
     {icon: config.icon, label: 'Workflow', value: config.tagline},
     {icon: ShieldCheck, label: 'Deployment', value: 'Cloud or self-hosted'},
     {icon: Database, label: 'Pricing', value: '1 GB free to start'},
   ]
 
   return (
-    <article className="min-h-screen bg-white text-slate-950">
+    <article className="min-h-screen bg-[#08090f] font-display text-slate-300">
       <SeoHead
         seo={featurePageSeo({
           slug: config.slug,
@@ -68,135 +126,155 @@ export function FeaturePageTemplate({config}: {readonly config: FeaturePageConfi
         })}
       />
 
-      <LandingNavbar tone="light" />
+      <LandingNavbar tone="dark" />
 
       <main>
+        {/* ── Hero ─────────────────────────────────────────────────────────── */}
         <section className="relative overflow-hidden px-4 pb-20 pt-20 sm:px-6 lg:px-8 lg:pb-24">
-          <div className="absolute inset-x-0 top-0 h-96 bg-[linear-gradient(180deg,#f8fafc_0%,rgba(248,250,252,0)_100%)]" />
+          <div aria-hidden className="pointer-events-none absolute inset-0">
+            <div className="absolute inset-0 bg-[radial-gradient(58rem_30rem_at_72%_-10%,rgba(124,92,246,0.18),transparent_70%)]" />
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.05)_1px,transparent_1px)] bg-[size:56px_56px] [mask-image:radial-gradient(60rem_40rem_at_50%_0%,#000,transparent_75%)]" />
+          </div>
           <div className="relative mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16">
             <div>
-              <div className={`mb-6 inline-flex rounded-lg ${config.iconBg} p-3 ring-1 ring-slate-950/5`}>
-                <config.icon className={`size-6 ${config.iconColor}`} />
+              {/* Feature icon tile — gradient background, white icon */}
+              <div className={cn('mb-6 inline-flex rounded-lg p-3', GRADIENT_BG)}>
+                <config.icon className="size-6 text-white" />
               </div>
-              <h1 className="max-w-xl text-4xl font-semibold leading-[1.05] text-slate-950 sm:text-5xl lg:text-6xl">
+              <h1 className="max-w-xl text-4xl font-bold leading-[1.05] tracking-[-0.04em] text-white sm:text-5xl lg:text-6xl">
                 {config.title}
               </h1>
-              <p className="mt-6 max-w-xl text-lg leading-8 text-slate-600">
-                {config.description}
-              </p>
+              <p className="mt-6 max-w-xl text-lg leading-8 text-slate-400">{config.description}</p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Button
                   asChild
                   size="lg"
-                  className="h-12 bg-slate-950 px-6 text-white hover:bg-slate-800"
+                  className={cn('border-0 text-white shadow-[0_10px_28px_-10px_#6366F1] hover:brightness-110', GRADIENT_BG)}
                 >
                   <Link to="/signup">
                     Start free
-                    <ArrowRight className="ml-2 size-4" />
+                    <ArrowRight data-icon="inline-end" />
                   </Link>
                 </Button>
                 <Button
                   asChild
                   variant="outline"
                   size="lg"
-                  className="h-12 border-slate-400 !bg-white px-6 font-semibold !text-slate-950 shadow-sm hover:!bg-slate-50 hover:!text-slate-950 dark:!bg-white dark:!text-slate-950 dark:hover:!bg-slate-50"
+                  className="border-white/15 bg-white/[0.03] text-slate-100 hover:bg-white/[0.07] hover:text-white"
                 >
                   <Link to="/demo">
+                    <Play data-icon="inline-start" />
                     Live demo
-                    <ArrowRight className="ml-2 size-4" />
                   </Link>
                 </Button>
               </div>
             </div>
-            <div className="w-full">
-              <ScreenshotFrame gradient={config.gradient} fade="bottom">
-                <img src={config.screenshot} alt={config.screenshotAlt} className="size-full object-cover" />
-              </ScreenshotFrame>
-            </div>
+            <div className="w-full">{config.heroVisual ?? <FeatureHeroDashboard config={config} />}</div>
           </div>
         </section>
 
-        <section className="border-y border-slate-200 bg-slate-50 px-4 py-8 sm:px-6 lg:px-8">
-          <div className="mx-auto grid max-w-6xl gap-4 sm:grid-cols-3">
+        {/* ── Proof strip ──────────────────────────────────────────────────── */}
+        <section className="border-y border-white/[0.06] bg-[#0a0b12]">
+          <div className="mx-auto grid max-w-6xl gap-px px-4 sm:grid-cols-3 lg:px-8">
             {proofItems.map((item) => (
-              <div key={item.label} className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-4">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-800">
-                  <item.icon className="size-4" />
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-slate-500">{item.label}</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-950">{item.value}</p>
+              <div key={item.label} className="px-5 py-6">
+                <div className="flex items-start gap-3">
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.03]">
+                    <item.icon className="size-4 text-indigo-300" />
+                  </div>
+                  <div>
+                    <p className="font-brandmono text-[10px] uppercase tracking-[0.14em] text-slate-500">{item.label}</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-100">{item.value}</p>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         </section>
 
+        {/* ── Sub-features ─────────────────────────────────────────────────── */}
         <section className="px-4 py-24 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-6xl">
-            <div className="max-w-2xl">
-              <h2 className="text-3xl font-semibold leading-tight text-slate-950 sm:text-4xl">
-                Built for production debugging without the enterprise tax
-              </h2>
-              <p className="mt-4 text-base leading-7 text-slate-600">
-                Each capability is designed to work with the rest of the platform, so teams can move from signal to root cause without switching tools.
-              </p>
-            </div>
+            <SectionHeading
+              kicker={config.tagline}
+              title="Built for production debugging without the enterprise tax"
+              lead="Each capability is designed to work with the rest of the platform, so teams can move from signal to root cause without switching tools."
+            />
             <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {config.subFeatures.map((sf) => (
-                <div key={sf.title} className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm transition-colors hover:border-slate-300">
-                  <div className="mb-5 flex size-10 items-center justify-center rounded-md bg-slate-50 ring-1 ring-slate-200">
-                    <sf.icon className={`size-5 ${sf.iconColor}`} />
+                <div
+                  key={sf.title}
+                  className="rounded-lg border border-white/10 bg-white/[0.02] p-6 transition-colors hover:border-white/[0.16]"
+                >
+                  <div className="mb-5 flex size-10 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.03]">
+                    <sf.icon className="size-5 text-indigo-300" />
                   </div>
-                  <h3 className="text-base font-semibold text-slate-950">{sf.title}</h3>
-                  <p className="mt-3 text-sm leading-6 text-slate-600">{sf.description}</p>
+                  <h3 className="text-base font-semibold text-white">{sf.title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-slate-400">{sf.description}</p>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
+        {/* ── Compat note ──────────────────────────────────────────────────── */}
         {config.compatNote && (
-          <section className="bg-slate-50 px-4 py-16 sm:px-6 lg:px-8">
-            <div className="mx-auto max-w-4xl rounded-lg border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          <section className="border-y border-white/[0.06] bg-[#0a0b12] px-4 py-16 sm:px-6 lg:px-8">
+            <div className="mx-auto max-w-4xl rounded-lg border border-white/10 bg-[#0c0e16] p-6 sm:p-8">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
-                  <Check className="size-5" />
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.03]">
+                  <Check className="size-5 text-emerald-400" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-950">Works with your existing setup</h2>
-                  <p className="mt-2 text-base leading-7 text-slate-600">{config.compatNote}</p>
+                  <h2 className="text-lg font-semibold text-white">Works with your existing setup</h2>
+                  <p className="mt-2 text-base leading-7 text-slate-400">{config.compatNote}</p>
                 </div>
               </div>
             </div>
           </section>
         )}
 
-        <section className="border-t border-slate-200 bg-white px-4 py-24 text-slate-950 sm:px-6 lg:px-8">
-          <div className="mx-auto grid max-w-5xl gap-8 md:grid-cols-[1fr_auto] md:items-center">
-            <div>
-              <h2 className="text-3xl font-semibold leading-tight sm:text-4xl">
-                Start with production telemetry today
-              </h2>
-              <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">
-                Start with 1 GB free, invite the team, and keep the option to self-host when you need it.
-              </p>
+        {/* ── Final CTA ────────────────────────────────────────────────────── */}
+        <section className="relative overflow-hidden px-4 py-24 sm:px-6 lg:px-8">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(48rem_24rem_at_50%_120%,rgba(124,92,246,0.18),transparent_70%)]"
+          />
+          <div className="relative mx-auto max-w-3xl text-center">
+            <h2 className="text-3xl font-bold tracking-[-0.03em] text-white sm:text-4xl">
+              Start with production telemetry today
+            </h2>
+            <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-slate-400">
+              Start with 1 GB free, invite the team, and keep the option to self-host when you need it.
+            </p>
+            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <Button
+                asChild
+                size="lg"
+                className={cn('border-0 text-white shadow-[0_10px_28px_-10px_#6366F1] hover:brightness-110', GRADIENT_BG)}
+              >
+                <Link to="/signup">
+                  Start free
+                  <ArrowRight data-icon="inline-end" />
+                </Link>
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                size="lg"
+                className="border-white/15 bg-white/[0.03] text-slate-100 hover:bg-white/[0.07] hover:text-white"
+              >
+                <Link to="/demo">
+                  <Play data-icon="inline-start" />
+                  Live demo
+                </Link>
+              </Button>
             </div>
-            <Button
-              asChild
-              size="lg"
-              className="h-12 bg-slate-950 px-6 text-white hover:bg-slate-800"
-            >
-              <Link to="/signup">
-                Start free
-                <ArrowRight className="ml-2 size-4" />
-              </Link>
-            </Button>
           </div>
         </section>
       </main>
 
-      <LandingFooter tone="light" />
+      <LandingFooter tone="dark" />
     </article>
   )
 }

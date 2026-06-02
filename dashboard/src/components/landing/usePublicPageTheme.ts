@@ -14,27 +14,21 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {Landing} from './Landing'
-import {LandingNavbar, LandingFooter} from './LandingNavbar'
-import {useForceDarkTheme} from './usePublicPageTheme'
-import {SeoHead} from '@/components/SeoHead'
-import {homeSeo} from '@/lib/seo/routes'
+import {useEffect} from 'react'
 
-export function LandingPage() {
-  // The public home page is dark-first (style-guide).
-  useForceDarkTheme()
-
-  return (
-    <article className="min-h-screen bg-[#08090f] font-display text-slate-300">
-      <SeoHead seo={homeSeo} />
-
-      <LandingNavbar tone="dark" />
-
-      <main>
-        <Landing />
-      </main>
-
-      <LandingFooter tone="dark" />
-    </article>
-  )
+// The public marketing pages are dark-first (style-guide). Hold the document in
+// dark mode while such a page is mounted, and restore the prior theme when the
+// visitor navigates back into the (light-by-default) app.
+export function useForceDarkTheme() {
+  useEffect(() => {
+    const root = document.documentElement
+    const hadDark = root.classList.contains('dark')
+    const prevColorScheme = root.style.colorScheme
+    root.classList.add('dark')
+    root.style.colorScheme = 'dark'
+    return () => {
+      if (!hadDark) root.classList.remove('dark')
+      root.style.colorScheme = prevColorScheme
+    }
+  }, [])
 }
