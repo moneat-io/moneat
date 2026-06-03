@@ -737,6 +737,7 @@ class UptimeExtendedTest {
             uptimeService = uptimeService,
             checkExecutor = checkExecutor,
             incidentService = incidentService,
+            frontendBaseUrl = "https://moneat.io",
         )
 
         scheduler.start()
@@ -787,6 +788,7 @@ class UptimeExtendedTest {
             uptimeService = uptimeService,
             checkExecutor = checkExecutor,
             incidentService = mockk(relaxed = true),
+            frontendBaseUrl = "https://moneat.io",
         )
 
         scheduler.start()

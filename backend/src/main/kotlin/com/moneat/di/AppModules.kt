@@ -262,12 +262,21 @@ val logsModule = module {
 }
 
 /** Uptime monitoring and status pages. */
-val uptimeModule = module {
+fun uptimeModule(frontendBaseUrl: String) = module {
     single<UptimeMonitorRepository> { UptimeMonitorRepositoryImpl() }
 
     single { UptimeService(get(), get()) }
     single { UptimeCheckExecutor() }
-    single { UptimeScheduler(get(), get(), get(), get(), get()) }
+    single {
+        UptimeScheduler(
+            uptimeService = get(),
+            checkExecutor = get(),
+            incidentService = get(),
+            billingQuotaService = get(),
+            workflowService = get(),
+            frontendBaseUrl = frontendBaseUrl
+        )
+    }
     single { StatusPageService(get()) }
 }
 
@@ -331,19 +340,24 @@ val aiModule = module {
 }
 
 /** All application modules combined in load order. */
-val appModules = listOf(
-    sharedModule,
-    authModule,
-    billingModule,
-    orgModule,
-    eventsModule,
-    monitorModule,
-    logsModule,
-    uptimeModule,
-    dashboardsModule,
-    summaryModule,
-    llmModule,
-    analyticsModule,
-    featureFlagsModule,
-    aiModule,
-)
+private const val DEFAULT_FRONTEND_BASE_URL = "https://moneat.io"
+
+fun buildAppModules(frontendBaseUrl: String = DEFAULT_FRONTEND_BASE_URL) =
+    listOf(
+        sharedModule,
+        authModule,
+        billingModule,
+        orgModule,
+        eventsModule,
+        monitorModule,
+        logsModule,
+        uptimeModule(frontendBaseUrl),
+        dashboardsModule,
+        summaryModule,
+        llmModule,
+        analyticsModule,
+        featureFlagsModule,
+        aiModule,
+    )
+
+val appModules = buildAppModules()

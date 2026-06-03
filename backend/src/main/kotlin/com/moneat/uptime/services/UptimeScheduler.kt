@@ -29,7 +29,6 @@ import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 import com.moneat.utils.suspendRunCatching
 import com.moneat.workflows.services.WorkflowService
-import io.ktor.server.config.ApplicationConfig
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -61,14 +60,12 @@ class UptimeScheduler(
     private val incidentService: IncidentService = IncidentService(),
     private val billingQuotaService: BillingQuotaService = BillingQuotaService(),
     private val workflowService: WorkflowService = WorkflowService(),
+    private val frontendBaseUrl: String,
 ) {
     companion object {
         private const val CHECK_STATUS_DOWN = 0
         private const val CHECK_STATUS_UP = 1
         private const val TIMEOUT_BUFFER_MS = 5000L
-        private val frontendBaseUrl by lazy {
-            ApplicationConfig("application.conf").property("email.frontendUrl").getString()
-        }
     }
 
     private var schedulerJob: Job? = null

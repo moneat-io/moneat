@@ -47,6 +47,8 @@ import kotlin.reflect.full.declaredFunctions
 import kotlin.reflect.jvm.isAccessible
 import kotlin.time.Instant
 
+private const val TEST_FRONTEND_BASE_URL = "https://moneat.io"
+
 class UptimeSchedulerTest {
 
     private val uptimeService = mockk<UptimeService>(relaxed = true)
@@ -61,6 +63,7 @@ class UptimeSchedulerTest {
         incidentService = incidentService,
         billingQuotaService = billingQuotaService,
         workflowService = workflowService,
+        frontendBaseUrl = TEST_FRONTEND_BASE_URL,
     )
 
     @AfterTest
