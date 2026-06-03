@@ -248,7 +248,10 @@ Authenticate with an OTLP API key (created in **Settings → OTLP API Keys**) pa
 
 ## Telemetry
 
-Self-hosted deployments collect anonymous usage telemetry (CPU count, memory, aggregate event counts, deployment config). No personal data, event contents, or secrets are collected. [Learn more.](https://moneat.io/docs/self-hosting/telemetry)
+Self-hosted deployments send a periodic telemetry pulse. These are the exact fields included:
+Moneat version, CPU count, memory usage, OS name and architecture, JVM version, aggregate
+project/user/event/issue counts, SSL enabled status, and a random deployment ID. No other fields
+are included in the telemetry payload. [Learn more.](https://moneat.io/docs/self-hosting/telemetry)
 
 Opt out:
 

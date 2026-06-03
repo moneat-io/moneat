@@ -320,9 +320,16 @@ prompt_smtp() {
 
 prompt_telemetry() {
   echo
+  info "Anonymous telemetry fields:"
+  info "  - Moneat version"
+  info "  - CPU count, memory usage, OS name and architecture"
+  info "  - JVM version"
+  info "  - Aggregate project, user, event, and issue counts"
+  info "  - SSL enabled status"
+  info "  - Random deployment ID"
   if prompt_yes_no "Enable anonymous telemetry to help improve Moneat?" "y"; then
     TELEMETRY_ENABLED=true
-    success "Telemetry enabled (anonymous usage stats only)"
+    success "Telemetry enabled"
   else
     TELEMETRY_ENABLED=false
     info "Telemetry disabled"

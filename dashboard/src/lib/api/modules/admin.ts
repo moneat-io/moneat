@@ -283,6 +283,7 @@ export function adminMethods(core: ApiClientCore) {
         deployments: {
           deploymentId: string
           receivedAt: string
+          version: string
           cpuCount: number
           memTotalBytes: number
           memUsedBytes: number

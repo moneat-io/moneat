@@ -42,12 +42,13 @@ fun Route.telemetryIngestRoutes(
         ClickHouseClient.execute(
             """
             INSERT INTO telemetry_pulses (
-                deployment_id, cpu_count, mem_total_bytes, mem_used_bytes,
+                deployment_id, version, cpu_count, mem_total_bytes, mem_used_bytes,
                 os_name, os_arch, jvm_version,
                 project_count, user_count, event_count, issue_count,
                 ssl_enabled
             ) VALUES (
                 '${esc(pulse.deploymentId)}',
+                '${esc(pulse.version)}',
                 ${pulse.cpuCount},
                 ${pulse.memTotalBytes},
                 ${pulse.memUsedBytes},
