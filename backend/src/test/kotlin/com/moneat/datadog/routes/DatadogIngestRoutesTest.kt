@@ -17,7 +17,9 @@
 package com.moneat.datadog.routes
 
 import com.google.protobuf.CodedOutputStream
+import com.moneat.billing.models.BillingUsageResponse
 import com.moneat.billing.services.BillingQuotaService
+import com.moneat.billing.services.QuotaReservationResult
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.services.DatadogEventService
 import com.moneat.datadog.services.DatadogHostService
@@ -111,8 +113,10 @@ class DatadogIngestRoutesTest {
             DbmIngestionService,
             DebuggerIngestionService,
             OrchestratorIngestionService,
+            quotaService,
         )
 
+        every { quotaService.isEnforcementEnabled() } returns false
         every { DatadogService.validateApiKeyContext(any()) } answers {
             if (firstArg<String>() == VALID_KEY) {
                 DatadogService.ApiKeyValidation(ORG_ID, null)
@@ -180,6 +184,41 @@ class DatadogIngestRoutesTest {
         coded.flush()
         return output.toByteArray()
     }
+
+    private fun deniedQuotaResult(eventType: String) = QuotaReservationResult(
+        allowed = false,
+        reason = "event_type_quota_exceeded",
+        eventType = eventType,
+        usage = quotaUsageResponse(),
+    )
+
+    private fun quotaUsageResponse() = BillingUsageResponse(
+        organizationId = ORG_ID,
+        periodStart = "2026-06-01",
+        periodEnd = "2026-06-30",
+        retentionDays = 30,
+        apmTraceRetentionDays = 30,
+        usedUnits = 0,
+        usedErrors = 0,
+        errorLimit = 0,
+        usedTransactions = 0,
+        transactionLimit = 0,
+        usedReplays = 0,
+        replayLimit = 0,
+        usedFeedback = 0,
+        feedbackLimit = 0,
+        usedBytes = 0,
+        bytesLimit = 0,
+        baseLimitUnits = 0,
+        paygLimitUnits = 0,
+        totalLimitUnits = 0,
+        paygBudgetCents = 0,
+        paygUsedUnits = 0,
+        paygUsedCentsEstimate = 0,
+        plan = "FREE",
+        status = "active",
+        withinQuota = false,
+    )
 
     // ──── V1 Metric Series ────
 
@@ -738,6 +777,32 @@ class DatadogIngestRoutesTest {
     }
 
     @Test
+    fun `dd contimage returns 429 and skips enqueue when misc quota is exceeded`() = testApplication {
+        every { DatadogService.validateApiKey(VALID_KEY) } returns ORG_ID
+        every { quotaService.isEnforcementEnabled() } returns true
+        every {
+            quotaService.reserveUnits(
+                organizationId = ORG_ID,
+                requestedUnits = 1,
+                eventType = "dd_misc",
+                requestedBytes = any(),
+            )
+        } returns deniedQuotaResult("dd_misc")
+        installRoutes()()
+
+        val response = client.post("/dd/api/v2/contimage") {
+            header(DD_API_KEY_HEADER, VALID_KEY)
+            contentType(ContentType.Application.Json)
+            setBody("{}")
+        }
+
+        assertEquals(HttpStatusCode.TooManyRequests, response.status)
+        verify(exactly = 0) {
+            MiscIngestionService.enqueueContainerImage(any(), any())
+        }
+    }
+
+    @Test
     fun `dd contimage protobuf decodes and enqueues images`() = testApplication {
         every { DatadogService.validateApiKey(VALID_KEY) } returns ORG_ID
         every { MiscIngestionService.enqueueContainerImages(any(), any()) } returns 1
@@ -872,6 +937,25 @@ class DatadogIngestRoutesTest {
     }
 
     @Test
+    fun `contlcycle accepts whitespace empty json probes`() = testApplication {
+        every { DatadogService.validateApiKey(VALID_KEY) } returns ORG_ID
+        installRoutes()()
+
+        listOf("{ }", "{\n}", "{\n\t}").forEach { payload ->
+            val response = client.post("/api/v2/contlcycle") {
+                header(DD_API_KEY_HEADER, VALID_KEY)
+                contentType(ContentType.Application.Json)
+                setBody(payload)
+            }
+            assertEquals(HttpStatusCode.Accepted, response.status)
+        }
+
+        coVerify(exactly = 3) {
+            DatadogEventService.enqueueEvents(ORG_ID.toLong(), emptyList())
+        }
+    }
+
+    @Test
     fun `contlcycle returns 400 for non empty json payload`() = testApplication {
         every { DatadogService.validateApiKey(VALID_KEY) } returns ORG_ID
         installRoutes()()
@@ -942,6 +1026,32 @@ class DatadogIngestRoutesTest {
                         it.single().tags.contains("env:test")
                 },
             )
+        }
+    }
+
+    @Test
+    fun `event management returns 429 and skips enqueue when event quota is exceeded`() = testApplication {
+        every { DatadogService.validateApiKey(VALID_KEY) } returns ORG_ID
+        every { quotaService.isEnforcementEnabled() } returns true
+        every {
+            quotaService.reserveUnits(
+                organizationId = ORG_ID,
+                requestedUnits = 1,
+                eventType = "dd_event",
+                requestedBytes = any(),
+            )
+        } returns deniedQuotaResult("dd_event")
+        installRoutes()()
+
+        val response = client.post("/api/v2/events") {
+            header(DD_API_KEY_HEADER, VALID_KEY)
+            contentType(ContentType.Application.Json)
+            setBody("""{"events":[{"title":"deploy","host":"web-01","tags":["env:test"]}]}""")
+        }
+
+        assertEquals(HttpStatusCode.TooManyRequests, response.status)
+        coVerify(exactly = 0) {
+            DatadogEventService.enqueueEvents(any(), any())
         }
     }
 

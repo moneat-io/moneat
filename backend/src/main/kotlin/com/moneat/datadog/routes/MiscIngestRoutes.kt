@@ -274,5 +274,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.reserveEventQuota(
 private fun String.isProtobufContent(): Boolean =
     contains("protobuf", ignoreCase = true)
 
+private val emptyJsonObjectRegex = Regex("""\{\s*}""")
+
 private fun String.isEmptyObject(): Boolean =
-    this == "{}" || this == "null"
+    this == "null" || emptyJsonObjectRegex.matches(this)
