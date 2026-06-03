@@ -480,4 +480,245 @@ class ProtoDecoderTest {
         assertEquals(ProcessAgentPayloadDecoder.TYPE_RES_COLLECTOR, header.type)
         assertEquals(0, header.encoding)
     }
+
+    @Test
+    fun `MiscPayloadDecoder decodes container image protobuf`() {
+        val os = buildProto {
+            writeString(1, "linux")
+            writeString(3, "amd64")
+        }
+        val layer = buildProto {
+            writeString(3, "sha256:layer")
+        }
+        val image = buildProto {
+            writeString(1, "sha256:image")
+            writeString(2, "registry.example.com/team/api")
+            writeString(3, "registry.example.com")
+            writeString(4, "api")
+            writeString(5, "registry.example.com/team/api:v1")
+            writeString(6, "sha256:digest")
+            writeInt64(7, 123_456L)
+            writeByteArray(9, os)
+            writeByteArray(10, layer)
+            writeString(12, "env:prod")
+        }
+        val payload = buildProto {
+            writeString(2, "host-a")
+            writeByteArray(3, image)
+            writeString(4, "agent")
+        }
+
+        val decoded = MiscPayloadDecoder.decodeContainerImages(payload)
+
+        assertEquals(1, decoded.size)
+        assertEquals("registry.example.com/team/api", decoded[0].imageName)
+        assertEquals("v1", decoded[0].imageTag)
+        assertEquals("sha256:digest", decoded[0].digest)
+        assertEquals("registry.example.com", decoded[0].registry)
+        assertEquals(123_456L, decoded[0].sizeBytes)
+        assertEquals("linux", decoded[0].os)
+        assertEquals("amd64", decoded[0].architecture)
+        assertEquals(1, decoded[0].layers)
+        assertTrue(decoded[0].tags.contains("host:host-a"))
+        assertTrue(decoded[0].tags.contains("source:agent"))
+        assertTrue(decoded[0].tags.contains("env:prod"))
+    }
+
+    @Test
+    fun `MiscPayloadDecoder decodes container image fallback fields`() {
+        val image = buildProto {
+            writeString(1, "sha256:image-id")
+            writeString(4, "worker")
+            writeString(5, "worker:latest")
+            writeString(8, "registry.example.com/team/worker@sha256:fallback")
+            writeString(12, "team:infra")
+        }
+        val payload = buildProto {
+            writeByteArray(3, image)
+        }
+
+        val decoded = MiscPayloadDecoder.decodeContainerImages(payload)
+
+        assertEquals(1, decoded.size)
+        assertEquals("worker", decoded[0].imageName)
+        assertEquals("latest", decoded[0].imageTag)
+        assertEquals("registry.example.com/team/worker@sha256:fallback", decoded[0].digest)
+        assertTrue(decoded[0].tags.contains("image_id:sha256:image-id"))
+        assertTrue(decoded[0].tags.contains("repo_digest:registry.example.com/team/worker@sha256:fallback"))
+        assertTrue(decoded[0].tags.contains("team:infra"))
+    }
+
+    @Test
+    fun `MiscPayloadDecoder decodes sbom protobuf packages and CVEs`() {
+        val component = buildProto {
+            writeEnum(1, 3)
+            writeString(3, "pkg-ref")
+            writeString(8, "openssl")
+            writeString(9, "3.0.0")
+            writeString(16, "pkg:deb/openssl@3.0.0")
+        }
+        val affects = buildProto {
+            writeString(1, "pkg-ref")
+        }
+        val vulnerability = buildProto {
+            writeString(2, "CVE-2026-0001")
+            writeByteArray(17, affects)
+        }
+        val cycloneDx = buildProto {
+            writeByteArray(5, component)
+            writeByteArray(10, vulnerability)
+        }
+        val entity = buildProto {
+            writeEnum(1, 1)
+            writeString(2, "sha256:image")
+            writeString(4, "registry.example.com/team/api:v1")
+            writeString(7, "service:api")
+            writeByteArray(10, cycloneDx)
+            writeEnum(11, 0)
+            writeString(14, "registry.example.com/team/api@sha256:image")
+        }
+        val payload = buildProto {
+            writeInt32(1, 1)
+            writeString(2, "host-b")
+            writeString(3, "agent")
+            writeByteArray(4, entity)
+            writeString(5, "prod")
+        }
+
+        val decoded = MiscPayloadDecoder.decodeSbom(payload)
+
+        assertEquals("host-b", decoded.host)
+        assertEquals("sha256:image", decoded.containerId)
+        assertEquals("registry.example.com/team/api", decoded.imageName)
+        assertEquals(1, decoded.packages.size)
+        assertEquals("openssl", decoded.packages[0].name)
+        assertEquals("3.0.0", decoded.packages[0].version)
+        assertEquals("deb", decoded.packages[0].type)
+        assertEquals(listOf("CVE-2026-0001"), decoded.packages[0].cveIds)
+        assertTrue(decoded.tags.contains("service:api"))
+        assertTrue(decoded.tags.contains("env:prod"))
+    }
+
+    @Test
+    fun `MiscPayloadDecoder decodes nested sbom components and entity types`() {
+        val childComponent = buildProto {
+            writeEnum(1, 2)
+            writeString(3, "child-ref")
+            writeString(8, "ktor")
+            writeString(9, "3.3.0")
+        }
+        val rootComponent = buildProto {
+            writeEnum(1, 1)
+            writeString(3, "root-ref")
+            writeByteArray(21, childComponent)
+        }
+        val affects = buildProto {
+            writeString(1, "child-ref")
+        }
+        val vulnerability = buildProto {
+            writeString(2, "CVE-2026-4242")
+            writeByteArray(17, affects)
+        }
+        val cycloneDx = buildProto {
+            writeByteArray(5, rootComponent)
+            writeByteArray(10, vulnerability)
+        }
+        val entity = buildProto {
+            writeEnum(1, 3)
+            writeString(2, "host-fs")
+            writeByteArray(10, cycloneDx)
+        }
+        val payload = buildProto {
+            writeString(2, "host-d")
+            writeString(3, "agent")
+            writeByteArray(4, entity)
+        }
+
+        val decoded = MiscPayloadDecoder.decodeSbom(payload)
+
+        assertEquals("host-d", decoded.host)
+        assertEquals("host-fs", decoded.imageName)
+        assertEquals(1, decoded.packages.size)
+        assertEquals("ktor", decoded.packages[0].name)
+        assertEquals("framework", decoded.packages[0].type)
+        assertEquals(listOf("CVE-2026-4242"), decoded.packages[0].cveIds)
+        assertTrue(decoded.tags.contains("source:agent"))
+        assertTrue(decoded.tags.contains("entity_type:host_file_system"))
+    }
+
+    @Test
+    fun `MiscPayloadDecoder decodes container lifecycle protobuf events`() {
+        val owner = buildProto {
+            writeEnum(1, 1)
+            writeString(2, "pod-uid")
+        }
+        val container = buildProto {
+            writeString(1, "container-1")
+            writeString(2, "containerd")
+            writeInt32(3, 137)
+            writeInt64(4, 1_700_000_000_123L)
+            writeByteArray(5, owner)
+        }
+        val event = buildProto {
+            writeEnum(1, 0)
+            writeByteArray(2, container)
+        }
+        val payload = buildProto {
+            writeString(2, "host-c")
+            writeEnum(3, 0)
+            writeByteArray(4, event)
+            writeString(5, "cluster-a")
+        }
+
+        val decoded = MiscPayloadDecoder.decodeContainerLifecycleEvents(payload)
+
+        assertEquals(1, decoded.size)
+        assertEquals("host-c", decoded[0].host)
+        assertEquals(1_700_000_000L, decoded[0].dateHappened)
+        assertTrue(decoded[0].title.contains("container container-1"))
+        assertTrue(decoded[0].tags.contains("source:containerd"))
+        assertTrue(decoded[0].tags.contains("cluster_id:cluster-a"))
+        assertTrue(decoded[0].tags.contains("exit_code:137"))
+        assertTrue(decoded[0].tags.contains("owner_uid:pod-uid"))
+    }
+
+    @Test
+    fun `MiscPayloadDecoder decodes pod and task lifecycle protobuf events`() {
+        val pod = buildProto {
+            writeString(1, "pod-1")
+            writeString(2, "kubelet")
+            writeInt64(3, 1_700_000_000_123_000_000L)
+        }
+        val task = buildProto {
+            writeString(1, "task-1")
+            writeString(2, "ecs")
+            writeInt64(3, 1_700_000_123L)
+        }
+        val podEvent = buildProto {
+            writeEnum(1, 0)
+            writeByteArray(3, pod)
+        }
+        val taskEvent = buildProto {
+            writeEnum(1, 0)
+            writeByteArray(4, task)
+        }
+        val payload = buildProto {
+            writeString(2, "host-e")
+            writeByteArray(4, podEvent)
+            writeByteArray(4, taskEvent)
+            writeString(5, "cluster-b")
+        }
+
+        val decoded = MiscPayloadDecoder.decodeContainerLifecycleEvents(payload)
+
+        assertEquals(2, decoded.size)
+        assertEquals("host-e", decoded[0].host)
+        assertEquals(1_700_000_000L, decoded[0].dateHappened)
+        assertTrue(decoded[0].title.contains("pod pod-1"))
+        assertTrue(decoded[0].tags.contains("source:kubelet"))
+        assertTrue(decoded[0].tags.contains("cluster_id:cluster-b"))
+        assertEquals(1_700_000_123L, decoded[1].dateHappened)
+        assertTrue(decoded[1].title.contains("task task-1"))
+        assertTrue(decoded[1].tags.contains("source:ecs"))
+    }
 }
