@@ -213,9 +213,10 @@ class IssueService(
 
     suspend fun updateIssue(
         issueId: String,
-        update: IssueUpdateRequest
+        update: IssueUpdateRequest,
+        explicitProjectId: Long? = null
     ) {
-        val projectId = issueRepository.getProjectIdForIssue(issueId)
+        val projectId = resolveProjectIdForIssue(issueId, explicitProjectId)
             ?: throw IllegalArgumentException("Issue not found")
 
         if (update.status != null) {
@@ -225,6 +226,13 @@ class IssueService(
             updateErrorAlertEpisode(issueId, projectId, update.status)
         }
     }
+
+    private suspend fun resolveProjectIdForIssue(issueId: String, explicitProjectId: Long?): Long? =
+        if (explicitProjectId != null) {
+            issueRepository.getProjectIdForIssue(issueId, explicitProjectId)
+        } else {
+            issueRepository.getProjectIdForIssue(issueId)
+        }
 
     private fun updateErrorAlertEpisode(
         issueId: String,

@@ -99,6 +99,7 @@ const MERGE_FETCH_LIMIT = 100
 
 type SafeIssue = {
   id: string
+  projectResourceId: string
   service: string
   title: string
   culprit: string
@@ -109,6 +110,15 @@ type SafeIssue = {
   eventCount: number
   userCount: number
   status: string
+}
+
+type IssueUpdateTarget = {
+  id: string
+  projectResourceId: string
+}
+
+function issueSelectionKey(issue: Pick<SafeIssue, 'id' | 'projectResourceId'>): string {
+  return `${issue.projectResourceId}:${issue.id}`
 }
 
 function clampText(value: string, maxChars: number): string {
@@ -232,7 +242,8 @@ function IndexPage() {
 function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
-  const [selectedIssues, setSelectedIssues] = useState<Set<string>>(new Set())
+  const [issueFiltersTouched, setIssueFiltersTouched] = useState(false)
+  const [selectedIssueKeys, setSelectedIssueKeys] = useState<Set<string>>(new Set())
   const [page, setPage] = useState(1)
   const pageSize = 25
   const { selectedProjectId } = useProject()
@@ -248,17 +259,17 @@ function DashboardPage() {
   // Seed the Service facet once from the sidebar-selected project so the default
   // view stays scoped as before; afterwards the rail/bar own the selection, and
   // clearing Service widens to all services.
-  const [seeded, setSeeded] = useState(false)
-  if (!seeded && projects && projects.length > 0) {
-    setSeeded(true)
+  const seedServiceFilter = useMemo<FacetFilter | null>(() => {
+    if (issueFiltersTouched || !projects?.length) return null
     const seedProject = projects.find((p) => p.resourceId === selectedProjectId) ?? projects[0]
-    if (seedProject) setFacetFilters([{ key: 'service', value: seedProject.name }])
-  }
+    return seedProject ? { key: 'service', value: seedProject.name } : null
+  }, [issueFiltersTouched, projects, selectedProjectId])
+  const effectiveFacetFilters = seedServiceFilter ? [seedServiceFilter] : facetFilters
 
   // Service include/exclude picks which projects' issues to load and merge
   // (client-side until the org-wide issues API lands). None selected ⇒ all.
-  const includedServices = facetFilters.filter((f) => f.key === 'service' && !f.exclude).map((f) => f.value)
-  const excludedServices = facetFilters.filter((f) => f.key === 'service' && f.exclude).map((f) => f.value)
+  const includedServices = effectiveFacetFilters.filter((f) => f.key === 'service' && !f.exclude).map((f) => f.value)
+  const excludedServices = effectiveFacetFilters.filter((f) => f.key === 'service' && f.exclude).map((f) => f.value)
   const targetProjects = (projects ?? [])
     .filter((p) => (includedServices.length > 0 ? includedServices.includes(p.name) : true))
     .filter((p) => !excludedServices.includes(p.name))
@@ -275,13 +286,13 @@ function DashboardPage() {
   const issuesErrorObj = issueQueries.find((q) => q.isError)?.error
 
   const resolveMutation = useMutation({
-    mutationFn: async (issueIds: string[]) => {
+    mutationFn: async (issues: IssueUpdateTarget[]) => {
       const results = await Promise.allSettled(
-        issueIds.map(id => api.updateIssue(id, { status: 'resolved' }))
+        issues.map((issue) => api.updateIssue(issue.id, { status: 'resolved' }, issue.projectResourceId))
       )
       const successCount = results.filter(r => r.status === 'fulfilled').length
       if (successCount === 0) throw new Error('All requests failed')
-      return { submitted: issueIds.length, successCount }
+      return { submitted: issues.length, successCount }
     },
     onSuccess: ({ submitted, successCount }) => {
       trackEvent('Issue Resolve', { count: String(successCount) })
@@ -299,7 +310,7 @@ function DashboardPage() {
           variant: 'destructive',
         })
       }
-      setSelectedIssues(new Set())
+      setSelectedIssueKeys(new Set())
     },
     onError: () => {
       toast({
@@ -311,13 +322,13 @@ function DashboardPage() {
   })
 
   const ignoreMutation = useMutation({
-    mutationFn: async (issueIds: string[]) => {
+    mutationFn: async (issues: IssueUpdateTarget[]) => {
       const results = await Promise.allSettled(
-        issueIds.map(id => api.updateIssue(id, { status: 'ignored' }))
+        issues.map((issue) => api.updateIssue(issue.id, { status: 'ignored' }, issue.projectResourceId))
       )
       const successCount = results.filter(r => r.status === 'fulfilled').length
       if (successCount === 0) throw new Error('All requests failed')
-      return { submitted: issueIds.length, successCount }
+      return { submitted: issues.length, successCount }
     },
     onSuccess: ({ submitted, successCount }) => {
       trackEvent('Issue Ignore', { count: String(successCount) })
@@ -335,7 +346,7 @@ function DashboardPage() {
           variant: 'destructive',
         })
       }
-      setSelectedIssues(new Set())
+      setSelectedIssueKeys(new Set())
     },
     onError: () => {
       toast({ title: 'Error', description: 'Failed to ignore issues', variant: 'destructive' })
@@ -343,13 +354,15 @@ function DashboardPage() {
   })
 
   const resolveNextReleaseMutation = useMutation({
-    mutationFn: async (issueIds: string[]) => {
+    mutationFn: async (issues: IssueUpdateTarget[]) => {
       const results = await Promise.allSettled(
-        issueIds.map(id => api.updateIssue(id, { status: 'resolvedInNextRelease' }))
+        issues.map((issue) =>
+          api.updateIssue(issue.id, { status: 'resolvedInNextRelease' }, issue.projectResourceId)
+        )
       )
       const successCount = results.filter(r => r.status === 'fulfilled').length
       if (successCount === 0) throw new Error('All requests failed')
-      return { submitted: issueIds.length, successCount }
+      return { submitted: issues.length, successCount }
     },
     onSuccess: ({ submitted, successCount }) => {
       trackEvent('Issue ResolveInNextRelease', { count: String(successCount) })
@@ -367,7 +380,7 @@ function DashboardPage() {
           variant: 'destructive',
         })
       }
-      setSelectedIssues(new Set())
+      setSelectedIssueKeys(new Set())
     },
     onError: () => {
       toast({ title: 'Error', description: 'Failed to update issues', variant: 'destructive' })
@@ -376,66 +389,84 @@ function DashboardPage() {
 
   const bulkPending = resolveMutation.isPending || ignoreMutation.isPending || resolveNextReleaseMutation.isPending
 
-  const handleToggleIssue = (issueId: string) => {
-    const newSelected = new Set(selectedIssues)
-    if (newSelected.has(issueId)) {
-      newSelected.delete(issueId)
+  const handleToggleIssue = (issue: SafeIssue) => {
+    const key = issueSelectionKey(issue)
+    const newSelected = new Set(selectedIssueKeys)
+    if (newSelected.has(key)) {
+      newSelected.delete(key)
     } else {
-      newSelected.add(issueId)
+      newSelected.add(key)
     }
-    setSelectedIssues(newSelected)
+    setSelectedIssueKeys(newSelected)
   }
 
   const handleToggleAll = () => {
-    if (selectedIssues.size === pagedIssues.length) {
-      setSelectedIssues(new Set())
+    const pageKeys = pagedIssues.map(issueSelectionKey)
+    const allPageIssuesSelected = pageKeys.every((key) => selectedIssueKeys.has(key))
+    const nextSelected = new Set(selectedIssueKeys)
+    if (allPageIssuesSelected) {
+      pageKeys.forEach((key) => nextSelected.delete(key))
     } else {
-      setSelectedIssues(new Set(pagedIssues.map(issue => issue.id)))
+      pageKeys.forEach((key) => nextSelected.add(key))
     }
+    setSelectedIssueKeys(nextSelected)
   }
 
   const handleResolveSelected = () => {
-    resolveMutation.mutate(Array.from(selectedIssues))
+    resolveMutation.mutate(selectedIssueTargets)
   }
 
   const handleIgnoreSelected = () => {
-    ignoreMutation.mutate(Array.from(selectedIssues))
+    ignoreMutation.mutate(selectedIssueTargets)
   }
 
   const handleResolveNextReleaseSelected = () => {
-    resolveNextReleaseMutation.mutate(Array.from(selectedIssues))
+    resolveNextReleaseMutation.mutate(selectedIssueTargets)
   }
 
-  const safeIssues = useMemo<SafeIssue[]>(() => {
-    const out: SafeIssue[] = []
-    targetProjects.forEach((project, index) => {
-      const rows = issueQueries[index]?.data ?? []
-      for (const issue of rows) {
-        const id = toSafeString(issue.id, '', ISSUE_ID_MAX_CHARS)
-        if (!id) continue
-        out.push({
-          id,
-          service: project.name,
-          title: toSafeString(issue.title, '', ISSUE_SEARCH_TEXT_MAX_CHARS),
-          culprit: toSafeString(issue.culprit, '', ISSUE_SEARCH_TEXT_MAX_CHARS),
-          level: toSafeString(issue.level, 'error', 16) || 'error',
-          platform: toSafeString(issue.platform, 'unknown', 64) || 'unknown',
-          firstSeen: toSafeString(issue.firstSeen, ''),
-          lastSeen: toSafeString(issue.lastSeen, ''),
-          eventCount: toSafeCount(issue.eventCount),
-          userCount: toSafeCount(issue.userCount),
-          status: toSafeString(issue.status, 'unresolved', 32) || 'unresolved',
-        })
-      }
+  const safeIssues: SafeIssue[] = []
+  targetProjects.forEach((project, index) => {
+    const projectResourceId = toSafeString(project.resourceId, '', ISSUE_ID_MAX_CHARS)
+    if (!projectResourceId) return
+    const rows = issueQueries[index]?.data ?? []
+    for (const issue of rows) {
+      const id = toSafeString(issue.id, '', ISSUE_ID_MAX_CHARS)
+      if (!id) continue
+      safeIssues.push({
+        id,
+        projectResourceId,
+        service: project.name,
+        title: toSafeString(issue.title, '', ISSUE_SEARCH_TEXT_MAX_CHARS),
+        culprit: toSafeString(issue.culprit, '', ISSUE_SEARCH_TEXT_MAX_CHARS),
+        level: toSafeString(issue.level, 'error', 16) || 'error',
+        platform: toSafeString(issue.platform, 'unknown', 64) || 'unknown',
+        firstSeen: toSafeString(issue.firstSeen, ''),
+        lastSeen: toSafeString(issue.lastSeen, ''),
+        eventCount: toSafeCount(issue.eventCount),
+        userCount: toSafeCount(issue.userCount),
+        status: toSafeString(issue.status, 'unresolved', 32) || 'unresolved',
+      })
+    }
+  })
+
+  const safeIssuesByKey = new Map<string, IssueUpdateTarget>()
+  safeIssues.forEach((issue) => {
+    safeIssuesByKey.set(issueSelectionKey(issue), {
+      id: issue.id,
+      projectResourceId: issue.projectResourceId,
     })
-    return out
-  }, [targetProjects, issueQueries])
+  })
+  const selectedIssueTargets: IssueUpdateTarget[] = []
+  selectedIssueKeys.forEach((key) => {
+    const target = safeIssuesByKey.get(key)
+    if (target) selectedIssueTargets.push(target)
+  })
 
   const normalizedSearchQuery = searchQuery.trim().toLowerCase()
-  const statusIncludes = facetFilters.filter((f) => f.key === 'status' && !f.exclude).map((f) => f.value)
-  const statusExcludes = facetFilters.filter((f) => f.key === 'status' && f.exclude).map((f) => f.value)
-  const levelIncludes = facetFilters.filter((f) => f.key === 'level' && !f.exclude).map((f) => f.value)
-  const levelExcludes = facetFilters.filter((f) => f.key === 'level' && f.exclude).map((f) => f.value)
+  const statusIncludes = effectiveFacetFilters.filter((f) => f.key === 'status' && !f.exclude).map((f) => f.value)
+  const statusExcludes = effectiveFacetFilters.filter((f) => f.key === 'status' && f.exclude).map((f) => f.value)
+  const levelIncludes = effectiveFacetFilters.filter((f) => f.key === 'level' && !f.exclude).map((f) => f.value)
+  const levelExcludes = effectiveFacetFilters.filter((f) => f.key === 'level' && f.exclude).map((f) => f.value)
 
   // Service is resolved server-side (which projects we fetch); status/level/search
   // narrow the merged set client-side, honoring include + exclude.
@@ -460,11 +491,13 @@ function DashboardPage() {
   const pagedIssues = filteredIssues.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 
   const hasActiveIssueFilters =
-    Boolean(searchQuery) || facetFilters.some((f) => f.key === 'status' || f.key === 'level' || f.exclude)
+    Boolean(searchQuery) ||
+    effectiveFacetFilters.some((f) => f.key === 'status' || f.key === 'level' || f.exclude)
 
   function handleFacetFiltersChange(next: FacetFilter[]) {
+    setIssueFiltersTouched(true)
     setFacetFilters(next)
-    setSelectedIssues(new Set())
+    setSelectedIssueKeys(new Set())
     setPage(1)
   }
 
@@ -560,8 +593,8 @@ function DashboardPage() {
       searchBar={
         <SearchFilterBar
           query={searchQuery}
-          onQueryChange={(q) => { setSearchQuery(q); setPage(1); setSelectedIssues(new Set()) }}
-          facetFilters={facetFilters}
+          onQueryChange={(q) => { setSearchQuery(q); setPage(1); setSelectedIssueKeys(new Set()) }}
+          facetFilters={effectiveFacetFilters}
           onFacetFiltersChange={handleFacetFiltersChange}
           schema={issueSchema}
           placeholder="Search issues..."
@@ -570,7 +603,7 @@ function DashboardPage() {
       rail={
         <FacetRail
           sections={issueRailSections}
-          facetFilters={facetFilters}
+          facetFilters={effectiveFacetFilters}
           onFacetFiltersChange={handleFacetFiltersChange}
         />
       }
@@ -579,17 +612,19 @@ function DashboardPage() {
           {pagedIssues.length > 0 && (
             <div className="flex items-center gap-2">
               <Checkbox
-                checked={selectedIssues.size === pagedIssues.length && pagedIssues.length > 0}
+                checked={pagedIssues.length > 0 && pagedIssues.every((issue) =>
+                  selectedIssueKeys.has(issueSelectionKey(issue))
+                )}
                 onCheckedChange={handleToggleAll}
                 aria-label="Select all issues"
               />
               <span className="text-sm text-muted-foreground whitespace-nowrap hidden sm:inline">Select all</span>
             </div>
           )}
-          {selectedIssues.size > 0 && (
+          {selectedIssueTargets.length > 0 && (
             <div className="flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-lg px-2 py-0.5">
               <CheckCircle2 className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium whitespace-nowrap">{selectedIssues.size} selected</span>
+              <span className="text-sm font-medium whitespace-nowrap">{selectedIssueTargets.length} selected</span>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button disabled={bulkPending} size="sm" className="h-7 ml-1">
@@ -666,13 +701,13 @@ function DashboardPage() {
             <div className="divide-y divide-border/40">
               {pagedIssues.map((issue) => (
                 <div
-                  key={issue.id}
+                  key={issueSelectionKey(issue)}
                   className={`hover:bg-accent/40 transition border-l-[3px] ${levelBorderClass(issue.level)}`}
                 >
                   <div className="flex items-center gap-2 sm:gap-3 py-2 sm:py-2.5 px-2 sm:px-4">
                     <Checkbox
-                      checked={selectedIssues.has(issue.id)}
-                      onCheckedChange={() => handleToggleIssue(issue.id)}
+                      checked={selectedIssueKeys.has(issueSelectionKey(issue))}
+                      onCheckedChange={() => handleToggleIssue(issue)}
                       onClick={(e) => e.stopPropagation()}
                       aria-label={`Select ${issue.title}`}
                       className="shrink-0"
@@ -680,6 +715,7 @@ function DashboardPage() {
                     <Link
                       to="/issues/$issueId"
                       params={{ issueId: issue.id }}
+                      search={{ projectId: issue.projectResourceId }}
                       className="flex-1 flex items-center gap-2 sm:gap-3 min-w-0"
                     >
                       <div className="w-12 sm:w-[4.5rem] shrink-0">

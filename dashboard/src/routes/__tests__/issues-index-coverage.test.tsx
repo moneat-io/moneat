@@ -1,6 +1,6 @@
 import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { screen, fireEvent } from '@testing-library/react'
+import { screen, fireEvent, waitFor } from '@testing-library/react'
 import { renderRoute, clearAuthStorage } from '@/test/utils'
 
 const { mockNavigate, mockToast, mockApi } = vi.hoisted(() => ({
@@ -37,7 +37,17 @@ vi.mock('@tanstack/react-router', () => ({
     options,
     useParams: () => ({}),
   }),
-  Link: ({ children, ...props }: { children: React.ReactNode }) => React.createElement('a', props, children),
+  Link: ({
+    children,
+    search,
+    ...props
+  }: {
+    children: React.ReactNode
+    search?: Record<string, unknown>
+  }) => React.createElement('a', {
+    ...props,
+    'data-search': search ? JSON.stringify(search) : undefined,
+  }, children),
   redirect: (opts: Record<string, unknown>) => ({ ...opts, __redirect: true }),
   useNavigate: () => mockNavigate,
   useMatches: () => [],
@@ -190,6 +200,44 @@ describe('Issues Index - data coverage', () => {
     // Toggling it off clears the filter — the last selection is removable.
     fireEvent.click(screen.getByRole('button', { name: 'Resolved' }))
     expect(screen.getByText('5 results')).toBeInTheDocument()
+  })
+
+  it('keeps row service context for merged issue links and bulk updates', async () => {
+    const workerProject = {
+      ...mockProject,
+      id: 2,
+      resourceId: 'proj-2',
+      name: 'Worker Service',
+      slug: 'worker-service',
+    }
+    const workerIssue = {
+      ...mockIssues[0],
+      id: 'issue-worker',
+      title: 'Worker panic',
+      culprit: 'worker.handler',
+    }
+    mockApi.getProjects.mockResolvedValue([mockProject, workerProject])
+    mockApi.getIssues.mockImplementation((projectId: string) =>
+      Promise.resolve(projectId === 'proj-2' ? [workerIssue] : [mockIssues[0]])
+    )
+
+    renderRoute(IssuesIndexRoute)
+
+    fireEvent.click(await screen.findByText('Clear all'))
+    const workerTitle = await screen.findByText(/worker.handler: Worker panic/)
+    expect(workerTitle.closest('a')).toHaveAttribute('data-search', '{"projectId":"proj-2"}')
+
+    fireEvent.click(screen.getByLabelText('Select Worker panic'))
+    fireEvent.pointerDown(screen.getByRole('button', { name: /Actions/ }))
+    fireEvent.click(await screen.findByText('Resolve'))
+
+    await waitFor(() => {
+      expect(mockApi.updateIssue).toHaveBeenCalledWith(
+        'issue-worker',
+        { status: 'resolved' },
+        'proj-2'
+      )
+    })
   })
 
   it('shows no issues match filters when search has no results', async () => {

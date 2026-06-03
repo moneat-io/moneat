@@ -27,6 +27,7 @@ import com.moneat.events.repositories.models.IssueRow
  */
 interface IssueRepository {
     suspend fun getProjectIdForIssue(issueId: String): Long?
+    suspend fun getProjectIdForIssue(issueId: String, projectId: Long): Long?
     fun getIssueStatusOverrides(projectId: Long): Map<String, String>
     suspend fun getIssuesRaw(
         projectId: Long,

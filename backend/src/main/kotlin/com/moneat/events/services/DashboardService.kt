@@ -270,6 +270,7 @@ class DashboardService(
 
     suspend fun updateIssue(
         issueId: String,
-        update: com.moneat.events.models.IssueUpdateRequest
-    ) = issueService.updateIssue(issueId, update)
+        update: com.moneat.events.models.IssueUpdateRequest,
+        projectId: Long? = null
+    ) = issueService.updateIssue(issueId, update, projectId)
 }

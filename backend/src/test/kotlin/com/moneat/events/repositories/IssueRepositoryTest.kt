@@ -132,7 +132,10 @@ class IssueRepositoryTest {
             } get Projects.id
         }
         repository.upsertIssueStatus("shared-issue", projectId, "resolved")
-        assertNull(repository.getIssueStatus("shared-issue", otherProjectId))
+        repository.upsertIssueStatus("shared-issue", otherProjectId, "ignored")
+
+        assertEquals("resolved", repository.getIssueStatus("shared-issue", projectId))
+        assertEquals("ignored", repository.getIssueStatus("shared-issue", otherProjectId))
     }
 
     // ──── getProjectName ────

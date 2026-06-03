@@ -202,7 +202,7 @@ function RailSection({section, facetFilters, onFacetFiltersChange}: RailSectionP
             </div>
           )}
 
-          {values.length === 0 ? (
+          {!options && loadOptions && loaded === null ? (
             <p className="px-2 py-1 text-xs text-muted-foreground">Loading values...</p>
           ) : shown.length === 0 ? (
             <p className="px-2 py-1 text-xs text-muted-foreground">No matches</p>

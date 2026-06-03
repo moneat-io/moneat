@@ -428,6 +428,20 @@ class EventServicesExtendedTest {
     }
 
     @Test
+    fun `updateIssue uses explicit project scope`() = runBlocking {
+        coEvery { issueRepository.getProjectIdForIssue(testIssueId, testProjectId) } returns testProjectId
+
+        issueService.updateIssue(
+            testIssueId,
+            IssueUpdateRequest(status = "resolved"),
+            explicitProjectId = testProjectId
+        )
+
+        coVerify(exactly = 0) { issueRepository.getProjectIdForIssue(testIssueId) }
+        verify { issueRepository.upsertIssueStatus(testIssueId, testProjectId, "resolved") }
+    }
+
+    @Test
     fun `updateIssue with null status does not call repository`() = runBlocking {
         coEvery { issueRepository.getProjectIdForIssue(testIssueId) } returns testProjectId
         issueService.updateIssue(testIssueId, IssueUpdateRequest(status = null))

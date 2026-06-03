@@ -47,12 +47,20 @@ class IssueRepositoryImpl(
     private val clickhouseDb: String get() = queryHelper.clickhouseDb
     private val json get() = queryHelper.json
 
-    override suspend fun getProjectIdForIssue(issueId: String): Long? {
+    override suspend fun getProjectIdForIssue(issueId: String): Long? =
+        findProjectIdForIssue(issueId, projectId = null)
+
+    override suspend fun getProjectIdForIssue(issueId: String, projectId: Long): Long? =
+        findProjectIdForIssue(issueId, projectId)
+
+    private suspend fun findProjectIdForIssue(issueId: String, projectId: Long?): Long? {
         val escapedIssueId = escapeSql(issueId)
+        val projectFilter = projectId?.let { "AND project_id = $it" } ?: ""
         val query = """
             SELECT toInt64(project_id) as project_id
             FROM `$clickhouseDb`.issues FINAL
             WHERE issue_id = '$escapedIssueId'
+                $projectFilter
             LIMIT 1
             FORMAT JSONEachRow
         """.trimIndent()

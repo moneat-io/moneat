@@ -64,6 +64,12 @@ describe('FacetRail', () => {
     expect(onFacetFiltersChange).toHaveBeenCalledWith([{key: 'service', value: 'api', exclude: true}])
   })
 
+  it('removes an excluded value via the exclude affordance', () => {
+    const {onFacetFiltersChange} = setup({facetFilters: [{key: 'service', value: 'api', exclude: true}]})
+    fireEvent.click(screen.getByTitle('Remove exclusion'))
+    expect(onFacetFiltersChange).toHaveBeenCalledWith([])
+  })
+
   it('replaces the value for a single-select section', () => {
     const {onFacetFiltersChange} = setup({facetFilters: [{key: 'status', value: 'unresolved', exclude: false}]})
     fireEvent.click(screen.getByRole('button', {name: 'resolved'}))
@@ -96,5 +102,40 @@ describe('FacetRail', () => {
     expect(screen.getByRole('button', {name: 'svc-1'})).toBeTruthy()
     expect(screen.getByRole('button', {name: 'svc-10'})).toBeTruthy()
     expect(screen.queryByRole('button', {name: 'svc-2'})).toBeNull()
+  })
+
+  it('expands and collapses long value lists', () => {
+    const many: FacetRailSection[] = [
+      {
+        key: 'tag',
+        label: 'Tags',
+        options: Array.from({length: 12}, (_, i) => ({value: `svc-${i}`})),
+      },
+    ]
+    render(<FacetRail sections={many} facetFilters={[]} onFacetFiltersChange={() => {}} />)
+
+    expect(screen.queryByRole('button', {name: 'svc-11'})).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', {name: 'Show 4 more'}))
+    expect(screen.getByRole('button', {name: 'svc-11'})).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', {name: 'Show less'}))
+    expect(screen.queryByRole('button', {name: 'svc-11'})).toBeNull()
+  })
+
+  it('shows an empty state after a lazy section loads zero values', async () => {
+    const lazySections: FacetRailSection[] = [
+      {
+        key: 'service',
+        label: 'Service',
+        loadOptions: () => Promise.resolve([]),
+      },
+    ]
+    render(<FacetRail sections={lazySections} facetFilters={[]} onFacetFiltersChange={() => {}} />)
+
+    fireEvent.click(screen.getByRole('button', {name: /Service/}))
+
+    expect(await screen.findByText('No matches')).toBeTruthy()
+    expect(screen.queryByText('Loading values...')).toBeNull()
   })
 })

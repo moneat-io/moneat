@@ -123,35 +123,40 @@ function normalizeApmTraceId(value: unknown): string | null {
 }
 
 export const Route = createFileRoute('/issues/$issueId')({
+  validateSearch: (search: Record<string, unknown>) => ({
+    projectId: typeof search.projectId === 'string' ? search.projectId : undefined,
+  }),
   component: IssueDetailPage,
 })
 
 function IssueDetailPage() {
   const { issueId } = Route.useParams()
+  const { projectId } = Route.useSearch()
   const queryClient = useQueryClient()
   const { timezone } = useTimezone()
   const { toast } = useToast()
   const { selectedProjectId } = useProject()
+  const scopedProjectId = projectId ?? selectedProjectId
   const [expandContextsByDefault, setExpandContextsByDefault] = useState(true)
 
   const { data: issue, isLoading } = useQuery({
-    queryKey: ['issue', issueId, selectedProjectId],
-    queryFn: () => api.getIssue(issueId, selectedProjectId),
+    queryKey: ['issue', issueId, scopedProjectId],
+    queryFn: () => api.getIssue(issueId, scopedProjectId),
   })
 
   const { data: events = [] } = useQuery({
-    queryKey: ['issue-events', issueId, selectedProjectId],
-    queryFn: () => api.getIssueEvents(issueId, 50, selectedProjectId),
+    queryKey: ['issue-events', issueId, scopedProjectId],
+    queryFn: () => api.getIssueEvents(issueId, 50, scopedProjectId),
   })
 
   const { data: relatedTransactions = [] } = useQuery({
-    queryKey: ['issue-transactions', issueId, selectedProjectId],
-    queryFn: () => api.getIssueTransactions(issueId, 20, selectedProjectId),
+    queryKey: ['issue-transactions', issueId, scopedProjectId],
+    queryFn: () => api.getIssueTransactions(issueId, 20, scopedProjectId),
   })
 
   const { data: linkedReplays = [] } = useQuery({
-    queryKey: ['issue-replays', issueId, selectedProjectId],
-    queryFn: () => api.getReplaysForIssue(issueId, 10, selectedProjectId),
+    queryKey: ['issue-replays', issueId, scopedProjectId],
+    queryFn: () => api.getReplaysForIssue(issueId, 10, scopedProjectId),
   })
 
   const primaryTransactionId = relatedTransactions[0]?.eventId
@@ -164,10 +169,10 @@ function IssueDetailPage() {
   })
 
   const statusMutation = useMutation({
-    mutationFn: (status: string) => api.updateIssue(issueId, { status }, selectedProjectId),
+    mutationFn: (status: string) => api.updateIssue(issueId, { status }, scopedProjectId),
     onSuccess: (_, status) => {
       trackEvent('Issue StatusChange', { source: 'detail', status })
-      queryClient.invalidateQueries({ queryKey: ['issue', issueId, selectedProjectId] })
+      queryClient.invalidateQueries({ queryKey: ['issue', issueId, scopedProjectId] })
       const messages: Record<string, { title: string; description: string }> = {
         resolved: { title: 'Issue resolved', description: 'The issue has been marked as resolved.' },
         unresolved: { title: 'Issue unresolved', description: 'The issue has been marked as unresolved.' },

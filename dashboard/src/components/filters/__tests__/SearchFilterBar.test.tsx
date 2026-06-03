@@ -110,4 +110,114 @@ describe('SearchFilterBar', () => {
     fireEvent.mouseDown(suggestion)
     expect(onFacetFiltersChange).toHaveBeenCalledWith([{key: 'service', value: 'api', exclude: false}])
   })
+
+  it('applies key and value suggestions', () => {
+    const {onFacetFiltersChange, input} = setup()
+    fireEvent.change(input, {target: {value: 'ser'}})
+    fireEvent.mouseDown(screen.getByText('service'))
+    expect(input).toHaveValue('service:')
+
+    fireEvent.change(input, {target: {value: 'service:wor'}})
+    fireEvent.mouseDown(screen.getByText('service:worker'))
+    expect(onFacetFiltersChange).toHaveBeenCalledWith([{key: 'service', value: 'worker', exclude: false}])
+  })
+
+  it('routes boolean, wildcard, and unknown-key tokens to query text', () => {
+    const {onQueryChange, onFacetFiltersChange, input} = setup()
+
+    fireEvent.change(input, {target: {value: 'service:*'}})
+    fireEvent.keyDown(input, {key: 'Enter'})
+    fireEvent.change(input, {target: {value: 'message:error OR timeout'}})
+    fireEvent.keyDown(input, {key: 'Enter'})
+    fireEvent.change(input, {target: {value: 'unknown:value'}})
+    fireEvent.keyDown(input, {key: 'Enter'})
+
+    expect(onQueryChange).toHaveBeenCalledWith('service:*')
+    expect(onQueryChange).toHaveBeenCalledWith('message:error OR timeout')
+    expect(onQueryChange).toHaveBeenCalledWith('unknown:value')
+    expect(onFacetFiltersChange).not.toHaveBeenCalled()
+  })
+
+  it('handles suggestion keyboard navigation and escape', () => {
+    const {input} = setup()
+
+    fireEvent.change(input, {target: {value: 'service:a'}})
+    expect(screen.getByText('service:api')).toBeInTheDocument()
+    fireEvent.keyDown(input, {key: 'ArrowDown'})
+    fireEvent.keyDown(input, {key: 'ArrowUp'})
+    fireEvent.keyDown(input, {key: 'Escape'})
+
+    expect(screen.queryByText('service:api')).toBeNull()
+  })
+
+  it('edits query and facet chips and clears all filters', () => {
+    const onClearExtra = vi.fn()
+    const {onQueryChange, onFacetFiltersChange, input} = setup({
+      query: 'timeout slow',
+      facetFilters: [{key: 'service', value: 'api', exclude: true}],
+      hasExtraActiveFilters: true,
+      onClearExtra,
+    })
+
+    fireEvent.click(screen.getByText('timeout slow'))
+    expect(input).toHaveValue('timeout slow')
+    expect(onQueryChange).toHaveBeenCalledWith('')
+
+    fireEvent.click(screen.getByText(/service:api/))
+    expect(input).toHaveValue('-service:api')
+    expect(onFacetFiltersChange).toHaveBeenCalledWith([])
+
+    fireEvent.keyDown(input, {key: 'Escape'})
+    fireEvent.click(screen.getByRole('button', {name: 'Clear all filters'}))
+    expect(onQueryChange).toHaveBeenCalledWith('')
+    expect(onFacetFiltersChange).toHaveBeenCalledWith([])
+    expect(onClearExtra).toHaveBeenCalled()
+  })
+
+  it('peels query words before facet chips on Backspace', () => {
+    const {onQueryChange, onFacetFiltersChange, input} = setup({
+      query: 'timeout slow',
+      facetFilters: [{key: 'service', value: 'api'}],
+    })
+
+    fireEvent.keyDown(input, {key: 'Backspace'})
+
+    expect(onQueryChange).toHaveBeenCalledWith('timeout')
+    expect(onFacetFiltersChange).not.toHaveBeenCalled()
+  })
+
+  it('removes search text without opening chip edit mode', () => {
+    const {onQueryChange, input} = setup({query: 'timeout'})
+
+    fireEvent.click(screen.getByRole('button', {name: 'Remove search text'}))
+
+    expect(onQueryChange).toHaveBeenCalledWith('')
+    expect(input).toHaveValue('')
+  })
+
+  it('renders trailing controls and dismisses suggestions on outside click', () => {
+    const {input} = setup({
+      placeholder: 'Filter events...',
+      trailing: <button type="button">Refresh</button>,
+    })
+
+    expect(input).toHaveAttribute('placeholder', 'Filter events...')
+    expect(screen.getByRole('button', {name: 'Refresh'})).toBeInTheDocument()
+
+    fireEvent.change(input, {target: {value: 'serv'}})
+    expect(screen.getByText('service')).toBeInTheDocument()
+
+    fireEvent.mouseDown(document.body)
+
+    expect(screen.queryByText('service')).toBeNull()
+  })
+
+  it('leaves filters unchanged on Backspace when nothing is active', () => {
+    const {onQueryChange, onFacetFiltersChange, input} = setup()
+
+    fireEvent.keyDown(input, {key: 'Backspace'})
+
+    expect(onQueryChange).not.toHaveBeenCalled()
+    expect(onFacetFiltersChange).not.toHaveBeenCalled()
+  })
 })

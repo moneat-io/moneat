@@ -715,7 +715,7 @@ fun Route.apiRoutes() {
                     }
 
                     val update = call.receive<IssueUpdateRequest>()
-                    dashboardService.updateIssue(issueId, update)
+                    dashboardService.updateIssue(issueId, update, projectId)
                     call.respond(HttpStatusCode.NoContent)
                 }
 

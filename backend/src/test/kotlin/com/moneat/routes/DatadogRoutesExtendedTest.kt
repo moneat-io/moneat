@@ -2318,7 +2318,7 @@ class DatadogRoutesExtendedTest {
     fun `GET v1 apm-errors returns 200`() = testApplication {
         val (userId, orgId) = seedUserAndOrg()
         coEvery {
-            TraceIngestionService.getApmErrors(orgId, any(), any(), any(), any())
+            TraceIngestionService.getApmErrors(orgId, any(), any(), any(), any(), any())
         } returns DdApmErrorsResponse(emptyList(), 0L)
         application {
             installAuth()
@@ -2328,6 +2328,123 @@ class DatadogRoutesExtendedTest {
             withAuth(jwtToken(userId, orgId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
+    }
+
+    @Test
+    fun `GET v1 apm-errors trims deduplicates and forwards service filters`() = testApplication {
+        val (userId, orgId) = seedUserAndOrg()
+        coEvery {
+            TraceIngestionService.getApmErrors(
+                orgId,
+                listOf("api", "worker"),
+                any(),
+                any(),
+                any(),
+                any(),
+            )
+        } returns DdApmErrorsResponse(emptyList(), 0L)
+        application {
+            installAuth()
+            routing { traceDashboardRoutes() }
+        }
+        val response = client.get("/v1/apm-errors?services=api,%20worker,api&service=ignored") {
+            withAuth(jwtToken(userId, orgId))
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        coVerify(exactly = 1) {
+            TraceIngestionService.getApmErrors(
+                orgId,
+                listOf("api", "worker"),
+                any(),
+                any(),
+                any(),
+                any(),
+            )
+        }
+    }
+
+    @Test
+    fun `GET v1 apm-errors falls back to legacy service when services is empty`() = testApplication {
+        val (userId, orgId) = seedUserAndOrg()
+        coEvery {
+            TraceIngestionService.getApmErrors(
+                orgId,
+                listOf("api"),
+                any(),
+                any(),
+                any(),
+                any(),
+            )
+        } returns DdApmErrorsResponse(emptyList(), 0L)
+        application {
+            installAuth()
+            routing { traceDashboardRoutes() }
+        }
+        val response = client.get("/v1/apm-errors?services=,%20&service=api") {
+            withAuth(jwtToken(userId, orgId))
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        coVerify(exactly = 1) {
+            TraceIngestionService.getApmErrors(
+                orgId,
+                listOf("api"),
+                any(),
+                any(),
+                any(),
+                any(),
+            )
+        }
+    }
+
+    @Test
+    fun `GET v1 apm-errors rejects too many service filters`() = testApplication {
+        val (userId, orgId) = seedUserAndOrg()
+        application {
+            installAuth()
+            routing { traceDashboardRoutes() }
+        }
+        val services = (1..51).joinToString(",") { "service-$it" }
+        val response = client.get("/v1/apm-errors?services=$services") {
+            withAuth(jwtToken(userId, orgId))
+        }
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        coVerify(exactly = 0) {
+            TraceIngestionService.getApmErrors(any(), any(), any(), any(), any(), any())
+        }
+    }
+
+    @Test
+    fun `GET v1 apm-errors rejects too many raw service filters before dedupe`() = testApplication {
+        val (userId, orgId) = seedUserAndOrg()
+        application {
+            installAuth()
+            routing { traceDashboardRoutes() }
+        }
+        val services = (1..51).joinToString(",") { "api" }
+        val response = client.get("/v1/apm-errors?services=$services") {
+            withAuth(jwtToken(userId, orgId))
+        }
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        coVerify(exactly = 0) {
+            TraceIngestionService.getApmErrors(any(), any(), any(), any(), any(), any())
+        }
+    }
+
+    @Test
+    fun `GET v1 apm-errors rejects oversized service filters`() = testApplication {
+        val (userId, orgId) = seedUserAndOrg()
+        application {
+            installAuth()
+            routing { traceDashboardRoutes() }
+        }
+        val serviceName = "a".repeat(201)
+        val response = client.get("/v1/apm-errors?services=$serviceName") {
+            withAuth(jwtToken(userId, orgId))
+        }
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        coVerify(exactly = 0) {
+            TraceIngestionService.getApmErrors(any(), any(), any(), any(), any(), any())
+        }
     }
 
     @Test
