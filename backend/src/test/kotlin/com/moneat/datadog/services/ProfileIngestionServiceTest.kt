@@ -308,6 +308,9 @@ class ProfileIngestionServiceTest {
             assertTrue(queries.any { it.contains("service = 'api'") })
             assertTrue(queries.any { it.contains("start_time >= fromUnixTimestamp64Milli(1000)") })
             assertTrue(queries.any { it.contains("LIMIT 5 OFFSET 2") })
+            val listQuery = queries.single { it.contains("ORDER BY start_time DESC") }
+            assertTrue(listQuery.contains("toString(start_time) as profile_start_time"))
+            assertTrue(!listQuery.contains("toString(start_time) as start_time"))
         } finally {
             unmockkObject(ClickHouseClient)
         }
@@ -384,6 +387,37 @@ class ProfileIngestionServiceTest {
             assertEquals("", profile.runtime)
             assertEquals("", profile.language)
             assertEquals("datadog", profile.source)
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
+    fun `listProfiles maps profile timestamp aliases`() = runBlocking {
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "testdb"
+            coEvery { ClickHouseClient.executeWithFormat(any(), any()) } answers {
+                val sql = firstArg<String>()
+                if (sql.contains("SELECT count()")) {
+                    "1"
+                } else {
+                    compactJson(
+                        """{"profile_id":"profile-3","service":"api","profile_type":"cpu",""",
+                        """"profile_start_time":"2026-01-01 00:00:00",""",
+                        """"profile_end_time":"2026-01-01 00:00:01",""",
+                        """"duration_ns":42,"size_bytes":7,"tags":{}}""",
+                    )
+                }
+            }
+
+            val profile = ProfileIngestionService.listProfiles(
+                organizationId = 42,
+                query = DdProfileListQuery(),
+            ).profiles.single()
+
+            assertEquals("2026-01-01 00:00:00", profile.startTime)
+            assertEquals("2026-01-01 00:00:01", profile.endTime)
         } finally {
             unmockkObject(ClickHouseClient)
         }

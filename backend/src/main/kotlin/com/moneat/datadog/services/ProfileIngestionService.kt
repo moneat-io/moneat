@@ -334,8 +334,8 @@ object ProfileIngestionService {
                 toString(profile_id) as profile_id,
                 host, service, env, version,
                 runtime, language, profile_type,
-                toString(start_time) as start_time,
-                toString(end_time) as end_time,
+                toString(start_time) as profile_start_time,
+                toString(end_time) as profile_end_time,
                 duration_ns, storage_key,
                 tags, size_bytes, source
             FROM `$clickhouseDb`.profiles
@@ -665,6 +665,8 @@ object ProfileIngestionService {
         val service = serviceFromColumn.ifBlank {
             firstNonBlankTag(tagsMap, "service", "service.name", "service_name")
         }
+        val startTime = obj["start_time"] ?: obj["profile_start_time"]
+        val endTime = obj["end_time"] ?: obj["profile_end_time"]
         return DdProfileResponse(
             profileId = obj["profile_id"]!!.jsonPrimitive.content,
             host = obj["host"]?.jsonPrimitive?.content ?: "",
@@ -674,8 +676,8 @@ object ProfileIngestionService {
             runtime = obj["runtime"]?.jsonPrimitive?.content ?: "",
             language = obj["language"]?.jsonPrimitive?.content ?: "",
             profileType = obj["profile_type"]!!.jsonPrimitive.content,
-            startTime = obj["start_time"]!!.jsonPrimitive.content,
-            endTime = obj["end_time"]!!.jsonPrimitive.content,
+            startTime = startTime!!.jsonPrimitive.content,
+            endTime = endTime!!.jsonPrimitive.content,
             durationNs = obj["duration_ns"]!!.jsonPrimitive.long,
             sizeBytes = obj["size_bytes"]!!.jsonPrimitive.long,
             tags = tagsMap,
