@@ -262,6 +262,42 @@ class ProtoDecoderTest {
     }
 
     @Test
+    fun `ProcessAgentPayloadDecoder decodeCollectorContainer maps container fields`() {
+        val container = buildProto {
+            writeString(2, "container-123")
+            writeString(3, "checkout")
+            writeString(4, "moneat/checkout:latest")
+            writeUInt64(6, 536870912L)
+            writeEnum(8, 3)
+            writeFloat(16, 128.5f)
+            writeFloat(17, 64.5f)
+            writeFloat(20, 37.25f)
+            writeUInt64(21, 268435456L)
+            writeString(26, "env:stage")
+            writeString(26, "service:checkout")
+        }
+        val proto = buildProto {
+            writeString(1, "node-01")
+            writeByteArray(3, container)
+        }
+
+        val result = ProcessAgentPayloadDecoder.decodeCollectorContainer(proto)
+
+        assertEquals("node-01", result.host)
+        val decoded = result.containers.single()
+        assertEquals("container-123", decoded.containerId)
+        assertEquals("checkout", decoded.name)
+        assertEquals("moneat/checkout:latest", decoded.image)
+        assertEquals("running", decoded.state)
+        assertEquals(37.25, decoded.cpuPercent)
+        assertEquals(268435456L, decoded.memUsage)
+        assertEquals(536870912L, decoded.memLimit)
+        assertEquals(128L, decoded.netRxBytes)
+        assertEquals(64L, decoded.netTxBytes)
+        assertEquals(listOf("env:stage", "service:checkout"), decoded.tags)
+    }
+
+    @Test
     fun `ProcessAgentPayloadDecoder decodeCollectorProc with empty proto`() {
         val result = ProcessAgentPayloadDecoder.decodeCollectorProc(ByteArray(0))
         assertEquals("", result.host)
@@ -275,6 +311,57 @@ class ProtoDecoderTest {
         }
         val result = ProcessAgentPayloadDecoder.decodeCollectorProc(proto)
         assertEquals("worker-01", result.host)
+    }
+
+    @Test
+    fun `ProcessAgentPayloadDecoder decodeCollectorProc maps process stats`() {
+        val command = buildProto {
+            writeString(1, "/usr/bin/java")
+            writeString(1, "-jar")
+            writeString(1, "backend.jar")
+            writeString(8, "/usr/bin/java")
+        }
+        val user = buildProto {
+            writeString(1, "moneat")
+        }
+        val memory = buildProto {
+            writeUInt64(1, 123456L)
+            writeUInt64(2, 654321L)
+        }
+        val cpu = buildProto {
+            writeFloat(2, 12.5f)
+            writeInt32(5, 42)
+        }
+        val process = buildProto {
+            writeInt32(2, 9876)
+            writeByteArray(4, command)
+            writeByteArray(5, user)
+            writeByteArray(7, memory)
+            writeByteArray(8, cpu)
+            writeInt32(11, 64)
+            writeEnum(12, 2)
+            writeString(23, "env:stage")
+            writeString(23, "service:backend")
+        }
+        val proto = buildProto {
+            writeString(2, "worker-01")
+            writeByteArray(3, process)
+        }
+
+        val result = ProcessAgentPayloadDecoder.decodeCollectorProc(proto)
+
+        val decoded = result.processes.single()
+        assertEquals(9876, decoded.pid)
+        assertEquals("java", decoded.name)
+        assertEquals("/usr/bin/java -jar backend.jar", decoded.command)
+        assertEquals("moneat", decoded.user)
+        assertEquals(12.5, decoded.cpuPercent)
+        assertEquals(123456L, decoded.memRss)
+        assertEquals(654321L, decoded.memVms)
+        assertEquals("R", decoded.state)
+        assertEquals(42, decoded.threadCount)
+        assertEquals(64, decoded.openFdCount)
+        assertEquals(listOf("env:stage", "service:backend"), decoded.tags)
     }
 
     @Test
@@ -303,6 +390,21 @@ class ProtoDecoderTest {
         assertEquals("java", process.name)
         assertEquals("/usr/bin/java", process.command)
         assertEquals("app", process.user)
+    }
+
+    @Test
+    fun `ProcessAgentPayloadDecoder decodeCollectorProcDiscovery falls back to namespace pid`() {
+        val discovery = buildProto {
+            writeInt32(2, 2468)
+        }
+        val proto = buildProto {
+            writeString(1, "worker-02")
+            writeByteArray(4, discovery)
+        }
+
+        val result = ProcessAgentPayloadDecoder.decodeCollectorProcDiscovery(proto)
+
+        assertEquals(2468, result.processes.single().pid)
     }
 
     @Test
