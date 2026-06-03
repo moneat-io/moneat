@@ -203,6 +203,7 @@ services:
       DD_PROCESS_AGENT_ENABLED: "true"
       # Log Collection
       DD_LOGS_ENABLED: "true"
+      DD_LOGS_CONFIG_LOGS_NO_SSL: "false"
       DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL: "true"
       # Dynamic Instrumentation (Probes / Debugger)
       DD_DYNAMIC_INSTRUMENTATION_ENABLED: "true"

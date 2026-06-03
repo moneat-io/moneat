@@ -18,6 +18,7 @@ Add log configuration to your `datadog.yaml`:
 logs_enabled: true
 logs_config:
   logs_dd_url: "{{INGEST_URL}}"
+  logs_no_ssl: false
 ```
 
 Then restart the agent:

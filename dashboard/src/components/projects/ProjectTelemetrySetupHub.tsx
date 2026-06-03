@@ -175,6 +175,7 @@ process_config:
 
 logs_config:
   logs_dd_url: ${ingestUrl}
+  logs_no_ssl: false
 
 container_lifecycle:
   dd_url: ${baseUrl}

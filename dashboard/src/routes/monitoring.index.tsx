@@ -183,6 +183,15 @@ apm_config:
   profiling_dd_url: ${ingestUrl}/profiling/v1/input`
   }
 
+  if (options.logs) {
+    yaml += `
+
+# Log Collection
+logs_config:
+  logs_dd_url: ${ingestUrl}
+  logs_no_ssl: false`
+  }
+
   yaml += `
 
 # EPForwarder tracks (cannot be set via env vars)
@@ -225,7 +234,11 @@ function getDockerRunCommand(apiKey: string, options: AgentOptions): string {
   }
   
   if (options.logs) {
-    envs += `\n  -e DD_LOGS_ENABLED=true \\\n  -e DD_LOGS_CONFIG_DD_URL="${ingestUrl}" \\\n  -e DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true \\`
+    envs +=
+      `\n  -e DD_LOGS_ENABLED=true \\` +
+      `\n  -e DD_LOGS_CONFIG_DD_URL="${ingestUrl}" \\` +
+      `\n  -e DD_LOGS_CONFIG_LOGS_NO_SSL=false \\` +
+      `\n  -e DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true \\`
   }
   
   if (options.processes) {
@@ -260,7 +273,11 @@ function getDockerComposeCommand(apiKey: string, options: AgentOptions): string 
   }
   
   if (options.logs) {
-    envs += `\n      - DD_LOGS_ENABLED=true\n      - DD_LOGS_CONFIG_DD_URL=${ingestUrl}\n      - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true`
+    envs +=
+      `\n      - DD_LOGS_ENABLED=true` +
+      `\n      - DD_LOGS_CONFIG_DD_URL=${ingestUrl}` +
+      `\n      - DD_LOGS_CONFIG_LOGS_NO_SSL=false` +
+      `\n      - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true`
   }
   
   if (options.processes) {
