@@ -45,6 +45,7 @@ import com.moneat.datadog.routes.dbmIngestRoutes
 import com.moneat.datadog.routes.debuggerIngestRoutes
 import com.moneat.datadog.routes.miscIngestRoutes
 import com.moneat.datadog.routes.orchestratorIngestRoutes
+import com.moneat.datadog.routes.profileIngestRoutes
 import com.moneat.datadog.routes.telemetryProxyRoutes
 import com.moneat.datadog.routes.traceDashboardRoutes
 import com.moneat.datadog.routes.traceIngestRoutes
@@ -61,6 +62,7 @@ import com.moneat.datadog.services.DdTraceListQuery
 import com.moneat.datadog.services.DebuggerIngestionService
 import com.moneat.datadog.services.MiscIngestionService
 import com.moneat.datadog.services.OrchestratorIngestionService
+import com.moneat.datadog.services.ProfileIngestionService
 import com.moneat.datadog.services.QueuedConnectionEntry
 import com.moneat.datadog.services.QueuedInfraBatch
 import com.moneat.datadog.services.QueuedProcessEntry
@@ -75,11 +77,13 @@ import com.moneat.testsupport.RouteTestSupport
 import com.moneat.testsupport.RouteTestSupport.installJwtAuth
 import com.moneat.testsupport.RouteTestSupport.withAuth
 import com.moneat.testsupport.TestDatabaseHelper
+import io.ktor.client.request.forms.FormBuilder
+import io.ktor.client.request.forms.MultiPartFormDataContent
+import io.ktor.client.request.forms.formData
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.head
 import io.ktor.client.request.header
-import io.ktor.client.request.head
 import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.request
@@ -87,6 +91,8 @@ import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsBytes
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.Headers
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
@@ -161,6 +167,7 @@ class DatadogRoutesExtendedTest {
                 TelemetryProxyService,
                 DatadogService,
                 TraceIngestionService,
+                ProfileIngestionService,
                 ClickHouseClient,
             )
         }
@@ -208,6 +215,7 @@ class DatadogRoutesExtendedTest {
             TelemetryProxyService,
             DatadogService,
             TraceIngestionService,
+            ProfileIngestionService,
             ClickHouseClient,
         )
 
@@ -254,6 +262,7 @@ class DatadogRoutesExtendedTest {
         every { DebuggerIngestionService.enqueueDiagnostics(any(), any()) } returns 1
         every { TelemetryProxyService.acknowledge(any(), any(), any()) } just Runs
         coEvery { TraceIngestionService.insertTraceStats(any(), any()) } just Runs
+        coEvery { ProfileIngestionService.ingestProfile(any(), any(), any(), any()) } returns "profile-test"
     }
 
     private fun Application.installAuth() {
@@ -1586,6 +1595,53 @@ class DatadogRoutesExtendedTest {
         assertEquals(HttpStatusCode.Accepted, response.status)
     }
 
+    // ──── ProfileIngestRoutes ────
+
+    @Test
+    fun `POST profile v2 aliases ingest uploaded profile`() = testApplication {
+        val aliases = listOf(
+            "/api/v2/profile",
+            "/dd/api/v2/profile",
+            "/profiling/v1/input",
+            "/dd/profiling/v1/input",
+        )
+        application {
+            install(ContentNegotiation) { json() }
+            routing { profileIngestRoutes(allowingQuotaService) }
+        }
+
+        aliases.forEach { path ->
+            val response = client.post(path) {
+                header(DD_API_KEY_HEADER, TEST_API_KEY)
+                setBody(profileMultipartBody())
+            }
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertTrue(response.bodyAsText().contains("profile-test"))
+        }
+
+        coVerify(exactly = aliases.size) {
+            ProfileIngestionService.ingestProfile(TEST_ORG_ID, any(), any(), "cpu")
+        }
+    }
+
+    @Test
+    fun `POST profile v2 returns 400 for non multipart payload`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            routing { profileIngestRoutes(allowingQuotaService) }
+        }
+
+        val response = client.post("/api/v2/profile") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.Json)
+            setBody("{}")
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("Multipart profile payload required"))
+    }
+
     // ──── DatadogInfraRoutes ────
 
     @Test
@@ -2270,6 +2326,85 @@ class DatadogRoutesExtendedTest {
 
     // ──── Helpers ────
 
+    private fun profileMultipartBody(): MultiPartFormDataContent =
+        MultiPartFormDataContent(
+            formData {
+                appendFile(
+                    name = "event",
+                    fileName = "event.json",
+                    bytes = """{"start":"2026-06-03T03:45:00Z","end":"2026-06-03T03:46:00Z"}"""
+                        .toByteArray(),
+                    contentType = ContentType.Application.Json,
+                )
+                appendFile("chunk_data", "cpu.pprof", buildPprofProfilePayload())
+            }
+        )
+
+    private fun FormBuilder.appendFile(
+        name: String,
+        fileName: String,
+        bytes: ByteArray,
+        contentType: ContentType = ContentType.Application.OctetStream,
+    ) {
+        append(
+            name,
+            bytes,
+            Headers.build {
+                append(
+                    HttpHeaders.ContentDisposition,
+                    "form-data; name=\"$name\"; filename=\"$fileName\""
+                )
+                append(HttpHeaders.ContentType, contentType.toString())
+            }
+        )
+    }
+
+    private fun buildPprofProfilePayload(): ByteArray =
+        buildProto {
+            writeByteArray(
+                1,
+                buildProto {
+                    writeInt64(1, 1)
+                    writeInt64(2, 2)
+                }
+            )
+            writeByteArray(
+                2,
+                buildProto {
+                    writeUInt64(1, 1)
+                    writeInt64(2, 1)
+                }
+            )
+            writeByteArray(
+                4,
+                buildProto {
+                    writeUInt64(1, 1)
+                    writeByteArray(
+                        4,
+                        buildProto {
+                            writeUInt64(1, 1)
+                            writeInt64(2, 1)
+                        }
+                    )
+                }
+            )
+            writeByteArray(
+                5,
+                buildProto {
+                    writeUInt64(1, 1)
+                    writeInt64(2, 3)
+                    writeInt64(3, 3)
+                    writeInt64(4, 4)
+                }
+            )
+            writeString(6, "")
+            writeString(6, "samples")
+            writeString(6, "count")
+            writeString(6, "main")
+            writeString(6, "main.go")
+            writeInt64(14, 1)
+        }
+
     private fun sampleHost(orgId: Int = TEST_ORG_ID) = DdHostInfo(
         id = 42,
         organizationId = orgId,
@@ -2286,3 +2421,13 @@ class DatadogRoutesExtendedTest {
         isOnline = true,
     )
 }
+
+private fun buildProto(block: CodedOutputStream.() -> Unit): ByteArray {
+    val buffer = ByteArray(PROTO_TEST_BUFFER_SIZE)
+    val output = CodedOutputStream.newInstance(buffer)
+    output.block()
+    output.flush()
+    return buffer.copyOf(output.totalBytesWritten)
+}
+
+private const val PROTO_TEST_BUFFER_SIZE = 512
