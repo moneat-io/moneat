@@ -20,6 +20,8 @@ import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.reserveDatadogQuota
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
+import com.moneat.datadog.decompression.MiscPayloadDecoder
+import com.moneat.datadog.models.DatadogEventPayload
 import com.moneat.datadog.models.DdContainerImagePayload
 import com.moneat.datadog.models.DdDataLineagePayload
 import com.moneat.datadog.models.DdDataStreamsPayload
@@ -27,6 +29,7 @@ import com.moneat.datadog.models.DdPipelineStatsPayload
 import com.moneat.datadog.models.DdSbomPayload
 import com.moneat.datadog.models.DdSymbolDbPayload
 import com.moneat.datadog.models.DdSyntheticsPayload
+import com.moneat.datadog.services.DatadogEventService
 import com.moneat.datadog.services.MiscIngestionService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
@@ -80,14 +83,14 @@ fun Route.miscIngestRoutes(
     // The event platform forwarder strips the path from dd_url, so contlcycle/contimage/sbom
     // arrive at /api/v2/... (no /dd/ prefix) when redirected via datadog.yaml dd_url config.
     route("/api/v2") {
-        post("/contlcycle") { handleContainerLifecycle() }
+        post("/contlcycle") { handleContainerLifecycle(quotaService) }
         post("/contimage") { handleContainerImage(quotaService) }
         if (includeSbomRoutes) {
             post("/sbom") { handleSbom(quotaService) }
         }
         post("/synthetics") { handleSynthetics(quotaService) }
         post("/data_streams_messages") { handleDataStreams(quotaService) }
-        post("/events") { handleEventManagement() }
+        post("/events") { handleEventManagement(quotaService) }
     }
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleSymbolDb(
@@ -188,13 +191,15 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleContainerImage(
         val contentType = call.request.headers["Content-Type"] ?: ""
         val contentEncoding = call.request.headers["Content-Encoding"]
         val rawBody = call.receive<ByteArray>()
-        if (contentType.contains("protobuf")) {
-            // Agent sends application/x-protobuf; full protobuf pipeline not yet implemented.
-            logger.debug { "Accepted DD contimage (protobuf) for org $orgId" }
+        val body = DecompressionService.decompress(rawBody, contentEncoding)
+        if (contentType.isProtobufContent()) {
+            val payloads = MiscPayloadDecoder.decodeContainerImages(body)
+            if (!reserveMiscQuota(quotaService, orgId, payloads.size, body)) return
+            val count = MiscIngestionService.enqueueContainerImages(orgId, payloads)
+            logger.debug { "Accepted $count DD contimage protobuf images for org $orgId" }
             call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
             return
         }
-        val body = DecompressionService.decompress(rawBody, contentEncoding)
         val payload = json.decodeFromString<DdContainerImagePayload>(body.decodeToString())
         if (!reserveMiscQuota(quotaService, orgId, 1, body)) return
         MiscIngestionService.enqueueContainerImage(orgId, payload)
@@ -213,13 +218,15 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSbom(
         val contentType = call.request.headers["Content-Type"] ?: ""
         val contentEncoding = call.request.headers["Content-Encoding"]
         val rawBody = call.receive<ByteArray>()
-        if (contentType.contains("protobuf")) {
-            // Agent sends application/x-protobuf; full protobuf pipeline not yet implemented.
-            logger.debug { "Accepted DD sbom (protobuf) for org $orgId" }
+        val body = DecompressionService.decompress(rawBody, contentEncoding)
+        if (contentType.isProtobufContent()) {
+            val payload = MiscPayloadDecoder.decodeSbom(body)
+            if (!reserveMiscQuota(quotaService, orgId, payload.packages.size, body)) return
+            val count = MiscIngestionService.enqueueSbom(orgId, payload)
+            logger.debug { "Accepted $count DD sbom protobuf packages for org $orgId" }
             call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
             return
         }
-        val body = DecompressionService.decompress(rawBody, contentEncoding)
         val payload = json.decodeFromString<DdSbomPayload>(body.decodeToString())
         if (!reserveMiscQuota(quotaService, orgId, payload.packages.size, body)) return
         val count = MiscIngestionService.enqueueSbom(orgId, payload)
@@ -231,16 +238,49 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSbom(
     }
 }
 
-private suspend fun io.ktor.server.routing.RoutingContext.handleContainerLifecycle() {
-    DatadogAuthMiddleware.authenticate(call) ?: return
-    // Container lifecycle events accepted; full ingestion pipeline not yet implemented.
-    call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+private suspend fun io.ktor.server.routing.RoutingContext.handleContainerLifecycle(
+    quotaService: BillingQuotaService,
+) {
+    val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
+    suspendRunCatching {
+        val contentType = call.request.headers["Content-Type"] ?: ""
+        val contentEncoding = call.request.headers["Content-Encoding"]
+        val rawBody = call.receive<ByteArray>()
+        val body = DecompressionService.decompress(rawBody, contentEncoding)
+        val events = if (contentType.isProtobufContent()) {
+            MiscPayloadDecoder.decodeContainerLifecycleEvents(body)
+        } else if (body.decodeToString().trim().isEmptyObject()) {
+            emptyList()
+        } else {
+            throw IllegalArgumentException("Container lifecycle payload must be protobuf")
+        }
+        if (!reserveEventQuota(quotaService, orgId, events.size, body)) return
+        val count = DatadogEventService.enqueueEvents(orgId.toLong(), events)
+        logger.debug { "Accepted $count DD container lifecycle events for org $orgId" }
+        call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+    }.getOrElse { e ->
+        logger.error(e) { "Failed to process container lifecycle events" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    }
 }
 
-private suspend fun io.ktor.server.routing.RoutingContext.handleEventManagement() {
-    DatadogAuthMiddleware.authenticate(call) ?: return
-    // Event management events accepted; full ingestion pipeline not yet implemented.
-    call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+private suspend fun io.ktor.server.routing.RoutingContext.handleEventManagement(
+    quotaService: BillingQuotaService,
+) {
+    val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
+    suspendRunCatching {
+        val contentEncoding = call.request.headers["Content-Encoding"]
+        val rawBody = call.receive<ByteArray>()
+        val body = DecompressionService.decompress(rawBody, contentEncoding)
+        val payload = json.decodeFromString<DatadogEventPayload>(body.decodeToString())
+        if (!reserveEventQuota(quotaService, orgId, payload.events.size, body)) return
+        val count = DatadogEventService.enqueueEvents(orgId.toLong(), payload.events)
+        logger.debug { "Accepted $count DD event-management events for org $orgId" }
+        call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+    }.getOrElse { e ->
+        logger.error(e) { "Failed to process event-management events" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    }
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.reserveMiscQuota(
@@ -258,3 +298,25 @@ private suspend fun io.ktor.server.routing.RoutingContext.reserveMiscQuota(
         requestedBytes = bytes.size.toLong(),
     )
 }
+
+private suspend fun io.ktor.server.routing.RoutingContext.reserveEventQuota(
+    quotaService: BillingQuotaService,
+    organizationId: Int,
+    requestedUnits: Int,
+    bytes: ByteArray,
+): Boolean {
+    return reserveDatadogQuota(
+        call = call,
+        quotaService = quotaService,
+        organizationId = organizationId,
+        requestedUnits = requestedUnits,
+        eventType = "dd_event",
+        requestedBytes = bytes.size.toLong(),
+    )
+}
+
+private fun String.isProtobufContent(): Boolean =
+    contains("protobuf", ignoreCase = true)
+
+private fun String.isEmptyObject(): Boolean =
+    this == "{}" || this == "null"

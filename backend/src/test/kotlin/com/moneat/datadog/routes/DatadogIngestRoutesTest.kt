@@ -16,6 +16,7 @@
 
 package com.moneat.datadog.routes
 
+import com.google.protobuf.CodedOutputStream
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.services.DatadogEventService
@@ -37,6 +38,7 @@ import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
@@ -46,11 +48,13 @@ import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.clearMocks
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkAll
 import io.mockk.verify
+import java.io.ByteArrayOutputStream
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import kotlin.test.AfterTest
@@ -129,6 +133,7 @@ class DatadogIngestRoutesTest {
         every { MiscIngestionService.enqueueDataStreams(any(), any()) } returns 0
         every { MiscIngestionService.enqueueSynthetics(any(), any()) } returns 0
         every { MiscIngestionService.enqueueContainerImage(any(), any()) } returns Unit
+        every { MiscIngestionService.enqueueContainerImages(any(), any()) } returns 0
         every { MiscIngestionService.enqueueSbom(any(), any()) } returns 0
         every { DbmIngestionService.enqueueQueries(any(), any()) } returns 0
         every { DbmIngestionService.enqueueQueryPayloads(any(), any()) } returns 0
@@ -166,6 +171,14 @@ class DatadogIngestRoutesTest {
                 orchestratorIngestRoutes(quotaService)
             }
         }
+    }
+
+    private fun buildProto(block: CodedOutputStream.() -> Unit): ByteArray {
+        val output = ByteArrayOutputStream()
+        val coded = CodedOutputStream.newInstance(output)
+        coded.block()
+        coded.flush()
+        return output.toByteArray()
     }
 
     // ──── V1 Metric Series ────
@@ -725,6 +738,48 @@ class DatadogIngestRoutesTest {
     }
 
     @Test
+    fun `dd contimage protobuf decodes and enqueues images`() = testApplication {
+        every { DatadogService.validateApiKey(VALID_KEY) } returns ORG_ID
+        every { MiscIngestionService.enqueueContainerImages(any(), any()) } returns 1
+        installRoutes()()
+        val os = buildProto {
+            writeString(1, "linux")
+            writeString(3, "arm64")
+        }
+        val image = buildProto {
+            writeString(2, "registry.example.com/team/worker")
+            writeString(3, "registry.example.com")
+            writeString(5, "registry.example.com/team/worker:v2")
+            writeString(6, "sha256:worker")
+            writeInt64(7, 2048L)
+            writeByteArray(9, os)
+            writeString(12, "env:test")
+        }
+        val payload = buildProto {
+            writeString(2, "host-a")
+            writeByteArray(3, image)
+        }
+
+        val response = client.post("/dd/api/v2/contimage") {
+            header(DD_API_KEY_HEADER, VALID_KEY)
+            header(HttpHeaders.ContentType, "application/x-protobuf")
+            setBody(payload)
+        }
+
+        assertEquals(HttpStatusCode.Accepted, response.status)
+        verify {
+            MiscIngestionService.enqueueContainerImages(
+                ORG_ID,
+                match {
+                    it.single().imageName == "registry.example.com/team/worker" &&
+                        it.single().imageTag == "v2" &&
+                        it.single().architecture == "arm64"
+                },
+            )
+        }
+    }
+
+    @Test
     fun `dd sbom returns 403 when api key is missing`() = testApplication {
         installRoutes()()
         val response = client.post("/dd/api/v2/sbom") {
@@ -744,6 +799,52 @@ class DatadogIngestRoutesTest {
             setBody("{}")
         }
         assertEquals(HttpStatusCode.Accepted, response.status)
+    }
+
+    @Test
+    fun `dd sbom protobuf decodes and enqueues packages`() = testApplication {
+        every { DatadogService.validateApiKey(VALID_KEY) } returns ORG_ID
+        every { MiscIngestionService.enqueueSbom(any(), any()) } returns 1
+        installRoutes()()
+        val component = buildProto {
+            writeEnum(1, 3)
+            writeString(3, "pkg-ref")
+            writeString(8, "openssl")
+            writeString(9, "3.0.0")
+            writeString(16, "pkg:deb/openssl@3.0.0")
+        }
+        val bom = buildProto {
+            writeByteArray(5, component)
+        }
+        val entity = buildProto {
+            writeEnum(1, 1)
+            writeString(2, "sha256:image")
+            writeString(4, "registry.example.com/team/api:v1")
+            writeString(7, "service:api")
+            writeByteArray(10, bom)
+        }
+        val payload = buildProto {
+            writeString(2, "host-b")
+            writeByteArray(4, entity)
+        }
+
+        val response = client.post("/dd/api/v2/sbom") {
+            header(DD_API_KEY_HEADER, VALID_KEY)
+            header(HttpHeaders.ContentType, "application/x-protobuf")
+            setBody(payload)
+        }
+
+        assertEquals(HttpStatusCode.Accepted, response.status)
+        verify {
+            MiscIngestionService.enqueueSbom(
+                ORG_ID,
+                match {
+                    it.host == "host-b" &&
+                        it.packages.single().name == "openssl" &&
+                        it.tags.contains("service:api")
+                },
+            )
+        }
     }
 
     // ──── Misc Ingest – non-/dd prefix ────
@@ -771,15 +872,65 @@ class DatadogIngestRoutesTest {
     }
 
     @Test
+    fun `contlcycle protobuf decodes and enqueues lifecycle events`() = testApplication {
+        every { DatadogService.validateApiKey(VALID_KEY) } returns ORG_ID
+        coEvery { DatadogEventService.enqueueEvents(any(), any()) } returns 1
+        installRoutes()()
+        val container = buildProto {
+            writeString(1, "container-1")
+            writeString(2, "containerd")
+            writeInt32(3, 137)
+        }
+        val event = buildProto {
+            writeEnum(1, 0)
+            writeByteArray(2, container)
+        }
+        val payload = buildProto {
+            writeString(2, "host-c")
+            writeEnum(3, 0)
+            writeByteArray(4, event)
+        }
+
+        val response = client.post("/api/v2/contlcycle") {
+            header(DD_API_KEY_HEADER, VALID_KEY)
+            header(HttpHeaders.ContentType, "application/x-protobuf")
+            setBody(payload)
+        }
+
+        assertEquals(HttpStatusCode.Accepted, response.status)
+        coVerify {
+            DatadogEventService.enqueueEvents(
+                ORG_ID.toLong(),
+                match {
+                    it.single().host == "host-c" &&
+                        it.single().tags.contains("object_id:container-1") &&
+                        it.single().tags.contains("exit_code:137")
+                },
+            )
+        }
+    }
+
+    @Test
     fun `event management returns accepted with valid api key`() = testApplication {
         every { DatadogService.validateApiKey(VALID_KEY) } returns ORG_ID
+        coEvery { DatadogEventService.enqueueEvents(any(), any()) } returns 1
         installRoutes()()
         val response = client.post("/api/v2/events") {
             header(DD_API_KEY_HEADER, VALID_KEY)
             contentType(ContentType.Application.Json)
-            setBody("{}")
+            setBody("""{"events":[{"title":"deploy","host":"web-01","tags":["env:test"]}]}""")
         }
         assertEquals(HttpStatusCode.Accepted, response.status)
+        coVerify {
+            DatadogEventService.enqueueEvents(
+                ORG_ID.toLong(),
+                match {
+                    it.single().title == "deploy" &&
+                        it.single().host == "web-01" &&
+                        it.single().tags.contains("env:test")
+                },
+            )
+        }
     }
 
     @Test
