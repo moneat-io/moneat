@@ -59,6 +59,7 @@ class DatadogLogServiceTest {
     @Test
     fun `mapDdLogs maps status to level correctly`() {
         val entries = listOf(
+            DatadogLogEntry(message = "trace msg", status = "trace"),
             DatadogLogEntry(message = "debug msg", status = "debug"),
             DatadogLogEntry(message = "info msg", status = "info"),
             DatadogLogEntry(message = "notice msg", status = "notice"),
@@ -73,16 +74,67 @@ class DatadogLogServiceTest {
 
         val batch = DatadogLogService.mapDdLogs(1L, entries)
 
-        assertEquals("debug", batch.logs[0].level)
-        assertEquals("info", batch.logs[1].level)
+        assertEquals("trace", batch.logs[0].level)
+        assertEquals("debug", batch.logs[1].level)
         assertEquals("info", batch.logs[2].level)
-        assertEquals("warn", batch.logs[3].level)
+        assertEquals("info", batch.logs[3].level)
         assertEquals("warn", batch.logs[4].level)
-        assertEquals("error", batch.logs[5].level)
-        assertEquals("fatal", batch.logs[6].level)
+        assertEquals("warn", batch.logs[5].level)
+        assertEquals("error", batch.logs[6].level)
         assertEquals("fatal", batch.logs[7].level)
         assertEquals("fatal", batch.logs[8].level)
-        assertEquals("info", batch.logs[9].level) // default
+        assertEquals("fatal", batch.logs[9].level)
+        assertEquals("info", batch.logs[10].level) // default
+    }
+
+    @Test
+    fun `mapDdLogs derives level and tags from Datadog Agent log lines`() {
+        val rawMessage =
+            "2026-06-03 02:05:42 UTC | TRACE | ERROR | " +
+                "(pkg/trace/log/throttled.go:46 in log) | Received unexpected status code 403"
+        val entries = listOf(
+            DatadogLogEntry(
+                message = rawMessage,
+                status = "info",
+                service = "moneat-stage",
+                ddsource = "agent"
+            )
+        )
+
+        val batch = DatadogLogService.mapDdLogs(1L, entries)
+        val log = batch.logs.single()
+
+        assertEquals("error", log.level)
+        assertEquals("Received unexpected status code 403", log.message)
+        assertEquals(rawMessage, log.body)
+        assertEquals("trace", log.tags["category"])
+        assertEquals("trace", log.tags["datadog.agent.component"])
+        assertEquals("datadog_agent", log.tags["log.format"])
+        assertEquals("pkg/trace/log/throttled.go:46 in log", log.tags["datadog.agent.caller"])
+        assertEquals("pkg/trace/log/throttled.go", log.tags["code.filepath"])
+        assertEquals("log", log.tags["code.function"])
+        assertEquals("agent", log.tags["ddsource"])
+    }
+
+    @Test
+    fun `mapDdLogs keeps more severe envelope level for Agent log lines`() {
+        val rawMessage =
+            "2026-06-03 02:05:34 UTC | CORE | WARN | " +
+                "(pkg/process/runner/submitter.go:332 in logQueueSize) | Delivery queues: process[size=42]"
+        val entries = listOf(
+            DatadogLogEntry(
+                message = rawMessage,
+                status = "error"
+            )
+        )
+
+        val batch = DatadogLogService.mapDdLogs(1L, entries)
+        val log = batch.logs.single()
+
+        assertEquals("error", log.level)
+        assertEquals("Delivery queues: process[size=42]", log.message)
+        assertEquals("core", log.tags["category"])
+        assertEquals("logQueueSize", log.tags["code.function"])
     }
 
     @Test
