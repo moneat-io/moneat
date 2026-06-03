@@ -71,6 +71,42 @@ import {oneDark, oneLight} from 'react-syntax-highlighter/dist/esm/styles/prism'
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io'
 
+function datadogLogsEndpoint(ingestUrl: string): {address: string; noSsl: boolean} {
+  try {
+    const parsed = new URL(ingestUrl)
+    const port = parsed.port || (parsed.protocol === 'http:' ? '80' : '443')
+    return {
+      address: `${parsed.hostname}:${port}`,
+      noSsl: parsed.protocol === 'http:',
+    }
+  } catch {
+    return {
+      address: ingestUrl.replace(/^https?:\/\//, '').replace(/\/.*$/, ''),
+      noSsl: false,
+    }
+  }
+}
+
+function datadogForwarderEndpoint(backendUrl: string): string {
+  const normalized = backendUrl.replace(/\/$/, '')
+  try {
+    const parsed = new URL(normalized)
+    const port = parsed.port ? `:${parsed.port}` : ''
+    return parsed.protocol === 'https:' ? `${parsed.hostname}${port}` : normalized
+  } catch {
+    return normalized
+  }
+}
+
+function datadogProfileEndpoint(backendUrl: string, apiKey?: string | null): string {
+  const endpoint = backendUrl.replace(/\/$/, '') + '/api/v2/profile'
+  return apiKey ? endpoint + '?api_key=' + encodeURIComponent(apiKey) : endpoint
+}
+
+function datadogTelemetryEndpoint(backendUrl: string): string {
+  return backendUrl.replace(/\/$/, '') + '/dd/telemetry/proxy'
+}
+
 function MonitoringPage() {
   return <MonitoringHostsPage />
 }
@@ -168,9 +204,13 @@ type AgentOptions = {
   processes: boolean
 }
 
-function getDatadogYaml(options: AgentOptions): string {
+function getDatadogYaml(options: AgentOptions, apiKey?: string | null): string {
   const backendUrl = BACKEND_URL.replace(/\/$/, '')
   const ingestUrl = backendUrl + '/dd'
+  const logsEndpoint = datadogLogsEndpoint(ingestUrl)
+  const forwarderEndpoint = datadogForwarderEndpoint(backendUrl)
+  const profileEndpoint = datadogProfileEndpoint(backendUrl, apiKey)
+  const telemetryEndpoint = datadogTelemetryEndpoint(backendUrl)
 
   let yaml = `# Datadog Agent configuration for Moneat
 docker_query_timeout: 15`
@@ -180,43 +220,55 @@ docker_query_timeout: 15`
 
 # Continuous Profiling (agent uses this URL verbatim)
 apm_config:
-  profiling_dd_url: ${ingestUrl}/profiling/v1/input`
+  profiling_dd_url: ${profileEndpoint}
+  telemetry:
+    dd_url: ${telemetryEndpoint}`
+  }
+
+  if (options.logs) {
+    yaml += `
+
+# Log Collection
+logs_config:
+  logs_dd_url: ${logsEndpoint.address}
+  logs_no_ssl: ${logsEndpoint.noSsl}`
   }
 
   yaml += `
 
 # EPForwarder tracks (cannot be set via env vars)
 container_lifecycle:
-  dd_url: ${backendUrl}
+  dd_url: ${forwarderEndpoint}
 container_image:
-  dd_url: ${backendUrl}
+  dd_url: ${forwarderEndpoint}
 sbom:
-  dd_url: ${backendUrl}
+  dd_url: ${forwarderEndpoint}
 network_devices:
   metadata:
-    dd_url: ${backendUrl}
+    dd_url: ${forwarderEndpoint}
   snmp_traps:
     forwarder:
-      dd_url: ${backendUrl}
+      dd_url: ${forwarderEndpoint}
   netflow:
     forwarder:
-      dd_url: ${backendUrl}
+      dd_url: ${forwarderEndpoint}
 synthetics:
   forwarder:
-    dd_url: ${backendUrl}
+    dd_url: ${forwarderEndpoint}
 database_monitoring:
   metrics:
-    dd_url: ${backendUrl}
+    dd_url: ${forwarderEndpoint}
   samples:
-    dd_url: ${backendUrl}
+    dd_url: ${forwarderEndpoint}
   activity:
-    dd_url: ${backendUrl}`
+    dd_url: ${forwarderEndpoint}`
 
   return yaml
 }
 
 function getDockerRunCommand(apiKey: string, options: AgentOptions): string {
   const ingestUrl = BACKEND_URL.replace(/\/$/, '') + '/dd'
+  const logsEndpoint = datadogLogsEndpoint(ingestUrl)
   
   let envs = `  -e DD_API_KEY="${apiKey}" \\\n  -e DD_DD_URL="${ingestUrl}" \\`
   
@@ -225,7 +277,11 @@ function getDockerRunCommand(apiKey: string, options: AgentOptions): string {
   }
   
   if (options.logs) {
-    envs += `\n  -e DD_LOGS_ENABLED=true \\\n  -e DD_LOGS_CONFIG_DD_URL="${ingestUrl}" \\\n  -e DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true \\`
+    envs +=
+      `\n  -e DD_LOGS_ENABLED=true \\` +
+      `\n  -e DD_LOGS_CONFIG_LOGS_DD_URL="${logsEndpoint.address}" \\` +
+      `\n  -e DD_LOGS_CONFIG_LOGS_NO_SSL=${logsEndpoint.noSsl} \\` +
+      `\n  -e DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true \\`
   }
   
   if (options.processes) {
@@ -252,6 +308,7 @@ ${envs}
 
 function getDockerComposeCommand(apiKey: string, options: AgentOptions): string {
   const ingestUrl = BACKEND_URL.replace(/\/$/, '') + '/dd'
+  const logsEndpoint = datadogLogsEndpoint(ingestUrl)
   
   let envs = `      - DD_API_KEY=${apiKey}\n      - DD_DD_URL=${ingestUrl}`
   
@@ -260,7 +317,11 @@ function getDockerComposeCommand(apiKey: string, options: AgentOptions): string 
   }
   
   if (options.logs) {
-    envs += `\n      - DD_LOGS_ENABLED=true\n      - DD_LOGS_CONFIG_DD_URL=${ingestUrl}\n      - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true`
+    envs +=
+      `\n      - DD_LOGS_ENABLED=true` +
+      `\n      - DD_LOGS_CONFIG_LOGS_DD_URL=${logsEndpoint.address}` +
+      `\n      - DD_LOGS_CONFIG_LOGS_NO_SSL=${logsEndpoint.noSsl}` +
+      `\n      - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true`
   }
   
   if (options.processes) {
@@ -360,7 +421,13 @@ function AddHostDialog({
   }
 
   const handleCopyYaml = () => {
-    copyWithToast(getDatadogYaml(options), setCopiedYaml, 'YAML config copied to clipboard', 'Please copy the config manually', toast)
+    copyWithToast(
+      getDatadogYaml(options, createdKey),
+      setCopiedYaml,
+      'YAML config copied to clipboard',
+      'Please copy the config manually',
+      toast
+    )
   }
 
   return (
@@ -501,7 +568,7 @@ function AddHostDialog({
                       showLineNumbers={false}
                       wrapLongLines={false}
                     >
-                      {getDatadogYaml(options)}
+                      {getDatadogYaml(options, createdKey)}
                     </SyntaxHighlighter>
                   </div>
                   <Button
