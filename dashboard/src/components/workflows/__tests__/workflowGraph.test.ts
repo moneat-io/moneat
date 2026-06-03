@@ -82,7 +82,7 @@ const catalog: WorkflowCatalogResponse = {
     label: 'When an alert triggers',
     description: 'Alert trigger.',
     scope: [],
-    default_once_for_template: ['alert.deduplication_key'],
+    default_once_for_template: ['alert.episode_key', 'alert.notification_sequence'],
   }],
   steps: [emailStep],
   node_types: [],
@@ -273,7 +273,7 @@ describe('workflow graph conversion', () => {
   it('builds drafts from catalog defaults and existing workflows', () => {
     expect(emptyWorkflowDraft(catalog)).toMatchObject({
       triggerName: 'alert.triggered',
-      onceForTemplate: 'alert.deduplication_key',
+      onceForTemplate: 'alert.episode_key, alert.notification_sequence',
     })
 
     expect(draftFromWorkflow(workflowResponse({name: 'Existing'}))).toMatchObject({

@@ -16,6 +16,7 @@
 
 package com.moneat.workflows
 
+import com.moneat.alerts.models.AlertEpisodes
 import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.alerts.models.AlertSeverity
 import com.moneat.alerts.models.AlertSource
@@ -521,7 +522,8 @@ class WorkflowGovernanceServiceTest {
             WorkflowRuns,
             WorkflowRunSteps,
             WorkflowAuditEvents,
-            WorkflowUsageEvents
+            WorkflowUsageEvents,
+            AlertEpisodes
         )
         transaction {
             // Drop child-to-parent so foreign keys never block a re-create between tests.
@@ -530,9 +532,10 @@ class WorkflowGovernanceServiceTest {
                 "workflow_runs",
                 "workflow_versions",
                 "workflow_audit_events",
-                "workflow_usage_events"
+                "workflow_usage_events",
+                "alert_episodes"
             ).forEach { table -> exec("DROP TABLE IF EXISTS $table") }
-            SchemaUtils.create(Users, Organizations, Memberships, Workflows)
+            SchemaUtils.create(Users, Organizations, Memberships, Workflows, AlertEpisodes)
             createWorkflowVersionTable()
             createWorkflowRunTable()
             createWorkflowRunStepTable()

@@ -16,6 +16,8 @@
 
 package com.moneat.events.routes
 
+import com.moneat.alerts.models.SuppressAlertEpisodeRequest
+import com.moneat.alerts.services.AlertEpisodeService
 import com.moneat.auth.routes.accountDeletionRoutes
 import com.moneat.auth.services.Quadruple
 import com.moneat.billing.routes.billingRoutes
@@ -88,11 +90,13 @@ private const val DEFAULT_EVENTS_LIMIT = 50
 private const val DEFAULT_TRANSACTIONS_LIMIT = 20
 private const val DEFAULT_REPLAYS_LIMIT = 10
 private const val DEFAULT_ALERT_FREQUENCY_MINUTES = 30
+private const val DEFAULT_ALERT_LIFECYCLE_LIMIT = 50
 private const val ERROR_NO_ORGANIZATION_ACCESS = "No organization access"
 
 @Suppress("kotlin:S3776")
 fun Route.apiRoutes() {
     val koin = GlobalContext.get()
+    val alertEpisodeService = koin.get<AlertEpisodeService>()
     val dashboardService = koin.get<DashboardService>()
     val projectIdResolver = koin.get<ProjectIdResolver>()
 
@@ -124,6 +128,8 @@ fun Route.apiRoutes() {
 
                 // Integrations
                 integrationRoutes()
+
+                alertLifecycleRoutes(alertEpisodeService)
 
                 // User profile
                 get("/user") {
@@ -1491,6 +1497,43 @@ fun Route.apiRoutes() {
     route("/v1") {
         integrationCallbackRoutes()
     }
+}
+
+private fun Route.alertLifecycleRoutes(alertEpisodeService: AlertEpisodeService) {
+    get("/alerts/lifecycles") {
+        val userId = call.principal<JWTPrincipal>()!!.payload.getClaim("userId").asInt()
+        val orgId = call.resolveSubscriptionOrganizationId(userId) ?: return@get
+        val status = call.request.queryParameters["status"]
+        val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_ALERT_LIFECYCLE_LIMIT
+        call.respond(alertEpisodeService.listEpisodes(orgId, status, limit))
+    }
+
+    post("/alerts/lifecycles/{episodeId}/ignore") {
+        val userId = call.principal<JWTPrincipal>()!!.payload.getClaim("userId").asInt()
+        val orgId = call.resolveSubscriptionOrganizationId(userId) ?: return@post
+        val episodeId = call.alertEpisodeId() ?: return@post
+        val request = call.receive<SuppressAlertEpisodeRequest>()
+        val episode = alertEpisodeService.suppressEpisode(orgId, episodeId, userId, request.reason)
+            ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert episode not found"))
+        call.respond(episode)
+    }
+
+    post("/alerts/lifecycles/{episodeId}/unignore") {
+        val userId = call.principal<JWTPrincipal>()!!.payload.getClaim("userId").asInt()
+        val orgId = call.resolveSubscriptionOrganizationId(userId) ?: return@post
+        val episodeId = call.alertEpisodeId() ?: return@post
+        val episode = alertEpisodeService.unsuppressEpisode(orgId, episodeId)
+            ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert episode not found"))
+        call.respond(episode)
+    }
+}
+
+private suspend fun ApplicationCall.alertEpisodeId(): Int? {
+    val episodeId = parameters["episodeId"]?.toIntOrNull()
+    if (episodeId == null) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert episode ID"))
+    }
+    return episodeId
 }
 
 private fun ApplicationCall.resolveProjectPathId(projectIdResolver: ProjectIdResolver): Long? =

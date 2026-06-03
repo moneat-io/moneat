@@ -18,6 +18,9 @@
 
 package com.moneat.services
 
+import com.moneat.alerts.models.AlertSource
+import com.moneat.alerts.services.AlertEpisodeContext
+import com.moneat.alerts.services.AlertEpisodeService
 import com.moneat.events.models.EventResponse
 import com.moneat.events.models.FeedbackUpdateRequest
 import com.moneat.events.models.IssueTransactionResponse
@@ -29,7 +32,10 @@ import com.moneat.events.services.DashboardQueryHelper
 import com.moneat.events.services.FeedbackService
 import com.moneat.events.services.IngestionWorker
 import com.moneat.events.services.IssueService
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Projects
 import com.moneat.shared.services.ProjectIdResolver
+import com.moneat.testsupport.TestDatabaseHelper
 import io.ktor.server.plugins.BadRequestException
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -41,6 +47,10 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -48,6 +58,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Instant
 
 /**
  * Extended tests for events/services covering:
@@ -60,14 +71,17 @@ class EventServicesExtendedTest {
 
     companion object {
         private const val ISSUE_1 = "issue-1"
+        private const val ORGANIZATION_ID = 1
         private const val TIMESTAMP_2024_01_01 = "2024-01-01T00:00:00.000Z"
         private const val UUID_550E8400 = "550e8400-e29b-41d4-a716-446655440000"
         private const val EMAIL_A_B = "a@b.com"
+        private var db: Database? = null
     }
 
     // ──── shared mocks ────
     private lateinit var issueRepository: IssueRepository
     private lateinit var queryHelper: DashboardQueryHelper
+    private lateinit var alertEpisodeService: AlertEpisodeService
     private lateinit var issueService: IssueService
 
     private val testProjectId = 10L
@@ -75,8 +89,29 @@ class EventServicesExtendedTest {
 
     @BeforeTest
     fun setup() {
+        db = db ?: Database.connect(
+            url = "jdbc:h2:mem:moneat_event_services_extended;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+            driver = "org.h2.Driver"
+        )
+        TransactionManager.defaultDatabase = db
+        TestDatabaseHelper.resetSchema(Organizations, Projects)
+        transaction {
+            Organizations.insert {
+                it[id] = ORGANIZATION_ID
+                it[name] = "Test Org"
+                it[slug] = "test-org"
+            }
+            Projects.insert {
+                it[id] = testProjectId
+                it[organization_id] = ORGANIZATION_ID
+                it[name] = "Test Project"
+                it[slug] = "test-project"
+            }
+        }
+
         issueRepository = mockk(relaxed = true)
         queryHelper = mockk(relaxed = true)
+        alertEpisodeService = mockk(relaxed = true)
 
         coEvery { queryHelper.getProjectRetentionDays(any()) } returns 30
         every {
@@ -87,7 +122,8 @@ class EventServicesExtendedTest {
         issueService = IssueService(
             issueRepository,
             queryHelper,
-            ProjectIdResolver(lookupResourceIdByProjectId = { null })
+            ProjectIdResolver(lookupResourceIdByProjectId = { null }),
+            alertEpisodeService
         )
     }
 
@@ -396,6 +432,88 @@ class EventServicesExtendedTest {
         coEvery { issueRepository.getProjectIdForIssue(testIssueId) } returns testProjectId
         issueService.updateIssue(testIssueId, IssueUpdateRequest(status = null))
         verify(exactly = 0) { issueRepository.upsertIssueStatus(any(), any(), any()) }
+    }
+
+    @Test
+    fun `updateIssue ignored suppresses current error alert episode`() = runBlocking {
+        coEvery { issueRepository.getProjectIdForIssue(testIssueId) } returns testProjectId
+
+        issueService.updateIssue(testIssueId, IssueUpdateRequest(status = "ignored"))
+
+        verify {
+            alertEpisodeService.suppressCurrentEpisode(
+                organizationId = ORGANIZATION_ID,
+                source = AlertSource.ERROR_ALERT,
+                deduplicationKey = errorAlertDedupKey(),
+                userId = null,
+                reason = "Issue ignored",
+                now = any()
+            )
+        }
+    }
+
+    @Test
+    fun `updateIssue resolved and archived close current error alert episode`() = runBlocking {
+        coEvery { issueRepository.getProjectIdForIssue(testIssueId) } returns testProjectId
+
+        issueService.updateIssue(testIssueId, IssueUpdateRequest(status = "resolved"))
+        issueService.updateIssue(testIssueId, IssueUpdateRequest(status = "archived"))
+
+        verify(exactly = 2) {
+            alertEpisodeService.closeCurrentEpisode(
+                organizationId = ORGANIZATION_ID,
+                source = AlertSource.ERROR_ALERT,
+                deduplicationKey = errorAlertDedupKey(),
+                now = any()
+            )
+        }
+    }
+
+    @Test
+    fun `updateIssue unresolved reopens and unsuppresses existing error alert episode`() = runBlocking {
+        coEvery { issueRepository.getProjectIdForIssue(testIssueId) } returns testProjectId
+        every {
+            alertEpisodeService.openCurrentEpisode(
+                organizationId = ORGANIZATION_ID,
+                source = AlertSource.ERROR_ALERT,
+                deduplicationKey = errorAlertDedupKey(),
+                now = any()
+            )
+        } returns suppressedEpisode()
+
+        issueService.updateIssue(testIssueId, IssueUpdateRequest(status = "unresolved"))
+
+        verify {
+            alertEpisodeService.unsuppressCurrentEpisode(
+                organizationId = ORGANIZATION_ID,
+                source = AlertSource.ERROR_ALERT,
+                deduplicationKey = errorAlertDedupKey(),
+                now = any()
+            )
+        }
+    }
+
+    private fun errorAlertDedupKey(): String = "moneat-error-$testIssueId"
+
+    private fun suppressedEpisode(): AlertEpisodeContext {
+        val now = Instant.parse("2026-06-02T12:00:00Z")
+        return AlertEpisodeContext(
+            id = 1,
+            organizationId = ORGANIZATION_ID,
+            source = AlertSource.ERROR_ALERT.name,
+            deduplicationKey = errorAlertDedupKey(),
+            episodeSeq = 1,
+            episodeKey = "${errorAlertDedupKey()}#1",
+            status = "FIRING",
+            openedAt = now,
+            lastSeenAt = now,
+            resolvedAt = null,
+            lastNotificationAt = null,
+            notificationCount = 1,
+            suppressedAt = now,
+            suppressedByUserId = null,
+            suppressReason = "Issue ignored"
+        )
     }
 
     // ================================================================

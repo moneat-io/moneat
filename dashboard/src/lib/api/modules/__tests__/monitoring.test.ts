@@ -718,6 +718,98 @@ describe('Monitoring API module', () => {
     })
   })
 
+  // ──── Alert Lifecycles ────
+
+  describe('getAlertLifecycles', () => {
+    it('passes lifecycle filters and returns episodes', async () => {
+      server.use(
+        http.get(`${API_BASE}/v1/alerts/lifecycles`, ({ request }) => {
+          const url = new URL(request.url)
+          expect(url.searchParams.get('status')).toBe('FIRING')
+          expect(url.searchParams.get('limit')).toBe('25')
+          return HttpResponse.json([
+            {
+              id: 1,
+              organization_id: 10,
+              source: 'HOST_ALERT',
+              deduplication_key: 'host-1',
+              episode_seq: 2,
+              episode_key: 'host-1#2',
+              status: 'FIRING',
+              opened_at: '2026-06-02T12:00:00Z',
+              last_seen_at: '2026-06-02T12:05:00Z',
+              notification_count: 1,
+              created_at: '2026-06-02T12:00:00Z',
+              updated_at: '2026-06-02T12:05:00Z',
+            },
+          ])
+        })
+      )
+
+      const result = await api.getAlertLifecycles({status: 'FIRING', limit: 25})
+      expect(result[0].episode_key).toBe('host-1#2')
+      expect(result[0].notification_count).toBe(1)
+    })
+  })
+
+  describe('ignoreAlertLifecycle', () => {
+    it('posts an ignore reason', async () => {
+      server.use(
+        http.post(`${API_BASE}/v1/alerts/lifecycles/7/ignore`, async ({ request }) => {
+          const body = (await request.json()) as Record<string, unknown>
+          expect(body.reason).toBe('Investigating')
+          return HttpResponse.json({
+            id: 7,
+            organization_id: 10,
+            source: 'HOST_ALERT',
+            deduplication_key: 'host-1',
+            episode_seq: 1,
+            episode_key: 'host-1#1',
+            status: 'FIRING',
+            opened_at: '2026-06-02T12:00:00Z',
+            last_seen_at: '2026-06-02T12:00:00Z',
+            notification_count: 1,
+            suppressed_at: '2026-06-02T12:10:00Z',
+            suppress_reason: 'Investigating',
+            created_at: '2026-06-02T12:00:00Z',
+            updated_at: '2026-06-02T12:10:00Z',
+          })
+        })
+      )
+
+      const result = await api.ignoreAlertLifecycle(7, 'Investigating')
+      expect(result.suppress_reason).toBe('Investigating')
+    })
+  })
+
+  describe('unignoreAlertLifecycle', () => {
+    it('posts to unignore an episode', async () => {
+      server.use(
+        http.post(`${API_BASE}/v1/alerts/lifecycles/7/unignore`, () =>
+          HttpResponse.json({
+            id: 7,
+            organization_id: 10,
+            source: 'HOST_ALERT',
+            deduplication_key: 'host-1',
+            episode_seq: 1,
+            episode_key: 'host-1#1',
+            status: 'FIRING',
+            opened_at: '2026-06-02T12:00:00Z',
+            last_seen_at: '2026-06-02T12:00:00Z',
+            notification_count: 1,
+            suppressed_at: null,
+            suppress_reason: null,
+            created_at: '2026-06-02T12:00:00Z',
+            updated_at: '2026-06-02T12:11:00Z',
+          })
+        )
+      )
+
+      const result = await api.unignoreAlertLifecycle(7)
+      expect(result.suppressed_at).toBeNull()
+    })
+  })
+
   // ──── Silence Periods (field aliasing) ────
 
   describe('getSilencePeriods', () => {

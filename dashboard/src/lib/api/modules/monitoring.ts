@@ -26,6 +26,8 @@ import type {
   DdConnectionListResponse,
   HostAlert,
   HostAlertConfig,
+  AlertEpisode,
+  AlertLifecycleListParams,
   SilencePeriod,
   CreateSilencePeriodRequest,
   SystemMetricsHistory,
@@ -258,7 +260,10 @@ export function monitoringMethods(core: ApiClientCore) {
       if (interval) params.append('interval', interval)
       const query = params.toString()
       return core.request<ContainerMetricsHistory>(
-        urlWithQuery(`${base}/monitor/systems/${systemId}/containers/${encodeURIComponent(containerName)}/metrics`, query)
+        urlWithQuery(
+          `${base}/monitor/systems/${systemId}/containers/${encodeURIComponent(containerName)}/metrics`,
+          query
+        )
       )
     },
 
@@ -340,6 +345,26 @@ export function monitoringMethods(core: ApiClientCore) {
         `${base}/monitor/hosts/${hostId}/alerts/${alertId}?scope=${scope}`,
         { method: 'DELETE' }
       ),
+
+    // Alert lifecycles
+    getAlertLifecycles: (params: AlertLifecycleListParams = {}) => {
+      const searchParams = new URLSearchParams()
+      if (params.status) searchParams.set('status', params.status)
+      if (params.limit != null) searchParams.set('limit', String(params.limit))
+      const query = searchParams.toString()
+      return core.request<AlertEpisode[]>(urlWithQuery(`${base}/alerts/lifecycles`, query))
+    },
+
+    ignoreAlertLifecycle: (episodeId: number, reason?: string) =>
+      core.request<AlertEpisode>(`${base}/alerts/lifecycles/${episodeId}/ignore`, {
+        method: 'POST',
+        body: JSON.stringify(reason === undefined ? {} : {reason}),
+      }),
+
+    unignoreAlertLifecycle: (episodeId: number) =>
+      core.request<AlertEpisode>(`${base}/alerts/lifecycles/${episodeId}/unignore`, {
+        method: 'POST',
+      }),
 
     // Silence periods
     getSilencePeriods: async () => {

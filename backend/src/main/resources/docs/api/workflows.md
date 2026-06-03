@@ -91,12 +91,37 @@ List recent runs for a workflow.
 |------|------|---------|-------------|
 | limit | integer | 50 | Number of runs to return. Values are clamped from 1 to 100. |
 
+### GET /v1/alerts/lifecycles
+
+List alert episodes for the current organization.
+
+**Query parameters:**
+
+| name | type | default | description |
+|------|------|---------|-------------|
+| status | string | all | Optional episode status, such as `FIRING` or `RESOLVED`. |
+| limit | integer | 50 | Number of episodes to return. Values are clamped from 1 to 100. |
+
+### POST /v1/alerts/lifecycles/{episodeId}/ignore
+
+Suppress notifications for the current open alert episode.
+
+**Body:**
+
+| name | type | required | description |
+|------|------|----------|-------------|
+| reason | string | no | Optional suppress reason. |
+
+### POST /v1/alerts/lifecycles/{episodeId}/unignore
+
+Resume notifications for an alert episode.
+
 ## Supported triggers
 
 | name | description |
 |------|-------------|
 | alert.triggered | Runs when Moneat fires an alert lifecycle event. |
-| alert.resolved | Runs when Moneat resolves an alert by deduplication key. |
+| alert.resolved | Runs when Moneat resolves an alert episode. |
 
 ## Supported steps
 
@@ -128,4 +153,12 @@ Dashboard alert events also expose dashboard-specific fields such as `alert.dash
 
 ## Run identity
 
-`once_for_template` is evaluated against the trigger scope to build `workflow_runs.once_for`. Moneat enforces one run per workflow and `once_for` value, which prevents repeated notification loops for the same alert.
+`once_for_template` is evaluated against the trigger scope to build `workflow_runs.once_for`. Moneat
+enforces one run per workflow and `once_for` value, which prevents repeated notification loops.
+
+Firing alert workflows default to `alert.episode_key` and `alert.notification_sequence`, so each
+new alert episode can notify again and long-running episodes can send daily reminders. Resolved alert
+workflows default to `alert.episode_key` and `alert.status`.
+
+`alert.deduplication_key` remains the stable key for the underlying alert condition. Do not use it
+alone as an alert workflow run identity unless repeat episodes should intentionally be suppressed.
