@@ -17,7 +17,7 @@
 import {useMemo, useState} from 'react'
 import {Link} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
-import {api, type HostAlert} from '@/lib/api'
+import {api, type HostAlert, type HostAlertConfig} from '@/lib/api'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {
@@ -63,6 +63,28 @@ const CONDITION_OPTIONS = [
   {value: '==', label: 'Equal to (==)'},
 ]
 
+const hostAlertConfigQueryKey = (hostId: number) => ['host-alert-config', hostId] as const
+
+function replaceAlert(alerts: HostAlert[], updatedAlert: HostAlert): HostAlert[] {
+  return alerts.map((alert) =>
+    alert.id === updatedAlert.id && alert.scope === updatedAlert.scope ? updatedAlert : alert
+  )
+}
+
+function updateAlertConfig(
+  alertConfig: HostAlertConfig | undefined,
+  updatedAlert: HostAlert
+): HostAlertConfig | undefined {
+  if (!alertConfig) return alertConfig
+
+  return {
+    ...alertConfig,
+    globalAlerts: replaceAlert(alertConfig.globalAlerts, updatedAlert),
+    hostAlerts: replaceAlert(alertConfig.hostAlerts, updatedAlert),
+    effectiveAlerts: replaceAlert(alertConfig.effectiveAlerts, updatedAlert),
+  }
+}
+
 export function AlertsTab({hostId}: AlertsTabProps) {
   const queryClient = useQueryClient()
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
@@ -71,7 +93,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
   const [createEnabled, setCreateEnabled] = useState(false)
 
   const {data: alertConfig, isLoading} = useQuery({
-    queryKey: ['host-alert-config', hostId],
+    queryKey: hostAlertConfigQueryKey(hostId),
     queryFn: () => api.getHostAlertConfig(hostId),
     enabled: api.isAuthenticated(),
   })
@@ -87,7 +109,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
   const scopeMutation = useMutation({
     mutationFn: (scope: HostAlertScope) => api.updateHostAlertScope(hostId, scope),
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['host-alert-config', hostId]})
+      queryClient.invalidateQueries({queryKey: hostAlertConfigQueryKey(hostId)})
     },
   })
 
@@ -104,7 +126,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
       }
     }) => api.createHostAlert(hostId, alert, scope),
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['host-alert-config', hostId]})
+      queryClient.invalidateQueries({queryKey: hostAlertConfigQueryKey(hostId)})
       setIsCreateDialogOpen(false)
       setCreateEnabled(false)
     },
@@ -113,8 +135,12 @@ export function AlertsTab({hostId}: AlertsTabProps) {
   const updateMutation = useMutation({
     mutationFn: ({alert, updates}: {alert: HostAlert; updates: Partial<HostAlert>}) =>
       api.updateHostAlert(hostId, alert.id, updates, alert.scope as HostAlertScope),
-    onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['host-alert-config', hostId]})
+    onSuccess: (updatedAlert, {alert, updates}) => {
+      const nextAlert = updatedAlert ?? {...alert, ...updates}
+      queryClient.setQueryData(hostAlertConfigQueryKey(hostId), (current: HostAlertConfig | undefined) =>
+        updateAlertConfig(current, nextAlert)
+      )
+      queryClient.invalidateQueries({queryKey: hostAlertConfigQueryKey(hostId)})
       setIsEditDialogOpen(false)
       setEditingAlert(null)
     },
@@ -123,15 +149,19 @@ export function AlertsTab({hostId}: AlertsTabProps) {
   const deleteMutation = useMutation({
     mutationFn: (alert: HostAlert) => api.deleteHostAlert(hostId, alert.id, alert.scope as HostAlertScope),
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['host-alert-config', hostId]})
+      queryClient.invalidateQueries({queryKey: hostAlertConfigQueryKey(hostId)})
     },
   })
 
   const toggleMutation = useMutation({
     mutationFn: ({alert, enabled}: {alert: HostAlert; enabled: boolean}) =>
       api.updateHostAlert(hostId, alert.id, {enabled}, alert.scope as HostAlertScope),
-    onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['host-alert-config', hostId]})
+    onSuccess: (updatedAlert, {alert, enabled}) => {
+      const nextAlert = updatedAlert ?? {...alert, enabled}
+      queryClient.setQueryData(hostAlertConfigQueryKey(hostId), (current: HostAlertConfig | undefined) =>
+        updateAlertConfig(current, nextAlert)
+      )
+      queryClient.invalidateQueries({queryKey: hostAlertConfigQueryKey(hostId)})
     },
   })
 
@@ -397,6 +427,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
                   }`}
                 >
                   <Switch
+                    aria-label={`${alert.enabled ? 'Disable' : 'Enable'} ${getMetricLabel(alert.metric)} alert`}
                     checked={alert.enabled}
                     onCheckedChange={(enabled) => toggleMutation.mutate({alert, enabled})}
                     disabled={toggleMutation.isPending}
