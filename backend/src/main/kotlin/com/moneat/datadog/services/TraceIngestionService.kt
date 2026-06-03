@@ -44,6 +44,9 @@ import com.moneat.datadog.models.DdServiceMapEntry
 import com.moneat.datadog.models.DdServiceMapResponse
 import com.moneat.datadog.models.DdSpan
 import com.moneat.datadog.models.DdSpanResponse
+import com.moneat.datadog.models.DdSketchSummary
+import com.moneat.datadog.models.DdStatsBucket
+import com.moneat.datadog.models.DdStatsEntry
 import com.moneat.datadog.models.DdStatsPayload
 import com.moneat.datadog.models.DdTraceDetailResponse
 import com.moneat.datadog.models.DdTraceListItem
@@ -69,6 +72,7 @@ import kotlinx.coroutines.coroutineScope
 import mu.KotlinLogging
 import org.msgpack.core.MessagePack
 import org.msgpack.core.MessageUnpacker
+import org.msgpack.value.ValueType
 
 private val logger = KotlinLogging.logger {}
 
@@ -170,6 +174,32 @@ object TraceIngestionService {
             traces.add(spans)
         }
         return traces
+    }
+
+    fun parseMsgpackStats(bytes: ByteArray): DdStatsPayload {
+        MessagePack.newDefaultUnpacker(bytes).use { unpacker ->
+            var hostname = ""
+            var env = ""
+            var version = ""
+            val buckets = mutableListOf<DdStatsBucket>()
+
+            val mapSize = unpacker.unpackMapHeader()
+            for (i in 0 until mapSize) {
+                when (normalizeMsgpackKey(unpacker.unpackString())) {
+                    "agenthostname", "hostname" -> hostname = unpackStringValue(unpacker)
+                    "agentenv", "env" -> env = unpackStringValue(unpacker)
+                    "agentversion", "version" -> version = unpackStringValue(unpacker)
+                    "stats" -> buckets += unpackClientStatsPayloads(unpacker)
+                    else -> unpacker.skipValue()
+                }
+            }
+            return DdStatsPayload(
+                stats = buckets,
+                hostname = hostname,
+                env = env,
+                version = version,
+            )
+        }
     }
 
     /**
@@ -1340,6 +1370,213 @@ object TraceIngestionService {
 
     internal fun parseTraceId(traceId: String): ULong? =
         traceId.toULongOrNull()
+
+    private fun unpackClientStatsPayloads(unpacker: MessageUnpacker): List<DdStatsBucket> {
+        if (unpacker.nextFormat.valueType != ValueType.ARRAY) {
+            unpacker.skipValue()
+            return emptyList()
+        }
+        val clientCount = unpacker.unpackArrayHeader()
+        val buckets = mutableListOf<DdStatsBucket>()
+        for (i in 0 until clientCount) {
+            buckets += unpackClientStatsPayload(unpacker)
+        }
+        return buckets
+    }
+
+    private fun unpackClientStatsPayload(unpacker: MessageUnpacker): List<DdStatsBucket> {
+        if (unpacker.nextFormat.valueType != ValueType.MAP) {
+            unpacker.skipValue()
+            return emptyList()
+        }
+        val mapSize = unpacker.unpackMapHeader()
+        val buckets = mutableListOf<DdStatsBucket>()
+        for (i in 0 until mapSize) {
+            when (normalizeMsgpackKey(unpacker.unpackString())) {
+                "stats" -> buckets += unpackStatsBuckets(unpacker)
+                else -> unpacker.skipValue()
+            }
+        }
+        return buckets
+    }
+
+    private fun unpackStatsBuckets(unpacker: MessageUnpacker): List<DdStatsBucket> {
+        if (unpacker.nextFormat.valueType != ValueType.ARRAY) {
+            unpacker.skipValue()
+            return emptyList()
+        }
+        val bucketCount = unpacker.unpackArrayHeader()
+        return List(bucketCount) { unpackStatsBucket(unpacker) }
+    }
+
+    private fun unpackStatsBucket(unpacker: MessageUnpacker): DdStatsBucket {
+        if (unpacker.nextFormat.valueType != ValueType.MAP) {
+            unpacker.skipValue()
+            return DdStatsBucket()
+        }
+        var start = 0L
+        var duration = 0L
+        val entries = mutableListOf<DdStatsEntry>()
+        val mapSize = unpacker.unpackMapHeader()
+        for (i in 0 until mapSize) {
+            when (normalizeMsgpackKey(unpacker.unpackString())) {
+                "start" -> start = unpackLongValue(unpacker)
+                "duration" -> duration = unpackLongValue(unpacker)
+                "stats" -> entries += unpackGroupedStats(unpacker)
+                else -> unpacker.skipValue()
+            }
+        }
+        return DdStatsBucket(start = start, duration = duration, stats = entries)
+    }
+
+    private fun unpackGroupedStats(unpacker: MessageUnpacker): List<DdStatsEntry> {
+        if (unpacker.nextFormat.valueType != ValueType.ARRAY) {
+            unpacker.skipValue()
+            return emptyList()
+        }
+        val statsCount = unpacker.unpackArrayHeader()
+        return List(statsCount) { unpackGroupedStatsEntry(unpacker) }
+    }
+
+    private fun unpackGroupedStatsEntry(unpacker: MessageUnpacker): DdStatsEntry {
+        if (unpacker.nextFormat.valueType != ValueType.MAP) {
+            unpacker.skipValue()
+            return DdStatsEntry()
+        }
+        val builder = MsgpackStatsEntryBuilder()
+        val mapSize = unpacker.unpackMapHeader()
+        for (i in 0 until mapSize) {
+            unpackGroupedStatsField(unpacker, builder)
+        }
+        return builder.toEntry()
+    }
+
+    private fun unpackGroupedStatsField(
+        unpacker: MessageUnpacker,
+        builder: MsgpackStatsEntryBuilder,
+    ) {
+        when (normalizeMsgpackKey(unpacker.unpackString())) {
+            "name" -> builder.name = unpackStringValue(unpacker)
+            "service" -> builder.service = unpackStringValue(unpacker)
+            "resource" -> builder.resource = unpackStringValue(unpacker)
+            "type" -> builder.type = unpackStringValue(unpacker)
+            "httpstatuscode" -> builder.httpStatusCode = unpackLongValue(unpacker).toInt()
+            "synthetics" -> builder.synthetics = unpackBooleanValue(unpacker)
+            "hits" -> builder.hits = unpackLongValue(unpacker)
+            "toplevelhits" -> builder.topLevelHits = unpackLongValue(unpacker)
+            "errors" -> builder.errors = unpackLongValue(unpacker)
+            "duration" -> builder.duration = unpackLongValue(unpacker)
+            "oksummary" -> builder.okSummary = unpackSketchSummaryValue(unpacker)
+            "errorsummary" -> builder.errorSummary = unpackSketchSummaryValue(unpacker)
+            else -> unpacker.skipValue()
+        }
+    }
+
+    private fun unpackSketchSummaryValue(unpacker: MessageUnpacker): DdSketchSummary? {
+        if (unpacker.nextFormat.valueType != ValueType.MAP) {
+            unpacker.skipValue()
+            return null
+        }
+        var count = 0L
+        var sum = 0.0
+        val mapSize = unpacker.unpackMapHeader()
+        for (i in 0 until mapSize) {
+            when (normalizeMsgpackKey(unpacker.unpackString())) {
+                "count" -> count = unpackLongValue(unpacker)
+                "sum" -> sum = unpackDoubleValue(unpacker)
+                else -> unpacker.skipValue()
+            }
+        }
+        return DdSketchSummary(count = count, sum = sum)
+    }
+
+    private fun unpackStringValue(unpacker: MessageUnpacker): String =
+        when (unpacker.nextFormat.valueType) {
+            ValueType.STRING -> unpacker.unpackString()
+            ValueType.NIL -> {
+                unpacker.unpackNil()
+                ""
+            }
+            else -> {
+                unpacker.skipValue()
+                ""
+            }
+        }
+
+    private fun unpackLongValue(unpacker: MessageUnpacker): Long =
+        when (unpacker.nextFormat.valueType) {
+            ValueType.INTEGER -> unpacker.unpackLong()
+            ValueType.FLOAT -> unpacker.unpackDouble().toLong()
+            ValueType.NIL -> {
+                unpacker.unpackNil()
+                0L
+            }
+            else -> {
+                unpacker.skipValue()
+                0L
+            }
+        }
+
+    private fun unpackDoubleValue(unpacker: MessageUnpacker): Double =
+        when (unpacker.nextFormat.valueType) {
+            ValueType.INTEGER -> unpacker.unpackLong().toDouble()
+            ValueType.FLOAT -> unpacker.unpackDouble()
+            ValueType.NIL -> {
+                unpacker.unpackNil()
+                0.0
+            }
+            else -> {
+                unpacker.skipValue()
+                0.0
+            }
+        }
+
+    private fun unpackBooleanValue(unpacker: MessageUnpacker): Boolean =
+        when (unpacker.nextFormat.valueType) {
+            ValueType.BOOLEAN -> unpacker.unpackBoolean()
+            ValueType.NIL -> {
+                unpacker.unpackNil()
+                false
+            }
+            else -> {
+                unpacker.skipValue()
+                false
+            }
+        }
+
+    private fun normalizeMsgpackKey(key: String): String =
+        key.lowercase().filter { it.isLetterOrDigit() }
+
+    private data class MsgpackStatsEntryBuilder(
+        var name: String = "",
+        var service: String = "",
+        var resource: String = "",
+        var type: String = "",
+        var httpStatusCode: Int = 0,
+        var synthetics: Boolean = false,
+        var hits: Long = 0,
+        var topLevelHits: Long = 0,
+        var errors: Long = 0,
+        var duration: Long = 0,
+        var okSummary: DdSketchSummary? = null,
+        var errorSummary: DdSketchSummary? = null,
+    ) {
+        fun toEntry(): DdStatsEntry =
+            DdStatsEntry(
+                name = name,
+                service = service,
+                resource = resource,
+                type = type,
+                httpStatusCode = httpStatusCode,
+                synthetics = synthetics,
+                hits = hits,
+                topLevelHits = topLevelHits,
+                errors = errors,
+                duration = duration,
+                okSummary = okSummary,
+                errorSummary = errorSummary,
+            )
+    }
 
     private fun List<List<DdSpan>>.toServiceMapSpans(
         organizationId: Int,
