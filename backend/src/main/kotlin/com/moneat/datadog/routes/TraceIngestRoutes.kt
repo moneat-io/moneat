@@ -217,11 +217,11 @@ private fun countTraceSpans(
     tracesJsonElement: JsonElement?,
     isProtobuf: Boolean,
 ): Int? {
-    if (tracesJsonElement != null) {
-        return tracesJsonElement.jsonArray.sumOf { trace -> trace.jsonArray.size }
-    }
-
     return runCatching {
+        if (tracesJsonElement != null) {
+            return@runCatching tracesJsonElement.jsonArray.sumOf { trace -> trace.jsonArray.size }
+        }
+
         val traces = if (isProtobuf) {
             TraceIngestionService.parseProtobufAgentPayload(bytes)
         } else {

@@ -1064,6 +1064,27 @@ class DatadogRoutesExtendedTest {
     }
 
     @Test
+    fun `POST unprefixed api traces returns 400 for invalid JSON shape`() = testApplication {
+        val invalidBodies = listOf("{}", "[{}]")
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing { traceIngestRoutes(allowingQuotaService) }
+        }
+
+        invalidBodies.forEach { body ->
+            val response = client.post("/api/v0.2/traces") {
+                header(DD_API_KEY_HEADER, TEST_API_KEY)
+                contentType(ContentType.Application.Json)
+                setBody(body)
+            }
+
+            assertEquals(HttpStatusCode.BadRequest, response.status, body)
+            assertTrue(response.bodyAsText().contains("Unparseable trace payload"), body)
+        }
+    }
+
+    @Test
     fun `POST unprefixed api trace stats returns 429 when quota is exceeded`() = testApplication {
         val quotaService = rejectingQuotaService()
         val body = """
