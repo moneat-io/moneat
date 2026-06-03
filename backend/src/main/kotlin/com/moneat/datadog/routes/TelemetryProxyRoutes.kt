@@ -19,6 +19,7 @@ package com.moneat.datadog.routes
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.services.TelemetryProxyService
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.request.path
 import io.ktor.server.request.receiveChannel
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -31,9 +32,21 @@ import com.moneat.utils.suspendRunCatching
 private val logger = KotlinLogging.logger {}
 
 fun Route.telemetryProxyRoutes() {
+    route("/telemetry") {
+        post("/proxy/{path...}") { handleTelemetryProxy() }
+    }
+
     route("/dd/telemetry") {
         // POST /dd/telemetry/proxy/* - agent telemetry proxy
         post("/proxy/{path...}") { handleTelemetryProxy() }
+    }
+
+    route("/api/v2") {
+        post("/apmtelemetry") { handleTelemetryProxy() }
+    }
+
+    route("/dd/api/v2") {
+        post("/apmtelemetry") { handleTelemetryProxy() }
     }
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleTelemetryProxy() {
@@ -42,7 +55,8 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleTelemetryProxy()
     suspendRunCatching {
         val rawBytes = call.receiveChannel().toByteArray()
         val path = call.parameters.getAll("path")
-            ?.joinToString("/") ?: "unknown"
+            ?.joinToString("/")
+            ?: call.request.path().trimStart('/')
 
         TelemetryProxyService.acknowledge(organizationId, path, rawBytes.size)
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))

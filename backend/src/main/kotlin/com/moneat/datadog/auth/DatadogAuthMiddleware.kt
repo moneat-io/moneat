@@ -27,6 +27,15 @@ private val logger = KotlinLogging.logger {}
 
 private const val CACHE_TTL_MS = 300_000L // 5 minutes
 private const val MAX_CACHE_SIZE = 10_000
+private val API_KEY_HEADER_NAMES = listOf(
+    "DD-API-KEY",
+    "DD-Api-Key",
+    "dd-api-key",
+    "X-Datadog-API-Key",
+    "X-Datadog-Api-Key",
+    "Api-Key",
+    "api-key",
+)
 
 object DatadogAuthMiddleware {
     private data class CachedKey(val organizationId: Int, val expiresAt: Long)
@@ -48,7 +57,7 @@ object DatadogAuthMiddleware {
         val now = System.currentTimeMillis()
         evictExpiredEntries(now)
 
-        val apiKey = getApiKey(call)
+        val apiKey = extractApiKey(call)
         if (apiKey.isNullOrBlank()) {
             call.respond(
                 HttpStatusCode.Forbidden,
@@ -92,7 +101,7 @@ object DatadogAuthMiddleware {
         val now = System.currentTimeMillis()
         evictExpiredEntries(now)
 
-        val apiKey = getApiKey(call)
+        val apiKey = extractApiKey(call)
         if (apiKey.isNullOrBlank()) {
             call.respond(
                 HttpStatusCode.Forbidden,
@@ -158,9 +167,8 @@ object DatadogAuthMiddleware {
         contextCache.clear()
     }
 
-    private fun getApiKey(call: ApplicationCall): String? =
-        call.request.headers["DD-API-KEY"]
-            ?: call.request.headers["DD-Api-Key"]
-            ?: call.request.headers["dd-api-key"]
+    fun extractApiKey(call: ApplicationCall): String? =
+        API_KEY_HEADER_NAMES.firstNotNullOfOrNull { call.request.headers[it] }
             ?: call.request.queryParameters["api_key"]
+            ?: call.request.queryParameters["api-key"]
 }
