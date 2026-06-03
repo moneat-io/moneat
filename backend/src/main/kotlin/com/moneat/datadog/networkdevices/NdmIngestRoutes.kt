@@ -43,27 +43,30 @@ fun Route.ndmIngestRoutes(
     quotaService: BillingQuotaService = BillingQuotaService(),
 ) {
     route("/dd/api/v1") {
-        post("/ndm") { handleNdmPayload(quotaService) }
+        post("/ndm") { handleNdmPayload(quotaService, "ndm") }
     }
 
     // Event platform forwarder strips path from dd_url, so these arrive without /dd/ prefix.
     route("/api/v2") {
-        post("/ndm") { handleNdmPayload(quotaService) }
-        post("/ndmconfig") { handleNdmPayload(quotaService) }
-        post("/ndmtraps") { handleNdmPayload(quotaService) }
-        post("/ndmflow") { handleNdmPayload(quotaService) }
-        post("/netpath") { handleNdmPayload(quotaService) }
+        post("/ndm") { handleNdmPayload(quotaService, "ndm") }
+        post("/ndmconfig") { handleNdmPayload(quotaService, "ndmconfig") }
+        post("/ndmtraps") { handleNdmPayload(quotaService, "ndmtraps") }
+        post("/ndmflow") { handleNdmPayload(quotaService, "ndmflow") }
+        post("/netpath") { handleNdmPayload(quotaService, "netpath") }
     }
 }
+
 private suspend fun io.ktor.server.routing.RoutingContext.handleNdmPayload(
     quotaService: BillingQuotaService,
+    endpointType: String,
 ) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     suspendRunCatching {
         val contentEncoding = call.request.headers["Content-Encoding"]
         val rawBody = call.receive<ByteArray>()
         val body = DecompressionService.decompress(rawBody, contentEncoding)
-        val payload = json.decodeFromString<DdNdmPayload>(body.decodeToString())
+        val decodedPayload = json.decodeFromString<DdNdmPayload>(body.decodeToString())
+        val payload = decodedPayload.withEndpointType(endpointType)
         val requestedUnits = countNdmPayload(payload)
         if (requestedUnits == null) {
             call.respond(
@@ -84,6 +87,14 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleNdmPayload(
     }.getOrElse { e ->
         logger.error(e) { "Failed to process NDM payload" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+    }
+}
+
+private fun DdNdmPayload.withEndpointType(endpointType: String): DdNdmPayload {
+    return if (type.isBlank()) {
+        copy(type = endpointType)
+    } else {
+        this
     }
 }
 

@@ -18,6 +18,7 @@ package com.moneat.datadog.networkdevices
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.auth.DatadogAuthMiddleware
+import com.moneat.datadog.models.DdNdmPayload
 import com.moneat.datadog.services.DatadogService
 import com.moneat.testsupport.startTestKoin
 import com.moneat.testsupport.stopTestKoin
@@ -37,6 +38,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
+import io.mockk.verify
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -174,5 +176,38 @@ class NdmIngestRoutesTest {
             setBody("""{"type":"netpath","paths":[]}""")
         }
         assertEquals(HttpStatusCode.Accepted, response.status)
+    }
+
+    @Test
+    fun `ndm api v2 endpoints infer payload type from path`() = testApplication {
+        every { DatadogService.validateApiKey(VALID_KEY) } returns 1
+        val capturedTypes = mutableListOf<String>()
+        every { NdmIngestionService.enqueue(any(), any()) } answers {
+            capturedTypes += secondArg<DdNdmPayload>().type
+            1
+        }
+        application {
+            install(ContentNegotiation) { json() }
+            routing { ndmIngestRoutes(quotaService) }
+        }
+
+        val paths = listOf(
+            "/api/v2/ndm" to "ndm",
+            "/api/v2/ndmconfig" to "ndmconfig",
+            "/api/v2/ndmtraps" to "ndmtraps",
+            "/api/v2/ndmflow" to "ndmflow",
+            "/api/v2/netpath" to "netpath",
+        )
+        for (path in paths.map { it.first }) {
+            val response = client.post(path) {
+                header(DD_API_KEY_HEADER, VALID_KEY)
+                contentType(ContentType.Application.Json)
+                setBody("{}")
+            }
+            assertEquals(HttpStatusCode.Accepted, response.status, path)
+        }
+
+        assertEquals(paths.map { it.second }, capturedTypes)
+        verify(exactly = paths.size) { NdmIngestionService.enqueue(1, any()) }
     }
 }
