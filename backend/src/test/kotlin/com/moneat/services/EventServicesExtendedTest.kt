@@ -37,6 +37,7 @@ import com.moneat.shared.models.Projects
 import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.testsupport.TestDatabaseHelper
 import io.ktor.server.plugins.BadRequestException
+import io.ktor.server.plugins.NotFoundException
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -397,7 +398,7 @@ class EventServicesExtendedTest {
     @Test
     fun `updateIssue throws when issue not found`() {
         coEvery { issueRepository.getProjectIdForIssue("missing") } returns null
-        assertFailsWith<IllegalArgumentException> {
+        assertFailsWith<NotFoundException> {
             runBlocking {
                 issueService.updateIssue("missing", IssueUpdateRequest(status = "resolved"))
             }
