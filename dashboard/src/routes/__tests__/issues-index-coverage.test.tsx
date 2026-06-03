@@ -133,15 +133,16 @@ describe('Issues Index - data coverage', () => {
   it('renders issues list with projects and issues data', async () => {
     renderRoute(IssuesIndexRoute)
 
-    // Should show the dashboard header
-    expect(await screen.findByText('Dashboard')).toBeInTheDocument()
+    // Should show the search bar
+    expect(await screen.findByRole('textbox')).toBeInTheDocument()
 
     // Issues should be displayed (wait for async data)
     expect(await screen.findByText(/app.main: TypeError: null ref/)).toBeInTheDocument()
 
-    // Status badges
-    expect(screen.getByText('Resolved')).toBeInTheDocument()
-    expect(screen.getByText('Ignored')).toBeInTheDocument()
+    // Status badges (the row labels also appear as rail facet options, so the
+    // shared-cased ones can occur more than once).
+    expect(screen.getAllByText('Resolved').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Ignored').length).toBeGreaterThan(0)
     expect(screen.getByText('Next Release')).toBeInTheDocument()
 
     // New badge (multiple issues may be "new" since all were first seen recently)
@@ -161,26 +162,43 @@ describe('Issues Index - data coverage', () => {
 
     // Wait for issues to load so the select-all appears
     await screen.findByText(/app.main: TypeError: null ref/)
-    expect(screen.getByPlaceholderText('Search issues...')).toBeInTheDocument()
+    expect(screen.getByRole('textbox')).toBeInTheDocument()
     expect(screen.getByText('Select all')).toBeInTheDocument()
   })
 
   it('filters issues by search query', async () => {
     renderRoute(IssuesIndexRoute)
 
-    await screen.findByText('Dashboard')
-    const searchInput = screen.getByPlaceholderText('Search issues...')
+    await screen.findByText(/app.main: TypeError: null ref/)
+    const searchInput = screen.getByRole('textbox')
     fireEvent.change(searchInput, { target: { value: 'TypeError' } })
+    fireEvent.keyDown(searchInput, { key: 'Enter' })
 
     expect(screen.getByText('1 result')).toBeInTheDocument()
+  })
+
+  it('filters by status from the rail and clears it again (removable, multi-select capable)', async () => {
+    renderRoute(IssuesIndexRoute)
+
+    await screen.findByText(/app.main: TypeError: null ref/)
+    expect(screen.getByText('5 results')).toBeInTheDocument()
+
+    // Include a Status facet from the rail → client-side filter to that status.
+    fireEvent.click(screen.getByRole('button', { name: 'Resolved' }))
+    expect(screen.getByText('1 result')).toBeInTheDocument()
+
+    // Toggling it off clears the filter — the last selection is removable.
+    fireEvent.click(screen.getByRole('button', { name: 'Resolved' }))
+    expect(screen.getByText('5 results')).toBeInTheDocument()
   })
 
   it('shows no issues match filters when search has no results', async () => {
     renderRoute(IssuesIndexRoute)
 
-    await screen.findByText('Dashboard')
-    const searchInput = screen.getByPlaceholderText('Search issues...')
+    await screen.findByText(/app.main: TypeError: null ref/)
+    const searchInput = screen.getByRole('textbox')
     fireEvent.change(searchInput, { target: { value: 'nonexistent-query' } })
+    fireEvent.keyDown(searchInput, { key: 'Enter' })
 
     expect(screen.getByText('No issues match your filters')).toBeInTheDocument()
   })
@@ -196,15 +214,15 @@ describe('Issues Index - data coverage', () => {
   it('switches to APM Errors tab', async () => {
     renderRoute(IssuesIndexRoute)
 
-    await screen.findByText('Dashboard')
+    await screen.findByRole('textbox')
     const apmTab = screen.getByText('APM Errors')
     fireEvent.click(apmTab)
 
     expect(await screen.findByText('No APM errors found')).toBeInTheDocument()
     expect(mockApi.getApmErrors).toHaveBeenCalledTimes(1)
     expect(mockApi.getApmErrors).toHaveBeenCalledWith({
-      service: undefined,
-      limit: 50,
+      services: undefined,
+      limit: 0,
       offset: 0,
       timeRange: '24h',
     })
@@ -239,22 +257,27 @@ describe('Issues Index - data coverage', () => {
       ],
     })
 
+    localStorage.clear()
+    localStorage.setItem('apmErrors.facetFilters', JSON.stringify([{ key: 'service', value: 'api-gateway' }]))
     renderRoute(IssuesIndexRoute)
 
-    await screen.findByText('Dashboard')
+    await screen.findByRole('textbox')
     fireEvent.click(screen.getByText('APM Errors'))
 
+    // Seed the selected service via its persisted slice (the rail/bar selection),
+    // which loads its errors.
     expect(await screen.findByText('Connection refused')).toBeInTheDocument()
     expect(screen.getByText('NetworkError')).toBeInTheDocument()
     expect(screen.getByText('View trace')).toBeInTheDocument()
-    expect(screen.getByText('worker')).toBeInTheDocument()
   })
 
-  it('renders project settings and new project buttons', async () => {
+  it('does not show create or settings affordances in the header', async () => {
     renderRoute(IssuesIndexRoute)
 
-    await screen.findByText('Dashboard')
-    expect(screen.getByText('New Project')).toBeInTheDocument()
-    expect(screen.getByLabelText('Project settings')).toBeInTheDocument()
+    await screen.findByRole('textbox')
+    // Creation/config moved to the sidebar + Configuration page.
+    expect(screen.queryByText('New Project')).not.toBeInTheDocument()
+    expect(screen.queryByText('New Service')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Project settings')).not.toBeInTheDocument()
   })
 })

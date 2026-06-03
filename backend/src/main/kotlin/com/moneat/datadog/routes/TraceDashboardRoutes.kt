@@ -200,7 +200,16 @@ fun Route.traceDashboardRoutes() {
         get("/v1/apm-errors") {
             val orgId = call.organizationId()
                 ?: return@get call.respondUnauthorized()
-            val service = call.parameters["service"]
+            // Accept a multi-select `services` list (comma-separated); fall back to
+            // the legacy single `service` param for backward compatibility.
+            val services = call.parameters["services"]
+                ?.split(",")
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() }
+                ?: call.parameters["service"]
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { listOf(it) }
+                ?: emptyList()
             val limit = (
                 call.parameters["limit"]
                     ?.toIntOrNull() ?: DEFAULT_LIMIT
@@ -212,7 +221,7 @@ fun Route.traceDashboardRoutes() {
 
             val result = TraceIngestionService.getApmErrors(
                 orgId,
-                service,
+                services,
                 limit,
                 offset,
                 timeRange,

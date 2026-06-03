@@ -29,6 +29,7 @@ import type {
 
 type ApmListParams = {
   service?: string
+  services?: string[]
   source?: string
   env?: string
   status?: ApmStatusFilter
@@ -40,6 +41,7 @@ type ApmListParams = {
 
 function appendApmListParams(searchParams: URLSearchParams, params: ApmListParams): void {
   if (params.service) searchParams.set('service', params.service)
+  if (params.services?.length) searchParams.set('services', params.services.join(','))
   if (params.source) searchParams.set('source', params.source)
   if (params.env) searchParams.set('env', params.env)
   if (params.status) searchParams.set('status', params.status)

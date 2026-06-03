@@ -2318,7 +2318,7 @@ class DatadogRoutesExtendedTest {
     fun `GET v1 apm-errors returns 200`() = testApplication {
         val (userId, orgId) = seedUserAndOrg()
         coEvery {
-            TraceIngestionService.getApmErrors(orgId, null, any(), any(), any())
+            TraceIngestionService.getApmErrors(orgId, any(), any(), any(), any())
         } returns DdApmErrorsResponse(emptyList(), 0L)
         application {
             installAuth()

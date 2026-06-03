@@ -14,23 +14,16 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useMemo, useState, type ComponentType, type FormEvent} from 'react'
-import {
-  Check,
-  DatabaseZap,
-  Loader2,
-  RadioTower,
-  ServerCog,
-} from 'lucide-react'
+import {useMemo, useState, type FormEvent} from 'react'
+import {Check, Loader2} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
 import {cn} from '@/lib/utils'
 import {platforms, type PlatformType} from '@/routes/projects'
+import {TelemetrySourcePicker} from '@/components/projects/TelemetrySourcePicker'
 import {
   DEFAULT_SELECTED_TELEMETRY_SOURCE_IDS,
-  TELEMETRY_SOURCES,
-  toggleTelemetrySourceId,
   type TelemetrySourceId,
 } from '@/lib/telemetry-sources'
 
@@ -63,12 +56,6 @@ const platformFilterTabs: Array<{id: PlatformFilter; label: string}> = [
   {id: 'desktop-gaming', label: 'Desktop & Gaming'},
 ]
 
-const sourceIcons: Record<TelemetrySourceId, ComponentType<{className?: string}>> = {
-  'opentelemetry': RadioTower,
-  'sentry-sdk': DatabaseZap,
-  'datadog-agent': ServerCog,
-}
-
 function getDefaultTargets(platformId: string): string[] {
   const platform = platforms.find((candidate) => candidate.id === platformId)
   if (platform?.targets && platform.defaultTargets) {
@@ -80,7 +67,7 @@ function getDefaultTargets(platformId: string): string[] {
 export function ProjectSetupForm({
   onSubmit,
   isSubmitting = false,
-  submitLabel = 'Create Project',
+  submitLabel = 'Create Service',
   submittingLabel = 'Creating...',
   onCancel,
   cancelLabel = 'Cancel',
@@ -132,10 +119,6 @@ export function ProjectSetupForm({
     )
   }
 
-  const handleSourceToggle = (sourceId: TelemetrySourceId) => {
-    setSelectedSourceIds((currentSourceIds) => toggleTelemetrySourceId(currentSourceIds, sourceId))
-  }
-
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault()
     if (!canSubmit || !selectedPlatform) return
@@ -157,7 +140,7 @@ export function ProjectSetupForm({
       ) : null}
 
       <div className="flex flex-col gap-2">
-        <Label htmlFor="project-name">Project Name</Label>
+        <Label htmlFor="project-name">Service name</Label>
         <Input
           id="project-name"
           placeholder="Checkout API"
@@ -249,43 +232,7 @@ export function ProjectSetupForm({
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-3">
-        <div>
-          <Label>Telemetry sources</Label>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Pick the source setup Moneat should walk you through after the project is created.
-          </p>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {TELEMETRY_SOURCES.map((source) => {
-            const Icon = sourceIcons[source.id]
-            const isSelected = selectedSourceIds.includes(source.id)
-            return (
-              <button
-                key={source.id}
-                type="button"
-                onClick={() => handleSourceToggle(source.id)}
-                className={cn(
-                  'flex min-h-28 items-start gap-3 rounded-lg border-2 p-3 text-left transition-all',
-                  isSelected ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
-                )}
-                aria-pressed={isSelected}
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted">
-                  <Icon className="h-4 w-4" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2 text-sm font-medium">
-                    {source.shortLabel}
-                    {isSelected ? <Check className="h-3.5 w-3.5 text-primary" /> : null}
-                  </span>
-                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">{source.description}</span>
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
+      <TelemetrySourcePicker value={selectedSourceIds} onChange={setSelectedSourceIds} />
 
       <div className="flex flex-wrap gap-2 pt-1">
         <Button type="submit" disabled={!canSubmit}>
