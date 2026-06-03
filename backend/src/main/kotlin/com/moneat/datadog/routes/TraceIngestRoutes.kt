@@ -51,7 +51,10 @@ private val json = Json {
 }
 
 private const val QUEUE_KEY = "moneat:traces:queue"
+private const val TRACE_V02_PATH = "/v0.2/traces"
+private const val TRACE_STATS_V02_PATH = "/v0.2/stats"
 private const val TRACE_STATS_V06_PATH = "/v0.6/stats"
+private const val SUPPORT_FLARE_PATH = "/flare"
 
 fun Route.traceIngestRoutes(
     quotaService: BillingQuotaService = BillingQuotaService(),
@@ -75,27 +78,27 @@ fun Route.traceIngestRoutes(
         // DD agent backend/edge format - sent by dd-agent trace writer when forwarding to
         // the configured DD_APM_DD_URL (e.g. https://api.moneat.io/dd)
         route("/api") {
-            post("/v0.2/traces") { handleTraceIntake(quotaService) }
-            put("/v0.2/traces") { handleTraceIntake(quotaService) }
-            post("/v0.2/stats") { handleTraceStats(quotaService) }
-            put("/v0.2/stats") { handleTraceStats(quotaService) }
+            post(TRACE_V02_PATH) { handleTraceIntake(quotaService) }
+            put(TRACE_V02_PATH) { handleTraceIntake(quotaService) }
+            post(TRACE_STATS_V02_PATH) { handleTraceStats(quotaService) }
+            put(TRACE_STATS_V02_PATH) { handleTraceStats(quotaService) }
             post(TRACE_STATS_V06_PATH) { handleTraceStats(quotaService) }
             put(TRACE_STATS_V06_PATH) { handleTraceStats(quotaService) }
         }
 
         route("/support") {
-            get("/flare") { respondAgentDiagnosticOk() }
-            head("/flare") { respondAgentDiagnosticOk() }
-            post("/flare") { respondAgentDiagnosticOk() }
+            get(SUPPORT_FLARE_PATH) { respondAgentDiagnosticOk() }
+            head(SUPPORT_FLARE_PATH) { respondAgentDiagnosticOk() }
+            post(SUPPORT_FLARE_PATH) { respondAgentDiagnosticOk() }
         }
     }
 
     // Some DD agent writers strip path prefixes from configured intake URLs.
     route("/api") {
-        post("/v0.2/traces") { handleTraceIntake(quotaService) }
-        put("/v0.2/traces") { handleTraceIntake(quotaService) }
-        post("/v0.2/stats") { handleTraceStats(quotaService) }
-        put("/v0.2/stats") { handleTraceStats(quotaService) }
+        post(TRACE_V02_PATH) { handleTraceIntake(quotaService) }
+        put(TRACE_V02_PATH) { handleTraceIntake(quotaService) }
+        post(TRACE_STATS_V02_PATH) { handleTraceStats(quotaService) }
+        put(TRACE_STATS_V02_PATH) { handleTraceStats(quotaService) }
         post(TRACE_STATS_V06_PATH) { handleTraceStats(quotaService) }
         put(TRACE_STATS_V06_PATH) { handleTraceStats(quotaService) }
     }

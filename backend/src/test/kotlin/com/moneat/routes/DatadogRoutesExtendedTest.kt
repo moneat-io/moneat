@@ -81,10 +81,12 @@ import io.ktor.client.request.header
 import io.ktor.client.request.head
 import io.ktor.client.request.post
 import io.ktor.client.request.put
+import io.ktor.client.request.request
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsBytes
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
@@ -120,6 +122,12 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class DatadogRoutesExtendedTest {
+
+    private data class TraceAliasRequest(
+        val method: HttpMethod,
+        val path: String,
+        val body: String,
+    )
 
     companion object {
         private const val TEST_ORG_ID = 1
@@ -1093,6 +1101,63 @@ class DatadogRoutesExtendedTest {
     }
 
     @Test
+    fun `trace api aliases parse payloads before quota rejection`() = testApplication {
+        val quotaService = rejectingQuotaService()
+        val traceBody = """[[{"trace_id":1,"span_id":2,"name":"web.request"}]]"""
+        val statsBody = """
+            {
+              "Stats": [
+                {
+                  "Start": 1700000000000,
+                  "Duration": 10000000000,
+                  "Stats": [
+                    {
+                      "Name": "web.request",
+                      "Service": "api",
+                      "Resource": "GET /health",
+                      "Type": "web",
+                      "Hits": 1
+                    }
+                  ]
+                }
+              ]
+            }
+        """.trimIndent()
+        val aliases = listOf(
+            TraceAliasRequest(HttpMethod.Post, "/dd/api/v0.2/traces", traceBody),
+            TraceAliasRequest(HttpMethod.Put, "/dd/api/v0.2/traces", traceBody),
+            TraceAliasRequest(HttpMethod.Post, "/dd/api/v0.2/stats", statsBody),
+            TraceAliasRequest(HttpMethod.Put, "/dd/api/v0.2/stats", statsBody),
+            TraceAliasRequest(HttpMethod.Post, "/dd/api/v0.6/stats", statsBody),
+            TraceAliasRequest(HttpMethod.Put, "/dd/api/v0.6/stats", statsBody),
+            TraceAliasRequest(HttpMethod.Put, "/dd/v0.6/stats", statsBody),
+            TraceAliasRequest(HttpMethod.Put, "/api/v0.2/traces", traceBody),
+            TraceAliasRequest(HttpMethod.Put, "/api/v0.2/stats", statsBody),
+            TraceAliasRequest(HttpMethod.Put, "/api/v0.6/stats", statsBody),
+        )
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing { traceIngestRoutes(quotaService) }
+        }
+
+        aliases.forEach { alias ->
+            val response = client.request(alias.path) {
+                method = alias.method
+                header(DD_API_KEY_HEADER, TEST_API_KEY)
+                contentType(ContentType.Application.Json)
+                setBody(alias.body)
+            }
+
+            assertEquals(
+                HttpStatusCode.TooManyRequests,
+                response.status,
+                "${alias.method.value} ${alias.path}",
+            )
+        }
+    }
+
+    @Test
     fun `POST unprefixed api v0_2 trace stats decodes msgpack and inserts`() = testApplication {
         val quotaService = mockk<BillingQuotaService>()
         val body = buildStatsMsgpackPayload()
@@ -1184,6 +1249,19 @@ class DatadogRoutesExtendedTest {
         val response = client.head("/dd/support/flare")
 
         assertEquals(HttpStatusCode.OK, response.status)
+    }
+
+    @Test
+    fun `POST dd support flare returns diagnostic compatibility response`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            routing { traceIngestRoutes(allowingQuotaService) }
+        }
+
+        val response = client.post("/dd/support/flare")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("agent-diagnostic"))
     }
 
     @Test
