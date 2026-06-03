@@ -31,6 +31,7 @@ import io.ktor.server.request.receiveChannel
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
+import io.ktor.server.routing.head
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
@@ -57,6 +58,7 @@ fun Route.traceIngestRoutes(
 ) {
     route("/dd") {
         get("/_health") { respondAgentDiagnosticOk() }
+        head("/_health") { respondAgentDiagnosticOk() }
 
         // PUT /dd/v0.3/traces - v0.3 format (msgpack)
         put("/v0.3/traces") { handleTraceIntake(quotaService) }
@@ -83,6 +85,7 @@ fun Route.traceIngestRoutes(
 
         route("/support") {
             get("/flare") { respondAgentDiagnosticOk() }
+            head("/flare") { respondAgentDiagnosticOk() }
             post("/flare") { respondAgentDiagnosticOk() }
         }
     }

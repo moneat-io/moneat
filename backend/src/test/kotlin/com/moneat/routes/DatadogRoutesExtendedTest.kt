@@ -78,6 +78,7 @@ import com.moneat.testsupport.TestDatabaseHelper
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.request.head
 import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
@@ -1149,6 +1150,18 @@ class DatadogRoutesExtendedTest {
     }
 
     @Test
+    fun `HEAD dd trace health returns diagnostic compatibility response`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            routing { traceIngestRoutes(allowingQuotaService) }
+        }
+
+        val response = client.head("/dd/_health")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+    }
+
+    @Test
     fun `GET dd support flare returns diagnostic compatibility response`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
@@ -1159,6 +1172,18 @@ class DatadogRoutesExtendedTest {
 
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("ok"))
+    }
+
+    @Test
+    fun `HEAD dd support flare returns diagnostic compatibility response`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            routing { traceIngestRoutes(allowingQuotaService) }
+        }
+
+        val response = client.head("/dd/support/flare")
+
+        assertEquals(HttpStatusCode.OK, response.status)
     }
 
     @Test
