@@ -46,6 +46,7 @@ import {
   Brain,
   Bell,
   Shield,
+  ShieldCheck,
   Settings,
   Folder,
   BarChart3,
@@ -167,6 +168,14 @@ const SETTINGS_ITEMS: Array<{
     keywords: ['users', 'members', 'permissions', 'roles'],
   },
   {
+    label: 'RBAC',
+    description: 'Configure custom access roles',
+    href: '/settings?tab=rbac',
+    tab: 'rbac',
+    icon: ShieldCheck,
+    keywords: ['permissions', 'roles', 'access control', 'rbac'],
+  },
+  {
     label: 'Billing',
     description: 'Plans, payments, and invoices',
     href: '/settings?tab=billing',
@@ -276,13 +285,15 @@ export function CommandPalette() {
   const filteredSettings = useMemo(() => {
     if (!search.trim()) return []
     const q = search.trim().toLowerCase()
-    return SETTINGS_ITEMS.filter(
-      (s) =>
+    return SETTINGS_ITEMS.filter((s) => {
+      if (s.label === 'RBAC' && !hasEnterpriseModule(features, 'advanced_rbac')) return false
+      return (
         s.label.toLowerCase().includes(q) ||
         s.description.toLowerCase().includes(q) ||
         s.keywords?.some((k) => k.toLowerCase().includes(q) || q.includes(k.toLowerCase()))
-    )
-  }, [search])
+      )
+    })
+  }, [features, search])
 
   const handleInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter' && search.startsWith('/')) {

@@ -27,6 +27,7 @@ import {OtlpApiKeysTab} from '@/components/settings/OtlpApiKeysTab'
 import {AgentApiKeysTab} from '@/components/settings/AgentApiKeysTab'
 import {ApmSpanUsageBreakdown} from '@/components/settings/ApmSpanUsageBreakdown'
 import {McpApiKeysTab} from '@/components/settings/McpApiKeysTab'
+import {RbacSettings} from '@/components/settings/RbacSettings'
 import {trackEvent} from '@/lib/analytics'
 import {buildPricingCardModel} from '@/lib/pricing-display'
 import {Button} from '@/components/ui/button'
@@ -77,6 +78,7 @@ import {
   Server,
   Settings,
   Shield,
+  ShieldCheck,
   SlidersHorizontal,
   Trash2,
   TrendingUp,
@@ -182,7 +184,9 @@ function SettingsPage() {
   // SSO: self-hosted can view/configure when entitled; SaaS only Team/Business (not FREE via feature flags)
   const { data: features } = useEnterpriseFeatures()
   const hasSamlModule = hasEnterpriseModule(features, 'saml')
+  const hasAdvancedRbacModule = hasEnterpriseModule(features, 'advanced_rbac')
   const canManageTeam = user?.orgRole === 'admin' || user?.orgRole === 'owner'
+  const canViewRbacTab = canManageTeam && hasAdvancedRbacModule
   const canViewSsoTab =
     isSelfHosted || (!isSelfHosted && (tier === 'TEAM' || tier === 'BUSINESS'))
   const canConfigureSso = user?.orgRole === 'owner' && canViewSsoTab
@@ -251,7 +255,7 @@ function SettingsPage() {
                 <Database className="h-4 w-4 mr-2" />
                 Log Indexes
               </TabsTrigger>
-              {(canManageTeam || canViewSsoTab) && (
+              {(canManageTeam || canViewRbacTab || canViewSsoTab) && (
                 <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 mt-4">
                   Organization
                 </div>
@@ -263,6 +267,15 @@ function SettingsPage() {
                 >
                   <Users className="h-4 w-4 mr-2" />
                   Team
+                </TabsTrigger>
+              )}
+              {canViewRbacTab && (
+                <TabsTrigger
+                  value="rbac"
+                  className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground"
+                >
+                  <ShieldCheck className="h-4 w-4 mr-2" />
+                  RBAC
                 </TabsTrigger>
               )}
               {!isSelfHosted && (
@@ -323,6 +336,11 @@ function SettingsPage() {
             {canManageTeam && (
               <TabsContent value="team" className="space-y-4 mt-0">
                 <TeamSettings />
+              </TabsContent>
+            )}
+            {canViewRbacTab && (
+              <TabsContent value="rbac" className="space-y-4 mt-0">
+                <RbacSettings />
               </TabsContent>
             )}
             <TabsContent value="general" className="space-y-4 mt-0">
