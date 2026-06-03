@@ -22,6 +22,7 @@ import com.moneat.datadog.reserveDatadogQuota
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.services.TraceIngestionService
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
@@ -117,7 +118,13 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleTraceIntake(
     val isJson = contentType.withoutParameters() == ContentType.Application.Json
     val isProtobuf = contentType.contentSubtype.contains("protobuf")
     val tracesJsonElement = if (isJson) {
-        json.parseToJsonElement(bytes.decodeToString())
+        suspendRunCatching {
+            json.parseToJsonElement(bytes.decodeToString())
+        }.getOrElse { e ->
+            logger.warn(e) { "Failed to parse DD trace payload" }
+            call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Unparseable trace payload"))
+            return
+        }
     } else {
         null
     }
@@ -178,7 +185,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleTraceStats(
     val bytes = DecompressionService.decompress(rawBytes, call.request.headers["Content-Encoding"])
     val isJson = call.request.contentType().withoutParameters() == ContentType.Application.Json
 
-    val payload = runCatching {
+    val payload = suspendRunCatching {
         if (isJson) {
             json.decodeFromString<com.moneat.datadog.models.DdStatsPayload>(bytes.decodeToString())
         } else {
