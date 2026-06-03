@@ -37,6 +37,7 @@ private const val MAX_ECOSYSTEM_LENGTH = 64
 private const val CYCLONEDX_FORMAT = "cyclonedx"
 private const val SPDX_PACKAGE_MANAGER_CATEGORY = "package-manager"
 private const val PURL_REFERENCE_TYPE = "purl"
+const val SBOM_NO_USABLE_PACKAGES_MESSAGE = "SBOM contains no packages with name and version"
 
 class SbomValidationException(
     message: String,
@@ -58,7 +59,7 @@ object SbomParser {
             else -> throw SbomValidationException("Unsupported SBOM format")
         }
         if (parsed.packages.isEmpty()) {
-            throw SbomValidationException("SBOM contains no packages with name and version")
+            throw SbomValidationException(SBOM_NO_USABLE_PACKAGES_MESSAGE)
         }
         if (parsed.packages.size > MAX_PACKAGES) {
             throw SbomValidationException("SBOM package count exceeds limit")
@@ -85,7 +86,7 @@ object SbomParser {
             }
         }
         if (packages.isEmpty()) {
-            throw SbomValidationException("SBOM contains no packages with name and version")
+            throw SbomValidationException(SBOM_NO_USABLE_PACKAGES_MESSAGE)
         }
         return ParsedSbom(
             format = SbomFormat.AGENT,
