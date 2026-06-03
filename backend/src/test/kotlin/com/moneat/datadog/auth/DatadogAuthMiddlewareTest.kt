@@ -133,4 +133,32 @@ class DatadogAuthMiddlewareTest {
             assertEquals("1", response.bodyAsText())
         }
     }
+
+    @Test
+    fun `extractApiKey accepts shared Datadog key locations`() = testApplication {
+        application {
+            routing {
+                get("/probe") {
+                    call.respondText(DatadogAuthMiddleware.extractApiKey(call) ?: "missing")
+                }
+            }
+        }
+
+        val cases = listOf(
+            "/probe" to "X-Datadog-API-Key",
+            "/probe" to "Api-Key",
+            "/probe" to "api-key",
+        )
+        cases.forEach { (path, headerName) ->
+            val response = client.get(path) {
+                header(headerName, "header-value")
+            }
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertEquals("header-value", response.bodyAsText())
+        }
+
+        assertEquals("query-value", client.get("/probe?api_key=query-value").bodyAsText())
+        assertEquals("dash-query-value", client.get("/probe?api-key=dash-query-value").bodyAsText())
+    }
 }

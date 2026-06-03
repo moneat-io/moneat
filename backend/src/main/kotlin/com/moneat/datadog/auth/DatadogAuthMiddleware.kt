@@ -57,7 +57,7 @@ object DatadogAuthMiddleware {
         val now = System.currentTimeMillis()
         evictExpiredEntries(now)
 
-        val apiKey = getApiKey(call)
+        val apiKey = extractApiKey(call)
         if (apiKey.isNullOrBlank()) {
             call.respond(
                 HttpStatusCode.Forbidden,
@@ -101,7 +101,7 @@ object DatadogAuthMiddleware {
         val now = System.currentTimeMillis()
         evictExpiredEntries(now)
 
-        val apiKey = getApiKey(call)
+        val apiKey = extractApiKey(call)
         if (apiKey.isNullOrBlank()) {
             call.respond(
                 HttpStatusCode.Forbidden,
@@ -167,7 +167,7 @@ object DatadogAuthMiddleware {
         contextCache.clear()
     }
 
-    private fun getApiKey(call: ApplicationCall): String? =
+    fun extractApiKey(call: ApplicationCall): String? =
         API_KEY_HEADER_NAMES.firstNotNullOfOrNull { call.request.headers[it] }
             ?: call.request.queryParameters["api_key"]
             ?: call.request.queryParameters["api-key"]

@@ -168,10 +168,7 @@ fun Application.configureRateLimiting() {
         }
         register(RateLimitName("datadog-ingestion")) {
             requestKey { call ->
-                val apiKey = call.request.headers["DD-API-KEY"]
-                    ?: call.request.headers["DD-Api-Key"]
-                    ?: call.request.headers["dd-api-key"]
-                    ?: call.request.queryParameters["api_key"]
+                val apiKey = DatadogAuthMiddleware.extractApiKey(call)
                 if (apiKey != null) {
                     DatadogAuthMiddleware.resolveOrgId(apiKey)
                         ?.let { "org:$it" }
