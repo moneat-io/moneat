@@ -156,9 +156,48 @@ function keyPlaceholder(createdKey: string | null, fallback: string): string {
   return createdKey ?? fallback
 }
 
+function datadogLogsEndpoint(ingestUrl: string): {address: string; noSsl: boolean} {
+  try {
+    const parsed = new URL(ingestUrl)
+    const port = parsed.port || (parsed.protocol === 'http:' ? '80' : '443')
+    return {
+      address: `${parsed.hostname}:${port}`,
+      noSsl: parsed.protocol === 'http:',
+    }
+  } catch {
+    return {
+      address: ingestUrl.replace(/^https?:\/\//, '').replace(/\/.*$/, ''),
+      noSsl: false,
+    }
+  }
+}
+
+function datadogForwarderEndpoint(backendUrl: string): string {
+  const normalized = backendUrl.replace(/\/$/, '')
+  try {
+    const parsed = new URL(normalized)
+    const port = parsed.port ? `:${parsed.port}` : ''
+    return parsed.protocol === 'https:' ? `${parsed.hostname}${port}` : normalized
+  } catch {
+    return normalized
+  }
+}
+
+function datadogProfileEndpoint(backendUrl: string, apiKey: string): string {
+  return backendUrl.replace(/\/$/, '') + '/api/v2/profile?api_key=' + encodeURIComponent(apiKey)
+}
+
+function datadogTelemetryEndpoint(backendUrl: string): string {
+  return backendUrl.replace(/\/$/, '') + '/dd/telemetry/proxy'
+}
+
 function datadogYaml(apiKey: string): string {
   const baseUrl = backendBaseUrl.replace(/\/$/, '')
   const ingestUrl = baseUrl + '/dd'
+  const logsEndpoint = datadogLogsEndpoint(ingestUrl)
+  const forwarderEndpoint = datadogForwarderEndpoint(baseUrl)
+  const profileEndpoint = datadogProfileEndpoint(baseUrl, apiKey)
+  const telemetryEndpoint = datadogTelemetryEndpoint(baseUrl)
   return `# Datadog Agent configuration for Moneat
 # Save this file as ${DATADOG_AGENT_CONFIG_PATH}
 # Redirects agent telemetry to your Moneat backend.
@@ -168,53 +207,56 @@ docker_query_timeout: 15
 
 apm_config:
   apm_dd_url: ${ingestUrl}
-  profiling_dd_url: ${ingestUrl}/profiling/v1/input
+  profiling_dd_url: ${profileEndpoint}
+  telemetry:
+    dd_url: ${telemetryEndpoint}
 
 process_config:
   process_dd_url: ${ingestUrl}
 
 logs_config:
-  logs_dd_url: ${ingestUrl}
+  logs_dd_url: ${logsEndpoint.address}
+  logs_no_ssl: ${logsEndpoint.noSsl}
 
 container_lifecycle:
-  dd_url: ${baseUrl}
+  dd_url: ${forwarderEndpoint}
 container_image:
-  dd_url: ${baseUrl}
+  dd_url: ${forwarderEndpoint}
 sbom:
-  dd_url: ${baseUrl}
+  dd_url: ${forwarderEndpoint}
 
 network_devices:
   metadata:
-    dd_url: ${baseUrl}
+    dd_url: ${forwarderEndpoint}
   snmp_traps:
     forwarder:
-      dd_url: ${baseUrl}
+      dd_url: ${forwarderEndpoint}
   netflow:
     forwarder:
-      dd_url: ${baseUrl}
+      dd_url: ${forwarderEndpoint}
 network_config_management:
   forwarder:
-    dd_url: ${baseUrl}
+    dd_url: ${forwarderEndpoint}
 network_path:
   forwarder:
-    dd_url: ${baseUrl}
+    dd_url: ${forwarderEndpoint}
 
 synthetics:
   forwarder:
-    dd_url: ${baseUrl}
+    dd_url: ${forwarderEndpoint}
 data_streams:
   forwarder:
-    dd_url: ${baseUrl}
+    dd_url: ${forwarderEndpoint}
 event_management:
   forwarder:
-    dd_url: ${baseUrl}
+    dd_url: ${forwarderEndpoint}
 database_monitoring:
   metrics:
-    dd_url: ${baseUrl}
+    dd_url: ${forwarderEndpoint}
   samples:
-    dd_url: ${baseUrl}
+    dd_url: ${forwarderEndpoint}
   activity:
-    dd_url: ${baseUrl}`
+    dd_url: ${forwarderEndpoint}`
 }
 
 function datadogDockerCommand(apiKey: string): string {

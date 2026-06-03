@@ -8,9 +8,31 @@ import SdkSetup from './components/SdkSetup'
 
 const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io').replace(/\/$/, '')
 
+function datadogLogsEndpointAddress(backendUrl: string): string {
+  try {
+    const parsed = new URL(backendUrl)
+    const port = parsed.port || (parsed.protocol === 'http:' ? '80' : '443')
+    return `${parsed.hostname}:${port}`
+  } catch {
+    return backendUrl
+  }
+}
+
+function datadogForwarderEndpoint(backendUrl: string): string {
+  try {
+    const parsed = new URL(backendUrl)
+    const port = parsed.port ? `:${parsed.port}` : ''
+    return parsed.protocol === 'https:' ? `${parsed.hostname}${port}` : backendUrl
+  } catch {
+    return backendUrl
+  }
+}
+
 const DOC_TOKENS: Record<string, string> = {
   '{{BACKEND_URL}}': BACKEND_URL,
+  '{{BACKEND_HOST}}': datadogForwarderEndpoint(BACKEND_URL),
   '{{INGEST_URL}}': BACKEND_URL + '/dd',
+  '{{LOGS_HOST_PORT}}': datadogLogsEndpointAddress(BACKEND_URL),
 }
 
 function interpolateTokens(text: string): string {
