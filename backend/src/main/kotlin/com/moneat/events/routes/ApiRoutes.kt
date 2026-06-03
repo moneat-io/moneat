@@ -26,6 +26,7 @@ import com.moneat.billing.services.PricingTierService
 import com.moneat.events.models.AddTargetRequest
 import com.moneat.events.models.AlertNotificationPreferencesResponse
 import com.moneat.events.models.CreateProjectRequest
+import com.moneat.events.models.EventIssueLinkResponse
 import com.moneat.events.models.FeedbackUpdateRequest
 import com.moneat.events.models.IssueUpdateRequest
 import com.moneat.events.models.NotificationPreferencesData
@@ -715,7 +716,7 @@ fun Route.apiRoutes() {
                     }
 
                     val update = call.receive<IssueUpdateRequest>()
-                    dashboardService.updateIssue(issueId, update)
+                    dashboardService.updateIssue(issueId, update, projectId)
                     call.respond(HttpStatusCode.NoContent)
                 }
 
@@ -1114,7 +1115,12 @@ fun Route.apiRoutes() {
                     if (issueId == null) {
                         call.respond(HttpStatusCode.NotFound)
                     } else {
-                        call.respond(mapOf("issueId" to issueId))
+                        call.respond(
+                            EventIssueLinkResponse(
+                                issueId = issueId,
+                                projectResourceId = projectIdResolver.resourceIdFor(projectId) ?: projectId.toString()
+                            )
+                        )
                     }
                 }
 

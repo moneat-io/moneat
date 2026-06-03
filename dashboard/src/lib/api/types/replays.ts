@@ -45,6 +45,11 @@ export interface ReplayRecordingResponse {
   events: unknown[]
 }
 
+export interface EventIssueLink {
+  issueId: string
+  projectResourceId: string
+}
+
 export interface Feedback {
   feedbackId: string
   message: string

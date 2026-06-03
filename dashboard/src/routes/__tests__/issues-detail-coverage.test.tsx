@@ -1,10 +1,11 @@
 import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, fireEvent, waitFor } from '@testing-library/react'
 import { renderRoute, clearAuthStorage } from '@/test/utils'
 
-const { mockNavigate, mockToast, mockApi } = vi.hoisted(() => ({
+const { mockNavigate, mockSearch, mockToast, mockApi } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
+  mockSearch: vi.fn(),
   mockToast: vi.fn(),
   mockApi: {
     isAuthenticated: vi.fn(),
@@ -52,6 +53,7 @@ vi.mock('@tanstack/react-router', () => ({
     ...options,
     options,
     useParams: () => ({ issueId: 'issue-123' }),
+    useSearch: () => mockSearch(),
   }),
   Link: ({ children, ...props }: { children: React.ReactNode }) => React.createElement('a', props, children),
   redirect: (opts: Record<string, unknown>) => ({ ...opts, __redirect: true }),
@@ -161,6 +163,7 @@ describe('Issue Detail - full data coverage', () => {
     clearAuthStorage()
     mockApi.isAuthenticated.mockReturnValue(true)
     mockApi.checkAuth.mockResolvedValue(true)
+    mockSearch.mockReturnValue({})
     mockApi.getProjects.mockResolvedValue([])
     mockApi.updateIssue.mockResolvedValue(undefined)
     mockApi.getIssue.mockResolvedValue(null)
@@ -238,6 +241,30 @@ describe('Issue Detail - full data coverage', () => {
     expect(screen.getByText('Tags & context')).toBeInTheDocument()
     expect(screen.getByText('This error has an associated APM trace')).toBeInTheDocument()
     expect(screen.getByText('View trace')).toBeInTheDocument()
+  })
+
+  it('uses the linked projectId search param for issue reads and updates', async () => {
+    mockSearch.mockReturnValue({ projectId: 'proj-2' })
+    mockApi.getIssue.mockResolvedValue({ ...mockIssue, status: 'unresolved' })
+
+    renderRoute(IssueDetailRoute)
+
+    await waitFor(() => {
+      expect(mockApi.getIssue).toHaveBeenCalledWith('issue-123', 'proj-2')
+    })
+    expect(mockApi.getIssueEvents).toHaveBeenCalledWith('issue-123', 50, 'proj-2')
+    expect(mockApi.getIssueTransactions).toHaveBeenCalledWith('issue-123', 20, 'proj-2')
+    expect(mockApi.getReplaysForIssue).toHaveBeenCalledWith('issue-123', 10, 'proj-2')
+
+    fireEvent.click(await screen.findByText('Resolve'))
+
+    await waitFor(() => {
+      expect(mockApi.updateIssue).toHaveBeenCalledWith(
+        'issue-123',
+        { status: 'resolved' },
+        'proj-2'
+      )
+    })
   })
 
   it('renders resolved issue with Unresolve button', async () => {

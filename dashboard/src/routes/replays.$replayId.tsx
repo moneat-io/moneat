@@ -351,6 +351,8 @@ function ReplayDetailPage() {
   )
   const durationMs =
     recordingDurationMs > 0 ? recordingDurationMs : computedDurationMs > 0 ? computedDurationMs : (replay?.durationMs ?? 0)
+  const replayProjectId = replay?.projectResourceId ??
+    (replay?.projectId != null ? String(replay.projectId) : undefined)
   const mobileCompressedTimeMapper = useMemo(
     () => (isMobileReplay ? createMobileCompressedTimeMapper(events) : null),
     [events, isMobileReplay]
@@ -665,7 +667,7 @@ function ReplayDetailPage() {
               <ReplayTimelinePanel
                 items={timelineItems}
                 currentOffsetMs={currentOffsetMs}
-                projectId={replay.projectResourceId ?? replay.projectId}
+                projectId={replayProjectId}
                 onSeek={handleSeek}
               />
             ) : (
@@ -825,6 +827,7 @@ function ReplayDetailPage() {
                       key={errorId}
                       to="/issues/$issueId"
                       params={{ issueId: errorId }}
+                      search={{ projectId: replayProjectId }}
                       className="flex items-center justify-between rounded border p-1.5 transition-colors hover:bg-accent group"
                     >
                       <span className="font-mono text-xs text-muted-foreground truncate min-w-0">{errorId}</span>

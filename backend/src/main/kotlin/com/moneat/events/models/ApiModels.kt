@@ -568,6 +568,12 @@ data class FeedbackUpdateRequest(
 )
 
 @Serializable
+data class EventIssueLinkResponse(
+    val issueId: String,
+    val projectResourceId: String
+)
+
+@Serializable
 data class TestNotificationRequest(
     val type: String, // error_alert, weekly_summary, system_up, system_down, uptime_alert, verification, password_reset
     val channel: String, // email, slack, both

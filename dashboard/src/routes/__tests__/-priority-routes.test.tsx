@@ -69,6 +69,7 @@ vi.mock('@tanstack/react-router', () => ({
     ...options,
     options,
     useParams: () => ({ issueId: 'issue-123' }),
+    useSearch: () => ({}),
   }),
   Link: ({ children, ...props }: { children: React.ReactNode }) => React.createElement('a', props, children),
   redirect: (opts: Record<string, unknown>) => ({ ...opts, __redirect: true }),
@@ -134,11 +135,11 @@ describe('priority route coverage', () => {
     expect((IssueDetailRoute as { beforeLoad?: unknown }).beforeLoad).toBeUndefined()
   })
 
-  it('issues route renders empty project state', async () => {
+  it('issues route renders empty service state', async () => {
     const Component = (IssuesIndexRoute as unknown as { component: React.ComponentType }).component
     renderRoute(Component)
 
-    expect(await screen.findByText('No projects yet')).toBeInTheDocument()
+    expect(await screen.findByText('No services yet')).toBeInTheDocument()
     expect(mockApi.getProjects).toHaveBeenCalled()
   })
 

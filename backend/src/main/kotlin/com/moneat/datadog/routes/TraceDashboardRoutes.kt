@@ -39,9 +39,12 @@ private const val DEFAULT_APM_TIME_RANGE = "24h"
 private const val INVALID_TOKEN_ERROR = "Invalid token"
 private const val INVALID_TIME_RANGE_ERROR = "Invalid timeRange"
 private const val INVALID_STATUS_ERROR = "Invalid status"
+private const val INVALID_SERVICES_ERROR = "Invalid services"
 private const val STATUS_ERROR = "error"
 private const val STATUS_OK = "ok"
 private const val MAX_TRACE_SEARCH_LENGTH = 200
+private const val MAX_SERVICE_FILTERS = 50
+private const val MAX_SERVICE_FILTER_LENGTH = 200
 private val hexTraceIdPattern = Regex("^[0-9a-fA-F]+$")
 
 private val apmTimeRanges = mapOf(
@@ -200,7 +203,10 @@ fun Route.traceDashboardRoutes() {
         get("/v1/apm-errors") {
             val orgId = call.organizationId()
                 ?: return@get call.respondUnauthorized()
-            val service = call.parameters["service"]
+            // Accept a multi-select `services` list (comma-separated); fall back to
+            // the legacy single `service` param for backward compatibility.
+            val services = call.serviceFilters()
+                ?: return@get call.respondBadRequest(INVALID_SERVICES_ERROR)
             val limit = (
                 call.parameters["limit"]
                     ?.toIntOrNull() ?: DEFAULT_LIMIT
@@ -212,7 +218,7 @@ fun Route.traceDashboardRoutes() {
 
             val result = TraceIngestionService.getApmErrors(
                 orgId,
-                service,
+                services,
                 limit,
                 offset,
                 timeRange,
@@ -261,6 +267,25 @@ private fun ApplicationCall.traceSearch(): String? =
         ?.trim()
         ?.take(MAX_TRACE_SEARCH_LENGTH)
         ?.takeIf { it.isNotEmpty() }
+
+private fun ApplicationCall.serviceFilters(): List<String>? {
+    val parsedServices = parameters["services"]
+        ?.split(",")
+        ?.map { it.trim() }
+        ?.filter { it.isNotEmpty() }
+    val rawSingleService = parameters["service"]
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?.let { listOf(it) }
+    val rawServices = parsedServices?.takeIf { it.isNotEmpty() } ?: rawSingleService ?: emptyList()
+    if (rawServices.size > MAX_SERVICE_FILTERS) return null
+
+    val services = rawServices.distinct()
+    if (services.size > MAX_SERVICE_FILTERS) return null
+    return services.takeIf {
+        it.all { service -> service.length <= MAX_SERVICE_FILTER_LENGTH }
+    }
+}
 
 private fun String.isSupportedTraceId(): Boolean =
     isNotBlank() && (toULongOrNull() != null || hexTraceIdPattern.matches(this))

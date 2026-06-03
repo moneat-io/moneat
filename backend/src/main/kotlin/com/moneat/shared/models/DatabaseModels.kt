@@ -593,7 +593,7 @@ object OrgInvitations : Table("org_invitations") {
 
 object IssueStatuses : Table("issue_statuses") {
     val id = integer("id").autoIncrement()
-    val issue_id = varchar("issue_id", 64).uniqueIndex()
+    val issue_id = varchar("issue_id", 64)
     val project_id = long("project_id")
         .references(Projects.id, onDelete = ReferenceOption.CASCADE)
     val status = varchar("status", 32).default("unresolved")
@@ -601,5 +601,8 @@ object IssueStatuses : Table("issue_statuses") {
     val status_detail = jsonb("status_detail").nullable()
     val updated_at = timestamp("updated_at")
     val updated_by = integer("updated_by").references(Users.id).nullable()
+    init {
+        uniqueIndex(issue_id, project_id)
+    }
     override val primaryKey = PrimaryKey(id)
 }

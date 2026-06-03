@@ -56,6 +56,7 @@ import { Route as DemoRouteImport } from './routes/demo'
 import { Route as DatadogAlternativeRouteImport } from './routes/datadog-alternative'
 import { Route as DashboardsRouteImport } from './routes/dashboards'
 import { Route as CustomDashboardsRouteImport } from './routes/custom-dashboards'
+import { Route as ConfigurationRouteImport } from './routes/configuration'
 import { Route as CompareRouteImport } from './routes/compare'
 import { Route as BlogRouteImport } from './routes/blog'
 import { Route as BetterStackAlternativeRouteImport } from './routes/better-stack-alternative'
@@ -388,6 +389,11 @@ const DashboardsRoute = DashboardsRouteImport.update({
 const CustomDashboardsRoute = CustomDashboardsRouteImport.update({
   id: '/custom-dashboards',
   path: '/custom-dashboards',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConfigurationRoute = ConfigurationRouteImport.update({
+  id: '/configuration',
+  path: '/configuration',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CompareRoute = CompareRouteImport.update({
@@ -900,6 +906,7 @@ export interface FileRoutesByFullPath {
   '/better-stack-alternative': typeof BetterStackAlternativeRoute
   '/blog': typeof BlogRouteWithChildren
   '/compare': typeof CompareRoute
+  '/configuration': typeof ConfigurationRoute
   '/custom-dashboards': typeof CustomDashboardsRoute
   '/dashboards': typeof DashboardsRouteWithChildren
   '/datadog-alternative': typeof DatadogAlternativeRoute
@@ -1042,6 +1049,7 @@ export interface FileRoutesByTo {
   '/alerting': typeof AlertingRoute
   '/better-stack-alternative': typeof BetterStackAlternativeRoute
   '/compare': typeof CompareRoute
+  '/configuration': typeof ConfigurationRoute
   '/custom-dashboards': typeof CustomDashboardsRoute
   '/datadog-alternative': typeof DatadogAlternativeRoute
   '/demo': typeof DemoRoute
@@ -1178,6 +1186,7 @@ export interface FileRoutesById {
   '/better-stack-alternative': typeof BetterStackAlternativeRoute
   '/blog': typeof BlogRouteWithChildren
   '/compare': typeof CompareRoute
+  '/configuration': typeof ConfigurationRoute
   '/custom-dashboards': typeof CustomDashboardsRoute
   '/dashboards': typeof DashboardsRouteWithChildren
   '/datadog-alternative': typeof DatadogAlternativeRoute
@@ -1326,6 +1335,7 @@ export interface FileRouteTypes {
     | '/better-stack-alternative'
     | '/blog'
     | '/compare'
+    | '/configuration'
     | '/custom-dashboards'
     | '/dashboards'
     | '/datadog-alternative'
@@ -1468,6 +1478,7 @@ export interface FileRouteTypes {
     | '/alerting'
     | '/better-stack-alternative'
     | '/compare'
+    | '/configuration'
     | '/custom-dashboards'
     | '/datadog-alternative'
     | '/demo'
@@ -1603,6 +1614,7 @@ export interface FileRouteTypes {
     | '/better-stack-alternative'
     | '/blog'
     | '/compare'
+    | '/configuration'
     | '/custom-dashboards'
     | '/dashboards'
     | '/datadog-alternative'
@@ -1750,6 +1762,7 @@ export interface RootRouteChildren {
   BetterStackAlternativeRoute: typeof BetterStackAlternativeRoute
   BlogRoute: typeof BlogRouteWithChildren
   CompareRoute: typeof CompareRoute
+  ConfigurationRoute: typeof ConfigurationRoute
   CustomDashboardsRoute: typeof CustomDashboardsRoute
   DashboardsRoute: typeof DashboardsRouteWithChildren
   DatadogAlternativeRoute: typeof DatadogAlternativeRoute
@@ -2141,6 +2154,13 @@ declare module '@tanstack/react-router' {
       path: '/custom-dashboards'
       fullPath: '/custom-dashboards'
       preLoaderRoute: typeof CustomDashboardsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/configuration': {
+      id: '/configuration'
+      path: '/configuration'
+      fullPath: '/configuration'
+      preLoaderRoute: typeof ConfigurationRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/compare': {
@@ -3226,6 +3246,7 @@ const rootRouteChildren: RootRouteChildren = {
   BetterStackAlternativeRoute: BetterStackAlternativeRoute,
   BlogRoute: BlogRouteWithChildren,
   CompareRoute: CompareRoute,
+  ConfigurationRoute: ConfigurationRoute,
   CustomDashboardsRoute: CustomDashboardsRoute,
   DashboardsRoute: DashboardsRouteWithChildren,
   DatadogAlternativeRoute: DatadogAlternativeRoute,

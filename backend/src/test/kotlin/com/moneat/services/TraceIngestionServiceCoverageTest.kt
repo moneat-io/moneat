@@ -597,7 +597,7 @@ class TraceIngestionServiceCoverageTest {
 
         val result = TraceIngestionService.getApmErrors(
             organizationId = 1,
-            service = null,
+            services = emptyList(),
             limit = 10,
             offset = 0
         )
@@ -640,7 +640,7 @@ class TraceIngestionServiceCoverageTest {
 
         val result = TraceIngestionService.getApmErrors(
             organizationId = 1,
-            service = "api",
+            services = listOf("api"),
             limit = 10,
             offset = 0
         )
@@ -778,7 +778,7 @@ class TraceIngestionServiceCoverageTest {
         )
         TraceIngestionService.getApmErrors(
             organizationId = 1,
-            service = null,
+            services = emptyList(),
             limit = 10,
             offset = 0,
             timeRange = timeRange

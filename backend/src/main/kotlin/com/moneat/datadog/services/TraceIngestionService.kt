@@ -1027,7 +1027,7 @@ object TraceIngestionService {
 
     suspend fun getApmErrors(
         organizationId: Int,
-        service: String?,
+        services: List<String> = emptyList(),
         limit: Int,
         offset: Int,
         timeRange: DdApmQueryTimeRange = defaultApmQueryTimeRange,
@@ -1038,8 +1038,9 @@ object TraceIngestionService {
             ClickHouseQueryUtils.orgIdClause(organizationId.toLong()),
             timeRange.bucketStartClause()
         )
-        service?.let {
-            filters.add("service = '${escapeSql(it)}'")
+        if (services.isNotEmpty()) {
+            val serviceList = services.joinToString(", ") { "'${escapeSql(it)}'" }
+            filters.add("service IN ($serviceList)")
         }
         val whereClause = filters.joinToString(" AND ")
 

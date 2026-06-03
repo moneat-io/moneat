@@ -29,6 +29,7 @@ import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.suspendRunCatching
 import io.ktor.server.plugins.BadRequestException
+import io.ktor.server.plugins.NotFoundException
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -213,10 +214,11 @@ class IssueService(
 
     suspend fun updateIssue(
         issueId: String,
-        update: IssueUpdateRequest
+        update: IssueUpdateRequest,
+        explicitProjectId: Long? = null
     ) {
-        val projectId = issueRepository.getProjectIdForIssue(issueId)
-            ?: throw IllegalArgumentException("Issue not found")
+        val projectId = resolveProjectIdForIssue(issueId, explicitProjectId)
+            ?: throw NotFoundException("Issue not found")
 
         if (update.status != null) {
             val validStatuses = setOf(STATUS_UNRESOLVED, STATUS_RESOLVED, STATUS_ARCHIVED, STATUS_IGNORED)
@@ -225,6 +227,13 @@ class IssueService(
             updateErrorAlertEpisode(issueId, projectId, update.status)
         }
     }
+
+    private suspend fun resolveProjectIdForIssue(issueId: String, explicitProjectId: Long?): Long? =
+        if (explicitProjectId != null) {
+            issueRepository.getProjectIdForIssue(issueId, explicitProjectId)
+        } else {
+            issueRepository.getProjectIdForIssue(issueId)
+        }
 
     private fun updateErrorAlertEpisode(
         issueId: String,

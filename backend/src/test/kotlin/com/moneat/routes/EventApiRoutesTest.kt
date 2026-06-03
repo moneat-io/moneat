@@ -555,6 +555,7 @@ class EventApiRoutesTest {
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("issue-found-1"))
+        assertTrue(response.bodyAsText().contains("projectResourceId"))
     }
 
     @Test

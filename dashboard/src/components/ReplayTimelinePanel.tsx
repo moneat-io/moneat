@@ -56,6 +56,10 @@ export interface ReplayTimelinePanelProps {
 
 type FilterValue = 'all' | 'error' | 'transaction' | 'span'
 
+function issueSearch(projectId?: string | number): { projectId: string | undefined } {
+  return { projectId: projectId === undefined ? undefined : String(projectId) }
+}
+
 function formatOffset(offsetMs: number): string {
   if (offsetMs < 0) return '0:00'
   const totalSeconds = Math.floor(offsetMs / 1000)
@@ -200,7 +204,13 @@ function serializeValue(value: unknown): string {
   return String(value ?? '')
 }
 
-function BreadcrumbDetailPanel({ item }: { readonly item: TimelineItem }) {
+function BreadcrumbDetailPanel({
+  item,
+  projectId,
+}: {
+  readonly item: TimelineItem
+  readonly projectId?: string | number
+}) {
   const { timezone } = useTimezone()
   const colors = typeColorClasses(item.type)
   const data = item.data ?? {}
@@ -278,6 +288,7 @@ function BreadcrumbDetailPanel({ item }: { readonly item: TimelineItem }) {
             <Link
               to="/issues/$issueId"
               params={{ issueId: item.issueId }}
+              search={issueSearch(projectId)}
               className="inline-flex items-center gap-1 text-[11px] font-medium text-danger-fg hover:underline"
             >
               View Issue <ExternalLink className="h-3 w-3" />
@@ -351,6 +362,7 @@ function WaterfallPanel({
             <Link
               to="/issues/$issueId"
               params={{ issueId: item.issueId }}
+              search={issueSearch(projectId)}
               className="inline-flex items-center gap-1 text-[11px] font-medium text-danger-fg hover:underline"
             >
               View Issue <ExternalLink className="h-3 w-3" />
@@ -404,7 +416,7 @@ function ExpandedItemPanel({
   if (canFetchSpans(item)) {
     return <WaterfallPanel item={item} projectId={projectId} />
   }
-  return <BreadcrumbDetailPanel item={item} />
+  return <BreadcrumbDetailPanel item={item} projectId={projectId} />
 }
 
 /* ── Main component ── */
@@ -636,6 +648,7 @@ const TimelineList = React.forwardRef<HTMLDivElement, TimelineListProps>(functio
                     <Link
                       to="/issues/$issueId"
                       params={{ issueId: item.issueId }}
+                      search={issueSearch(projectId)}
                       onClick={(e) => e.stopPropagation()}
                       className="shrink-0 p-1.5 rounded-md hover:bg-danger-bg text-danger-fg transition-colors"
                       aria-label="View issue"

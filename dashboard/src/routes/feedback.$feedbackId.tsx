@@ -157,9 +157,9 @@ function FeedbackDetailPage() {
     queryFn: () => api.getFeedbackDetail(feedbackId),
   })
 
-  const { data: issueForEvent } = useQuery({
+  const { data: issueLinkForEvent } = useQuery({
     queryKey: ['event-issue', feedback?.associatedEventId],
-    queryFn: () => api.getIssueIdForEvent(feedback!.associatedEventId!),
+    queryFn: () => api.getIssueLinkForEvent(feedback!.associatedEventId!),
     enabled: !!feedback?.associatedEventId,
   })
 
@@ -484,10 +484,11 @@ function FeedbackDetailPage() {
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-medium mb-1">Linked Event</p>
-                          {issueForEvent ? (
+                          {issueLinkForEvent ? (
                             <Link
                               to="/issues/$issueId"
-                              params={{ issueId: issueForEvent }}
+                              params={{ issueId: issueLinkForEvent.issueId }}
+                              search={{ projectId: issueLinkForEvent.projectResourceId }}
                               className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium"
                             >
                               View related issue

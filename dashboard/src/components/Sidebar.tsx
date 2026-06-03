@@ -55,6 +55,7 @@ import {
     Settings,
     Shield,
     ShieldAlert,
+    SlidersHorizontal,
     Sparkles,
     Timer,
     Workflow,
@@ -276,6 +277,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
     { key: 'workflows', icon: Workflow, label: 'Workflows', href: '/workflows', requiresProject: false, group: 'operations' },
     { key: 'analytics', icon: BarChart3, label: 'Analytics', href: '/analytics', requiresProject: false, group: 'analytics' },
     // Management
+    { key: 'configuration', icon: SlidersHorizontal, label: 'Configuration', href: '/configuration', requiresProject: false, group: 'management' },
     ...adminNavItems,
   ]
 
@@ -368,7 +370,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  aria-label="Switch project"
+                  aria-label="Switch service"
                   className="flex w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-left text-xs cursor-default transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   {activeProject && (
@@ -410,7 +412,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => window.dispatchEvent(new CustomEvent('open-create-project-dialog'))} className="text-xs">
                   <Plus className="h-3 w-3" />
-                  New Project
+                  New Service
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -419,8 +421,8 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  aria-label={activeProject ? `Switch project: ${activeProject.name}` : 'Switch project'}
-                  title={activeProject ? `Switch project: ${activeProject.name}` : 'Switch project'}
+                  aria-label={activeProject ? `Switch service: ${activeProject.name}` : 'Switch service'}
+                  title={activeProject ? `Switch service: ${activeProject.name}` : 'Switch service'}
                   className="flex w-full items-center justify-center rounded-md border bg-muted/50 p-1.5 cursor-default transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   {activeProject && (
@@ -460,7 +462,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => window.dispatchEvent(new CustomEvent('open-create-project-dialog'))} className="text-xs">
                   <Plus className="h-3 w-3" />
-                  New Project
+                  New Service
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -475,14 +477,14 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
               className="w-full justify-center gap-1 h-7 text-xs"
             >
               <Plus className="h-3 w-3" />
-              New Project
+              New Service
             </Button>
           ) : (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  aria-label="Create new project"
+                  aria-label="Create new service"
                   onClick={() => window.dispatchEvent(new CustomEvent('open-create-project-dialog'))}
                   className="flex w-full items-center justify-center rounded-md border bg-muted/50 p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 >
@@ -490,7 +492,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
                 </button>
               </TooltipTrigger>
               <TooltipContent side="right">
-                <p>New Project</p>
+                <p>New Service</p>
               </TooltipContent>
             </Tooltip>
           )
@@ -767,9 +769,9 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
       <Dialog open={showCreateDialog} onOpenChange={(open) => { if (!open) resetCreateForm() }}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
-            <DialogTitle>Create New Project</DialogTitle>
+            <DialogTitle>Create New Service</DialogTitle>
             <DialogDescription>
-              Pick the application and telemetry sources you want Moneat to walk you through.
+              Pick the service and telemetry sources you want Moneat to walk you through.
             </DialogDescription>
           </DialogHeader>
 

@@ -694,6 +694,7 @@ function DashboardPage() {
                       key={issue.id}
                       to="/issues/$issueId"
                       params={{issueId: issue.id}}
+                      search={{projectId}}
                       className={`flex items-center gap-2 py-2 px-2.5 rounded-md border-l-2 ${levelAccent} hover:bg-muted/50 transition`}
                     >
                       <Badge variant={levelBadgeVariant(issue.level)} className="text-[10px] px-1.5 py-0 w-14 justify-center shrink-0">

@@ -37,6 +37,7 @@ import com.moneat.shared.models.Projects
 import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.testsupport.TestDatabaseHelper
 import io.ktor.server.plugins.BadRequestException
+import io.ktor.server.plugins.NotFoundException
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -397,7 +398,7 @@ class EventServicesExtendedTest {
     @Test
     fun `updateIssue throws when issue not found`() {
         coEvery { issueRepository.getProjectIdForIssue("missing") } returns null
-        assertFailsWith<IllegalArgumentException> {
+        assertFailsWith<NotFoundException> {
             runBlocking {
                 issueService.updateIssue("missing", IssueUpdateRequest(status = "resolved"))
             }
@@ -425,6 +426,20 @@ class EventServicesExtendedTest {
             issueService.updateIssue(testIssueId, IssueUpdateRequest(status = status))
             verify { issueRepository.upsertIssueStatus(testIssueId, testProjectId, status) }
         }
+    }
+
+    @Test
+    fun `updateIssue uses explicit project scope`() = runBlocking {
+        coEvery { issueRepository.getProjectIdForIssue(testIssueId, testProjectId) } returns testProjectId
+
+        issueService.updateIssue(
+            testIssueId,
+            IssueUpdateRequest(status = "resolved"),
+            explicitProjectId = testProjectId
+        )
+
+        coVerify(exactly = 0) { issueRepository.getProjectIdForIssue(testIssueId) }
+        verify { issueRepository.upsertIssueStatus(testIssueId, testProjectId, "resolved") }
     }
 
     @Test

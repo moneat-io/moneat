@@ -10,10 +10,10 @@ describe('ProjectSetupForm', () => {
 
     render(<ProjectSetupForm onSubmit={onSubmit} />)
 
-    await user.type(screen.getByLabelText('Project Name'), 'Checkout API')
+    await user.type(screen.getByLabelText('Service name'), 'Checkout API')
     await user.click(screen.getByRole('button', {name: /React$/}))
     await user.click(screen.getByRole('button', {name: /Sentry SDK/}))
-    await user.click(screen.getByRole('button', {name: 'Create Project'}))
+    await user.click(screen.getByRole('button', {name: 'Create Service'}))
 
     expect(screen.queryByRole('button', {name: /HTTP logs/})).not.toBeInTheDocument()
     expect(onSubmit).toHaveBeenCalledWith({
@@ -30,13 +30,13 @@ describe('ProjectSetupForm', () => {
 
     render(<ProjectSetupForm onSubmit={onSubmit} />)
 
-    expect(screen.getByRole('button', {name: 'Create Project'})).toBeDisabled()
+    expect(screen.getByRole('button', {name: 'Create Service'})).toBeDisabled()
 
-    await user.type(screen.getByLabelText('Project Name'), 'Mobile app')
-    expect(screen.getByRole('button', {name: 'Create Project'})).toBeDisabled()
+    await user.type(screen.getByLabelText('Service name'), 'Mobile app')
+    expect(screen.getByRole('button', {name: 'Create Service'})).toBeDisabled()
 
     await user.click(screen.getByRole('button', {name: 'iOS'}))
-    expect(screen.getByRole('button', {name: 'Create Project'})).toBeEnabled()
+    expect(screen.getByRole('button', {name: 'Create Service'})).toBeEnabled()
   })
 
   it('filters platform choices by category', async () => {
@@ -61,19 +61,19 @@ describe('ProjectSetupForm', () => {
 
     render(<ProjectSetupForm onSubmit={onSubmit} />)
 
-    await user.type(screen.getByLabelText('Project Name'), 'Game client')
+    await user.type(screen.getByLabelText('Service name'), 'Game client')
     await user.click(screen.getByRole('button', {name: 'Desktop & Gaming'}))
     await user.click(screen.getByRole('button', {name: 'Unity'}))
-    expect(screen.getByRole('button', {name: 'Create Project'})).toBeEnabled()
+    expect(screen.getByRole('button', {name: 'Create Service'})).toBeEnabled()
 
     await user.click(screen.getByRole('button', {name: 'Android'}))
     await user.click(screen.getByRole('button', {name: 'iOS'}))
     expect(screen.getByText('Select at least one target platform.')).toBeInTheDocument()
-    expect(screen.getByRole('button', {name: 'Create Project'})).toBeDisabled()
+    expect(screen.getByRole('button', {name: 'Create Service'})).toBeDisabled()
 
     await user.click(screen.getByRole('button', {name: 'Web'}))
     await user.click(screen.getByRole('button', {name: /Datadog Agent/}))
-    await user.click(screen.getByRole('button', {name: 'Create Project'}))
+    await user.click(screen.getByRole('button', {name: 'Create Service'}))
 
     expect(onSubmit).toHaveBeenCalledWith({
       name: 'Game client',

@@ -16,6 +16,7 @@
 
 import type { ApiClientCore } from '../client'
 import type {
+  EventIssueLink,
   Replay,
   ReplayDetail,
   ReplayRecordingResponse,
@@ -24,6 +25,15 @@ import type {
 
 export function replaysMethods(core: ApiClientCore) {
   const base = core.API_BASE
+  const getIssueLinkForEvent = async (eventId: string): Promise<EventIssueLink | null> => {
+    try {
+      return await core.request<EventIssueLink>(
+        `${base}/events/${encodeURIComponent(eventId)}/issue`
+      )
+    } catch {
+      return null
+    }
+  }
 
   return {
     getReplays: (
@@ -56,15 +66,11 @@ export function replaysMethods(core: ApiClientCore) {
         `${base}/replays/${encodeURIComponent(replayId)}/timeline`
       ),
 
+    getIssueLinkForEvent,
+
     getIssueIdForEvent: async (eventId: string): Promise<string | null> => {
-      try {
-        const response = await core.request<{ issueId: string }>(
-          `${base}/events/${encodeURIComponent(eventId)}/issue`
-        )
-        return response.issueId
-      } catch {
-        return null
-      }
+      const link = await getIssueLinkForEvent(eventId)
+      return link?.issueId ?? null
     },
 
     getReplaysForIssue: (issueId: string, limit = 10, projectId?: string | number | null) => {
