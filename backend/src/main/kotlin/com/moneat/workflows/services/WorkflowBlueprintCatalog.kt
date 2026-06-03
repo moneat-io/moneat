@@ -65,7 +65,6 @@ object WorkflowBlueprintCatalog {
     private const val CATEGORY_UPTIME = "uptime"
     private const val CATEGORY_TRIAGE = "triage"
 
-    private const val DEDUP_KEY = "alert.deduplication_key"
     private const val EPISODE_KEY = "alert.episode_key"
     private const val NOTIFICATION_SEQUENCE = "alert.notification_sequence"
     private const val ALERT_STATUS = "alert.status"

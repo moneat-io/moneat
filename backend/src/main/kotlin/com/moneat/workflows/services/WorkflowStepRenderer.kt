@@ -19,6 +19,13 @@ package com.moneat.workflows.services
 import com.moneat.alerts.models.AlertSeverity
 import com.moneat.alerts.models.AlertStatus
 import com.moneat.config.EnvConfig
+import com.moneat.workflows.models.ALERT_EPISODE_ID_REFERENCE
+import com.moneat.workflows.models.ALERT_EPISODE_KEY_REFERENCE
+import com.moneat.workflows.models.ALERT_EPISODE_SEQ_REFERENCE
+import com.moneat.workflows.models.ALERT_LAST_SEEN_AT_REFERENCE
+import com.moneat.workflows.models.ALERT_NOTIFICATION_KIND_REFERENCE
+import com.moneat.workflows.models.ALERT_NOTIFICATION_SEQUENCE_REFERENCE
+import com.moneat.workflows.models.ALERT_OPENED_AT_REFERENCE
 import com.moneat.workflows.models.WorkflowPreviewField
 import com.moneat.workflows.models.WorkflowStepConfig
 import com.moneat.workflows.models.WorkflowStepPreview
@@ -65,13 +72,6 @@ internal const val ALERT_WIDGET_TITLE_REFERENCE = "alert.widget.title"
 internal const val ALERT_CONDITION_REFERENCE = "alert.condition"
 internal const val ALERT_THRESHOLD_REFERENCE = "alert.threshold"
 internal const val ALERT_CURRENT_VALUE_REFERENCE = "alert.current_value"
-internal const val ALERT_EPISODE_ID_REFERENCE = "alert.episode_id"
-internal const val ALERT_EPISODE_KEY_REFERENCE = "alert.episode_key"
-internal const val ALERT_EPISODE_SEQ_REFERENCE = "alert.episode_seq"
-internal const val ALERT_NOTIFICATION_SEQUENCE_REFERENCE = "alert.notification_sequence"
-internal const val ALERT_NOTIFICATION_KIND_REFERENCE = "alert.notification_kind"
-internal const val ALERT_OPENED_AT_REFERENCE = "alert.opened_at"
-internal const val ALERT_LAST_SEEN_AT_REFERENCE = "alert.last_seen_at"
 private const val ALERT_COLOR_RED = "#E01E5A"
 private const val ALERT_COLOR_GREEN = "#2EB67D"
 private const val ALERT_COLOR_YELLOW = "#ECB22E"

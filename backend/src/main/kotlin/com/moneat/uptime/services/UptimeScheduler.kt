@@ -29,6 +29,7 @@ import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 import com.moneat.utils.suspendRunCatching
 import com.moneat.workflows.services.WorkflowService
+import io.ktor.server.config.ApplicationConfig
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -62,7 +63,12 @@ class UptimeScheduler(
     private val workflowService: WorkflowService = WorkflowService(),
 ) {
     companion object {
+        private const val CHECK_STATUS_DOWN = 0
+        private const val CHECK_STATUS_UP = 1
         private const val TIMEOUT_BUFFER_MS = 5000L
+        private val frontendBaseUrl by lazy {
+            ApplicationConfig("application.conf").property("email.frontendUrl").getString()
+        }
     }
 
     private var schedulerJob: Job? = null
@@ -204,11 +210,11 @@ class UptimeScheduler(
         failureMessagePrefix: String
     ): CheckResult {
         logger.error(exception) { "$failureLogPrefix for monitor ${monitor.id}: ${exception.message}" }
-        return CheckResult(0, -1, 0, "$failureMessagePrefix: ${exception.message}")
+        return CheckResult(CHECK_STATUS_DOWN, -1, 0, "$failureMessagePrefix: ${exception.message}")
     }
 
     private suspend fun CheckResult.withRetriesIfNeeded(monitor: UptimeMonitorData): CheckResult =
-        if (status == 0 && monitor.retries > 0) {
+        if (status == CHECK_STATUS_DOWN && monitor.retries > 0) {
             handleRetries(monitor, this)
         } else {
             this
@@ -262,8 +268,8 @@ class UptimeScheduler(
 
     private fun statusFromResult(result: CheckResult): String =
         when (result.status) {
-            1 -> "up"
-            0 -> "down"
+            CHECK_STATUS_UP -> "up"
+            CHECK_STATUS_DOWN -> "down"
             else -> "pending"
         }
 
@@ -289,7 +295,7 @@ class UptimeScheduler(
             lastResult = retryResult
 
             // If check succeeded, stop retrying
-            if (retryResult.status == 1) {
+            if (retryResult.status == CHECK_STATUS_UP) {
                 logger.debug { "Monitor ${monitor.name} recovered on retry $retry/${monitor.retries}" }
                 break
             }
@@ -312,10 +318,7 @@ class UptimeScheduler(
                 "Message: ${result.message}"
         }
 
-        val config =
-            io.ktor.server.config
-                .ApplicationConfig("application.conf")
-        val baseUrl = config.property("email.frontendUrl").getString()
+        val baseUrl = frontendBaseUrl
 
         // Build an alert lifecycle event; IncidentService applies incident-provider routing.
         suspendRunCatching {
@@ -342,9 +345,7 @@ class UptimeScheduler(
         monitor: UptimeMonitorData,
         result: CheckResult
     ) {
-        val config = io.ktor.server.config.ApplicationConfig("application.conf")
-        val baseUrl = config.property("email.frontendUrl").getString()
-        workflowService.publishAlertTriggered(uptimeDownEvent(monitor, result, baseUrl))
+        workflowService.publishAlertTriggered(uptimeDownEvent(monitor, result, frontendBaseUrl))
     }
 
     private fun uptimeDownEvent(

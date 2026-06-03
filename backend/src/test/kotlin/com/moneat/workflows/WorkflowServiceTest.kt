@@ -805,7 +805,7 @@ class WorkflowServiceTest {
             )
 
             transaction {
-                AlertEpisodes.update({ AlertEpisodes.deduplicationKey eq "host-1" }) {
+                AlertEpisodes.update(where = { AlertEpisodes.deduplicationKey eq "host-1" }) {
                     it[AlertEpisodes.lastNotificationAt] = Clock.System.now() - 25.hours
                 }
             }
@@ -1234,8 +1234,8 @@ class WorkflowServiceTest {
             assertEquals(listOf("alert.episode_key=host-1#1|alert.notification_sequence=1"), runIdentities(workflow.id))
 
             transaction {
-                AlertEpisodes.update({ AlertEpisodes.deduplicationKey eq "host-1" }) {
-                    it[lastNotificationAt] = Clock.System.now() - 25.hours
+                AlertEpisodes.update(where = { AlertEpisodes.deduplicationKey eq "host-1" }) {
+                    it[AlertEpisodes.lastNotificationAt] = Clock.System.now() - 25.hours
                 }
             }
             service.publishAlertTriggered(alertEvent())

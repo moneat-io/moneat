@@ -141,6 +141,8 @@ class AlertEpisodeServiceTest {
         assertEquals("moneat-host-alert-1#2", reopened.episode.episodeKey)
     }
 
+    // ──── Workflow Helpers ────
+
     @Test
     fun `workflow helper opens episode without reserving notification`() {
         val now = Instant.parse("2026-06-02T12:00:00Z")
@@ -167,6 +169,8 @@ class AlertEpisodeServiceTest {
         assertNotNull(latestAfterPublish)
         assertEquals(helperEpisode.id, latestAfterPublish.id)
     }
+
+    // ──── Current Episode Helpers ────
 
     @Test
     fun `current episode helpers suppress unsuppress and close the open episode`() {
@@ -215,6 +219,8 @@ class AlertEpisodeServiceTest {
         assertNotNull(reopened)
         assertEquals(2, reopened.episodeSeq)
     }
+
+    // ──── Listing ────
 
     @Test
     fun `listEpisodes filters status and clamps limit`() {

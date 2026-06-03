@@ -24,6 +24,13 @@ import com.moneat.workflows.engine.temporal.HTTP_REQUEST_ACTION
 import com.moneat.workflows.engine.temporal.TRANSFORM_GRAALJS_ACTION
 import com.moneat.workflows.engine.temporal.WORKFLOW_EGRESS_ACTIONS
 import com.moneat.workflows.engine.temporal.workflowEgressActionsEnabled
+import com.moneat.workflows.models.ALERT_EPISODE_ID_REFERENCE
+import com.moneat.workflows.models.ALERT_EPISODE_KEY_REFERENCE
+import com.moneat.workflows.models.ALERT_EPISODE_SEQ_REFERENCE
+import com.moneat.workflows.models.ALERT_LAST_SEEN_AT_REFERENCE
+import com.moneat.workflows.models.ALERT_NOTIFICATION_KIND_REFERENCE
+import com.moneat.workflows.models.ALERT_NOTIFICATION_SEQUENCE_REFERENCE
+import com.moneat.workflows.models.ALERT_OPENED_AT_REFERENCE
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -41,13 +48,6 @@ private const val ALERT_WIDGET_TITLE_REFERENCE = "alert.widget.title"
 private const val ALERT_CONDITION_REFERENCE = "alert.condition"
 private const val ALERT_THRESHOLD_REFERENCE = "alert.threshold"
 private const val ALERT_CURRENT_VALUE_REFERENCE = "alert.current_value"
-private const val ALERT_EPISODE_ID_REFERENCE = "alert.episode_id"
-private const val ALERT_EPISODE_KEY_REFERENCE = "alert.episode_key"
-private const val ALERT_EPISODE_SEQ_REFERENCE = "alert.episode_seq"
-private const val ALERT_NOTIFICATION_SEQUENCE_REFERENCE = "alert.notification_sequence"
-private const val ALERT_NOTIFICATION_KIND_REFERENCE = "alert.notification_kind"
-private const val ALERT_OPENED_AT_REFERENCE = "alert.opened_at"
-private const val ALERT_LAST_SEEN_AT_REFERENCE = "alert.last_seen_at"
 private const val ORGANIZATION_ID_REFERENCE = "organization.id"
 private const val WORKFLOW_INPUT_REFERENCE = "workflow.input"
 private const val WORKFLOW_ACTOR_ID_REFERENCE = "workflow.actor_id"
