@@ -780,6 +780,22 @@ class DatadogRoutesExtendedTest {
     }
 
     @Test
+    fun `POST unprefixed api v2 logs returns 200`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            routing { datadogLogRoutes(allowingQuotaService) }
+        }
+        val response = client.post("/api/v2/logs") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.Json)
+            setBody(
+                """[{"message":"test log","hostname":"h1","service":"svc","status":"info"}]"""
+            )
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+    }
+
+    @Test
     fun `POST dd api v2 logs returns 400 for bad payload`() =
         testApplication {
             application {

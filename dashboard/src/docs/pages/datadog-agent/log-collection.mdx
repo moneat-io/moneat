@@ -17,7 +17,9 @@ Add log configuration to your `datadog.yaml`:
 # datadog.yaml
 logs_enabled: true
 logs_config:
-  logs_dd_url: "{{INGEST_URL}}"
+  # Host:port only, without scheme or path. Example: api.moneat.io:443
+  logs_dd_url: "{{LOGS_HOST_PORT}}"
+  logs_no_ssl: false
 ```
 
 Then restart the agent:

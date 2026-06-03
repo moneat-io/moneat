@@ -156,9 +156,26 @@ function keyPlaceholder(createdKey: string | null, fallback: string): string {
   return createdKey ?? fallback
 }
 
+function datadogLogsEndpoint(ingestUrl: string): {address: string; noSsl: boolean} {
+  try {
+    const parsed = new URL(ingestUrl)
+    const port = parsed.port || (parsed.protocol === 'http:' ? '80' : '443')
+    return {
+      address: `${parsed.hostname}:${port}`,
+      noSsl: parsed.protocol === 'http:',
+    }
+  } catch {
+    return {
+      address: ingestUrl.replace(/^https?:\/\//, '').replace(/\/.*$/, ''),
+      noSsl: false,
+    }
+  }
+}
+
 function datadogYaml(apiKey: string): string {
   const baseUrl = backendBaseUrl.replace(/\/$/, '')
   const ingestUrl = baseUrl + '/dd'
+  const logsEndpoint = datadogLogsEndpoint(ingestUrl)
   return `# Datadog Agent configuration for Moneat
 # Save this file as ${DATADOG_AGENT_CONFIG_PATH}
 # Redirects agent telemetry to your Moneat backend.
@@ -174,7 +191,8 @@ process_config:
   process_dd_url: ${ingestUrl}
 
 logs_config:
-  logs_dd_url: ${ingestUrl}
+  logs_dd_url: ${logsEndpoint.address}
+  logs_no_ssl: ${logsEndpoint.noSsl}
 
 container_lifecycle:
   dd_url: ${baseUrl}

@@ -26,6 +26,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
+import io.ktor.server.routing.RoutingContext
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import kotlinx.serialization.json.Json
@@ -45,48 +46,56 @@ fun Route.datadogLogRoutes(
 ) {
     route("/dd") {
         route("/api/v2") {
-            post("/logs") {
-                val orgId = DatadogAuthMiddleware.authenticate(call)
-                    ?: return@post
-
-                val contentEncoding =
-                    call.request.headers["Content-Encoding"]
-                val rawBody = call.receive<ByteArray>()
-                val body = DecompressionService.decompress(
-                    rawBody,
-                    contentEncoding
-                )
-
-                val bodyStr = body.decodeToString()
-                val entries = parseLogEntries(bodyStr)
-
-                if (entries == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid log payload"))
-                    return@post
-                }
-
-                if (entries.isEmpty()) {
-                    call.respond(HttpStatusCode.OK, mapOf("status" to "ok"))
-                    return@post
-                }
-
-                if (!reserveDatadogQuota(call, quotaService, orgId, entries.size, "dd_log", body.size.toLong())) {
-                    return@post
-                }
-
-                val count = DatadogLogService.enqueueLogs(
-                    organizationId = orgId.toLong(),
-                    entries = entries
-                )
-
-                logger.debug {
-                    "Accepted $count DD logs for org $orgId"
-                }
-
-                call.respond(HttpStatusCode.OK, mapOf("status" to "ok"))
-            }
+            post("/logs") { handleDatadogLogs(quotaService) }
         }
     }
+
+    route("/api/v2") {
+        post("/logs") { handleDatadogLogs(quotaService) }
+    }
+}
+
+private suspend fun RoutingContext.handleDatadogLogs(
+    quotaService: BillingQuotaService,
+) {
+    val orgId = DatadogAuthMiddleware.authenticate(call)
+        ?: return
+
+    val contentEncoding =
+        call.request.headers["Content-Encoding"]
+    val rawBody = call.receive<ByteArray>()
+    val body = DecompressionService.decompress(
+        rawBody,
+        contentEncoding
+    )
+
+    val bodyStr = body.decodeToString()
+    val entries = parseLogEntries(bodyStr)
+
+    if (entries == null) {
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid log payload"))
+        return
+    }
+
+    if (entries.isEmpty()) {
+        call.respond(HttpStatusCode.OK, mapOf("status" to "ok"))
+        return
+    }
+
+    if (!reserveDatadogQuota(call, quotaService, orgId, entries.size, "dd_log", body.size.toLong())) {
+        return
+    }
+
+    val count = DatadogLogService.enqueueLogs(
+        organizationId = orgId.toLong(),
+        entries = entries
+    )
+
+    logger.debug {
+        "Accepted $count DD logs for org $orgId"
+    }
+
+    call.respond(HttpStatusCode.OK, mapOf("status" to "ok"))
 }
 
 private fun parseLogEntries(bodyStr: String): List<DatadogLogEntry>? {

@@ -24,6 +24,12 @@ Copy the configuration below and save it to `/etc/datadog-agent/datadog.yaml` on
 # Increase Docker check timeout (default 5s is too short on loaded hosts)
 docker_query_timeout: 15
 
+# Log Collection
+logs_config:
+  # Host:port only, without scheme or path. Example: api.moneat.io:443
+  logs_dd_url: {{LOGS_HOST_PORT}}
+  logs_no_ssl: false
+
 # Container (contlcycle-intake, contimage-intake, sbom-intake)
 container_lifecycle:
   dd_url: {{BACKEND_URL}}
