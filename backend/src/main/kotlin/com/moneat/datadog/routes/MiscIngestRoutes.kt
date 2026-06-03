@@ -43,6 +43,10 @@ import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
+private const val CONTENT_ENCODING_HEADER = "Content-Encoding"
+private const val CONTENT_TYPE_HEADER = "Content-Type"
+private const val INVALID_PAYLOAD_ERROR = "Invalid payload"
+
 private val json = Json {
     ignoreUnknownKeys = true
     isLenient = true
@@ -98,7 +102,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSymbolDb(
 ) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     suspendRunCatching {
-        val contentEncoding = call.request.headers["Content-Encoding"]
+        val contentEncoding = call.request.headers[CONTENT_ENCODING_HEADER]
         val rawBody = call.receive<ByteArray>()
         val body = DecompressionService.decompress(rawBody, contentEncoding)
         val payload = json.decodeFromString<DdSymbolDbPayload>(body.decodeToString())
@@ -108,7 +112,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSymbolDb(
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
     }.getOrElse { e ->
         logger.error(e) { "Failed to process symbol_db" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to INVALID_PAYLOAD_ERROR))
     }
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handlePipelineStats(
@@ -116,7 +120,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handlePipelineStats(
 ) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     suspendRunCatching {
-        val contentEncoding = call.request.headers["Content-Encoding"]
+        val contentEncoding = call.request.headers[CONTENT_ENCODING_HEADER]
         val rawBody = call.receive<ByteArray>()
         val body = DecompressionService.decompress(rawBody, contentEncoding)
         val payload = json.decodeFromString<DdPipelineStatsPayload>(body.decodeToString())
@@ -126,7 +130,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handlePipelineStats(
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
     }.getOrElse { e ->
         logger.error(e) { "Failed to process pipeline_stats" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to INVALID_PAYLOAD_ERROR))
     }
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleDataLineage(
@@ -134,7 +138,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDataLineage(
 ) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     suspendRunCatching {
-        val contentEncoding = call.request.headers["Content-Encoding"]
+        val contentEncoding = call.request.headers[CONTENT_ENCODING_HEADER]
         val rawBody = call.receive<ByteArray>()
         val body = DecompressionService.decompress(rawBody, contentEncoding)
         val payload = json.decodeFromString<DdDataLineagePayload>(body.decodeToString())
@@ -144,7 +148,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDataLineage(
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
     }.getOrElse { e ->
         logger.error(e) { "Failed to process data_lineage" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to INVALID_PAYLOAD_ERROR))
     }
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleDataStreams(
@@ -152,7 +156,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDataStreams(
 ) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     suspendRunCatching {
-        val contentEncoding = call.request.headers["Content-Encoding"]
+        val contentEncoding = call.request.headers[CONTENT_ENCODING_HEADER]
         val rawBody = call.receive<ByteArray>()
         val body = DecompressionService.decompress(rawBody, contentEncoding)
         val payload = json.decodeFromString<DdDataStreamsPayload>(body.decodeToString())
@@ -162,7 +166,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDataStreams(
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
     }.getOrElse { e ->
         logger.error(e) { "Failed to process data_streams" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to INVALID_PAYLOAD_ERROR))
     }
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleSynthetics(
@@ -170,7 +174,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSynthetics(
 ) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     suspendRunCatching {
-        val contentEncoding = call.request.headers["Content-Encoding"]
+        val contentEncoding = call.request.headers[CONTENT_ENCODING_HEADER]
         val rawBody = call.receive<ByteArray>()
         val body = DecompressionService.decompress(rawBody, contentEncoding)
         val payload = json.decodeFromString<DdSyntheticsPayload>(body.decodeToString())
@@ -180,7 +184,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSynthetics(
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
     }.getOrElse { e ->
         logger.error(e) { "Failed to process synthetics" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to INVALID_PAYLOAD_ERROR))
     }
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleContainerImage(
@@ -188,8 +192,8 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleContainerImage(
 ) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     suspendRunCatching {
-        val contentType = call.request.headers["Content-Type"] ?: ""
-        val contentEncoding = call.request.headers["Content-Encoding"]
+        val contentType = call.request.headers[CONTENT_TYPE_HEADER] ?: ""
+        val contentEncoding = call.request.headers[CONTENT_ENCODING_HEADER]
         val rawBody = call.receive<ByteArray>()
         val body = DecompressionService.decompress(rawBody, contentEncoding)
         if (contentType.isProtobufContent()) {
@@ -207,7 +211,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleContainerImage(
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
     }.getOrElse { e ->
         logger.error(e) { "Failed to process contimage" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to INVALID_PAYLOAD_ERROR))
     }
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleSbom(
@@ -215,8 +219,8 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSbom(
 ) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     suspendRunCatching {
-        val contentType = call.request.headers["Content-Type"] ?: ""
-        val contentEncoding = call.request.headers["Content-Encoding"]
+        val contentType = call.request.headers[CONTENT_TYPE_HEADER] ?: ""
+        val contentEncoding = call.request.headers[CONTENT_ENCODING_HEADER]
         val rawBody = call.receive<ByteArray>()
         val body = DecompressionService.decompress(rawBody, contentEncoding)
         if (contentType.isProtobufContent()) {
@@ -234,7 +238,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSbom(
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
     }.getOrElse { e ->
         logger.error(e) { "Failed to process sbom" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to INVALID_PAYLOAD_ERROR))
     }
 }
 
@@ -243,8 +247,8 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleContainerLifecyc
 ) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     suspendRunCatching {
-        val contentType = call.request.headers["Content-Type"] ?: ""
-        val contentEncoding = call.request.headers["Content-Encoding"]
+        val contentType = call.request.headers[CONTENT_TYPE_HEADER] ?: ""
+        val contentEncoding = call.request.headers[CONTENT_ENCODING_HEADER]
         val rawBody = call.receive<ByteArray>()
         val body = DecompressionService.decompress(rawBody, contentEncoding)
         val events = if (contentType.isProtobufContent()) {
@@ -260,7 +264,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleContainerLifecyc
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
     }.getOrElse { e ->
         logger.error(e) { "Failed to process container lifecycle events" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to INVALID_PAYLOAD_ERROR))
     }
 }
 
@@ -269,7 +273,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleEventManagement(
 ) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     suspendRunCatching {
-        val contentEncoding = call.request.headers["Content-Encoding"]
+        val contentEncoding = call.request.headers[CONTENT_ENCODING_HEADER]
         val rawBody = call.receive<ByteArray>()
         val body = DecompressionService.decompress(rawBody, contentEncoding)
         val payload = json.decodeFromString<DatadogEventPayload>(body.decodeToString())
@@ -279,7 +283,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleEventManagement(
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
     }.getOrElse { e ->
         logger.error(e) { "Failed to process event-management events" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to INVALID_PAYLOAD_ERROR))
     }
 }
 
