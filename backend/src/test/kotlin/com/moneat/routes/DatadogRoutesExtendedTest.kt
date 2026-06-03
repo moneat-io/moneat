@@ -1599,7 +1599,12 @@ class DatadogRoutesExtendedTest {
 
     @Test
     fun `POST profile v2 aliases ingest uploaded profile`() = testApplication {
-        val aliases = listOf("/api/v2/profile", "/dd/api/v2/profile")
+        val aliases = listOf(
+            "/api/v2/profile",
+            "/dd/api/v2/profile",
+            "/profiling/v1/input",
+            "/dd/profiling/v1/input",
+        )
         application {
             install(ContentNegotiation) { json() }
             routing { profileIngestRoutes(allowingQuotaService) }
@@ -2324,15 +2329,23 @@ class DatadogRoutesExtendedTest {
     private fun profileMultipartBody(): MultiPartFormDataContent =
         MultiPartFormDataContent(
             formData {
-                append(
-                    "event",
-                    """{"start":"2026-06-03T03:45:00Z","end":"2026-06-03T03:46:00Z"}"""
+                appendFile(
+                    name = "event",
+                    fileName = "event.json",
+                    bytes = """{"start":"2026-06-03T03:45:00Z","end":"2026-06-03T03:46:00Z"}"""
+                        .toByteArray(),
+                    contentType = ContentType.Application.Json,
                 )
                 appendFile("chunk_data", "cpu.pprof", buildPprofProfilePayload())
             }
         )
 
-    private fun FormBuilder.appendFile(name: String, fileName: String, bytes: ByteArray) {
+    private fun FormBuilder.appendFile(
+        name: String,
+        fileName: String,
+        bytes: ByteArray,
+        contentType: ContentType = ContentType.Application.OctetStream,
+    ) {
         append(
             name,
             bytes,
@@ -2341,7 +2354,7 @@ class DatadogRoutesExtendedTest {
                     HttpHeaders.ContentDisposition,
                     "form-data; name=\"$name\"; filename=\"$fileName\""
                 )
-                append(HttpHeaders.ContentType, ContentType.Application.OctetStream.toString())
+                append(HttpHeaders.ContentType, contentType.toString())
             }
         )
     }
