@@ -872,6 +872,18 @@ class DatadogIngestRoutesTest {
     }
 
     @Test
+    fun `contlcycle returns 400 for non empty json payload`() = testApplication {
+        every { DatadogService.validateApiKey(VALID_KEY) } returns ORG_ID
+        installRoutes()()
+        val response = client.post("/api/v2/contlcycle") {
+            header(DD_API_KEY_HEADER, VALID_KEY)
+            contentType(ContentType.Application.Json)
+            setBody("""{"container_id":"container-1"}""")
+        }
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
     fun `contlcycle protobuf decodes and enqueues lifecycle events`() = testApplication {
         every { DatadogService.validateApiKey(VALID_KEY) } returns ORG_ID
         coEvery { DatadogEventService.enqueueEvents(any(), any()) } returns 1

@@ -31,6 +31,7 @@ import com.moneat.datadog.models.DdSymbolDbPayload
 import com.moneat.datadog.models.DdSyntheticsPayload
 import com.moneat.datadog.services.DatadogEventService
 import com.moneat.datadog.services.MiscIngestionService
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -39,7 +40,6 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -97,194 +97,146 @@ fun Route.miscIngestRoutes(
         post("/events") { handleEventManagement(quotaService) }
     }
 }
-private suspend fun io.ktor.server.routing.RoutingContext.handleSymbolDb(
-    quotaService: BillingQuotaService,
-) {
-    val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
-    suspendRunCatching {
-        val contentEncoding = call.request.headers[CONTENT_ENCODING_HEADER]
-        val rawBody = call.receive<ByteArray>()
-        val body = DecompressionService.decompress(rawBody, contentEncoding)
-        val payload = json.decodeFromString<DdSymbolDbPayload>(body.decodeToString())
-        if (!reserveMiscQuota(quotaService, orgId, 1, body)) return
+private suspend fun io.ktor.server.routing.RoutingContext.handleSymbolDb(quotaService: BillingQuotaService) =
+    withDatadogPayload("symbol_db") { orgId, body ->
+        val payload = json.decodeFromString<DdSymbolDbPayload>(body.text())
+        if (!reserveMiscQuota(quotaService, orgId, 1, body.bytes)) return@withDatadogPayload
         MiscIngestionService.enqueueSymbolDb(orgId, payload)
         logger.debug { "Accepted DD symbol_db for org $orgId" }
-        call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    }.getOrElse { e ->
-        logger.error(e) { "Failed to process symbol_db" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to INVALID_PAYLOAD_ERROR))
+        respondAccepted()
     }
-}
-private suspend fun io.ktor.server.routing.RoutingContext.handlePipelineStats(
-    quotaService: BillingQuotaService,
-) {
-    val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
-    suspendRunCatching {
-        val contentEncoding = call.request.headers[CONTENT_ENCODING_HEADER]
-        val rawBody = call.receive<ByteArray>()
-        val body = DecompressionService.decompress(rawBody, contentEncoding)
-        val payload = json.decodeFromString<DdPipelineStatsPayload>(body.decodeToString())
-        if (!reserveMiscQuota(quotaService, orgId, payload.stats.size, body)) return
+
+private suspend fun io.ktor.server.routing.RoutingContext.handlePipelineStats(quotaService: BillingQuotaService) =
+    withDatadogPayload("pipeline_stats") { orgId, body ->
+        val payload = json.decodeFromString<DdPipelineStatsPayload>(body.text())
+        if (!reserveMiscQuota(quotaService, orgId, payload.stats.size, body.bytes)) return@withDatadogPayload
         val count = MiscIngestionService.enqueuePipelineStats(orgId, payload)
         logger.debug { "Accepted $count DD pipeline_stats for org $orgId" }
-        call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    }.getOrElse { e ->
-        logger.error(e) { "Failed to process pipeline_stats" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to INVALID_PAYLOAD_ERROR))
+        respondAccepted()
     }
-}
-private suspend fun io.ktor.server.routing.RoutingContext.handleDataLineage(
-    quotaService: BillingQuotaService,
-) {
-    val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
-    suspendRunCatching {
-        val contentEncoding = call.request.headers[CONTENT_ENCODING_HEADER]
-        val rawBody = call.receive<ByteArray>()
-        val body = DecompressionService.decompress(rawBody, contentEncoding)
-        val payload = json.decodeFromString<DdDataLineagePayload>(body.decodeToString())
-        if (!reserveMiscQuota(quotaService, orgId, 1, body)) return
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleDataLineage(quotaService: BillingQuotaService) =
+    withDatadogPayload("data_lineage") { orgId, body ->
+        val payload = json.decodeFromString<DdDataLineagePayload>(body.text())
+        if (!reserveMiscQuota(quotaService, orgId, 1, body.bytes)) return@withDatadogPayload
         MiscIngestionService.enqueueDataLineage(orgId, payload)
         logger.debug { "Accepted DD data_lineage for org $orgId" }
-        call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    }.getOrElse { e ->
-        logger.error(e) { "Failed to process data_lineage" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to INVALID_PAYLOAD_ERROR))
+        respondAccepted()
     }
-}
-private suspend fun io.ktor.server.routing.RoutingContext.handleDataStreams(
-    quotaService: BillingQuotaService,
-) {
-    val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
-    suspendRunCatching {
-        val contentEncoding = call.request.headers[CONTENT_ENCODING_HEADER]
-        val rawBody = call.receive<ByteArray>()
-        val body = DecompressionService.decompress(rawBody, contentEncoding)
-        val payload = json.decodeFromString<DdDataStreamsPayload>(body.decodeToString())
-        if (!reserveMiscQuota(quotaService, orgId, payload.stats.size, body)) return
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleDataStreams(quotaService: BillingQuotaService) =
+    withDatadogPayload("data_streams") { orgId, body ->
+        val payload = json.decodeFromString<DdDataStreamsPayload>(body.text())
+        if (!reserveMiscQuota(quotaService, orgId, payload.stats.size, body.bytes)) return@withDatadogPayload
         val count = MiscIngestionService.enqueueDataStreams(orgId, payload)
         logger.debug { "Accepted $count DD data_streams for org $orgId" }
-        call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    }.getOrElse { e ->
-        logger.error(e) { "Failed to process data_streams" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to INVALID_PAYLOAD_ERROR))
+        respondAccepted()
     }
-}
-private suspend fun io.ktor.server.routing.RoutingContext.handleSynthetics(
-    quotaService: BillingQuotaService,
-) {
-    val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
-    suspendRunCatching {
-        val contentEncoding = call.request.headers[CONTENT_ENCODING_HEADER]
-        val rawBody = call.receive<ByteArray>()
-        val body = DecompressionService.decompress(rawBody, contentEncoding)
-        val payload = json.decodeFromString<DdSyntheticsPayload>(body.decodeToString())
-        if (!reserveMiscQuota(quotaService, orgId, payload.results.size, body)) return
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleSynthetics(quotaService: BillingQuotaService) =
+    withDatadogPayload("synthetics") { orgId, body ->
+        val payload = json.decodeFromString<DdSyntheticsPayload>(body.text())
+        if (!reserveMiscQuota(quotaService, orgId, payload.results.size, body.bytes)) return@withDatadogPayload
         val count = MiscIngestionService.enqueueSynthetics(orgId, payload)
         logger.debug { "Accepted $count DD synthetics for org $orgId" }
-        call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    }.getOrElse { e ->
-        logger.error(e) { "Failed to process synthetics" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to INVALID_PAYLOAD_ERROR))
+        respondAccepted()
     }
-}
-private suspend fun io.ktor.server.routing.RoutingContext.handleContainerImage(
-    quotaService: BillingQuotaService,
-) {
-    val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
-    suspendRunCatching {
-        val contentType = call.request.headers[CONTENT_TYPE_HEADER] ?: ""
-        val contentEncoding = call.request.headers[CONTENT_ENCODING_HEADER]
-        val rawBody = call.receive<ByteArray>()
-        val body = DecompressionService.decompress(rawBody, contentEncoding)
-        if (contentType.isProtobufContent()) {
-            val payloads = MiscPayloadDecoder.decodeContainerImages(body)
-            if (!reserveMiscQuota(quotaService, orgId, payloads.size, body)) return
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleContainerImage(quotaService: BillingQuotaService) =
+    withDatadogPayload("contimage") { orgId, body ->
+        if (body.isProtobuf) {
+            val payloads = MiscPayloadDecoder.decodeContainerImages(body.bytes)
+            if (!reserveMiscQuota(quotaService, orgId, payloads.size, body.bytes)) return@withDatadogPayload
             val count = MiscIngestionService.enqueueContainerImages(orgId, payloads)
             logger.debug { "Accepted $count DD contimage protobuf images for org $orgId" }
-            call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-            return
+            respondAccepted()
+            return@withDatadogPayload
         }
-        val payload = json.decodeFromString<DdContainerImagePayload>(body.decodeToString())
-        if (!reserveMiscQuota(quotaService, orgId, 1, body)) return
+        val payload = json.decodeFromString<DdContainerImagePayload>(body.text())
+        if (!reserveMiscQuota(quotaService, orgId, 1, body.bytes)) return@withDatadogPayload
         MiscIngestionService.enqueueContainerImage(orgId, payload)
         logger.debug { "Accepted DD contimage for org $orgId" }
-        call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    }.getOrElse { e ->
-        logger.error(e) { "Failed to process contimage" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to INVALID_PAYLOAD_ERROR))
+        respondAccepted()
     }
-}
-private suspend fun io.ktor.server.routing.RoutingContext.handleSbom(
-    quotaService: BillingQuotaService,
-) {
-    val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
-    suspendRunCatching {
-        val contentType = call.request.headers[CONTENT_TYPE_HEADER] ?: ""
-        val contentEncoding = call.request.headers[CONTENT_ENCODING_HEADER]
-        val rawBody = call.receive<ByteArray>()
-        val body = DecompressionService.decompress(rawBody, contentEncoding)
-        if (contentType.isProtobufContent()) {
-            val payload = MiscPayloadDecoder.decodeSbom(body)
-            if (!reserveMiscQuota(quotaService, orgId, payload.packages.size, body)) return
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleSbom(quotaService: BillingQuotaService) =
+    withDatadogPayload("sbom") { orgId, body ->
+        if (body.isProtobuf) {
+            val payload = MiscPayloadDecoder.decodeSbom(body.bytes)
+            if (!reserveMiscQuota(quotaService, orgId, payload.packages.size, body.bytes)) {
+                return@withDatadogPayload
+            }
             val count = MiscIngestionService.enqueueSbom(orgId, payload)
             logger.debug { "Accepted $count DD sbom protobuf packages for org $orgId" }
-            call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-            return
+            respondAccepted()
+            return@withDatadogPayload
         }
-        val payload = json.decodeFromString<DdSbomPayload>(body.decodeToString())
-        if (!reserveMiscQuota(quotaService, orgId, payload.packages.size, body)) return
+        val payload = json.decodeFromString<DdSbomPayload>(body.text())
+        if (!reserveMiscQuota(quotaService, orgId, payload.packages.size, body.bytes)) return@withDatadogPayload
         val count = MiscIngestionService.enqueueSbom(orgId, payload)
         logger.debug { "Accepted $count DD sbom packages for org $orgId" }
-        call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    }.getOrElse { e ->
-        logger.error(e) { "Failed to process sbom" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to INVALID_PAYLOAD_ERROR))
+        respondAccepted()
     }
-}
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleContainerLifecycle(
     quotaService: BillingQuotaService,
-) {
-    val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
-    suspendRunCatching {
-        val contentType = call.request.headers[CONTENT_TYPE_HEADER] ?: ""
-        val contentEncoding = call.request.headers[CONTENT_ENCODING_HEADER]
-        val rawBody = call.receive<ByteArray>()
-        val body = DecompressionService.decompress(rawBody, contentEncoding)
-        val events = if (contentType.isProtobufContent()) {
-            MiscPayloadDecoder.decodeContainerLifecycleEvents(body)
-        } else if (body.decodeToString().trim().isEmptyObject()) {
-            emptyList()
-        } else {
-            throw IllegalArgumentException("Container lifecycle payload must be protobuf")
-        }
-        if (!reserveEventQuota(quotaService, orgId, events.size, body)) return
-        val count = DatadogEventService.enqueueEvents(orgId.toLong(), events)
-        logger.debug { "Accepted $count DD container lifecycle events for org $orgId" }
-        call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
-    }.getOrElse { e ->
-        logger.error(e) { "Failed to process container lifecycle events" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to INVALID_PAYLOAD_ERROR))
+) = withDatadogPayload("container lifecycle events") { orgId, body ->
+    val events = if (body.isProtobuf) {
+        MiscPayloadDecoder.decodeContainerLifecycleEvents(body.bytes)
+    } else if (body.text().trim().isEmptyObject()) {
+        emptyList()
+    } else {
+        throw IllegalArgumentException("Container lifecycle payload must be protobuf")
     }
+    if (!reserveEventQuota(quotaService, orgId, events.size, body.bytes)) return@withDatadogPayload
+    val count = DatadogEventService.enqueueEvents(orgId.toLong(), events)
+    logger.debug { "Accepted $count DD container lifecycle events for org $orgId" }
+    respondAccepted()
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleEventManagement(
     quotaService: BillingQuotaService,
+) = withDatadogPayload("event-management events") { orgId, body ->
+    val payload = json.decodeFromString<DatadogEventPayload>(body.text())
+    if (!reserveEventQuota(quotaService, orgId, payload.events.size, body.bytes)) return@withDatadogPayload
+    val count = DatadogEventService.enqueueEvents(orgId.toLong(), payload.events)
+    logger.debug { "Accepted $count DD event-management events for org $orgId" }
+    respondAccepted()
+}
+
+private class MiscIngestBody(
+    val bytes: ByteArray,
+    val contentType: String,
+) {
+    val isProtobuf: Boolean
+        get() = contentType.isProtobufContent()
+
+    fun text(): String = bytes.decodeToString()
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.withDatadogPayload(
+    failureName: String,
+    block: suspend io.ktor.server.routing.RoutingContext.(Int, MiscIngestBody) -> Unit,
 ) {
     val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
     suspendRunCatching {
-        val contentEncoding = call.request.headers[CONTENT_ENCODING_HEADER]
-        val rawBody = call.receive<ByteArray>()
-        val body = DecompressionService.decompress(rawBody, contentEncoding)
-        val payload = json.decodeFromString<DatadogEventPayload>(body.decodeToString())
-        if (!reserveEventQuota(quotaService, orgId, payload.events.size, body)) return
-        val count = DatadogEventService.enqueueEvents(orgId.toLong(), payload.events)
-        logger.debug { "Accepted $count DD event-management events for org $orgId" }
-        call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+        block(orgId, receiveMiscIngestBody())
     }.getOrElse { e ->
-        logger.error(e) { "Failed to process event-management events" }
+        logger.error(e) { "Failed to process $failureName" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to INVALID_PAYLOAD_ERROR))
     }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.receiveMiscIngestBody(): MiscIngestBody {
+    val contentEncoding = call.request.headers[CONTENT_ENCODING_HEADER]
+    val contentType = call.request.headers[CONTENT_TYPE_HEADER] ?: ""
+    val rawBody = call.receive<ByteArray>()
+    val body = DecompressionService.decompress(rawBody, contentEncoding)
+    return MiscIngestBody(bytes = body, contentType = contentType)
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.respondAccepted() {
+    call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.reserveMiscQuota(
