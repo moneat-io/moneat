@@ -690,7 +690,20 @@ describe('Monitoring API module', () => {
         })
       )
       const alert = await api.updateHostAlert(1, 50, { threshold: 95 })
-      expect(alert.threshold).toBe(95)
+      expect(alert?.threshold).toBe(95)
+    })
+
+    it('returns undefined for a no-content update response', async () => {
+      server.use(
+        http.put(`${API_BASE}/v1/monitor/hosts/1/alerts/50`, async ({ request }) => {
+          const body = (await request.json()) as Record<string, unknown>
+          expect(body.enabled).toBe(false)
+          return new HttpResponse(null, { status: 204 })
+        })
+      )
+
+      const alert = await api.updateHostAlert(1, 50, { enabled: false })
+      expect(alert).toBeUndefined()
     })
   })
 

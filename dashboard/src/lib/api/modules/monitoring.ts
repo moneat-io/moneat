@@ -329,11 +329,11 @@ export function monitoringMethods(core: ApiClientCore) {
       updates: Partial<HostAlert>,
       scope: 'global' | 'host' = 'host'
     ) => {
-      const payload = await core.request<Record<string, unknown>>(
+      const payload = await core.request<Record<string, unknown> | undefined>(
         `${base}/monitor/hosts/${hostId}/alerts/${alertId}?scope=${scope}`,
         { method: 'PUT', body: JSON.stringify(updates) }
       )
-      return mapHostAlert(payload)
+      return payload === undefined ? undefined : mapHostAlert(payload)
     },
 
     deleteHostAlert: (
