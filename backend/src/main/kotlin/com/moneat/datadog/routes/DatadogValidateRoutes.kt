@@ -21,18 +21,45 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
+import io.ktor.server.routing.head
 import io.ktor.server.routing.route
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
 fun Route.datadogValidateRoutes() {
+    route("/api/v1") {
+        datadogValidateHandlers()
+    }
+
     route("/dd") {
         route("/api/v1") {
-            get("/validate") {
-                val orgId = DatadogAuthMiddleware.authenticate(call) ?: return@get
-                call.respond(
-                    HttpStatusCode.OK,
-                    mapOf("valid" to "true", "org_id" to orgId.toString())
-                )
-            }
+            datadogValidateHandlers()
         }
     }
 }
+
+private fun Route.datadogValidateHandlers() {
+    get("/validate") { handleValidateApiKey() }
+    get("/validate/") { handleValidateApiKey() }
+    head("/validate") { handleValidateApiKeyHead() }
+    head("/validate/") { handleValidateApiKeyHead() }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleValidateApiKey() {
+    val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
+    call.respond(
+        HttpStatusCode.OK,
+        DatadogValidationResponse(valid = true, orgId = orgId.toString())
+    )
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleValidateApiKeyHead() {
+    DatadogAuthMiddleware.authenticate(call) ?: return
+    call.respond(HttpStatusCode.OK)
+}
+
+@Serializable
+private data class DatadogValidationResponse(
+    val valid: Boolean,
+    @SerialName("org_id") val orgId: String,
+)

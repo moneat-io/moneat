@@ -31,6 +31,7 @@ import com.moneat.datadog.services.OrchestratorIngestionService
 import com.moneat.testsupport.startTestKoin
 import com.moneat.testsupport.stopTestKoin
 import io.ktor.client.request.get
+import io.ktor.client.request.head
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -554,7 +555,39 @@ class DatadogIngestRoutesTest {
             header(DD_API_KEY_HEADER, VALID_KEY)
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("true"))
+        assertTrue(response.bodyAsText().filterNot(Char::isWhitespace).contains(""""valid":true"""))
+    }
+
+    @Test
+    fun `unprefixed v1 validate returns valid with valid api key`() = testApplication {
+        every { DatadogService.validateApiKey(VALID_KEY) } returns ORG_ID
+        installRoutes()()
+        val response = client.get("/api/v1/validate") {
+            header(DD_API_KEY_HEADER, VALID_KEY)
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().filterNot(Char::isWhitespace).contains(""""valid":true"""))
+    }
+
+    @Test
+    fun `v1 validate accepts trailing slash`() = testApplication {
+        every { DatadogService.validateApiKey(VALID_KEY) } returns ORG_ID
+        installRoutes()()
+        val response = client.get("/dd/api/v1/validate/") {
+            header(DD_API_KEY_HEADER, VALID_KEY)
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().filterNot(Char::isWhitespace).contains(""""valid":true"""))
+    }
+
+    @Test
+    fun `v1 validate accepts HEAD`() = testApplication {
+        every { DatadogService.validateApiKey(VALID_KEY) } returns ORG_ID
+        installRoutes()()
+        val response = client.head("/dd/api/v1/validate") {
+            header(DD_API_KEY_HEADER, VALID_KEY)
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
     }
 
     // ──── Misc Ingest – /dd prefix ────

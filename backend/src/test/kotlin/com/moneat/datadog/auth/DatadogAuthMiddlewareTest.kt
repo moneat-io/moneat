@@ -18,6 +18,15 @@ package com.moneat.datadog.auth
 
 import com.moneat.datadog.models.DdApiKeys
 import com.moneat.datadog.services.DatadogService
+import io.ktor.client.request.get
+import io.ktor.client.request.header
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.call
+import io.ktor.server.response.respondText
+import io.ktor.server.routing.get
+import io.ktor.server.routing.routing
+import io.ktor.server.testing.testApplication
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -97,5 +106,31 @@ class DatadogAuthMiddlewareTest {
         // Should still work (re-validates from DB)
         val orgId = DatadogService.validateApiKey(created.key)
         assertNotNull(orgId)
+    }
+
+    @Test
+    fun `authenticate accepts alternate Datadog API key header names`() = testApplication {
+        val created = DatadogService.createApiKey(
+            organizationId = 1,
+            name = "Trace Writer Key",
+            userId = 1
+        )
+        application {
+            routing {
+                get("/probe") {
+                    val orgId = DatadogAuthMiddleware.authenticate(call) ?: return@get
+                    call.respondText(orgId.toString())
+                }
+            }
+        }
+
+        listOf("X-Datadog-API-Key", "Api-Key", "api-key").forEach { headerName ->
+            val response = client.get("/probe") {
+                header(headerName, created.key)
+            }
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertEquals("1", response.bodyAsText())
+        }
     }
 }

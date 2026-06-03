@@ -69,6 +69,7 @@ import com.moneat.testsupport.RouteTestSupport.withAuth
 import com.moneat.testsupport.TestDatabaseHelper
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
+import io.ktor.client.request.head
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.put
@@ -992,7 +993,45 @@ class DatadogRoutesExtendedTest {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("valid"))
+        assertTrue(response.bodyAsText().filterNot(Char::isWhitespace).contains(""""valid":true"""))
+    }
+
+    @Test
+    fun `GET unprefixed api v1 validate returns 200 with orgId`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            routing { datadogValidateRoutes() }
+        }
+        val response = client.get("/api/v1/validate") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().filterNot(Char::isWhitespace).contains(""""valid":true"""))
+    }
+
+    @Test
+    fun `GET dd api v1 validate accepts trailing slash`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            routing { datadogValidateRoutes() }
+        }
+        val response = client.get("/dd/api/v1/validate/") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().filterNot(Char::isWhitespace).contains(""""valid":true"""))
+    }
+
+    @Test
+    fun `HEAD dd api v1 validate returns 200`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            routing { datadogValidateRoutes() }
+        }
+        val response = client.head("/dd/api/v1/validate") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
     }
 
     @Test
@@ -1390,6 +1429,20 @@ class DatadogRoutesExtendedTest {
             routing { telemetryProxyRoutes() }
         }
         val response = client.post("/dd/telemetry/proxy/api/v2/apmtelemetry") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.Json)
+            setBody("""{"payload":"test"}""")
+        }
+        assertEquals(HttpStatusCode.Accepted, response.status)
+    }
+
+    @Test
+    fun `POST unprefixed apm telemetry returns 202`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            routing { telemetryProxyRoutes() }
+        }
+        val response = client.post("/api/v2/apmtelemetry") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.Json)
             setBody("""{"payload":"test"}""")
