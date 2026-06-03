@@ -278,6 +278,76 @@ class ProtoDecoderTest {
     }
 
     @Test
+    fun `ProcessAgentPayloadDecoder decodeCollectorProcDiscovery maps discovered process`() {
+        val command = buildProto {
+            writeString(1, "/usr/bin/java")
+        }
+        val user = buildProto {
+            writeString(1, "app")
+        }
+        val discovery = buildProto {
+            writeInt32(1, 4321)
+            writeByteArray(4, command)
+            writeByteArray(5, user)
+        }
+        val proto = buildProto {
+            writeString(1, "worker-01")
+            writeByteArray(4, discovery)
+        }
+
+        val result = ProcessAgentPayloadDecoder.decodeCollectorProcDiscovery(proto)
+
+        assertEquals("worker-01", result.host)
+        val process = result.processes.single()
+        assertEquals(4321, process.pid)
+        assertEquals("java", process.name)
+        assertEquals("/usr/bin/java", process.command)
+        assertEquals("app", process.user)
+    }
+
+    @Test
+    fun `ProcessAgentPayloadDecoder decodeCollectorConnections maps network fields`() {
+        val localAddr = buildProto {
+            writeString(2, "10.0.0.5")
+            writeInt32(3, 8080)
+        }
+        val remoteAddr = buildProto {
+            writeString(2, "2001:db8::1")
+            writeInt32(3, 443)
+        }
+        val connection = buildProto {
+            writeInt32(1, 1234)
+            writeByteArray(5, localAddr)
+            writeByteArray(6, remoteAddr)
+            writeEnum(10, 1)
+            writeEnum(11, 0)
+            writeUInt64(16, 5000)
+            writeUInt64(17, 10000)
+            writeEnum(19, 2)
+        }
+        val proto = buildProto {
+            writeString(2, "web-01")
+            writeByteArray(3, connection)
+        }
+
+        val result = ProcessAgentPayloadDecoder.decodeCollectorConnections(proto)
+
+        assertEquals("web-01", result.host)
+        assertEquals(1, result.connections.size)
+        val decoded = result.connections.single()
+        assertEquals(1234, decoded.pid)
+        assertEquals("10.0.0.5", decoded.localAddr)
+        assertEquals(8080, decoded.localPort)
+        assertEquals("2001:db8::1", decoded.remoteAddr)
+        assertEquals(443, decoded.remotePort)
+        assertEquals("IPv6", decoded.family)
+        assertEquals("tcp6", decoded.protocol)
+        assertEquals("outgoing", decoded.direction)
+        assertEquals(5000, decoded.bytesSent)
+        assertEquals(10000, decoded.bytesRecv)
+    }
+
+    @Test
     fun `ProtoWireConstants has expected field values`() {
         assertEquals(3, ProtoWireConstants.FIELD_SHIFT)
         assertEquals(3, ProtoWireConstants.FIELD_3)
@@ -292,7 +362,20 @@ class ProtoDecoderTest {
     @Test
     fun `ProcessAgentPayloadDecoder type constants are correct`() {
         assertEquals(12, ProcessAgentPayloadDecoder.TYPE_COLLECTOR_PROC)
+        assertEquals(22, ProcessAgentPayloadDecoder.TYPE_COLLECTOR_CONNECTIONS)
+        assertEquals(23, ProcessAgentPayloadDecoder.TYPE_RES_COLLECTOR)
         assertEquals(39, ProcessAgentPayloadDecoder.TYPE_COLLECTOR_CONTAINER)
         assertEquals(53, ProcessAgentPayloadDecoder.TYPE_COLLECTOR_PROC_DISCOVERY)
+    }
+
+    @Test
+    fun `ProcessAgentPayloadDecoder encodeCollectorResponse returns MessageV3 response`() {
+        val response = ProcessAgentPayloadDecoder.encodeCollectorResponse()
+        val header = ProcessAgentPayloadDecoder.readHeader(response)
+
+        assertNotNull(header)
+        assertEquals(3, header.version)
+        assertEquals(ProcessAgentPayloadDecoder.TYPE_RES_COLLECTOR, header.type)
+        assertEquals(0, header.encoding)
     }
 }

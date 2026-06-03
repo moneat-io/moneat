@@ -409,6 +409,43 @@ class TraceIngestionServiceTest {
     }
 
     @Test
+    fun `parseMsgpackStats maps Agent stats payload`() {
+        val packer = MessagePack.newDefaultBufferPacker()
+        packer.packMapHeader(4)
+        packer.packString("AgentHostname")
+        packer.packString("agent-host")
+        packer.packString("AgentEnv")
+        packer.packString("staging")
+        packer.packString("AgentVersion")
+        packer.packString("7.72.0")
+        packer.packString("Stats")
+        packer.packArrayHeader(1)
+        packClientStatsPayload(packer)
+        packer.close()
+
+        val result = TraceIngestionService.parseMsgpackStats(packer.toByteArray())
+
+        assertEquals("agent-host", result.hostname)
+        assertEquals("staging", result.env)
+        assertEquals("7.72.0", result.version)
+        val bucket = result.stats.single()
+        assertEquals(1700000000000000000L, bucket.start)
+        assertEquals(10000000000L, bucket.duration)
+        val entry = bucket.stats.single()
+        assertEquals("web.request", entry.name)
+        assertEquals("api", entry.service)
+        assertEquals("GET /health", entry.resource)
+        assertEquals("web", entry.type)
+        assertEquals(200, entry.httpStatusCode)
+        assertEquals(2, entry.hits)
+        assertEquals(1, entry.topLevelHits)
+        assertEquals(0, entry.errors)
+        assertEquals(50000000L, entry.duration)
+        assertEquals(2, entry.okSummary?.count)
+        assertEquals(42.0, entry.okSummary?.sum)
+    }
+
+    @Test
     fun `parseTraceId accepts unsigned numeric values`() {
         val parsed = TraceIngestionService.parseTraceId("18446744073709551615")
         assertEquals(ULong.MAX_VALUE, parsed)
@@ -500,5 +537,49 @@ class TraceIngestionServiceTest {
             is Double -> packer.packDouble(mv)
             else -> packer.packString(mv.toString())
         }
+    }
+
+    private fun packClientStatsPayload(packer: MessageBufferPacker) {
+        packer.packMapHeader(1)
+        packer.packString("Stats")
+        packer.packArrayHeader(1)
+        packer.packMapHeader(3)
+        packer.packString("Start")
+        packer.packLong(1700000000000000000L)
+        packer.packString("Duration")
+        packer.packLong(10000000000L)
+        packer.packString("Stats")
+        packer.packArrayHeader(1)
+        packGroupedStats(packer)
+    }
+
+    private fun packGroupedStats(packer: MessageBufferPacker) {
+        packer.packMapHeader(11)
+        packer.packString("Name")
+        packer.packString("web.request")
+        packer.packString("Service")
+        packer.packString("api")
+        packer.packString("Resource")
+        packer.packString("GET /health")
+        packer.packString("Type")
+        packer.packString("web")
+        packer.packString("HTTPStatusCode")
+        packer.packInt(200)
+        packer.packString("Hits")
+        packer.packLong(2)
+        packer.packString("TopLevelHits")
+        packer.packLong(1)
+        packer.packString("Errors")
+        packer.packLong(0)
+        packer.packString("Duration")
+        packer.packLong(50000000L)
+        packer.packString("Synthetics")
+        packer.packBoolean(false)
+        packer.packString("OkSummary")
+        packer.packMapHeader(2)
+        packer.packString("Count")
+        packer.packLong(2)
+        packer.packString("Sum")
+        packer.packDouble(42.0)
     }
 }

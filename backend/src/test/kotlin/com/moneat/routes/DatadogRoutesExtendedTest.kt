@@ -16,16 +16,21 @@
 
 package com.moneat.routes
 
+import com.google.protobuf.CodedOutputStream
 import com.moneat.billing.models.BillingUsageResponse
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.QuotaReservationResult
 import com.moneat.config.ClickHouseClient
 import com.moneat.datadog.auth.DatadogAuthContext
 import com.moneat.datadog.auth.DatadogAuthMiddleware
+import com.moneat.datadog.decompression.ProcessAgentPayloadDecoder
+import com.moneat.datadog.models.DatadogConnectionsPayload
+import com.moneat.datadog.models.DatadogProcessPayload
 import com.moneat.datadog.models.DdApiKeys
 import com.moneat.datadog.models.DdApmErrorsResponse
 import com.moneat.datadog.models.DdResourceStatsResponse
 import com.moneat.datadog.models.DdServiceMapResponse
+import com.moneat.datadog.models.DdStatsPayload
 import com.moneat.datadog.models.DdTraceListResponse
 import com.moneat.datadog.routes.datadogDogStatsDRoutes
 import com.moneat.datadog.routes.datadogEventRoutes
@@ -56,6 +61,9 @@ import com.moneat.datadog.services.DdTraceListQuery
 import com.moneat.datadog.services.DebuggerIngestionService
 import com.moneat.datadog.services.MiscIngestionService
 import com.moneat.datadog.services.OrchestratorIngestionService
+import com.moneat.datadog.services.QueuedConnectionEntry
+import com.moneat.datadog.services.QueuedInfraBatch
+import com.moneat.datadog.services.QueuedProcessEntry
 import com.moneat.datadog.services.QueuedServiceCheckBatch
 import com.moneat.datadog.services.QueuedServiceCheckEntry
 import com.moneat.datadog.services.TelemetryProxyService
@@ -73,6 +81,7 @@ import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsBytes
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -94,6 +103,9 @@ import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkAll
 import io.mockk.verify
+import java.io.ByteArrayOutputStream
+import org.msgpack.core.MessageBufferPacker
+import org.msgpack.core.MessagePack
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
@@ -103,6 +115,7 @@ import org.junit.jupiter.api.BeforeAll
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class DatadogRoutesExtendedTest {
@@ -116,6 +129,9 @@ class DatadogRoutesExtendedTest {
         private const val DD_LOGS_PATH = "/dd/api/v2/logs"
         private const val EMPTY_ROWS_JSON = """{"rows":[]}"""
         private const val AGENT_API_KEYS_PATH = "/v1/agent-api-keys"
+        private const val PROCESS_AGENT_HEADER_SIZE = 16
+        private const val PROCESS_AGENT_MESSAGE_V3: Byte = 3
+        private const val PROCESS_AGENT_PROTOBUF_ENCODING: Byte = 0
         private var db: Database? = null
 
         @JvmStatic
@@ -227,6 +243,7 @@ class DatadogRoutesExtendedTest {
         every { DebuggerIngestionService.enqueueDebuggerLogs(any(), any()) } returns 1
         every { DebuggerIngestionService.enqueueDiagnostics(any(), any()) } returns 1
         every { TelemetryProxyService.acknowledge(any(), any(), any()) } just Runs
+        coEvery { TraceIngestionService.insertTraceStats(any(), any()) } just Runs
     }
 
     private fun Application.installAuth() {
@@ -287,6 +304,124 @@ class DatadogRoutesExtendedTest {
             usage = quotaUsage(),
         )
         return quotaService
+    }
+
+    private fun buildProto(block: CodedOutputStream.() -> Unit): ByteArray {
+        val out = ByteArrayOutputStream()
+        val coded = CodedOutputStream.newInstance(out)
+        coded.block()
+        coded.flush()
+        return out.toByteArray()
+    }
+
+    private fun buildProcessAgentMessage(type: Int, body: ByteArray): ByteArray {
+        val header = ByteArray(PROCESS_AGENT_HEADER_SIZE)
+        header[0] = PROCESS_AGENT_MESSAGE_V3
+        header[1] = PROCESS_AGENT_PROTOBUF_ENCODING
+        header[2] = type.toByte()
+        return header + body
+    }
+
+    private fun buildProcessPayload(): ByteArray {
+        val command = buildProto { writeString(1, "/usr/bin/nginx") }
+        val process = buildProto {
+            writeInt32(2, 1234)
+            writeByteArray(4, command)
+        }
+        return buildProto {
+            writeString(2, TEST_HOST)
+            writeByteArray(3, process)
+        }
+    }
+
+    private fun buildDiscoveryPayload(): ByteArray {
+        val command = buildProto { writeString(1, "/usr/bin/java") }
+        val discovery = buildProto {
+            writeInt32(1, 4321)
+            writeByteArray(4, command)
+        }
+        return buildProto {
+            writeString(1, TEST_HOST)
+            writeByteArray(4, discovery)
+        }
+    }
+
+    private fun buildConnectionsPayload(): ByteArray {
+        val localAddr = buildProto {
+            writeString(2, "10.0.0.5")
+            writeInt32(3, 8080)
+        }
+        val remoteAddr = buildProto {
+            writeString(2, "203.0.113.20")
+            writeInt32(3, 443)
+        }
+        val connection = buildProto {
+            writeInt32(1, 1234)
+            writeByteArray(5, localAddr)
+            writeByteArray(6, remoteAddr)
+            writeEnum(10, 0)
+            writeEnum(11, 0)
+            writeUInt64(16, 5000)
+            writeUInt64(17, 10000)
+            writeEnum(19, 2)
+        }
+        return buildProto {
+            writeString(2, TEST_HOST)
+            writeByteArray(3, connection)
+        }
+    }
+
+    private fun assertProcessAgentCollectorResponse(bytes: ByteArray) {
+        val header = ProcessAgentPayloadDecoder.readHeader(bytes)
+        assertNotNull(header)
+        assertEquals(ProcessAgentPayloadDecoder.TYPE_RES_COLLECTOR, header.type)
+        assertEquals(PROCESS_AGENT_PROTOBUF_ENCODING.toInt(), header.encoding)
+    }
+
+    private fun buildStatsMsgpackPayload(): ByteArray {
+        val packer = MessagePack.newDefaultBufferPacker()
+        packer.packMapHeader(2)
+        packer.packString("AgentHostname")
+        packer.packString(TEST_HOST)
+        packer.packString("Stats")
+        packer.packArrayHeader(1)
+        packClientStatsPayload(packer)
+        packer.close()
+        return packer.toByteArray()
+    }
+
+    private fun packClientStatsPayload(packer: MessageBufferPacker) {
+        packer.packMapHeader(1)
+        packer.packString("Stats")
+        packer.packArrayHeader(1)
+        packer.packMapHeader(3)
+        packer.packString("Start")
+        packer.packLong(1700000000000000000L)
+        packer.packString("Duration")
+        packer.packLong(10000000000L)
+        packer.packString("Stats")
+        packer.packArrayHeader(1)
+        packGroupedStats(packer)
+    }
+
+    private fun packGroupedStats(packer: MessageBufferPacker) {
+        packer.packMapHeader(8)
+        packer.packString("Name")
+        packer.packString("web.request")
+        packer.packString("Service")
+        packer.packString("api")
+        packer.packString("Resource")
+        packer.packString("GET /health")
+        packer.packString("Type")
+        packer.packString("web")
+        packer.packString("HTTPStatusCode")
+        packer.packInt(200)
+        packer.packString("Hits")
+        packer.packLong(1)
+        packer.packString("TopLevelHits")
+        packer.packLong(1)
+        packer.packString("Duration")
+        packer.packLong(50000000L)
     }
 
     private fun seedUserAndOrg(): Pair<Int, Int> {
@@ -884,6 +1019,132 @@ class DatadogRoutesExtendedTest {
     }
 
     @Test
+    fun `POST unprefixed api traces returns 429 when quota is exceeded`() = testApplication {
+        val quotaService = rejectingQuotaService()
+        val body = """[[{"trace_id":1,"span_id":2,"name":"web.request"}]]"""
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing { traceIngestRoutes(quotaService) }
+        }
+
+        val response = client.post("/api/v0.2/traces") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }
+
+        assertEquals(HttpStatusCode.TooManyRequests, response.status)
+    }
+
+    @Test
+    fun `POST unprefixed api trace stats returns 429 when quota is exceeded`() = testApplication {
+        val quotaService = rejectingQuotaService()
+        val body = """
+            {
+              "Stats": [
+                {
+                  "Start": 1700000000000,
+                  "Duration": 10000000000,
+                  "Stats": [
+                    {
+                      "Name": "web.request",
+                      "Service": "api",
+                      "Resource": "GET /health",
+                      "Type": "web",
+                      "Hits": 1
+                    }
+                  ]
+                }
+              ]
+            }
+        """.trimIndent()
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing { traceIngestRoutes(quotaService) }
+        }
+
+        val response = client.post("/api/v0.6/stats") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }
+
+        assertEquals(HttpStatusCode.TooManyRequests, response.status)
+    }
+
+    @Test
+    fun `POST unprefixed api v0_2 trace stats decodes msgpack and inserts`() = testApplication {
+        val quotaService = mockk<BillingQuotaService>()
+        val body = buildStatsMsgpackPayload()
+        var capturedPayload: DdStatsPayload? = null
+        every { quotaService.isEnforcementEnabled() } returns true
+        every {
+            quotaService.reserveUnits(any(), any(), any(), any())
+        } returns QuotaReservationResult(
+            allowed = true,
+            reason = null,
+            usage = quotaUsage(),
+        )
+        coEvery {
+            TraceIngestionService.insertTraceStats(TEST_ORG_ID, any())
+        } coAnswers {
+            capturedPayload = secondArg()
+        }
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing { traceIngestRoutes(quotaService) }
+        }
+
+        val response = client.post("/api/v0.2/stats") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.parse("application/msgpack"))
+            setBody(body)
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val payload = requireNotNull(capturedPayload)
+        assertEquals(TEST_HOST, payload.hostname)
+        assertEquals(1, payload.stats.single().stats.size)
+        verify {
+            quotaService.reserveUnits(
+                organizationId = TEST_ORG_ID,
+                requestedUnits = 1,
+                eventType = "dd_trace",
+                requestedBytes = body.size.toLong(),
+            )
+        }
+    }
+
+    @Test
+    fun `GET dd trace health returns diagnostic compatibility response`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            routing { traceIngestRoutes(allowingQuotaService) }
+        }
+
+        val response = client.get("/dd/_health")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("ok"))
+    }
+
+    @Test
+    fun `GET dd support flare returns diagnostic compatibility response`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            routing { traceIngestRoutes(allowingQuotaService) }
+        }
+
+        val response = client.get("/dd/support/flare")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("ok"))
+    }
+
+    @Test
     fun `POST dd metrics returns 429 before enqueue when quota is exceeded`() = testApplication {
         val quotaService = rejectingQuotaService()
         val body = """{"series":[{"metric":"system.cpu","host":"h1","points":[[1700000000,42.0]]}]}"""
@@ -1148,7 +1409,29 @@ class DatadogRoutesExtendedTest {
     // ──── DatadogInfraRoutes ────
 
     @Test
-    fun `POST api v1 discovery returns 200`() = testApplication {
+    fun `POST api v1 discovery decodes and enqueues process discovery`() = testApplication {
+        var capturedPayload: DatadogProcessPayload? = null
+        val batch = QueuedInfraBatch(
+            organizationId = TEST_ORG_ID.toLong(),
+            type = "processes",
+            processes = listOf(
+                QueuedProcessEntry(
+                    host = TEST_HOST,
+                    pid = 4321,
+                    name = "java",
+                    command = "/usr/bin/java",
+                    timestampMs = 1700000000000,
+                )
+            ),
+        )
+        every {
+            DatadogInfraService.mapProcesses(TEST_ORG_ID.toLong(), any())
+        } answers {
+            capturedPayload = secondArg()
+            batch
+        }
+        coEvery { DatadogInfraService.enqueueInfra(batch, any()) } returns 1
+
         application {
             install(ContentNegotiation) { json() }
             routing { datadogInfraRoutes(allowingQuotaService) }
@@ -1156,13 +1439,217 @@ class DatadogRoutesExtendedTest {
         val response = client.post("/api/v1/discovery") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.OctetStream)
-            setBody(ByteArray(0))
+            setBody(
+                buildProcessAgentMessage(
+                    ProcessAgentPayloadDecoder.TYPE_COLLECTOR_PROC_DISCOVERY,
+                    buildDiscoveryPayload(),
+                )
+            )
         }
-        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals(HttpStatusCode.Accepted, response.status)
+        assertProcessAgentCollectorResponse(response.bodyAsBytes())
+        val payload = requireNotNull(capturedPayload)
+        assertEquals(TEST_HOST, payload.host)
+        assertEquals(4321, payload.processes.single().pid)
+        assertEquals("java", payload.processes.single().name)
     }
 
     @Test
-    fun `POST dd api v1 connections returns 202`() = testApplication {
+    fun `POST unprefixed api v1 collector returns process-agent collector response`() = testApplication {
+        val batch = QueuedInfraBatch(
+            organizationId = TEST_ORG_ID.toLong(),
+            type = "processes",
+            processes = listOf(
+                QueuedProcessEntry(
+                    host = TEST_HOST,
+                    pid = 1234,
+                    name = "nginx",
+                    command = "/usr/bin/nginx",
+                    timestampMs = 1700000000000,
+                )
+            ),
+        )
+        every {
+            DatadogInfraService.mapProcesses(TEST_ORG_ID.toLong(), any())
+        } returns batch
+        coEvery { DatadogInfraService.enqueueInfra(batch, any()) } returns 1
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing { datadogInfraRoutes(allowingQuotaService) }
+        }
+        val response = client.post("/api/v1/collector") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.OctetStream)
+            setBody(
+                buildProcessAgentMessage(
+                    ProcessAgentPayloadDecoder.TYPE_COLLECTOR_PROC,
+                    buildProcessPayload(),
+                )
+            )
+        }
+
+        assertEquals(HttpStatusCode.Accepted, response.status)
+        assertProcessAgentCollectorResponse(response.bodyAsBytes())
+    }
+
+    @Test
+    fun `POST dd api v1 connections decodes and enqueues network connections`() = testApplication {
+        var capturedPayload: DatadogConnectionsPayload? = null
+        val batch = QueuedInfraBatch(
+            organizationId = TEST_ORG_ID.toLong(),
+            type = "connections",
+            connections = listOf(
+                QueuedConnectionEntry(
+                    host = TEST_HOST,
+                    pid = 1234,
+                    localAddr = "10.0.0.5",
+                    localPort = 8080,
+                    remoteAddr = "203.0.113.20",
+                    remotePort = 443,
+                    protocol = "tcp",
+                    family = "IPv4",
+                    direction = "outgoing",
+                    bytesSent = 5000,
+                    bytesRecv = 10000,
+                    timestampMs = 1700000000000,
+                )
+            ),
+        )
+        every {
+            DatadogInfraService.mapConnections(TEST_ORG_ID.toLong(), any())
+        } answers {
+            capturedPayload = secondArg()
+            batch
+        }
+        coEvery { DatadogInfraService.enqueueInfra(batch, any()) } returns 1
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing { datadogInfraRoutes(allowingQuotaService) }
+        }
+        val response = client.post("/dd/api/v1/connections") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.OctetStream)
+            setBody(
+                buildProcessAgentMessage(
+                    ProcessAgentPayloadDecoder.TYPE_COLLECTOR_CONNECTIONS,
+                    buildConnectionsPayload(),
+                )
+            )
+        }
+
+        assertEquals(HttpStatusCode.Accepted, response.status)
+        assertProcessAgentCollectorResponse(response.bodyAsBytes())
+        val payload = checkNotNull(capturedPayload)
+        assertEquals(TEST_HOST, payload.host)
+        val decoded = payload.connections.single()
+        assertEquals(1234, decoded.pid)
+        assertEquals("10.0.0.5", decoded.localAddr)
+        assertEquals(8080, decoded.localPort)
+        assertEquals("203.0.113.20", decoded.remoteAddr)
+        assertEquals(443, decoded.remotePort)
+        assertEquals("tcp", decoded.protocol)
+        assertEquals("outgoing", decoded.direction)
+        assertEquals(5000, decoded.bytesSent)
+        assertEquals(10000, decoded.bytesRecv)
+        coVerify(exactly = 1) { DatadogInfraService.enqueueInfra(batch, any()) }
+    }
+
+    @Test
+    fun `POST unprefixed api v1 collector parses process payload before quota rejection`() = testApplication {
+        val quotaService = rejectingQuotaService()
+        var capturedPayload: DatadogProcessPayload? = null
+        every {
+            DatadogInfraService.mapProcesses(TEST_ORG_ID.toLong(), any())
+        } answers {
+            capturedPayload = secondArg()
+            QueuedInfraBatch(
+                organizationId = TEST_ORG_ID.toLong(),
+                type = "processes",
+                processes = listOf(
+                    QueuedProcessEntry(
+                        host = TEST_HOST,
+                        pid = 1234,
+                        name = "nginx",
+                        command = "/usr/bin/nginx",
+                        timestampMs = 1700000000000,
+                    )
+                ),
+            )
+        }
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing { datadogInfraRoutes(quotaService) }
+        }
+        val response = client.post("/api/v1/collector") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.OctetStream)
+            setBody(
+                buildProcessAgentMessage(
+                    ProcessAgentPayloadDecoder.TYPE_COLLECTOR_PROC,
+                    buildProcessPayload(),
+                )
+            )
+        }
+
+        assertEquals(HttpStatusCode.TooManyRequests, response.status)
+        val payload = checkNotNull(capturedPayload)
+        assertEquals(TEST_HOST, payload.host)
+        val decoded = payload.processes.single()
+        assertEquals(1234, decoded.pid)
+        assertEquals("nginx", decoded.name)
+    }
+
+    @Test
+    fun `POST unprefixed api v1 connections parses payload before quota rejection`() = testApplication {
+        val quotaService = rejectingQuotaService()
+        var capturedPayload: DatadogConnectionsPayload? = null
+        every {
+            DatadogInfraService.mapConnections(TEST_ORG_ID.toLong(), any())
+        } answers {
+            capturedPayload = secondArg()
+            QueuedInfraBatch(
+                organizationId = TEST_ORG_ID.toLong(),
+                type = "connections",
+                connections = listOf(
+                    QueuedConnectionEntry(
+                        host = TEST_HOST,
+                        pid = 1234,
+                        localAddr = "10.0.0.5",
+                        localPort = 8080,
+                        remoteAddr = "203.0.113.20",
+                        remotePort = 443,
+                        timestampMs = 1700000000000,
+                    )
+                ),
+            )
+        }
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing { datadogInfraRoutes(quotaService) }
+        }
+        val response = client.post("/api/v1/connections") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.OctetStream)
+            setBody(
+                buildProcessAgentMessage(
+                    ProcessAgentPayloadDecoder.TYPE_COLLECTOR_CONNECTIONS,
+                    buildConnectionsPayload(),
+                )
+            )
+        }
+
+        assertEquals(HttpStatusCode.TooManyRequests, response.status)
+        val payload = checkNotNull(capturedPayload)
+        assertEquals(TEST_HOST, payload.host)
+        assertEquals("203.0.113.20", payload.connections.single().remoteAddr)
+    }
+
+    @Test
+    fun `POST dd api v1 connections rejects malformed process agent payload`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
             routing { datadogInfraRoutes(allowingQuotaService) }
@@ -1172,7 +1659,8 @@ class DatadogRoutesExtendedTest {
             contentType(ContentType.Application.OctetStream)
             setBody(ByteArray(0))
         }
-        assertEquals(HttpStatusCode.Accepted, response.status)
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
     }
 
     // ──── DbmIngestRoutes ────

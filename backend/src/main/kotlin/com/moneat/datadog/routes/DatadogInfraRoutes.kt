@@ -21,15 +21,17 @@ import com.moneat.datadog.reserveDatadogQuota
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.ProcessAgentPayloadDecoder
 import com.moneat.datadog.services.DatadogInfraService
+import com.moneat.utils.suspendRunCatching
+import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondBytes
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import mu.KotlinLogging
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -39,10 +41,15 @@ fun Route.datadogInfraRoutes(
     // Process-agent sends to /api/v1/* without /dd/ prefix
     route("/api/v1") {
         post("/discovery") {
-            DatadogAuthMiddleware.authenticate(call) ?: return@post
-            call.respond(HttpStatusCode.OK, mapOf("status" to "ok"))
+            val orgId = DatadogAuthMiddleware.authenticate(call) ?: return@post
+            handleProcessAgentPayload(call, quotaService, orgId)
+        }
+        post("/collector") {
+            val orgId = DatadogAuthMiddleware.authenticate(call) ?: return@post
+            handleProcessAgentPayload(call, quotaService, orgId)
         }
         post("/container") { handleContainer(call, quotaService) }
+        post("/connections") { handleConnections(call, quotaService) }
     }
 
     route("/dd") {
@@ -55,14 +62,59 @@ fun Route.datadogInfraRoutes(
             post("/container") { handleContainer(call, quotaService) }
 
             post("/connections") {
-                val orgId = DatadogAuthMiddleware.authenticate(call) ?: return@post
-                // CollectorConnections uses complex IP-byte encoding; acknowledge and skip
-                call.receive<ByteArray>()
-                logger.debug { "Accepted DD connections payload for org $orgId" }
-                call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+                handleConnections(call, quotaService)
             }
         }
     }
+}
+
+private suspend fun handleConnections(
+    call: ApplicationCall,
+    quotaService: BillingQuotaService,
+) {
+    val orgId = DatadogAuthMiddleware.authenticate(call) ?: return
+    val rawBody = call.receive<ByteArray>()
+    val header = ProcessAgentPayloadDecoder.readHeader(rawBody)
+    if (header == null) {
+        logger.warn { "Received non-MessageV3 DD connections payload for org $orgId" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid DD connections payload"))
+        return
+    }
+    if (header.type != ProcessAgentPayloadDecoder.TYPE_COLLECTOR_CONNECTIONS) {
+        logger.warn { "Received DD connections endpoint payload with type=${header.type} for org $orgId" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid DD connections payload type"))
+        return
+    }
+
+    val proto = suspendRunCatching {
+        ProcessAgentPayloadDecoder.decompressBody(rawBody, header.encoding)
+    }.getOrElse { e ->
+        logger.warn(e) { "Failed to decompress DD connections payload for org $orgId" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid DD connections payload"))
+        return
+    }
+    val payload = suspendRunCatching {
+        ProcessAgentPayloadDecoder.decodeCollectorConnections(proto)
+    }.getOrElse { e ->
+        logger.warn(e) { "Failed to decode CollectorConnections for org $orgId" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid DD connections payload"))
+        return
+    }
+    val batch = DatadogInfraService.mapConnections(orgId.toLong(), payload)
+    if (!reserveDatadogQuota(
+            call,
+            quotaService,
+            orgId,
+            batch.connections.size,
+            "dd_infra",
+            proto.size.toLong(),
+        )
+    ) {
+        return
+    }
+    val count = DatadogInfraService.enqueueInfra(batch)
+    logger.debug { "Accepted $count DD network connections for org $orgId" }
+    respondProcessAgentCollectorOk(call)
 }
 
 private suspend fun handleContainer(
@@ -83,7 +135,7 @@ private suspend fun handleProcessAgentPayload(
 
     if (header == null) {
         logger.warn { "Received non-MessageV3 payload on DD infra endpoint for org $orgId" }
-        call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid DD infra payload"))
         return
     }
 
@@ -91,7 +143,7 @@ private suspend fun handleProcessAgentPayload(
         ProcessAgentPayloadDecoder.decompressBody(rawBody, header.encoding)
     }.getOrElse { e ->
         logger.warn(e) { "Failed to decompress DD infra payload (type=${header.type}) for org $orgId" }
-        call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid DD infra payload"))
         return
     }
 
@@ -101,7 +153,7 @@ private suspend fun handleProcessAgentPayload(
                 ProcessAgentPayloadDecoder.decodeCollectorContainer(proto)
             }.getOrElse { e ->
                 logger.warn(e) { "Failed to decode CollectorContainer for org $orgId" }
-                return call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+                return call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid DD container payload"))
             }
             val batch = DatadogInfraService.mapContainers(orgId.toLong(), payload)
             if (!reserveDatadogQuota(
@@ -121,10 +173,14 @@ private suspend fun handleProcessAgentPayload(
         ProcessAgentPayloadDecoder.TYPE_COLLECTOR_PROC,
         ProcessAgentPayloadDecoder.TYPE_COLLECTOR_PROC_DISCOVERY -> {
             val payload = suspendRunCatching {
-                ProcessAgentPayloadDecoder.decodeCollectorProc(proto)
+                if (header.type == ProcessAgentPayloadDecoder.TYPE_COLLECTOR_PROC_DISCOVERY) {
+                    ProcessAgentPayloadDecoder.decodeCollectorProcDiscovery(proto)
+                } else {
+                    ProcessAgentPayloadDecoder.decodeCollectorProc(proto)
+                }
             }.getOrElse { e ->
                 logger.warn(e) { "Failed to decode CollectorProc for org $orgId" }
-                return call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+                return call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid DD process payload"))
             }
             val batch = DatadogInfraService.mapProcesses(orgId.toLong(), payload)
             if (!reserveDatadogQuota(
@@ -142,8 +198,18 @@ private suspend fun handleProcessAgentPayload(
             logger.debug { "Accepted $count DD processes for org $orgId" }
         }
         else -> {
-            logger.debug { "Ignoring unhandled DD infra payload type=${header.type} for org $orgId" }
+            logger.warn { "Received unsupported DD infra payload type=${header.type} for org $orgId" }
+            call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Unsupported DD infra payload type"))
+            return
         }
     }
-    call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
+    respondProcessAgentCollectorOk(call)
+}
+
+private suspend fun respondProcessAgentCollectorOk(call: ApplicationCall) {
+    call.respondBytes(
+        bytes = ProcessAgentPayloadDecoder.encodeCollectorResponse(),
+        contentType = ContentType.Application.OctetStream,
+        status = HttpStatusCode.Accepted,
+    )
 }
