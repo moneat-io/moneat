@@ -35,6 +35,8 @@ import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
 
+private const val INVALID_CONNECTIONS_PAYLOAD_ERROR = "Invalid DD connections payload"
+
 fun Route.datadogInfraRoutes(
     quotaService: BillingQuotaService = BillingQuotaService(),
 ) {
@@ -77,7 +79,7 @@ private suspend fun handleConnections(
     val header = ProcessAgentPayloadDecoder.readHeader(rawBody)
     if (header == null) {
         logger.warn { "Received non-MessageV3 DD connections payload for org $orgId" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid DD connections payload"))
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to INVALID_CONNECTIONS_PAYLOAD_ERROR))
         return
     }
     if (header.type != ProcessAgentPayloadDecoder.TYPE_COLLECTOR_CONNECTIONS) {
@@ -90,14 +92,14 @@ private suspend fun handleConnections(
         ProcessAgentPayloadDecoder.decompressBody(rawBody, header.encoding)
     }.getOrElse { e ->
         logger.warn(e) { "Failed to decompress DD connections payload for org $orgId" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid DD connections payload"))
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to INVALID_CONNECTIONS_PAYLOAD_ERROR))
         return
     }
     val payload = suspendRunCatching {
         ProcessAgentPayloadDecoder.decodeCollectorConnections(proto)
     }.getOrElse { e ->
         logger.warn(e) { "Failed to decode CollectorConnections for org $orgId" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid DD connections payload"))
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to INVALID_CONNECTIONS_PAYLOAD_ERROR))
         return
     }
     val batch = DatadogInfraService.mapConnections(orgId.toLong(), payload)

@@ -49,6 +49,7 @@ private val json = Json {
 }
 
 private const val QUEUE_KEY = "moneat:traces:queue"
+private const val TRACE_STATS_V06_PATH = "/v0.6/stats"
 
 fun Route.traceIngestRoutes(
     quotaService: BillingQuotaService = BillingQuotaService(),
@@ -66,7 +67,7 @@ fun Route.traceIngestRoutes(
         put("/v0.7/traces") { handleTraceIntake(quotaService) }
 
         // PUT /dd/v0.6/stats - trace stats (local agent format)
-        put("/v0.6/stats") { handleTraceStats(quotaService) }
+        put(TRACE_STATS_V06_PATH) { handleTraceStats(quotaService) }
 
         // DD agent backend/edge format - sent by dd-agent trace writer when forwarding to
         // the configured DD_APM_DD_URL (e.g. https://api.moneat.io/dd)
@@ -75,8 +76,8 @@ fun Route.traceIngestRoutes(
             put("/v0.2/traces") { handleTraceIntake(quotaService) }
             post("/v0.2/stats") { handleTraceStats(quotaService) }
             put("/v0.2/stats") { handleTraceStats(quotaService) }
-            post("/v0.6/stats") { handleTraceStats(quotaService) }
-            put("/v0.6/stats") { handleTraceStats(quotaService) }
+            post(TRACE_STATS_V06_PATH) { handleTraceStats(quotaService) }
+            put(TRACE_STATS_V06_PATH) { handleTraceStats(quotaService) }
         }
 
         route("/support") {
@@ -91,8 +92,8 @@ fun Route.traceIngestRoutes(
         put("/v0.2/traces") { handleTraceIntake(quotaService) }
         post("/v0.2/stats") { handleTraceStats(quotaService) }
         put("/v0.2/stats") { handleTraceStats(quotaService) }
-        post("/v0.6/stats") { handleTraceStats(quotaService) }
-        put("/v0.6/stats") { handleTraceStats(quotaService) }
+        post(TRACE_STATS_V06_PATH) { handleTraceStats(quotaService) }
+        put(TRACE_STATS_V06_PATH) { handleTraceStats(quotaService) }
     }
 }
 
