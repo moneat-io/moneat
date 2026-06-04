@@ -156,6 +156,7 @@ describe('client', () => {
   describe('checkAuth() success', () => {
     it('returns true and sets authenticated flag on 200', async () => {
       sessionStorage.removeItem('authenticated')
+      sessionStorage.setItem('demoEpochMs', '1700000000000')
       server.use(
         http.get(`${API_BASE}/v1/user`, () =>
           HttpResponse.json({ id: 1, email: 'a@b.com' })
@@ -165,6 +166,7 @@ describe('client', () => {
       const result = await api.checkAuth()
       expect(result).toBe(true)
       expect(sessionStorage.getItem('authenticated')).toBe('true')
+      expect(sessionStorage.getItem('demoEpochMs')).toBeNull()
     })
   })
 
@@ -172,6 +174,7 @@ describe('client', () => {
 
   describe('checkAuth() 401', () => {
     it('returns false and removes authenticated flag on 401', async () => {
+      sessionStorage.setItem('demoEpochMs', '1700000000000')
       server.use(
         http.get(`${API_BASE}/v1/user`, () =>
           new HttpResponse(null, { status: 401 })
@@ -183,6 +186,7 @@ describe('client', () => {
 
       const result = await api.checkAuth()
       expect(result).toBe(false)
+      expect(sessionStorage.getItem('demoEpochMs')).toBeNull()
     })
   })
 

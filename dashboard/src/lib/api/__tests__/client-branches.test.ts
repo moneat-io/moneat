@@ -261,6 +261,7 @@ describe('client – branch coverage', () => {
 
   describe('checkAuth – 403 response', () => {
     it('removes authenticated flag and returns false on 403', async () => {
+      sessionStorage.setItem('demoEpochMs', '1700000000000')
       server.use(
         http.get(`${API_BASE}/v1/user`, () => {
           return new HttpResponse(null, { status: 403 })
@@ -270,6 +271,7 @@ describe('client – branch coverage', () => {
       const result = await api.checkAuth()
       expect(result).toBe(false)
       expect(sessionStorage.getItem('authenticated')).toBeNull()
+      expect(sessionStorage.getItem('demoEpochMs')).toBeNull()
     })
   })
 

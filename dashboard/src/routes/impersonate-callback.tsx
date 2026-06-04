@@ -17,6 +17,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { APP_OVERVIEW_SEARCH } from '@/lib/overview-route'
+import { setDemoEpoch } from '@/lib/demo'
 
 export const Route = createFileRoute('/impersonate-callback')({
   component: ImpersonateCallback,
@@ -42,7 +43,8 @@ function ImpersonateCallback() {
       if (event.data?.type !== 'MONEAT_IMPERSONATION_TOKEN') return
       if (typeof event.data?.token !== 'string' || event.data.token.length === 0) return
 
-      sessionStorage.setItem('impersonate_token', event.data.token)
+      setDemoEpoch(null)
+      globalThis.sessionStorage?.setItem('impersonate_token', event.data.token)
       window.clearTimeout(timeoutId)
       window.removeEventListener('message', handleTokenMessage)
       navigate({ to: '/', search: APP_OVERVIEW_SEARCH })
