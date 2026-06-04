@@ -62,11 +62,21 @@ class AnalyticsService {
         filters: List<AnalyticsFilter>,
         compFrom: LocalDate?,
         compTo: LocalDate?,
+    ): AnalyticsOverviewResponse =
+        getOverview(AnalyticsQueryScope.service(projectId), dateFrom, dateTo, filters, compFrom, compTo)
+
+    suspend fun getOverview(
+        scope: AnalyticsQueryScope,
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        filters: List<AnalyticsFilter>,
+        compFrom: LocalDate?,
+        compTo: LocalDate?,
     ): AnalyticsOverviewResponse {
-        val main = queryOverviewMetrics(projectId, dateFrom, dateTo, filters)
+        val main = queryOverviewMetrics(scope, dateFrom, dateTo, filters)
 
         val comp = if (compFrom != null && compTo != null) {
-            queryOverviewMetrics(projectId, compFrom, compTo, filters)
+            queryOverviewMetrics(scope, compFrom, compTo, filters)
         } else {
             null
         }
@@ -86,12 +96,12 @@ class AnalyticsService {
     }
 
     private suspend fun queryOverviewMetrics(
-        projectId: Long,
+        scope: AnalyticsQueryScope,
         dateFrom: LocalDate,
         dateTo: LocalDate,
         filters: List<AnalyticsFilter>,
     ): OverviewMetrics {
-        val where = buildWhere(projectId, dateFrom, dateTo, filters, "s", "hour")
+        val where = buildWhere(scope, dateFrom, dateTo, filters, "s", "hour")
         // Pre-aggregate per session_id to correctly handle SummingMergeTree (which sums pageviews
         // and is_bounce across unmerged rows). Without this, is_bounce gets summed to N (one per
         // insert) and avg(is_bounce)*100 produces values like 45000%.
@@ -104,12 +114,13 @@ class AnalyticsService {
                 if(count() > 0, toFloat64(sum(total_pageviews)) / count(), 0) AS views_per_visit
             FROM (
                 SELECT
+                    project_id,
                     session_id,
                     sum(pageviews) AS total_pageviews,
                     dateDiff('second', min(started), max(ended)) AS total_duration_sec
                 FROM analytics_sessions_hourly AS s
                 WHERE $where
-                GROUP BY session_id
+                GROUP BY project_id, session_id
             )
             FORMAT JSONEachRow
         """.trimIndent()
@@ -134,14 +145,22 @@ class AnalyticsService {
         dateFrom: LocalDate,
         dateTo: LocalDate,
         filters: List<AnalyticsFilter>,
+    ): List<TimeseriesPoint> =
+        getTimeseries(AnalyticsQueryScope.service(projectId), dateFrom, dateTo, filters)
+
+    suspend fun getTimeseries(
+        scope: AnalyticsQueryScope,
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        filters: List<AnalyticsFilter>,
     ): List<TimeseriesPoint> {
-        val where = buildWhere(projectId, dateFrom, dateTo, filters, "s", "hour")
+        val where = buildWhere(scope, dateFrom, dateTo, filters, "s", "hour")
         val interval = if (dateTo.toEpochDay() - dateFrom.toEpochDay() <= 2) "toStartOfHour" else "toDate"
 
         val sql = """
             SELECT
                 $interval(s.hour) AS date,
-                uniq(s.session_id) AS visitors,
+                uniq(s.project_id, s.session_id) AS visitors,
                 sum(s.pageviews) AS pageviews
             FROM analytics_sessions_hourly AS s
             WHERE $where
@@ -168,15 +187,25 @@ class AnalyticsService {
         filters: List<AnalyticsFilter>,
         dimension: String,
         limit: Int = DEFAULT_LIMIT,
+    ): BreakdownResponse =
+        getBreakdown(AnalyticsQueryScope.service(projectId), dateFrom, dateTo, filters, dimension, limit)
+
+    suspend fun getBreakdown(
+        scope: AnalyticsQueryScope,
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        filters: List<AnalyticsFilter>,
+        dimension: String,
+        limit: Int = DEFAULT_LIMIT,
     ): BreakdownResponse {
         val (column, table, alias) = resolveDimension(dimension)
         val timeColumn = if (alias == "s") "hour" else "timestamp"
-        val where = buildWhere(projectId, dateFrom, dateTo, filters, alias, timeColumn)
+        val where = buildWhere(scope, dateFrom, dateTo, filters, alias, timeColumn)
 
         val sql = """
             SELECT
                 $column AS name,
-                uniq($alias.session_id) AS visitors,
+                uniq($alias.project_id, $alias.session_id) AS visitors,
                 ${if (table == "analytics_sessions_hourly") "sum($alias.pageviews)" else "count()"} AS pageviews
             FROM $table AS $alias
             WHERE $where AND name != ''
@@ -204,7 +233,15 @@ class AnalyticsService {
         dateTo: LocalDate,
         filters: List<AnalyticsFilter>,
         limit: Int = DEFAULT_LIMIT,
-    ): BreakdownResponse = getBreakdown(projectId, dateFrom, dateTo, filters, "pathname", limit)
+    ): BreakdownResponse = getPages(AnalyticsQueryScope.service(projectId), dateFrom, dateTo, filters, limit)
+
+    suspend fun getPages(
+        scope: AnalyticsQueryScope,
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        filters: List<AnalyticsFilter>,
+        limit: Int = DEFAULT_LIMIT,
+    ): BreakdownResponse = getBreakdown(scope, dateFrom, dateTo, filters, "pathname", limit)
 
     suspend fun getEntryPages(
         projectId: Long,
@@ -212,7 +249,15 @@ class AnalyticsService {
         dateTo: LocalDate,
         filters: List<AnalyticsFilter>,
         limit: Int = DEFAULT_LIMIT,
-    ): BreakdownResponse = getBreakdown(projectId, dateFrom, dateTo, filters, "entry_page", limit)
+    ): BreakdownResponse = getEntryPages(AnalyticsQueryScope.service(projectId), dateFrom, dateTo, filters, limit)
+
+    suspend fun getEntryPages(
+        scope: AnalyticsQueryScope,
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        filters: List<AnalyticsFilter>,
+        limit: Int = DEFAULT_LIMIT,
+    ): BreakdownResponse = getBreakdown(scope, dateFrom, dateTo, filters, "entry_page", limit)
 
     suspend fun getExitPages(
         projectId: Long,
@@ -220,14 +265,29 @@ class AnalyticsService {
         dateTo: LocalDate,
         filters: List<AnalyticsFilter>,
         limit: Int = DEFAULT_LIMIT,
-    ): BreakdownResponse = getBreakdown(projectId, dateFrom, dateTo, filters, "exit_page", limit)
+    ): BreakdownResponse = getExitPages(AnalyticsQueryScope.service(projectId), dateFrom, dateTo, filters, limit)
+
+    suspend fun getExitPages(
+        scope: AnalyticsQueryScope,
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        filters: List<AnalyticsFilter>,
+        limit: Int = DEFAULT_LIMIT,
+    ): BreakdownResponse = getBreakdown(scope, dateFrom, dateTo, filters, "exit_page", limit)
 
     // --- Realtime ---
 
-    fun getRealtime(projectId: Long): RealtimeResponse {
-        val key = "${AnalyticsIngestionWorker.REALTIME_KEY_PREFIX}$projectId"
+    fun getRealtime(projectId: Long): RealtimeResponse =
+        getRealtime(AnalyticsQueryScope.service(projectId))
+
+    fun getRealtime(scope: AnalyticsQueryScope): RealtimeResponse {
+        val keys = scope.serviceIds.map { serviceId ->
+            "${AnalyticsIngestionWorker.REALTIME_KEY_PREFIX}$serviceId"
+        }
+        if (keys.isEmpty()) return RealtimeResponse(0L)
+
         val count = suspendRunCatching {
-            RedisConfig.sync().pfcount(key)
+            RedisConfig.sync().pfcount(*keys.toTypedArray())
         }.getOrElse { e ->
             val errorMsg = e.toString().take(ERROR_TRUNCATE_LENGTH)
             logger.debug { "Failed to read realtime counter: $errorMsg" }
@@ -245,8 +305,19 @@ class AnalyticsService {
         steps: List<String>,
         groupBy: String = "session_id",
         source: String? = null,
+    ): FunnelResponse =
+        getFunnel(AnalyticsQueryScope.service(projectId), dateFrom, dateTo, steps, groupBy, source)
+
+    suspend fun getFunnel(
+        scope: AnalyticsQueryScope,
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        steps: List<String>,
+        groupBy: String = "session_id",
+        source: String? = null,
     ): FunnelResponse {
         if (steps.size < 2) return FunnelResponse(emptyList(), 0.0)
+        val scopeWhere = serviceScopeWhere(scope)
         val dateWhere = dateRange(dateFrom, dateTo)
         val groupByColumn = resolveGroupByColumn(groupBy)
         val sourceClause = sourceWhere(source)
@@ -260,14 +331,15 @@ class AnalyticsService {
                 count() AS cnt
             FROM (
                 SELECT
+                    project_id,
                     $groupByColumn,
                     windowFunnel($FUNNEL_WINDOW_SECONDS)(toDateTime(timestamp), $events) AS level
                 FROM analytics_events
-                WHERE project_id = ${asClickHouseProjectId(projectId)}
+                WHERE $scopeWhere
                   AND $dateWhere
                   $sourceClause
                   $nonEmptyGroupClause
-                GROUP BY $groupByColumn
+                GROUP BY project_id, $groupByColumn
             )
             WHERE level > 0
             GROUP BY level
@@ -318,11 +390,29 @@ class AnalyticsService {
         startEvent: String,
         returnEvent: String,
         periods: List<Int>,
+    ): RetentionResponse =
+        getRetention(
+            AnalyticsQueryScope.service(projectId),
+            dateFrom,
+            dateTo,
+            startEvent,
+            returnEvent,
+            periods
+        )
+
+    suspend fun getRetention(
+        scope: AnalyticsQueryScope,
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        startEvent: String,
+        returnEvent: String,
+        periods: List<Int>,
     ): RetentionResponse {
         if (startEvent.isBlank() || returnEvent.isBlank() || periods.isEmpty()) {
             return RetentionResponse(startEvent, returnEvent, emptyList())
         }
 
+        val scopeWhere = serviceScopeWhere(scope, "e")
         val dateWhere = dateRange(dateFrom, dateTo, "e", "timestamp")
         val escapedStartEvent = AnalyticsIngestionWorker.escapeCH(startEvent)
         val escapedReturnEvent = AnalyticsIngestionWorker.escapeCH(returnEvent)
@@ -338,16 +428,17 @@ class AnalyticsService {
         val sql = """
             WITH cohorts AS (
                 SELECT
+                    project_id,
                     user_id,
                     min(timestamp) AS first_seen,
                     toStartOfWeek(min(timestamp)) AS cohort_week
                 FROM analytics_events AS e
-                WHERE e.project_id = ${asClickHouseProjectId(projectId)}
+                WHERE $scopeWhere
                   AND e.source = 'server'
                   AND e.event_name = '$escapedStartEvent'
                   AND e.user_id != ''
                   AND $dateWhere
-                GROUP BY user_id
+                GROUP BY project_id, user_id
             )
             SELECT
                 toString(c.cohort_week) AS cohort_week,
@@ -355,7 +446,7 @@ class AnalyticsService {
 $retentionColumns
             FROM cohorts AS c
             LEFT JOIN analytics_events AS e
-                ON e.project_id = ${asClickHouseProjectId(projectId)}
+                ON e.project_id = c.project_id
                 AND e.source = 'server'
                 AND e.user_id = c.user_id
                 AND e.event_name = '$escapedReturnEvent'
@@ -396,15 +487,26 @@ $retentionColumns
         limit: Int = DEFAULT_LIMIT,
         groupBy: String = "session_id",
         source: String? = null,
+    ): BreakdownResponse =
+        getEvents(AnalyticsQueryScope.service(projectId), dateFrom, dateTo, filters, limit, groupBy, source)
+
+    suspend fun getEvents(
+        scope: AnalyticsQueryScope,
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        filters: List<AnalyticsFilter>,
+        limit: Int = DEFAULT_LIMIT,
+        groupBy: String = "session_id",
+        source: String? = null,
     ): BreakdownResponse {
-        val where = buildWhere(projectId, dateFrom, dateTo, filters, "e", "timestamp")
+        val where = buildWhere(scope, dateFrom, dateTo, filters, "e", "timestamp")
         val groupByColumn = resolveGroupByColumn(groupBy)
         val sourceClause = sourceWhere(source, "e")
         val nonEmptyGroupClause = if (groupByColumn == "user_id") "AND e.user_id != ''" else ""
         val sql = """
             SELECT
                 e.event_name AS name,
-                uniq(e.$groupByColumn) AS visitors,
+                uniq(e.project_id, e.$groupByColumn) AS visitors,
                 count() AS pageviews
             FROM analytics_events AS e
             WHERE $where
@@ -430,7 +532,7 @@ $retentionColumns
     // --- Query helpers ---
 
     private fun buildWhere(
-        projectId: Long,
+        scope: AnalyticsQueryScope,
         dateFrom: LocalDate,
         dateTo: LocalDate,
         filters: List<AnalyticsFilter>,
@@ -438,7 +540,7 @@ $retentionColumns
         timeColumn: String,
     ): String {
         val parts = mutableListOf<String>()
-        parts.add("$alias.project_id = ${asClickHouseProjectId(projectId)}")
+        parts.add(serviceScopeWhere(scope, alias))
         parts.add(dateRange(dateFrom, dateTo, alias, timeColumn))
 
         for (filter in filters) {
@@ -497,9 +599,17 @@ $retentionColumns
         return "AND ${prefix}source = '$escapedSource'"
     }
 
-    private fun asClickHouseProjectId(projectId: Long): String {
-        return "toUInt64($projectId)"
+    private fun serviceScopeWhere(scope: AnalyticsQueryScope, alias: String = ""): String {
+        val prefix = if (alias.isNotEmpty()) "$alias." else ""
+        val serviceIds = scope.serviceIds
+        if (serviceIds.isEmpty()) return "0 = 1"
+        if (serviceIds.size == 1) return "${prefix}project_id = ${asClickHouseServiceId(serviceIds.first())}"
+        val values = serviceIds.joinToString(", ") { asClickHouseServiceId(it) }
+        return "${prefix}project_id IN ($values)"
     }
+
+    private fun asClickHouseServiceId(serviceId: Long): String =
+        "toUInt64($serviceId)"
 
     private fun dateRange(
         dateFrom: LocalDate,
