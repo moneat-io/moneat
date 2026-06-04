@@ -261,14 +261,24 @@ jobs:
           echo "version=${version#v}" >> "$GITHUB_OUTPUT"
 
       - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v6
-        with:
-          projectBaseDir: backend
-          args: >
-            -Dsonar.projectVersion=${{ steps.sonar-version.outputs.version }}
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonar.moneat.io
+          SONAR_SCANNER_IMAGE: sonarsource/sonar-scanner-cli:11.4.0.2044_7.2.0
+        run: |
+          set -euo pipefail
+
+          mkdir -p "${HOME}/.sonar/cache"
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -e SONAR_HOST_URL \
+            -e SONAR_TOKEN \
+            -e SONAR_USER_HOME=/usr/src/.sonar \
+            -v "${GITHUB_WORKSPACE}:/usr/src" \
+            -v "${HOME}/.sonar/cache:/usr/src/.sonar/cache" \
+            -w /usr/src/backend \
+            "${SONAR_SCANNER_IMAGE}" \
+            -Dsonar.projectVersion=${{ steps.sonar-version.outputs.version }}
 
       - name: SonarQube Quality Gate check
         id: sonarqube-quality-gate-check
