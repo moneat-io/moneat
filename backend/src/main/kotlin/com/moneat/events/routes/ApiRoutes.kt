@@ -95,7 +95,18 @@ private const val DEFAULT_REPLAYS_LIMIT = 10
 private const val DEFAULT_ALERT_FREQUENCY_MINUTES = 30
 private const val DEFAULT_ALERT_LIFECYCLE_LIMIT = 50
 private const val DEMO_ORGANIZATION_ID = -1
+private const val DEMO_PRIMARY_SERVICE_ID = -1L
+private const val DEMO_CHECKOUT_SERVICE_ID = -2L
+private const val DEMO_MOBILE_SERVICE_ID = -3L
 private const val ERROR_NO_ORGANIZATION_ACCESS = "No organization access"
+private const val ERROR_INVALID_SERVICE_IDS = "Invalid serviceIds"
+private val DEMO_SERVICE_IDS = listOf(DEMO_PRIMARY_SERVICE_ID, DEMO_CHECKOUT_SERVICE_ID, DEMO_MOBILE_SERVICE_ID)
+
+private data class ServiceReadContext(
+    val organizationId: Int,
+    val serviceIds: List<Long>,
+    val demoEpochMs: Long?
+)
 
 @Suppress("kotlin:S3776")
 fun Route.apiRoutes() {
@@ -590,7 +601,7 @@ fun Route.apiRoutes() {
                         }
                     val serviceIds = call.resolveServiceIdsQuery(projectIdResolver)
                     if (serviceIds == null) {
-                        call.respond(HttpStatusCode.BadRequest, "Invalid serviceIds")
+                        call.respond(HttpStatusCode.BadRequest, ERROR_INVALID_SERVICE_IDS)
                         return@get
                     }
 
@@ -977,6 +988,30 @@ fun Route.apiRoutes() {
                 }
 
                 // Replays
+                get("/replays") {
+                    val principal = call.principal<JWTPrincipal>()
+                    val userId = principal!!.payload.getClaim("userId").asInt()
+                    val context =
+                        call.resolveServiceReadContext(userId, dashboardService, projectIdResolver) ?: return@get
+
+                    val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
+                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_PAGE_LIMIT
+                    val environment = call.request.queryParameters["environment"]
+                    val period = call.request.queryParameters["period"] ?: "7d"
+
+                    val replays =
+                        dashboardService.getReplaysForServices(
+                            organizationId = context.organizationId,
+                            serviceIds = context.serviceIds,
+                            page = page,
+                            limit = limit,
+                            environment = environment,
+                            period = period,
+                            demoEpochMs = context.demoEpochMs
+                        )
+                    call.respond(replays)
+                }
+
                 get("/projects/{projectId}/replays") {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
@@ -1071,6 +1106,28 @@ fun Route.apiRoutes() {
 
                     val timeline = dashboardService.getReplayTimeline(replayId, demoEpochMs)
                     call.respond(timeline)
+                }
+
+                get("/feedback") {
+                    val principal = call.principal<JWTPrincipal>()
+                    val userId = principal!!.payload.getClaim("userId").asInt()
+                    val context =
+                        call.resolveServiceReadContext(userId, dashboardService, projectIdResolver) ?: return@get
+
+                    val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
+                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_PAGE_LIMIT
+                    val status = call.request.queryParameters["status"]
+
+                    val feedback =
+                        dashboardService.getFeedbackForServices(
+                            organizationId = context.organizationId,
+                            serviceIds = context.serviceIds,
+                            page = page,
+                            limit = limit,
+                            status = status,
+                            demoEpochMs = context.demoEpochMs
+                        )
+                    call.respond(feedback)
                 }
 
                 get("/projects/{projectId}/feedback") {
@@ -1198,6 +1255,45 @@ fun Route.apiRoutes() {
                 }
 
                 // Releases
+                get("/releases") {
+                    val principal = call.principal<JWTPrincipal>()
+                    val userId = principal!!.payload.getClaim("userId").asInt()
+                    val context =
+                        call.resolveServiceReadContext(userId, dashboardService, projectIdResolver) ?: return@get
+
+                    val releases =
+                        dashboardService.getReleasesForServices(
+                            organizationId = context.organizationId,
+                            serviceIds = context.serviceIds,
+                            parentSpan = call.getSentryTransaction()
+                        )
+                    call.respond(releases)
+                }
+
+                get("/releases/{version}/stats") {
+                    val principal = call.principal<JWTPrincipal>()
+                    val userId = principal!!.payload.getClaim("userId").asInt()
+                    val context =
+                        call.resolveServiceReadContext(userId, dashboardService, projectIdResolver) ?: return@get
+                    val version = call.parameters["version"]
+                    if (version == null) {
+                        call.respond(HttpStatusCode.BadRequest)
+                        return@get
+                    }
+
+                    val stats =
+                        dashboardService.getReleaseStatsForServices(
+                            organizationId = context.organizationId,
+                            serviceIds = context.serviceIds,
+                            version = version
+                        )
+                    if (stats == null) {
+                        call.respond(HttpStatusCode.NotFound)
+                    } else {
+                        call.respond(stats)
+                    }
+                }
+
                 get("/projects/{projectId}/releases") {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
@@ -1594,6 +1690,57 @@ private fun ApplicationCall.resolveProjectPathId(projectIdResolver: ProjectIdRes
 
 private fun ApplicationCall.resolveProjectQueryId(projectIdResolver: ProjectIdResolver): Long? =
     request.queryParameters["projectId"]?.let(projectIdResolver::resolve)
+
+private suspend fun ApplicationCall.resolveServiceReadContext(
+    userId: Int,
+    dashboardService: DashboardService,
+    projectIdResolver: ProjectIdResolver
+): ServiceReadContext? {
+    val isDemo = isDemoUser()
+    val organizationId =
+        if (isDemo) {
+            DEMO_ORGANIZATION_ID
+        } else {
+            resolveSubscriptionOrganizationId(userId) ?: return null
+        }
+
+    val serviceIds = resolveServiceIdsQuery(projectIdResolver)
+    if (serviceIds == null) {
+        respond(HttpStatusCode.BadRequest, ERROR_INVALID_SERVICE_IDS)
+        return null
+    }
+
+    val serviceNames = serviceNamesQuery()
+    val resolvedNameIds = serviceNames.mapNotNull { serviceName ->
+        dashboardService.resolveServiceId(organizationId, serviceName)
+    }
+    val requestedServiceIds = normalizeRequestedServiceIds(serviceIds + resolvedNameIds)
+    val organizationServiceIds =
+        if (isDemo) {
+            DEMO_SERVICE_IDS
+        } else {
+            dashboardService.getServiceIdsForOrganization(organizationId)
+        }
+    val scopedServiceIds =
+        if (serviceIds.isNotEmpty() || serviceNames.isNotEmpty()) {
+            requestedServiceIds.filter { serviceId -> serviceId in organizationServiceIds }
+        } else {
+            organizationServiceIds
+        }
+
+    return ServiceReadContext(organizationId, scopedServiceIds, getDemoEpochMs())
+}
+
+private fun normalizeRequestedServiceIds(serviceIds: List<Long>): List<Long> =
+    serviceIds
+        .flatMap { serviceId ->
+            if (serviceId == DEMO_PRIMARY_SERVICE_ID) {
+                DEMO_SERVICE_IDS
+            } else {
+                listOf(serviceId)
+            }
+        }
+        .distinct()
 
 private fun ApplicationCall.serviceNamesQuery(): List<String> =
     queryCsvValues("services") + queryCsvValues("service")

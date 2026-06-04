@@ -53,6 +53,7 @@ class ReplayServiceTest {
         db = OrgProjectTestFixtures.connectResetAndSeedDefaultOrgProject(db, "moneat_replay_service")
 
         coEvery { retentionPolicyService.getRetentionDaysForProject(any()) } returns 30
+        coEvery { retentionPolicyService.getRetentionDaysForOrganization(any()) } returns 30
         queryHelper = DashboardQueryHelper(retentionPolicyService, pricingTierService)
         service = ReplayService(queryHelper)
     }
@@ -104,6 +105,39 @@ class ReplayServiceTest {
             assertEquals("Chrome", result[0].browserName)
             assertEquals("macOS", result[0].osName)
             assertEquals(8, result[0].activity)
+        }
+    }
+
+    @Test
+    fun `getReplaysForServices scopes list and fallback error count by row service id`() = runBlocking {
+        val queries = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val replayRow = """
+{"replay_id":"$REPLAY_UUID","project_id":2,"started_at":"2026-01-01T00:00:00.000Z","finished_at":"2026-01-01T00:05:00.000Z","started_ms":"1767225600000","finished_ms":"1767225900000","duration_ms":"300000","urls":["https://app.example.com"],"error_count":0,"user_id":"u-1","user_email":"test@test.com","user_username":"tester","browser_name":"Chrome","browser_version":"120","os_name":"macOS","os_version":"14","activity":8}
+        """.trimIndent()
+        withClickHouseMockServer({ exchange ->
+            val query = exchange.requestBodyText()
+            queries += query
+            when {
+                query.contains("countDistinct(event_id)") ->
+                    exchange.respond(200, """{"count":3}""", TEXT_PLAIN)
+
+                else ->
+                    exchange.respond(200, replayRow, TEXT_PLAIN)
+            }
+        }) {
+            val result =
+                service.getReplaysForServices(
+                    organizationId = 1,
+                    serviceIds = listOf(1L, 2L),
+                    environment = "production"
+                )
+
+            assertEquals(1, result.size)
+            assertEquals(2L, result.first().projectId)
+            assertEquals(3, result.first().errorCount)
+            assertTrue(queries.any { it.contains("project_id IN (1, 2)") })
+            assertTrue(queries.any { it.contains("project_id = 2") })
+            assertTrue(queries.any { it.contains("environment = 'production'") })
         }
     }
 

@@ -49,6 +49,7 @@ class ReleaseStatsServiceTest {
     @BeforeTest
     fun setup() {
         coEvery { retentionPolicyService.getRetentionDaysForProject(any()) } returns 30
+        coEvery { retentionPolicyService.getRetentionDaysForOrganization(any()) } returns 30
         queryHelper = DashboardQueryHelper(retentionPolicyService, pricingTierService)
         service = ReleaseStatsService(queryHelper)
     }
@@ -115,6 +116,52 @@ class ReleaseStatsServiceTest {
             val releases = service.getReleases(1L)
             assertTrue(releases.isEmpty())
         }
+    }
+
+    @Test
+    fun `getReleasesForServices scopes release queries to service ids`() = runBlocking {
+        val queries = java.util.Collections.synchronizedList(mutableListOf<String>())
+        MockHttpServer { exchange ->
+            val query = exchange.requestBodyText()
+            queries += query
+            when {
+                query.contains("first_release") && query.contains("GROUP BY first_release") ->
+                    exchange.respond(200, """{"version":"1.0.0","total":1}""", contentType = TEXT_PLAIN)
+
+                query.contains(COUNT_IF_ERRORS_0) && query.contains("sessions") ->
+                    exchange.respond(200, """{"version":"1.0.0","rate":99.0}""", contentType = TEXT_PLAIN)
+
+                else ->
+                    exchange.respond(
+                        200,
+                        """
+                        {
+                          "version":"1.0.0",
+                          "first_seen":"2026-01-01T00:00:00.000Z",
+                          "last_seen":"2026-01-02T00:00:00.000Z",
+                          "event_count":4,
+                          "user_count":2
+                        }
+                        """.trimIndent().replace("\n", ""),
+                        contentType = TEXT_PLAIN
+                    )
+            }
+        }.use { server ->
+            ClickHouseClient.close()
+            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+
+            val releases = service.getReleasesForServices(organizationId = 1, serviceIds = listOf(1L, 2L))
+
+            assertEquals(1, releases.size)
+            assertTrue(queries.any { it.contains("project_id IN (1, 2)") })
+        }
+    }
+
+    @Test
+    fun `getReleaseStatsForServices returns null for empty service scope`() = runBlocking {
+        val stats = service.getReleaseStatsForServices(organizationId = 1, serviceIds = emptyList(), version = "1.0.0")
+
+        assertNull(stats)
     }
 
     @Test

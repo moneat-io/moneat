@@ -229,10 +229,24 @@ class DashboardService(
         parentSpan: ISpan? = null
     ): List<ReleaseListResponse> = releaseStatsService.getReleases(projectId, parentSpan)
 
+    suspend fun getReleasesForServices(
+        organizationId: Int,
+        serviceIds: List<Long>,
+        parentSpan: ISpan? = null
+    ): List<ReleaseListResponse> =
+        releaseStatsService.getReleasesForServices(organizationId, serviceIds, parentSpan)
+
     suspend fun getReleaseStats(
         projectId: Long,
         version: String
     ): ReleaseDetailStats? = releaseStatsService.getReleaseStats(projectId, version)
+
+    suspend fun getReleaseStatsForServices(
+        organizationId: Int,
+        serviceIds: List<Long>,
+        version: String
+    ): ReleaseDetailStats? =
+        releaseStatsService.getReleaseStatsForServices(organizationId, serviceIds, version)
 
     suspend fun getReplays(
         projectId: Long,
@@ -242,6 +256,17 @@ class DashboardService(
         period: String = "7d",
         demoEpochMs: Long? = null
     ): List<ReplayListItem> = replayService.getReplays(projectId, page, limit, environment, period, demoEpochMs)
+
+    suspend fun getReplaysForServices(
+        organizationId: Int,
+        serviceIds: List<Long>,
+        page: Int = 1,
+        limit: Int = 25,
+        environment: String? = null,
+        period: String = "7d",
+        demoEpochMs: Long? = null
+    ): List<ReplayListItem> =
+        replayService.getReplaysForServices(organizationId, serviceIds, page, limit, environment, period, demoEpochMs)
 
     suspend fun getReplay(
         replayId: String,
@@ -268,6 +293,16 @@ class DashboardService(
         status: String? = null,
         demoEpochMs: Long? = null
     ): List<FeedbackListItem> = feedbackService.getFeedback(projectId, page, limit, status, demoEpochMs)
+
+    suspend fun getFeedbackForServices(
+        organizationId: Int,
+        serviceIds: List<Long>,
+        page: Int = 1,
+        limit: Int = 25,
+        status: String? = null,
+        demoEpochMs: Long? = null
+    ): List<FeedbackListItem> =
+        feedbackService.getFeedbackForServices(organizationId, serviceIds, page, limit, status, demoEpochMs)
 
     suspend fun getFeedbackDetail(feedbackId: String): FeedbackDetailResponse? =
         feedbackService.getFeedbackDetail(feedbackId)
