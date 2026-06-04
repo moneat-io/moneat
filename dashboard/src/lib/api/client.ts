@@ -144,7 +144,6 @@ export function createApiClientCore(): ApiClientCore {
   async function logout(): Promise<void> {
     globalThis.sessionStorage?.removeItem('impersonate_token')
     globalThis.sessionStorage?.removeItem('authenticated')
-    globalThis.localStorage?.removeItem('selectedProjectId')
     setDemoEpoch(null)
     try {
       const { signal, cleanup } = withRequestTimeoutSignal()

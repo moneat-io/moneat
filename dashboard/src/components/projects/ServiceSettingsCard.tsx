@@ -34,7 +34,6 @@ import {
 import {api} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
 import {APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
-import {useProject} from '@/contexts/ProjectContext'
 import {getPlatformInfo, platforms, type PlatformType} from '@/routes/projects'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
@@ -78,7 +77,6 @@ export function ServiceSettingsCard({projectId, sourceIds, onDeleted}: ServiceSe
   const router = useRouter()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const {selectedProjectId, setSelectedProjectId} = useProject()
   const {toast} = useToast()
 
   const {data: project, isLoading} = useQuery({
@@ -144,9 +142,6 @@ export function ServiceSettingsCard({projectId, sourceIds, onDeleted}: ServiceSe
     onSuccess: async () => {
       trackEvent('Project Delete')
       await queryClient.invalidateQueries({queryKey: ['projects']})
-      if (selectedProjectId === projectId) {
-        setSelectedProjectId(null)
-      }
       toast({title: 'Service deleted', description: `"${project?.name ?? 'Service'}" has been deleted.`})
       if (onDeleted) {
         onDeleted()

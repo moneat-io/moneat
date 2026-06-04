@@ -64,7 +64,6 @@ import {
     Zap,
 } from 'lucide-react'
 import {useTimezone} from '@/hooks/useTimezone'
-import {useProject} from '@/contexts/ProjectContext'
 import {formatDateTime, formatTime} from '@/lib/date-format'
 
 interface StackFrameData {
@@ -135,8 +134,7 @@ function IssueDetailPage() {
   const queryClient = useQueryClient()
   const { timezone } = useTimezone()
   const { toast } = useToast()
-  const { selectedProjectId } = useProject()
-  const scopedProjectId = projectId ?? selectedProjectId
+  const scopedProjectId = projectId
   const [expandContextsByDefault, setExpandContextsByDefault] = useState(true)
 
   const { data: issue, isLoading } = useQuery({

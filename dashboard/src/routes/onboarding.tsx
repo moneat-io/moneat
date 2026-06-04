@@ -19,7 +19,6 @@ import {useState, useEffect} from 'react'
 import {useMutation, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
-import {useProject} from '@/contexts/ProjectContext'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
@@ -83,7 +82,6 @@ const ONBOARDING_CARD_CLASS_NAME = 'my-auto w-full'
 function OnboardingPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { setSelectedProjectId } = useProject()
   const [step, setStep] = useState<OnboardingStep>('org')
 
   // Org step state
@@ -223,7 +221,6 @@ function OnboardingPage() {
         sources: serializeTelemetrySourceIds(submission.sourceIds),
       })
       queryClient.invalidateQueries({ queryKey: ['projects'] })
-      setSelectedProjectId(project.resourceId)
       navigate({
         to: '/projects/$projectId',
         params: { projectId: project.resourceId },

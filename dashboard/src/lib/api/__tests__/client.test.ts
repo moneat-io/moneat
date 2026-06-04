@@ -227,7 +227,6 @@ describe('client', () => {
   describe('logout()', () => {
     it('clears sessionStorage items and calls /auth/logout', async () => {
       sessionStorage.setItem('impersonate_token', 'imp-token')
-      localStorage.setItem('selectedProjectId', '42')
       let logoutCalled = false
       server.use(
         http.post(`${API_BASE}/auth/logout`, () => {
@@ -239,7 +238,6 @@ describe('client', () => {
       await api.logout()
       expect(sessionStorage.getItem('authenticated')).toBeNull()
       expect(sessionStorage.getItem('impersonate_token')).toBeNull()
-      expect(localStorage.getItem('selectedProjectId')).toBeNull()
       expect(logoutCalled).toBe(true)
     })
   })

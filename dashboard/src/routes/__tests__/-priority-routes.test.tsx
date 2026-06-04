@@ -2,7 +2,6 @@ import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
-import { ProjectProvider } from '@/contexts/ProjectContext'
 
 const { mockNavigate, mockToast, mockApi } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
@@ -93,9 +92,7 @@ function renderRoute(Component: React.ComponentType) {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <ProjectProvider>
-        <Component />
-      </ProjectProvider>
+      <Component />
     </QueryClientProvider>
   )
 }
@@ -148,7 +145,7 @@ describe('priority route coverage', () => {
     renderRoute(Component)
 
     expect(await screen.findByText('Issue not found')).toBeInTheDocument()
-    expect(mockApi.getIssue).toHaveBeenCalledWith('issue-123', null)
+    expect(mockApi.getIssue).toHaveBeenCalledWith('issue-123', undefined)
   })
 
   it('performance route redirects to traces', async () => {
@@ -160,7 +157,7 @@ describe('priority route coverage', () => {
     })
   })
 
-  it('ai route renders empty service state without selected project context', async () => {
+  it('ai route renders empty service state without global service selection', async () => {
     const Component = (AiRoute as unknown as { component: React.ComponentType }).component
     renderRoute(Component)
 

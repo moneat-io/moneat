@@ -19,7 +19,6 @@ import {Link, useNavigate, useRouterState} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
-import {useProject} from '@/contexts/ProjectContext'
 import {ThemeSwitcher} from '@/components/ThemeSwitcher'
 import {Avatar, AvatarFallback} from '@/components/ui/avatar'
 import {Button} from '@/components/ui/button'
@@ -33,7 +32,6 @@ import {
     BookOpen,
     Brain,
     HelpCircle,
-    ChevronDown,
     ChevronLeft,
     ChevronRight,
     Flag,
@@ -47,7 +45,6 @@ import {
     MessageSquare,
     Package,
     Play,
-    Plus,
     Rocket,
     ScrollText,
     Search,
@@ -61,7 +58,6 @@ import {
     Workflow,
 } from 'lucide-react'
 import {cn} from '@/lib/utils'
-import {getPlatformInfo} from '@/routes/projects'
 import {Tooltip, TooltipContent, TooltipTrigger} from '@/components/ui/tooltip'
 import {
   DropdownMenu,
@@ -84,6 +80,7 @@ import {
   serializeTelemetrySourceIds,
   storeTelemetrySourceIdsForProject,
 } from '@/lib/telemetry-sources'
+import {primaryServiceResourceId} from '@/lib/service-facet-scope'
 
 export const SIDEBAR_COLLAPSED_WIDTH = 56
 export const SIDEBAR_EXPANDED_WIDTH = 176
@@ -104,7 +101,6 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
   const currentPath = router.location.pathname
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { selectedProjectId, setSelectedProjectId } = useProject()
   const { toast } = useToast()
   const { data: features } = useEnterpriseFeatures()
   const { openPalette } = useCommandPalette() ?? {}
@@ -128,17 +124,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
     queryFn: () => api.getProjects(),
     enabled: api.isAuthenticated(),
   })
-
-  const activeProject = projects?.find((project) =>
-    project.resourceId === selectedProjectId || String(project.id) === selectedProjectId
-  ) ?? projects?.[0] ?? null
-  const activeProjectId = activeProject?.resourceId ?? null
-
-  useEffect(() => {
-    if (activeProject && selectedProjectId !== activeProject.resourceId) {
-      setSelectedProjectId(activeProject.resourceId)
-    }
-  }, [activeProject, selectedProjectId, setSelectedProjectId])
+  const primaryServiceId = primaryServiceResourceId(projects)
 
   const createProjectMutation = useMutation({
     mutationFn: (data: ProjectSetupSubmission) =>
@@ -150,7 +136,6 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
         sources: serializeTelemetrySourceIds(submission.sourceIds),
       })
       queryClient.invalidateQueries({ queryKey: ['projects'] })
-      setSelectedProjectId(project.resourceId)
       resetCreateForm()
       navigate({
         to: '/projects/$projectId',
@@ -358,146 +343,6 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
           </Tooltip>
         )}
       </div>
-      {/* Project chooser */}
-      <div className={cn('shrink-0 border-b p-1.5', !isExpanded && 'px-1.5')}>
-        {projects && projects.length > 0 ? (
-          (() => {
-            const platformId = activeProject ? (activeProject.keys?.[0]?.platformTarget || activeProject.framework || 'other') : 'other'
-            const platformInfo = getPlatformInfo(platformId) || getPlatformInfo('other')
-            const PlatformIcon = platformInfo?.icon || Package
-            return isExpanded ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="Switch service"
-                  className="flex w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-left text-xs cursor-default transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  {activeProject && (
-                    <div
-                      className="h-4 w-4 rounded flex items-center justify-center flex-shrink-0"
-                      style={{backgroundColor: platformInfo?.color || '#4b5563'}}
-                    >
-                      <PlatformIcon className="h-2.5 w-2.5 text-white" />
-                    </div>
-                  )}
-                  <span className="flex-1 truncate text-foreground">{activeProject?.name}</span>
-                  <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" side="right" className="w-[--radix-dropdown-menu-trigger-width] min-w-[10rem]">
-                {projects.map((project) => {
-                  const pId = project.keys?.[0]?.platformTarget || project.framework || 'other'
-                  const pInfo = getPlatformInfo(pId) || getPlatformInfo('other')
-                  const PIco = pInfo?.icon || Package
-                  return (
-                    <DropdownMenuItem
-                      key={project.id}
-                      onClick={() => setSelectedProjectId(project.resourceId)}
-                      className={cn(
-                        'flex items-center gap-2',
-                        project.id === activeProject?.id && 'bg-accent'
-                      )}
-                    >
-                    <div
-                      className="h-4 w-4 rounded flex items-center justify-center flex-shrink-0"
-                      style={{backgroundColor: pInfo?.color || '#4b5563'}}
-                    >
-                      <PIco className="h-2.5 w-2.5 text-white" />
-                      </div>
-                      <span className="truncate">{project.name}</span>
-                    </DropdownMenuItem>
-                  )
-                })}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => window.dispatchEvent(new CustomEvent('open-create-project-dialog'))} className="text-xs">
-                  <Plus className="h-3 w-3" />
-                  New Service
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  aria-label={activeProject ? `Switch service: ${activeProject.name}` : 'Switch service'}
-                  title={activeProject ? `Switch service: ${activeProject.name}` : 'Switch service'}
-                  className="flex w-full items-center justify-center rounded-md border bg-muted/50 p-1.5 cursor-default transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  {activeProject && (
-                    <div
-                      className="h-4 w-4 rounded flex items-center justify-center"
-                      style={{backgroundColor: platformInfo?.color || '#4b5563'}}
-                    >
-                      <PlatformIcon className="h-2.5 w-2.5 text-white" />
-                    </div>
-                  )}
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" side="right" className="min-w-[10rem]">
-                {projects.map((project) => {
-                  const pId = project.keys?.[0]?.platformTarget || project.framework || 'other'
-                  const pInfo = getPlatformInfo(pId) || getPlatformInfo('other')
-                  const PIco = pInfo?.icon || Package
-                  return (
-                    <DropdownMenuItem
-                      key={project.id}
-                      onClick={() => setSelectedProjectId(project.resourceId)}
-                      className={cn(
-                        'flex items-center gap-2',
-                        project.id === activeProject?.id && 'bg-accent'
-                      )}
-                    >
-                    <div
-                      className="h-4 w-4 rounded flex items-center justify-center flex-shrink-0"
-                      style={{backgroundColor: pInfo?.color || '#4b5563'}}
-                    >
-                      <PIco className="h-2.5 w-2.5 text-white" />
-                      </div>
-                      <span className="truncate">{project.name}</span>
-                    </DropdownMenuItem>
-                  )
-                })}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => window.dispatchEvent(new CustomEvent('open-create-project-dialog'))} className="text-xs">
-                  <Plus className="h-3 w-3" />
-                  New Service
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )
-            })()
-        ) : (
-          isExpanded ? (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => window.dispatchEvent(new CustomEvent('open-create-project-dialog'))}
-              className="w-full justify-center gap-1 h-7 text-xs"
-            >
-              <Plus className="h-3 w-3" />
-              New Service
-            </Button>
-          ) : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="Create new service"
-                  onClick={() => window.dispatchEvent(new CustomEvent('open-create-project-dialog'))}
-                  className="flex w-full items-center justify-center rounded-md border bg-muted/50 p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                <p>New Service</p>
-              </TooltipContent>
-            </Tooltip>
-          )
-        )}
-      </div>
       {/* Navigation Items */}
       <nav
         className={cn(
@@ -607,8 +452,8 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
               <DropdownMenuContent align="start" side="right" className="w-48">
                 <DropdownMenuItem
                   onClick={() => {
-                    if (activeProjectId) {
-                      navigate({to: `/projects/${activeProjectId}`})
+                    if (primaryServiceId) {
+                      navigate({to: `/projects/${primaryServiceId}`})
                       return
                     }
 
@@ -694,8 +539,8 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
               <DropdownMenuContent align="start" side="right" className="w-48">
                 <DropdownMenuItem
                   onClick={() => {
-                    if (activeProjectId) {
-                      navigate({to: `/projects/${activeProjectId}`})
+                    if (primaryServiceId) {
+                      navigate({to: `/projects/${primaryServiceId}`})
                       return
                     }
 
@@ -765,7 +610,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
         {renderSidebarContent()}
       </div>
 
-      {/* Create Project Dialog */}
+      {/* Create Service Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={(open) => { if (!open) resetCreateForm() }}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
