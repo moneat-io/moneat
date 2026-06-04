@@ -108,6 +108,12 @@ class DashboardService(
         demoEpochMs: Long? = null
     ): List<ProjectResponse> = projectService.getProjects(userId, demoEpochMs)
 
+    fun getServiceIdsForOrganization(orgId: Int): List<Long> =
+        projectRepository.getProjectsForOrganizations(listOf(orgId)).map { it.projectId }
+
+    fun resolveServiceId(orgId: Int, serviceName: String): Long? =
+        projectRepository.resolveServiceId(orgId, serviceName)
+
     suspend fun getProject(projectId: Long): ProjectResponse? =
         projectService.getProject(projectId)
 
