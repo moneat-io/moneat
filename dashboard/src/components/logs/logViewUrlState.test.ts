@@ -23,7 +23,7 @@ import {
   resolveLogGroupBy,
   serializeLogViewState,
 } from './logViewUrlState'
-import type {FacetFilter} from './LogSearchBar'
+import type {FacetFilter} from '@/lib/filters/types'
 
 describe('logViewUrlState', () => {
   describe('parseLogViewSearch', () => {

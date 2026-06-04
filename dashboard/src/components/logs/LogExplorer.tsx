@@ -17,8 +17,10 @@
 import {startTransition, useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {useNavigate} from '@tanstack/react-router'
 import {api, formatErrorForLogging, type LogEntry, type LogFilterOptionsWithCounts} from '@/lib/api'
-import {type FacetFilter, LEVEL_OPTIONS, LogSearchBar, TIME_PRESETS} from '@/components/logs/LogSearchBar'
-import {TagFacets} from '@/components/logs/TagFacets'
+import {ExplorerShell} from '@/components/filters/ExplorerShell'
+import {FacetRail} from '@/components/filters/FacetRail'
+import {SearchFilterBar} from '@/components/filters/SearchFilterBar'
+import {TimeRangePicker} from '@/components/filters/TimeRangePicker'
 import {LogTable} from '@/components/logs/LogTable'
 import {LogDetail} from '@/components/logs/LogDetail'
 import {AutoRefreshToggle, type RefreshInterval} from '@/components/logs/AutoRefreshToggle'
@@ -29,8 +31,11 @@ import {LogTopList} from '@/components/logs/LogTopList'
 import {LogPieChart} from '@/components/logs/LogPieChart'
 import {LogAggregateTable} from '@/components/logs/LogAggregateTable'
 import {Button} from '@/components/ui/button'
+import {type FacetFilter, type FacetRailSection, type FacetSchema} from '@/lib/filters/types'
+import {TIME_PRESETS} from '@/lib/filters/time'
+import {logLevelBadgeClass} from '@/lib/severity'
 import {cn} from '@/lib/utils'
-import {ChevronDown, ChevronLeft, Download, Loader2, PanelLeftClose, PanelLeftOpen, TerminalSquare} from 'lucide-react'
+import {ChevronDown, ChevronLeft, Download, ListFilter, Loader2, TerminalSquare} from 'lucide-react'
 import {useQuery} from '@tanstack/react-query'
 import {
   type LogViewSearch,
@@ -54,6 +59,23 @@ interface LogExplorerProps {
   initialScrollToBottom?: boolean
   enableUrlSync?: boolean
   urlSearch?: LogViewSearch
+}
+
+const LEVEL_OPTIONS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal']
+const LOG_LEVELS = new Set<string>(LEVEL_OPTIONS)
+const EMPTY_LOG_FILTER_OPTIONS: LogFilterOptionsWithCounts['services'] = []
+const EMPTY_TAG_KEYS: string[] = []
+
+const LOG_FACET_CHIP_COLORS: Record<string, string> = {
+  service: 'bg-[hsl(var(--primary)/0.12)] text-primary border-[hsl(var(--primary)/0.3)]',
+  environment: 'bg-success-bg text-success-fg border-success-border',
+  host: 'bg-[hsl(var(--chart-6)/0.15)] text-[hsl(var(--chart-6))] border-[hsl(var(--chart-6)/0.3)]',
+  source: 'bg-[hsl(var(--chart-7)/0.15)] text-[hsl(var(--chart-7))] border-[hsl(var(--chart-7)/0.3)]',
+}
+
+function shouldOpenFacetRail(enableFacets: boolean): boolean {
+  const viewportWidth = globalThis.window?.innerWidth ?? 0
+  return enableFacets && viewportWidth >= 1024
 }
 
 function toIsoOrUndefined(value: string): string | undefined {
@@ -93,9 +115,104 @@ function formatLogCount(n: number): string {
   return String(n)
 }
 
+function toFacetRailOptions(options: LogFilterOptionsWithCounts['services']) {
+  return options.map((option) => ({value: option.value, count: option.count}))
+}
+
+function keepPreviousLogFilterOptions(
+  previousData: LogFilterOptionsWithCounts | undefined
+): LogFilterOptionsWithCounts | undefined {
+  return previousData
+}
+
 function toDateTimeLocalValue(date: Date): string {
   const pad = (value: number) => String(value).padStart(2, '0')
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function formatLevelSummary(levels: string[]): string {
+  if (levels.length === LEVEL_OPTIONS.length) return 'All Levels'
+  if (levels.length === 0) return 'No Levels'
+  if (levels.length === 1) return levels[0].charAt(0).toUpperCase() + levels[0].slice(1)
+  return `${levels.length} Levels`
+}
+
+function LogLevelPicker({
+  levels,
+  onToggleLevel,
+  onResetLevels,
+}: {
+  levels: string[]
+  onToggleLevel: (level: string) => void
+  onResetLevels: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const hasCustomLevelFilter = levels.length > 0 && levels.length < LEVEL_OPTIONS.length
+  const levelSummary = useMemo(() => formatLevelSummary(levels), [levels])
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (ref.current && !ref.current.contains(event.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  return (
+    <div className="relative" ref={ref}>
+      <Button
+        variant="outline"
+        size="default"
+        className={cn(
+          'h-[30px] px-2 sm:px-3 gap-1.5 whitespace-nowrap font-normal text-xs',
+          hasCustomLevelFilter && 'border-primary/40'
+        )}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <ListFilter className="h-3.5 w-3.5 text-muted-foreground" />
+        <span className="hidden text-xs sm:inline">{levelSummary}</span>
+        <ChevronDown className="hidden h-3 w-3 text-muted-foreground sm:inline" />
+      </Button>
+
+      {open && (
+        <div className="absolute right-0 top-full z-50 mt-1 w-[200px] rounded-lg border bg-popover p-1">
+          {LEVEL_OPTIONS.map((level) => {
+            const active = levels.includes(level)
+            return (
+              <button
+                key={level}
+                type="button"
+                onClick={() => onToggleLevel(level)}
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-sm transition-colors',
+                  active ? cn(logLevelBadgeClass(level), 'border') : 'hover:bg-accent/50'
+                )}
+              >
+                <span className="font-mono text-xs uppercase">{level}</span>
+              </button>
+            )
+          })}
+          {hasCustomLevelFilter && (
+            <div className="border-t mt-1 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  onResetLevels()
+                  setOpen(false)
+                }}
+                className="flex w-full items-center rounded-md px-3 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent/50"
+              >
+                Reset to all levels
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function LogExplorer({
@@ -185,9 +302,6 @@ export function LogExplorer({
   // Detail panel
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
-
-  // Facets sidebar
-  const [showFacets, setShowFacets] = useState(() => enableFacets && window.innerWidth >= 1024)
 
   // Visualization mode
   const [vizMode, setVizMode] = useState<LogVizMode>(initialState.vizMode)
@@ -353,7 +467,101 @@ export function LogExplorer({
       return api.getLogFilters({from: timeRange.from, to: timeRange.to})
     },
     enabled: !systemId && enableFacets,
+    placeholderData: keepPreviousLogFilterOptions,
   })
+
+  const availableServices = filterOptions?.services ?? EMPTY_LOG_FILTER_OPTIONS
+  const availableEnvironments = filterOptions?.environments ?? EMPTY_LOG_FILTER_OPTIONS
+  const availableTagKeys = filterOptions?.tagKeys ?? EMPTY_TAG_KEYS
+  const serviceSuggestions = useMemo(
+    () => availableServices.map((service) => service.value),
+    [availableServices]
+  )
+  const environmentSuggestions = useMemo(
+    () => availableEnvironments.map((environment) => environment.value),
+    [availableEnvironments]
+  )
+  const logSearchSchema = useMemo<FacetSchema>(
+    () => [
+      {
+        key: 'environment',
+        aliases: ['env'],
+        color: LOG_FACET_CHIP_COLORS.environment,
+        singleSelect: true,
+        suggestions: environmentSuggestions,
+      },
+      {key: 'host', color: LOG_FACET_CHIP_COLORS.host},
+      {key: 'level', allowExclude: false, suggestions: LEVEL_OPTIONS},
+      {
+        key: 'service',
+        color: LOG_FACET_CHIP_COLORS.service,
+        singleSelect: true,
+        suggestions: serviceSuggestions,
+      },
+      {key: 'source', color: LOG_FACET_CHIP_COLORS.source},
+    ],
+    [environmentSuggestions, serviceSuggestions]
+  )
+  const logFacetSections = useMemo<FacetRailSection[]>(() => {
+    const sections: FacetRailSection[] = [
+      {
+        key: 'service',
+        label: 'Service',
+        color: 'bg-primary',
+        singleSelect: true,
+        options: toFacetRailOptions(availableServices),
+      },
+      {
+        key: 'environment',
+        label: 'Environment',
+        color: 'bg-success-solid',
+        singleSelect: true,
+        options: toFacetRailOptions(availableEnvironments),
+      },
+    ]
+
+    for (const tagKey of availableTagKeys) {
+      sections.push({
+        key: tagKey,
+        label: tagKey,
+        color: 'bg-primary/70',
+        singleSelect: true,
+        loadOptions: async () => {
+          const result = await api.getLogTagValues(tagKey, {
+            from: timeRange.from,
+            to: timeRange.to,
+            limit: 30,
+          })
+          return result.values.map((value) => ({value}))
+        },
+      })
+    }
+
+    return sections
+  }, [availableServices, availableEnvironments, availableTagKeys, timeRange.from, timeRange.to])
+
+  const toggleLevel = useCallback((level: string) => {
+    setLevels((current) => {
+      if (!current.includes(level)) return [...current, level]
+      const next = current.filter((item) => item !== level)
+      return next.length === 0 ? current : next
+    })
+  }, [])
+
+  const resetLevels = useCallback(() => {
+    setLevels([...LEVEL_OPTIONS])
+  }, [])
+
+  const handleSearchTokenIntercept = useCallback((key: string, value: string, exclude: boolean) => {
+    if (key !== 'level' || exclude) return false
+    const normalized = value.toLowerCase()
+    if (!LOG_LEVELS.has(normalized)) return true
+    setLevels((current) => {
+      if (current.length === LEVEL_OPTIONS.length) return [normalized]
+      return current.includes(normalized) ? current : [...current, normalized]
+    })
+    return true
+  }, [])
 
   // Fetch logs - org-scoped (getLogs) when no systemId; getSystemLogs when systemId (monitor)
   const {
@@ -554,12 +762,6 @@ export function LogExplorer({
     setDetailOpen(false)
   }, [])
 
-  const toggleLevel = (level: string) => {
-    setLevels((current) =>
-      current.includes(level) ? current.filter((item) => item !== level) : [...current, level]
-    )
-  }
-
   const handlePreviousPage = () => {
     if (cursorHistory.length === 0) return
     const previous = cursorHistory[cursorHistory.length - 1] ?? null
@@ -618,288 +820,287 @@ export function LogExplorer({
   const isInitialLoadingState =
     accumulatedLogs.length === 0 &&
     (isInitialLoading || (logPage?.logs?.length ?? 0) > 0)
-  const showEmptyState = !isInitialLoadingState && logs.length === 0 && !query && facetFilters.length === 0 && !hasCustomLevelFilter && (totalCount === 0 || totalCount === null)
+  const hasTimeRangeFilter = timePreset !== defaultTimeRange || customFrom !== '' || customTo !== ''
+  const showEmptyState =
+    !isInitialLoadingState &&
+    logs.length === 0 &&
+    !query &&
+    facetFilters.length === 0 &&
+    !hasCustomLevelFilter &&
+    !hasTimeRangeFilter &&
+    (totalCount === 0 || totalCount === null)
 
   return (
-    <div className={cn("flex flex-col overflow-hidden bg-gradient-to-br from-background via-background to-[hsl(var(--primary)/0.03)]", className)}>
-      {/* Header bar */}
-      <div className="shrink-0 border-b bg-background/95 backdrop-blur-sm z-20">
-          <div className="flex items-center gap-2 px-2 py-1.5 sm:px-3 lg:px-4">
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="rounded-md bg-gradient-to-br from-primary/15 to-[hsl(var(--chart-3)/0.15)] p-1 ring-1 ring-primary/20">
-                <TerminalSquare className="h-3.5 w-3.5 text-primary" />
-              </div>
-              <h2 className="text-xs font-semibold leading-tight hidden sm:block">Log Explorer</h2>
-            </div>
-
-            <div className="flex-1 min-w-0">
-              <LogSearchBar
-                query={query}
-                onQueryChange={setQuery}
-                facetFilters={facetFilters}
-                onFacetFiltersChange={setFacetFilters}
-                levels={levels}
-                onToggleLevel={toggleLevel}
-                availableTagKeys={filterOptions?.tagKeys ?? []}
-                availableServices={(filterOptions?.services ?? []).map(s => s.value)}
-                availableEnvironments={(filterOptions?.environments ?? []).map(e => e.value)}
-                timePreset={timePreset}
-                onTimePresetChange={setTimePreset}
-                customFrom={customFrom}
-                customTo={customTo}
-                onCustomFromChange={setCustomFrom}
-                onCustomToChange={setCustomTo}
-              />
-            </div>
-
-            {enableAutoRefresh && (
-              <AutoRefreshToggle
-                interval={autoRefreshInterval}
-                onIntervalChange={setAutoRefreshInterval}
-              />
-            )}
+    <>
+      <ExplorerShell
+        className={cn(
+          'min-h-0 overflow-hidden bg-gradient-to-br from-background via-background to-[hsl(var(--primary)/0.03)]',
+          className
+        )}
+        title="Log Explorer"
+        icon={(
+          <div className="rounded-md bg-gradient-to-br from-primary/15 to-[hsl(var(--chart-3)/0.15)] p-1 ring-1 ring-primary/20">
+            <TerminalSquare className="h-3.5 w-3.5 text-primary" />
           </div>
-      </div>
-
-      {/* Main content */}
-      <div className="flex flex-1 overflow-hidden">
-          {/* Facets sidebar */}
-          <div
-            className={cn(
-              'shrink-0 border-r transition-all duration-200',
-              showFacets && enableFacets ? 'w-[200px]' : 'w-0 overflow-hidden border-r-0'
+        )}
+        searchBar={(
+          <SearchFilterBar
+            query={query}
+            onQueryChange={setQuery}
+            facetFilters={facetFilters}
+            onFacetFiltersChange={setFacetFilters}
+            schema={logSearchSchema}
+            suggestKeys={availableTagKeys}
+            onInterceptToken={handleSearchTokenIntercept}
+            placeholder="Search..."
+            hasExtraActiveFilters={hasCustomLevelFilter}
+            onClearExtra={resetLevels}
+            trailing={(
+              <>
+                <LogLevelPicker
+                  levels={levels}
+                  onToggleLevel={toggleLevel}
+                  onResetLevels={resetLevels}
+                />
+                <TimeRangePicker
+                  timePreset={timePreset}
+                  onTimePresetChange={setTimePreset}
+                  customFrom={customFrom}
+                  customTo={customTo}
+                  onCustomFromChange={setCustomFrom}
+                  onCustomToChange={setCustomTo}
+                />
+              </>
             )}
-          >
-            {showFacets && enableFacets && (
-              <TagFacets
-                availableTagKeys={filterOptions?.tagKeys ?? []}
-                availableServices={filterOptions?.services ?? []}
-                availableEnvironments={filterOptions?.environments ?? []}
-                facetFilters={facetFilters}
-                onFacetFiltersChange={setFacetFilters}
-                from={timeRange.from}
-                to={timeRange.to}
-                scopeId={systemId}
-              />
-            )}
-          </div>
+          />
+        )}
+        actions={enableAutoRefresh ? (
+          <AutoRefreshToggle
+            interval={autoRefreshInterval}
+            onIntervalChange={setAutoRefreshInterval}
+          />
+        ) : undefined}
+        rail={enableFacets ? (
+          <FacetRail
+            title="Facets"
+            sections={logFacetSections}
+            facetFilters={facetFilters}
+            onFacetFiltersChange={setFacetFilters}
+          />
+        ) : undefined}
+        defaultRailOpen={shouldOpenFacetRail(enableFacets)}
+        toolbar={(
+          <>
+            <LogVizTabs mode={vizMode} onModeChange={setVizMode} />
 
-          {/* Log content area */}
-          <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
-            {/* Toolbar: facets toggle, viz tabs, group by, export, pagination */}
-            <div className="flex items-center gap-1.5 border-b bg-card/30 px-2 py-1">
-              {enableFacets && (
-                <button
-                  type="button"
-                  onClick={() => setShowFacets(!showFacets)}
-                  className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                  title={showFacets ? 'Hide facets' : 'Show facets'}
+            {/* Group By / Field selector for non-list views */}
+            {(vizMode === 'toplist' || vizMode === 'pie' || vizMode === 'table') && (
+              <div className="relative">
+                <select
+                  value={topField}
+                  onChange={(e) => setTopField(e.target.value)}
+                  className="h-6 appearance-none rounded border bg-background px-1.5 pr-5 text-[11px]"
                 >
-                  {showFacets ? (
-                    <PanelLeftClose className="h-4 w-4" />
-                  ) : (
-                    <PanelLeftOpen className="h-4 w-4" />
-                  )}
-                </button>
+                  <option value="service">service</option>
+                  <option value="level">level</option>
+                  <option value="environment">environment</option>
+                  <option value="host">host</option>
+                  <option value="container_name">container</option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-1 top-1 h-3 w-3 text-muted-foreground" />
+              </div>
+            )}
+
+            {aggregateData && aggregateData.buckets.length > 0 && (
+              <div className="relative">
+                <select
+                  value={groupBy}
+                  onChange={(e) => setGroupBy(e.target.value)}
+                  className="h-6 appearance-none rounded border bg-background px-1.5 pr-5 text-[11px]"
+                >
+                  <option value="">No grouping</option>
+                  <option value="level">Group by level</option>
+                  <option value="service">Group by service</option>
+                  <option value="environment">Group by environment</option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-1 top-1 h-3 w-3 text-muted-foreground" />
+              </div>
+            )}
+
+            <div className="flex-1 text-xs text-muted-foreground">
+              {isInitialLoadingState ? (
+                <span className="flex items-center gap-1.5">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Loading...
+                </span>
+              ) : (
+                <span>
+                  {aggregateData?.totalCount != null
+                    ? `${formatLogCount(aggregateData.totalCount)} results found`
+                    : `${logs.length} result${logs.length !== 1 ? 's' : ''} shown`}
+                </span>
               )}
+            </div>
 
-              <LogVizTabs mode={vizMode} onModeChange={setVizMode} />
+            {/* CSV Export - org-scoped only, not for monitor systems */}
+            {!systemId && (
+              <Button variant="ghost" size="sm" onClick={handleExportCsv} className="h-6 gap-1 text-[11px]">
+                <Download className="h-3 w-3" />
+                CSV
+              </Button>
+            )}
 
-              {/* Group By / Field selector for non-list views */}
-              {(vizMode === 'toplist' || vizMode === 'pie' || vizMode === 'table') && (
-                <div className="relative">
-                  <select
-                    value={topField}
-                    onChange={(e) => setTopField(e.target.value)}
-                    className="h-6 appearance-none rounded border bg-background px-1.5 pr-5 text-[11px]"
-                  >
-                    <option value="service">service</option>
-                    <option value="level">level</option>
-                    <option value="environment">environment</option>
-                    <option value="host">host</option>
-                    <option value="container_name">container</option>
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-1 top-1 h-3 w-3 text-muted-foreground" />
-                </div>
-              )}
-
-              {aggregateData && aggregateData.buckets.length > 0 && (
-                <div className="relative">
-                  <select
-                    value={groupBy}
-                    onChange={(e) => setGroupBy(e.target.value)}
-                    className="h-6 appearance-none rounded border bg-background px-1.5 pr-5 text-[11px]"
-                  >
-                    <option value="">No grouping</option>
-                    <option value="level">Group by level</option>
-                    <option value="service">Group by service</option>
-                    <option value="environment">Group by environment</option>
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-1 top-1 h-3 w-3 text-muted-foreground" />
-                </div>
-              )}
-
-              <div className="flex-1 text-xs text-muted-foreground">
-                {isInitialLoadingState ? (
-                  <span className="flex items-center gap-1.5">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Loading...
+            {/* Pagination (shown only if we have history) */}
+            {cursorHistory.length > 0 && (
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handlePreviousPage}
+                  disabled={cursorHistory.length === 0}
+                  className="h-6 w-6 p-0"
+                  title="Reset to first page"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+      >
+        <div className="flex h-full min-h-0 flex-col overflow-hidden">
+          {/* Histogram - always visible above all modes */}
+          {vizMode === 'timeseries' && aggregateData && aggregateData.buckets.length > 0 && (
+            <div className="shrink-0 border-b bg-card/50">
+              <div className="px-2 pt-1.5 pb-1">
+                <div className="mb-0.5 flex items-center justify-between">
+                  <span className="text-[10px] font-medium text-muted-foreground">
+                    Log volume ({aggregateData.interval} buckets)
                   </span>
-                ) : (
-                  <span>
-                    {aggregateData?.totalCount != null
-                      ? `${formatLogCount(aggregateData.totalCount)} results found`
-                      : `${logs.length} result${logs.length !== 1 ? 's' : ''} shown`}
-                  </span>
+                  <span className="text-[10px] text-muted-foreground">Click a bar to zoom</span>
+                </div>
+                <LogHistogram
+                  buckets={aggregateData.buckets}
+                  grouped={true}
+                  height={72}
+                  interval={aggregateData.interval}
+                  rangeFrom={timeRange.from}
+                  rangeTo={timeRange.to ?? getNowDate().toISOString()}
+                  onBucketClick={handleHistogramBucketClick}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Additional visualizations - shown compactly above list */}
+          {(vizMode === 'toplist' || vizMode === 'pie' || vizMode === 'table') && topData && (
+            <div className="shrink-0 border-b bg-card/50">
+              <div className="px-2 py-1.5">
+                {vizMode === 'toplist' && (
+                  <div className="max-h-44 overflow-y-auto">
+                    <LogTopList
+                      values={topData.values.slice(0, 10)}
+                      totalCount={topData.totalCount}
+                      field={topField}
+                      onValueClick={(value) => {
+                        setFacetFilters((prev) => [
+                          ...prev.filter((filter) => filter.key !== topField),
+                          {key: topField, value, exclude: false},
+                        ])
+                      }}
+                    />
+                  </div>
+                )}
+                {vizMode === 'pie' && (
+                  <div className="max-h-52">
+                    <LogPieChart values={topData.values} field={topField} />
+                  </div>
+                )}
+                {vizMode === 'table' && (
+                  <div className="max-h-44 overflow-y-auto">
+                    <LogAggregateTable
+                      values={topData.values}
+                      totalCount={topData.totalCount}
+                      field={topField}
+                      onValueClick={(value) => {
+                        setFacetFilters((prev) => [
+                          ...prev.filter((filter) => filter.key !== topField),
+                          {key: topField, value, exclude: false},
+                        ])
+                      }}
+                    />
+                  </div>
                 )}
               </div>
-
-              {/* CSV Export - org-scoped only, not for monitor systems */}
-              {!systemId && (
-                <Button variant="ghost" size="sm" onClick={handleExportCsv} className="h-6 gap-1 text-[11px]">
-                  <Download className="h-3 w-3" />
-                  CSV
-                </Button>
-              )}
-
-              {/* Pagination (shown only if we have history) */}
-              {cursorHistory.length > 0 && (
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handlePreviousPage}
-                    disabled={cursorHistory.length === 0}
-                    className="h-6 w-6 p-0"
-                    title="Reset to first page"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
             </div>
+          )}
 
-            {/* Histogram - always visible above all modes */}
-            {vizMode === 'timeseries' && aggregateData && aggregateData.buckets.length > 0 && (
-              <div className="shrink-0 border-b bg-card/50">
-                <div className="px-2 pt-1.5 pb-1">
-                  <div className="mb-0.5 flex items-center justify-between">
-                    <span className="text-[10px] font-medium text-muted-foreground">Log volume ({aggregateData.interval} buckets)</span>
-                    <span className="text-[10px] text-muted-foreground">Click a bar to zoom</span>
-                  </div>
-                  <LogHistogram
-                    buckets={aggregateData.buckets}
-                    grouped={true}
-                    height={72}
-                    interval={aggregateData.interval}
-                    rangeFrom={timeRange.from}
-                    rangeTo={timeRange.to ?? getNowDate().toISOString()}
-                    onBucketClick={handleHistogramBucketClick}
-                  />
+          {/* Content area - logs list */}
+          <div className="flex-1 overflow-y-auto" ref={logContainerRef}>
+            {showEmptyState ? (
+              <div className="px-2 pb-4 sm:px-3 sm:pb-6">
+                <LogSetupGuide sdkVersions={sdkVersions} />
+              </div>
+            ) : isInitialLoadingState ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
+                  <p className="mt-2 text-xs text-muted-foreground">Loading logs...</p>
                 </div>
               </div>
-            )}
-
-            {/* Additional visualizations - shown compactly above list */}
-            {(vizMode === 'toplist' || vizMode === 'pie' || vizMode === 'table') && topData && (
-              <div className="shrink-0 border-b bg-card/50">
-                <div className="px-2 py-1.5">
-                  {vizMode === 'toplist' && (
-                    <div className="max-h-44 overflow-y-auto">
-                      <LogTopList
-                        values={topData.values.slice(0, 10)}
-                        totalCount={topData.totalCount}
-                        field={topField}
-                        onValueClick={(value) => {
-                          setFacetFilters(prev => [...prev.filter(f => f.key !== topField), {key: topField, value, exclude: false}])
-                        }}
-                      />
-                    </div>
-                  )}
-                  {vizMode === 'pie' && (
-                    <div className="max-h-52">
-                      <LogPieChart values={topData.values} field={topField} />
-                    </div>
-                  )}
-                  {vizMode === 'table' && (
-                    <div className="max-h-44 overflow-y-auto">
-                      <LogAggregateTable
-                        values={topData.values}
-                        totalCount={topData.totalCount}
-                        field={topField}
-                        onValueClick={(value) => {
-                          setFacetFilters(prev => [...prev.filter(f => f.key !== topField), {key: topField, value, exclude: false}])
-                        }}
-                      />
-                    </div>
-                  )}
+            ) : logs.length === 0 ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <TerminalSquare className="mx-auto h-8 w-8 text-muted-foreground/30" />
+                  <p className="mt-2 text-xs font-medium text-muted-foreground">No logs match your filters</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground/70">
+                    Try adjusting your search query, time range, or filters
+                  </p>
                 </div>
               </div>
-            )}
+            ) : (
+              <>
+                <LogTable
+                  logs={logs}
+                  selectedLogId={selectedLog?.logId}
+                  onSelectLog={handleSelectLog}
+                  compact={true}
+                />
 
-            {/* Content area - logs list */}
-            <div className="flex-1 overflow-y-auto" ref={logContainerRef}>
-              {showEmptyState ? (
-                <div className="px-2 pb-4 sm:px-3 sm:pb-6">
-                  <LogSetupGuide sdkVersions={sdkVersions} />
-                </div>
-              ) : isInitialLoadingState ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="text-center">
-                    <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
-                    <p className="mt-2 text-xs text-muted-foreground">Loading logs...</p>
-                  </div>
-                </div>
-              ) : logs.length === 0 ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="text-center">
-                    <TerminalSquare className="mx-auto h-8 w-8 text-muted-foreground/30" />
-                    <p className="mt-2 text-xs font-medium text-muted-foreground">No logs match your filters</p>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground/70">
-                      Try adjusting your search query, time range, or filters
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <LogTable
-                    logs={logs}
-                    selectedLogId={selectedLog?.logId}
-                    onSelectLog={handleSelectLog}
-                    compact={true}
-                  />
-                  
-                  {/* Infinite scroll sentinel and loading indicator */}
-                  <div ref={scrollSentinelRef} className="px-2 py-2">
-                    {(isLoadingMore || isFetching) && logPage?.hasMore ? (
-                      <div className="flex items-center justify-center gap-2 py-2">
-                        <div className="h-1 w-full max-w-xs overflow-hidden rounded-full bg-muted">
-                          <div className="h-full w-1/2 animate-pulse bg-primary" style={{animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite'}} />
-                        </div>
+                {/* Infinite scroll sentinel and loading indicator */}
+                <div ref={scrollSentinelRef} className="px-2 py-2">
+                  {(isLoadingMore || isFetching) && logPage?.hasMore ? (
+                    <div className="flex items-center justify-center gap-2 py-2">
+                      <div className="h-1 w-full max-w-xs overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full w-1/2 animate-pulse bg-primary"
+                          style={{animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite'}}
+                        />
                       </div>
-                    ) : logPage?.hasMore ? (
-                      <div className="text-center text-xs text-muted-foreground/50">
-                        Scroll for more
-                      </div>
-                    ) : logPage && !logPage.hasMore ? (
-                      <div className="border-t pt-2 text-center text-[11px] text-muted-foreground/70">
-                        End of results • {logs.length} logs loaded
-                      </div>
-                    ) : null}
-                  </div>
-                </>
-              )}
-            </div>
+                    </div>
+                  ) : logPage?.hasMore ? (
+                    <div className="text-center text-xs text-muted-foreground/50">
+                      Scroll for more
+                    </div>
+                  ) : logPage && !logPage.hasMore ? (
+                    <div className="border-t pt-2 text-center text-[11px] text-muted-foreground/70">
+                      End of results • {logs.length} logs loaded
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            )}
           </div>
-      </div>
+        </div>
+      </ExplorerShell>
 
       {/* Log detail sheet */}
-      <LogDetail 
-        log={selectedLog} 
-        open={detailOpen} 
-        onClose={() => setDetailOpen(false)} 
+      <LogDetail
+        log={selectedLog}
+        open={detailOpen}
+        onClose={() => setDetailOpen(false)}
         onViewInContext={enableUrlSync ? handleViewInContext : undefined}
       />
-    </div>
+    </>
   )
 }

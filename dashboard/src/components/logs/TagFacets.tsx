@@ -20,7 +20,7 @@ import {api} from '@/lib/api'
 import {cn} from '@/lib/utils'
 import {Checkbox} from '@/components/ui/checkbox'
 import {ChevronRight, Minus, Tag} from 'lucide-react'
-import type {FacetFilter} from './LogSearchBar'
+import type {FacetFilter} from '@/lib/filters/types'
 
 import type {LogFilterOptionWithCount} from '@/lib/api'
 
