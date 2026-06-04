@@ -22,7 +22,7 @@ export interface MergedContainer {
   memLimit: number
   netRxBytes: number
   netTxBytes: number
-  source: 'datadog-agent'
+  source?: string | null
   timestamp?: string
 }
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
@@ -127,7 +127,7 @@ export function ContainerList() {
     queryFn: async () => {
       const res = await api.getContainers({limit: 200})
       const mapped = res.containers.map((c) => ({
-        id: `dd-${c.host}-${c.containerId}`,
+        id: `${c.source ?? 'container'}-${c.host}-${c.containerId}`,
         host: c.host,
         containerId: c.containerId,
         name: c.name,
@@ -138,7 +138,7 @@ export function ContainerList() {
         memLimit: c.memLimit,
         netRxBytes: c.netRxBytes,
         netTxBytes: c.netTxBytes,
-        source: 'datadog-agent' as const,
+        source: c.source,
         timestamp: c.timestamp,
       } satisfies MergedContainer))
       // Deduplicate by (host, containerId), keeping the most recent entry
