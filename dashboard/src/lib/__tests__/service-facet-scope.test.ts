@@ -14,7 +14,7 @@ import {
   serviceScopeKey,
 } from '../service-facet-scope'
 
-const projects = [
+const services = [
   {
     id: 1,
     resourceId: 'svc-api',
@@ -47,7 +47,7 @@ describe('service facet scope', () => {
 
   it('uses explicit included services minus exclusions', () => {
     expect(serviceNamesForQuery(
-      projects,
+      services,
       ['Worker Service', 'API Service', 'Worker Service'],
       ['API Service']
     )).toEqual(['Worker Service'])
@@ -55,22 +55,22 @@ describe('service facet scope', () => {
 
   it('deduplicates and sorts included services', () => {
     expect(serviceNamesForQuery(
-      projects,
+      services,
       ['Worker Service', 'API Service', 'Worker Service'],
       []
     )).toEqual(['API Service', 'Worker Service'])
   })
 
-  it('uses all projects when only exclusions are selected', () => {
+  it('uses all services when only exclusions are selected', () => {
     expect(serviceNamesForQuery(
-      projects,
+      services,
       [],
       ['Worker Service']
     )).toEqual(['API Service'])
   })
 
   it('returns no query services when no service filters are active', () => {
-    expect(serviceNamesForQuery(projects, [], [])).toEqual([])
+    expect(serviceNamesForQuery(services, [], [])).toEqual([])
   })
 
   it('builds stable scope keys', () => {
@@ -79,8 +79,8 @@ describe('service facet scope', () => {
     expect(serviceScopeKey(['API Service', 'Worker|Service'], true)).toBe('["API Service","Worker|Service"]')
   })
 
-  it('builds service rail options from projects', () => {
-    expect(serviceRailSections(projects)).toEqual([
+  it('builds service rail options from services', () => {
+    expect(serviceRailSections(services)).toEqual([
       {
         key: 'service',
         label: 'Service',
@@ -91,8 +91,8 @@ describe('service facet scope', () => {
   })
 
   it('resolves the first accessible service for legacy home queries', () => {
-    expect(primaryServiceResourceId(projects)).toBe('svc-api')
-    expect(hasAccessibleServices(projects)).toBe(true)
+    expect(primaryServiceResourceId(services)).toBe('svc-api')
+    expect(hasAccessibleServices(services)).toBe(true)
     expect(primaryServiceResourceId([])).toBeUndefined()
     expect(hasAccessibleServices([])).toBe(false)
   })

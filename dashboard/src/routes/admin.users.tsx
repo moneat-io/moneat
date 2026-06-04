@@ -411,7 +411,7 @@ function AdminUsersPage() {
               This action cannot be undone. This will permanently delete the selected {selectedUsers.size === 1 ? 'user' : 'users'} and all associated data including:
               <ul className="list-disc list-inside mt-2 space-y-1">
                 <li>Organizations (if they are the sole member)</li>
-                <li>Projects and project keys</li>
+                <li>Services and service keys</li>
                 <li>Auth tokens and sessions</li>
                 <li>Notification preferences</li>
                 <li>All related events and data</li>

@@ -3,6 +3,7 @@ import {createFileRoute} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {useAnalyticsParams} from '@/contexts/UseAnalyticsParams'
+import {serviceNamesForQuery} from '@/lib/service-facet-scope'
 import {AnalyticsFilterBar} from '@/components/analytics/AnalyticsFilterBar'
 import {AnalyticsKpiCards, AnalyticsKpiCardsSkeleton} from '@/components/analytics/AnalyticsKpiCards'
 import {AnalyticsChart} from '@/components/analytics/AnalyticsChart'
@@ -46,21 +47,6 @@ function facetValues(filters: readonly FacetFilter[], key: string, exclude: bool
     .map((filter) => filter.value)
 }
 
-function serviceNamesForQuery(
-  projects: readonly Project[],
-  includedServices: readonly string[],
-  excludedServices: readonly string[]
-): string[] {
-  if (includedServices.length === 0 && excludedServices.length === 0) return []
-
-  const excluded = new Set(excludedServices)
-  const candidates = includedServices.length > 0
-    ? includedServices
-    : projects.map((project) => project.name)
-
-  return candidates.filter((service) => !excluded.has(service))
-}
-
 function analyticsScopeKey(serviceNames: readonly string[], hasServiceFilters: boolean): string {
   if (!hasServiceFilters) return 'all-services'
   if (serviceNames.length === 0) return 'no-services'
@@ -71,9 +57,9 @@ function analyticsServiceParams(serviceNames: readonly string[]): Pick<Analytics
   return serviceNames.length > 0 ? {services: [...serviceNames]} : {}
 }
 
-function findSetupProject(projects: readonly Project[], serviceNames: readonly string[]): Project | undefined {
-  if (serviceNames.length === 0) return projects[0]
-  return projects.find((project) => project.name === serviceNames[0]) ?? projects[0]
+function findSetupService(services: readonly Project[], serviceNames: readonly string[]): Project | undefined {
+  if (serviceNames.length === 0) return services[0]
+  return services.find((service) => service.name === serviceNames[0]) ?? services[0]
 }
 
 function AnalyticsOverview() {
@@ -83,12 +69,12 @@ function AnalyticsOverview() {
   const [breakdownTab, setBreakdownTab] = useState('pages')
   const [analyticsTab, setAnalyticsTab] = useState('web')
 
-  const {data: projects, isLoading: projectsLoading, error: projectsError} = useQuery({
+  const {data: services, isLoading: servicesLoading, error: servicesError} = useQuery({
     queryKey: ['projects'],
     queryFn: () => api.getProjects(),
   })
 
-  const projectList = projects ?? []
+  const serviceList = services ?? []
   const includedServices = useMemo(
     () => facetValues(facetFilters, 'service', false),
     [facetFilters]
@@ -99,13 +85,13 @@ function AnalyticsOverview() {
   )
   const hasServiceFilters = includedServices.length > 0 || excludedServices.length > 0
   const serviceNames = useMemo(
-    () => serviceNamesForQuery(projectList, includedServices, excludedServices),
-    [projectList, includedServices, excludedServices]
+    () => serviceNamesForQuery(serviceList, includedServices, excludedServices),
+    [serviceList, includedServices, excludedServices]
   )
   const scopeKey = analyticsScopeKey(serviceNames, hasServiceFilters)
-  const hasAnalyticsScope = projectList.length > 0 && (!hasServiceFilters || serviceNames.length > 0)
+  const hasAnalyticsScope = serviceList.length > 0 && (!hasServiceFilters || serviceNames.length > 0)
   const serviceParams = useMemo(() => analyticsServiceParams(serviceNames), [serviceNames])
-  const setupProject = findSetupProject(projectList, serviceNames)
+  const setupService = findSetupService(serviceList, serviceNames)
 
   const dateParams = useMemo((): AnalyticsParams => ({
     period,
@@ -135,10 +121,10 @@ function AnalyticsOverview() {
         key: 'service',
         label: 'Service',
         color: 'bg-primary',
-        options: projectList.map((project) => ({value: project.name})),
+        options: serviceList.map((service) => ({value: service.name})),
       },
     ],
-    [projectList]
+    [serviceList]
   )
 
   const {data: overview, isLoading: overviewLoading} = useQuery({
@@ -232,19 +218,19 @@ function AnalyticsOverview() {
     setFilters([...filters, {property, operator: 'is', value: item.name}])
   }
 
-  if (projectsLoading) {
+  if (servicesLoading) {
     return <div className="p-8 text-sm text-muted-foreground">Loading analytics...</div>
   }
 
-  if (projectsError) {
+  if (servicesError) {
     return (
       <div className="p-8 text-destructive">
-        Failed to load services: {projectsError instanceof Error ? projectsError.message : 'Unknown error'}
+        Failed to load services: {servicesError instanceof Error ? servicesError.message : 'Unknown error'}
       </div>
     )
   }
 
-  if (projectList.length === 0) {
+  if (serviceList.length === 0) {
     return (
       <div className="py-10">
         <EmptyState
@@ -288,7 +274,7 @@ function AnalyticsOverview() {
 
             <TabsContent value="web" className="mt-2 space-y-2">
               {!overviewLoading && !hasWebAnalytics ? (
-                <WebAnalyticsEmptyState project={setupProject} />
+                <WebAnalyticsEmptyState service={setupService} />
               ) : (
                 <>
                   <AnalyticsFilterBar filters={filters} onFiltersChange={setFilters} />
@@ -447,8 +433,8 @@ function AnalyticsOverview() {
                 <ProductAnalyticsTab scopeId={ORGANIZATION_ANALYTICS_SCOPE} params={productParams} />
               ) : (
                 <ProductAnalyticsEmptyState
-                  project={setupProject}
-                  projectId={setupProject?.resourceId ?? 'your-service-id'}
+                  service={setupService}
+                  serviceId={setupService?.resourceId ?? 'your-service-id'}
                 />
               )}
             </TabsContent>
@@ -459,9 +445,9 @@ function AnalyticsOverview() {
   )
 }
 
-function WebAnalyticsEmptyState({project}: {project?: Project}) {
-  const scriptHost = getProjectApiHost(project)
-  const publicKey = getProjectPublicKey(project)
+function WebAnalyticsEmptyState({service}: {service?: Project}) {
+  const scriptHost = getServiceApiHost(service)
+  const publicKey = getServicePublicKey(service)
   const scriptCode = `<script
   defer
   data-domain="yoursite.com"
@@ -511,14 +497,14 @@ function WebAnalyticsEmptyState({project}: {project?: Project}) {
   )
 }
 
-function getProjectPublicKey(project?: Project): string {
-  if (!project?.dsn) return 'your-project-public-key'
+function getServicePublicKey(service?: Project): string {
+  if (!service?.dsn) return 'your-service-public-key'
 
   try {
-    const url = new URL(project.dsn)
-    return url.username || 'your-project-public-key'
+    const url = new URL(service.dsn)
+    return url.username || 'your-service-public-key'
   } catch {
-    return 'your-project-public-key'
+    return 'your-service-public-key'
   }
 }
 
@@ -677,9 +663,9 @@ function ProductFunnelResults({
   )
 }
 
-function ProductAnalyticsEmptyState({project, projectId}: {project?: Project; projectId: string}) {
-  const apiHost = getProjectApiHost(project)
-  const endpoint = `${apiHost}/v1/analytics/${projectId}/events`
+function ProductAnalyticsEmptyState({service, serviceId}: {service?: Project; serviceId: string}) {
+  const apiHost = getServiceApiHost(service)
+  const endpoint = `${apiHost}/v1/analytics/${serviceId}/events`
   const nodeCode = `await fetch('${endpoint}', {
   method: 'POST',
   headers: {
@@ -754,11 +740,11 @@ function ProductAnalyticsEmptyState({project, projectId}: {project?: Project; pr
   )
 }
 
-function getProjectApiHost(project?: Project): string {
-  if (!project?.dsn) return 'https://your-moneat-instance.com'
+function getServiceApiHost(service?: Project): string {
+  if (!service?.dsn) return 'https://your-moneat-instance.com'
 
   try {
-    const url = new URL(project.dsn)
+    const url = new URL(service.dsn)
     return `${url.protocol}//${url.host}`
   } catch {
     return 'https://your-moneat-instance.com'

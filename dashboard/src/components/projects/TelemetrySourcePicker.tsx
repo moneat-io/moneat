@@ -39,7 +39,7 @@ interface TelemetrySourcePickerProps {
 
 /**
  * Controlled grid of telemetry sources (OpenTelemetry / Sentry SDK / Datadog Agent).
- * Extracted from ProjectSetupForm so the same picker drives both service creation
+ * Extracted from ServiceSetupForm so the same picker drives both service creation
  * and per-service configuration. Toggling keeps at least one source selected
  * (via toggleTelemetrySourceId).
  */

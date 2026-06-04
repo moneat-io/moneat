@@ -123,7 +123,7 @@ function AdminTelemetryPage() {
                   <TableHead className="text-xs">SSL</TableHead>
                   <TableHead className="text-xs text-right">CPU</TableHead>
                   <TableHead className="text-xs text-right">Memory</TableHead>
-                  <TableHead className="text-xs text-right">Projects</TableHead>
+                  <TableHead className="text-xs text-right">Services</TableHead>
                   <TableHead className="text-xs text-right">Users</TableHead>
                   <TableHead className="text-xs text-right">Events</TableHead>
                   <TableHead className="text-xs text-right">Issues</TableHead>

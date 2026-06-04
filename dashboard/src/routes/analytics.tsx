@@ -15,13 +15,13 @@ export const Route = createFileRoute('/analytics')({
 function AnalyticsLayoutInner() {
   const {period, setPeriod, customFrom, customTo, onCustomRangeChange} = useAnalyticsParams()
 
-  const {data: projects} = useQuery({
+  const {data: services} = useQuery({
     queryKey: ['projects'],
     queryFn: () => api.getProjects(),
   })
 
-  const projectId = primaryServiceResourceId(projects)
-  const project = projects?.find(p => p.resourceId === projectId)
+  const serviceId = primaryServiceResourceId(services)
+  const service = services?.find((candidate) => candidate.resourceId === serviceId)
 
   return (
     <div className="p-3 space-y-2">
@@ -33,7 +33,7 @@ function AnalyticsLayoutInner() {
           <div>
             <h1 className="text-lg font-semibold leading-tight">Analytics</h1>
             <p className="text-muted-foreground text-xs">
-              {project ? `${project.name} — ` : ''}Privacy-focused web analytics
+              {service ? `${service.name} — ` : ''}Privacy-focused web analytics
             </p>
           </div>
         </div>
@@ -46,7 +46,7 @@ function AnalyticsLayoutInner() {
             customTo={customTo}
             onCustomRangeChange={onCustomRangeChange}
           />
-          {projectId && <AnalyticsRealtimeBadge projectId={projectId} />}
+          {serviceId && <AnalyticsRealtimeBadge serviceId={serviceId} />}
         </div>
       </div>
 

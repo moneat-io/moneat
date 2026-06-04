@@ -526,7 +526,7 @@ function AdminOrgDetailPage() {
         </Card>
       )}
 
-      {/* Members & Projects */}
+      {/* Members & Services */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
@@ -608,9 +608,9 @@ function AdminOrgDetailPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Projects</CardTitle>
+            <CardTitle className="text-base">Services</CardTitle>
             <CardDescription>
-              {org.projectCount} project{org.projectCount !== 1 ? 's' : ''}
+              {org.projectCount} service{org.projectCount !== 1 ? 's' : ''}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -642,7 +642,7 @@ function AdminOrgDetailPage() {
                 </TableBody>
               </Table>
             ) : (
-              <EmptyState message="No projects" icon={FolderKanban} />
+              <EmptyState message="No services" icon={FolderKanban} />
             )}
           </CardContent>
         </Card>

@@ -216,7 +216,7 @@ describe('Analytics index service facets', () => {
     expect(screen.getByText('View Full Documentation')).toBeInTheDocument()
   })
 
-  it('renders the web setup state with fallback project identifiers', async () => {
+  it('renders the web setup state with fallback service identifiers', async () => {
     mockApi.getProjects.mockResolvedValue([{...mockProjects[0], dsn: 'not a valid url'}])
     mockApi.getAnalyticsOverview.mockResolvedValue({
       uniqueVisitors: 0,

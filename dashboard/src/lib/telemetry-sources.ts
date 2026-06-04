@@ -38,7 +38,7 @@ export interface MonitorHostUsage {
 }
 
 export interface TelemetrySourceStatusInput {
-  projectEventCount?: number
+  serviceEventCount?: number
   otlpKeys?: KeyUsage[]
   agentKeys?: KeyUsage[]
   monitorHosts?: MonitorHostUsage[]
@@ -141,20 +141,25 @@ export function toggleTelemetrySourceId(
   return [...selectedSourceIds, sourceId]
 }
 
-export function telemetrySourcesStorageKey(projectId: string | number): string {
-  return `moneat:project:${projectId}:telemetry-sources`
+export function telemetrySourcesStorageKey(serviceId: string | number): string {
+  return `moneat:service:${serviceId}:telemetry-sources`
 }
 
-export function loadTelemetrySourceIdsForProject(projectId: string | number): TelemetrySourceId[] {
-  const rawValue = globalThis.localStorage?.getItem(telemetrySourcesStorageKey(projectId))
+function legacyTelemetrySourcesStorageKey(serviceId: string | number): string {
+  return `moneat:project:${serviceId}:telemetry-sources`
+}
+
+export function loadTelemetrySourceIdsForService(serviceId: string | number): TelemetrySourceId[] {
+  const rawValue = globalThis.localStorage?.getItem(telemetrySourcesStorageKey(serviceId)) ??
+    globalThis.localStorage?.getItem(legacyTelemetrySourcesStorageKey(serviceId))
   return parseTelemetrySourceIds(rawValue)
 }
 
-export function storeTelemetrySourceIdsForProject(
-  projectId: string | number,
+export function storeTelemetrySourceIdsForService(
+  serviceId: string | number,
   sourceIds: TelemetrySourceId[]
 ): void {
-  globalThis.localStorage?.setItem(telemetrySourcesStorageKey(projectId), serializeTelemetrySourceIds(sourceIds))
+  globalThis.localStorage?.setItem(telemetrySourcesStorageKey(serviceId), serializeTelemetrySourceIds(sourceIds))
 }
 
 export function getTelemetrySourceStatus(
@@ -162,11 +167,11 @@ export function getTelemetrySourceStatus(
   input: TelemetrySourceStatusInput
 ): TelemetrySourceStatus {
   if (sourceId === 'sentry-sdk') {
-    if ((input.projectEventCount ?? 0) > 0) {
+    if ((input.serviceEventCount ?? 0) > 0) {
       return {
         state: 'receiving',
         label: 'Receiving',
-        detail: 'Moneat has received project events.',
+        detail: 'Moneat has received service events.',
       }
     }
     return {

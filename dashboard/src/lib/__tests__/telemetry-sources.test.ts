@@ -2,10 +2,10 @@ import {describe, expect, it} from 'vitest'
 import {
   ALL_TELEMETRY_SOURCE_IDS,
   getTelemetrySourceStatus,
-  loadTelemetrySourceIdsForProject,
+  loadTelemetrySourceIdsForService,
   parseTelemetrySourceIds,
   serializeTelemetrySourceIds,
-  storeTelemetrySourceIdsForProject,
+  storeTelemetrySourceIdsForService,
   toggleTelemetrySourceId,
 } from '@/lib/telemetry-sources'
 
@@ -29,15 +29,15 @@ describe('telemetry-sources', () => {
     expect(toggleTelemetrySourceId(['opentelemetry'], 'opentelemetry')).toEqual(['opentelemetry'])
   })
 
-  it('stores source selections per project', () => {
-    storeTelemetrySourceIdsForProject(42, ['sentry-sdk', 'opentelemetry'])
-    expect(loadTelemetrySourceIdsForProject(42)).toEqual(['sentry-sdk', 'opentelemetry'])
-    expect(loadTelemetrySourceIdsForProject(43)).toEqual([])
+  it('stores source selections per service', () => {
+    storeTelemetrySourceIdsForService(42, ['sentry-sdk', 'opentelemetry'])
+    expect(loadTelemetrySourceIdsForService(42)).toEqual(['sentry-sdk', 'opentelemetry'])
+    expect(loadTelemetrySourceIdsForService(43)).toEqual([])
   })
 
-  it('reports Sentry-compatible SDK progress from project events', () => {
-    expect(getTelemetrySourceStatus('sentry-sdk', {projectEventCount: 0}).state).toBe('waiting')
-    expect(getTelemetrySourceStatus('sentry-sdk', {projectEventCount: 1}).state).toBe('receiving')
+  it('reports Sentry-compatible SDK progress from service events', () => {
+    expect(getTelemetrySourceStatus('sentry-sdk', {serviceEventCount: 0}).state).toBe('waiting')
+    expect(getTelemetrySourceStatus('sentry-sdk', {serviceEventCount: 1}).state).toBe('receiving')
   })
 
   it('reports OTLP-style progress from API key usage', () => {

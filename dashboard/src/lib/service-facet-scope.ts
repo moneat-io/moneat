@@ -1,6 +1,8 @@
 import type {Issue, IssueListParams, Project} from '@/lib/api'
 import type {FacetFilter, FacetRailSection} from '@/lib/filters/types'
 
+type ServiceList = readonly Project[] | null | undefined
+
 export const HOME_OVERVIEW_ISSUES_QUERY = {
   page: 1,
   limit: 100,
@@ -22,12 +24,12 @@ export function facetValues(filters: readonly FacetFilter[], key: string, exclud
     .map((filter) => filter.value)
 }
 
-export function hasAccessibleServices(projects: readonly Project[] | null | undefined): boolean {
-  return (projects?.length ?? 0) > 0
+export function hasAccessibleServices(services: ServiceList): boolean {
+  return (services?.length ?? 0) > 0
 }
 
-export function primaryServiceResourceId(projects: readonly Project[] | null | undefined): string | undefined {
-  return projects?.[0]?.resourceId
+export function primaryServiceResourceId(services: ServiceList): string | undefined {
+  return services?.[0]?.resourceId
 }
 
 export function issueDetailSearch(issue: Pick<Issue, 'projectResourceId'>): {projectId: string} {
@@ -35,7 +37,7 @@ export function issueDetailSearch(issue: Pick<Issue, 'projectResourceId'>): {pro
 }
 
 export function serviceNamesForQuery(
-  projects: readonly Project[],
+  services: readonly Project[],
   includedServices: readonly string[],
   excludedServices: readonly string[]
 ): string[] {
@@ -44,7 +46,7 @@ export function serviceNamesForQuery(
   const excluded = new Set(excludedServices)
   const candidates = includedServices.length > 0
     ? includedServices
-    : projects.map((project) => project.name)
+    : services.map((service) => service.name)
 
   return [...new Set(candidates)]
     .filter((service) => !excluded.has(service))
@@ -57,13 +59,13 @@ export function serviceScopeKey(serviceNames: readonly string[], hasServiceFilte
   return JSON.stringify(serviceNames)
 }
 
-export function serviceRailSections(projects: readonly Project[]): FacetRailSection[] {
+export function serviceRailSections(services: readonly Project[]): FacetRailSection[] {
   return [
     {
       key: 'service',
       label: 'Service',
       color: 'bg-primary',
-      options: projects.map((project) => ({value: project.name})),
+      options: services.map((service) => ({value: service.name})),
     },
   ]
 }

@@ -73,12 +73,12 @@ import {APP_OVERVIEW_HREF, APP_OVERVIEW_SEARCH, isAppOverviewSearch} from '@/lib
 import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
 import {useCommandPalette} from '@/hooks/useCommandPalette'
 import {
-  ProjectSetupForm,
-  type ProjectSetupSubmission,
-} from '@/components/projects/ProjectSetupForm'
+  ServiceSetupForm,
+  type ServiceSetupSubmission,
+} from '@/components/projects/ServiceSetupForm'
 import {
   serializeTelemetrySourceIds,
-  storeTelemetrySourceIdsForProject,
+  storeTelemetrySourceIdsForService,
 } from '@/lib/telemetry-sources'
 import {primaryServiceResourceId} from '@/lib/service-facet-scope'
 
@@ -105,13 +105,13 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
   const { data: features } = useEnterpriseFeatures()
   const { openPalette } = useCommandPalette() ?? {}
 
-  // Create project dialog state
+  // Create service dialog state
   const [showCreateDialog, setShowCreateDialog] = useState(false)
 
   useEffect(() => {
     const handler = () => setShowCreateDialog(true)
-    globalThis.addEventListener('open-create-project-dialog', handler)
-    return () => globalThis.removeEventListener('open-create-project-dialog', handler)
+    globalThis.addEventListener('open-create-service-dialog', handler)
+    return () => globalThis.removeEventListener('open-create-service-dialog', handler)
   }, [])
   const { data: user } = useQuery({
     queryKey: ['currentUser'],
@@ -126,48 +126,48 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
   })
   const primaryServiceId = primaryServiceResourceId(projects)
 
-  const createProjectMutation = useMutation({
-    mutationFn: (data: ProjectSetupSubmission) =>
+  const createServiceMutation = useMutation({
+    mutationFn: (data: ServiceSetupSubmission) =>
       api.createProject(data.name, data.framework, data.targets),
-    onSuccess: (project, submission) => {
-      storeTelemetrySourceIdsForProject(project.resourceId, submission.sourceIds)
-      trackEvent('Project Create', {
-        framework: project.framework || 'none',
+    onSuccess: (service, submission) => {
+      storeTelemetrySourceIdsForService(service.resourceId, submission.sourceIds)
+      trackEvent('Service Create', {
+        framework: service.framework || 'none',
         sources: serializeTelemetrySourceIds(submission.sourceIds),
       })
       queryClient.invalidateQueries({ queryKey: ['projects'] })
       resetCreateForm()
       navigate({
         to: '/projects/$projectId',
-        params: { projectId: project.resourceId },
+        params: { projectId: service.resourceId },
         search: { sources: serializeTelemetrySourceIds(submission.sourceIds) },
       })
     },
     onError: (error: Error) => {
       if (error.message.includes('project_limit_reached')) {
         toast({
-          title: 'Project Limit Reached',
+          title: 'Service Limit Reached',
           description: (
             <>
-              You've reached the maximum number of projects for your plan.{' '}
+              You've reached the maximum number of services for your plan.{' '}
               <Link to="/settings" search={{tab: 'billing'}} className="underline font-medium">
                 Upgrade your plan
               </Link>{' '}
-              to add more projects.
+              to add more services.
             </>
           ),
           variant: 'destructive',
         })
       } else if (error.message.includes('already exists')) {
         toast({
-          title: 'Project Already Exists',
-          description: 'A project with this name already exists. Please choose a different name.',
+          title: 'Service Already Exists',
+          description: 'A service with this name already exists. Please choose a different name.',
           variant: 'destructive',
         })
       } else {
         toast({
           title: 'Error',
-          description: error.message || 'Failed to create project. Please try again.',
+          description: error.message || 'Failed to create service. Please try again.',
           variant: 'destructive',
         })
       }
@@ -176,7 +176,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
 
   const resetCreateForm = () => {
     setShowCreateDialog(false)
-    createProjectMutation.reset()
+    createServiceMutation.reset()
   }
 
   type NavGroupId = 'core' | 'infrastructure' | 'insights' | 'operations' | 'analytics' | 'management'
@@ -620,11 +620,11 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
             </DialogDescription>
           </DialogHeader>
 
-          <ProjectSetupForm
+          <ServiceSetupForm
             autoFocus
-            isSubmitting={createProjectMutation.isPending}
+            isSubmitting={createServiceMutation.isPending}
             onCancel={resetCreateForm}
-            onSubmit={(submission) => createProjectMutation.mutate(submission)}
+            onSubmit={(submission) => createServiceMutation.mutate(submission)}
           />
         </DialogContent>
       </Dialog>

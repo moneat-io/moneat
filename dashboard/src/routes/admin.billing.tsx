@@ -1137,8 +1137,8 @@ function AdminBillingPage() {
               {/* Specs */}
               <div className="space-y-1.5">
                 <Label htmlFor="maxProjects">
-                  Max Projects
-                  <HelpTip text="Maximum number of projects an organization on this tier can create. Leave blank for unlimited." />
+                  Max Services
+                  <HelpTip text="Maximum number of services an organization on this tier can create. Leave blank for unlimited." />
                 </Label>
                 <Input
                   id="maxProjects"
@@ -1150,7 +1150,7 @@ function AdminBillingPage() {
                     setCreateForm((p) => ({...p, maxProjects: val}))
                   }}
                 />
-                <FieldHint>{createForm.maxProjects ? `${createForm.maxProjects} projects` : 'Unlimited projects'}</FieldHint>
+                <FieldHint>{createForm.maxProjects ? `${createForm.maxProjects} services` : 'Unlimited services'}</FieldHint>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="maxSystems">
@@ -1909,7 +1909,7 @@ function AdminBillingPage() {
                 <p>Monthly Data Limit: {Math.round(targetTierConfig.monthlyGbLimit / BYTES_PER_GB)} GB</p>
                 <p>LLM Events: {formatQuotaLimit(targetTierConfig.monthlyLlmEventLimit ?? 0)}</p>
                 <p>Retention: {retentionSummary(targetTierConfig)}</p>
-                <p>Max Projects: {targetTierConfig.maxProjects ?? 'Unlimited'}</p>
+                <p>Max Services: {targetTierConfig.maxProjects ?? 'Unlimited'}</p>
                 <p>Max Systems: {targetTierConfig.maxSystems}</p>
                 <p>PAYG: {targetTierConfig.paygEnabled ? 'Enabled' : 'Disabled'}</p>
               </div>
@@ -2113,7 +2113,7 @@ function CreateConfigSummary({tier, form}: {tier: string; form: CreateFormState}
       <p><strong>Trial:</strong> {form.trialDays} day(s)</p>
       <p><strong>LLM Events:</strong> {formatQuotaLimit(form.monthlyLlmEventLimit)}</p>
       <p><strong>Retention:</strong> {createFormRetentionSummary(form)}</p>
-      <p><strong>Max Projects:</strong> {form.maxProjects || 'Unlimited'}</p>
+      <p><strong>Max Services:</strong> {form.maxProjects || 'Unlimited'}</p>
       <p><strong>Max Systems:</strong> {form.maxSystems}</p>
       <p><strong>Monitor Interval:</strong> {formatInterval(form.monitorIntervalSeconds)}</p>
       <p>
@@ -2242,7 +2242,7 @@ function ChangeSummary({
   const formMaxProjects = form.maxProjects.trim() ? Number(form.maxProjects) : null
   if (current.maxProjects !== formMaxProjects) {
     changes.push({
-      field: 'Max Projects',
+      field: 'Max Services',
       from: current.maxProjects != null ? String(current.maxProjects) : 'Unlimited',
       to: formMaxProjects != null ? String(formMaxProjects) : 'Unlimited',
     })

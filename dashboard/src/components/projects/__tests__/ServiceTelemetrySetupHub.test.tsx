@@ -3,7 +3,7 @@ import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {fireEvent, render, screen, waitFor} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
-import {ProjectTelemetrySetupHub} from '@/components/projects/ProjectTelemetrySetupHub'
+import {ServiceTelemetrySetupHub} from '@/components/projects/ServiceTelemetrySetupHub'
 import type {Project} from '@/lib/api'
 
 const {mockApi, mockNavigate, mockRouterInvalidate, mockToast} = vi.hoisted(() => ({
@@ -34,7 +34,7 @@ vi.mock('@tanstack/react-router', () => ({
   useRouter: () => ({invalidate: mockRouterInvalidate}),
 }))
 
-const baseProject: Project = {
+const baseService: Project = {
   id: 1,
   resourceId: 'svc-checkout',
   name: 'Checkout API',
@@ -59,18 +59,18 @@ function stubClipboard(writeText = vi.fn()) {
   return writeText
 }
 
-function renderHub(project: Project = baseProject, selectedSourcesParam?: string) {
+function renderHub(service: Project = baseService, selectedSourcesParam?: string) {
   const queryClient = new QueryClient({
     defaultOptions: {queries: {retry: false}, mutations: {retry: false}},
   })
   return render(
     <QueryClientProvider client={queryClient}>
-      <ProjectTelemetrySetupHub project={project} selectedSourcesParam={selectedSourcesParam} />
+      <ServiceTelemetrySetupHub service={service} selectedSourcesParam={selectedSourcesParam} />
     </QueryClientProvider>
   )
 }
 
-describe('ProjectTelemetrySetupHub', () => {
+describe('ServiceTelemetrySetupHub', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     globalThis.localStorage.clear()
@@ -91,7 +91,7 @@ describe('ProjectTelemetrySetupHub', () => {
     }
   })
 
-  it('frames the project route as the sources and ingestion home for a service', async () => {
+  it('frames sources and ingestion as the home for a service', async () => {
     renderHub()
 
     expect(screen.getByRole('heading', {name: 'Sources / Ingestion'})).toBeInTheDocument()
@@ -115,7 +115,7 @@ describe('ProjectTelemetrySetupHub', () => {
     const writeText = stubClipboard()
     mockApi.getProjectStats.mockResolvedValueOnce({totalEvents: 12})
 
-    renderHub(baseProject, 'sentry-sdk')
+    renderHub(baseService, 'sentry-sdk')
 
     expect(screen.getByRole('heading', {name: 'Connect a Sentry-compatible SDK'})).toBeInTheDocument()
     expect((await screen.findAllByText('Receiving')).length).toBeGreaterThan(0)
@@ -132,7 +132,7 @@ describe('ProjectTelemetrySetupHub', () => {
   it('creates an OTLP key and shows the one-time secret in the ingestion snippets', async () => {
     const user = userEvent.setup()
 
-    renderHub(baseProject, 'opentelemetry')
+    renderHub(baseService, 'opentelemetry')
 
     await user.click(screen.getByRole('button', {name: 'Create OTLP key'}))
 
@@ -145,8 +145,8 @@ describe('ProjectTelemetrySetupHub', () => {
 
   it('shows service DSNs for target platforms and can add another platform', async () => {
     const user = userEvent.setup()
-    const targetProject: Project = {
-      ...baseProject,
+    const targetService: Project = {
+      ...baseService,
       framework: 'unity',
       keys: [
         {platformTarget: null, dsn: 'https://public@example.test/default'},
@@ -154,7 +154,7 @@ describe('ProjectTelemetrySetupHub', () => {
       ],
     }
 
-    renderHub(targetProject, 'sentry-sdk')
+    renderHub(targetService, 'sentry-sdk')
 
     expect(await screen.findByText('Target platforms')).toBeInTheDocument()
     expect(screen.getByText('Service DSNs')).toBeInTheDocument()
@@ -174,7 +174,7 @@ describe('ProjectTelemetrySetupHub', () => {
     const user = userEvent.setup()
     mockApi.getAgentApiKeys.mockResolvedValueOnce({keys: [{lastUsedAt: null}]})
 
-    renderHub(baseProject, 'datadog-agent')
+    renderHub(baseService, 'datadog-agent')
 
     expect(screen.getByRole('heading', {name: 'Connect a Datadog Agent'})).toBeInTheDocument()
     expect((await screen.findAllByText('Key created')).length).toBeGreaterThan(0)

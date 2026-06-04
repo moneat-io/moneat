@@ -1,14 +1,14 @@
 import {render, screen} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {describe, expect, it, vi} from 'vitest'
-import {ProjectSetupForm, type ProjectSetupSubmission} from '@/components/projects/ProjectSetupForm'
+import {ServiceSetupForm, type ServiceSetupSubmission} from '@/components/projects/ServiceSetupForm'
 
-describe('ProjectSetupForm', () => {
-  it('submits project, platform, targets, and selected telemetry sources', async () => {
+describe('ServiceSetupForm', () => {
+  it('submits service, platform, targets, and selected telemetry sources', async () => {
     const user = userEvent.setup()
-    const onSubmit = vi.fn<(submission: ProjectSetupSubmission) => void>()
+    const onSubmit = vi.fn<(submission: ServiceSetupSubmission) => void>()
 
-    render(<ProjectSetupForm onSubmit={onSubmit} />)
+    render(<ServiceSetupForm onSubmit={onSubmit} />)
 
     await user.type(screen.getByLabelText('Service name'), 'Checkout API')
     await user.click(screen.getByRole('button', {name: /React$/}))
@@ -24,11 +24,11 @@ describe('ProjectSetupForm', () => {
     })
   })
 
-  it('keeps submit disabled until a project name and platform are selected', async () => {
+  it('keeps submit disabled until a service name and platform are selected', async () => {
     const user = userEvent.setup()
     const onSubmit = vi.fn()
 
-    render(<ProjectSetupForm onSubmit={onSubmit} />)
+    render(<ServiceSetupForm onSubmit={onSubmit} />)
 
     expect(screen.getByRole('button', {name: 'Create Service'})).toBeDisabled()
 
@@ -43,7 +43,7 @@ describe('ProjectSetupForm', () => {
     const user = userEvent.setup()
     const onSubmit = vi.fn()
 
-    render(<ProjectSetupForm onSubmit={onSubmit} />)
+    render(<ServiceSetupForm onSubmit={onSubmit} />)
 
     await user.click(screen.getByRole('button', {name: 'Backend'}))
     expect(screen.getByRole('button', {name: 'Node.js'})).toBeInTheDocument()
@@ -57,9 +57,9 @@ describe('ProjectSetupForm', () => {
 
   it('requires at least one target platform for multi-target apps', async () => {
     const user = userEvent.setup()
-    const onSubmit = vi.fn<(submission: ProjectSetupSubmission) => void>()
+    const onSubmit = vi.fn<(submission: ServiceSetupSubmission) => void>()
 
-    render(<ProjectSetupForm onSubmit={onSubmit} />)
+    render(<ServiceSetupForm onSubmit={onSubmit} />)
 
     await user.type(screen.getByLabelText('Service name'), 'Game client')
     await user.click(screen.getByRole('button', {name: 'Desktop & Gaming'}))
@@ -89,29 +89,29 @@ describe('ProjectSetupForm', () => {
     const onCancel = vi.fn()
 
     const {rerender} = render(
-      <ProjectSetupForm
+      <ServiceSetupForm
         onSubmit={onSubmit}
         onCancel={onCancel}
         cancelLabel="Back"
-        error="Unable to create project"
+        error="Unable to create service"
       />
     )
 
-    expect(screen.getByText('Unable to create project')).toBeInTheDocument()
+    expect(screen.getByText('Unable to create service')).toBeInTheDocument()
     await user.click(screen.getByRole('button', {name: 'Back'}))
     expect(onCancel).toHaveBeenCalledTimes(1)
 
     rerender(
-      <ProjectSetupForm
+      <ServiceSetupForm
         onSubmit={onSubmit}
         onCancel={onCancel}
         cancelLabel="Back"
         isSubmitting
-        submittingLabel="Saving project..."
+        submittingLabel="Saving service..."
       />
     )
 
-    expect(screen.getByRole('button', {name: 'Saving project...'})).toBeDisabled()
+    expect(screen.getByRole('button', {name: 'Saving service...'})).toBeDisabled()
     expect(screen.getByRole('button', {name: 'Back'})).toBeDisabled()
   })
 })
