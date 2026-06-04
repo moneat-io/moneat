@@ -6,13 +6,17 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-import {useMemo, useState, useCallback, memo} from 'react'
+import {
+  useMemo,
+  useState,
+  useCallback,
+  memo,
+  type ComponentType,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+} from 'react'
 import {useQuery} from '@tanstack/react-query'
 import {
-  ReactFlow,
-  Controls,
-  Background,
-  BackgroundVariant,
   Handle,
   Position,
   MarkerType,
@@ -20,11 +24,14 @@ import {
   type Edge,
   type NodeProps,
 } from '@xyflow/react'
-import '@xyflow/react/dist/style.css'
 import Dagre from '@dagrejs/dagre'
 import {api, type ApmServiceMapEntry} from '@/lib/api'
 import {Badge} from '@/components/ui/badge'
-import {Loader2, Database, Globe, Server, Layers, X} from 'lucide-react'
+import {Database, Globe, Server, Layers} from 'lucide-react'
+import {MapCanvas} from '@/components/maps/MapCanvas'
+import {MapDetailPanel} from '@/components/maps/MapDetailPanel'
+import {MapLegend} from '@/components/maps/MapLegend'
+import {MapNodeCard} from '@/components/maps/MapNodeCard'
 
 type ServiceType = 'database' | 'cache' | 'queue' | 'web' | 'service'
 
@@ -47,13 +54,18 @@ const SERVICE_COLORS: Record<ServiceType, string> = {
   service: '#339AF0',
 }
 
-const SERVICE_ICONS: Record<ServiceType, React.ComponentType<{className?: string}>> = {
+const SERVICE_ICONS: Record<ServiceType, ComponentType<{className?: string}>> = {
   database: Database,
   cache: Layers,
   queue: Layers,
   web: Globe,
   service: Server,
 }
+
+const SERVICE_LEGEND_ITEMS = Object.entries(SERVICE_COLORS).map(([type, color]) => ({
+  label: type.charAt(0).toUpperCase() + type.slice(1),
+  color,
+}))
 
 function formatDuration(ns: number): string {
   if (ns < 1_000_000) return `${(ns / 1000).toFixed(0)}µs`
@@ -81,62 +93,67 @@ function buildGraph(
   services: ApmServiceMapEntry[],
   selectedId: string | null,
 ): {nodes: Node[]; edges: Edge[]} {
-  const known = new Set(services.map((s) => s.service))
+  const known = new Set(services.map((service) => service.service))
   const external = new Set<string>()
-  for (const s of services)
-    for (const t of s.callsTo) if (!known.has(t)) external.add(t)
+  for (const service of services) {
+    for (const target of service.callsTo) {
+      if (!known.has(target)) external.add(target)
+    }
+  }
 
   const connected = new Set<string>()
-  const connEdges = new Set<string>()
+  const connectedEdges = new Set<string>()
   if (selectedId) {
     connected.add(selectedId)
-    for (const s of services) {
-      for (const t of s.callsTo) {
-        if (s.service === selectedId || t === selectedId) {
-          connected.add(s.service)
-          connected.add(t)
-          connEdges.add(`${s.service}->${t}`)
+    for (const service of services) {
+      for (const target of service.callsTo) {
+        if (service.service === selectedId || target === selectedId) {
+          connected.add(service.service)
+          connected.add(target)
+          connectedEdges.add(`${service.service}->${target}`)
         }
       }
     }
   }
 
-  const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}))
-  g.setGraph({rankdir: 'LR', nodesep: 50, ranksep: 160, marginx: 40, marginy: 40})
+  const graph = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}))
+  graph.setGraph({rankdir: 'LR', nodesep: 50, ranksep: 160, marginx: 40, marginy: 40})
 
-  for (const s of services) g.setNode(s.service, {width: NODE_W, height: NODE_H})
-  for (const name of external) g.setNode(name, {width: EXT_W, height: EXT_H})
-  for (const s of services) for (const t of s.callsTo) g.setEdge(s.service, t)
+  for (const service of services) graph.setNode(service.service, {width: NODE_W, height: NODE_H})
+  for (const name of external) graph.setNode(name, {width: EXT_W, height: EXT_H})
+  for (const service of services) {
+    for (const target of service.callsTo) graph.setEdge(service.service, target)
+  }
 
-  Dagre.layout(g)
+  Dagre.layout(graph)
 
-  const dim = (id: string) => selectedId !== null && !connected.has(id)
+  const shouldDim = (id: string) => selectedId !== null && !connected.has(id)
 
-  const nodes: Node[] = services.map((s) => {
-    const pos = g.node(s.service)
+  const nodes: Node[] = services.map((service) => {
+    const position = graph.node(service.service)
     return {
-      id: s.service,
+      id: service.service,
       type: 'service',
-      position: {x: pos.x - NODE_W / 2, y: pos.y - NODE_H / 2},
+      position: {x: position.x - NODE_W / 2, y: position.y - NODE_H / 2},
       data: {
-        label: s.service,
-        spanCount: s.spanCount,
-        errorCount: s.errorCount,
-        avgDurationNs: s.avgDurationNs,
-        serviceType: inferServiceType(s.service),
+        label: service.service,
+        spanCount: service.spanCount,
+        errorCount: service.errorCount,
+        avgDurationNs: service.avgDurationNs,
+        serviceType: inferServiceType(service.service),
         isExternal: false,
-        dimmed: dim(s.service),
-        selected: selectedId === s.service,
+        dimmed: shouldDim(service.service),
+        selected: selectedId === service.service,
       } satisfies ServiceNodeData,
     }
   })
 
   for (const name of external) {
-    const pos = g.node(name)
+    const position = graph.node(name)
     nodes.push({
       id: name,
       type: 'service',
-      position: {x: pos.x - EXT_W / 2, y: pos.y - EXT_H / 2},
+      position: {x: position.x - EXT_W / 2, y: position.y - EXT_H / 2},
       data: {
         label: name,
         spanCount: 0,
@@ -144,21 +161,21 @@ function buildGraph(
         avgDurationNs: 0,
         serviceType: inferServiceType(name),
         isExternal: true,
-        dimmed: dim(name),
+        dimmed: shouldDim(name),
         selected: selectedId === name,
       } satisfies ServiceNodeData,
     })
   }
 
   const edges: Edge[] = []
-  for (const s of services) {
-    for (const t of s.callsTo) {
-      const id = `${s.service}->${t}`
-      const isDimmed = selectedId !== null && !connEdges.has(id)
+  for (const service of services) {
+    for (const target of service.callsTo) {
+      const id = `${service.service}->${target}`
+      const isDimmed = selectedId !== null && !connectedEdges.has(id)
       edges.push({
         id,
-        source: s.service,
-        target: t,
+        source: service.service,
+        target,
         type: 'smoothstep',
         animated: !isDimmed && selectedId !== null,
         style: {
@@ -184,7 +201,7 @@ function buildGraph(
 
 // --- Custom node ---
 
-const handleStyle: React.CSSProperties = {
+const handleStyle: CSSProperties = {
   width: 6,
   height: 6,
   border: 'none',
@@ -197,58 +214,35 @@ const ServiceNode = memo(function ServiceNode({data}: NodeProps<Node<ServiceNode
   const hasErrors = data.errorCount > 0
 
   return (
-    <div
-      className={[
-        'rounded-lg border-2 bg-card text-card-foreground',
-        'transition-all duration-200 cursor-pointer',
-        data.selected ? 'ring-2 ring-primary scale-[1.02]' : '',
-        data.dimmed ? 'opacity-25' : '',
-        data.isExternal ? 'border-dashed' : '',
-      ].join(' ')}
-      style={{
-        borderColor: hasErrors && !data.selected
-          ? 'hsl(var(--destructive))'
-          : data.selected
-            ? 'hsl(var(--primary))'
-            : color,
-        minWidth: data.isExternal ? 140 : 180,
-      }}
-    >
+    <>
       <Handle type="target" position={Position.Left} style={handleStyle} />
-
-      <div className="px-3 py-2.5">
-        <div className="flex items-center gap-2">
-          <div
-            className="shrink-0 w-7 h-7 rounded-md flex items-center justify-center"
-            style={{backgroundColor: `${color}22`, color}}
-          >
-            <Icon className="w-4 h-4" />
-          </div>
-          <span className="font-semibold text-sm truncate flex-1">{data.label}</span>
-          {hasErrors && (
-            <span className="shrink-0 w-2.5 h-2.5 rounded-full bg-destructive animate-pulse" />
-          )}
-        </div>
-
-        {!data.isExternal && (
-          <div className="flex items-center gap-3 mt-1.5 text-[11px] text-muted-foreground font-mono">
+      <MapNodeCard
+        title={data.label}
+        subtitle={data.isExternal ? 'External dependency' : undefined}
+        icon={<Icon className="h-4 w-4" />}
+        iconContainerStyle={{backgroundColor: `${color}22`, color}}
+        borderColor={getServiceBorderColor({color, hasErrors, selected: data.selected})}
+        minWidth={data.isExternal ? 140 : 180}
+        selected={data.selected}
+        dimmed={data.dimmed}
+        dashed={data.isExternal}
+        statusIndicator={hasErrors ? (
+          <span className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-destructive" />
+        ) : null}
+        metrics={!data.isExternal ? (
+          <>
             <span>{data.spanCount.toLocaleString()} spans</span>
             <span>{formatDuration(data.avgDurationNs)}</span>
             {hasErrors && (
-              <span className="text-destructive font-semibold">
+              <span className="font-semibold text-destructive">
                 {data.errorCount} err
               </span>
             )}
-          </div>
-        )}
-
-        {data.isExternal && (
-          <p className="text-[11px] text-muted-foreground mt-1">External dependency</p>
-        )}
-      </div>
-
+          </>
+        ) : undefined}
+      />
       <Handle type="source" position={Position.Right} style={handleStyle} />
-    </div>
+    </>
   )
 })
 
@@ -273,118 +267,86 @@ export function ServiceMap() {
     [services, selectedId],
   )
 
-  const onNodeClick = useCallback((_e: React.MouseEvent, node: Node) => {
-    setSelectedId((prev) => (prev === node.id ? null : node.id))
+  const onNodeClick = useCallback((_event: ReactMouseEvent, node: Node) => {
+    setSelectedId((previousId) => (previousId === node.id ? null : node.id))
   }, [])
 
   const onPaneClick = useCallback(() => setSelectedId(null), [])
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    )
-  }
-
-  if (services.length === 0) {
-    return (
-      <div className="text-center py-12 text-muted-foreground">
-        <p className="font-medium">No services found</p>
-        <p className="text-sm mt-1">
-          Service map populates automatically as traces are ingested.
-        </p>
-      </div>
-    )
-  }
-
   const selected = selectedId
-    ? services.find((s) => s.service === selectedId)
+    ? services.find((service) => service.service === selectedId)
     : null
 
   return (
-    <div className="service-map relative h-[calc(100vh-260px)] min-h-[420px] rounded-lg border bg-card/50 overflow-hidden">
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        onNodeClick={onNodeClick}
-        onPaneClick={onPaneClick}
-        nodesDraggable={false}
-        nodesConnectable={false}
-        fitView
-        fitViewOptions={{padding: 0.25}}
-        minZoom={0.2}
-        maxZoom={2}
-        proOptions={{hideAttribution: true}}
-      >
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={24}
-          size={1}
-          className="!bg-background"
-        />
-        <Controls showInteractive={false} />
-      </ReactFlow>
+    <MapCanvas
+      nodes={nodes}
+      edges={edges}
+      nodeTypes={nodeTypes}
+      onNodeClick={onNodeClick}
+      onPaneClick={onPaneClick}
+      isLoading={isLoading}
+      isEmpty={services.length === 0}
+      emptyTitle="No services found"
+      emptyDescription="Service map populates automatically as traces are ingested."
+      className="service-map h-[calc(100vh-260px)] min-h-[420px]"
+    >
+      <MapLegend
+        items={[
+          ...SERVICE_LEGEND_ITEMS,
+          {
+            label: 'External',
+            color: 'hsl(var(--muted-foreground) / 0.4)',
+            dashed: true,
+          },
+        ]}
+      />
 
-      {/* Legend */}
-      <div className="absolute bottom-3 left-3 flex items-center gap-3 bg-card/90 backdrop-blur-sm border rounded-md px-3 py-1.5 text-[11px] text-muted-foreground pointer-events-none">
-        {Object.entries(SERVICE_COLORS).map(([type, c]) => (
-          <span key={type} className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-sm inline-block" style={{backgroundColor: c}} />
-            <span className="capitalize">{type}</span>
-          </span>
-        ))}
-        <span className="flex items-center gap-1.5 ml-1">
-          <span className="w-4 border-t-2 border-dashed border-muted-foreground/40 inline-block" />
-          <span>External</span>
-        </span>
-      </div>
-
-      {/* Detail panel */}
       {selected && (
-        <div className="absolute top-3 right-3 w-60 bg-card border rounded-lg overflow-hidden animate-in fade-in slide-in-from-right-2 duration-200">
-          <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
-            <h3 className="font-semibold text-sm truncate">{selected.service}</h3>
-            <button
-              onClick={() => setSelectedId(null)}
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
+        <MapDetailPanel title={selected.service} onClose={() => setSelectedId(null)}>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Spans</span>
+            <span className="font-mono text-xs">{selected.spanCount.toLocaleString()}</span>
           </div>
-          <div className="px-3 py-2.5 space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Spans</span>
-              <span className="font-mono text-xs">{selected.spanCount.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Avg Duration</span>
-              <span className="font-mono text-xs">{formatDuration(selected.avgDurationNs)}</span>
-            </div>
-            {selected.errorCount > 0 && (
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Errors</span>
-                <Badge variant="destructive" className="text-[10px] h-5">
-                  {selected.errorCount}
-                </Badge>
-              </div>
-            )}
-            {selected.callsTo.length > 0 && (
-              <div className="pt-1 border-t">
-                <span className="text-[11px] text-muted-foreground">Downstream</span>
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {selected.callsTo.map((t) => (
-                    <Badge key={t} variant="secondary" className="text-[10px] h-5">
-                      {t}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Avg Duration</span>
+            <span className="font-mono text-xs">{formatDuration(selected.avgDurationNs)}</span>
           </div>
-        </div>
+          {selected.errorCount > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Errors</span>
+              <Badge variant="destructive" className="h-5 text-[10px]">
+                {selected.errorCount}
+              </Badge>
+            </div>
+          )}
+          {selected.callsTo.length > 0 && (
+            <div className="border-t pt-1">
+              <span className="text-[11px] text-muted-foreground">Downstream</span>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {selected.callsTo.map((target) => (
+                  <Badge key={target} variant="secondary" className="h-5 text-[10px]">
+                    {target}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+        </MapDetailPanel>
       )}
-    </div>
+    </MapCanvas>
   )
+}
+
+function getServiceBorderColor({
+  color,
+  hasErrors,
+  selected,
+}: {
+  color: string
+  hasErrors: boolean
+  selected: boolean
+}): string {
+  if (hasErrors && !selected) return 'hsl(var(--destructive))'
+  if (selected) return 'hsl(var(--primary))'
+  return color
 }

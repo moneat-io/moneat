@@ -17,15 +17,24 @@
 package com.moneat.monitor.routes
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.monitor.models.InfrastructureMapSavedViewsResponse
+import com.moneat.monitor.models.SaveInfrastructureMapViewRequest
+import com.moneat.monitor.services.InfrastructureMapSavedViewService
+import com.moneat.monitor.services.InvalidInfrastructureMapSavedViewException
 import com.moneat.shared.models.Memberships
+import com.moneat.utils.ErrorResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
+import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
+import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
+import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -44,6 +53,17 @@ private val json = Json { ignoreUnknownKeys = true }
 private const val DEFAULT_LIMIT = 100
 private const val MAX_LIMIT = 500
 
+private data class SavedViewScope(
+    val userId: Int,
+    val organizationId: Int
+)
+
+private sealed class OrganizationScopeResult {
+    data class Resolved(val organizationId: Int) : OrganizationScopeResult()
+    object NoAccess : OrganizationScopeResult()
+    object MissingContext : OrganizationScopeResult()
+}
+
 private fun getOrgIdsForUser(userId: Int): List<Int> {
     return transaction {
         Memberships
@@ -55,6 +75,38 @@ private fun getOrgIdsForUser(userId: Int): List<Int> {
 
 private fun orgIdsToChCondition(orgIds: List<Int>): String {
     return orgIds.joinToString(",") { "toUInt64($it)" }
+}
+
+private suspend fun ApplicationCall.resolveSavedViewScope(): SavedViewScope? {
+    val principal = principal<JWTPrincipal>()
+    val userId = principal!!.payload.getClaim("userId").asInt()
+    val organizationIdClaim = principal.payload.getClaim("orgId").asInt()
+
+    return when (val scope = resolveOrganizationId(userId, organizationIdClaim)) {
+        is OrganizationScopeResult.Resolved -> SavedViewScope(userId, scope.organizationId)
+        OrganizationScopeResult.NoAccess -> {
+            respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
+            null
+        }
+        OrganizationScopeResult.MissingContext -> {
+            respond(HttpStatusCode.BadRequest, ErrorResponse("Organization context required"))
+            null
+        }
+    }
+}
+
+private fun resolveOrganizationId(userId: Int, organizationIdClaim: Int?): OrganizationScopeResult {
+    val organizationIds = getOrgIdsForUser(userId)
+    if (organizationIds.isEmpty()) return OrganizationScopeResult.NoAccess
+    if (organizationIdClaim != null) {
+        return if (organizationIdClaim in organizationIds) {
+            OrganizationScopeResult.Resolved(organizationIdClaim)
+        } else {
+            OrganizationScopeResult.NoAccess
+        }
+    }
+    if (organizationIds.size == 1) return OrganizationScopeResult.Resolved(organizationIds.first())
+    return OrganizationScopeResult.MissingContext
 }
 
 private fun parseLimit(limitParam: String?): Int {
@@ -104,9 +156,61 @@ private fun parseJsonEachRow(body: String): List<JsonObject> {
 }
 
 @Suppress("LongMethod", "CyclomaticComplexMethod")
-fun Route.infraRoutes() {
+fun Route.infraRoutes(
+    infrastructureMapSavedViewService: InfrastructureMapSavedViewService = InfrastructureMapSavedViewService(),
+) {
     route("/v1") {
         authenticate("auth-jwt") {
+            // --- Infrastructure map saved views ---
+
+            get("/infra/map/saved-views") {
+                val scope = call.resolveSavedViewScope() ?: return@get
+                val views = infrastructureMapSavedViewService.listViews(
+                    organizationId = scope.organizationId,
+                    userId = scope.userId
+                )
+                call.respond(HttpStatusCode.OK, InfrastructureMapSavedViewsResponse(views))
+            }
+
+            post("/infra/map/saved-views") {
+                val scope = call.resolveSavedViewScope() ?: return@post
+                val request = call.receive<SaveInfrastructureMapViewRequest>()
+                val result =
+                    try {
+                        infrastructureMapSavedViewService.saveView(
+                            organizationId = scope.organizationId,
+                            userId = scope.userId,
+                            request = request
+                        )
+                    } catch (error: InvalidInfrastructureMapSavedViewException) {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse(error.message ?: "Invalid saved view"))
+                        return@post
+                    }
+
+                val statusCode = if (result.created) HttpStatusCode.Created else HttpStatusCode.OK
+                call.respond(statusCode, result.view)
+            }
+
+            delete("/infra/map/saved-views/{id}") {
+                val scope = call.resolveSavedViewScope() ?: return@delete
+                val viewId = call.parameters["id"]?.toIntOrNull()
+                if (viewId == null) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid saved view ID"))
+                    return@delete
+                }
+
+                val deleted = infrastructureMapSavedViewService.deleteView(
+                    organizationId = scope.organizationId,
+                    userId = scope.userId,
+                    viewId = viewId
+                )
+                if (!deleted) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Saved view not found"))
+                    return@delete
+                }
+                call.respond(HttpStatusCode.NoContent)
+            }
+
             // --- Infrastructure Events ---
 
             get("/infra/events") {

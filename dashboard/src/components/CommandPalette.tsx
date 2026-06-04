@@ -61,6 +61,7 @@ import {
   Database,
   Bug,
   Router,
+  Map as MapIcon,
   Sparkles,
 } from 'lucide-react'
 import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
@@ -88,6 +89,7 @@ const PAGE_ITEMS: Array<{
   {label: 'Dashboards', description: 'Custom metrics and visualizations', href: '/dashboards', icon: LayoutDashboard, keywords: ['widgets']},
   {label: 'Feature Flags', description: 'OpenFeature flags and experiments', href: '/feature-flags', icon: Flag, keywords: ['flags', 'openfeature', 'ofrep', 'experiments']},
   {label: 'Monitoring', description: 'Infrastructure and system health', href: '/monitoring', icon: Server, keywords: ['infrastructure', 'systems', 'servers']},
+  {label: 'Monitoring – Map', description: 'Infrastructure map by health, tags, and resources', href: '/monitoring/map', icon: MapIcon, keywords: ['infrastructure map', 'host map', 'containers', 'tags']},
   {label: 'Service Map', description: 'Service dependencies from traces', href: '/monitoring/service-map', icon: Network, keywords: ['service map', 'dependencies', 'traces', 'topology']},
   {label: 'Monitoring – Hosts', description: 'Host metrics and system resources', href: '/monitoring/hosts', icon: Server, keywords: ['infrastructure', 'servers', 'cpu', 'memory', 'disk']},
   {label: 'Monitoring – Containers', description: 'Docker and Kubernetes container metrics', href: '/monitoring/containers', icon: Box, keywords: ['docker', 'kubernetes', 'k8s', 'pods']},

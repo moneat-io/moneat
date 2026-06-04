@@ -110,6 +110,7 @@ import { Route as MonitoringSbomRouteImport } from './routes/monitoring.sbom'
 import { Route as MonitoringProcessesRouteImport } from './routes/monitoring.processes'
 import { Route as MonitoringNetworkDevicesRouteImport } from './routes/monitoring.network-devices'
 import { Route as MonitoringNetworkRouteImport } from './routes/monitoring.network'
+import { Route as MonitoringMapRouteImport } from './routes/monitoring.map'
 import { Route as MonitoringKubernetesRouteImport } from './routes/monitoring.kubernetes'
 import { Route as MonitoringEventsRouteImport } from './routes/monitoring.events'
 import { Route as MonitoringDebuggerRouteImport } from './routes/monitoring.debugger'
@@ -664,6 +665,11 @@ const MonitoringNetworkRoute = MonitoringNetworkRouteImport.update({
   path: '/network',
   getParentRoute: () => MonitoringRoute,
 } as any)
+const MonitoringMapRoute = MonitoringMapRouteImport.update({
+  id: '/map',
+  path: '/map',
+  getParentRoute: () => MonitoringRoute,
+} as any)
 const MonitoringKubernetesRoute = MonitoringKubernetesRouteImport.update({
   id: '/kubernetes',
   path: '/kubernetes',
@@ -981,6 +987,7 @@ export interface FileRoutesByFullPath {
   '/monitoring/debugger': typeof MonitoringDebuggerRoute
   '/monitoring/events': typeof MonitoringEventsRoute
   '/monitoring/kubernetes': typeof MonitoringKubernetesRouteWithChildren
+  '/monitoring/map': typeof MonitoringMapRoute
   '/monitoring/network': typeof MonitoringNetworkRoute
   '/monitoring/network-devices': typeof MonitoringNetworkDevicesRouteWithChildren
   '/monitoring/processes': typeof MonitoringProcessesRoute
@@ -1114,6 +1121,7 @@ export interface FileRoutesByTo {
   '/monitoring/databases': typeof MonitoringDatabasesRoute
   '/monitoring/debugger': typeof MonitoringDebuggerRoute
   '/monitoring/events': typeof MonitoringEventsRoute
+  '/monitoring/map': typeof MonitoringMapRoute
   '/monitoring/network': typeof MonitoringNetworkRoute
   '/monitoring/network-devices': typeof MonitoringNetworkDevicesRouteWithChildren
   '/monitoring/processes': typeof MonitoringProcessesRoute
@@ -1261,6 +1269,7 @@ export interface FileRoutesById {
   '/monitoring/debugger': typeof MonitoringDebuggerRoute
   '/monitoring/events': typeof MonitoringEventsRoute
   '/monitoring/kubernetes': typeof MonitoringKubernetesRouteWithChildren
+  '/monitoring/map': typeof MonitoringMapRoute
   '/monitoring/network': typeof MonitoringNetworkRoute
   '/monitoring/network-devices': typeof MonitoringNetworkDevicesRouteWithChildren
   '/monitoring/processes': typeof MonitoringProcessesRoute
@@ -1410,6 +1419,7 @@ export interface FileRouteTypes {
     | '/monitoring/debugger'
     | '/monitoring/events'
     | '/monitoring/kubernetes'
+    | '/monitoring/map'
     | '/monitoring/network'
     | '/monitoring/network-devices'
     | '/monitoring/processes'
@@ -1543,6 +1553,7 @@ export interface FileRouteTypes {
     | '/monitoring/databases'
     | '/monitoring/debugger'
     | '/monitoring/events'
+    | '/monitoring/map'
     | '/monitoring/network'
     | '/monitoring/network-devices'
     | '/monitoring/processes'
@@ -1689,6 +1700,7 @@ export interface FileRouteTypes {
     | '/monitoring/debugger'
     | '/monitoring/events'
     | '/monitoring/kubernetes'
+    | '/monitoring/map'
     | '/monitoring/network'
     | '/monitoring/network-devices'
     | '/monitoring/processes'
@@ -2534,6 +2546,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MonitoringNetworkRouteImport
       parentRoute: typeof MonitoringRoute
     }
+    '/monitoring/map': {
+      id: '/monitoring/map'
+      path: '/map'
+      fullPath: '/monitoring/map'
+      preLoaderRoute: typeof MonitoringMapRouteImport
+      parentRoute: typeof MonitoringRoute
+    }
     '/monitoring/kubernetes': {
       id: '/monitoring/kubernetes'
       path: '/kubernetes'
@@ -3016,6 +3035,7 @@ interface MonitoringRouteChildren {
   MonitoringDebuggerRoute: typeof MonitoringDebuggerRoute
   MonitoringEventsRoute: typeof MonitoringEventsRoute
   MonitoringKubernetesRoute: typeof MonitoringKubernetesRouteWithChildren
+  MonitoringMapRoute: typeof MonitoringMapRoute
   MonitoringNetworkRoute: typeof MonitoringNetworkRoute
   MonitoringNetworkDevicesRoute: typeof MonitoringNetworkDevicesRouteWithChildren
   MonitoringProcessesRoute: typeof MonitoringProcessesRoute
@@ -3031,6 +3051,7 @@ const MonitoringRouteChildren: MonitoringRouteChildren = {
   MonitoringDebuggerRoute: MonitoringDebuggerRoute,
   MonitoringEventsRoute: MonitoringEventsRoute,
   MonitoringKubernetesRoute: MonitoringKubernetesRouteWithChildren,
+  MonitoringMapRoute: MonitoringMapRoute,
   MonitoringNetworkRoute: MonitoringNetworkRoute,
   MonitoringNetworkDevicesRoute: MonitoringNetworkDevicesRouteWithChildren,
   MonitoringProcessesRoute: MonitoringProcessesRoute,

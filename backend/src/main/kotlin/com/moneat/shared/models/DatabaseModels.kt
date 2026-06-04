@@ -192,6 +192,22 @@ object SidebarPreferenceEvents : Table("sidebar_preference_events") {
     override val primaryKey = PrimaryKey(id)
 }
 
+object InfrastructureMapSavedViews : Table("infrastructure_map_saved_views") {
+    val id = integer("id").autoIncrement()
+    val organization_id = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
+    val user_id = integer("user_id").references(Users.id, onDelete = ReferenceOption.CASCADE)
+    val name = varchar("name", 48)
+    val name_key = varchar("name_key", 48)
+    val resource_kind = varchar("resource_kind", 16)
+    val view_state = jsonb("view_state")
+    val created_at = timestamp("created_at")
+    val updated_at = timestamp("updated_at")
+    init {
+        uniqueIndex(organization_id, user_id, name_key)
+    }
+    override val primaryKey = PrimaryKey(id)
+}
+
 object Projects : Table("projects") {
     val id = long("id").autoIncrement()
     val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
