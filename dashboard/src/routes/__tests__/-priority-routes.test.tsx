@@ -160,10 +160,10 @@ describe('priority route coverage', () => {
     })
   })
 
-  it('ai route prompts for project selection when no project is selected', () => {
+  it('ai route renders empty service state without selected project context', async () => {
     const Component = (AiRoute as unknown as { component: React.ComponentType }).component
     renderRoute(Component)
 
-    expect(screen.getByText('Select a project to view AI observability data.')).toBeInTheDocument()
+    expect(await screen.findByText('No services yet')).toBeInTheDocument()
   })
 })
