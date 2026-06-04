@@ -186,8 +186,8 @@ jobs:
   # SonarQube: reuse backend-unit artifacts (JaCoCo + detekt); compile only, then scan
   sonarqube:
     name: SonarQube Analysis
-    if: ${{ always() && github.event_name != 'schedule' && (needs.changes.result != 'success' || needs.changes.outputs.backend == 'true') }}
-    needs: [changes, backend-unit, backend-detekt]
+    if: github.event_name != 'schedule'
+    needs: [backend-unit, backend-detekt]
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
@@ -195,16 +195,6 @@ jobs:
       pull-requests: write
 
     steps:
-      - name: Check backend quality prerequisites
-        if: ${{ needs.backend-unit.result != 'success' || needs.backend-detekt.result != 'success' }}
-        env:
-          BACKEND_UNIT_RESULT: ${{ needs.backend-unit.result }}
-          BACKEND_DETEKT_RESULT: ${{ needs.backend-detekt.result }}
-        run: |
-          echo "backend-unit result: ${BACKEND_UNIT_RESULT}"
-          echo "backend-detekt result: ${BACKEND_DETEKT_RESULT}"
-          exit 1
-
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
