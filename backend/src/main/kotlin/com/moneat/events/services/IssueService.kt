@@ -24,8 +24,10 @@ import com.moneat.events.models.IssueResponse
 import com.moneat.events.models.IssueTransactionResponse
 import com.moneat.events.models.IssueUpdateRequest
 import com.moneat.events.repositories.IssueRepository
+import com.moneat.events.repositories.models.IssueStatusKey
 import com.moneat.shared.models.Projects
 import com.moneat.shared.services.ProjectIdResolver
+import com.moneat.shared.services.ServiceIdentityResolver
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.suspendRunCatching
 import io.ktor.server.plugins.BadRequestException
@@ -42,12 +44,14 @@ class IssueService(
     private val queryHelper: DashboardQueryHelper,
     private val projectIdResolver: ProjectIdResolver = ProjectIdResolver(),
     private val alertEpisodeService: AlertEpisodeService = AlertEpisodeService(),
+    private val serviceIdentityResolver: ServiceIdentityResolver = ServiceIdentityResolver(),
 ) {
     companion object {
         private const val ISSUE_OVERFETCH_MULTIPLIER = 5
         private const val ERROR_ALERT_DEDUP_PREFIX = "moneat-error-"
         private const val STATUS_IGNORED = "ignored"
         private const val STATUS_RESOLVED = "resolved"
+        private const val STATUS_RESOLVED_IN_NEXT_RELEASE = "resolvedInNextRelease"
         private const val STATUS_ARCHIVED = "archived"
         private const val STATUS_UNRESOLVED = "unresolved"
     }
@@ -116,6 +120,48 @@ class IssueService(
             result
         }.getOrElse { e ->
             logger.error(e) { "Failed to fetch issues for project $projectId" }
+            emptyList()
+        }
+    }
+
+    suspend fun getIssues(query: IssueListQuery): List<IssueResponse> {
+        val offset = (query.page - 1) * query.limit
+        val retentionDays = queryHelper.getOrganizationRetentionDays(query.organizationId)
+        val retentionClause =
+            queryHelper.timestampRetentionClause("timestamp", retentionDays, query.demoEpochMs)
+        val serviceIds = resolveServiceIds(query)
+        if (query.hasServiceFilters() && serviceIds.isEmpty()) return emptyList()
+
+        val pgOverrides = issueRepository.getIssueStatusOverridesForOrganization(
+            organizationId = query.organizationId,
+            serviceIds = serviceIds
+        )
+
+        val overfetch =
+            if (query.status != null) {
+                (query.limit + offset) * ISSUE_OVERFETCH_MULTIPLIER
+            } else {
+                query.limit + offset
+            }
+        val rows = issueRepository.getOrganizationIssuesRaw(
+            organizationId = query.organizationId,
+            serviceIds = serviceIds,
+            overfetch = overfetch,
+            retentionClause = retentionClause
+        )
+
+        return suspendRunCatching {
+            paginateIssueRows(
+                rows = rows,
+                status = query.status,
+                offset = offset,
+                limit = query.limit,
+                statusForRow = { row ->
+                    pgOverrides[IssueStatusKey(row.projectId, row.issueId)] ?: row.status
+                }
+            )
+        }.getOrElse { e ->
+            logger.error(e) { "Failed to fetch issues for organization ${query.organizationId}" }
             emptyList()
         }
     }
@@ -221,12 +267,70 @@ class IssueService(
             ?: throw NotFoundException("Issue not found")
 
         if (update.status != null) {
-            val validStatuses = setOf(STATUS_UNRESOLVED, STATUS_RESOLVED, STATUS_ARCHIVED, STATUS_IGNORED)
+            val validStatuses = setOf(
+                STATUS_UNRESOLVED,
+                STATUS_RESOLVED,
+                STATUS_RESOLVED_IN_NEXT_RELEASE,
+                STATUS_ARCHIVED,
+                STATUS_IGNORED
+            )
             if (update.status !in validStatuses) throw BadRequestException("Invalid status value")
             issueRepository.upsertIssueStatus(issueId, projectId, update.status)
             updateErrorAlertEpisode(issueId, projectId, update.status)
         }
     }
+
+    private fun resolveServiceIds(query: IssueListQuery): List<Long> =
+        (query.serviceIds + resolveServiceNames(query.organizationId, query.serviceNames))
+            .distinct()
+
+    private fun resolveServiceNames(organizationId: Int, serviceNames: List<String>): List<Long> =
+        serviceNames.mapNotNull { serviceName ->
+            serviceIdentityResolver.resolveServiceId(organizationId, serviceName)
+        }
+
+    private fun IssueListQuery.hasServiceFilters(): Boolean =
+        serviceIds.isNotEmpty() || serviceNames.isNotEmpty()
+
+    private fun paginateIssueRows(
+        rows: List<com.moneat.events.repositories.models.IssueRow>,
+        status: String?,
+        offset: Int,
+        limit: Int,
+        statusForRow: (com.moneat.events.repositories.models.IssueRow) -> String
+    ): List<IssueResponse> {
+        var skipped = 0
+        val result = mutableListOf<IssueResponse>()
+        for (row in rows) {
+            val effectiveStatus = statusForRow(row)
+            if (status != null && effectiveStatus != status) continue
+            if (skipped < offset) {
+                skipped++
+                continue
+            }
+            result.add(row.toIssueResponse(effectiveStatus))
+            if (result.size >= limit) break
+        }
+        return result
+    }
+
+    private fun com.moneat.events.repositories.models.IssueRow.toIssueResponse(status: String): IssueResponse =
+        IssueResponse(
+            id = issueId,
+            projectId = projectId,
+            projectResourceId = projectResourceId(projectId),
+            title = title,
+            culprit = culprit,
+            level = level,
+            platform = platform,
+            firstSeen = firstSeen,
+            lastSeen = lastSeen,
+            eventCount = eventCount,
+            userCount = userCount,
+            status = status,
+            substatus = null,
+            statusDetail = null
+        )
 
     private suspend fun resolveProjectIdForIssue(issueId: String, explicitProjectId: Long?): Long? =
         if (explicitProjectId != null) {
@@ -252,6 +356,7 @@ class IssueService(
                     reason = "Issue ignored"
                 )
             STATUS_RESOLVED,
+            STATUS_RESOLVED_IN_NEXT_RELEASE,
             STATUS_ARCHIVED ->
                 alertEpisodeService.closeCurrentEpisode(
                     organizationId = organizationId,

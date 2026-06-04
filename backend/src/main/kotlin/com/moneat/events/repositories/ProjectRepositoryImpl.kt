@@ -215,7 +215,7 @@ class ProjectRepositoryImpl(
                         keys = emptyList(),
                         dsn = "",
                         serviceId = row[Projects.id],
-                        serviceName = row[Projects.slug],
+                        serviceName = projectServiceName(row),
                     )
                 }
         }
@@ -288,9 +288,15 @@ class ProjectRepositoryImpl(
             keys = keys,
             dsn = firstDsn,
             serviceId = row[Projects.id],
-            serviceName = row[Projects.slug],
+            serviceName = projectServiceName(row),
         )
     }
+
+    private fun projectServiceName(row: ResultRow): String =
+        row[Projects.slug]
+            .trim()
+            .ifBlank { row[Projects.name].trim() }
+            .ifBlank { row[Projects.id].toString() }
 
     private fun buildDsn(publicKey: String, projectId: Long): String {
         val backendUrl = EnvConfig.get("BACKEND_URL", "https://api.moneat.io")

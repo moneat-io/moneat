@@ -19,6 +19,7 @@ package com.moneat.services
 import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.config.ClickHouseClient
 import com.moneat.events.services.DashboardService
+import com.moneat.events.services.IssueListQuery
 import com.moneat.shared.models.IssueStatuses
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
@@ -122,6 +123,59 @@ class DashboardServiceTest {
         }
 
     @Test
+    fun `getIssues for organization applies organization and service clauses`() =
+        runBlocking {
+            val queries = Collections.synchronizedList(mutableListOf<String>())
+            MockHttpServer { exchange ->
+                val query = exchange.requestBodyText()
+                queries += query
+                if (query.contains("events e") && query.contains("GROUP BY issue_id")) {
+                    exchange.respond(
+                        200,
+                        issueOrgRowJson(),
+                        contentType = "text/plain"
+                    )
+                } else {
+                    exchange.respond(200, "", contentType = "text/plain")
+                }
+            }.use { server ->
+                ClickHouseClient.close()
+                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+                org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
+
+                transaction {
+                    Organizations.insert {
+                        it[id] = 1
+                        it[name] = "Test Org"
+                        it[slug] = "test-org"
+                    }
+                    Projects.insert {
+                        it[id] = 123
+                        it[organization_id] = 1
+                        it[name] = "API"
+                        it[slug] = "api"
+                    }
+                }
+
+                val service = DashboardService.create()
+                val issues = service.getIssues(
+                    IssueListQuery(
+                        organizationId = 1,
+                        page = 1,
+                        limit = 10,
+                        status = null,
+                        serviceIds = listOf(123)
+                    )
+                )
+
+                assertEquals(1, issues.size)
+                assertEquals("issue-org-1", issues.first().id)
+                assertTrue(queries.any { it.contains("organization_id = 1") })
+                assertTrue(queries.any { it.contains("project_id IN (123)") })
+            }
+        }
+
+    @Test
     fun `getIssue returns detail with latest event and demo project name`() =
         runBlocking {
             MockHttpServer { exchange ->
@@ -190,6 +244,12 @@ class DashboardServiceTest {
                 assertEquals("t1", traceContext?.get("trace_id")?.jsonPrimitive?.contentOrNull)
             }
         }
+
+    private fun issueOrgRowJson(): String =
+        """{"issue_id":"issue-org-1","project_id":123,"title":"Org crash","culprit":"Api.kt",""" +
+            """"level":"error","platform":"kotlin","first_seen":"2026-02-01T01:00:00.000Z",""" +
+            """"last_seen":"2026-02-02T01:00:00.000Z","event_count":12,"user_count":4,""" +
+            """"status":"unresolved"}"""
 
     @Test
     fun `getIssueTransactions returns transactions linked by issue error trace id`() =

@@ -20,10 +20,13 @@ import com.moneat.events.models.EventResponse
 import com.moneat.events.models.IssueTransactionResponse
 import com.moneat.events.repositories.models.IssueDetailRow
 import com.moneat.events.repositories.models.IssueRow
+import com.moneat.events.repositories.models.IssueStatusKey
 import com.moneat.events.services.DashboardQueryHelper
 import com.moneat.shared.models.IssueStatuses
 import com.moneat.shared.models.Projects
+import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import com.moneat.utils.suspendRunCatching
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
@@ -31,12 +34,12 @@ import kotlinx.serialization.json.long
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -77,6 +80,31 @@ class IssueRepositoryImpl(
             }
         } else {
             emptyMap()
+        }
+
+    override fun getIssueStatusOverridesForOrganization(
+        organizationId: Int,
+        serviceIds: List<Long>
+    ): Map<IssueStatusKey, String> =
+        transaction {
+            val serviceFilterIds = normalizedServiceIds(serviceIds)
+            val orgFilter = Projects.organization_id eq organizationId
+            val statusFilter =
+                if (serviceFilterIds.isEmpty()) {
+                    orgFilter
+                } else {
+                    orgFilter and (Projects.id inList serviceFilterIds)
+                }
+
+            (IssueStatuses innerJoin Projects)
+                .selectAll()
+                .where { statusFilter }
+                .associate { row ->
+                    IssueStatusKey(
+                        projectId = row[IssueStatuses.project_id],
+                        issueId = row[IssueStatuses.issue_id]
+                    ) to row[IssueStatuses.status]
+                }
         }
 
     override suspend fun getIssuesRaw(
@@ -130,6 +158,63 @@ class IssueRepositoryImpl(
                 )
             }.getOrElse { e ->
                 logger.error(e) { "Failed to parse issue row" }
+                null
+            }
+        }
+    }
+
+    override suspend fun getOrganizationIssuesRaw(
+        organizationId: Int,
+        serviceIds: List<Long>,
+        overfetch: Int,
+        retentionClause: String
+    ): List<IssueRow> {
+        val organizationClause = ClickHouseQueryUtils.orgIdClause(organizationId.toLong())
+        val serviceClause = serviceFilterClause(serviceIds)
+        val query = """
+            SELECT
+                issue_id,
+                toInt64(project_id) as project_id,
+                any(message) as title,
+                any(exception_type) as culprit,
+                any(level) as level,
+                any(platform) as platform,
+                formatDateTime(min(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as first_seen,
+                formatDateTime(max(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as last_seen,
+                count() as event_count,
+                uniq(user_id) as user_count,
+                'unresolved' as status
+            FROM `$clickhouseDb`.events e
+            WHERE $organizationClause
+                $serviceClause
+                AND event_type = 'error'
+                AND issue_id != ''
+                AND $retentionClause
+            GROUP BY issue_id, project_id
+            ORDER BY max(timestamp) DESC
+            LIMIT $overfetch
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        val rows = queryHelper.executeJsonEachRowQuery(query, "Organization issues") ?: return emptyList()
+        return rows.mapNotNull { obj ->
+            suspendRunCatching {
+                IssueRow(
+                    issueId = obj["issue_id"]?.jsonPrimitive?.content ?: return@mapNotNull null,
+                    projectId = obj["project_id"]?.jsonPrimitive?.long ?: return@mapNotNull null,
+                    title = obj["title"]?.jsonPrimitive?.content ?: "",
+                    culprit = obj["culprit"]?.jsonPrimitive?.content ?: "",
+                    level = obj["level"]?.jsonPrimitive?.content ?: "error",
+                    platform = obj["platform"]?.jsonPrimitive?.content ?: "",
+                    firstSeen = obj["first_seen"]?.jsonPrimitive?.content ?: "",
+                    lastSeen = obj["last_seen"]?.jsonPrimitive?.content ?: "",
+                    eventCount = obj["event_count"]?.jsonPrimitive?.long ?: 0,
+                    userCount = obj["user_count"]?.jsonPrimitive?.long ?: 0,
+                    status = obj["status"]?.jsonPrimitive?.contentOrNull ?: "unresolved",
+                    fingerprint = null
+                )
+            }.getOrElse { e ->
+                logger.error(e) { "Failed to parse organization issue row" }
                 null
             }
         }
@@ -310,5 +395,29 @@ class IssueRepositoryImpl(
                 }
             }
         }
+    }
+
+    private fun serviceFilterClause(serviceIds: List<Long>): String {
+        val normalizedIds = normalizedServiceIds(serviceIds)
+        if (normalizedIds.isEmpty()) return ""
+        val values = normalizedIds.joinToString(", ")
+        val column = if (normalizedIds.any { it < 0 }) "toInt64(project_id)" else "project_id"
+        return "AND $column IN ($values)"
+    }
+
+    private fun normalizedServiceIds(serviceIds: List<Long>): List<Long> =
+        serviceIds
+            .flatMap { serviceId ->
+                if (serviceId == DEMO_ALL_SERVICES_ID) {
+                    DEMO_PROJECT_IDS
+                } else {
+                    listOf(serviceId)
+                }
+            }
+            .distinct()
+
+    private companion object {
+        private const val DEMO_ALL_SERVICES_ID = -1L
+        private val DEMO_PROJECT_IDS = listOf(-1L, -2L, -3L)
     }
 }
