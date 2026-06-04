@@ -264,6 +264,9 @@ describe('Performance routes', () => {
       }))
     })
 
+    fireEvent.click(screen.getByRole('button', {name: /Refresh/i}))
+    await waitFor(() => expect(mockApi.getApmResourceStats).toHaveBeenCalledTimes(2))
+
     fireEvent.click(viewAllButton)
     await waitFor(() => expect(scrollIntoViewMock).toHaveBeenCalledTimes(2))
   })

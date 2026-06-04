@@ -194,6 +194,7 @@ private suspend fun ApplicationCall.respondBadRequest(error: String) {
 }
 
 private data class ApmRouteQuery(
+    val service: String?,
     val services: List<String>,
     val env: String?,
     val source: String?,
@@ -206,6 +207,7 @@ private data class ApmRouteQuery(
 ) {
     fun toTraceListQuery(): DdTraceListQuery =
         DdTraceListQuery(
+            service = service,
             services = services,
             env = env,
             source = source,
@@ -219,6 +221,7 @@ private data class ApmRouteQuery(
 
     fun toResourceStatsQuery(): DdResourceStatsQuery =
         DdResourceStatsQuery(
+            service = service,
             services = services,
             env = env,
             source = source,
@@ -233,6 +236,7 @@ private data class ApmRouteQuery(
 
 private fun ApplicationCall.apmRouteQuery(): ApmRouteQuery? =
     ApmRouteQuery(
+        service = serviceFilter(),
         services = serviceFilters() ?: return null,
         env = parameters["env"],
         source = parameters["source"],
@@ -277,16 +281,17 @@ private fun ApplicationCall.traceQueryLimit(): Int =
 private fun ApplicationCall.traceQueryOffset(): Int =
     parameters["offset"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0
 
+private fun ApplicationCall.serviceFilter(): String? =
+    parameters["service"]
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+
 private fun ApplicationCall.serviceFilters(): List<String>? {
     val parsedServices = parameters["services"]
         ?.split(",")
         ?.map { it.trim() }
         ?.filter { it.isNotEmpty() }
-    val rawSingleService = parameters["service"]
-        ?.trim()
-        ?.takeIf { it.isNotEmpty() }
-        ?.let { listOf(it) }
-    val rawServices = parsedServices?.takeIf { it.isNotEmpty() } ?: rawSingleService ?: emptyList()
+    val rawServices = (parsedServices ?: emptyList()) + listOfNotNull(serviceFilter())
     if (rawServices.size > MAX_SERVICE_FILTERS) return null
 
     val services = rawServices.distinct()

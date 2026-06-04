@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute, Link} from '@tanstack/react-router'
-import {useQuery} from '@tanstack/react-query'
+import {useQuery, useQueryClient} from '@tanstack/react-query'
 import {useEffect, useMemo, useRef, useState, type ReactNode, type RefObject} from 'react'
 import {
   CartesianGrid,
@@ -214,6 +214,7 @@ const RECENT_TRACE_SKELETON_CELLS: SkeletonCellSpec[] = [
 ]
 
 function PerformanceTracesPage() {
+  const queryClient = useQueryClient()
   const [timeRange, setTimeRange] = useState<ApmTimeRange>('24h')
   const [refresh, setRefresh] = useState<RefreshValue>('15s')
   const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
@@ -341,6 +342,7 @@ function PerformanceTracesPage() {
             onClick={() => {
               void overviewQuery.refetch()
               void tracesQuery.refetch()
+              void queryClient.refetchQueries({queryKey: ['apm-erroring-resources']})
             }}
           >
             <RefreshCw className="h-3.5 w-3.5" />
