@@ -98,6 +98,32 @@ describe('Analytics API', () => {
       expect(result.comparison).toBeDefined()
       expect(result.comparison!.uniqueVisitors).toBe(40)
     })
+
+    it('fetches organization analytics overview with service filters', async () => {
+      server.use(
+        http.get(`${API_BASE}/v1/analytics/overview`, ({ request }) => {
+          const url = new URL(request.url)
+          expect(url.searchParams.get('period')).toBe('7d')
+          expect(url.searchParams.getAll('services')).toEqual(['api', 'worker'])
+          expect(url.searchParams.getAll('serviceIds')).toEqual(['service-1', '2'])
+          return HttpResponse.json({
+            uniqueVisitors: 25,
+            totalPageviews: 80,
+            bounceRate: 10,
+            avgVisitDuration: 30,
+            viewsPerVisit: 3.2,
+          })
+        })
+      )
+
+      const result = await api.getAnalyticsOverview(null, {
+        period: '7d',
+        services: ['api', 'worker'],
+        serviceIds: ['service-1', 2],
+      })
+      expect(result.uniqueVisitors).toBe(25)
+      expect(result.totalPageviews).toBe(80)
+    })
   })
 
   // ──── getAnalyticsTimeseries ────
@@ -381,6 +407,26 @@ describe('Analytics API', () => {
         1,
         ['signup.completed', 'recording.started'],
         { period: '30d' },
+        { source: 'server', groupBy: 'user_id' }
+      )
+    })
+
+    it('fetches organization funnel data with service filters', async () => {
+      server.use(
+        http.get(`${API_BASE}/v1/analytics/funnel`, ({ request }) => {
+          const url = new URL(request.url)
+          expect(url.searchParams.get('source')).toBe('server')
+          expect(url.searchParams.get('group_by')).toBe('user_id')
+          expect(url.searchParams.getAll('services')).toEqual(['api'])
+          expect(url.searchParams.getAll('steps[]')).toEqual(['signup.completed', 'recording.started'])
+          return HttpResponse.json({ steps: [], overallConversion: 0 })
+        })
+      )
+
+      await api.getAnalyticsFunnel(
+        undefined,
+        ['signup.completed', 'recording.started'],
+        { services: ['api'] },
         { source: 'server', groupBy: 'user_id' }
       )
     })
