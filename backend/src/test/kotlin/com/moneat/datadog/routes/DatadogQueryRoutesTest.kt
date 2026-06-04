@@ -361,7 +361,8 @@ class DatadogQueryRoutesTest {
         installTraceRoutes()()
         val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
         val resp = client.get(
-            "/v1/traces/resources?service=api&env=prod&source=otlp&status=error&search=checkout&limit=500&offset=-10"
+            "/v1/traces/resources?services=api,worker&env=prod&source=otlp&status=error" +
+                "&operation=POST%20%2Fcheckout&search=checkout&limit=500&offset=-10"
         ) {
             withAuth(token)
         }
@@ -371,10 +372,11 @@ class DatadogQueryRoutesTest {
             TraceIngestionService.listResourceStats(
                 organizationId = 10,
                 query = match {
-                    it.service == "api" &&
+                    it.services == listOf("api", "worker") &&
                         it.env == "prod" &&
                         it.source == "otlp" &&
                         it.status == "error" &&
+                        it.operation == "POST /checkout" &&
                         it.search == "checkout" &&
                         it.limit == 200 &&
                         it.offset == 0
@@ -396,7 +398,8 @@ class DatadogQueryRoutesTest {
         installTraceRoutes()()
         val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
         val resp = client.get(
-            "/v1/traces?service=api&env=prod&source=otlp&status=error&search=checkout&limit=500&offset=-10"
+            "/v1/traces?services=api,worker&env=prod&source=otlp&status=error" +
+                "&operation=POST%20%2Fcheckout&search=checkout&limit=500&offset=-10"
         ) {
             withAuth(token)
         }
@@ -406,10 +409,11 @@ class DatadogQueryRoutesTest {
             TraceIngestionService.listTraces(
                 organizationId = 10,
                 query = match {
-                    it.service == "api" &&
+                    it.services == listOf("api", "worker") &&
                         it.env == "prod" &&
                         it.source == "otlp" &&
                         it.status == "error" &&
+                        it.operation == "POST /checkout" &&
                         it.limit == 200 &&
                         it.offset == 0 &&
                         it.search == "checkout"
@@ -472,6 +476,7 @@ class DatadogQueryRoutesTest {
                 services = emptyList(),
                 sources = emptyList(),
                 environments = emptyList(),
+                operations = emptyList(),
             ),
         )
 

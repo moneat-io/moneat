@@ -93,6 +93,7 @@ export interface ApmOverviewFacets {
   services: ApmFacetItem[]
   sources: ApmFacetItem[]
   environments: ApmFacetItem[]
+  operations: ApmFacetItem[]
 }
 
 export interface ApmOverviewResponse {

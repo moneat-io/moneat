@@ -110,9 +110,11 @@ val defaultApmQueryTimeRange = DdApmQueryTimeRange(24, DdApmQueryTimeUnit.HOUR)
 
 data class DdResourceStatsQuery(
     val service: String? = null,
+    val services: List<String> = emptyList(),
     val env: String? = null,
     val source: String? = null,
     val status: String? = null,
+    val operation: String? = null,
     val search: String? = null,
     val limit: Int = DEFAULT_QUERY_LIMIT,
     val offset: Int = 0,
@@ -121,9 +123,11 @@ data class DdResourceStatsQuery(
 
 data class DdTraceListQuery(
     val service: String? = null,
+    val services: List<String> = emptyList(),
     val env: String? = null,
     val source: String? = null,
     val status: String? = null,
+    val operation: String? = null,
     val search: String? = null,
     val limit: Int = DEFAULT_QUERY_LIMIT,
     val offset: Int = 0,
@@ -390,9 +394,10 @@ object TraceIngestionService {
             finalizedFilters.add(query.timeRange.bucketStartClause("trace_bucket"))
             finalizedFilters.add("trace_bucket < $liveBoundary")
         }
-        query.service?.let { finalizedFilters.add("root_service = '${escapeSql(it)}'") }
+        serviceFilterClause("root_service", query.service, query.services)?.let(finalizedFilters::add)
         query.env?.let { finalizedFilters.add("env = '${escapeSql(it)}'") }
         query.source?.let { finalizedFilters.add("source = '${escapeSql(it)}'") }
+        query.operation?.let { finalizedFilters.add("root_resource = '${escapeSql(it)}'") }
         when (query.status) {
             STATUS_ERROR -> finalizedFilters.add("has_error = 1")
             STATUS_OK -> finalizedFilters.add("has_error = 0")
@@ -418,9 +423,10 @@ object TraceIngestionService {
             "bucket_start >= $liveBoundary",
         )
         val liveHaving = mutableListOf<String>()
-        query.service?.let { liveHaving.add("root_service = '${escapeSql(it)}'") }
+        serviceFilterClause("root_service", query.service, query.services)?.let(liveHaving::add)
         query.env?.let { liveHaving.add("env = '${escapeSql(it)}'") }
         query.source?.let { liveHaving.add("source = '${escapeSql(it)}'") }
+        query.operation?.let { liveHaving.add("root_resource = '${escapeSql(it)}'") }
         when (query.status) {
             STATUS_ERROR -> liveHaving.add("has_error = 1")
             STATUS_OK -> liveHaving.add("has_error = 0")
@@ -772,6 +778,10 @@ object TraceIngestionService {
             SELECT 'env' as facet_type, env as value, count() as count
             FROM ($subquery) WHERE env != ''
             GROUP BY env ORDER BY count DESC, value ASC LIMIT $MAX_FILTER_FACETS
+            UNION ALL
+            SELECT 'operation' as facet_type, root_resource as value, count() as count
+            FROM ($subquery) WHERE root_resource != ''
+            GROUP BY root_resource ORDER BY count DESC, value ASC LIMIT $MAX_FILTER_FACETS
             FORMAT JSONEachRow
         """.trimIndent()
 
@@ -779,6 +789,7 @@ object TraceIngestionService {
         val services = mutableListOf<DdApmFacetItem>()
         val sources = mutableListOf<DdApmFacetItem>()
         val environments = mutableListOf<DdApmFacetItem>()
+        val operations = mutableListOf<DdApmFacetItem>()
         for (obj in rows) {
             val item = DdApmFacetItem(
                 value = obj.stringValue("value"),
@@ -788,12 +799,14 @@ object TraceIngestionService {
                 "service" -> services.add(item)
                 "source" -> sources.add(item)
                 "env" -> environments.add(item)
+                "operation" -> operations.add(item)
             }
         }
         return DdApmOverviewFacets(
             services = services,
             sources = sources,
             environments = environments,
+            operations = operations,
         )
     }
 
@@ -1176,7 +1189,7 @@ object TraceIngestionService {
             ClickHouseQueryUtils.orgIdClause(organizationId.toLong()),
             query.timeRange.bucketStartClause()
         )
-        query.service?.let { filters.add("service = '${escapeSql(it)}'") }
+        serviceFilterClause("service", query.service, query.services)?.let(filters::add)
         val whereClause = filters.joinToString(" AND ")
 
         val countQuery = """
@@ -1265,9 +1278,11 @@ object TraceIngestionService {
             organizationId = organizationId,
             query = DdTraceListQuery(
                 service = query.service,
+                services = query.services,
                 env = query.env,
                 source = query.source,
                 status = query.status.takeUnless { it == STATUS_ERROR },
+                operation = query.operation,
                 search = query.search,
                 timeRange = query.timeRange,
             ),
@@ -1343,9 +1358,29 @@ object TraceIngestionService {
         !env.isNullOrBlank() ||
             !source.isNullOrBlank() ||
             !status.isNullOrBlank() ||
+            !operation.isNullOrBlank() ||
             !search.isNullOrBlank()
 
     // --- Internal helpers ---
+    private fun serviceFilterClause(
+        column: String,
+        service: String?,
+        services: List<String>,
+    ): String? {
+        val values = (services + listOfNotNull(service))
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+        return when (values.size) {
+            0 -> null
+            1 -> "$column = '${escapeSql(values.first())}'"
+            else -> {
+                val serviceList = values.joinToString(", ") { "'${escapeSql(it)}'" }
+                "$column IN ($serviceList)"
+            }
+        }
+    }
+
     private suspend fun executeDashboardQuery(
         query: String,
         format: String,

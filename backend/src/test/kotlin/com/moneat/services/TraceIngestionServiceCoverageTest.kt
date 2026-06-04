@@ -450,6 +450,30 @@ class TraceIngestionServiceCoverageTest {
     }
 
     @Test
+    fun `listTraces applies services list to server side query`() = runBlocking {
+        val capturedQueries = mutableListOf<String>()
+        coEvery { ClickHouseClient.executeWithFormat(any(), any()) } coAnswers {
+            capturedQueries.add(firstArg())
+            if (secondArg<String>() == "TabSeparated") {
+                "0"
+            } else {
+                ""
+            }
+        }
+
+        TraceIngestionService.listTraces(
+            organizationId = 1,
+            query = DdTraceListQuery(
+                services = listOf("api", "worker"),
+                limit = 10,
+                offset = 0,
+            )
+        )
+
+        assertTrue(capturedQueries.any { it.contains("root_service IN ('api', 'worker')") })
+    }
+
+    @Test
     fun `listTraces applies search to server side query`() = runBlocking {
         val capturedQueries = mutableListOf<String>()
         coEvery { ClickHouseClient.executeWithFormat(any(), any()) } coAnswers {
@@ -499,6 +523,7 @@ class TraceIngestionServiceCoverageTest {
         assertTrue(capturedQueries.any { it.contains("UNION ALL") && it.contains("apm_trace_summaries") })
         assertTrue(capturedQueries.any { it.contains("trace_bucket < toStartOfHour(now() - INTERVAL 2 HOUR)") })
         assertTrue(capturedQueries.any { it.contains("bucket_start >= toStartOfHour(now() - INTERVAL 2 HOUR)") })
+        assertTrue(capturedQueries.any { it.contains("SELECT 'operation' as facet_type") })
     }
 
     // ===================== getTraceDetail =====================

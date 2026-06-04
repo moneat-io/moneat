@@ -63,7 +63,8 @@ fun Route.traceDashboardRoutes() {
             get("/resources") {
                 val orgId = call.organizationId()
                     ?: return@get call.respondUnauthorized()
-                val service = call.parameters["service"]
+                val services = call.serviceFilters()
+                    ?: return@get call.respondBadRequest(INVALID_SERVICES_ERROR)
                 val env = call.parameters["env"]
                 val source = call.parameters["source"]
                 val search = call.traceSearch()
@@ -83,10 +84,11 @@ fun Route.traceDashboardRoutes() {
                 val result = TraceIngestionService.listResourceStats(
                     organizationId = orgId,
                     query = DdResourceStatsQuery(
-                        service = service,
+                        services = services,
                         env = env,
                         source = source,
                         status = status,
+                        operation = call.parameters["operation"]?.takeIf { it.isNotBlank() },
                         search = search,
                         limit = limit,
                         offset = offset,
@@ -101,6 +103,8 @@ fun Route.traceDashboardRoutes() {
             get("/overview") {
                 val orgId = call.organizationId()
                     ?: return@get call.respondUnauthorized()
+                val services = call.serviceFilters()
+                    ?: return@get call.respondBadRequest(INVALID_SERVICES_ERROR)
                 val status = call.apmStatus()
                     ?: return@get call.respondBadRequest(INVALID_STATUS_ERROR)
                 val timeRange = call.apmTimeRange()
@@ -109,10 +113,11 @@ fun Route.traceDashboardRoutes() {
                 val result = TraceIngestionService.getApmOverview(
                     organizationId = orgId,
                     query = DdTraceListQuery(
-                        service = call.parameters["service"],
+                        services = services,
                         env = call.parameters["env"],
                         source = call.parameters["source"],
                         status = status,
+                        operation = call.parameters["operation"]?.takeIf { it.isNotBlank() },
                         search = call.traceSearch(),
                         timeRange = timeRange,
                     ),
@@ -125,7 +130,8 @@ fun Route.traceDashboardRoutes() {
             get {
                 val orgId = call.organizationId()
                     ?: return@get call.respondUnauthorized()
-                val service = call.parameters["service"]
+                val services = call.serviceFilters()
+                    ?: return@get call.respondBadRequest(INVALID_SERVICES_ERROR)
                 val env = call.parameters["env"]
                 val source = call.parameters["source"]
                 val search = call.traceSearch()
@@ -145,10 +151,11 @@ fun Route.traceDashboardRoutes() {
                 val result = TraceIngestionService.listTraces(
                     organizationId = orgId,
                     query = DdTraceListQuery(
-                        service = service,
+                        services = services,
                         env = env,
                         source = source,
                         status = status,
+                        operation = call.parameters["operation"]?.takeIf { it.isNotBlank() },
                         search = search,
                         limit = limit,
                         offset = offset,
