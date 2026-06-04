@@ -16,11 +16,10 @@
 
 import {createFileRoute, Link} from '@tanstack/react-router'
 
-import {useMutation, useQueries, useQuery, useQueryClient} from '@tanstack/react-query'
+import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
-import type {ApmErrorGroup, ApmTimeRange} from '@/lib/api'
+import type {ApmErrorGroup, ApmTimeRange, Issue, Project} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
-import {useProject} from '@/contexts/ProjectContext'
 import {formatRelativeTime, cn} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
@@ -91,11 +90,7 @@ const ISSUE_TITLE_RENDER_MAX_CHARS = 240
 const ISSUE_CULPRIT_RENDER_MAX_CHARS = 160
 const ISSUE_SEARCH_TEXT_MAX_CHARS = 512
 const ISSUE_ID_MAX_CHARS = 512
-
-// Until the org-wide issues API lands, multi-service views merge per-project
-// fetches client-side. Bound the work: cap projects and per-project rows.
-const MERGE_PROJECT_CAP = 50
-const MERGE_FETCH_LIMIT = 100
+const ISSUES_FETCH_LIMIT = 500
 
 type SafeIssue = {
   id: string
@@ -133,10 +128,82 @@ function toSafeString(value: unknown, fallback = '', maxChars = ISSUE_SEARCH_TEX
   return trimmed.slice(0, maxChars)
 }
 
+function toSafeId(value: unknown): string {
+  if (typeof value !== 'string' && typeof value !== 'number') return ''
+  return toSafeString(String(value), '', ISSUE_ID_MAX_CHARS)
+}
+
 function toSafeCount(value: unknown): number {
   const n = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(n) || n < 0) return 0
   return Math.floor(n)
+}
+
+function facetValues(filters: readonly FacetFilter[], key: string, exclude: boolean): string[] {
+  return filters
+    .filter((filter) => filter.key === key && Boolean(filter.exclude) === exclude)
+    .map((filter) => filter.value)
+}
+
+function serviceNamesForQuery(
+  projects: readonly Project[],
+  includedServices: readonly string[],
+  excludedServices: readonly string[]
+): string[] {
+  if (includedServices.length === 0 && excludedServices.length === 0) return []
+
+  const excluded = new Set(excludedServices)
+  const candidates = includedServices.length > 0
+    ? includedServices
+    : projects.map((project) => project.name)
+
+  return candidates.filter((service) => !excluded.has(service))
+}
+
+function serverStatusFilter(statusIncludes: readonly string[], statusExcludes: readonly string[]): string | undefined {
+  return statusIncludes.length === 1 && statusExcludes.length === 0 ? statusIncludes[0] : undefined
+}
+
+function projectMaps(projects: readonly Project[]): {
+  byResourceId: Map<string, string>
+  byId: Map<string, string>
+} {
+  return {
+    byResourceId: new Map(projects.map((project) => [project.resourceId, project.name])),
+    byId: new Map(projects.map((project) => [String(project.id), project.name])),
+  }
+}
+
+function toSafeIssue(
+  issue: Issue,
+  projectsByResourceId: ReadonlyMap<string, string>,
+  projectsById: ReadonlyMap<string, string>
+): SafeIssue | null {
+  const id = toSafeId(issue.id)
+  if (!id) return null
+
+  const projectResourceId = toSafeId(issue.projectResourceId) || toSafeId(issue.projectId)
+  if (!projectResourceId) return null
+
+  const service =
+    projectsByResourceId.get(projectResourceId) ??
+    projectsById.get(toSafeId(issue.projectId)) ??
+    projectResourceId
+
+  return {
+    id,
+    projectResourceId,
+    service,
+    title: toSafeString(issue.title, '', ISSUE_SEARCH_TEXT_MAX_CHARS),
+    culprit: toSafeString(issue.culprit, '', ISSUE_SEARCH_TEXT_MAX_CHARS),
+    level: toSafeString(issue.level, 'error', 16) || 'error',
+    platform: toSafeString(issue.platform, 'unknown', 64) || 'unknown',
+    firstSeen: toSafeString(issue.firstSeen, ''),
+    lastSeen: toSafeString(issue.lastSeen, ''),
+    eventCount: toSafeCount(issue.eventCount),
+    userCount: toSafeCount(issue.userCount),
+    status: toSafeString(issue.status, 'unresolved', 32) || 'unresolved',
+  }
 }
 
 function getIssueDisplayTitle(issue: { title: string; culprit: string }): string {
@@ -242,11 +309,9 @@ function IndexPage() {
 function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
-  const [issueFiltersTouched, setIssueFiltersTouched] = useState(false)
   const [selectedIssueKeys, setSelectedIssueKeys] = useState<Set<string>>(new Set())
   const [page, setPage] = useState(1)
   const pageSize = 25
-  const { selectedProjectId } = useProject()
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
@@ -256,34 +321,54 @@ function DashboardPage() {
   })
   const hasProjects = (projects?.length ?? 0) > 0
 
-  // Seed the Service facet once from the sidebar-selected project so the default
-  // view stays scoped as before; afterwards the rail/bar own the selection, and
-  // clearing Service widens to all services.
-  const seedServiceFilter = useMemo<FacetFilter | null>(() => {
-    if (issueFiltersTouched || !projects?.length) return null
-    const seedProject = projects.find((p) => p.resourceId === selectedProjectId) ?? projects[0]
-    return seedProject ? { key: 'service', value: seedProject.name } : null
-  }, [issueFiltersTouched, projects, selectedProjectId])
-  const effectiveFacetFilters = seedServiceFilter ? [seedServiceFilter] : facetFilters
+  const effectiveFacetFilters = facetFilters
+  const includedServices = useMemo(
+    () => facetValues(effectiveFacetFilters, 'service', false),
+    [effectiveFacetFilters]
+  )
+  const excludedServices = useMemo(
+    () => facetValues(effectiveFacetFilters, 'service', true),
+    [effectiveFacetFilters]
+  )
+  const statusIncludes = useMemo(
+    () => facetValues(effectiveFacetFilters, 'status', false),
+    [effectiveFacetFilters]
+  )
+  const statusExcludes = useMemo(
+    () => facetValues(effectiveFacetFilters, 'status', true),
+    [effectiveFacetFilters]
+  )
+  const levelIncludes = useMemo(
+    () => facetValues(effectiveFacetFilters, 'level', false),
+    [effectiveFacetFilters]
+  )
+  const levelExcludes = useMemo(
+    () => facetValues(effectiveFacetFilters, 'level', true),
+    [effectiveFacetFilters]
+  )
+  const serviceFiltersActive = includedServices.length > 0 || excludedServices.length > 0
+  const selectedServices = useMemo(
+    () => serviceNamesForQuery(projects ?? [], includedServices, excludedServices),
+    [excludedServices, includedServices, projects]
+  )
+  const issuesQueryEnabled = hasProjects && (!serviceFiltersActive || selectedServices.length > 0)
+  const statusParam = serverStatusFilter(statusIncludes, statusExcludes)
 
-  // Service include/exclude picks which projects' issues to load and merge
-  // (client-side until the org-wide issues API lands). None selected ⇒ all.
-  const includedServices = effectiveFacetFilters.filter((f) => f.key === 'service' && !f.exclude).map((f) => f.value)
-  const excludedServices = effectiveFacetFilters.filter((f) => f.key === 'service' && f.exclude).map((f) => f.value)
-  const targetProjects = (projects ?? [])
-    .filter((p) => (includedServices.length > 0 ? includedServices.includes(p.name) : true))
-    .filter((p) => !excludedServices.includes(p.name))
-    .slice(0, MERGE_PROJECT_CAP)
-
-  const issueQueries = useQueries({
-    queries: targetProjects.map((p) => ({
-      queryKey: ['issues', p.resourceId],
-      queryFn: () => api.getIssues(p.resourceId, 1, MERGE_FETCH_LIMIT),
-      enabled: !!p.resourceId,
-    })),
+  const {
+    data: organizationIssues = [],
+    isLoading: issuesLoading,
+    isError: issuesError,
+    error: issuesErrorObj,
+  } = useQuery({
+    queryKey: ['issues', 'organization', selectedServices, statusParam],
+    queryFn: () => api.getOrganizationIssues({
+      page: 1,
+      limit: ISSUES_FETCH_LIMIT,
+      status: statusParam,
+      services: serviceFiltersActive ? selectedServices : undefined,
+    }),
+    enabled: issuesQueryEnabled,
   })
-  const issuesError = issueQueries.some((q) => q.isError)
-  const issuesErrorObj = issueQueries.find((q) => q.isError)?.error
 
   const resolveMutation = useMutation({
     mutationFn: async (issues: IssueUpdateTarget[]) => {
@@ -424,38 +509,27 @@ function DashboardPage() {
     resolveNextReleaseMutation.mutate(selectedIssueTargets)
   }
 
-  const safeIssues: SafeIssue[] = []
-  targetProjects.forEach((project, index) => {
-    const projectResourceId = toSafeString(project.resourceId, '', ISSUE_ID_MAX_CHARS)
-    if (!projectResourceId) return
-    const rows = issueQueries[index]?.data ?? []
-    for (const issue of rows) {
-      const id = toSafeString(issue.id, '', ISSUE_ID_MAX_CHARS)
-      if (!id) continue
-      safeIssues.push({
-        id,
-        projectResourceId,
-        service: project.name,
-        title: toSafeString(issue.title, '', ISSUE_SEARCH_TEXT_MAX_CHARS),
-        culprit: toSafeString(issue.culprit, '', ISSUE_SEARCH_TEXT_MAX_CHARS),
-        level: toSafeString(issue.level, 'error', 16) || 'error',
-        platform: toSafeString(issue.platform, 'unknown', 64) || 'unknown',
-        firstSeen: toSafeString(issue.firstSeen, ''),
-        lastSeen: toSafeString(issue.lastSeen, ''),
-        eventCount: toSafeCount(issue.eventCount),
-        userCount: toSafeCount(issue.userCount),
-        status: toSafeString(issue.status, 'unresolved', 32) || 'unresolved',
-      })
-    }
-  })
+  const {byResourceId: projectNameByResourceId, byId: projectNameById} = useMemo(
+    () => projectMaps(projects ?? []),
+    [projects]
+  )
+  const safeIssues = useMemo(
+    () => organizationIssues
+      .map((issue) => toSafeIssue(issue, projectNameByResourceId, projectNameById))
+      .filter((issue): issue is SafeIssue => issue !== null),
+    [organizationIssues, projectNameById, projectNameByResourceId]
+  )
 
-  const safeIssuesByKey = new Map<string, IssueUpdateTarget>()
-  safeIssues.forEach((issue) => {
-    safeIssuesByKey.set(issueSelectionKey(issue), {
-      id: issue.id,
-      projectResourceId: issue.projectResourceId,
+  const safeIssuesByKey = useMemo(() => {
+    const byKey = new Map<string, IssueUpdateTarget>()
+    safeIssues.forEach((issue) => {
+      byKey.set(issueSelectionKey(issue), {
+        id: issue.id,
+        projectResourceId: issue.projectResourceId,
+      })
     })
-  })
+    return byKey
+  }, [safeIssues])
   const selectedIssueTargets: IssueUpdateTarget[] = []
   selectedIssueKeys.forEach((key) => {
     const target = safeIssuesByKey.get(key)
@@ -463,13 +537,9 @@ function DashboardPage() {
   })
 
   const normalizedSearchQuery = searchQuery.trim().toLowerCase()
-  const statusIncludes = effectiveFacetFilters.filter((f) => f.key === 'status' && !f.exclude).map((f) => f.value)
-  const statusExcludes = effectiveFacetFilters.filter((f) => f.key === 'status' && f.exclude).map((f) => f.value)
-  const levelIncludes = effectiveFacetFilters.filter((f) => f.key === 'level' && !f.exclude).map((f) => f.value)
-  const levelExcludes = effectiveFacetFilters.filter((f) => f.key === 'level' && f.exclude).map((f) => f.value)
 
-  // Service is resolved server-side (which projects we fetch); status/level/search
-  // narrow the merged set client-side, honoring include + exclude.
+  // Service filters are resolved by the org-wide API. Status, level, and search
+  // narrow the loaded issue set client-side so include/exclude semantics remain.
   const filteredIssues = safeIssues
     .filter((issue) => {
       const matchesSearch =
@@ -492,10 +562,9 @@ function DashboardPage() {
 
   const hasActiveIssueFilters =
     Boolean(searchQuery) ||
-    effectiveFacetFilters.some((f) => f.key === 'status' || f.key === 'level' || f.exclude)
+    effectiveFacetFilters.length > 0
 
   function handleFacetFiltersChange(next: FacetFilter[]) {
-    setIssueFiltersTouched(true)
     setFacetFilters(next)
     setSelectedIssueKeys(new Set())
     setPage(1)
@@ -656,7 +725,9 @@ function DashboardPage() {
       }
     >
       <div className="p-4">
-        {issuesError ? (
+        {issuesLoading ? (
+          <div className="p-6 text-muted-foreground">Loading issues...</div>
+        ) : issuesError ? (
           <div className="p-6 text-destructive border border-destructive/30 rounded-lg bg-destructive/5">
             Failed to load issues: {issuesErrorObj instanceof Error ? issuesErrorObj.message : 'Unknown error'}
           </div>
@@ -679,7 +750,7 @@ function DashboardPage() {
                 <p className="text-muted-foreground">
                   {hasActiveIssueFilters
                     ? 'Try adjusting your search or filters.'
-                    : 'Start sending errors to this project to see them tracked here. Visit the setup guide to integrate your application.'}
+                    : 'Start sending errors to your services to see them tracked here.'}
                 </p>
               </div>
             </div>

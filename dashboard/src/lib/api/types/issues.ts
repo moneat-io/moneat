@@ -50,6 +50,14 @@ export interface Issue {
   statusDetail?: Record<string, string>
 }
 
+export interface IssueListParams {
+  page?: number
+  limit?: number
+  status?: string
+  services?: string[]
+  serviceIds?: Array<string | number>
+}
+
 export interface IssueDetail extends Issue {
   projectName?: string
   fingerprint: string[]

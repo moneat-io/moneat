@@ -12,6 +12,23 @@ describe('Issues API - extended coverage', () => {
     sessionStorage.setItem('authenticated', 'true')
   })
 
+  it('getOrganizationIssues defaults to first page without optional filters', async () => {
+    server.use(
+      http.get(`${API_BASE}/v1/issues`, ({ request }) => {
+        const url = new URL(request.url)
+        expect(url.searchParams.get('page')).toBe('1')
+        expect(url.searchParams.get('limit')).toBe('25')
+        expect(url.searchParams.has('status')).toBe(false)
+        expect(url.searchParams.has('services')).toBe(false)
+        expect(url.searchParams.has('serviceIds')).toBe(false)
+        return HttpResponse.json([])
+      })
+    )
+
+    const result = await api.getOrganizationIssues()
+    expect(result).toEqual([])
+  })
+
   it('fetches issue transactions with custom limit', async () => {
     const mockTransactions = [{ eventId: 'tx-1', name: 'GET /api' }]
 
