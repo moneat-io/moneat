@@ -1,15 +1,15 @@
 ---
 title: Infrastructure Monitoring
-description: Monitor hosts, containers, processes, and network connections via the Datadog Agent.
+description: Monitor hosts, containers, processes, and network connections from configured infrastructure telemetry agents.
 ---
 
 # Infrastructure Monitoring
 
-Infrastructure monitoring collects host metrics, container stats, process details, and network connections from machines running the Datadog Agent. Data is ingested via Datadog-compatible endpoints and stored in ClickHouse.
+Infrastructure monitoring collects host metrics, container stats, process details, and network connections from configured infrastructure agents. The Datadog Agent setup below is the currently documented path for these signals; additional collectors or agents should be documented separately as they are supported. Data is normalized into Moneat infrastructure telemetry and stored in ClickHouse.
 
 ## Setup
 
-Install and configure the Datadog Agent pointed at your Moneat instance. See the [Datadog Agent setup](/docs/datadog-agent/agent-setup) page for instructions.
+The Datadog Agent is the currently documented setup path for infrastructure monitoring. Install and configure the agent pointed at your Moneat instance. See the [Datadog Agent setup](/docs/datadog-agent/agent-setup) page for instructions.
 
 The Process Agent must be enabled to collect container, process, and network data. Add to your `datadog.yaml`:
 

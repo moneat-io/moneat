@@ -48,6 +48,7 @@ export interface DdContainerResponse {
   memLimit: number
   netRxBytes: number
   netTxBytes: number
+  source?: string | null
   tags: Record<string, string>
   timestamp: string
 }
