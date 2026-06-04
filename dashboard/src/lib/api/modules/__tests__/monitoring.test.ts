@@ -240,6 +240,70 @@ describe('Monitoring API module', () => {
         },
       ])
     })
+
+    it('maps camelCase saved map views and default state fallbacks', async () => {
+      server.use(
+        http.get(`${API_BASE}/v1/infra/map/saved-views`, () =>
+          HttpResponse.json({
+            views: [
+              {
+                id: 'camel-view',
+                name: 'Container images',
+                resourceKind: 'containers',
+                groupBy: 'image',
+                fillBy: 'lastSeen',
+                sizeBy: 'network',
+                searchQuery: 'redis',
+                schemaVersion: 2,
+                createdAt: '2026-06-04T16:15:00Z',
+                updatedAt: '2026-06-04T16:20:00Z',
+              },
+              {
+                id: 8,
+                name: 'Defaults',
+              },
+            ],
+          })
+        )
+      )
+
+      const result = await api.getInfrastructureMapSavedViews()
+
+      expect(result.views).toEqual([
+        {
+          id: 'camel-view',
+          name: 'Container images',
+          resourceKind: 'containers',
+          groupBy: 'image',
+          fillBy: 'lastSeen',
+          sizeBy: 'network',
+          searchQuery: 'redis',
+          schemaVersion: 2,
+          createdAt: '2026-06-04T16:15:00Z',
+          updatedAt: '2026-06-04T16:20:00Z',
+        },
+        {
+          id: '8',
+          name: 'Defaults',
+          resourceKind: 'hosts',
+          groupBy: 'status',
+          fillBy: 'health',
+          sizeBy: 'uniform',
+          searchQuery: '',
+          schemaVersion: 1,
+          createdAt: '',
+          updatedAt: '',
+        },
+      ])
+    })
+
+    it('returns an empty saved map view list when response omits views', async () => {
+      server.use(
+        http.get(`${API_BASE}/v1/infra/map/saved-views`, () => HttpResponse.json({}))
+      )
+
+      await expect(api.getInfrastructureMapSavedViews()).resolves.toEqual({views: []})
+    })
   })
 
   describe('saveInfrastructureMapView', () => {

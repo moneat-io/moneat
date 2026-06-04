@@ -180,6 +180,263 @@ describe('infrastructure map model', () => {
     })
   })
 
+  it('uses host fallbacks, recency tones, and metric sizing', () => {
+    const resources = createInfrastructureMapResources({
+      resourceKind: 'hosts',
+      hosts: [
+        createHost({
+          id: 1,
+          hostname: '',
+          os: '',
+          platform: '',
+          cpuCores: undefined,
+          memoryTotalKb: undefined,
+          agentVersion: undefined,
+          tags: undefined,
+          lastSeenAt: undefined,
+        }),
+        createHost({
+          id: 2,
+          hostname: 'old-host',
+          cpuCores: 16,
+          memoryTotalKb: 16_777_216,
+          lastSeenAt: '2026-06-04T12:00:00Z',
+        }),
+        createHost({
+          id: 3,
+          hostname: 'fresh-host',
+          cpuCores: 4,
+          memoryTotalKb: 1_048_576,
+          lastSeenAt: '2026-06-04 16:00:00',
+        }),
+      ],
+      containers: [],
+      nowMs: NOW_MS,
+    })
+
+    const result = buildInfrastructureMapGroups(resources, {
+      ...HOST_VIEW,
+      groupBy: 'agent',
+      fillBy: 'lastSeen',
+      sizeBy: 'cpu',
+    })
+
+    expect(result.groups.map((group) => group.label)).toEqual(['Unknown agent', 'v7.0.0'])
+    expect(getNode(result, 'Host 1')).toMatchObject({
+      subtitle: 'host',
+      fillTone: 'warning',
+      metricLabel: '1h ago',
+      sizeLabel: '0 cores',
+      sizePercent: 36,
+    })
+    expect(getNode(result, 'Host 1')?.details).toContainEqual({label: 'Last seen', value: 'never seen'})
+    expect(getNode(result, 'old-host')).toMatchObject({
+      fillTone: 'danger',
+      metricLabel: '4h ago',
+      sizePercent: 92,
+    })
+    expect(getNode(result, 'fresh-host')).toMatchObject({
+      fillTone: 'success',
+      metricLabel: 'just now',
+      sizeLabel: '4 cores',
+    })
+  })
+
+  it('groups hosts by tags and matches tag search text', () => {
+    const resources = createInfrastructureMapResources({
+      resourceKind: 'hosts',
+      hosts: [
+        createHost({
+          id: 1,
+          hostname: 'api-1',
+          tags: {service: 'api', region: 'us-east-1'},
+        }),
+        createHost({
+          id: 2,
+          hostname: 'db-1',
+          tags: {region: 'eu-west-1'},
+        }),
+      ],
+      containers: [],
+      nowMs: NOW_MS,
+    })
+
+    const cpuResult = buildInfrastructureMapGroups(resources, {
+      ...HOST_VIEW,
+      groupBy: 'tag:service',
+      fillBy: 'cpu',
+      sizeBy: 'memory',
+    })
+    const memoryResult = buildInfrastructureMapGroups(resources, {
+      ...HOST_VIEW,
+      groupBy: 'tag:service',
+      fillBy: 'memory',
+      sizeBy: 'uniform',
+    })
+    const searchResult = buildInfrastructureMapGroups(resources, {
+      ...HOST_VIEW,
+      groupBy: 'tag:service',
+      searchQuery: 'US-EAST-1',
+    })
+    const unknownDimensionResult = buildInfrastructureMapGroups(resources, {
+      ...HOST_VIEW,
+      groupBy: 'image',
+    })
+
+    expect(cpuResult.groups.map((group) => group.label)).toEqual(['api', 'No service'])
+    expect(getNode(cpuResult, 'api-1')).toMatchObject({
+      fillTone: 'info',
+      metricLabel: '4 cores',
+      sizeLabel: '8.0 GB',
+      sizePercent: 92,
+    })
+    expect(getNode(memoryResult, 'api-1')).toMatchObject({
+      fillTone: 'info',
+      metricLabel: '8.0 GB',
+      sizeLabel: 'uniform',
+    })
+    expect(searchResult.summary).toMatchObject({
+      visibleResources: 1,
+      healthyResources: 1,
+      groupCount: 1,
+    })
+    expect(searchResult.groups[0].label).toBe('api')
+    expect(unknownDimensionResult.groups.map((group) => group.label)).toEqual(['Unknown'])
+  })
+
+  it('applies container fallbacks for stopped and unnamed resources', () => {
+    const resources = createInfrastructureMapResources({
+      resourceKind: 'containers',
+      hosts: [createHost({id: 9, hostname: 'worker-2'})],
+      containers: [
+        createContainer({
+          host: '',
+          containerId: '',
+          name: '',
+          image: '',
+          state: 'exited',
+          cpuPercent: 0,
+          memUsage: 512,
+          memLimit: 0,
+          netRxBytes: 0,
+          netTxBytes: 0,
+          tags: {},
+          timestamp: 'not-a-date',
+        }),
+        createContainer({
+          host: 'worker-2',
+          containerId: 'abcdef1234567890',
+          name: '',
+          image: 'redis',
+          state: 'running',
+          cpuPercent: 55,
+          memUsage: 1_073_741_824,
+          memLimit: 0,
+          netRxBytes: 1,
+          netTxBytes: 2,
+          tags: {env: 'dev'},
+          timestamp: '2026-06-04T15:59:00+00:00',
+        }),
+      ],
+      nowMs: NOW_MS,
+    })
+
+    const healthResult = buildInfrastructureMapGroups(resources, {
+      ...CONTAINER_VIEW,
+      groupBy: 'host',
+      fillBy: 'health',
+      sizeBy: 'network',
+    })
+    const stoppedResult = buildInfrastructureMapGroups(resources, {
+      ...CONTAINER_VIEW,
+      groupBy: 'host',
+      fillBy: 'health',
+      sizeBy: 'network',
+      searchQuery: 'exited',
+    })
+    const memoryResult = buildInfrastructureMapGroups(resources, {
+      ...CONTAINER_VIEW,
+      groupBy: 'image',
+      fillBy: 'memory',
+      sizeBy: 'memory',
+      searchQuery: 'redis',
+    })
+
+    expect(healthResult.groups.map((group) => group.label)).toEqual(['Unknown host', 'worker-2'])
+    expect(getNode(healthResult, 'container')).toMatchObject({
+      subtitle: 'Unknown image',
+      statusLabel: 'stopped',
+      fillTone: 'danger',
+      metricLabel: 'stopped',
+      sizeLabel: '0 B',
+    })
+    expect(getNode(healthResult, 'container')?.details).toContainEqual({label: 'Memory', value: '512 B'})
+    expect(getNode(healthResult, 'abcdef123456')).toMatchObject({
+      hostId: 9,
+      fillTone: 'success',
+      metricLabel: 'running',
+      sizeLabel: '3 B',
+    })
+    expect(getNode(stoppedResult, 'container')).toMatchObject({
+      sizePercent: 58,
+    })
+    expect(getNode(memoryResult, 'abcdef123456')).toMatchObject({
+      fillTone: 'neutral',
+      metricLabel: '1.0 GB',
+      sizeLabel: '1.0 GB',
+    })
+  })
+
+  it('shows warning tones for medium container utilization and relative network volume', () => {
+    const resources = createInfrastructureMapResources({
+      resourceKind: 'containers',
+      hosts: [],
+      containers: [
+        createContainer({
+          containerId: 'medium',
+          name: 'medium-worker',
+          memUsage: 300_000_000,
+          memLimit: 536_870_912,
+          netRxBytes: 60,
+          netTxBytes: 0,
+        }),
+        createContainer({
+          containerId: 'busy',
+          name: 'busy-worker',
+          memUsage: 10_000_000,
+          memLimit: 536_870_912,
+          netRxBytes: 100,
+          netTxBytes: 0,
+        }),
+      ],
+      nowMs: NOW_MS,
+    })
+
+    const memoryResult = buildInfrastructureMapGroups(resources, {
+      ...CONTAINER_VIEW,
+      fillBy: 'memory',
+      sizeBy: 'uniform',
+    })
+    const networkResult = buildInfrastructureMapGroups(resources, {
+      ...CONTAINER_VIEW,
+      fillBy: 'network',
+      sizeBy: 'uniform',
+    })
+
+    expect(getNode(memoryResult, 'medium-worker')).toMatchObject({
+      fillTone: 'warning',
+      metricLabel: '286.1 MB',
+    })
+    expect(getNode(networkResult, 'medium-worker')).toMatchObject({
+      fillTone: 'warning',
+      metricLabel: '60 B',
+    })
+    expect(getNode(networkResult, 'busy-worker')).toMatchObject({
+      fillTone: 'danger',
+      metricLabel: '100 B',
+    })
+  })
+
 })
 
 function getNode(
