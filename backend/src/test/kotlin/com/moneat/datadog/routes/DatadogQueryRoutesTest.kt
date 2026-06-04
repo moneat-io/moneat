@@ -552,7 +552,7 @@ class DatadogQueryRoutesTest {
         installProfileRoutes()()
         val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
         val resp = client.get(
-            "/v1/profiles?service=api&type=cpu&source=datadog&env=prod&host=h1&version=v1" +
+            "/v1/profiles?service=api&services=api,worker&type=cpu&source=datadog&env=prod&host=h1&version=v1" +
                 "&from=100&to=200&limit=500&offset=3",
         ) {
             withAuth(token)
@@ -564,6 +564,7 @@ class DatadogQueryRoutesTest {
                 10,
                 match {
                     it.service == "api" &&
+                        it.services == listOf("api", "worker") &&
                         it.profileType == "cpu" &&
                         it.source == "datadog" &&
                         it.env == "prod" &&
@@ -748,7 +749,8 @@ class DatadogQueryRoutesTest {
         installProfileRoutes()()
         val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
         val resp = client.get(
-            "/v1/profiles/timeseries?service=api&type=cpu&env=prod&host=h1&from=1000&to=61000&buckets=10",
+            "/v1/profiles/timeseries?service=api&services=api,worker&type=cpu&env=prod" +
+                "&host=h1&from=1000&to=61000&buckets=10",
         ) {
             withAuth(token)
         }
@@ -759,6 +761,7 @@ class DatadogQueryRoutesTest {
                 match {
                     it.organizationId == 10 &&
                         it.filters.service == "api" &&
+                        it.filters.services == listOf("api", "worker") &&
                         it.filters.profileType == "cpu" &&
                         it.filters.env == "prod" &&
                         it.filters.host == "h1" &&

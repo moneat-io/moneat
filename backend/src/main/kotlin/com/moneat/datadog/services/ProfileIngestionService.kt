@@ -50,6 +50,7 @@ private val logger = KotlinLogging.logger {}
 /** Server-side filters/paging for the profile list endpoint. */
 data class DdProfileListQuery(
     val service: String? = null,
+    val services: List<String> = emptyList(),
     val profileType: String? = null,
     val source: String? = null,
     val env: String? = null,
@@ -64,6 +65,7 @@ data class DdProfileListQuery(
 /** Shared dimensions used by profile dashboard queries. */
 data class ProfileQueryFilters(
     val service: String? = null,
+    val services: List<String> = emptyList(),
     val profileType: String? = null,
     val source: String? = null,
     val env: String? = null,
@@ -118,6 +120,7 @@ data class ProfileMergeSelection(
 private fun DdProfileListQuery.toFilters(): ProfileQueryFilters =
     ProfileQueryFilters(
         service = service,
+        services = services,
         profileType = profileType,
         source = source,
         env = env,
@@ -635,9 +638,7 @@ object ProfileIngestionService {
         val clauses = mutableListOf(
             ClickHouseQueryUtils.orgIdClause(organizationId.toLong())
         )
-        filters.service?.takeIf { it.isNotBlank() }?.let {
-            clauses.add("service = '${escapeSql(it)}'")
-        }
+        serviceFilterClause(filters.service, filters.services)?.let(clauses::add)
         filters.profileType?.takeIf { it.isNotBlank() }?.let {
             clauses.add("profile_type = '${escapeSql(it)}'")
         }
@@ -656,6 +657,21 @@ object ProfileIngestionService {
         timeFilter.fromMs?.let { clauses.add("start_time >= fromUnixTimestamp64Milli($it)") }
         timeFilter.toMs?.let { clauses.add("start_time < fromUnixTimestamp64Milli($it)") }
         return clauses.joinToString(" AND ")
+    }
+
+    private fun serviceFilterClause(service: String?, services: List<String>): String? {
+        val values = (services + listOfNotNull(service))
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+        return when (values.size) {
+            0 -> null
+            1 -> "service = '${escapeSql(values.first())}'"
+            else -> {
+                val serviceList = values.joinToString(", ") { "'${escapeSql(it)}'" }
+                "service IN ($serviceList)"
+            }
+        }
     }
 
     private fun parseProfileRow(line: String): DdProfileResponse {

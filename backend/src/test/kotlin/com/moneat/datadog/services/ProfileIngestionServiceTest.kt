@@ -290,6 +290,7 @@ class ProfileIngestionServiceTest {
                 organizationId = 42,
                 query = DdProfileListQuery(
                     service = "api",
+                    services = listOf("api", "worker"),
                     profileType = "cpu",
                     source = "datadog",
                     env = "prod",
@@ -305,7 +306,7 @@ class ProfileIngestionServiceTest {
             assertEquals(1, response.totalCount)
             assertEquals("profile-1", response.profiles.single().profileId)
             assertEquals("api", response.profiles.single().service)
-            assertTrue(queries.any { it.contains("service = 'api'") })
+            assertTrue(queries.any { it.contains("service IN ('api', 'worker')") })
             assertTrue(queries.any { it.contains("start_time >= fromUnixTimestamp64Milli(1000)") })
             assertTrue(queries.any { it.contains("LIMIT 5 OFFSET 2") })
             val listQuery = queries.single { it.contains("ORDER BY start_time DESC") }
@@ -523,6 +524,7 @@ class ProfileIngestionServiceTest {
                     organizationId = 42,
                     filters = ProfileQueryFilters(
                         service = "api",
+                        services = listOf("api", "worker"),
                         profileType = "cpu",
                         env = "prod",
                         host = "host-a",
@@ -536,6 +538,7 @@ class ProfileIngestionServiceTest {
             assertEquals(4, response.points.single().count)
             assertEquals(4096, response.points.single().sizeBytes)
             val sql = queries.single()
+            assertTrue(sql.contains("service IN ('api', 'worker')"))
             assertTrue(sql.contains("profile_type = 'cpu'"))
             assertTrue(sql.contains("host = 'host-a'"))
             assertTrue(sql.contains("toUnixTimestamp(toStartOfInterval"))
