@@ -335,7 +335,7 @@ export function CommandPalette() {
             <div className="relative">
               <CommandInput
                 className="pr-24"
-                placeholder="Search dashboards, projects, pages..."
+                placeholder="Search dashboards, services, pages..."
                 value={search}
                 onValueChange={handleSearchChange}
                 onKeyDown={handleInputKeyDown}
@@ -431,7 +431,7 @@ export function CommandPalette() {
                 </CommandGroup>
               )}
               {searchResult?.projects && searchResult.projects.length > 0 && (
-                <CommandGroup heading="Projects">
+                <CommandGroup heading="Services">
                   {searchResult.projects.map((p) => (
                     <CommandItem
                       key={p.id}

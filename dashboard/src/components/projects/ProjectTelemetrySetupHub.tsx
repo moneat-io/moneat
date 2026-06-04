@@ -338,7 +338,7 @@ function TargetPlatformSection({
   return (
     <FlatSetupSection
       title="Target platforms"
-      description="Each target platform gets its own DSN for separate error monitoring."
+      description="Each target platform gets its own Sentry-compatible DSN for separate error monitoring."
       action={availableTargets.length > 0 && !showAddPlatform ? (
         <Button
           type="button"
@@ -445,8 +445,8 @@ function DsnSection({
   if (project.keys.length > 1) {
     return (
       <FlatSetupSection
-        title="Project DSNs"
-        description="Use the matching DSN for each target platform in your SDK."
+        title="Service DSNs"
+        description="Use the matching DSN for each target platform in your Sentry-compatible SDK."
       >
         <Tabs value={selectedTarget ?? 'default'} onValueChange={onSelectedTargetChange}>
           <TabsList className="mb-4 flex h-auto flex-wrap gap-1">
@@ -486,7 +486,7 @@ function DsnSection({
   }
 
   return (
-    <FlatSetupSection title="Project DSN" description="Use this DSN in a Sentry-compatible SDK.">
+    <FlatSetupSection title="Service DSN" description="Use this DSN in a Sentry-compatible SDK.">
       <div className="flex items-center gap-2">
         <code className="min-w-0 flex-1 break-all rounded-lg bg-muted px-3 py-2.5 text-sm">
           {project.dsn}
@@ -820,9 +820,9 @@ export function ProjectTelemetrySetupHub({
       setCopiedResourceId(true)
       setTimeout(() => setCopiedResourceId(false), COPY_RESET_MS)
     } catch (error) {
-      console.error('Failed to copy project resource ID:', error)
+      console.error('Failed to copy service ID:', error)
       toast({
-        title: 'Could not copy resource ID',
+        title: 'Could not copy service ID',
         description: 'Check browser clipboard permissions and try again.',
         variant: 'destructive',
       })
@@ -938,9 +938,13 @@ export function ProjectTelemetrySetupHub({
               ) : null}
               <Badge variant={statusVariant(activeStatus.state)}>{activeStatus.label}</Badge>
             </div>
-            <h1 className="text-3xl font-bold">{project.name}</h1>
+            <p className="text-sm font-medium text-muted-foreground">{project.name}</p>
+            <h1 className="text-3xl font-bold">Sources / Ingestion</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Connect telemetry sources and manage this service's stable ID, DSNs, and ingestion keys.
+            </p>
             <div className="mt-1 flex max-w-full items-center gap-2 text-xs text-muted-foreground">
-              <span>Project ID</span>
+              <span>Service ID</span>
               <code className="max-w-[min(28rem,70vw)] truncate rounded bg-muted px-1.5 py-0.5 font-mono text-foreground">
                 {project.resourceId}
               </code>
@@ -949,14 +953,14 @@ export function ProjectTelemetrySetupHub({
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6 shrink-0"
-                aria-label="Copy project ID"
+                aria-label="Copy service ID"
                 onClick={copyResourceId}
               >
                 {copiedResourceId ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               </Button>
             </div>
           </div>
-          <Button asChild variant="outline" size="icon" aria-label="Project settings">
+          <Button asChild variant="outline" size="icon" aria-label="Service settings">
             <Link to="/projects/$projectId/settings" params={{projectId: project.resourceId}}>
               <Settings className="h-4 w-4" />
             </Link>

@@ -430,7 +430,7 @@ export function ServiceSettingsCard({projectId, sourceIds, onDeleted}: ServiceSe
             <Link to="/projects/$projectId" params={{projectId}}>
               <Button variant="outline" size="sm">
                 <ExternalLink className="h-4 w-4" />
-                View setup guide
+                View ingestion setup
               </Button>
             </Link>
           </CardContent>
@@ -447,7 +447,7 @@ export function ServiceSettingsCard({projectId, sourceIds, onDeleted}: ServiceSe
             <Link to="/projects/$projectId" params={{projectId}}>
               <Button variant="outline" size="sm">
                 <ExternalLink className="h-4 w-4" />
-                View setup guide
+                View ingestion setup
               </Button>
             </Link>
           </CardContent>

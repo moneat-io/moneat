@@ -67,7 +67,7 @@ export const TELEMETRY_SOURCES: TelemetrySource[] = [
     shortLabel: 'Sentry SDK',
     description: 'Keep an existing Sentry SDK and send error, replay, and performance events to Moneat.',
     setupTitle: 'Connect a Sentry-compatible SDK',
-    setupDescription: 'Use the project DSN with the SDK for your selected platform.',
+    setupDescription: 'Use the service DSN with the SDK for your selected platform.',
     productHref: '/issues',
     productLabel: 'View issues',
   },
@@ -172,7 +172,7 @@ export function getTelemetrySourceStatus(
     return {
       state: 'waiting',
       label: 'Waiting',
-      detail: 'The project DSN is ready. Send a test event to verify setup.',
+      detail: 'The service DSN is ready. Send a test event to verify setup.',
     }
   }
 

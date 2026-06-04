@@ -51,7 +51,7 @@ function ProjectSettingsPage() {
             className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to setup guide
+            Back to ingestion setup
           </Link>
           <div>
             <h1 className="text-2xl font-bold">Service settings</h1>
