@@ -79,6 +79,7 @@ private suspend fun ApplicationCall.handleListProfiles() {
     val offset = (parameters["offset"]?.toIntOrNull() ?: 0).coerceAtLeast(0)
     val query = DdProfileListQuery(
         service = parameters["service"],
+        services = serviceFilters(),
         profileType = parameters["type"],
         source = parameters["source"],
         env = parameters["env"],
@@ -212,11 +213,24 @@ private suspend fun ApplicationCall.handleProfileFlamegraph() {
 private fun ApplicationCall.profileFilters(includeVersion: Boolean = false): ProfileQueryFilters =
     ProfileQueryFilters(
         service = parameters["service"],
+        services = serviceFilters(),
         profileType = parameters["type"],
         env = parameters["env"],
         host = parameters["host"],
         version = if (includeVersion) parameters["version"] else null,
     )
+
+private fun ApplicationCall.serviceFilters(): List<String> {
+    val services = parameters["services"]
+        ?.split(",")
+        ?.map { it.trim() }
+        ?.filter { it.isNotEmpty() }
+        ?: emptyList()
+    val legacyService = parameters["service"]
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+    return (services + listOfNotNull(legacyService)).distinct()
+}
 
 private suspend fun ApplicationCall.requireOrgId(): Int? {
     val orgId = orgIdOrNull()

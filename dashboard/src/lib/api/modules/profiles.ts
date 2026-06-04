@@ -25,6 +25,10 @@ import type {
   MergedFlamegraphResponse,
 } from '../types'
 
+function normalizedServices(services?: string[]): string[] {
+  return services?.map((service) => service.trim()).filter((service) => service !== '') ?? []
+}
+
 export function profilesMethods(core: ApiClientCore) {
   const base = core.API_BASE
 
@@ -32,6 +36,7 @@ export function profilesMethods(core: ApiClientCore) {
     getProfiles: (
       params: {
         service?: string
+        services?: string[]
         type?: string
         source?: string
         env?: string
@@ -45,6 +50,8 @@ export function profilesMethods(core: ApiClientCore) {
     ) => {
       const searchParams = new URLSearchParams()
       if (params.service) searchParams.set('service', params.service)
+      const services = normalizedServices(params.services)
+      if (services.length > 0) searchParams.set('services', services.join(','))
       if (params.type) searchParams.set('type', params.type)
       if (params.source) searchParams.set('source', params.source)
       if (params.env) searchParams.set('env', params.env)
@@ -72,6 +79,7 @@ export function profilesMethods(core: ApiClientCore) {
 
     getProfileTimeseries: (params: {
       service?: string
+      services?: string[]
       type?: string
       env?: string
       host?: string
@@ -81,6 +89,8 @@ export function profilesMethods(core: ApiClientCore) {
     }) => {
       const sp = new URLSearchParams()
       if (params.service) sp.set('service', params.service)
+      const services = normalizedServices(params.services)
+      if (services.length > 0) sp.set('services', services.join(','))
       if (params.type) sp.set('type', params.type)
       if (params.env) sp.set('env', params.env)
       if (params.host) sp.set('host', params.host)
@@ -94,6 +104,7 @@ export function profilesMethods(core: ApiClientCore) {
 
     getMergedFlamegraph: (params: {
       service?: string
+      services?: string[]
       type?: string
       env?: string
       host?: string
@@ -106,6 +117,8 @@ export function profilesMethods(core: ApiClientCore) {
     }) => {
       const sp = new URLSearchParams()
       if (params.service) sp.set('service', params.service)
+      const services = normalizedServices(params.services)
+      if (services.length > 0) sp.set('services', services.join(','))
       if (params.type) sp.set('type', params.type)
       if (params.env) sp.set('env', params.env)
       if (params.host) sp.set('host', params.host)

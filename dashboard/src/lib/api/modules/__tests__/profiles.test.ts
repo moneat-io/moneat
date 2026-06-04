@@ -50,6 +50,7 @@ describe('Profiles API', () => {
       http.get(`${API_BASE}/v1/profiles`, ({ request }) => {
         const url = new URL(request.url)
         expect(url.searchParams.get('service')).toBe('my-service')
+        expect(url.searchParams.get('services')).toBe('my-service,worker')
         expect(url.searchParams.get('type')).toBe('cpu')
         expect(url.searchParams.get('source')).toBe('agent')
         expect(url.searchParams.get('limit')).toBe('10')
@@ -60,6 +61,7 @@ describe('Profiles API', () => {
 
     const result = await api.getProfiles({
       service: 'my-service',
+      services: [' my-service ', '', 'worker '],
       type: 'cpu',
       source: 'agent',
       limit: 10,
@@ -151,6 +153,7 @@ describe('Profiles API', () => {
       http.get(`${API_BASE}/v1/profiles/timeseries`, ({ request }) => {
         const url = new URL(request.url)
         expect(url.searchParams.get('service')).toBe('api')
+        expect(url.searchParams.get('services')).toBe('api,worker')
         expect(url.searchParams.get('from')).toBe('0')
         expect(url.searchParams.get('to')).toBe('1000')
         expect(url.searchParams.get('buckets')).toBe('48')
@@ -159,6 +162,7 @@ describe('Profiles API', () => {
     )
     const result = await api.getProfileTimeseries({
       service: 'api',
+      services: [' api ', '', 'worker '],
       from: 0,
       to: 1000,
       buckets: 48,
@@ -174,6 +178,7 @@ describe('Profiles API', () => {
       http.get(`${API_BASE}/v1/profiles/merged-flamegraph`, ({ request }) => {
         const url = new URL(request.url)
         expect(url.searchParams.get('service')).toBe('api')
+        expect(url.searchParams.get('services')).toBe('api,worker')
         expect(url.searchParams.get('type')).toBe('jfr')
         expect(url.searchParams.get('sampleType')).toBe('cpu')
         expect(url.searchParams.get('maxProfiles')).toBe('25')
@@ -182,6 +187,7 @@ describe('Profiles API', () => {
     )
     const result = await api.getMergedFlamegraph({
       service: 'api',
+      services: [' api ', '', 'worker '],
       type: 'jfr',
       sampleType: 'cpu',
       maxProfiles: 25,

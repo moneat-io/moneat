@@ -375,6 +375,13 @@ describe('ProfileServiceList', () => {
 
     expect(await screen.findByText('No services match "missing".')).toBeInTheDocument()
   })
+
+  it('filters service rollups by profile type', async () => {
+    renderWithQueryClient(<ProfileServiceList typeFilter="jfr" />)
+
+    expect(await screen.findByRole('link', {name: /checkout/})).toBeInTheDocument()
+    expect(screen.queryByRole('link', {name: /worker/})).not.toBeInTheDocument()
+  })
 })
 
 describe('ServiceExplorer', () => {
@@ -433,6 +440,40 @@ describe('ServiceExplorer', () => {
     })
   })
 
+  it('clears the selected thread when the sample type changes', async () => {
+    renderWithQueryClient(<ServiceExplorer service="checkout" />)
+
+    expect(await screen.findByRole('heading', {name: 'checkout'})).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', {name: 'Pick thread'}))
+    await waitFor(() =>
+      expect(mockApi.getMergedFlamegraph).toHaveBeenLastCalledWith({
+        service: 'checkout',
+        env: undefined,
+        type: 'jfr',
+        from: RANGE_24H_START,
+        to: NOW_MS,
+        sampleType: null,
+        thread: 'main',
+        maxProfiles: 25,
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('button', {name: 'Pick sample type'}))
+    await waitFor(() =>
+      expect(mockApi.getMergedFlamegraph).toHaveBeenLastCalledWith({
+        service: 'checkout',
+        env: undefined,
+        type: 'jfr',
+        from: RANGE_24H_START,
+        to: NOW_MS,
+        sampleType: 'wall',
+        thread: null,
+        maxProfiles: 25,
+      }),
+    )
+  })
+
   it('renders fallback metadata for services without finite timestamps', async () => {
     renderWithQueryClient(<ServiceExplorer service="worker" />)
 
@@ -458,6 +499,36 @@ describe('profile routes', () => {
       type: undefined,
       limit: 50,
     })
+  })
+
+  it('applies profile facets to the all profiles query', async () => {
+    const ProfilesIndexComponent = getRouteComponent(ProfilesIndexRoute)
+
+    renderWithQueryClient(<ProfilesIndexComponent />)
+
+    fireEvent.click(await screen.findByLabelText('checkout'))
+    fireEvent.click(await screen.findByLabelText('jfr'))
+    fireEvent.click(screen.getByRole('button', {name: 'All profiles'}))
+
+    await waitFor(() => {
+      expect(mockApi.getProfiles).toHaveBeenCalledWith({
+        service: undefined,
+        services: ['checkout'],
+        type: 'jfr',
+        limit: 50,
+      })
+    })
+  })
+
+  it('applies the type facet to the services view', async () => {
+    const ProfilesIndexComponent = getRouteComponent(ProfilesIndexRoute)
+
+    renderWithQueryClient(<ProfilesIndexComponent />)
+
+    fireEvent.click(await screen.findByLabelText('jfr'))
+
+    expect(await screen.findByRole('link', {name: /checkout/})).toBeInTheDocument()
+    expect(screen.queryByRole('link', {name: /worker/})).not.toBeInTheDocument()
   })
 
   it('renders a profile detail route and forwards download/profile queries', async () => {
@@ -492,11 +563,89 @@ describe('profile routes', () => {
     renderWithQueryClient(<ProfileServiceComponent />)
 
     expect(await screen.findByRole('heading', {name: 'checkout'})).toBeInTheDocument()
+    expect(await screen.findByText('Profile facets')).toBeInTheDocument()
+    expect(screen.getByText('service:checkout')).toBeInTheDocument()
     expect(mockApi.getMergedFlamegraph).toHaveBeenCalledWith({
       service: 'checkout',
       env: undefined,
       type: 'jfr',
       from: RANGE_24H_START,
+      to: NOW_MS,
+      sampleType: null,
+      thread: null,
+      maxProfiles: 25,
+    })
+  })
+
+  it('forwards service route facet and time filters to profile aggregations', async () => {
+    mockRouteParams.value = {service: 'checkout'}
+    const ProfileServiceComponent = getRouteComponent(ProfileServiceRoute)
+
+    renderWithQueryClient(<ProfileServiceComponent />)
+
+    expect(await screen.findByText('Profile facets')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', {name: 'checkout'})).toBeInTheDocument()
+
+    fireEvent.click(await screen.findByLabelText('staging'))
+    await waitFor(() =>
+      expect(mockApi.getMergedFlamegraph).toHaveBeenLastCalledWith({
+        service: 'checkout',
+        env: 'staging',
+        type: 'jfr',
+        from: RANGE_24H_START,
+        to: NOW_MS,
+        sampleType: null,
+        thread: null,
+        maxProfiles: 25,
+      }),
+    )
+
+    fireEvent.click(screen.getByLabelText('pprof'))
+    await waitFor(() =>
+      expect(mockApi.getMergedFlamegraph).toHaveBeenLastCalledWith({
+        service: 'checkout',
+        env: 'staging',
+        type: 'pprof',
+        from: RANGE_24H_START,
+        to: NOW_MS,
+        sampleType: null,
+        thread: null,
+        maxProfiles: 25,
+      }),
+    )
+
+    fireEvent.click(screen.getByRole('button', {name: /24h/}))
+    fireEvent.click(screen.getByRole('button', {name: '6h'}))
+    await waitFor(() =>
+      expect(mockApi.getProfileTimeseries).toHaveBeenLastCalledWith({
+        service: 'checkout',
+        env: 'staging',
+        type: 'pprof',
+        from: NOW_MS - 6 * 60 * 60 * 1000,
+        to: NOW_MS,
+        buckets: 48,
+      }),
+    )
+    expect(mockApi.getMergedFlamegraph).toHaveBeenLastCalledWith({
+      service: 'checkout',
+      env: 'staging',
+      type: 'pprof',
+      from: NOW_MS - 6 * 60 * 60 * 1000,
+      to: NOW_MS,
+      sampleType: null,
+      thread: null,
+      maxProfiles: 25,
+    })
+
+    fireEvent.click(screen.getByRole('button', {name: /Remove service:checkout/}))
+    await waitFor(() =>
+      expect(screen.getByText('service:checkout')).toBeInTheDocument(),
+    )
+    expect(mockApi.getMergedFlamegraph).toHaveBeenLastCalledWith({
+      service: 'checkout',
+      env: 'staging',
+      type: 'pprof',
+      from: NOW_MS - 6 * 60 * 60 * 1000,
       to: NOW_MS,
       sampleType: null,
       thread: null,
