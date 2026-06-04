@@ -40,6 +40,7 @@ import com.moneat.events.models.UpdateProjectRequest
 import com.moneat.events.models.UpdateSidebarPreferencesRequest
 import com.moneat.events.models.UserResponse
 import com.moneat.events.services.DashboardService
+import com.moneat.events.services.IssueListQuery
 import com.moneat.notifications.services.AlertNotificationPreferencesService
 import com.moneat.org.routes.integrationCallbackRoutes
 import com.moneat.org.routes.integrationRoutes
@@ -86,12 +87,14 @@ import org.jetbrains.exposed.v1.jdbc.update
 import org.koin.core.context.GlobalContext
 import kotlin.time.Clock
 
+private const val DEFAULT_PAGE = 1
 private const val DEFAULT_PAGE_LIMIT = 25
 private const val DEFAULT_EVENTS_LIMIT = 50
 private const val DEFAULT_TRANSACTIONS_LIMIT = 20
 private const val DEFAULT_REPLAYS_LIMIT = 10
 private const val DEFAULT_ALERT_FREQUENCY_MINUTES = 30
 private const val DEFAULT_ALERT_LIFECYCLE_LIMIT = 50
+private const val DEMO_ORGANIZATION_ID = -1
 private const val ERROR_NO_ORGANIZATION_ACCESS = "No organization access"
 
 @Suppress("kotlin:S3776")
@@ -573,6 +576,50 @@ fun Route.apiRoutes() {
                 }
 
                 // Issues
+                get("/issues") {
+                    val principal = call.principal<JWTPrincipal>()
+                    val userId = principal!!.payload.getClaim("userId").asInt()
+                    val isDemo = call.isDemoUser()
+                    val demoEpochMs = call.getDemoEpochMs()
+
+                    val organizationId =
+                        if (isDemo) {
+                            DEMO_ORGANIZATION_ID
+                        } else {
+                            call.resolveSubscriptionOrganizationId(userId) ?: return@get
+                        }
+                    val serviceIds = call.resolveServiceIdsQuery(projectIdResolver)
+                    if (serviceIds == null) {
+                        call.respond(HttpStatusCode.BadRequest, "Invalid serviceIds")
+                        return@get
+                    }
+
+                    val page = call.request.queryParameters["page"]?.toIntOrNull() ?: DEFAULT_PAGE
+                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_PAGE_LIMIT
+                    if (page < 1 || limit < 1) {
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            ErrorResponse("page and limit must be positive integers")
+                        )
+                        return@get
+                    }
+                    val status = call.request.queryParameters["status"]
+                    val services = call.serviceNamesQuery()
+
+                    val issues = dashboardService.getIssues(
+                        IssueListQuery(
+                            organizationId = organizationId,
+                            page = page,
+                            limit = limit,
+                            status = status,
+                            serviceNames = services,
+                            serviceIds = serviceIds,
+                            demoEpochMs = demoEpochMs
+                        )
+                    )
+                    call.respond(issues)
+                }
+
                 get("/projects/{projectId}/issues") {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
@@ -1547,6 +1594,24 @@ private fun ApplicationCall.resolveProjectPathId(projectIdResolver: ProjectIdRes
 
 private fun ApplicationCall.resolveProjectQueryId(projectIdResolver: ProjectIdResolver): Long? =
     request.queryParameters["projectId"]?.let(projectIdResolver::resolve)
+
+private fun ApplicationCall.serviceNamesQuery(): List<String> =
+    queryCsvValues("services") + queryCsvValues("service")
+
+private fun ApplicationCall.resolveServiceIdsQuery(projectIdResolver: ProjectIdResolver): List<Long>? {
+    val rawServiceIds = queryCsvValues("serviceIds") + queryCsvValues("serviceId")
+    if (rawServiceIds.isEmpty()) return emptyList()
+    return rawServiceIds.map { rawServiceId ->
+        projectIdResolver.resolve(rawServiceId) ?: return null
+    }.distinct()
+}
+
+private fun ApplicationCall.queryCsvValues(name: String): List<String> =
+    request.queryParameters.getAll(name)
+        ?.flatMap { value -> value.split(",") }
+        ?.map { value -> value.trim() }
+        ?.filter { value -> value.isNotBlank() }
+        ?: emptyList()
 
 private suspend fun ApplicationCall.resolveSubscriptionOrganizationId(userId: Int): Int? {
     val orgId = principal<JWTPrincipal>()?.payload?.getClaim("orgId")?.asInt()

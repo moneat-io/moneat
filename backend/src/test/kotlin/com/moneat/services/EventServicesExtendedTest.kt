@@ -28,10 +28,13 @@ import com.moneat.events.models.IssueUpdateRequest
 import com.moneat.events.repositories.IssueRepository
 import com.moneat.events.repositories.models.IssueDetailRow
 import com.moneat.events.repositories.models.IssueRow
+import com.moneat.events.repositories.models.IssueStatusKey
 import com.moneat.events.services.DashboardQueryHelper
 import com.moneat.events.services.FeedbackService
 import com.moneat.events.services.IngestionWorker
+import com.moneat.events.services.IssueListQuery
 import com.moneat.events.services.IssueService
+import com.moneat.shared.models.OtelServiceProjectMappings
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.services.ProjectIdResolver
@@ -95,7 +98,7 @@ class EventServicesExtendedTest {
             driver = "org.h2.Driver"
         )
         TransactionManager.defaultDatabase = db
-        TestDatabaseHelper.resetSchema(Organizations, Projects)
+        TestDatabaseHelper.resetSchema(Organizations, Projects, OtelServiceProjectMappings)
         transaction {
             Organizations.insert {
                 it[id] = ORGANIZATION_ID
@@ -115,6 +118,7 @@ class EventServicesExtendedTest {
         alertEpisodeService = mockk(relaxed = true)
 
         coEvery { queryHelper.getProjectRetentionDays(any()) } returns 30
+        coEvery { queryHelper.getOrganizationRetentionDays(any()) } returns 30
         every {
             queryHelper.timestampRetentionClause(any(), any(), any())
         } returns "timestamp >= now() - INTERVAL 30 DAY"
@@ -255,6 +259,119 @@ class EventServicesExtendedTest {
         assertEquals(2, result.size)
         assertEquals("i3", result[0].id)
         assertEquals("i4", result[1].id)
+    }
+
+    @Test
+    fun `getIssues for organization applies status overrides per project`() = runBlocking {
+        val otherProjectId = seedProject("Other Project")
+        val rows = listOf(
+            makeIssueRow(issueId = "shared", projectId = testProjectId, status = "unresolved"),
+            makeIssueRow(issueId = "shared", projectId = otherProjectId, status = "unresolved")
+        )
+        every {
+            issueRepository.getIssueStatusOverridesForOrganization(ORGANIZATION_ID, emptyList())
+        } returns mapOf(IssueStatusKey(otherProjectId, "shared") to "ignored")
+        coEvery {
+            issueRepository.getOrganizationIssuesRaw(
+                organizationId = ORGANIZATION_ID,
+                serviceIds = emptyList(),
+                overfetch = any(),
+                retentionClause = any()
+            )
+        } returns rows
+
+        val result = issueService.getIssues(
+            IssueListQuery(
+                organizationId = ORGANIZATION_ID,
+                page = 1,
+                limit = 10,
+                status = "ignored"
+            )
+        )
+
+        assertEquals(1, result.size)
+        assertEquals(otherProjectId, result.single().projectId)
+    }
+
+    @Test
+    fun `getIssues for organization forwards service id filters`() = runBlocking {
+        every {
+            issueRepository.getIssueStatusOverridesForOrganization(ORGANIZATION_ID, listOf(testProjectId))
+        } returns emptyMap()
+        coEvery {
+            issueRepository.getOrganizationIssuesRaw(
+                organizationId = ORGANIZATION_ID,
+                serviceIds = listOf(testProjectId),
+                overfetch = 10,
+                retentionClause = any()
+            )
+        } returns listOf(makeIssueRow(projectId = testProjectId))
+
+        val result = issueService.getIssues(
+            IssueListQuery(
+                organizationId = ORGANIZATION_ID,
+                page = 1,
+                limit = 10,
+                status = null,
+                serviceIds = listOf(testProjectId)
+            )
+        )
+
+        assertEquals(1, result.size)
+        coVerify {
+            issueRepository.getOrganizationIssuesRaw(
+                organizationId = ORGANIZATION_ID,
+                serviceIds = listOf(testProjectId),
+                overfetch = 10,
+                retentionClause = any()
+            )
+        }
+    }
+
+    @Test
+    fun `getIssues for organization resolves service names to service ids`() = runBlocking {
+        every {
+            issueRepository.getIssueStatusOverridesForOrganization(ORGANIZATION_ID, listOf(testProjectId))
+        } returns emptyMap()
+        coEvery {
+            issueRepository.getOrganizationIssuesRaw(
+                organizationId = ORGANIZATION_ID,
+                serviceIds = listOf(testProjectId),
+                overfetch = 10,
+                retentionClause = any()
+            )
+        } returns listOf(makeIssueRow(projectId = testProjectId))
+
+        val result = issueService.getIssues(
+            IssueListQuery(
+                organizationId = ORGANIZATION_ID,
+                page = 1,
+                limit = 10,
+                status = null,
+                serviceNames = listOf("test-project")
+            )
+        )
+
+        assertEquals(1, result.size)
+        assertEquals(testProjectId, result.single().projectId)
+    }
+
+    @Test
+    fun `getIssues for organization returns empty when service names do not resolve`() = runBlocking {
+        val result = issueService.getIssues(
+            IssueListQuery(
+                organizationId = ORGANIZATION_ID,
+                page = 1,
+                limit = 10,
+                status = null,
+                serviceNames = listOf("missing-service")
+            )
+        )
+
+        assertTrue(result.isEmpty())
+        coVerify(exactly = 0) {
+            issueRepository.getOrganizationIssuesRaw(any(), any(), any(), any())
+        }
     }
 
     // ================================================================
@@ -422,7 +539,7 @@ class EventServicesExtendedTest {
     fun `updateIssue accepts all valid statuses`() = runBlocking {
         coEvery { issueRepository.getProjectIdForIssue(testIssueId) } returns testProjectId
 
-        for (status in listOf("unresolved", "resolved", "archived", "ignored")) {
+        for (status in listOf("unresolved", "resolved", "resolvedInNextRelease", "archived", "ignored")) {
             issueService.updateIssue(testIssueId, IssueUpdateRequest(status = status))
             verify { issueRepository.upsertIssueStatus(testIssueId, testProjectId, status) }
         }
@@ -468,13 +585,14 @@ class EventServicesExtendedTest {
     }
 
     @Test
-    fun `updateIssue resolved and archived close current error alert episode`() = runBlocking {
+    fun `updateIssue resolved states and archived close current error alert episode`() = runBlocking {
         coEvery { issueRepository.getProjectIdForIssue(testIssueId) } returns testProjectId
 
         issueService.updateIssue(testIssueId, IssueUpdateRequest(status = "resolved"))
+        issueService.updateIssue(testIssueId, IssueUpdateRequest(status = "resolvedInNextRelease"))
         issueService.updateIssue(testIssueId, IssueUpdateRequest(status = "archived"))
 
-        verify(exactly = 2) {
+        verify(exactly = 3) {
             alertEpisodeService.closeCurrentEpisode(
                 organizationId = ORGANIZATION_ID,
                 source = AlertSource.ERROR_ALERT,
@@ -953,10 +1071,11 @@ class EventServicesExtendedTest {
 
     private fun makeIssueRow(
         issueId: String = ISSUE_1,
-        status: String = "unresolved"
+        status: String = "unresolved",
+        projectId: Long = testProjectId
     ): IssueRow = IssueRow(
         issueId = issueId,
-        projectId = testProjectId,
+        projectId = projectId,
         title = "Test $issueId",
         culprit = "com.example.Main",
         level = "error",
@@ -968,6 +1087,15 @@ class EventServicesExtendedTest {
         status = status,
         fingerprint = listOf("fp1")
     )
+
+    private fun seedProject(name: String): Long =
+        transaction {
+            Projects.insert {
+                it[organization_id] = ORGANIZATION_ID
+                it[Projects.name] = name
+                it[slug] = name.lowercase().replace(" ", "-")
+            } get Projects.id
+        }
 
     private fun makeIssueDetailRow(
         issueId: String = ISSUE_1,

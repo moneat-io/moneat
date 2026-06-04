@@ -20,6 +20,7 @@ import com.moneat.events.models.EventResponse
 import com.moneat.events.models.IssueTransactionResponse
 import com.moneat.events.repositories.models.IssueDetailRow
 import com.moneat.events.repositories.models.IssueRow
+import com.moneat.events.repositories.models.IssueStatusKey
 
 /**
  * Repository for issue data access.
@@ -29,6 +30,10 @@ interface IssueRepository {
     suspend fun getProjectIdForIssue(issueId: String): Long?
     suspend fun getProjectIdForIssue(issueId: String, projectId: Long): Long?
     fun getIssueStatusOverrides(projectId: Long): Map<String, String>
+    fun getIssueStatusOverridesForOrganization(
+        organizationId: Int,
+        serviceIds: List<Long>
+    ): Map<IssueStatusKey, String>
     suspend fun getIssuesRaw(
         projectId: Long,
         offset: Int,
@@ -36,6 +41,12 @@ interface IssueRepository {
         retentionDays: Int,
         retentionClause: String,
         projectIdClause: String
+    ): List<IssueRow>
+    suspend fun getOrganizationIssuesRaw(
+        organizationId: Int,
+        serviceIds: List<Long>,
+        overfetch: Int,
+        retentionClause: String
     ): List<IssueRow>
     suspend fun getIssueDetailRaw(
         issueId: String,

@@ -137,6 +137,9 @@ class DashboardService(
     ): List<IssueResponse> =
         issueService.getIssues(projectId, page, limit, status, demoEpochMs)
 
+    suspend fun getIssues(query: IssueListQuery): List<IssueResponse> =
+        issueService.getIssues(query)
+
     suspend fun getIssue(
         issueId: String,
         demoEpochMs: Long? = null,

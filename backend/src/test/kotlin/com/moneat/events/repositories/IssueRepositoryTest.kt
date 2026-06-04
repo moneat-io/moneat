@@ -16,6 +16,7 @@
 
 package com.moneat.events.repositories
 
+import com.moneat.events.repositories.models.IssueStatusKey
 import com.moneat.events.services.DashboardQueryHelper
 import com.moneat.shared.models.IssueStatuses
 import com.moneat.shared.models.Organizations
@@ -39,6 +40,7 @@ class IssueRepositoryTest {
 
     private var db: Database? = null
     private lateinit var repository: IssueRepository
+    private var organizationId: Int = 0
     private var projectId: Long = 0L
 
     @BeforeTest
@@ -52,17 +54,20 @@ class IssueRepositoryTest {
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
         TestDatabaseHelper.resetSchema(Organizations, Projects, IssueStatuses)
         repository = IssueRepositoryImpl(DashboardQueryHelper())
-        projectId = transaction {
+        val seedIds = transaction {
             val orgId = Organizations.insert {
                 it[name] = "Org"
                 it[slug] = "org"
             } get Organizations.id
-            Projects.insert {
+            val seededProjectId = Projects.insert {
                 it[organization_id] = orgId
                 it[name] = "Project"
                 it[slug] = "project"
             } get Projects.id
+            orgId to seededProjectId
         }
+        organizationId = seedIds.first
+        projectId = seedIds.second
     }
 
     // ──── getIssueStatusOverrides ────
@@ -88,6 +93,30 @@ class IssueRepositoryTest {
         // projectId <= 0 is a sentinel for demo projects; should return empty without hitting DB
         val overrides = repository.getIssueStatusOverrides(-1L)
         assertTrue(overrides.isEmpty())
+    }
+
+    @Test
+    fun `getIssueStatusOverridesForOrganization keys overrides by project and issue`() {
+        val otherProjectId = transaction {
+            Projects.insert {
+                it[organization_id] = organizationId
+                it[name] = "Other Project"
+                it[slug] = "other-project"
+            } get Projects.id
+        }
+        repository.upsertIssueStatus("shared-issue", projectId, "resolved")
+        repository.upsertIssueStatus("shared-issue", otherProjectId, "ignored")
+
+        val overrides = repository.getIssueStatusOverridesForOrganization(
+            organizationId = organizationId,
+            serviceIds = emptyList()
+        )
+
+        assertEquals("resolved", overrides[IssueStatusKey(projectId, "shared-issue")])
+        assertEquals(
+            "ignored",
+            overrides[IssueStatusKey(otherProjectId, "shared-issue")]
+        )
     }
 
     // ──── getIssueStatus ────
