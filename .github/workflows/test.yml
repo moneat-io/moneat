@@ -268,7 +268,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          mkdir -p "${HOME}/.sonar/cache"
+          mkdir -p "${HOME}/.sonar/cache" backend/.scannerwork
           docker run --rm \
             --user "$(id -u):$(id -g)" \
             -e SONAR_HOST_URL \
@@ -278,7 +278,8 @@ jobs:
             -v "${HOME}/.sonar:/usr/src/.sonar" \
             -w /usr/src/backend \
             "${SONAR_SCANNER_IMAGE}" \
-            -Dsonar.projectVersion=${{ steps.sonar-version.outputs.version }}
+            -Dsonar.projectVersion=${{ steps.sonar-version.outputs.version }} \
+            -Dsonar.working.directory=.scannerwork
 
       - name: SonarQube Quality Gate check
         id: sonarqube-quality-gate-check
