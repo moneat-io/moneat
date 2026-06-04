@@ -53,6 +53,9 @@ import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 
 private const val LOG_FORBIDDEN_MESSAGE = "Insufficient permissions"
+private const val PIPELINE_NOT_FOUND_MESSAGE = "Pipeline not found"
+private const val SAVED_VIEW_NOT_FOUND_MESSAGE = "Saved view not found"
+private const val METRIC_RULE_NOT_FOUND_MESSAGE = "Metric rule not found"
 private const val DEFAULT_METRIC_ROLLUP_MINUTES = 5L
 private const val MAX_METRIC_ROLLUP_DAYS = 1L
 
@@ -63,10 +66,20 @@ fun Route.registerLogManagementRoutes(
     membershipService: OrgMembershipService,
     dashboardAlertService: DashboardAlertService
 ) {
+    registerLogIndexManagementRoutes(logIndexService, membershipService)
+    registerLogPipelineManagementRoutes(logManagementService, membershipService)
+    registerLogSavedViewManagementRoutes(logManagementService, membershipService)
+    registerLogMetricManagementRoutes(logManagementService, logService, membershipService)
+    registerLogMonitorManagementRoutes(membershipService, dashboardAlertService)
+}
+
+private fun Route.registerLogIndexManagementRoutes(
+    logIndexService: LogIndexService,
+    membershipService: OrgMembershipService
+) {
     get("/logs/permissions") {
         call.respondLogPermissions(membershipService)
     }
-
     get("/logs/indexes/usage") {
         call.respond(HttpStatusCode.OK, mapOf("usage" to logIndexService.usageStats(call.logOrgId())))
     }
@@ -75,7 +88,12 @@ fun Route.registerLogManagementRoutes(
         val applied = logIndexService.enforceRetention(call.logOrgId())
         call.respond(HttpStatusCode.OK, mapOf("indexes_processed" to applied))
     }
+}
 
+private fun Route.registerLogPipelineManagementRoutes(
+    logManagementService: LogManagementService,
+    membershipService: OrgMembershipService
+) {
     get("/logs/pipelines") {
         call.respond(HttpStatusCode.OK, mapOf("pipelines" to logManagementService.listPipelines(call.logOrgId())))
     }
@@ -89,19 +107,24 @@ fun Route.registerLogManagementRoutes(
         if (!call.ensureLogAccess(membershipService, LogPermissions.MANAGE)) return@put
         val id = call.logPathId("id") ?: return@put
         val updated = logManagementService.updatePipeline(call.logOrgId(), id, call.receive<UpdateLogPipelineRequest>())
-        call.respondNullable(updated, "Pipeline not found")
+        call.respondNullable(updated, PIPELINE_NOT_FOUND_MESSAGE)
     }
     delete("/logs/pipelines/{id}") {
         if (!call.ensureLogAccess(membershipService, LogPermissions.MANAGE)) return@delete
         val id = call.logPathId("id") ?: return@delete
-        call.respondDeleted(logManagementService.deletePipeline(call.logOrgId(), id), "Pipeline not found")
+        call.respondDeleted(logManagementService.deletePipeline(call.logOrgId(), id), PIPELINE_NOT_FOUND_MESSAGE)
     }
     post("/logs/pipelines/preview") {
         if (!call.ensureLogAccess(membershipService, LogPermissions.MANAGE)) return@post
         val result = logManagementService.previewPipeline(call.receive<LogPipelinePreviewRequest>())
         call.respond(HttpStatusCode.OK, mapOf("results" to result))
     }
+}
 
+private fun Route.registerLogSavedViewManagementRoutes(
+    logManagementService: LogManagementService,
+    membershipService: OrgMembershipService
+) {
     get("/logs/saved-views") {
         call.respond(
             HttpStatusCode.OK,
@@ -123,17 +146,23 @@ fun Route.registerLogManagementRoutes(
             call.logUserId(),
             call.receive<UpdateLogSavedViewRequest>()
         )
-        call.respondNullable(updated, "Saved view not found")
+        call.respondNullable(updated, SAVED_VIEW_NOT_FOUND_MESSAGE)
     }
     delete("/logs/saved-views/{id}") {
         if (!call.ensureLogAccess(membershipService, LogPermissions.MANAGE)) return@delete
         val id = call.logPathId("id") ?: return@delete
         call.respondDeleted(
             logManagementService.deleteSavedView(call.logOrgId(), id, call.logUserId()),
-            "Saved view not found"
+            SAVED_VIEW_NOT_FOUND_MESSAGE
         )
     }
+}
 
+private fun Route.registerLogMetricManagementRoutes(
+    logManagementService: LogManagementService,
+    logService: LogService,
+    membershipService: OrgMembershipService
+) {
     get("/logs/metrics/rules") {
         call.respond(HttpStatusCode.OK, mapOf("rules" to logManagementService.listMetricRules(call.logOrgId())))
     }
@@ -151,12 +180,12 @@ fun Route.registerLogManagementRoutes(
             id,
             call.receive<UpdateLogMetricRuleRequest>()
         )
-        call.respondNullable(updated, "Metric rule not found")
+        call.respondNullable(updated, METRIC_RULE_NOT_FOUND_MESSAGE)
     }
     delete("/logs/metrics/rules/{id}") {
         if (!call.ensureLogAccess(membershipService, LogPermissions.METRICS)) return@delete
         val id = call.logPathId("id") ?: return@delete
-        call.respondDeleted(logManagementService.deleteMetricRule(call.logOrgId(), id), "Metric rule not found")
+        call.respondDeleted(logManagementService.deleteMetricRule(call.logOrgId(), id), METRIC_RULE_NOT_FOUND_MESSAGE)
     }
     post("/logs/metrics/preview") {
         if (!call.ensureLogAccess(membershipService, LogPermissions.METRICS)) return@post
@@ -168,12 +197,17 @@ fun Route.registerLogManagementRoutes(
         if (!call.ensureLogAccess(membershipService, LogPermissions.METRICS)) return@post
         val id = call.logPathId("id") ?: return@post
         val rule = logManagementService.getMetricRule(call.logOrgId(), id)
-            ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse("Metric rule not found"))
+            ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse(METRIC_RULE_NOT_FOUND_MESSAGE))
         val aggregate = logService.aggregateForMetricPreview(call.logOrgId().toLong(), rule.toCreateRequest())
         val inserted = logManagementService.recordMetricPoints(call.logOrgId().toLong(), rule, aggregate)
         call.respond(HttpStatusCode.OK, mapOf("points_inserted" to inserted))
     }
+}
 
+private fun Route.registerLogMonitorManagementRoutes(
+    membershipService: OrgMembershipService,
+    dashboardAlertService: DashboardAlertService
+) {
     post("/logs/monitors/from-query") {
         if (!call.ensureLogAccess(membershipService, LogPermissions.MONITORS)) return@post
         val request = call.receive<LogMonitorDraftRequest>()

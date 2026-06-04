@@ -72,7 +72,7 @@ class LogEntryFilterEvaluator(
     ): Boolean {
         val value = entry[node.field] ?: return false
         if (!node.isWildcard) {
-            return value.equals(node.value, ignoreCase = true)
+            return value.lowercase() == node.value.lowercase()
         }
 
         val pattern = Regex.escape(node.value)

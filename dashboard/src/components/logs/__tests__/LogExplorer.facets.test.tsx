@@ -29,6 +29,7 @@ const {mockApi, mockNavigate} = vi.hoisted(() => ({
     getLogTagValues: vi.fn(),
     getLogTop: vi.fn(),
     getLogs: vi.fn(),
+    createLogTailStream: vi.fn(),
     getCurrentUser: vi.fn(),
     getSystemLogs: vi.fn(),
     isAuthenticated: vi.fn(() => false),
@@ -118,6 +119,22 @@ function sampleLog(overrides: Partial<{
   }
 }
 
+interface MockLogTailStream {
+  close: ReturnType<typeof vi.fn>
+  onerror: ((event: Event) => void) | null
+  onmessage: ((event: MessageEvent) => void) | null
+  onopen: ((event: Event) => void) | null
+}
+
+function createMockLogTailStream(): MockLogTailStream {
+  return {
+    close: vi.fn(),
+    onerror: null,
+    onmessage: null,
+    onopen: null,
+  }
+}
+
 describe('LogExplorer facets', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -161,6 +178,7 @@ describe('LogExplorer facets', () => {
       totalCount: 0,
     })
     mockApi.downloadLogExport.mockResolvedValue(undefined)
+    mockApi.createLogTailStream.mockImplementation(createMockLogTailStream)
   })
 
   it('forwards selected service environment and level filters to log queries', async () => {
@@ -441,5 +459,74 @@ describe('LogExplorer facets', () => {
     })
     expect(await screen.findByRole('button', {name: 'checkout'})).toBeTruthy()
     expect(screen.queryByRole('button', {name: 'payments'})).toBeNull()
+  })
+
+  it('streams live-tail logs, closes on pause, and reconnects when filters change', async () => {
+    const streams: MockLogTailStream[] = []
+    mockApi.createLogTailStream.mockImplementation(() => {
+      const stream = createMockLogTailStream()
+      streams.push(stream)
+      return stream
+    })
+
+    renderLogExplorer()
+
+    fireEvent.click(await screen.findByRole('button', {name: 'Live tail'}))
+    await waitFor(() => {
+      expect(mockApi.createLogTailStream).toHaveBeenCalledWith(expect.objectContaining({
+        query: undefined,
+        levels: undefined,
+      }))
+    })
+
+    streams[0].onopen?.({} as Event)
+    streams[0].onmessage?.({
+      data: JSON.stringify({
+        log_id: 'live-1',
+        timestamp: '2026-06-03T12:00:01.000Z',
+        level: 'error',
+        message: 'live payment failed',
+        service: 'api',
+        environment: 'prod',
+        trace_id: 'trace-live',
+      }),
+    } as MessageEvent)
+
+    expect(await screen.findByText('live payment failed')).toBeInTheDocument()
+
+    streams[0].onmessage?.({
+      data: JSON.stringify({
+        log_id: 'live-1',
+        timestamp: '2026-06-03T12:00:01.000Z',
+        level: 'error',
+        message: 'live payment failed',
+        service: 'api',
+        environment: 'prod',
+      }),
+    } as MessageEvent)
+    expect(screen.getAllByText('live payment failed')).toHaveLength(1)
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    streams[0].onmessage?.({data: 'not-json'} as MessageEvent)
+    expect(consoleError).toHaveBeenCalledWith('Live tail event parse failed:', expect.any(String))
+    consoleError.mockRestore()
+
+    const input = screen.getByPlaceholderText('Search...')
+    fireEvent.change(input, {target: {value: 'level:error'}})
+    fireEvent.keyDown(input, {key: 'Enter'})
+
+    await waitFor(() => {
+      expect(streams[0].close).toHaveBeenCalled()
+      expect(mockApi.createLogTailStream).toHaveBeenLastCalledWith(expect.objectContaining({
+        levels: ['error'],
+      }))
+    })
+
+    streams.at(-1)?.onerror?.({} as Event)
+    fireEvent.click(screen.getByRole('button', {name: 'Pause live'}))
+
+    await waitFor(() => {
+      expect(streams.at(-1)?.close).toHaveBeenCalled()
+    })
   })
 })

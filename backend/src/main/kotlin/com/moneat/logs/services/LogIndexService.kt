@@ -453,16 +453,14 @@ class LogIndexService {
                 ?.let { excludeId == null || it[LogIndexes.id] != excludeId }
                 ?: false
         }
-        if (duplicate) throw IllegalArgumentException("Index name already exists")
+        require(!duplicate) { "Index name already exists" }
     }
 
     private fun <T> mapDuplicateIndexName(block: () -> T): T =
         try {
             block()
         } catch (error: ExposedSQLException) {
-            if (error.sqlState == POSTGRES_UNIQUE_VIOLATION_SQLSTATE) {
-                throw IllegalArgumentException("Index name already exists")
-            }
+            require(error.sqlState != POSTGRES_UNIQUE_VIOLATION_SQLSTATE) { "Index name already exists" }
             throw error
         }
 

@@ -66,6 +66,13 @@ private const val DEFAULT_METRIC_GROUP_VALUE = ""
 private const val KEY_VALUE_PATTERN = """([A-Za-z0-9_.-]+)=([^\s]+)"""
 private const val CLICKHOUSE_ERROR_PREVIEW_CHARS = 500
 private const val POSTGRES_UNIQUE_VIOLATION_SQLSTATE = "23505"
+private const val PIPELINE_NAME_REQUIRED_MESSAGE = "Pipeline name is required"
+private const val PIPELINE_NAME_EXISTS_MESSAGE = "Pipeline name already exists"
+private const val SAVED_VIEW_NAME_REQUIRED_MESSAGE = "Saved view name is required"
+private const val SAVED_VIEW_NAME_EXISTS_MESSAGE = "Saved view name already exists"
+private const val METRIC_RULE_NAME_REQUIRED_MESSAGE = "Metric rule name is required"
+private const val METRIC_RULE_NAME_EXISTS_MESSAGE = "Metric rule name already exists"
+private const val DROP_STEP_CONDITION_REQUIRED_MESSAGE = "Drop pipeline steps require a condition"
 
 class LogManagementService {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
@@ -76,10 +83,8 @@ class LogManagementService {
 
         fun normalizeMetricGroupBy(value: String?): String? {
             val normalized = value?.trim()?.takeIf { it.isNotBlank() } ?: return null
-            if (normalized !in validMetricGroupFields) {
-                throw IllegalArgumentException(
-                    "Metric group_by must be one of: ${validMetricGroupFields.joinToString()}"
-                )
+            require(normalized in validMetricGroupFields) {
+                "Metric group_by must be one of: ${validMetricGroupFields.joinToString()}"
             }
             return normalized
         }
@@ -99,12 +104,11 @@ class LogManagementService {
         createdBy: Int,
         request: CreateLogPipelineRequest
     ): LogPipelineResponse {
-        val name = request.name.trim()
-        if (name.isBlank()) throw IllegalArgumentException("Pipeline name is required")
+        val name = requireTrimmedName(request.name, PIPELINE_NAME_REQUIRED_MESSAGE)
         ensurePipelineNameAvailable(organizationId, name)
         validatePipelineSteps(request.steps)
         val now = Clock.System.now()
-        val id = mapDuplicateName("Pipeline name already exists") {
+        val id = mapDuplicateName(PIPELINE_NAME_EXISTS_MESSAGE) {
             transaction {
                 LogPipelines.insert {
                     it[LogPipelines.organizationId] = organizationId
@@ -128,21 +132,18 @@ class LogManagementService {
         pipelineId: Int,
         request: UpdateLogPipelineRequest
     ): LogPipelineResponse? {
-        request.name?.trim()?.takeIf { it.isNotBlank() }?.let { name ->
-            ensurePipelineNameAvailable(organizationId, name, pipelineId)
-        }
+        val nameUpdate = request.name?.let { requireTrimmedName(it, PIPELINE_NAME_REQUIRED_MESSAGE) }
+        nameUpdate?.let { name -> ensurePipelineNameAvailable(organizationId, name, pipelineId) }
         request.steps?.let { validatePipelineSteps(it) }
         val now = Clock.System.now()
-        val updated = mapDuplicateName("Pipeline name already exists") {
+        val updated = mapDuplicateName(PIPELINE_NAME_EXISTS_MESSAGE) {
             transaction {
                 LogPipelines.update({
                     (LogPipelines.id eq pipelineId) and
                         (LogPipelines.organizationId eq organizationId)
                 }) {
-                    request.name?.let { name ->
-                        val trimmed = name.trim()
-                        if (trimmed.isBlank()) throw IllegalArgumentException("Pipeline name is required")
-                        it[LogPipelines.name] = trimmed
+                    nameUpdate?.let { name ->
+                        it[LogPipelines.name] = name
                     }
                     request.description?.let { value ->
                         it[LogPipelines.description] = value.trim()
@@ -237,11 +238,10 @@ class LogManagementService {
         createdBy: Int,
         request: CreateLogSavedViewRequest
     ): LogSavedViewResponse {
-        val name = request.name.trim()
-        if (name.isBlank()) throw IllegalArgumentException("Saved view name is required")
+        val name = requireTrimmedName(request.name, SAVED_VIEW_NAME_REQUIRED_MESSAGE)
         ensureSavedViewNameAvailable(organizationId, name)
         val now = Clock.System.now()
-        val id = mapDuplicateName("Saved view name already exists") {
+        val id = mapDuplicateName(SAVED_VIEW_NAME_EXISTS_MESSAGE) {
             transaction {
                 LogSavedViews.insert {
                     it[LogSavedViews.organizationId] = organizationId
@@ -263,19 +263,16 @@ class LogManagementService {
         userId: Int,
         request: UpdateLogSavedViewRequest
     ): LogSavedViewResponse? {
-        request.name?.trim()?.takeIf { it.isNotBlank() }?.let { name ->
-            ensureSavedViewNameAvailable(organizationId, name, viewId)
-        }
+        val nameUpdate = request.name?.let { requireTrimmedName(it, SAVED_VIEW_NAME_REQUIRED_MESSAGE) }
+        nameUpdate?.let { name -> ensureSavedViewNameAvailable(organizationId, name, viewId) }
         val now = Clock.System.now()
-        val updated = mapDuplicateName("Saved view name already exists") {
+        val updated = mapDuplicateName(SAVED_VIEW_NAME_EXISTS_MESSAGE) {
             transaction {
                 LogSavedViews.update({
                     savedViewAccessCondition(organizationId, viewId, userId)
                 }) {
-                    request.name?.let { name ->
-                        val trimmed = name.trim()
-                        if (trimmed.isBlank()) throw IllegalArgumentException("Saved view name is required")
-                        it[LogSavedViews.name] = trimmed
+                    nameUpdate?.let { name ->
+                        it[LogSavedViews.name] = name
                     }
                     request.state?.let { state ->
                         it[LogSavedViews.viewStateJson] = encodeViewState(state)
@@ -316,12 +313,11 @@ class LogManagementService {
         createdBy: Int,
         request: CreateLogMetricRuleRequest
     ): LogMetricRuleResponse {
-        val name = request.name.trim()
-        if (name.isBlank()) throw IllegalArgumentException("Metric rule name is required")
+        val name = requireTrimmedName(request.name, METRIC_RULE_NAME_REQUIRED_MESSAGE)
         ensureMetricRuleNameAvailable(organizationId, name)
         val groupBy = normalizeMetricGroupBy(request.groupBy)
         val now = Clock.System.now()
-        val id = mapDuplicateName("Metric rule name already exists") {
+        val id = mapDuplicateName(METRIC_RULE_NAME_EXISTS_MESSAGE) {
             transaction {
                 LogMetricRules.insert {
                     it[LogMetricRules.organizationId] = organizationId
@@ -345,20 +341,17 @@ class LogManagementService {
         ruleId: Int,
         request: UpdateLogMetricRuleRequest
     ): LogMetricRuleResponse? {
-        request.name?.trim()?.takeIf { it.isNotBlank() }?.let { name ->
-            ensureMetricRuleNameAvailable(organizationId, name, ruleId)
-        }
+        val nameUpdate = request.name?.let { requireTrimmedName(it, METRIC_RULE_NAME_REQUIRED_MESSAGE) }
+        nameUpdate?.let { name -> ensureMetricRuleNameAvailable(organizationId, name, ruleId) }
         val now = Clock.System.now()
-        val updated = mapDuplicateName("Metric rule name already exists") {
+        val updated = mapDuplicateName(METRIC_RULE_NAME_EXISTS_MESSAGE) {
             transaction {
                 LogMetricRules.update({
                     (LogMetricRules.id eq ruleId) and
                         (LogMetricRules.organizationId eq organizationId)
                 }) {
-                    request.name?.let { name ->
-                        val trimmed = name.trim()
-                        if (trimmed.isBlank()) throw IllegalArgumentException("Metric rule name is required")
-                        it[LogMetricRules.name] = trimmed
+                    nameUpdate?.let { name ->
+                        it[LogMetricRules.name] = name
                     }
                     request.query?.let { value ->
                         it[LogMetricRules.query] = value.trim()
@@ -612,10 +605,19 @@ class LogManagementService {
 
     private fun validatePipelineSteps(steps: List<LogPipelineStep>) {
         steps.forEach { step ->
-            if (step.enabled && step.type.trim().lowercase() == "drop" && step.condition.isBlank()) {
-                throw IllegalArgumentException("Drop pipeline steps require a condition")
+            val unconditionalDrop = step.enabled &&
+                step.type.trim().lowercase() == "drop" &&
+                step.condition.isBlank()
+            require(!unconditionalDrop) {
+                DROP_STEP_CONDITION_REQUIRED_MESSAGE
             }
         }
+    }
+
+    private fun requireTrimmedName(value: String, message: String): String {
+        val trimmed = value.trim()
+        require(trimmed.isNotBlank()) { message }
+        return trimmed
     }
 
     private fun ensurePipelineNameAvailable(
@@ -634,7 +636,7 @@ class LogManagementService {
                 ?.let { excludeId == null || it[LogPipelines.id] != excludeId }
                 ?: false
         }
-        if (duplicate) throw IllegalArgumentException("Pipeline name already exists")
+        require(!duplicate) { PIPELINE_NAME_EXISTS_MESSAGE }
     }
 
     private fun ensureSavedViewNameAvailable(
@@ -653,7 +655,7 @@ class LogManagementService {
                 ?.let { excludeId == null || it[LogSavedViews.id] != excludeId }
                 ?: false
         }
-        if (duplicate) throw IllegalArgumentException("Saved view name already exists")
+        require(!duplicate) { SAVED_VIEW_NAME_EXISTS_MESSAGE }
     }
 
     private fun ensureMetricRuleNameAvailable(
@@ -672,7 +674,7 @@ class LogManagementService {
                 ?.let { excludeId == null || it[LogMetricRules.id] != excludeId }
                 ?: false
         }
-        if (duplicate) throw IllegalArgumentException("Metric rule name already exists")
+        require(!duplicate) { METRIC_RULE_NAME_EXISTS_MESSAGE }
     }
 
     private fun savedViewAccessCondition(
@@ -688,9 +690,7 @@ class LogManagementService {
         try {
             block()
         } catch (error: ExposedSQLException) {
-            if (error.sqlState == POSTGRES_UNIQUE_VIOLATION_SQLSTATE) {
-                throw IllegalArgumentException(message)
-            }
+            require(error.sqlState != POSTGRES_UNIQUE_VIOLATION_SQLSTATE) { message }
             throw error
         }
 
@@ -753,11 +753,18 @@ private data class PipelineEntryState(
             "container_image" -> containerImage
             "trace_id" -> traceId
             "span_id" -> spanId
-            else -> tags[field]
-                ?: resourceAttributes[field]
-                ?: field.removePrefix("tags.").takeIf { it != field }?.let { tags[it] }
-                ?: field.removePrefix("resource_attributes.").takeIf { it != field }?.let { resourceAttributes[it] }
+            else -> getNestedField(field)
         }
+    }
+
+    private fun getNestedField(field: String): String? {
+        val tagKey = field.removePrefix("tags.").takeIf { it != field }
+        if (tagKey != null) return tags[tagKey]
+
+        val resourceAttributeKey = field.removePrefix("resource_attributes.").takeIf { it != field }
+        if (resourceAttributeKey != null) return resourceAttributes[resourceAttributeKey]
+
+        return tags[field] ?: resourceAttributes[field]
     }
 
     fun set(
