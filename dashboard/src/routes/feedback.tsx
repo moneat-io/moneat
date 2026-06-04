@@ -17,8 +17,8 @@
 import {createFileRoute, Outlet, redirect, useMatches, useNavigate} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
-import {useProject} from '@/contexts/ProjectContext'
 import {formatRelativeTime, cn} from '@/lib/utils'
+import {FacetRail} from '@/components/filters/FacetRail'
 import {Badge, type BadgeProps} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
@@ -43,8 +43,15 @@ import {
   Search,
   Video,
 } from 'lucide-react'
-import {useEffect, useMemo, useState} from 'react'
+import {useMemo, useState} from 'react'
 import {useToast} from '@/hooks/useToast'
+import {
+  facetValues,
+  serviceNamesForQuery,
+  serviceRailSections,
+  serviceScopeKey,
+} from '@/lib/service-facet-scope'
+import type {FacetFilter} from '@/lib/filters/types'
 
 export const Route = createFileRoute('/feedback')({
   beforeLoad: async ({ location }) => {
@@ -156,7 +163,7 @@ function FeedbackPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('unresolved')
   const [selectedFeedback, setSelectedFeedback] = useState<Set<string>>(new Set())
-  const { selectedProjectId, setSelectedProjectId } = useProject()
+  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -166,35 +173,47 @@ function FeedbackPage() {
     queryFn: () => api.getProjects(),
   })
 
-  const projectId = selectedProjectId || projects?.[0]?.resourceId
-
-  useEffect(() => {
-    if (!selectedProjectId && projects?.[0]?.resourceId) {
-      setSelectedProjectId(projects[0].resourceId)
-    }
-  }, [selectedProjectId, projects, setSelectedProjectId])
+  const projectList = projects ?? []
+  const includedServices = useMemo(
+    () => facetValues(facetFilters, 'service', false),
+    [facetFilters]
+  )
+  const excludedServices = useMemo(
+    () => facetValues(facetFilters, 'service', true),
+    [facetFilters]
+  )
+  const hasServiceFilters = includedServices.length > 0 || excludedServices.length > 0
+  const serviceNames = useMemo(
+    () => serviceNamesForQuery(projectList, includedServices, excludedServices),
+    [projectList, includedServices, excludedServices]
+  )
+  const scopeKey = serviceScopeKey(serviceNames, hasServiceFilters)
+  const hasFeedbackScope = projectList.length > 0 && (!hasServiceFilters || serviceNames.length > 0)
+  const serviceScopeParams = useMemo(() => (
+    serviceNames.length > 0 ? {services: [...serviceNames]} : {}
+  ), [serviceNames])
+  const railSections = useMemo(() => serviceRailSections(projectList), [projectList])
+  const handleFacetFiltersChange = (nextFilters: FacetFilter[]) => {
+    setFacetFilters(nextFilters)
+    setSelectedFeedback(new Set())
+  }
 
   // Fetch all feedback for stats (unfiltered)
   const { data: allFeedback = [] } = useQuery({
-    queryKey: ['feedback', projectId, 'all'],
-    queryFn: () =>
-      projectId
-        ? api.getFeedback(projectId, { page: 1, limit: 500 })
-        : [],
-    enabled: !!projectId,
+    queryKey: ['feedback', 'organization', scopeKey, 'all', serviceScopeParams],
+    queryFn: () => api.getOrganizationFeedback({ page: 1, limit: 500, ...serviceScopeParams }),
+    enabled: hasFeedbackScope,
   })
 
   const { data: feedbackList = [] } = useQuery({
-    queryKey: ['feedback', projectId, statusFilter],
-    queryFn: () =>
-      projectId
-        ? api.getFeedback(projectId, {
-            page: 1,
-            limit: 100,
-            status: statusFilter === 'all' ? undefined : statusFilter,
-          })
-        : [],
-    enabled: !!projectId,
+    queryKey: ['feedback', 'organization', scopeKey, statusFilter, serviceScopeParams],
+    queryFn: () => api.getOrganizationFeedback({
+      page: 1,
+      limit: 100,
+      status: statusFilter === 'all' ? undefined : statusFilter,
+      ...serviceScopeParams,
+    }),
+    enabled: hasFeedbackScope,
   })
 
   const stats = useMemo(() => {
@@ -212,7 +231,7 @@ function FeedbackPage() {
       )
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['feedback', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['feedback'] })
       toast({
         title: 'Success',
         description: `${selectedFeedback.size} feedback item${selectedFeedback.size === 1 ? '' : 's'} resolved`,
@@ -267,54 +286,70 @@ function FeedbackPage() {
           description="Review and manage feedback from your users"
         />
 
-        {!projects || projects.length === 0 ? (
-          <EmptyState
-            icon={MessageSquare}
-            title="No projects yet"
-            description="Create a project and integrate the feedback widget to see user feedback here."
+        <div className="grid gap-2 lg:grid-cols-[220px_minmax(0,1fr)]">
+          <FacetRail
+            sections={railSections}
+            facetFilters={facetFilters}
+            onFacetFiltersChange={handleFacetFiltersChange}
+            title="Feedback"
+            className="h-auto max-h-[340px] rounded-md border lg:sticky lg:top-2 lg:h-[calc(100vh-8rem)] lg:max-h-none"
           />
-        ) : (
-          <>
-            {/* Stats Cards (also act as status filters) */}
-            {allFeedback.length > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <FeedbackStatCard
-                  label="Total"
-                  value={stats.total}
-                  icon={Inbox}
-                  tone="accent"
-                  active={statusFilter === 'all'}
-                  onClick={() => setStatusFilter('all')}
-                />
-                <FeedbackStatCard
-                  label="Unresolved"
-                  value={stats.unresolved}
-                  icon={CircleDot}
-                  tone="warning"
-                  active={statusFilter === 'unresolved'}
-                  onClick={() => setStatusFilter('unresolved')}
-                />
-                <FeedbackStatCard
-                  label="Resolved"
-                  value={stats.resolved}
-                  icon={CheckCircle2}
-                  tone="success"
-                  active={statusFilter === 'resolved'}
-                  onClick={() => setStatusFilter('resolved')}
-                />
-                <FeedbackStatCard
-                  label="Archived"
-                  value={stats.archived}
-                  icon={Archive}
-                  tone="neutral"
-                  active={statusFilter === 'archived'}
-                  onClick={() => setStatusFilter('archived')}
-                />
-              </div>
-            )}
 
-            {/* Toolbar */}
-            <div className="mb-3 flex gap-2 items-center flex-wrap">
+          <div className="min-w-0">
+            {projectList.length === 0 ? (
+              <EmptyState
+                icon={MessageSquare}
+                title="No services yet"
+                description="Create a service and integrate the feedback widget to see user feedback here."
+              />
+            ) : !hasFeedbackScope ? (
+              <EmptyState
+                icon={MessageSquare}
+                title="No services match filters"
+                description="Adjust the selected services to view feedback."
+              />
+            ) : (
+              <>
+                {/* Stats Cards (also act as status filters) */}
+                {allFeedback.length > 0 && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <FeedbackStatCard
+                      label="Total"
+                      value={stats.total}
+                      icon={Inbox}
+                      tone="accent"
+                      active={statusFilter === 'all'}
+                      onClick={() => setStatusFilter('all')}
+                    />
+                    <FeedbackStatCard
+                      label="Unresolved"
+                      value={stats.unresolved}
+                      icon={CircleDot}
+                      tone="warning"
+                      active={statusFilter === 'unresolved'}
+                      onClick={() => setStatusFilter('unresolved')}
+                    />
+                    <FeedbackStatCard
+                      label="Resolved"
+                      value={stats.resolved}
+                      icon={CheckCircle2}
+                      tone="success"
+                      active={statusFilter === 'resolved'}
+                      onClick={() => setStatusFilter('resolved')}
+                    />
+                    <FeedbackStatCard
+                      label="Archived"
+                      value={stats.archived}
+                      icon={Archive}
+                      tone="neutral"
+                      active={statusFilter === 'archived'}
+                      onClick={() => setStatusFilter('archived')}
+                    />
+                  </div>
+                )}
+
+                {/* Toolbar */}
+                <div className="mb-3 flex gap-2 items-center flex-wrap">
               {filteredFeedback.length > 0 && (
                 <div className="flex items-center gap-2">
                   <Checkbox
@@ -350,9 +385,9 @@ function FeedbackPage() {
                   className="pl-8 h-8 text-xs"
                 />
               </div>
-            </div>
+                </div>
 
-            {filteredFeedback.length === 0 ? (
+                {filteredFeedback.length === 0 ? (
               <EmptyState
                 icon={searchQuery ? Search : MessageSquare}
                 title={searchQuery ? 'No feedback match your search' : 'No feedback yet'}
@@ -362,7 +397,7 @@ function FeedbackPage() {
                     : 'Use the feedback widget in your app to collect user feedback. It will appear here.'
                 }
               />
-            ) : (
+                ) : (
               <TooltipProvider>
                 <div className="space-y-1.5">
                   {filteredFeedback.map((f) => {
@@ -473,19 +508,21 @@ function FeedbackPage() {
                   })}
                 </div>
               </TooltipProvider>
-            )}
+                )}
 
-            {/* Footer count */}
-            {filteredFeedback.length > 0 && (
+                {/* Footer count */}
+                {filteredFeedback.length > 0 && (
               <div className="mt-3 text-center">
                 <p className="text-xs text-muted-foreground">
                   Showing {filteredFeedback.length} feedback item{filteredFeedback.length === 1 ? '' : 's'}
                   {searchQuery && ' matching your search'}
                 </p>
               </div>
+                )}
+              </>
             )}
-          </>
-        )}
+          </div>
+        </div>
       </div>
     </div>
   )

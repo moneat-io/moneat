@@ -17,11 +17,11 @@
 import {createFileRoute, Outlet, redirect, useMatches, useNavigate} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
-import {useProject} from '@/contexts/ProjectContext'
 import {formatRelativeTime} from '@/lib/utils'
 import {useTimezone} from '@/hooks/useTimezone'
 import {formatDate as formatDateUtil} from '@/lib/date-format'
 import {useMemo, useState} from 'react'
+import {FacetRail} from '@/components/filters/FacetRail'
 import {Badge} from '@/components/ui/badge'
 import {Input} from '@/components/ui/input'
 import {PageHeader} from '@/components/ui/page-header'
@@ -32,19 +32,26 @@ import {Button} from '@/components/ui/button'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,} from '@/components/ui/tooltip'
 import {
-    AlertCircle,
-    ChevronLeft,
-    ChevronRight,
-    Clock,
-    Globe,
-    Monitor,
-    MousePointerClick,
-    Play,
-    Search,
-    Timer,
-    User,
-    Video,
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Globe,
+  Monitor,
+  MousePointerClick,
+  Play,
+  Search,
+  Timer,
+  User,
+  Video,
 } from 'lucide-react'
+import {
+  facetValues,
+  serviceNamesForQuery,
+  serviceRailSections,
+  serviceScopeKey,
+} from '@/lib/service-facet-scope'
+import type {FacetFilter} from '@/lib/filters/types'
 
 export const Route = createFileRoute('/replays')({
   beforeLoad: async ({ location }) => {
@@ -132,18 +139,41 @@ function getDurationColor(ms: number): string {
 function ReplaysPage() {
   const navigate = useNavigate()
   const { timezone } = useTimezone()
-  const { selectedProjectId } = useProject()
   const [period, setPeriod] = useState<'24h' | '7d' | '30d' | '90d'>('7d')
   const [environment, setEnvironment] = useState('all')
   const [page, setPage] = useState(1)
   const [searchQuery, setSearchQuery] = useState('')
+  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
 
-  const { data: projects } = useQuery({
+  const { data: projects, isLoading: projectsLoading, error: projectsError } = useQuery({
     queryKey: ['projects'],
     queryFn: () => api.getProjects(),
   })
 
-  const projectId = selectedProjectId || projects?.[0]?.resourceId
+  const projectList = projects ?? []
+  const includedServices = useMemo(
+    () => facetValues(facetFilters, 'service', false),
+    [facetFilters]
+  )
+  const excludedServices = useMemo(
+    () => facetValues(facetFilters, 'service', true),
+    [facetFilters]
+  )
+  const hasServiceFilters = includedServices.length > 0 || excludedServices.length > 0
+  const serviceNames = useMemo(
+    () => serviceNamesForQuery(projectList, includedServices, excludedServices),
+    [projectList, includedServices, excludedServices]
+  )
+  const scopeKey = serviceScopeKey(serviceNames, hasServiceFilters)
+  const hasReplayScope = projectList.length > 0 && (!hasServiceFilters || serviceNames.length > 0)
+  const serviceScopeParams = useMemo(() => (
+    serviceNames.length > 0 ? {services: [...serviceNames]} : {}
+  ), [serviceNames])
+  const railSections = useMemo(() => serviceRailSections(projectList), [projectList])
+  const handleFacetFiltersChange = (nextFilters: FacetFilter[]) => {
+    setFacetFilters(nextFilters)
+    setPage(1)
+  }
   const { data: billingUsage } = useQuery({
     queryKey: ['billing-usage'],
     queryFn: () => api.getBillingUsage(),
@@ -165,17 +195,15 @@ function ReplaysPage() {
     : availablePeriods[availablePeriods.length - 1]?.value ?? '7d') as '24h' | '7d' | '30d' | '90d'
 
   const { data: replays = [], isLoading } = useQuery({
-    queryKey: ['replays', projectId, effectivePeriod, environment, page],
-    queryFn: () =>
-      projectId
-        ? api.getReplays(projectId, {
-            page,
-            limit: 25,
-            period: effectivePeriod,
-            environment: environment === 'all' ? undefined : environment,
-          })
-        : [],
-    enabled: !!projectId,
+    queryKey: ['replays', 'organization', scopeKey, effectivePeriod, environment, page, serviceScopeParams],
+    queryFn: () => api.getOrganizationReplays({
+      page,
+      limit: 25,
+      period: effectivePeriod,
+      environment: environment === 'all' ? undefined : environment,
+      ...serviceScopeParams,
+    }),
+    enabled: hasReplayScope,
   })
 
   const stats = useMemo(() => {
@@ -211,39 +239,60 @@ function ReplaysPage() {
     })
   }, [replays, searchQuery])
 
-  if (!projects || projects.length === 0) {
+  if (projectsLoading) {
+    return <div className="p-8 text-sm text-muted-foreground">Loading services...</div>
+  }
+
+  if (projectsError) {
+    return (
+      <div className="p-8 text-destructive">
+        Failed to load services: {projectsError instanceof Error ? projectsError.message : 'Unknown error'}
+      </div>
+    )
+  }
+
+  if (projectList.length === 0) {
     return (
       <div className="min-h-screen p-6">
         <EmptyState
           icon={Video}
-          title="No projects yet"
-          description="Create a project to start capturing session replays."
+          title="No services yet"
+          description="Create a service to start capturing session replays."
         />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen">
-      <div className="container mx-auto px-4 py-4 space-y-4">
-        <PageHeader
-          icon={Video}
-          title="Session Replays"
-          description="Watch real user sessions to understand behavior and debug issues"
-        />
+    <div className="grid min-h-screen gap-2 p-3 lg:grid-cols-[220px_minmax(0,1fr)]">
+      <FacetRail
+        sections={railSections}
+        facetFilters={facetFilters}
+        onFacetFiltersChange={handleFacetFiltersChange}
+        title="Replays"
+        className="h-auto max-h-[340px] rounded-md border lg:sticky lg:top-2 lg:h-[calc(100vh-8rem)] lg:max-h-none"
+      />
 
-        {/* Stats Cards */}
-        {replays.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatCard label="Sessions" value={stats.total} icon={Play} tone="info" />
-            <StatCard label="Errors" value={stats.totalErrors} icon={AlertCircle} tone="danger" />
-            <StatCard label="Avg Duration" value={formatDuration(stats.avgDuration)} icon={Timer} tone="success" />
-            <StatCard label="Unique Users" value={stats.uniqueUsers} icon={User} tone="accent" />
-          </div>
-        )}
+      <div className="min-w-0">
+        <div className="container mx-auto px-4 py-4 space-y-4">
+          <PageHeader
+            icon={Video}
+            title="Session Replays"
+            description="Watch real user sessions to understand behavior and debug issues"
+          />
 
-        {/* Toolbar */}
-        <div className="mb-3 flex flex-wrap items-center gap-2">
+          {/* Stats Cards */}
+          {replays.length > 0 && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <StatCard label="Sessions" value={stats.total} icon={Play} tone="info" />
+              <StatCard label="Errors" value={stats.totalErrors} icon={AlertCircle} tone="danger" />
+              <StatCard label="Avg Duration" value={formatDuration(stats.avgDuration)} icon={Timer} tone="success" />
+              <StatCard label="Unique Users" value={stats.uniqueUsers} icon={User} tone="accent" />
+            </div>
+          )}
+
+          {/* Toolbar */}
+          <div className="mb-3 flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -276,10 +325,16 @@ function ReplaysPage() {
               <SelectItem value="development">Development</SelectItem>
             </SelectContent>
           </Select>
-        </div>
+          </div>
 
-        {/* Content */}
-        {isLoading ? (
+          {/* Content */}
+          {!hasReplayScope ? (
+          <EmptyState
+            icon={Play}
+            title="No services match filters"
+            description="Adjust the selected services to view session replays."
+          />
+        ) : isLoading ? (
           <div className="space-y-2">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="rounded-xl border border-border/60 bg-card p-4 animate-pulse">
@@ -434,10 +489,10 @@ function ReplaysPage() {
               })}
             </div>
           </TooltipProvider>
-        )}
+          )}
 
-        {/* Pagination */}
-        {filteredReplays.length > 0 && (
+          {/* Pagination */}
+          {filteredReplays.length > 0 && (
           <div className="mt-4 flex items-center justify-between">
             <p className="text-xs text-muted-foreground">
               Showing {filteredReplays.length} replay{filteredReplays.length === 1 ? '' : 's'}
@@ -470,7 +525,8 @@ function ReplaysPage() {
               </Button>
             </div>
           </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   )

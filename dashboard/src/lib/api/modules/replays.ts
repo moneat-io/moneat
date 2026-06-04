@@ -22,6 +22,25 @@ import type {
   ReplayRecordingResponse,
   ReplayTimelineResponse,
 } from '../types'
+import { urlWithQuery } from '../utils'
+import { appendServiceScopeParams, type ServiceScopeParams } from './service-scope'
+
+interface ReplaysListOptions extends ServiceScopeParams {
+  page?: number
+  limit?: number
+  environment?: string
+  period?: '24h' | '7d' | '30d' | '90d'
+}
+
+function replaysQuery(options: ReplaysListOptions = {}): string {
+  const params = new URLSearchParams()
+  params.set('page', String(options.page ?? 1))
+  params.set('limit', String(options.limit ?? 25))
+  params.set('period', options.period ?? '7d')
+  if (options.environment) params.set('environment', options.environment)
+  appendServiceScopeParams(params, options)
+  return params.toString()
+}
 
 export function replaysMethods(core: ApiClientCore) {
   const base = core.API_BASE
@@ -38,20 +57,17 @@ export function replaysMethods(core: ApiClientCore) {
   return {
     getReplays: (
       projectId: string | number,
-      options: {
-        page?: number
-        limit?: number
-        environment?: string
-        period?: '24h' | '7d' | '30d' | '90d'
-      } = {}
+      options: ReplaysListOptions = {}
     ) => {
-      const params = new URLSearchParams()
-      params.set('page', String(options.page ?? 1))
-      params.set('limit', String(options.limit ?? 25))
-      params.set('period', options.period ?? '7d')
-      if (options.environment) params.set('environment', options.environment)
-      return core.request<Replay[]>(`${base}/projects/${projectId}/replays?${params.toString()}`)
+      return core.request<Replay[]>(
+        `${base}/projects/${projectId}/replays?${replaysQuery(options)}`
+      )
     },
+
+    getOrganizationReplays: (options: ReplaysListOptions = {}) =>
+      core.request<Replay[]>(
+        urlWithQuery(`${base}/replays`, replaysQuery(options))
+      ),
 
     getReplay: (replayId: string) =>
       core.request<ReplayDetail>(`${base}/replays/${encodeURIComponent(replayId)}`),

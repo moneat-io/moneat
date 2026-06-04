@@ -16,6 +16,23 @@
 
 import type { ApiClientCore } from '../client'
 import type { Feedback, FeedbackDetail } from '../types'
+import { urlWithQuery } from '../utils'
+import { appendServiceScopeParams, type ServiceScopeParams } from './service-scope'
+
+interface FeedbackListOptions extends ServiceScopeParams {
+  page?: number
+  limit?: number
+  status?: string
+}
+
+function feedbackQuery(options: FeedbackListOptions = {}): string {
+  const params = new URLSearchParams()
+  params.set('page', String(options.page ?? 1))
+  params.set('limit', String(options.limit ?? 25))
+  if (options.status) params.set('status', options.status)
+  appendServiceScopeParams(params, options)
+  return params.toString()
+}
 
 export function feedbackMethods(core: ApiClientCore) {
   const base = core.API_BASE
@@ -23,16 +40,17 @@ export function feedbackMethods(core: ApiClientCore) {
   return {
     getFeedback: (
       projectId: string | number,
-      options: { page?: number; limit?: number; status?: string } = {}
+      options: FeedbackListOptions = {}
     ) => {
-      const params = new URLSearchParams()
-      params.set('page', String(options.page ?? 1))
-      params.set('limit', String(options.limit ?? 25))
-      if (options.status) params.set('status', options.status)
       return core.request<Feedback[]>(
-        `${base}/projects/${projectId}/feedback?${params.toString()}`
+        `${base}/projects/${projectId}/feedback?${feedbackQuery(options)}`
       )
     },
+
+    getOrganizationFeedback: (options: FeedbackListOptions = {}) =>
+      core.request<Feedback[]>(
+        urlWithQuery(`${base}/feedback`, feedbackQuery(options))
+      ),
 
     getFeedbackDetail: (feedbackId: string) =>
       core.request<FeedbackDetail>(
