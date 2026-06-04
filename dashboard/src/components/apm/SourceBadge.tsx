@@ -22,9 +22,21 @@ const SOURCE_CONFIG: Record<string, {label: string; className: string}> = {
     label: 'Datadog',
     className: 'text-chart-6 border-chart-6/30',
   },
+  'datadog-agent': {
+    label: 'Datadog Agent',
+    className: 'text-chart-6 border-chart-6/30',
+  },
   otlp: {
     label: 'OTEL',
     className: 'text-chart-3 border-chart-3/30',
+  },
+  opentelemetry: {
+    label: 'OpenTelemetry',
+    className: 'text-chart-3 border-chart-3/30',
+  },
+  'sentry-sdk': {
+    label: 'Sentry SDK',
+    className: 'text-muted-foreground border-border/50',
   },
   sdk: {
     label: 'SDK',

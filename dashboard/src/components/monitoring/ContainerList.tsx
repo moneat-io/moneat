@@ -8,6 +8,7 @@
 
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
+import {SourceBadge} from '@/components/apm/SourceBadge'
 
 export interface MergedContainer {
   id: string
@@ -379,9 +380,7 @@ export function ContainerList() {
                       </TableCell>
 
                       <TableCell>
-                        <Badge variant="neutral" className="text-[10px] font-medium">
-                          Datadog
-                        </Badge>
+                        <SourceBadge source={c.source} className="max-w-[100px] truncate" />
                       </TableCell>
 
                       <TableCell>
