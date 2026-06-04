@@ -18,7 +18,6 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api, type LlmGenerationDetail } from '@/lib/api'
-import { useProject } from '@/contexts/ProjectContext'
 import { Badge } from '@/components/ui/badge'
 import { StatsCard } from '@/components/charts/StatsCard'
 import { PageHeader } from '@/components/ui/page-header'
@@ -28,12 +27,6 @@ import { Brain, Clock, Coins, Hash, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/ai/traces/$traceId')({
-  validateSearch: (search: Record<string, unknown>) => {
-    const rawProjectId = search.projectId
-    return {
-      projectId: typeof rawProjectId === 'string' && rawProjectId.length > 0 ? rawProjectId : undefined,
-    }
-  },
   component: TraceDetailPage,
 })
 
@@ -120,25 +113,12 @@ function findParentBySpanId(candidates: GenerationNode[] | undefined, child: Gen
 
 function TraceDetailPage() {
   const { traceId } = Route.useParams()
-  const search = Route.useSearch()
-  const { selectedProjectId } = useProject()
   const [selectedGen, setSelectedGen] = useState<LlmGenerationDetail | null>(null)
 
-  const projectId = search.projectId ?? selectedProjectId
-
   const { data: trace, isLoading } = useQuery({
-    queryKey: ['llm-trace', projectId, traceId],
-    queryFn: () => api.getLlmTrace(projectId!, traceId),
-    enabled: projectId !== null && projectId !== undefined,
+    queryKey: ['llm-trace', 'organization', traceId],
+    queryFn: () => api.getLlmTrace(traceId),
   })
-
-  if (projectId === null || projectId === undefined) {
-    return (
-      <div className="p-6">
-        <EmptyState icon={Brain} title="No project selected" description="Select a project to view this trace." />
-      </div>
-    )
-  }
 
   if (isLoading) {
     return <div className="p-6 text-muted-foreground">Loading trace...</div>

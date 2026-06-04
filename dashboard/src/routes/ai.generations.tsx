@@ -16,9 +16,9 @@
 
 import {createFileRoute, Link} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
-import {useState} from 'react'
-import {api} from '@/lib/api'
-import {useProject} from '@/contexts/ProjectContext'
+import {useCallback, useMemo, useState} from 'react'
+import {api, type LlmGenerationsParams, type LlmScopeParams} from '@/lib/api'
+import {FacetRail} from '@/components/filters/FacetRail'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Badge} from '@/components/ui/badge'
@@ -32,6 +32,13 @@ import {Brain, ChevronLeft, ChevronRight} from 'lucide-react'
 import {ProviderLogo} from '@/components/icons/AiProviders'
 import {useTimezone} from '@/hooks/useTimezone'
 import {formatDateTime} from '@/lib/date-format'
+import {
+  facetValues,
+  serviceNamesForQuery,
+  serviceRailSections,
+  serviceScopeKey,
+} from '@/lib/service-facet-scope'
+import type {FacetFilter} from '@/lib/filters/types'
 
 export const Route = createFileRoute('/ai/generations')({
   component: GenerationsPage,
@@ -49,7 +56,6 @@ function formatCost(usd: number): string {
 }
 
 function GenerationsPage() {
-  const { selectedProjectId } = useProject()
   const { timezone } = useTimezone()
   const [range, setRange] = useState('24h')
   const [page, setPage] = useState(1)
@@ -57,33 +63,80 @@ function GenerationsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [typeFilter, setTypeFilter] = useState<string>('')
   const [selectedGenId, setSelectedGenId] = useState<string | null>(null)
+  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
+
+  const {data: projects, isLoading: projectsLoading, error: projectsError} = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => api.getProjects(),
+  })
+
+  const projectList = projects ?? []
+  const includedServices = useMemo(
+    () => facetValues(facetFilters, 'service', false),
+    [facetFilters]
+  )
+  const excludedServices = useMemo(
+    () => facetValues(facetFilters, 'service', true),
+    [facetFilters]
+  )
+  const hasServiceFilters = includedServices.length > 0 || excludedServices.length > 0
+  const serviceNames = useMemo(
+    () => serviceNamesForQuery(projectList, includedServices, excludedServices),
+    [projectList, includedServices, excludedServices]
+  )
+  const scopeKey = serviceScopeKey(serviceNames, hasServiceFilters)
+  const hasLlmScope = projectList.length > 0 && (!hasServiceFilters || serviceNames.length > 0)
+  const serviceScopeParams = useMemo((): LlmScopeParams => (
+    serviceNames.length > 0 ? {services: [...serviceNames]} : {}
+  ), [serviceNames])
+  const llmParams = useMemo((): LlmGenerationsParams => ({
+    range,
+    page,
+    pageSize: 25,
+    model: modelFilter || undefined,
+    status: statusFilter || undefined,
+    type: typeFilter || undefined,
+    ...serviceScopeParams,
+  }), [modelFilter, page, range, serviceScopeParams, statusFilter, typeFilter])
+  const railSections = useMemo(() => serviceRailSections(projectList), [projectList])
 
   const { data, isLoading } = useQuery({
-    queryKey: ['llm-generations', selectedProjectId, range, page, modelFilter, statusFilter, typeFilter],
-    queryFn: () => api.getLlmGenerations(selectedProjectId!, {
-      range,
-      page,
-      pageSize: 25,
-      model: modelFilter || undefined,
-      status: statusFilter || undefined,
-      type: typeFilter || undefined,
-    }),
-    enabled: !!selectedProjectId,
+    queryKey: ['llm-generations', 'organization', scopeKey, llmParams],
+    queryFn: () => api.getLlmGenerations(llmParams),
+    enabled: hasLlmScope,
   })
 
   const { data: detail } = useQuery({
-    queryKey: ['llm-generation-detail', selectedProjectId, selectedGenId],
-    queryFn: () => api.getLlmGenerationDetail(selectedProjectId!, selectedGenId!),
-    enabled: !!selectedProjectId && !!selectedGenId,
+    queryKey: ['llm-generation-detail', 'organization', scopeKey, selectedGenId],
+    queryFn: () => api.getLlmGenerationDetail(selectedGenId!, serviceScopeParams),
+    enabled: hasLlmScope && !!selectedGenId,
   })
 
-  if (!selectedProjectId) {
+  const handleFacetFiltersChange = useCallback((nextFilters: FacetFilter[]) => {
+    setFacetFilters(nextFilters)
+    setPage(1)
+    setSelectedGenId(null)
+  }, [])
+
+  if (projectsLoading) {
+    return <div className="p-8 text-sm text-muted-foreground">Loading generations...</div>
+  }
+
+  if (projectsError) {
     return (
-      <div className="p-3">
+      <div className="p-8 text-destructive">
+        Failed to load services: {projectsError instanceof Error ? projectsError.message : 'Unknown error'}
+      </div>
+    )
+  }
+
+  if (projectList.length === 0) {
+    return (
+      <div className="py-10">
         <EmptyState
           icon={Brain}
-          title="No project selected"
-          description="Select a project to view generations."
+          title="No services yet"
+          description="Create a service to start viewing LLM generations."
         />
       </div>
     )
@@ -92,193 +145,220 @@ function GenerationsPage() {
   const totalPages = data ? Math.ceil(data.total / data.pageSize) : 0
 
   return (
-    <div className="space-y-3 p-3">
-      <PageHeader
-        icon={Brain}
-        title="Generations"
-        actions={
-        <div className="flex flex-wrap gap-1.5">
-          <Input
-            placeholder="Filter by model..."
-            value={modelFilter}
-            onChange={(e) => { setModelFilter(e.target.value); setPage(1) }}
-            className="w-36 h-8 text-xs"
-          />
-          <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v === 'all' ? '' : v); setPage(1) }}>
-            <SelectTrigger className="w-24 h-8 text-xs">
-              <SelectValue placeholder="Type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="chat">Chat</SelectItem>
-              <SelectItem value="completion">Completion</SelectItem>
-              <SelectItem value="embedding">Embedding</SelectItem>
-              <SelectItem value="tool_call">Tool Call</SelectItem>
-              <SelectItem value="agent">Agent</SelectItem>
-              <SelectItem value="chain">Chain</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v === 'all' ? '' : v); setPage(1) }}>
-            <SelectTrigger className="w-24 h-8 text-xs">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              <SelectItem value="success">Success</SelectItem>
-              <SelectItem value="error">Error</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={range} onValueChange={(v) => { setRange(v); setPage(1) }}>
-            <SelectTrigger className="w-24 h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="1h">Last 1h</SelectItem>
-              <SelectItem value="6h">Last 6h</SelectItem>
-              <SelectItem value="24h">Last 24h</SelectItem>
-              <SelectItem value="7d">Last 7d</SelectItem>
-              <SelectItem value="30d">Last 30d</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        }
+    <div className="grid gap-2 p-3 lg:grid-cols-[220px_minmax(0,1fr)]">
+      <FacetRail
+        sections={railSections}
+        facetFilters={facetFilters}
+        onFacetFiltersChange={handleFacetFiltersChange}
+        title="AI"
+        className="h-auto max-h-[340px] rounded-md border lg:sticky lg:top-2 lg:h-[calc(100vh-8rem)] lg:max-h-none"
       />
 
-      <SectionCard title="Generations" icon={Brain} count={data?.total} flushBody bodyClassName="overflow-x-auto">
-          <Table className="[&_th]:h-8 [&_th]:px-1.5 [&_th]:text-xs [&_td]:py-1.5 [&_td]:px-1.5">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Timestamp</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Model</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead className="text-right">Tokens</TableHead>
-                <TableHead className="text-right">Cost</TableHead>
-                <TableHead className="text-right">Duration</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Trace</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data?.generations.map((gen) => (
-                <TableRow
-                  key={gen.generationId}
-                  className="cursor-pointer hover:bg-accent/50"
-                  onClick={() => setSelectedGenId(gen.generationId)}
-                >
-                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                    {formatDateTime(new Date(gen.timestamp), timezone)}
-                  </TableCell>
-                  <TableCell className="font-medium text-sm max-w-48 truncate">
-                    {gen.name || '-'}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <ProviderLogo provider={gen.provider} showName={false} className="shrink-0" />
-                      <div>
-                        <div className="text-sm">{gen.model || '-'}</div>
-                        <div className="text-xs text-muted-foreground">{gen.provider}</div>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="text-xs">{gen.type}</Badge>
-                  </TableCell>
-                  <TableCell className="text-right text-sm">
-                    {gen.totalTokens > 0 ? gen.totalTokens.toLocaleString() : '-'}
-                  </TableCell>
-                  <TableCell className="text-right text-sm">{formatCost(gen.costUsd)}</TableCell>
-                  <TableCell className="text-right text-sm">{formatDuration(gen.durationMs)}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={gen.status === 'error' ? 'destructive' : 'secondary'}
-                      className="text-xs"
-                    >
-                      {gen.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {gen.traceId && (
-                      <Link
-                        to="/ai/traces/$traceId"
-                        params={{ traceId: gen.traceId }}
-                        search={{ projectId: selectedProjectId }}
-                        className="text-xs text-primary hover:underline"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {gen.traceId.slice(0, 8)}...
-                      </Link>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {(!data?.generations || data.generations.length === 0) && !isLoading && (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center text-muted-foreground py-6">
-                    No generations found for the selected filters.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-      </SectionCard>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between py-1">
-          <span className="text-xs text-muted-foreground">
-            Page {page} of {totalPages} ({data?.total} total)
-          </span>
-          <div className="flex gap-1">
-            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+      <div className="min-w-0 space-y-3">
+        {!hasLlmScope ? (
+          <div className="py-10">
+            <EmptyState
+              icon={Brain}
+              title="No services match filters"
+              description="Adjust the selected services to view generations."
+            />
           </div>
-        </div>
-      )}
+        ) : (
+          <>
+            <PageHeader
+              icon={Brain}
+              title="Generations"
+              actions={
+              <div className="flex flex-wrap gap-1.5">
+                <Input
+                  placeholder="Filter by model..."
+                  value={modelFilter}
+                  onChange={(e) => { setModelFilter(e.target.value); setPage(1) }}
+                  className="w-36 h-8 text-xs"
+                />
+                <Select
+                  value={typeFilter}
+                  onValueChange={(v) => { setTypeFilter(v === 'all' ? '' : v); setPage(1) }}
+                >
+                  <SelectTrigger className="w-24 h-8 text-xs">
+                    <SelectValue placeholder="Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="chat">Chat</SelectItem>
+                    <SelectItem value="completion">Completion</SelectItem>
+                    <SelectItem value="embedding">Embedding</SelectItem>
+                    <SelectItem value="tool_call">Tool Call</SelectItem>
+                    <SelectItem value="agent">Agent</SelectItem>
+                    <SelectItem value="chain">Chain</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={statusFilter}
+                  onValueChange={(v) => { setStatusFilter(v === 'all' ? '' : v); setPage(1) }}
+                >
+                  <SelectTrigger className="w-24 h-8 text-xs">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="success">Success</SelectItem>
+                    <SelectItem value="error">Error</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={range} onValueChange={(v) => { setRange(v); setPage(1) }}>
+                  <SelectTrigger className="w-24 h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1h">Last 1h</SelectItem>
+                    <SelectItem value="6h">Last 6h</SelectItem>
+                    <SelectItem value="24h">Last 24h</SelectItem>
+                    <SelectItem value="7d">Last 7d</SelectItem>
+                    <SelectItem value="30d">Last 30d</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              }
+            />
 
-      {/* Detail Dialog */}
-      <Dialog open={!!selectedGenId} onOpenChange={(open) => { if (!open) setSelectedGenId(null) }}>
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Generation Detail</DialogTitle>
-          </DialogHeader>
-          {detail && (
-            <div className="space-y-2">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                <div><span className="text-muted-foreground">Model:</span> <span className="font-medium">{detail.model}</span></div>
-                <div><span className="text-muted-foreground">Provider:</span> <span className="font-medium">{detail.provider}</span></div>
-                <div><span className="text-muted-foreground">Type:</span> <Badge variant="outline">{detail.type}</Badge></div>
-                <div><span className="text-muted-foreground">Status:</span> <Badge variant={detail.status === 'error' ? 'destructive' : 'secondary'}>{detail.status}</Badge></div>
-                <div><span className="text-muted-foreground">Duration:</span> <span className="font-medium">{formatDuration(detail.durationMs)}</span></div>
-                <div><span className="text-muted-foreground">Tokens:</span> <span className="font-medium">{detail.inputTokens} / {detail.outputTokens}</span></div>
-                <div><span className="text-muted-foreground">Cost:</span> <span className="font-medium">{formatCost(detail.costUsd)}</span></div>
-                <div><span className="text-muted-foreground">Temperature:</span> <span className="font-medium">{detail.temperature}</span></div>
-              </div>
-              {detail.errorMessage && (
-                <div className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">
-                  <strong>Error:</strong> {detail.errorMessage}
-                </div>
-              )}
-              <div>
-                <h4 className="text-xs font-semibold mb-1">Input</h4>
-                <pre className="bg-muted rounded-md p-2 text-xs overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap">
-                  {tryFormatJson(detail.input)}
-                </pre>
-              </div>
-              <div>
-                <h4 className="text-xs font-semibold mb-1">Output</h4>
-                <pre className="bg-muted rounded-md p-2 text-xs overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap">
-                  {tryFormatJson(detail.output)}
-                </pre>
-              </div>
+            <SectionCard title="Generations" icon={Brain} count={data?.total} flushBody bodyClassName="overflow-x-auto">
+                <Table className="[&_th]:h-8 [&_th]:px-1.5 [&_th]:text-xs [&_td]:py-1.5 [&_td]:px-1.5">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Timestamp</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Model</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead className="text-right">Tokens</TableHead>
+                      <TableHead className="text-right">Cost</TableHead>
+                      <TableHead className="text-right">Duration</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Trace</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data?.generations.map((gen) => (
+                      <TableRow
+                        key={gen.generationId}
+                        className="cursor-pointer hover:bg-accent/50"
+                        onClick={() => setSelectedGenId(gen.generationId)}
+                      >
+                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                          {formatDateTime(new Date(gen.timestamp), timezone)}
+                        </TableCell>
+                        <TableCell className="font-medium text-sm max-w-48 truncate">
+                          {gen.name || '-'}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <ProviderLogo provider={gen.provider} showName={false} className="shrink-0" />
+                            <div>
+                              <div className="text-sm">{gen.model || '-'}</div>
+                              <div className="text-xs text-muted-foreground">{gen.provider}</div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs">{gen.type}</Badge>
+                        </TableCell>
+                        <TableCell className="text-right text-sm">
+                          {gen.totalTokens > 0 ? gen.totalTokens.toLocaleString() : '-'}
+                        </TableCell>
+                        <TableCell className="text-right text-sm">{formatCost(gen.costUsd)}</TableCell>
+                        <TableCell className="text-right text-sm">{formatDuration(gen.durationMs)}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={gen.status === 'error' ? 'destructive' : 'secondary'}
+                            className="text-xs"
+                          >
+                            {gen.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {gen.traceId && (
+                            <Link
+                              to="/ai/traces/$traceId"
+                              params={{ traceId: gen.traceId }}
+                              className="text-xs text-primary hover:underline"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {gen.traceId.slice(0, 8)}...
+                            </Link>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {(!data?.generations || data.generations.length === 0) && !isLoading && (
+                      <TableRow>
+                        <TableCell colSpan={9} className="text-center text-muted-foreground py-6">
+                          No generations found for the selected filters.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+            </SectionCard>
+          </>
+        )}
+
+        {/* Pagination */}
+        {hasLlmScope && totalPages > 1 && (
+          <div className="flex items-center justify-between py-1">
+            <span className="text-xs text-muted-foreground">
+              Page {page} of {totalPages} ({data?.total} total)
+            </span>
+            <div className="flex gap-1">
+              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
+          </div>
+        )}
+
+        {/* Detail Dialog */}
+        <Dialog open={!!selectedGenId} onOpenChange={(open) => { if (!open) setSelectedGenId(null) }}>
+          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Generation Detail</DialogTitle>
+            </DialogHeader>
+            {detail && (
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                  <div><span className="text-muted-foreground">Model:</span> <span className="font-medium">{detail.model}</span></div>
+                  <div><span className="text-muted-foreground">Provider:</span> <span className="font-medium">{detail.provider}</span></div>
+                  <div><span className="text-muted-foreground">Type:</span> <Badge variant="outline">{detail.type}</Badge></div>
+                  <div><span className="text-muted-foreground">Status:</span> <Badge variant={detail.status === 'error' ? 'destructive' : 'secondary'}>{detail.status}</Badge></div>
+                  <div><span className="text-muted-foreground">Duration:</span> <span className="font-medium">{formatDuration(detail.durationMs)}</span></div>
+                  <div><span className="text-muted-foreground">Tokens:</span> <span className="font-medium">{detail.inputTokens} / {detail.outputTokens}</span></div>
+                  <div><span className="text-muted-foreground">Cost:</span> <span className="font-medium">{formatCost(detail.costUsd)}</span></div>
+                  <div><span className="text-muted-foreground">Temperature:</span> <span className="font-medium">{detail.temperature}</span></div>
+                </div>
+                {detail.errorMessage && (
+                  <div className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">
+                    <strong>Error:</strong> {detail.errorMessage}
+                  </div>
+                )}
+                <div>
+                  <h4 className="text-xs font-semibold mb-1">Input</h4>
+                  <pre className="bg-muted rounded-md p-2 text-xs overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap">
+                    {tryFormatJson(detail.input)}
+                  </pre>
+                </div>
+                <div>
+                  <h4 className="text-xs font-semibold mb-1">Output</h4>
+                  <pre className="bg-muted rounded-md p-2 text-xs overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap">
+                    {tryFormatJson(detail.output)}
+                  </pre>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+      </div>
     </div>
   )
 }
