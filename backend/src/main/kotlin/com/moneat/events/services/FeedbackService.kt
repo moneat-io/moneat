@@ -60,10 +60,44 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
         limit: Int = 25,
         status: String? = null,
         demoEpochMs: Long? = null
+    ): List<FeedbackListItem> =
+        getFeedback(
+            scope = ServiceQueryScope.service(projectId),
+            retentionDays = queryHelper.getProjectRetentionDays(projectId),
+            page = page,
+            limit = limit,
+            status = status,
+            demoEpochMs = demoEpochMs
+        )
+
+    suspend fun getFeedbackForServices(
+        organizationId: Int,
+        serviceIds: List<Long>,
+        page: Int = 1,
+        limit: Int = 25,
+        status: String? = null,
+        demoEpochMs: Long? = null
+    ): List<FeedbackListItem> =
+        getFeedback(
+            scope = ServiceQueryScope.services(serviceIds),
+            retentionDays = queryHelper.getOrganizationRetentionDays(organizationId),
+            page = page,
+            limit = limit,
+            status = status,
+            demoEpochMs = demoEpochMs
+        )
+
+    private suspend fun getFeedback(
+        scope: ServiceQueryScope,
+        retentionDays: Int,
+        page: Int,
+        limit: Int,
+        status: String?,
+        demoEpochMs: Long?
     ): List<FeedbackListItem> {
+        if (scope.serviceIds.isEmpty()) return emptyList()
         val offset = (page - 1) * limit
-        val retentionDays = queryHelper.getProjectRetentionDays(projectId)
-        val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
+        val projectIdClause = scope.projectIdClause()
         val validStatuses = setOf("unresolved", "resolved", "archived")
         val statusFilter =
             if (status != null && status in validStatuses) {

@@ -108,6 +108,12 @@ class EventRoutesExtendedTest {
     private val mockDashboardService = mockk<DashboardService>(relaxed = true)
     private val mockAlertPrefsService = mockk<AlertNotificationPreferencesService>(relaxed = true)
 
+    private data class SeededUserProject(
+        val userId: Int,
+        val orgId: Int,
+        val projectId: Long
+    )
+
     @BeforeTest
     fun setup() {
         startTestKoin()
@@ -153,6 +159,12 @@ class EventRoutesExtendedTest {
     private fun token(userId: Int): String =
         RouteTestSupport.createToken(userId)
 
+    private fun token(
+        userId: Int,
+        orgId: Int
+    ): String =
+        RouteTestSupport.createToken(userId = userId, orgId = orgId)
+
     private fun demoToken(): String =
         JWT.create().withIssuer("moneat").withAudience("moneat-users")
             .withClaim("userId", -1)
@@ -160,7 +172,10 @@ class EventRoutesExtendedTest {
             .withClaim("isDemo", true)
             .sign(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
 
-    private fun seedUserWithProject(): Pair<Int, Long> {
+    private fun seedUserWithProject(): Pair<Int, Long> =
+        seedUserProject().let { it.userId to it.projectId }
+
+    private fun seedUserProject(): SeededUserProject {
         val orgId = transaction {
             Organizations.insert {
                 it[name] = "Ext Test Org"
@@ -188,7 +203,7 @@ class EventRoutesExtendedTest {
                 it[slug] = "ext-project-${System.nanoTime()}"
             } get Projects.id
         }
-        return Pair(userId, projectId)
+        return SeededUserProject(userId = userId, orgId = orgId, projectId = projectId)
     }
 
     private fun projectResourceId(projectId: Long): String = transaction {
@@ -603,6 +618,56 @@ class EventRoutesExtendedTest {
     }
 
     @Test
+    fun `GET org replays filters to requested services`() = testApplication {
+        val seed = seedUserProject()
+        every { mockDashboardService.getServiceIdsForOrganization(seed.orgId) } returns
+            listOf(seed.projectId, SENTINEL_ID)
+        coEvery {
+            mockDashboardService.getReplaysForServices(
+                seed.orgId,
+                listOf(seed.projectId),
+                2,
+                10,
+                "production",
+                "30d",
+                any()
+            )
+        } returns listOf(sampleReplayListItem(seed.projectId))
+
+        application { installTestApp() }
+        val url = "/v1/replays?page=2&limit=10&environment=production&period=30d&serviceId=${seed.projectId}"
+        val response = client.get(url) {
+            withAuth(token(seed.userId, seed.orgId))
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("replay-1"))
+        coVerify {
+            mockDashboardService.getReplaysForServices(
+                seed.orgId,
+                listOf(seed.projectId),
+                2,
+                10,
+                "production",
+                "30d",
+                any()
+            )
+        }
+    }
+
+    @Test
+    fun `GET org replays returns 400 for invalid service id`() = testApplication {
+        val seed = seedUserProject()
+
+        application { installTestApp() }
+        val response = client.get("/v1/replays?serviceIds=not-a-service") {
+            withAuth(token(seed.userId, seed.orgId))
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
     fun `GET replay detail returns 200`() = testApplication {
         val (userId, _) = seedUserWithProject()
         coEvery { mockDashboardService.hasReplayAccess(userId, REPLAY_D1) } returns true
@@ -732,6 +797,41 @@ class EventRoutesExtendedTest {
     }
 
     @Test
+    fun `GET org feedback resolves service names`() = testApplication {
+        val seed = seedUserProject()
+        every { mockDashboardService.resolveServiceId(seed.orgId, "checkout") } returns seed.projectId
+        every { mockDashboardService.getServiceIdsForOrganization(seed.orgId) } returns listOf(seed.projectId)
+        coEvery {
+            mockDashboardService.getFeedbackForServices(
+                seed.orgId,
+                listOf(seed.projectId),
+                1,
+                25,
+                "resolved",
+                any()
+            )
+        } returns listOf(sampleFeedbackListItem())
+
+        application { installTestApp() }
+        val response = client.get("/v1/feedback?services=checkout&status=resolved") {
+            withAuth(token(seed.userId, seed.orgId))
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("fb-1"))
+        coVerify {
+            mockDashboardService.getFeedbackForServices(
+                seed.orgId,
+                listOf(seed.projectId),
+                1,
+                25,
+                "resolved",
+                any()
+            )
+        }
+    }
+
+    @Test
     fun `GET feedback list returns 403 without access`() = testApplication {
         val (userId, _) = seedUserWithProject()
         every { mockDashboardService.hasProjectAccess(userId, SENTINEL_ID) } returns false
@@ -832,6 +932,26 @@ class EventRoutesExtendedTest {
     }
 
     @Test
+    fun `GET org releases uses all organization services`() = testApplication {
+        val seed = seedUserProject()
+        every { mockDashboardService.getServiceIdsForOrganization(seed.orgId) } returns listOf(seed.projectId)
+        coEvery {
+            mockDashboardService.getReleasesForServices(seed.orgId, listOf(seed.projectId), any())
+        } returns listOf(sampleRelease())
+
+        application { installTestApp() }
+        val response = client.get("/v1/releases") {
+            withAuth(token(seed.userId, seed.orgId))
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("1.0.0"))
+        coVerify {
+            mockDashboardService.getReleasesForServices(seed.orgId, listOf(seed.projectId), any())
+        }
+    }
+
+    @Test
     fun `GET releases returns 403 without access`() = testApplication {
         val (userId, _) = seedUserWithProject()
         every { mockDashboardService.hasProjectAccess(userId, SENTINEL_ID) } returns false
@@ -857,6 +977,42 @@ class EventRoutesExtendedTest {
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("1.0.0"))
+    }
+
+    @Test
+    fun `GET org release stats filters service ids to organization services`() = testApplication {
+        val seed = seedUserProject()
+        every { mockDashboardService.getServiceIdsForOrganization(seed.orgId) } returns listOf(seed.projectId)
+        coEvery {
+            mockDashboardService.getReleaseStatsForServices(seed.orgId, listOf(seed.projectId), "1.0.0")
+        } returns sampleReleaseStats()
+
+        application { installTestApp() }
+        val response = client.get("/v1/releases/1.0.0/stats?serviceIds=${seed.projectId},$SENTINEL_ID") {
+            withAuth(token(seed.userId, seed.orgId))
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("1.0.0"))
+        coVerify {
+            mockDashboardService.getReleaseStatsForServices(seed.orgId, listOf(seed.projectId), "1.0.0")
+        }
+    }
+
+    @Test
+    fun `GET org release stats returns 404 when not found`() = testApplication {
+        val seed = seedUserProject()
+        every { mockDashboardService.getServiceIdsForOrganization(seed.orgId) } returns listOf(seed.projectId)
+        coEvery {
+            mockDashboardService.getReleaseStatsForServices(seed.orgId, listOf(seed.projectId), "9.9.9")
+        } returns null
+
+        application { installTestApp() }
+        val response = client.get("/v1/releases/9.9.9/stats") {
+            withAuth(token(seed.userId, seed.orgId))
+        }
+
+        assertEquals(HttpStatusCode.NotFound, response.status)
     }
 
     @Test

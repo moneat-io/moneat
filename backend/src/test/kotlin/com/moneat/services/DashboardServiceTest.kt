@@ -40,6 +40,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DashboardServiceTest {
@@ -173,6 +174,23 @@ class DashboardServiceTest {
                 assertTrue(queries.any { it.contains("organization_id = 1") })
                 assertTrue(queries.any { it.contains("project_id IN (123)") })
             }
+        }
+
+    @Test
+    fun `org service read methods return empty results for empty service scope`() =
+        runBlocking {
+            val service = DashboardService.create()
+
+            val releases = service.getReleasesForServices(organizationId = 1, serviceIds = emptyList())
+            val releaseStats =
+                service.getReleaseStatsForServices(organizationId = 1, serviceIds = emptyList(), version = "1.0.0")
+            val replays = service.getReplaysForServices(organizationId = 1, serviceIds = emptyList())
+            val feedback = service.getFeedbackForServices(organizationId = 1, serviceIds = emptyList())
+
+            assertTrue(releases.isEmpty())
+            assertNull(releaseStats)
+            assertTrue(replays.isEmpty())
+            assertTrue(feedback.isEmpty())
         }
 
     @Test

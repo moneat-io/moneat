@@ -19,6 +19,7 @@ package com.moneat.events.services
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -42,6 +43,7 @@ class FeedbackServiceTest {
         every {
             queryHelper.timestampRetentionClause(any(), any(), any())
         } returns "timestamp >= now() - INTERVAL 30 DAY"
+        coEvery { queryHelper.getOrganizationRetentionDays(any()) } returns 30
         service = FeedbackService(queryHelper)
     }
 
@@ -83,5 +85,34 @@ class FeedbackServiceTest {
         assertEquals(FEEDBACK_UUID, detail?.feedbackId)
         assertEquals("2026-05-29T17:39:22.000Z", detail?.timestamp)
         assertEquals("unresolved", detail?.status)
+    }
+
+    @Test
+    fun `getFeedbackForServices scopes query to selected services`() = runBlocking {
+        val querySlot = slot<String>()
+        coEvery { queryHelper.executeJsonEachRowQuery(capture(querySlot), "Feedback list") } returns emptyList()
+
+        val result =
+            service.getFeedbackForServices(
+                organizationId = 1,
+                serviceIds = listOf(1L, 2L),
+                status = "resolved"
+            )
+
+        assertEquals(emptyList(), result)
+        assertEquals(true, querySlot.captured.contains("project_id IN (1, 2)"))
+        assertEquals(true, querySlot.captured.contains("status = 'resolved'"))
+    }
+
+    @Test
+    fun `getFeedback scopes project query through service scope`() = runBlocking {
+        val querySlot = slot<String>()
+        coEvery { queryHelper.executeJsonEachRowQuery(capture(querySlot), "Feedback list") } returns emptyList()
+
+        val result = service.getFeedback(projectId = 3L, status = "archived")
+
+        assertEquals(emptyList(), result)
+        assertEquals(true, querySlot.captured.contains("project_id = 3"))
+        assertEquals(true, querySlot.captured.contains("status = 'archived'"))
     }
 }
