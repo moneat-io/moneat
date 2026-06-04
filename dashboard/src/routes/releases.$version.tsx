@@ -17,7 +17,6 @@
 import {createFileRoute, Link, redirect} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
-import {useProject} from '@/contexts/ProjectContext'
 import {EventsChart} from '@/components/charts/EventsChart'
 import {BarChart} from '@/components/charts/BarChart'
 import {StatsCard} from '@/components/charts/StatsCard'
@@ -38,23 +37,11 @@ export const Route = createFileRoute('/releases/$version')({
 
 function ReleaseDetailPage() {
   const { version } = Route.useParams()
-  const { selectedProjectId } = useProject()
   const releaseVersion = version
 
-  const { data: projects } = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => api.getProjects(),
-  })
-
-  const projectId = selectedProjectId || projects?.[0]?.resourceId
-
   const { data: stats, isLoading } = useQuery({
-    queryKey: ['releaseStats', projectId, releaseVersion],
-    queryFn: () =>
-      projectId
-        ? api.getReleaseStats(projectId, releaseVersion)
-        : Promise.reject(new Error('No project')),
-    enabled: !!projectId,
+    queryKey: ['releaseStats', 'organization', releaseVersion],
+    queryFn: () => api.getOrganizationReleaseStats(releaseVersion),
   })
 
   return (
@@ -75,13 +62,7 @@ function ReleaseDetailPage() {
           }
         />
 
-        {!projectId ? (
-          <EmptyState
-            icon={Package}
-            title="No project selected"
-            description="Select a project to view release details."
-          />
-        ) : isLoading ? (
+        {isLoading ? (
           <div className="p-8 text-center">Loading release stats...</div>
         ) : !stats ? (
           <EmptyState
@@ -148,7 +129,7 @@ function ReleaseDetailPage() {
                       key={issue.issueId}
                       to="/issues/$issueId"
                       params={{ issueId: issue.issueId }}
-                      search={{ projectId }}
+                      search={{ projectId: undefined }}
                       className="flex items-center justify-between p-2 rounded-lg border hover:bg-accent/40 transition-colors"
                     >
                       <div className="flex items-center gap-2 min-w-0">

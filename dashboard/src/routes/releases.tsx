@@ -17,8 +17,8 @@
 import {createFileRoute, Link, Outlet, redirect, useMatches} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api, formatErrorForLogging} from '@/lib/api'
-import {useProject} from '@/contexts/ProjectContext'
 import {useMemo, useState} from 'react'
+import {FacetRail} from '@/components/filters/FacetRail'
 import {Card, CardContent} from '@/components/ui/card'
 import {Input} from '@/components/ui/input'
 import {Badge} from '@/components/ui/badge'
@@ -28,6 +28,13 @@ import {PageHeader} from '@/components/ui/page-header'
 import {EmptyState} from '@/components/ui/empty-state'
 import {StatusDot} from '@/components/ui/status-dot'
 import {Activity, AlertCircle, Flame, Package, Search, ShieldCheck, Users} from 'lucide-react'
+import {
+  facetValues,
+  serviceNamesForQuery,
+  serviceRailSections,
+  serviceScopeKey,
+} from '@/lib/service-facet-scope'
+import type {FacetFilter} from '@/lib/filters/types'
 
 export const Route = createFileRoute('/releases')({
   beforeLoad: async ({ location }) => {
@@ -54,22 +61,38 @@ type SortBy = 'latest' | 'events' | 'issues' | 'stability'
 function ReleasesPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState<SortBy>('latest')
-  const { selectedProjectId } = useProject()
+  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
 
-  const { data: projects } = useQuery({
+  const { data: projects, isLoading: projectsLoading, error: projectsError } = useQuery({
     queryKey: ['projects'],
     queryFn: () => api.getProjects(),
   })
 
-  const projectId = selectedProjectId || projects?.[0]?.resourceId
+  const projectList = projects ?? []
+  const includedServices = useMemo(
+    () => facetValues(facetFilters, 'service', false),
+    [facetFilters]
+  )
+  const excludedServices = useMemo(
+    () => facetValues(facetFilters, 'service', true),
+    [facetFilters]
+  )
+  const hasServiceFilters = includedServices.length > 0 || excludedServices.length > 0
+  const serviceNames = useMemo(
+    () => serviceNamesForQuery(projectList, includedServices, excludedServices),
+    [projectList, includedServices, excludedServices]
+  )
+  const scopeKey = serviceScopeKey(serviceNames, hasServiceFilters)
+  const hasReleaseScope = projectList.length > 0 && (!hasServiceFilters || serviceNames.length > 0)
+  const serviceScopeParams = useMemo(() => (
+    serviceNames.length > 0 ? {services: [...serviceNames]} : {}
+  ), [serviceNames])
+  const railSections = useMemo(() => serviceRailSections(projectList), [projectList])
 
   const { data: releases, isLoading, error } = useQuery({
-    queryKey: ['releases', projectId],
-    queryFn: async () => {
-      if (!projectId) return []
-      return api.getReleases(projectId)
-    },
-    enabled: !!projectId,
+    queryKey: ['releases', 'organization', scopeKey, serviceScopeParams],
+    queryFn: () => api.getOrganizationReleases(serviceScopeParams),
+    enabled: hasReleaseScope,
   })
   
   if (error) {
@@ -148,19 +171,40 @@ function ReleasesPage() {
   }
 
   return (
-    <div>
-      <div className="container mx-auto px-4 py-4 space-y-3">
-        <PageHeader
-          icon={Package}
-          title="Releases"
-          description="Track release health, new issues, and crash-free rates"
-        />
+    <div className="grid gap-2 p-3 lg:grid-cols-[220px_minmax(0,1fr)]">
+      <FacetRail
+        sections={railSections}
+        facetFilters={facetFilters}
+        onFacetFiltersChange={setFacetFilters}
+        title="Releases"
+        className="h-auto max-h-[340px] rounded-md border lg:sticky lg:top-2 lg:h-[calc(100vh-8rem)] lg:max-h-none"
+      />
 
-        {!projects || projects.length === 0 ? (
+      <div className="min-w-0">
+        <div className="container mx-auto px-4 py-4 space-y-3">
+          <PageHeader
+            icon={Package}
+            title="Releases"
+            description="Track release health, new issues, and crash-free rates"
+          />
+
+          {projectsLoading ? (
+          <div className="p-6 text-center text-sm">Loading services...</div>
+        ) : projectsError ? (
+          <div className="p-8 text-destructive">
+            Failed to load services: {projectsError instanceof Error ? projectsError.message : 'Unknown error'}
+          </div>
+        ) : projectList.length === 0 ? (
           <EmptyState
             icon={Package}
-            title="No projects yet"
-            description="Create a project to view releases."
+            title="No services yet"
+            description="Create a service to view releases."
+          />
+        ) : !hasReleaseScope ? (
+          <EmptyState
+            icon={Package}
+            title="No services match filters"
+            description="Adjust the selected services to view releases."
           />
         ) : isLoading ? (
           <div className="p-6 text-center text-sm">Loading releases...</div>
@@ -170,7 +214,7 @@ function ReleasesPage() {
             title="No releases detected"
             description="Releases are auto-detected when events include a release version. Configure your SDK with a release version to start tracking."
           />
-        ) : (
+          ) : (
           <div className="space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
               <StatsCard
@@ -326,7 +370,8 @@ function ReleasesPage() {
               </Link>
             ))}
           </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   )
