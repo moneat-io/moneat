@@ -19,7 +19,10 @@ package com.moneat.services
 import com.moneat.config.ClickHouseClient
 import com.moneat.llm.models.LlmGenerationIngest
 import com.moneat.llm.services.LlmDashboardService
+import com.moneat.llm.services.LlmGenerationFilters
+import com.moneat.llm.services.LlmGenerationsQuery
 import com.moneat.llm.services.LlmIngestionWorker
+import com.moneat.llm.services.LlmQueryScope
 import com.moneat.testsupport.queryBasedClickHouseHandler
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
@@ -54,6 +57,21 @@ class LlmServiceExtendedTest {
         ClickHouseClient.close()
     }
 
+    private fun generationsQuery(
+        range: String = "24h",
+        filters: LlmGenerationFilters = LlmGenerationFilters(),
+        page: Int = 1,
+        pageSize: Int = 25,
+        demoEpochMs: Long? = null
+    ): LlmGenerationsQuery =
+        LlmGenerationsQuery(
+            range = range,
+            filters = filters,
+            page = page,
+            pageSize = pageSize,
+            demoEpochMs = demoEpochMs
+        )
+
     // ──── LlmDashboardService: getGenerations ────
 
     @Test
@@ -71,13 +89,7 @@ class LlmServiceExtendedTest {
             withClickHouseMockServer(handler) { _ ->
                 val result = LlmDashboardService().getGenerations(
                     projectId = 5,
-                    range = "24h",
-                    model = null,
-                    provider = null,
-                    type = null,
-                    status = null,
-                    page = 1,
-                    pageSize = 25
+                    query = generationsQuery()
                 )
                 assertEquals(42L, result.total)
                 assertEquals(1, result.page)
@@ -100,13 +112,17 @@ class LlmServiceExtendedTest {
             ) { _ ->
                 LlmDashboardService().getGenerations(
                     projectId = 5,
-                    range = "7d",
-                    model = GPT_4O,
-                    provider = "openai",
-                    type = "chat",
-                    status = "error",
-                    page = 2,
-                    pageSize = 10
+                    query = generationsQuery(
+                        range = "7d",
+                        filters = LlmGenerationFilters(
+                            model = GPT_4O,
+                            provider = "openai",
+                            type = "chat",
+                            status = "error"
+                        ),
+                        page = 2,
+                        pageSize = 10
+                    )
                 )
                 val dataQuery = queries.find { it.contains("ORDER BY timestamp DESC") } ?: ""
                 assertTrue(dataQuery.contains("model = '${GPT_4O}'"), "model filter missing")
@@ -127,13 +143,7 @@ class LlmServiceExtendedTest {
             withClickHouseMockServer(handler) { _ ->
                 val result = LlmDashboardService().getGenerations(
                     projectId = 5,
-                    range = "24h",
-                    model = null,
-                    provider = null,
-                    type = null,
-                    status = null,
-                    page = 1,
-                    pageSize = 25
+                    query = generationsQuery()
                 )
                 assertEquals(0L, result.total)
                 assertTrue(result.generations.isEmpty())
@@ -322,6 +332,114 @@ class LlmServiceExtendedTest {
                 assertEquals(0.0, result.totalCost)
                 assertTrue(result.timeline.isEmpty())
                 assertTrue(result.topModels.isEmpty())
+            }
+        }
+
+    // ──── LlmDashboardService: service scopes ────
+
+    @Test
+    fun `getOverview scoped query filters by multiple service ids`() =
+        runBlocking {
+            val queries = mutableListOf<String>()
+            withClickHouseMockServer({ exchange ->
+                val query = exchange.requestBodyText()
+                queries += query
+                when {
+                    query.contains(COUNT_AS_TOTAL_GENERATIONS) -> {
+                        exchange.respond(200, EMPTY_STATS_JSON, contentType = TEXT_PLAIN)
+                    }
+                    else -> {
+                        exchange.respond(200, "\n", contentType = TEXT_PLAIN)
+                    }
+                }
+            }) { _ ->
+                LlmDashboardService().getOverview(
+                    scope = LlmQueryScope.services(listOf(10L, 11L)),
+                    range = "24h"
+                )
+                assertTrue(queries.isNotEmpty(), "Expected overview queries to be captured")
+                assertTrue(queries.all { it.contains("toInt64(project_id) IN (10, 11)") })
+            }
+        }
+
+    @Test
+    fun `getGenerations scoped query applies service scope and filters`() =
+        runBlocking {
+            val queries = mutableListOf<String>()
+            withClickHouseMockServer(
+                queryBasedClickHouseHandler(
+                    defaultBody = """{"total":0}""",
+                    captureQueries = queries
+                )
+            ) { _ ->
+                LlmDashboardService().getGenerations(
+                    scope = LlmQueryScope.services(listOf(5L, 6L)),
+                    query = LlmGenerationsQuery(
+                        range = "7d",
+                        filters = LlmGenerationFilters(
+                            model = GPT_4O,
+                            provider = "openai",
+                            type = "chat",
+                            status = "error"
+                        ),
+                        page = 1,
+                        pageSize = 25
+                    )
+                )
+                val dataQuery = queries.find { it.contains("ORDER BY timestamp DESC") } ?: ""
+                assertTrue(dataQuery.contains("toInt64(project_id) IN (5, 6)"))
+                assertTrue(dataQuery.contains("model = '${GPT_4O}'"))
+                assertTrue(dataQuery.contains("status = 'error'"))
+            }
+        }
+
+    @Test
+    fun `getGenerationDetail scoped query includes service scope and generation id`() =
+        runBlocking {
+            val queries = mutableListOf<String>()
+            withClickHouseMockServer({ exchange ->
+                queries += exchange.requestBodyText()
+                exchange.respond(500, "internal error", contentType = TEXT_PLAIN)
+            }) { _ ->
+                LlmDashboardService().getGenerationDetail(
+                    scope = LlmQueryScope.services(listOf(5L, 6L)),
+                    generationId = "gen-1"
+                )
+                val query = queries.firstOrNull() ?: ""
+                assertTrue(query.contains("toInt64(project_id) IN (5, 6)"))
+                assertTrue(query.contains("toString(generation_id) = 'gen-1'"))
+            }
+        }
+
+    @Test
+    fun `getTrace scoped query includes service scope and trace id`() =
+        runBlocking {
+            val queries = mutableListOf<String>()
+            withClickHouseMockServer(
+                queryBasedClickHouseHandler(defaultBody = "\n", captureQueries = queries)
+            ) { _ ->
+                LlmDashboardService().getTrace(
+                    scope = LlmQueryScope.services(listOf(5L, 6L)),
+                    traceId = "trace-1"
+                )
+                val query = queries.firstOrNull() ?: ""
+                assertTrue(query.contains("toInt64(project_id) IN (5, 6)"))
+                assertTrue(query.contains("trace_id = 'trace-1'"))
+            }
+        }
+
+    @Test
+    fun `getModels empty service scope uses no rows clause`() =
+        runBlocking {
+            val queries = mutableListOf<String>()
+            withClickHouseMockServer(
+                queryBasedClickHouseHandler(defaultBody = "\n", captureQueries = queries)
+            ) { _ ->
+                LlmDashboardService().getModels(
+                    scope = LlmQueryScope.services(emptyList()),
+                    range = "24h"
+                )
+                assertTrue(queries.any { it.contains("WHERE 0 = 1 AND") })
             }
         }
 
