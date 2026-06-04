@@ -73,7 +73,7 @@ function renderHub(project: Project = baseProject, selectedSourcesParam?: string
 describe('ProjectTelemetrySetupHub', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    localStorage.clear()
+    globalThis.localStorage.clear()
     mockApi.isAuthenticated.mockReturnValue(true)
     mockApi.getSdkVersions.mockResolvedValue({versions: {}})
     mockApi.getCurrentUser.mockResolvedValue({organizationSlug: 'acme'})
