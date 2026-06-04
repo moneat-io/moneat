@@ -198,6 +198,7 @@ data class DdApmOverviewFacets(
     val services: List<DdApmFacetItem>,
     val sources: List<DdApmFacetItem>,
     val environments: List<DdApmFacetItem>,
+    val operations: List<DdApmFacetItem>,
 )
 
 @Serializable

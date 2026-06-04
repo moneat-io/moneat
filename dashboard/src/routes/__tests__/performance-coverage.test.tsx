@@ -98,6 +98,7 @@ const mockOverview = {
     services: [{value: 'checkout-service', count: 5642}],
     sources: [{value: 'otlp', count: 5000}],
     environments: [{value: 'production', count: 5000}],
+    operations: [{value: 'POST /checkout', count: 1234}],
   },
 }
 
@@ -212,6 +213,27 @@ describe('Performance routes', () => {
     })
   })
 
+  it('applies trace facet rail filters to dashboard queries', async () => {
+    const Component = (PerformanceTracesRoute as unknown as {component: React.ComponentType}).component
+    renderWithQueryClient(Component)
+
+    fireEvent.click(await screen.findByLabelText('checkout-service'))
+    fireEvent.click(await screen.findByLabelText('POST /checkout'))
+
+    await waitFor(() => {
+      expect(mockApi.getApmOverview).toHaveBeenCalledWith(expect.objectContaining({
+        services: ['checkout-service'],
+        operation: 'POST /checkout',
+      }))
+      expect(mockApi.getApmTraces).toHaveBeenCalledWith(expect.objectContaining({
+        services: ['checkout-service'],
+        operation: 'POST /checkout',
+        limit: 25,
+        offset: 0,
+      }))
+    })
+  })
+
   it('renders skeleton cards while the traces dashboard loads', () => {
     const Component = (PerformanceTracesRoute as unknown as {component: React.ComponentType}).component
     mockApi.getApmOverview.mockReturnValue(neverResolve())
@@ -241,6 +263,9 @@ describe('Performance routes', () => {
         offset: 0,
       }))
     })
+
+    fireEvent.click(screen.getByRole('button', {name: /Refresh/i}))
+    await waitFor(() => expect(mockApi.getApmResourceStats).toHaveBeenCalledTimes(2))
 
     fireEvent.click(viewAllButton)
     await waitFor(() => expect(scrollIntoViewMock).toHaveBeenCalledTimes(2))

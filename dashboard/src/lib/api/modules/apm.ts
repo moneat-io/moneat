@@ -33,6 +33,7 @@ type ApmListParams = {
   source?: string
   env?: string
   status?: ApmStatusFilter
+  operation?: string
   search?: string
   limit?: number
   offset?: number
@@ -45,6 +46,7 @@ function appendApmListParams(searchParams: URLSearchParams, params: ApmListParam
   if (params.source) searchParams.set('source', params.source)
   if (params.env) searchParams.set('env', params.env)
   if (params.status) searchParams.set('status', params.status)
+  if (params.operation) searchParams.set('operation', params.operation)
   if (params.search) searchParams.set('search', params.search)
   if (params.limit != null) searchParams.set('limit', String(params.limit))
   if (params.offset != null) searchParams.set('offset', String(params.offset))

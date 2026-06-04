@@ -50,9 +50,11 @@ describe('APM API', () => {
       http.get(`${API_BASE}/v1/traces`, ({ request }) => {
         const url = new URL(request.url)
         expect(url.searchParams.get('service')).toBe('api-gateway')
+        expect(url.searchParams.get('services')).toBe('api-gateway,worker')
         expect(url.searchParams.get('source')).toBe('otlp')
         expect(url.searchParams.get('status')).toBe('error')
         expect(url.searchParams.get('env')).toBe('production')
+        expect(url.searchParams.get('operation')).toBe('POST /checkout')
         expect(url.searchParams.get('search')).toBe('checkout')
         expect(url.searchParams.get('limit')).toBe('20')
         expect(url.searchParams.get('offset')).toBe('10')
@@ -63,9 +65,11 @@ describe('APM API', () => {
 
     const result = await api.getApmTraces({
       service: 'api-gateway',
+      services: ['api-gateway', 'worker'],
       source: 'otlp',
       status: 'error',
       env: 'production',
+      operation: 'POST /checkout',
       search: 'checkout',
       limit: 20,
       offset: 10,
@@ -101,16 +105,18 @@ describe('APM API', () => {
       serviceHealth: [],
       resourceHotspots: [],
       errors: [],
-      facets: { services: [], sources: [], environments: [] },
+      facets: { services: [], sources: [], environments: [], operations: [] },
     }
 
     server.use(
       http.get(`${API_BASE}/v1/traces/overview`, ({ request }) => {
         const url = new URL(request.url)
         expect(url.searchParams.get('service')).toBe('api-gateway')
+        expect(url.searchParams.get('services')).toBe('api-gateway,worker')
         expect(url.searchParams.get('source')).toBe('sentry')
         expect(url.searchParams.get('status')).toBe('ok')
         expect(url.searchParams.get('env')).toBe('production')
+        expect(url.searchParams.get('operation')).toBe('GET /orders')
         expect(url.searchParams.get('search')).toBe('checkout')
         expect(url.searchParams.get('timeRange')).toBe('24h')
         return HttpResponse.json(mockResponse)
@@ -119,9 +125,11 @@ describe('APM API', () => {
 
     const result = await api.getApmOverview({
       service: 'api-gateway',
+      services: ['api-gateway', 'worker'],
       source: 'sentry',
       status: 'ok',
       env: 'production',
+      operation: 'GET /orders',
       search: 'checkout',
       timeRange: '24h',
     })
@@ -306,6 +314,7 @@ describe('APM API', () => {
       http.get(`${API_BASE}/v1/apm-errors`, ({ request }) => {
         const url = new URL(request.url)
         expect(url.searchParams.get('service')).toBe('payment-svc')
+        expect(url.searchParams.get('services')).toBe('payment-svc,worker')
         expect(url.searchParams.get('limit')).toBe('50')
         expect(url.searchParams.get('offset')).toBe('0')
         expect(url.searchParams.get('timeRange')).toBe('90d')
@@ -315,6 +324,7 @@ describe('APM API', () => {
 
     const result = await api.getApmErrors({
       service: 'payment-svc',
+      services: ['payment-svc', 'worker'],
       limit: 50,
       offset: 0,
       timeRange: '90d',
@@ -344,9 +354,11 @@ describe('APM API', () => {
       http.get(`${API_BASE}/v1/traces/resources`, ({ request }) => {
         const url = new URL(request.url)
         expect(url.searchParams.get('service')).toBe('user-svc')
+        expect(url.searchParams.get('services')).toBe('user-svc,worker')
         expect(url.searchParams.get('source')).toBe('otlp')
         expect(url.searchParams.get('status')).toBe('error')
         expect(url.searchParams.get('env')).toBe('production')
+        expect(url.searchParams.get('operation')).toBe('POST /users')
         expect(url.searchParams.get('search')).toBe('checkout')
         expect(url.searchParams.get('limit')).toBe('10')
         expect(url.searchParams.get('offset')).toBe('20')
@@ -357,9 +369,11 @@ describe('APM API', () => {
 
     const result = await api.getApmResourceStats({
       service: 'user-svc',
+      services: ['user-svc', 'worker'],
       source: 'otlp',
       status: 'error',
       env: 'production',
+      operation: 'POST /users',
       search: 'checkout',
       limit: 10,
       offset: 20,

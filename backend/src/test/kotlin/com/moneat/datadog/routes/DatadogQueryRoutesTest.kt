@@ -357,11 +357,21 @@ class DatadogQueryRoutesTest {
     }
 
     @Test
+    fun `traces overview rejects invalid services`() = testApplication {
+        installTraceRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val services = (1..51).joinToString(",") { "service-$it" }
+        val resp = client.get("/v1/traces/overview?services=$services") { withAuth(token) }
+        assertEquals(HttpStatusCode.BadRequest, resp.status)
+    }
+
+    @Test
     fun `traces resources forwards server side filters`() = testApplication {
         installTraceRoutes()()
         val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
         val resp = client.get(
-            "/v1/traces/resources?service=api&env=prod&source=otlp&status=error&search=checkout&limit=500&offset=-10"
+            "/v1/traces/resources?services=api,worker&env=prod&source=otlp&status=error" +
+                "&operation=POST%20%2Fcheckout&search=checkout&limit=500&offset=-10"
         ) {
             withAuth(token)
         }
@@ -371,10 +381,11 @@ class DatadogQueryRoutesTest {
             TraceIngestionService.listResourceStats(
                 organizationId = 10,
                 query = match {
-                    it.service == "api" &&
+                    it.services == listOf("api", "worker") &&
                         it.env == "prod" &&
                         it.source == "otlp" &&
                         it.status == "error" &&
+                        it.operation == "POST /checkout" &&
                         it.search == "checkout" &&
                         it.limit == 200 &&
                         it.offset == 0
@@ -392,11 +403,40 @@ class DatadogQueryRoutesTest {
     }
 
     @Test
+    fun `traces overview forwards server side filters`() = testApplication {
+        installTraceRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get(
+            "/v1/traces/overview?services=api,worker&env=prod&source=otlp&status=ok" +
+                "&operation=GET%20%2Forders&search=orders&timeRange=7d"
+        ) {
+            withAuth(token)
+        }
+
+        assertEquals(HttpStatusCode.OK, resp.status)
+        coVerify {
+            TraceIngestionService.getApmOverview(
+                organizationId = 10,
+                query = match {
+                    it.services == listOf("api", "worker") &&
+                        it.env == "prod" &&
+                        it.source == "otlp" &&
+                        it.status == "ok" &&
+                        it.operation == "GET /orders" &&
+                        it.search == "orders"
+                },
+                parentSpan = any(),
+            )
+        }
+    }
+
+    @Test
     fun `traces list forwards server side paging search and filters`() = testApplication {
         installTraceRoutes()()
         val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
         val resp = client.get(
-            "/v1/traces?service=api&env=prod&source=otlp&status=error&search=checkout&limit=500&offset=-10"
+            "/v1/traces?services=api,worker&env=prod&source=otlp&status=error" +
+                "&operation=POST%20%2Fcheckout&search=checkout&limit=500&offset=-10"
         ) {
             withAuth(token)
         }
@@ -406,10 +446,11 @@ class DatadogQueryRoutesTest {
             TraceIngestionService.listTraces(
                 organizationId = 10,
                 query = match {
-                    it.service == "api" &&
+                    it.services == listOf("api", "worker") &&
                         it.env == "prod" &&
                         it.source == "otlp" &&
                         it.status == "error" &&
+                        it.operation == "POST /checkout" &&
                         it.limit == 200 &&
                         it.offset == 0 &&
                         it.search == "checkout"
@@ -472,6 +513,7 @@ class DatadogQueryRoutesTest {
                 services = emptyList(),
                 sources = emptyList(),
                 environments = emptyList(),
+                operations = emptyList(),
             ),
         )
 
