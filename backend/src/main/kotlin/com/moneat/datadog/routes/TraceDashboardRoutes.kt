@@ -63,37 +63,12 @@ fun Route.traceDashboardRoutes() {
             get("/resources") {
                 val orgId = call.organizationId()
                     ?: return@get call.respondUnauthorized()
-                val services = call.serviceFilters()
-                    ?: return@get call.respondBadRequest(INVALID_SERVICES_ERROR)
-                val env = call.parameters["env"]
-                val source = call.parameters["source"]
-                val search = call.traceSearch()
-                val status = call.apmStatus()
-                    ?: return@get call.respondBadRequest(INVALID_STATUS_ERROR)
-                val limit = (
-                    call.parameters["limit"]
-                        ?.toIntOrNull() ?: DEFAULT_LIMIT
-                    )
-                    .coerceIn(1, MAX_LIMIT)
-                val offset = call.parameters["offset"]
-                    ?.toIntOrNull()
-                    ?.coerceAtLeast(0) ?: 0
-                val timeRange = call.apmTimeRange()
-                    ?: return@get call.respondBadRequest(INVALID_TIME_RANGE_ERROR)
+                val query = call.apmRouteQuery()
+                    ?: return@get call.respondBadRequest(call.apmRouteQueryError())
 
                 val result = TraceIngestionService.listResourceStats(
                     organizationId = orgId,
-                    query = DdResourceStatsQuery(
-                        services = services,
-                        env = env,
-                        source = source,
-                        status = status,
-                        operation = call.parameters["operation"]?.takeIf { it.isNotBlank() },
-                        search = search,
-                        limit = limit,
-                        offset = offset,
-                        timeRange = timeRange,
-                    ),
+                    query = query.toResourceStatsQuery(),
                     parentSpan = call.getSentryTransaction(),
                 )
                 call.respond(result)
@@ -103,24 +78,12 @@ fun Route.traceDashboardRoutes() {
             get("/overview") {
                 val orgId = call.organizationId()
                     ?: return@get call.respondUnauthorized()
-                val services = call.serviceFilters()
-                    ?: return@get call.respondBadRequest(INVALID_SERVICES_ERROR)
-                val status = call.apmStatus()
-                    ?: return@get call.respondBadRequest(INVALID_STATUS_ERROR)
-                val timeRange = call.apmTimeRange()
-                    ?: return@get call.respondBadRequest(INVALID_TIME_RANGE_ERROR)
+                val query = call.apmRouteQuery()
+                    ?: return@get call.respondBadRequest(call.apmRouteQueryError())
 
                 val result = TraceIngestionService.getApmOverview(
                     organizationId = orgId,
-                    query = DdTraceListQuery(
-                        services = services,
-                        env = call.parameters["env"],
-                        source = call.parameters["source"],
-                        status = status,
-                        operation = call.parameters["operation"]?.takeIf { it.isNotBlank() },
-                        search = call.traceSearch(),
-                        timeRange = timeRange,
-                    ),
+                    query = query.toTraceListQuery(),
                     parentSpan = call.getSentryTransaction(),
                 )
                 call.respond(result)
@@ -130,37 +93,12 @@ fun Route.traceDashboardRoutes() {
             get {
                 val orgId = call.organizationId()
                     ?: return@get call.respondUnauthorized()
-                val services = call.serviceFilters()
-                    ?: return@get call.respondBadRequest(INVALID_SERVICES_ERROR)
-                val env = call.parameters["env"]
-                val source = call.parameters["source"]
-                val search = call.traceSearch()
-                val status = call.apmStatus()
-                    ?: return@get call.respondBadRequest(INVALID_STATUS_ERROR)
-                val limit = (
-                    call.parameters["limit"]
-                        ?.toIntOrNull() ?: DEFAULT_LIMIT
-                    )
-                    .coerceIn(1, MAX_LIMIT)
-                val offset = call.parameters["offset"]
-                    ?.toIntOrNull()
-                    ?.coerceAtLeast(0) ?: 0
-                val timeRange = call.apmTimeRange()
-                    ?: return@get call.respondBadRequest(INVALID_TIME_RANGE_ERROR)
+                val query = call.apmRouteQuery()
+                    ?: return@get call.respondBadRequest(call.apmRouteQueryError())
 
                 val result = TraceIngestionService.listTraces(
                     organizationId = orgId,
-                    query = DdTraceListQuery(
-                        services = services,
-                        env = env,
-                        source = source,
-                        status = status,
-                        operation = call.parameters["operation"]?.takeIf { it.isNotBlank() },
-                        search = search,
-                        limit = limit,
-                        offset = offset,
-                        timeRange = timeRange,
-                    ),
+                    query = query.toTraceListQuery(),
                     parentSpan = call.getSentryTransaction(),
                 )
                 call.respond(result)
@@ -255,6 +193,64 @@ private suspend fun ApplicationCall.respondBadRequest(error: String) {
     )
 }
 
+private data class ApmRouteQuery(
+    val services: List<String>,
+    val env: String?,
+    val source: String?,
+    val search: String?,
+    val status: String?,
+    val operation: String?,
+    val limit: Int,
+    val offset: Int,
+    val timeRange: DdApmQueryTimeRange,
+) {
+    fun toTraceListQuery(): DdTraceListQuery =
+        DdTraceListQuery(
+            services = services,
+            env = env,
+            source = source,
+            status = status,
+            operation = operation,
+            search = search,
+            limit = limit,
+            offset = offset,
+            timeRange = timeRange,
+        )
+
+    fun toResourceStatsQuery(): DdResourceStatsQuery =
+        DdResourceStatsQuery(
+            services = services,
+            env = env,
+            source = source,
+            status = status,
+            operation = operation,
+            search = search,
+            limit = limit,
+            offset = offset,
+            timeRange = timeRange,
+        )
+}
+
+private fun ApplicationCall.apmRouteQuery(): ApmRouteQuery? =
+    ApmRouteQuery(
+        services = serviceFilters() ?: return null,
+        env = parameters["env"],
+        source = parameters["source"],
+        search = traceSearch(),
+        status = apmStatus() ?: return null,
+        operation = parameters["operation"]?.takeIf { it.isNotBlank() },
+        limit = traceQueryLimit(),
+        offset = traceQueryOffset(),
+        timeRange = apmTimeRange() ?: return null,
+    )
+
+private fun ApplicationCall.apmRouteQueryError(): String =
+    when {
+        serviceFilters() == null -> INVALID_SERVICES_ERROR
+        apmStatus() == null -> INVALID_STATUS_ERROR
+        else -> INVALID_TIME_RANGE_ERROR
+    }
+
 private fun ApplicationCall.apmTimeRange(): DdApmQueryTimeRange? {
     val rawValue = parameters["timeRange"] ?: parameters["range"] ?: DEFAULT_APM_TIME_RANGE
     return apmTimeRanges[rawValue]
@@ -274,6 +270,12 @@ private fun ApplicationCall.traceSearch(): String? =
         ?.trim()
         ?.take(MAX_TRACE_SEARCH_LENGTH)
         ?.takeIf { it.isNotEmpty() }
+
+private fun ApplicationCall.traceQueryLimit(): Int =
+    (parameters["limit"]?.toIntOrNull() ?: DEFAULT_LIMIT).coerceIn(1, MAX_LIMIT)
+
+private fun ApplicationCall.traceQueryOffset(): Int =
+    parameters["offset"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0
 
 private fun ApplicationCall.serviceFilters(): List<String>? {
     val parsedServices = parameters["services"]

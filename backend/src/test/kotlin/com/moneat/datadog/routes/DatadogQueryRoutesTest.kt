@@ -357,6 +357,15 @@ class DatadogQueryRoutesTest {
     }
 
     @Test
+    fun `traces overview rejects invalid services`() = testApplication {
+        installTraceRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val services = (1..51).joinToString(",") { "service-$it" }
+        val resp = client.get("/v1/traces/overview?services=$services") { withAuth(token) }
+        assertEquals(HttpStatusCode.BadRequest, resp.status)
+    }
+
+    @Test
     fun `traces resources forwards server side filters`() = testApplication {
         installTraceRoutes()()
         val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
@@ -391,6 +400,34 @@ class DatadogQueryRoutesTest {
         val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
         val resp = client.get("/v1/traces/overview?timeRange=2y") { withAuth(token) }
         assertEquals(HttpStatusCode.BadRequest, resp.status)
+    }
+
+    @Test
+    fun `traces overview forwards server side filters`() = testApplication {
+        installTraceRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get(
+            "/v1/traces/overview?services=api,worker&env=prod&source=otlp&status=ok" +
+                "&operation=GET%20%2Forders&search=orders&timeRange=7d"
+        ) {
+            withAuth(token)
+        }
+
+        assertEquals(HttpStatusCode.OK, resp.status)
+        coVerify {
+            TraceIngestionService.getApmOverview(
+                organizationId = 10,
+                query = match {
+                    it.services == listOf("api", "worker") &&
+                        it.env == "prod" &&
+                        it.source == "otlp" &&
+                        it.status == "ok" &&
+                        it.operation == "GET /orders" &&
+                        it.search == "orders"
+                },
+                parentSpan = any(),
+            )
+        }
     }
 
     @Test
