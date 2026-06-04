@@ -17,6 +17,7 @@
 import type { ApiClientCore } from '../client'
 import type {
   AnalyticsParams,
+  AnalyticsScopeId,
   AnalyticsOverview,
   AnalyticsTimeseriesPoint,
   AnalyticsBreakdownItem,
@@ -38,11 +39,23 @@ function appendAnalyticsParams(qs: URLSearchParams, params?: AnalyticsParams) {
   if (params?.comparison && params.comparison !== 'none') {
     qs.append('comparison', params.comparison)
   }
+  appendListParam(qs, 'services', params?.services)
+  appendListParam(qs, 'serviceIds', params?.serviceIds)
   if (params?.filters) {
     for (const f of params.filters) {
       qs.append('filters[]', `${f.property}:${f.operator}:${f.value}`)
     }
   }
+}
+
+function appendListParam(
+  qs: URLSearchParams,
+  name: string,
+  values?: ReadonlyArray<string | number>
+) {
+  values?.forEach((value) => {
+    qs.append(name, String(value))
+  })
 }
 
 function appendEventQueryOptions(
@@ -66,6 +79,28 @@ function buildAnalyticsQuery(
   const qs = new URLSearchParams()
   appendAnalyticsParams(qs, params)
   appendEventQueryOptions(qs, options)
+  return toQueryString(qs)
+}
+
+function buildAnalyticsDevicesQuery(
+  type: 'browser' | 'os' | 'device',
+  params?: AnalyticsParams
+): string {
+  const qs = new URLSearchParams()
+  appendAnalyticsParams(qs, params)
+  qs.append('type', type)
+  return toQueryString(qs)
+}
+
+function buildFunnelQuery(
+  steps: readonly string[],
+  params?: AnalyticsParams,
+  options?: AnalyticsEventQueryOptions
+): string {
+  const qs = new URLSearchParams()
+  appendAnalyticsParams(qs, params)
+  appendEventQueryOptions(qs, options)
+  steps.forEach((step) => qs.append('steps[]', step))
   return toQueryString(qs)
 }
 
@@ -128,6 +163,11 @@ function normalizeAnalyticsBreakdown(
   return Array.isArray(data?.results) ? data.results : []
 }
 
+function analyticsScopeBase(base: string, scopeId: AnalyticsScopeId): string {
+  if (scopeId == null) return `${base}/analytics`
+  return `${base}/analytics/${encodeURIComponent(String(scopeId))}`
+}
+
 export function analyticsMethods(core: ApiClientCore) {
   const base = core.API_BASE
 
@@ -142,82 +182,81 @@ export function analyticsMethods(core: ApiClientCore) {
 
   return {
     getAnalyticsOverview: async (
-      projectId: string | number,
+      projectId: AnalyticsScopeId,
       params?: AnalyticsParams
     ) => {
       const response = await core.request<AnalyticsOverviewApiResponse>(
-        `${base}/analytics/${projectId}/overview${buildAnalyticsQuery(params)}`
+        `${analyticsScopeBase(base, projectId)}/overview${buildAnalyticsQuery(params)}`
       )
       return normalizeAnalyticsOverview(response)
     },
 
     getAnalyticsTimeseries: async (
-      projectId: string | number,
+      projectId: AnalyticsScopeId,
       params?: AnalyticsParams
     ) => {
       const response = await core.request<AnalyticsTimeseriesApiPoint[]>(
-        `${base}/analytics/${projectId}/timeseries${buildAnalyticsQuery(params)}`
+        `${analyticsScopeBase(base, projectId)}/timeseries${buildAnalyticsQuery(params)}`
       )
       return normalizeAnalyticsTimeseries(response)
     },
 
-    getAnalyticsPages: (projectId: string | number, params?: AnalyticsParams) =>
+    getAnalyticsPages: (projectId: AnalyticsScopeId, params?: AnalyticsParams) =>
       fetchAnalyticsBreakdown(
-        `${base}/analytics/${projectId}/pages${buildAnalyticsQuery(params)}`
+        `${analyticsScopeBase(base, projectId)}/pages${buildAnalyticsQuery(params)}`
       ),
 
-    getAnalyticsEntryPages: (projectId: string | number, params?: AnalyticsParams) =>
+    getAnalyticsEntryPages: (projectId: AnalyticsScopeId, params?: AnalyticsParams) =>
       fetchAnalyticsBreakdown(
-        `${base}/analytics/${projectId}/entry-pages${buildAnalyticsQuery(params)}`
+        `${analyticsScopeBase(base, projectId)}/entry-pages${buildAnalyticsQuery(params)}`
       ),
 
-    getAnalyticsExitPages: (projectId: string | number, params?: AnalyticsParams) =>
+    getAnalyticsExitPages: (projectId: AnalyticsScopeId, params?: AnalyticsParams) =>
       fetchAnalyticsBreakdown(
-        `${base}/analytics/${projectId}/exit-pages${buildAnalyticsQuery(params)}`
+        `${analyticsScopeBase(base, projectId)}/exit-pages${buildAnalyticsQuery(params)}`
       ),
 
-    getAnalyticsSources: (projectId: string | number, params?: AnalyticsParams) =>
+    getAnalyticsSources: (projectId: AnalyticsScopeId, params?: AnalyticsParams) =>
       fetchAnalyticsBreakdown(
-        `${base}/analytics/${projectId}/sources${buildAnalyticsQuery(params)}`
+        `${analyticsScopeBase(base, projectId)}/sources${buildAnalyticsQuery(params)}`
       ),
 
     getAnalyticsUtm: (
-      projectId: string | number,
+      projectId: AnalyticsScopeId,
       utmParam: string,
       params?: AnalyticsParams
     ) =>
       fetchAnalyticsBreakdown(
-        `${base}/analytics/${projectId}/utm/${encodeURIComponent(utmParam)}${buildAnalyticsQuery(params)}`
+        `${analyticsScopeBase(base, projectId)}/utm/${encodeURIComponent(utmParam)}${buildAnalyticsQuery(params)}`
       ),
 
-    getAnalyticsLocations: (projectId: string | number, params?: AnalyticsParams) =>
+    getAnalyticsLocations: (projectId: AnalyticsScopeId, params?: AnalyticsParams) =>
       fetchAnalyticsBreakdown(
-        `${base}/analytics/${projectId}/locations${buildAnalyticsQuery(params)}`
+        `${analyticsScopeBase(base, projectId)}/locations${buildAnalyticsQuery(params)}`
       ),
 
     getAnalyticsDevices: (
-      projectId: string | number,
+      projectId: AnalyticsScopeId,
       type: 'browser' | 'os' | 'device',
       params?: AnalyticsParams
     ) => {
-      const qs = buildAnalyticsQuery(params)
       return fetchAnalyticsBreakdown(
-        `${base}/analytics/${projectId}/devices${qs}${qs ? '&' : '?'}type=${type}`
+        `${analyticsScopeBase(base, projectId)}/devices${buildAnalyticsDevicesQuery(type, params)}`
       )
     },
 
     getAnalyticsEvents: (
-      projectId: string | number,
+      projectId: AnalyticsScopeId,
       params?: AnalyticsParams,
       options?: AnalyticsEventQueryOptions
     ) =>
       fetchAnalyticsBreakdown(
-        `${base}/analytics/${projectId}/events${buildAnalyticsQuery(params, options)}`
+        `${analyticsScopeBase(base, projectId)}/events${buildAnalyticsQuery(params, options)}`
       ),
 
-    getAnalyticsRealtime: async (projectId: string | number) => {
+    getAnalyticsRealtime: async (projectId: AnalyticsScopeId) => {
       const response = await core.request<AnalyticsRealtimeApiResponse>(
-        `${base}/analytics/${projectId}/realtime`
+        `${analyticsScopeBase(base, projectId)}/realtime`
       )
       return {
         currentVisitors: response.currentVisitors ?? response.visitors ?? 0,
@@ -225,27 +264,22 @@ export function analyticsMethods(core: ApiClientCore) {
     },
 
     getAnalyticsFunnel: (
-      projectId: string | number,
+      projectId: AnalyticsScopeId,
       steps: string[],
       params?: AnalyticsParams,
       options?: AnalyticsEventQueryOptions
     ) => {
-      const qs = buildAnalyticsQuery(params, options)
-      const sep = qs ? '&' : '?'
-      const stepsParam = steps
-        .map((s) => `steps[]=${encodeURIComponent(s)}`)
-        .join('&')
       return core.request<AnalyticsFunnelResponse>(
-        `${base}/analytics/${projectId}/funnel${qs}${sep}${stepsParam}`
+        `${analyticsScopeBase(base, projectId)}/funnel${buildFunnelQuery(steps, params, options)}`
       )
     },
 
     getAnalyticsRetention: (
-      projectId: string | number,
+      projectId: AnalyticsScopeId,
       params: AnalyticsRetentionQuery
     ) =>
       core.request<AnalyticsRetentionResponse>(
-        `${base}/analytics/${projectId}/retention${buildRetentionQuery(params)}`
+        `${analyticsScopeBase(base, projectId)}/retention${buildRetentionQuery(params)}`
       ),
   }
 }
