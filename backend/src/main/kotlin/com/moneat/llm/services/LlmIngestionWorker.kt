@@ -156,6 +156,7 @@ class LlmIngestionWorker(
                     """(
                     toUUID('$generationId'),
                     $projectId,
+                    $projectId,
                     '${esc(gen.traceId)}',
                     '${esc(gen.spanId)}',
                     '${esc(gen.parentSpanId)}',
@@ -199,7 +200,7 @@ class LlmIngestionWorker(
         val query =
             """
             INSERT INTO `$clickhouseDb`.llm_generations (
-                generation_id, project_id, trace_id, span_id, parent_span_id,
+                generation_id, service_id, project_id, trace_id, span_id, parent_span_id,
                 timestamp, duration_ms, name, model, provider, type,
                 input, output, input_tokens, output_tokens, total_tokens, cost_usd,
                 temperature, max_tokens, top_p,

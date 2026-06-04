@@ -129,13 +129,14 @@ class AnalyticsIngestionWorker(
 
         val sql = """
             INSERT INTO analytics_events (
-                project_id, session_id, user_id, event_name, source, hostname, pathname,
+                service_id, project_id, session_id, user_id, event_name, source, hostname, pathname,
                 referrer, referrer_source,
                 utm_source, utm_medium, utm_campaign, utm_term, utm_content,
                 country_code, subdivision, city,
                 browser, browser_version, os, os_version, device_type,
                 screen_width, props, timestamp
             ) VALUES (
+                ${event.projectId},
                 ${event.projectId},
                 '${escapeCH(event.sessionId)}',
                 '${escapeCH(event.userId)}',

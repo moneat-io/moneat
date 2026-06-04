@@ -111,7 +111,7 @@ class EventRepositoryImpl(
         val tagsMap = tagsToMap(data.tags)
         val sql = """
             INSERT INTO `$db`.events (
-                event_id, project_id, organization_id, timestamp, event_type, level,
+                event_id, service_id, project_id, organization_id, timestamp, event_type, level,
                 message, platform, environment, release, dist, server_name,
                 user_id, user_email, user_username, user_ip_address,
                 exception_type, exception_value, stack_trace,
@@ -119,6 +119,7 @@ class EventRepositoryImpl(
                 sdk_name, sdk_version
             ) VALUES (
                 toUUID('${escapeSql(data.eventId)}'),
+                ${data.projectId},
                 ${data.projectId},
                 ${data.organizationId},
                 fromUnixTimestamp64Milli(${data.timestampMs}),
@@ -158,7 +159,7 @@ class EventRepositoryImpl(
         val tagsMap = tagsToMap(data.tags)
         val sql = """
             INSERT INTO `$db`.events (
-                event_id, project_id, organization_id, timestamp, event_type, level,
+                event_id, service_id, project_id, organization_id, timestamp, event_type, level,
                 message, platform, environment, release, dist, server_name,
                 user_id, user_email, user_username, user_ip_address,
                 exception_type, exception_value, stack_trace,
@@ -167,6 +168,7 @@ class EventRepositoryImpl(
                 sdk_name, sdk_version
             ) VALUES (
                 toUUID('${escapeSql(data.eventId)}'),
+                ${data.projectId},
                 ${data.projectId},
                 ${data.organizationId},
                 fromUnixTimestamp64Milli(${data.timestampMs}),
@@ -207,6 +209,7 @@ class EventRepositoryImpl(
             """(
                 toUUID('${escapeSql(session.sessionId)}'),
                 ${session.projectId},
+                ${session.projectId},
                 ${session.organizationId},
                 fromUnixTimestamp64Milli(${session.startedMs}),
                 ${session.durationMs},
@@ -220,7 +223,7 @@ class EventRepositoryImpl(
         }
         val sql = """
             INSERT INTO `$db`.sessions (
-                session_id, project_id, organization_id, started, duration_ms, status, errors,
+                session_id, service_id, project_id, organization_id, started, duration_ms, status, errors,
                 release, environment, user_id, received_at
             ) VALUES
             $valueRows
@@ -237,6 +240,7 @@ class EventRepositoryImpl(
                 '${escapeSql(span.traceId)}',
                 toUUID('${escapeSql(span.transactionId)}'),
                 ${span.projectId},
+                ${span.projectId},
                 ${span.organizationId},
                 '${escapeSql(span.op)}',
                 '${escapeSql(span.description)}',
@@ -250,7 +254,7 @@ class EventRepositoryImpl(
         }
         val sql = """
             INSERT INTO `$db`.spans (
-                span_id, parent_span_id, trace_id, transaction_id, project_id, organization_id,
+                span_id, parent_span_id, trace_id, transaction_id, service_id, project_id, organization_id,
                 op, description, start_timestamp, end_timestamp, duration_ms, status, tags, data
             ) VALUES
             $valueRows
@@ -262,12 +266,13 @@ class EventRepositoryImpl(
         val tagsMap = tagsToMap(data.tags)
         val sql = """
             INSERT INTO `$db`.user_feedback (
-                feedback_id, project_id, organization_id, timestamp, message, contact_email, name, url,
+                feedback_id, service_id, project_id, organization_id, timestamp, message, contact_email, name, url,
                 associated_event_id, replay_id, environment, release, platform,
                 user_id, user_email, user_username, user_ip_address,
                 sdk_name, sdk_version, tags, status
             ) VALUES (
                 toUUID('${escapeSql(data.feedbackId)}'),
+                ${data.projectId},
                 ${data.projectId},
                 ${data.organizationId},
                 fromUnixTimestamp64Milli(${data.timestampMs}),
@@ -299,13 +304,14 @@ class EventRepositoryImpl(
         val traceIdsArray = "[${data.traceIds.joinToString(",") { "'${escapeSql(it)}'" }}]"
         val sql = """
             INSERT INTO `$db`.replay_events (
-                replay_id, project_id, organization_id, segment_id, timestamp, replay_start_timestamp,
+                replay_id, service_id, project_id, organization_id, segment_id, timestamp, replay_start_timestamp,
                 urls, error_ids, trace_ids, environment, release, platform,
                 user_id, user_email, user_username, user_ip_address,
                 sdk_name, sdk_version, browser_name, browser_version,
                 os_name, os_version, device_name, device_family, activity, tags
             ) VALUES (
                 toUUID('${escapeSql(data.replayId)}'),
+                ${data.projectId},
                 ${data.projectId},
                 ${data.organizationId},
                 ${data.segmentId},
@@ -339,9 +345,10 @@ class EventRepositoryImpl(
     override suspend fun insertReplayRecording(data: ReplayRecordingInsertData) {
         val sql = """
             INSERT INTO `$db`.replay_segments (
-                replay_id, project_id, organization_id, segment_id, timestamp, recording_data
+                replay_id, service_id, project_id, organization_id, segment_id, timestamp, recording_data
             ) VALUES (
                 toUUID('${escapeSql(data.replayId)}'),
+                ${data.projectId},
                 ${data.projectId},
                 ${data.organizationId},
                 ${data.segmentId},
@@ -357,6 +364,7 @@ class EventRepositoryImpl(
         val valueRows = rows.joinToString(",\n") { g ->
             """(
                 toUUID('${escapeSql(g.generationId)}'),
+                ${g.projectId},
                 ${g.projectId},
                 ${g.organizationId},
                 '${escapeSql(g.traceId)}',
@@ -387,7 +395,7 @@ class EventRepositoryImpl(
         }
         val sql = """
             INSERT INTO `$db`.llm_generations (
-                generation_id, project_id, organization_id, trace_id, span_id, parent_span_id,
+                generation_id, service_id, project_id, organization_id, trace_id, span_id, parent_span_id,
                 timestamp, duration_ms, name, model, provider, type,
                 input, output, input_tokens, output_tokens, total_tokens, cost_usd,
                 temperature, max_tokens, top_p,
@@ -454,9 +462,10 @@ class EventRepositoryImpl(
     private suspend fun insertErrorEventRollups(data: ErrorEventInsertData) {
         val projectRollup = """
             INSERT INTO `$db`.event_project_rollup_1h (
-                project_id, organization_id, bucket_start, level, platform, browser_name,
+                service_id, project_id, organization_id, bucket_start, level, platform, browser_name,
                 environment, event_count
             ) VALUES (
+                ${data.projectId},
                 ${data.projectId},
                 ${data.organizationId},
                 toStartOfHour(fromUnixTimestamp64Milli(${data.timestampMs})),
@@ -469,8 +478,9 @@ class EventRepositoryImpl(
         """.trimIndent()
         val issueRollup = """
             INSERT INTO `$db`.event_issue_rollup_1h (
-                project_id, organization_id, issue_id, bucket_start, title, event_count
+                service_id, project_id, organization_id, issue_id, bucket_start, title, event_count
             ) VALUES (
+                ${data.projectId},
                 ${data.projectId},
                 ${data.organizationId},
                 '${escapeSql(data.issueId)}',

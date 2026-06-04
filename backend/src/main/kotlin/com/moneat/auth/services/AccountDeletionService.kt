@@ -26,6 +26,7 @@ import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.UsageRecords
 import com.moneat.shared.models.Users
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -39,9 +40,11 @@ import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
+
+private const val PROJECT_ID_COLUMN = "project_id"
+private const val SERVICE_ID_COLUMN = "service_id"
 
 class AccountDeletionService(
     private val stripeService: StripeService,
@@ -343,23 +346,23 @@ class AccountDeletionService(
                 // Delete from all ClickHouse tables (including LLM and analytics)
                 val tables =
                     listOf(
-                        "events",
-                        "spans",
-                        "sessions",
-                        "replay_events",
-                        "replay_segments",
-                        "user_feedback",
-                        "logs",
-                        "llm_generations",
-                        "llm_generations_hourly_mv",
-                        "analytics_events",
-                        "analytics_sessions_hourly",
-                        "issues"
+                        "events" to SERVICE_ID_COLUMN,
+                        "spans" to SERVICE_ID_COLUMN,
+                        "sessions" to SERVICE_ID_COLUMN,
+                        "replay_events" to SERVICE_ID_COLUMN,
+                        "replay_segments" to SERVICE_ID_COLUMN,
+                        "user_feedback" to SERVICE_ID_COLUMN,
+                        "logs" to SERVICE_ID_COLUMN,
+                        "llm_generations" to SERVICE_ID_COLUMN,
+                        "llm_generations_hourly_mv" to PROJECT_ID_COLUMN,
+                        "analytics_events" to SERVICE_ID_COLUMN,
+                        "analytics_sessions_hourly" to SERVICE_ID_COLUMN,
+                        "issues" to SERVICE_ID_COLUMN
                     )
 
-                tables.forEach { table ->
+                tables.forEach { (table, idColumn) ->
                     suspendRunCatching {
-                        val query = "ALTER TABLE $table DELETE WHERE project_id IN ($projectIdsList)"
+                        val query = "ALTER TABLE $table DELETE WHERE $idColumn IN ($projectIdsList)"
                         val response = ClickHouseClient.execute(query)
 
                         if (response.status == HttpStatusCode.OK) {

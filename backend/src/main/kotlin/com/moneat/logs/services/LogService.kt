@@ -192,6 +192,7 @@ class LogService(private val logRepository: LogRepository) {
                 toUUID('${escapeSql(entry.logId)}'),
                 ${batch.effectiveOrganizationId},
                 ${entry.projectId ?: 0L},
+                ${entry.projectId ?: 0L},
                 toUUID('${escapeSql(systemIdValue)}'),
                 fromUnixTimestamp64Milli(${entry.timestampMs}),
                 '${escapeSql(entry.level)}',
@@ -218,6 +219,7 @@ class LogService(private val logRepository: LogRepository) {
             INSERT INTO `$clickhouseDb`.logs (
                 log_id,
                 organization_id,
+                service_id,
                 project_id,
                 system_id,
                 timestamp,

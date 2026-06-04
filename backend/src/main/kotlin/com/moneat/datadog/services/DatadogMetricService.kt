@@ -68,7 +68,8 @@ private data class MetricInsertRow(
 @Serializable
 private data class MetricJsonEachRow(
     @SerialName("organization_id") val organizationId: Long,
-    @SerialName("project_id") val projectId: Long,
+    @SerialName("service_id") val projectId: Long,
+    @SerialName("project_id") val deprecatedProjectId: Long,
     @SerialName("metric_name") val metricName: String,
     @SerialName("metric_type") val metricType: String,
     val timestamp: String,
@@ -219,7 +220,7 @@ object DatadogMetricService {
 
         val insert = """
             INSERT INTO `$db`.metrics (
-                organization_id, project_id, metric_name, metric_type, timestamp,
+                organization_id, service_id, project_id, metric_name, metric_type, timestamp,
                 value, host, tags, unit, source_type_name,
                 source
             ) FORMAT JSONEachRow
@@ -248,6 +249,7 @@ object DatadogMetricService {
         MetricJsonEachRow(
             organizationId = organizationId,
             projectId = projectId ?: 0L,
+            deprecatedProjectId = projectId ?: 0L,
             metricName = metric.name,
             metricType = metric.type,
             timestamp = formatClickHouseDateTime64MillisUtc(metric.timestampMs),
@@ -272,6 +274,7 @@ object DatadogMetricService {
             """(
                 ${batch.organizationId},
                 ${batch.projectId ?: 0L},
+                ${batch.projectId ?: 0L},
                 '${escapeSql(s.name)}',
                 fromUnixTimestamp64Milli(${s.timestampMs}),
                 '${escapeSql(s.host)}',
@@ -288,7 +291,7 @@ object DatadogMetricService {
 
         val insert = """
             INSERT INTO `$db`.metric_sketches (
-                organization_id, project_id, metric_name, timestamp, host, tags,
+                organization_id, service_id, project_id, metric_name, timestamp, host, tags,
                 sketch_count, sketch_min, sketch_max, sketch_avg,
                 sketch_sum, sketch_k, sketch_n
             ) VALUES $rows
