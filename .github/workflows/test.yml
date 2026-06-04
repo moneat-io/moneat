@@ -275,7 +275,7 @@ jobs:
             -e SONAR_TOKEN \
             -e SONAR_USER_HOME=/usr/src/.sonar \
             -v "${GITHUB_WORKSPACE}:/usr/src" \
-            -v "${HOME}/.sonar/cache:/usr/src/.sonar/cache" \
+            -v "${HOME}/.sonar:/usr/src/.sonar" \
             -w /usr/src/backend \
             "${SONAR_SCANNER_IMAGE}" \
             -Dsonar.projectVersion=${{ steps.sonar-version.outputs.version }}
