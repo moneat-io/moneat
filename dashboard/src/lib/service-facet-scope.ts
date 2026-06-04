@@ -1,10 +1,37 @@
-import type {Project} from '@/lib/api'
+import type {Issue, IssueListParams, Project} from '@/lib/api'
 import type {FacetFilter, FacetRailSection} from '@/lib/filters/types'
+
+export const HOME_OVERVIEW_ISSUES_QUERY = {
+  page: 1,
+  limit: 100,
+  status: 'unresolved',
+} as const satisfies IssueListParams
+
+export const HOME_OVERVIEW_REPLAYS_OPTIONS = {
+  limit: 5,
+  period: '24h',
+} as const
+
+export const HOME_OVERVIEW_FEEDBACK_OPTIONS = {
+  limit: 5,
+} as const
 
 export function facetValues(filters: readonly FacetFilter[], key: string, exclude: boolean): string[] {
   return filters
     .filter((filter) => filter.key === key && Boolean(filter.exclude) === exclude)
     .map((filter) => filter.value)
+}
+
+export function hasAccessibleServices(projects: readonly Project[] | null | undefined): boolean {
+  return (projects?.length ?? 0) > 0
+}
+
+export function primaryServiceResourceId(projects: readonly Project[] | null | undefined): string | undefined {
+  return projects?.[0]?.resourceId
+}
+
+export function issueDetailSearch(issue: Pick<Issue, 'projectResourceId'>): {projectId: string} {
+  return {projectId: issue.projectResourceId}
 }
 
 export function serviceNamesForQuery(

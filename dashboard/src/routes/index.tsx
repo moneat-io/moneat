@@ -19,7 +19,6 @@ import {LandingPage} from '@/components/landing/LandingPage'
 import {useQuery} from '@tanstack/react-query'
 import {useState, useEffect} from 'react'
 import {api, type StatusPageDetail, type UptimeHeartbeat} from '@/lib/api'
-import {useProject} from '@/contexts/ProjectContext'
 import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
 import {formatRelativeTime} from '@/lib/utils'
 import {APP_OVERVIEW_SEARCH, APP_OVERVIEW_VIEW, normalizeAppOverviewSearch} from '@/lib/overview-route'
@@ -55,6 +54,14 @@ import {
 import {StatsCard, StatsCardSkeleton} from '@/components/charts/StatsCard'
 import {EventsChart, EventsChartSkeleton} from '@/components/charts/EventsChart'
 import {getNow} from '@/lib/demo'
+import {
+  hasAccessibleServices,
+  HOME_OVERVIEW_FEEDBACK_OPTIONS,
+  HOME_OVERVIEW_ISSUES_QUERY,
+  HOME_OVERVIEW_REPLAYS_OPTIONS,
+  issueDetailSearch,
+  primaryServiceResourceId,
+} from '@/lib/service-facet-scope'
 
 // ─── Incident status → badge variant ─────────────────────────────────
 function incidentStatusVariant(status: string): BadgeProps['variant'] {
@@ -337,55 +344,48 @@ function UtilizationBar({
 
 // ─── Main Dashboard ───────────────────────────────────────────────────
 function DashboardPage() {
-  const {selectedProjectId, setSelectedProjectId} = useProject()
-
-  const {data: projects} = useQuery({
+  const {data: projects, isLoading: isLoadingServices} = useQuery({
     queryKey: ['projects'],
     queryFn: () => api.getProjects(),
   })
 
-  const projectId = selectedProjectId || projects?.[0]?.resourceId
-
-  useEffect(() => {
-    if (!selectedProjectId && projects?.[0]?.resourceId) {
-      setSelectedProjectId(projects[0].resourceId)
-    }
-  }, [selectedProjectId, projects, setSelectedProjectId])
+  const hasServices = hasAccessibleServices(projects)
+  const primaryServiceId = primaryServiceResourceId(projects)
 
   const {data: stats, isLoading: isLoadingStats} = useQuery({
-    queryKey: ['stats', projectId],
-    queryFn: () => (projectId ? api.getProjectStats(projectId, '24h') : null),
-    enabled: !!projectId,
+    queryKey: ['stats', 'primary-service', primaryServiceId],
+    queryFn: () => (primaryServiceId ? api.getProjectStats(primaryServiceId, '24h') : null),
+    enabled: !!primaryServiceId,
   })
 
   const {data: issues = [], isLoading: isLoadingIssues} = useQuery({
-    queryKey: ['issues', projectId, 'unresolved'],
-    queryFn: () => (projectId ? api.getIssues(projectId) : []),
-    enabled: !!projectId,
+    queryKey: ['issues', 'organization', 'unresolved', 'overview'],
+    queryFn: () => api.getOrganizationIssues(HOME_OVERVIEW_ISSUES_QUERY),
+    enabled: hasServices,
   })
 
   const {data: perfStats, isLoading: isLoadingPerf} = useQuery({
-    queryKey: ['perf-stats', projectId],
-    queryFn: () => (projectId ? api.getPerformanceStats(projectId, {period: '24h'}) : null),
-    enabled: !!projectId,
+    queryKey: ['perf-stats', 'primary-service', primaryServiceId],
+    queryFn: () => (primaryServiceId ? api.getPerformanceStats(primaryServiceId, {period: '24h'}) : null),
+    enabled: !!primaryServiceId,
   })
 
   const {data: releases = [], isLoading: isLoadingReleases} = useQuery({
-    queryKey: ['releases-overview', projectId],
-    queryFn: () => (projectId ? api.getReleases(projectId) : []),
-    enabled: !!projectId,
+    queryKey: ['releases-overview', 'organization'],
+    queryFn: () => api.getOrganizationReleases(),
+    enabled: hasServices,
   })
 
   const {data: replays = [], isLoading: isLoadingReplays} = useQuery({
-    queryKey: ['replays-overview', projectId],
-    queryFn: () => (projectId ? api.getReplays(projectId, {limit: 5, period: '24h'}) : []),
-    enabled: !!projectId,
+    queryKey: ['replays-overview', 'organization'],
+    queryFn: () => api.getOrganizationReplays(HOME_OVERVIEW_REPLAYS_OPTIONS),
+    enabled: hasServices,
   })
 
   const {data: feedback = [], isLoading: isLoadingFeedback} = useQuery({
-    queryKey: ['feedback-overview', projectId],
-    queryFn: () => (projectId ? api.getFeedback(projectId, {limit: 5}) : []),
-    enabled: !!projectId,
+    queryKey: ['feedback-overview', 'organization'],
+    queryFn: () => api.getOrganizationFeedback(HOME_OVERVIEW_FEEDBACK_OPTIONS),
+    enabled: hasServices,
   })
 
   const {data: uptimeMonitors = [], isLoading: isLoadingUptime} = useQuery({
@@ -485,7 +485,7 @@ function DashboardPage() {
 
         {/* ── Top-level stats ──────────────────────────────────────── */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-4">
-          {isLoadingStats || isLoadingIssues ? (
+          {isLoadingServices || isLoadingStats || isLoadingIssues ? (
             <>
               <StatsCardSkeleton accent="amber" compact />
               <StatsCardSkeleton accent="blue" compact />
@@ -694,7 +694,7 @@ function DashboardPage() {
                       key={issue.id}
                       to="/issues/$issueId"
                       params={{issueId: issue.id}}
-                      search={{projectId}}
+                      search={issueDetailSearch(issue)}
                       className={`flex items-center gap-2 py-2 px-2.5 rounded-md border-l-2 ${levelAccent} hover:bg-muted/50 transition`}
                     >
                       <Badge variant={levelBadgeVariant(issue.level)} className="text-[10px] px-1.5 py-0 w-14 justify-center shrink-0">
