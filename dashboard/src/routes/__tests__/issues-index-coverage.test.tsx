@@ -10,6 +10,7 @@ const { mockNavigate, mockToast, mockApi } = vi.hoisted(() => ({
     isAuthenticated: vi.fn(),
     checkAuth: vi.fn(),
     getProjects: vi.fn(),
+    getOrganizationIssues: vi.fn(),
     getIssues: vi.fn(),
     getProjectStats: vi.fn(),
     updateIssue: vi.fn(),
@@ -67,6 +68,8 @@ const mockProject = {
 const mockIssues = [
   {
     id: 'issue-1',
+    projectId: 1,
+    projectResourceId: 'proj-1',
     title: 'TypeError: null ref',
     culprit: 'app.main',
     level: 'error',
@@ -79,6 +82,8 @@ const mockIssues = [
   },
   {
     id: 'issue-2',
+    projectId: 1,
+    projectResourceId: 'proj-1',
     title: 'ValueError: invalid input',
     culprit: 'api.handler',
     level: 'warning',
@@ -91,6 +96,8 @@ const mockIssues = [
   },
   {
     id: 'issue-3',
+    projectId: 1,
+    projectResourceId: 'proj-1',
     title: 'Fatal crash',
     culprit: '',
     level: 'fatal',
@@ -103,6 +110,8 @@ const mockIssues = [
   },
   {
     id: 'issue-4',
+    projectId: 1,
+    projectResourceId: 'proj-1',
     title: 'Debug trace',
     culprit: 'debug.module',
     level: 'debug',
@@ -115,6 +124,8 @@ const mockIssues = [
   },
   {
     id: 'issue-5',
+    projectId: 1,
+    projectResourceId: 'proj-1',
     title: 'Info message',
     culprit: 'info: Info message',
     level: 'info',
@@ -134,6 +145,7 @@ describe('Issues Index - data coverage', () => {
     mockApi.isAuthenticated.mockReturnValue(true)
     mockApi.checkAuth.mockResolvedValue(true)
     mockApi.getProjects.mockResolvedValue([mockProject])
+    mockApi.getOrganizationIssues.mockResolvedValue(mockIssues)
     mockApi.getIssues.mockResolvedValue(mockIssues)
     mockApi.getProjectStats.mockResolvedValue(null)
     mockApi.updateIssue.mockResolvedValue(undefined)
@@ -165,6 +177,13 @@ describe('Issues Index - data coverage', () => {
 
     // Result count
     expect(screen.getByText('5 results')).toBeInTheDocument()
+    expect(mockApi.getOrganizationIssues).toHaveBeenCalledWith({
+      page: 1,
+      limit: 500,
+      status: undefined,
+      services: undefined,
+    })
+    expect(mockApi.getIssues).not.toHaveBeenCalled()
   })
 
   it('renders search and filter controls', async () => {
@@ -195,14 +214,24 @@ describe('Issues Index - data coverage', () => {
 
     // Include a Status facet from the rail → client-side filter to that status.
     fireEvent.click(screen.getByRole('button', { name: 'Resolved' }))
-    expect(screen.getByText('1 result')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('1 result')).toBeInTheDocument()
+    })
+    expect(mockApi.getOrganizationIssues).toHaveBeenLastCalledWith({
+      page: 1,
+      limit: 500,
+      status: 'resolved',
+      services: undefined,
+    })
 
     // Toggling it off clears the filter — the last selection is removable.
     fireEvent.click(screen.getByRole('button', { name: 'Resolved' }))
-    expect(screen.getByText('5 results')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('5 results')).toBeInTheDocument()
+    })
   })
 
-  it('keeps row service context for merged issue links and bulk updates', async () => {
+  it('keeps row service context for org-wide issue links and bulk updates', async () => {
     const workerProject = {
       ...mockProject,
       id: 2,
@@ -213,19 +242,19 @@ describe('Issues Index - data coverage', () => {
     const workerIssue = {
       ...mockIssues[0],
       id: 'issue-worker',
+      projectId: 2,
+      projectResourceId: 'proj-2',
       title: 'Worker panic',
       culprit: 'worker.handler',
     }
     mockApi.getProjects.mockResolvedValue([mockProject, workerProject])
-    mockApi.getIssues.mockImplementation((projectId: string) =>
-      Promise.resolve(projectId === 'proj-2' ? [workerIssue] : [mockIssues[0]])
-    )
+    mockApi.getOrganizationIssues.mockResolvedValue([mockIssues[0], workerIssue])
 
     renderRoute(IssuesIndexRoute)
 
-    fireEvent.click(await screen.findByText('Clear all'))
     const workerTitle = await screen.findByText(/worker.handler: Worker panic/)
     expect(workerTitle.closest('a')).toHaveAttribute('data-search', '{"projectId":"proj-2"}')
+    expect(mockApi.getIssues).not.toHaveBeenCalled()
 
     fireEvent.click(screen.getByLabelText('Select Worker panic'))
     fireEvent.pointerDown(screen.getByRole('button', { name: /Actions/ }))
@@ -252,11 +281,36 @@ describe('Issues Index - data coverage', () => {
   })
 
   it('shows empty state when issues list is empty for default filter', async () => {
-    mockApi.getIssues.mockResolvedValue([])
+    mockApi.getOrganizationIssues.mockResolvedValue([])
 
     renderRoute(IssuesIndexRoute)
 
     expect(await screen.findByText('No issues yet')).toBeInTheDocument()
+  })
+
+  it('passes selected services to the org-wide issues API', async () => {
+    const workerProject = {
+      ...mockProject,
+      id: 2,
+      resourceId: 'proj-2',
+      name: 'Worker Service',
+      slug: 'worker-service',
+    }
+    mockApi.getProjects.mockResolvedValue([mockProject, workerProject])
+
+    renderRoute(IssuesIndexRoute)
+
+    await screen.findByText(/app.main: TypeError: null ref/)
+    fireEvent.click(screen.getByRole('button', { name: 'Worker Service' }))
+
+    await waitFor(() => {
+      expect(mockApi.getOrganizationIssues).toHaveBeenLastCalledWith({
+        page: 1,
+        limit: 500,
+        status: undefined,
+        services: ['Worker Service'],
+      })
+    })
   })
 
   it('switches to APM Errors tab', async () => {

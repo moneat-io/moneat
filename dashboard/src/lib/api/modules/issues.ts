@@ -19,14 +19,38 @@ import type {
   Event,
   Issue,
   IssueDetail,
+  IssueListParams,
   IssueTransaction,
 } from '../types'
 import { urlWithQuery } from '../utils'
+
+function setCsvParam(
+  params: URLSearchParams,
+  key: string,
+  values: readonly (string | number)[] | undefined
+) {
+  const csv = values
+    ?.map((value) => String(value).trim())
+    .filter((value) => value.length > 0)
+    .join(',')
+  if (csv) params.set(key, csv)
+}
 
 export function issuesMethods(core: ApiClientCore) {
   const base = core.API_BASE
 
   return {
+    getOrganizationIssues: (query: IssueListParams = {}) => {
+      const params = new URLSearchParams({
+        page: String(query.page ?? 1),
+        limit: String(query.limit ?? 25),
+      })
+      if (query.status) params.set('status', query.status)
+      setCsvParam(params, 'services', query.services)
+      setCsvParam(params, 'serviceIds', query.serviceIds)
+      return core.request<Issue[]>(urlWithQuery(`${base}/issues`, params.toString()))
+    },
+
     getIssues: (
       projectId: string | number,
       page = 1,

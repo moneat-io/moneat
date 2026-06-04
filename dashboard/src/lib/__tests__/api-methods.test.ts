@@ -149,6 +149,46 @@ describe('ApiClient - Projects and Issues', () => {
       expect(issues).toEqual(mockIssues)
     })
 
+    it('fetches organization issues with service facets', async () => {
+      const mockIssues = [
+        {
+          id: 'issue-1',
+          projectId: 1,
+          projectResourceId: 'proj-1',
+          title: 'TypeError: undefined is not a function',
+          culprit: 'app.js',
+          level: 'error',
+          platform: 'javascript',
+          firstSeen: '2024-02-11T10:00:00Z',
+          lastSeen: '2024-02-11T12:00:00Z',
+          eventCount: 10,
+          userCount: 5,
+          status: 'unresolved',
+        },
+      ]
+
+      server.use(
+        http.get(`${API_BASE}/v1/issues`, ({ request }) => {
+          const url = new URL(request.url)
+          expect(url.searchParams.get('page')).toBe('2')
+          expect(url.searchParams.get('limit')).toBe('50')
+          expect(url.searchParams.get('status')).toBe('unresolved')
+          expect(url.searchParams.get('services')).toBe('api,worker')
+          expect(url.searchParams.get('serviceIds')).toBe('proj-1,2')
+          return HttpResponse.json(mockIssues)
+        })
+      )
+
+      const issues = await api.getOrganizationIssues({
+        page: 2,
+        limit: 50,
+        status: 'unresolved',
+        services: ['api', 'worker'],
+        serviceIds: ['proj-1', 2],
+      })
+      expect(issues).toEqual(mockIssues)
+    })
+
     it('fetches single issue detail', async () => {
       const mockIssue = {
         id: 'issue-1',
