@@ -98,6 +98,14 @@ interface RailSectionProps {
   onFacetFiltersChange: (filters: FacetFilter[]) => void
 }
 
+type FacetValueLoader = NonNullable<FacetRailSection['loadOptions']>
+
+interface LazyLoadState {
+  loader: FacetValueLoader | null
+  values: readonly FacetValue[] | null
+  error: boolean
+}
+
 function RailSection({section, facetFilters, onFacetFiltersChange}: RailSectionProps) {
   const {key, label, color, singleSelect, allowExclude = true, options, loadOptions} = section
   // Eager sections open by default (values are ready); lazy ones stay closed
@@ -105,20 +113,35 @@ function RailSection({section, facetFilters, onFacetFiltersChange}: RailSectionP
   const [expanded, setExpanded] = useState(options != null)
   const [query, setQuery] = useState('')
   const [showAll, setShowAll] = useState(false)
-  const [loaded, setLoaded] = useState<readonly FacetValue[] | null>(null)
+  const [lazyLoad, setLazyLoad] = useState<LazyLoadState>({
+    loader: null,
+    values: null,
+    error: false,
+  })
+  const loaded = lazyLoad.loader === loadOptions ? lazyLoad.values : null
+  const loadError = lazyLoad.loader === loadOptions && lazyLoad.error
 
-  // Lazily load values the first time the section is opened.
+  // Lazily load values the first time the section is opened, then reload when
+  // the owner changes the loader context, such as a log-viewer time range.
   useEffect(() => {
-    if (expanded && !options && loadOptions && loaded === null) {
-      let cancelled = false
-      void loadOptions().then((values) => {
-        if (!cancelled) setLoaded(values)
-      })
-      return () => {
-        cancelled = true
-      }
+    if (!expanded || options || !loadOptions || loaded !== null || loadError) {
+      return undefined
     }
-  }, [expanded, options, loadOptions, loaded])
+
+    let cancelled = false
+    void loadOptions()
+      .then((values) => {
+        if (cancelled) return
+        setLazyLoad({loader: loadOptions, values, error: false})
+      })
+      .catch(() => {
+        if (!cancelled) setLazyLoad({loader: loadOptions, values: null, error: true})
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [expanded, options, loadOptions, loaded, loadError])
 
   const values = options ?? loaded ?? []
   const activeCount = facetFilters.filter((f) => f.key === key).length
@@ -202,7 +225,20 @@ function RailSection({section, facetFilters, onFacetFiltersChange}: RailSectionP
             </div>
           )}
 
-          {!options && loadOptions && loaded === null ? (
+          {loadError ? (
+            <div className="space-y-1 px-2 py-1">
+              <p className="text-xs text-muted-foreground">Could not load values.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setLazyLoad({loader: loadOptions ?? null, values: null, error: false})
+                }}
+                className="rounded px-0 text-xs font-medium text-primary hover:underline focus:outline-none"
+              >
+                Retry
+              </button>
+            </div>
+          ) : !options && loadOptions && loaded === null ? (
             <p className="px-2 py-1 text-xs text-muted-foreground">Loading values...</p>
           ) : shown.length === 0 ? (
             <p className="px-2 py-1 text-xs text-muted-foreground">No matches</p>

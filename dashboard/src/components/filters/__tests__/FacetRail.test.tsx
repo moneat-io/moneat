@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {render, screen, fireEvent} from '@testing-library/react'
+import {render, screen, fireEvent, waitFor} from '@testing-library/react'
 import {describe, it, expect, vi} from 'vitest'
 
 import {FacetRail} from '@/components/filters/FacetRail'
@@ -137,5 +137,64 @@ describe('FacetRail', () => {
 
     expect(await screen.findByText('No matches')).toBeTruthy()
     expect(screen.queryByText('Loading values...')).toBeNull()
+  })
+
+  it('reloads lazy values when the loader time range changes', async () => {
+    const loadOptions = vi.fn((range: string) => Promise.resolve([{value: `${range}-api`}]))
+    const buildSections = (range: string): FacetRailSection[] => [
+      {
+        key: 'service',
+        label: 'Service',
+        loadOptions: () => loadOptions(range),
+      },
+    ]
+    const {rerender} = render(
+      <FacetRail
+        sections={buildSections('1h')}
+        facetFilters={[]}
+        onFacetFiltersChange={() => {}}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', {name: /Service/}))
+
+    expect(await screen.findByRole('button', {name: '1h-api'})).toBeTruthy()
+    expect(loadOptions).toHaveBeenCalledWith('1h')
+
+    rerender(
+      <FacetRail
+        sections={buildSections('24h')}
+        facetFilters={[]}
+        onFacetFiltersChange={() => {}}
+      />
+    )
+
+    await waitFor(() => expect(loadOptions).toHaveBeenCalledWith('24h'))
+    expect(await screen.findByRole('button', {name: '24h-api'})).toBeTruthy()
+    expect(screen.queryByRole('button', {name: '1h-api'})).toBeNull()
+  })
+
+  it('shows a retry state when lazy loading fails', async () => {
+    const loadOptions = vi.fn()
+      .mockRejectedValueOnce(new Error('network failed'))
+      .mockResolvedValueOnce([{value: 'api'}])
+    const lazySections: FacetRailSection[] = [
+      {
+        key: 'service',
+        label: 'Service',
+        loadOptions,
+      },
+    ]
+    render(<FacetRail sections={lazySections} facetFilters={[]} onFacetFiltersChange={() => {}} />)
+
+    fireEvent.click(screen.getByRole('button', {name: /Service/}))
+
+    expect(await screen.findByText('Could not load values.')).toBeTruthy()
+    expect(screen.queryByText('Loading values...')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', {name: 'Retry'}))
+
+    expect(await screen.findByRole('button', {name: 'api'})).toBeTruthy()
+    expect(loadOptions).toHaveBeenCalledTimes(2)
   })
 })
