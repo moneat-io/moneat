@@ -21,6 +21,7 @@ package com.moneat.events.repositories
 import com.moneat.events.models.UpdateProjectRequest
 import com.moneat.events.services.DashboardQueryHelper
 import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.OtelServiceProjectMappings
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.ProjectKeys
 import com.moneat.shared.models.Projects
@@ -37,6 +38,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Clock
 
 class ProjectRepositoryTest {
 
@@ -52,7 +54,14 @@ class ProjectRepositoryTest {
             )
         }
         org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
-        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships, Projects, ProjectKeys)
+        TestDatabaseHelper.resetSchema(
+            Users,
+            Organizations,
+            Memberships,
+            Projects,
+            ProjectKeys,
+            OtelServiceProjectMappings
+        )
         val queryHelper = DashboardQueryHelper()
         repository = ProjectRepositoryImpl(
             timestampRetentionClause = { col, days, _ ->
@@ -124,6 +133,153 @@ class ProjectRepositoryTest {
     fun getProjectByIdReturnsNullForMissingProject() {
         val row = repository.getProjectById(99999)
         assertNull(row)
+    }
+
+    @Test
+    fun getServiceNameForProjectReturnsSlugAlias() {
+        val projectId = transaction {
+            val orgId = Organizations.insert {
+                it[name] = "Org"
+                it[slug] = "org"
+            } get Organizations.id
+            Projects.insert {
+                it[organization_id] = orgId
+                it[name] = "Checkout API"
+                it[slug] = "checkout-api"
+            } get Projects.id
+        }
+
+        assertEquals("checkout-api", repository.getServiceNameForProject(projectId))
+    }
+
+    @Test
+    fun resolveServiceIdUsesMappedServiceNameWithinOrganization() {
+        val now = Clock.System.now()
+        val (orgId, mappedProjectId, fallbackProjectId) = transaction {
+            val oid = Organizations.insert {
+                it[name] = "Org"
+                it[slug] = "org"
+            } get Organizations.id
+            val mapped = Projects.insert {
+                it[organization_id] = oid
+                it[name] = "Checkout"
+                it[slug] = "checkout"
+            } get Projects.id
+            val fallback = Projects.insert {
+                it[organization_id] = oid
+                it[name] = "Checkout API"
+                it[slug] = "checkout-api"
+            } get Projects.id
+            OtelServiceProjectMappings.insert {
+                it[organization_id] = oid
+                it[service_namespace] = ""
+                it[service_name] = "checkout-api"
+                it[project_id] = mapped
+                it[created_at] = now
+                it[updated_at] = now
+            }
+            Triple(oid, mapped, fallback)
+        }
+
+        val resolved = repository.resolveServiceId(orgId, "checkout-api")
+
+        assertEquals(mappedProjectId, resolved)
+        assertTrue(fallbackProjectId != resolved)
+    }
+
+    @Test
+    fun resolveServiceIdFallsBackToProjectSlugWithinOrganization() {
+        val (orgId, projectId) = transaction {
+            val oid = Organizations.insert {
+                it[name] = "Org"
+                it[slug] = "org"
+            } get Organizations.id
+            val pid = Projects.insert {
+                it[organization_id] = oid
+                it[name] = "Checkout API"
+                it[slug] = "checkout-api"
+            } get Projects.id
+            Pair(oid, pid)
+        }
+
+        assertEquals(projectId, repository.resolveServiceId(orgId, "checkout-api"))
+        assertNull(repository.resolveServiceId(orgId + 1, "checkout-api"))
+    }
+
+    @Test
+    fun resolveServiceIdFallsBackToProjectNameWithinOrganization() {
+        val (orgId, projectId) = transaction {
+            val oid = Organizations.insert {
+                it[name] = "Org"
+                it[slug] = "org"
+            } get Organizations.id
+            val pid = Projects.insert {
+                it[organization_id] = oid
+                it[name] = "Checkout API"
+                it[slug] = "checkout"
+            } get Projects.id
+            Pair(oid, pid)
+        }
+
+        assertEquals(projectId, repository.resolveServiceId(orgId, "checkout api"))
+        assertNull(repository.resolveServiceId(orgId, " "))
+    }
+
+    @Test
+    fun resolveServiceIdTrimsNamespaceBeforeMappingLookup() {
+        val now = Clock.System.now()
+        val (orgId, projectId) = transaction {
+            val oid = Organizations.insert {
+                it[name] = "Org"
+                it[slug] = "org"
+            } get Organizations.id
+            val pid = Projects.insert {
+                it[organization_id] = oid
+                it[name] = "Checkout"
+                it[slug] = "checkout"
+            } get Projects.id
+            OtelServiceProjectMappings.insert {
+                it[organization_id] = oid
+                it[service_namespace] = "payments"
+                it[service_name] = "checkout-api"
+                it[project_id] = pid
+                it[created_at] = now
+                it[updated_at] = now
+            }
+            Pair(oid, pid)
+        }
+
+        assertEquals(projectId, repository.resolveServiceId(orgId, " checkout-api ", " payments "))
+    }
+
+    @Test
+    fun resolveServiceNamesReturnsProjectSlugAliases() {
+        val (checkoutId, workerId) = transaction {
+            val orgId = Organizations.insert {
+                it[name] = "Org"
+                it[slug] = "org"
+            } get Organizations.id
+            val checkout = Projects.insert {
+                it[organization_id] = orgId
+                it[name] = "Checkout API"
+                it[slug] = "checkout-api"
+            } get Projects.id
+            val worker = Projects.insert {
+                it[organization_id] = orgId
+                it[name] = "Worker"
+                it[slug] = "worker"
+            } get Projects.id
+            Pair(checkout, worker)
+        }
+
+        assertEquals(emptyMap(), repository.resolveServiceNames(emptyList()))
+        assertEquals(
+            mapOf(
+                checkoutId to "checkout-api",
+                workerId to "worker"
+            ),
+            repository.resolveServiceNames(listOf(checkoutId, workerId))
+        )
     }
 
     @Test

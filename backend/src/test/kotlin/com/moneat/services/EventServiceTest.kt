@@ -74,6 +74,7 @@ class EventServiceTest {
         // Catchall defaults (registered first so specific overrides take precedence)
         every { eventRepository.verifyProjectKey(any(), any()) } returns ProjectKeyVerification(false, null)
         every { eventRepository.getOrganizationIdForProject(any()) } returns null
+        every { eventRepository.getServiceNameForProject(any()) } returns null
         // Specific mocks
         every { eventRepository.verifyProjectKey(testProjectId, validPublicKey) } returns
             ProjectKeyVerification(true, "jvm")

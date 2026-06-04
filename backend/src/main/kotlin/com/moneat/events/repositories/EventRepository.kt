@@ -34,6 +34,7 @@ import com.moneat.events.repositories.models.TransactionEventInsertData
 interface EventRepository {
     fun verifyProjectKey(projectId: Long, publicKey: String): ProjectKeyVerification
     fun getOrganizationIdForProject(projectId: Long): Int?
+    fun getServiceNameForProject(projectId: Long): String?
     suspend fun getEventCountForIssue(projectId: Long, issueId: String): Long
 
     suspend fun insertErrorEvent(data: ErrorEventInsertData): Boolean

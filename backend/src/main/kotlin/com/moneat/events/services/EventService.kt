@@ -98,6 +98,8 @@ class EventService(
         private const val UUID_SEG4 = 20
         private val OTLP_STACK_FRAME_PATTERN = Regex("""[\w.$/<>-]+\([^)]*\)""")
         private const val SENTRY_SOURCE = "sentry"
+        private const val SERVICE_TAG = "service"
+        private const val SERVICE_NAME_TAG = "service.name"
 
         /** Keys set by the server for apm_spans; must not be overwritten by SDK tag maps. */
         private val SENTRY_APM_META_RESERVED_KEYS = setOf("sentry.transaction_id", "sentry.project_id")
@@ -125,6 +127,7 @@ class EventService(
 
     private val projectKeyCache = ConcurrentHashMap<String, CachedEntry<ProjectKeyVerification>>()
     private val orgIdCache = ConcurrentHashMap<Long, CachedEntry<Int?>>()
+    private val serviceNameCache = ConcurrentHashMap<Long, CachedEntry<String?>>()
     private val knownIssueIds = ConcurrentHashMap.newKeySet<String>()
     private val cacheTtlMs = 5 * 60 * 1000L // 5 minutes
     private val maxKnownIssues = 100_000
@@ -145,10 +148,12 @@ class EventService(
             put("service", JsonPrimitive(exception.service))
             put("service_namespace", JsonPrimitive(exception.serviceNamespace))
         }.toString()
+        val organizationId = requireOrganizationIdForProject(projectId, "OTLP exception") ?: return false
 
         val eventData = ErrorEventInsertData(
             eventId = eventId,
             projectId = projectId,
+            organizationId = organizationId,
             timestampMs = exception.timestampMs,
             level = "error",
             message = exception.exceptionMessage.ifBlank { exception.exceptionType },
@@ -207,6 +212,26 @@ class EventService(
 
         val result = eventRepository.getOrganizationIdForProject(projectId)
         orgIdCache[projectId] = CachedEntry(result, now + cacheTtlMs)
+        return result
+    }
+
+    private fun organizationIdForProject(projectId: Long): Int? =
+        getOrganizationIdForProject(projectId)
+
+    private fun requireOrganizationIdForProject(projectId: Long, signal: String): Int? {
+        val organizationId = organizationIdForProject(projectId)
+        if (organizationId == null) {
+            logger.warn { "Missing organization for projectId $projectId, skipping $signal insert" }
+        }
+        return organizationId
+    }
+
+    private fun getServiceNameForProject(projectId: Long): String? {
+        val now = System.currentTimeMillis()
+        serviceNameCache[projectId]?.let { if (it.expiresAt > now) return it.value }
+
+        val result = eventRepository.getServiceNameForProject(projectId)
+        serviceNameCache[projectId] = CachedEntry(result, now + cacheTtlMs)
         return result
     }
 
@@ -381,6 +406,21 @@ class EventService(
         usageTracker.recordUsage(projectId, eventType, byteSize)
     }
 
+    private fun normalizeSentryServiceTags(
+        projectId: Long,
+        tags: Map<String, String>?
+    ): Map<String, String> {
+        val normalized = tags?.toMutableMap() ?: mutableMapOf()
+        val existingServiceName = normalized[SERVICE_NAME_TAG]?.trim()?.takeIf { it.isNotBlank() }
+        if (existingServiceName != null) return normalized
+
+        val explicitService = normalized[SERVICE_TAG]?.trim()?.takeIf { it.isNotBlank() }
+        normalized[SERVICE_NAME_TAG] = explicitService
+            ?: getServiceNameForProject(projectId)?.trim()?.takeIf { it.isNotBlank() }
+            ?: projectId.toString()
+        return normalized
+    }
+
     private suspend fun storeTransaction(
         projectId: Long,
         transaction: SentryTransaction
@@ -400,10 +440,13 @@ class EventService(
         val breadcrumbs = transaction.breadcrumbs?.toString() ?: "[]"
         val request = transaction.request?.toString() ?: "{}"
         val message = transaction.transaction ?: transactionOp.ifBlank { "transaction" }
+        val organizationId = requireOrganizationIdForProject(projectId, "transaction") ?: return false
+        val normalizedTags = normalizeSentryServiceTags(projectId, transaction.tags)
 
         val transactionData = TransactionEventInsertData(
             eventId = eventId,
             projectId = projectId,
+            organizationId = organizationId,
             timestampMs = endTimestampMs,
             level = transactionLevel,
             message = message,
@@ -419,7 +462,7 @@ class EventService(
             transactionName = transaction.transaction ?: "",
             transactionOp = transactionOp,
             durationMs = durationMs,
-            tags = transaction.tags,
+            tags = normalizedTags,
             contexts = contexts,
             breadcrumbs = breadcrumbs,
             request = request,
@@ -435,15 +478,19 @@ class EventService(
             val spans = transaction.spans.orEmpty()
 
             suspendRunCatching {
-                insertSentrySpansToApm(
+                val apmInput = SentryApmInsertInput(
                     projectId = projectId,
                     eventId = eventId,
-                    traceId = traceId,
-                    transactionOp = transactionOp,
-                    traceStatus = traceStatus,
+                    trace = SentryApmTraceInput(
+                        traceId = traceId,
+                        transactionOp = transactionOp,
+                        traceStatus = traceStatus,
+                    ),
                     transaction = transaction,
-                    childSpans = spans
+                    childSpans = spans,
+                    normalizedTags = normalizedTags,
                 )
+                insertSentrySpansToApm(apmInput)
             }.getOrElse { e ->
                 logger.warn(e) { "Failed to insert Sentry spans into apm_spans for transaction $eventId" }
             }
@@ -453,7 +500,7 @@ class EventService(
             // Detect ai.* spans and cross-insert into llm_generations
             val aiSpans = spans.filter { span -> (span.op ?: "").startsWith("ai.") }
             if (aiSpans.isNotEmpty()) {
-                insertAiSpansAsLlmGenerations(projectId, traceId, transaction, aiSpans)
+                insertAiSpansAsLlmGenerations(projectId, organizationId, traceId, transaction, aiSpans)
             }
 
             transaction.release?.takeIf { it.isNotBlank() }?.let { releaseVersion ->
@@ -519,11 +566,14 @@ class EventService(
         val contexts = event.contexts?.toString() ?: "{}"
         val breadcrumbs = event.breadcrumbs?.toString() ?: "[]"
         val request = event.request?.toString() ?: "{}"
+        val organizationId = requireOrganizationIdForProject(projectId, "event") ?: return false
+        val normalizedTags = normalizeSentryServiceTags(projectId, event.tags)
 
         // Build and insert error event via repository
         val eventData = ErrorEventInsertData(
             eventId = eventId,
             projectId = projectId,
+            organizationId = organizationId,
             timestampMs = timestamp,
             level = eventLevel,
             message = exceptionValue,
@@ -541,7 +591,7 @@ class EventService(
             stackTrace = stackTrace,
             fingerprint = fingerprint,
             issueId = issueId,
-            tags = event.tags,
+            tags = normalizedTags,
             contexts = contexts,
             breadcrumbs = breadcrumbs,
             request = request,
@@ -618,10 +668,12 @@ class EventService(
         val userEmail = feedback.user?.email ?: contactEmail
         val userUsername = feedback.user?.username ?: ""
         val userIpAddress = feedback.user?.ipAddress ?: ""
+        val organizationId = requireOrganizationIdForProject(projectId, "feedback") ?: return false
 
         val feedbackData = FeedbackInsertData(
             feedbackId = normalizeUuid(feedbackId),
             projectId = projectId,
+            organizationId = organizationId,
             timestampMs = timestamp,
             message = message,
             contactEmail = contactEmail,
@@ -694,6 +746,7 @@ class EventService(
 
     private fun SentrySession.toInsertData(projectId: Long): SessionInsertData? {
         val release = attrs?.release?.takeIf { it.isNotBlank() } ?: return null
+        val organizationId = requireOrganizationIdForProject(projectId, "session") ?: return null
         val startedMs =
             started?.let { unixSecondsToMillis(it) }
                 ?: timestamp?.let { unixSecondsToMillis(it) }
@@ -703,6 +756,7 @@ class EventService(
         return SessionInsertData(
             sessionId = normalizeUuid(sessionId ?: UUID.randomUUID().toString()),
             projectId = projectId,
+            organizationId = organizationId,
             startedMs = startedMs,
             durationMs = durationToMillis(duration),
             status = normalizeSessionStatus(status, errors),
@@ -716,8 +770,10 @@ class EventService(
 
     private fun SentrySessionAggregate.toSessionRows(projectId: Long): List<SessionInsertData> {
         val release = attrs?.release?.takeIf { it.isNotBlank() } ?: return emptyList()
+        val organizationId = requireOrganizationIdForProject(projectId, "session aggregate") ?: return emptyList()
         val defaults = SessionAggregateDefaults(
             projectId = projectId,
+            organizationId = organizationId,
             startedMs = started?.let { unixSecondsToMillis(it) } ?: System.currentTimeMillis(),
             release = release,
             environment = attrs.environment ?: "production",
@@ -745,6 +801,7 @@ class EventService(
                 SessionInsertData(
                     sessionId = UUID.randomUUID().toString(),
                     projectId = defaults.projectId,
+                    organizationId = defaults.organizationId,
                     startedMs = defaults.startedMs,
                     durationMs = 0.0,
                     status = status,
@@ -782,6 +839,7 @@ class EventService(
 
     private data class SessionAggregateDefaults(
         val projectId: Long,
+        val organizationId: Int,
         val startedMs: Long,
         val release: String,
         val environment: String,
@@ -827,9 +885,12 @@ class EventService(
                 ?.jsonPrimitive
                 ?.intOrNull ?: 0
 
+        val organizationId = requireOrganizationIdForProject(projectId, "replay event") ?: return false
+
         val replayData = ReplayEventInsertData(
             replayId = normalizeUuid(replayId),
             projectId = projectId,
+            organizationId = organizationId,
             segmentId = segmentId,
             timestampMs = ts,
             replayStartTimestampMs = startTs,
@@ -872,11 +933,13 @@ class EventService(
         segmentId: Int,
         payload: String
     ) {
+        val organizationId = requireOrganizationIdForProject(projectId, "replay recording") ?: return
         suspendRunCatching {
             eventRepository.insertReplayRecording(
                 ReplayRecordingInsertData(
                     replayId = normalizeUuid(replayId),
                     projectId = projectId,
+                    organizationId = organizationId,
                     segmentId = segmentId,
                     timestampMs = System.currentTimeMillis(),
                     recordingData = payload
@@ -902,6 +965,7 @@ class EventService(
 
         val normalizedReplayId = normalizeUuid(replayId)
         val timestamp = System.currentTimeMillis()
+        val organizationId = requireOrganizationIdForProject(projectId, "synthetic replay event") ?: return
 
         // Extract SDK info from envelope header if available
         val sdkName = "sentry.java.android"
@@ -913,6 +977,7 @@ class EventService(
                 ReplayEventInsertData(
                     replayId = normalizedReplayId,
                     projectId = projectId,
+                    organizationId = organizationId,
                     segmentId = segmentId,
                     timestampMs = timestamp,
                     replayStartTimestampMs = timestamp,
@@ -1166,6 +1231,7 @@ class EventService(
 
     private suspend fun insertAiSpansAsLlmGenerations(
         projectId: Long,
+        organizationId: Int,
         traceId: String,
         transaction: SentryTransaction,
         aiSpans: List<SentrySpan>
@@ -1199,6 +1265,7 @@ class EventService(
                 LlmGenerationInsertData(
                     generationId = UUID.randomUUID().toString(),
                     projectId = projectId,
+                    organizationId = organizationId,
                     traceId = traceId,
                     spanId = span.spanId ?: "",
                     parentSpanId = span.parentSpanId ?: "",
@@ -1274,15 +1341,33 @@ class EventService(
         val baseMeta: Map<String, String>,
     )
 
+    private class SentryApmTraceInput(
+        val traceId: String,
+        val transactionOp: String,
+        val traceStatus: String?,
+    )
+
+    private class SentryApmInsertInput(
+        val projectId: Long,
+        val eventId: String,
+        val trace: SentryApmTraceInput,
+        val transaction: SentryTransaction,
+        val childSpans: List<SentrySpan>,
+        val normalizedTags: Map<String, String>,
+    )
+
     private suspend fun insertSentrySpansToApm(
-        projectId: Long,
-        eventId: String,
-        traceId: String,
-        transactionOp: String,
-        traceStatus: String?,
-        transaction: SentryTransaction,
-        childSpans: List<SentrySpan>
+        input: SentryApmInsertInput
     ) {
+        val projectId = input.projectId
+        val eventId = input.eventId
+        val traceId = input.trace.traceId
+        val transactionOp = input.trace.transactionOp
+        val traceStatus = input.trace.traceStatus
+        val transaction = input.transaction
+        val childSpans = input.childSpans
+        val normalizedTags = input.normalizedTags
+
         if (traceId.isBlank()) {
             logger.debug { "No trace_id in transaction $eventId, skipping apm_spans insert" }
             return
@@ -1298,14 +1383,12 @@ class EventService(
             "sentry.transaction_id" to eventId,
             "sentry.project_id" to projectId.toString()
         )
-        transaction.tags?.let { mergeNonReservedTags(baseMeta, it) }
+        mergeNonReservedTags(baseMeta, normalizedTags)
 
         val ctx = ApmSpanContext(
             orgId = orgId,
             clickhouseDb = ClickHouseClient.getDatabase(),
-            service = transaction.serverName?.takeIf { it.isNotBlank() }
-                ?: transaction.sdk?.name?.takeIf { it.isNotBlank() }
-                ?: "sentry",
+            service = normalizedTags.getValue(SERVICE_NAME_TAG),
             host = transaction.serverName ?: "",
             env = transaction.environment ?: "production",
             version = transaction.release ?: "",

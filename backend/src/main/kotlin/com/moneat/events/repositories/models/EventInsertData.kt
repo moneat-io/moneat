@@ -41,7 +41,8 @@ data class ErrorEventInsertData(
     val breadcrumbs: String,
     val request: String,
     val sdkName: String,
-    val sdkVersion: String
+    val sdkVersion: String,
+    val organizationId: Int
 )
 
 data class TransactionEventInsertData(
@@ -67,7 +68,8 @@ data class TransactionEventInsertData(
     val breadcrumbs: String,
     val request: String,
     val sdkName: String,
-    val sdkVersion: String
+    val sdkVersion: String,
+    val organizationId: Int
 )
 
 data class SessionInsertData(
@@ -80,7 +82,8 @@ data class SessionInsertData(
     val release: String,
     val environment: String,
     val userId: String,
-    val receivedAtMs: Long
+    val receivedAtMs: Long,
+    val organizationId: Int
 )
 
 data class SpanInsertData(
@@ -96,7 +99,8 @@ data class SpanInsertData(
     val durationMs: Double,
     val status: String,
     val tags: Map<String, String>?,
-    val data: String
+    val data: String,
+    val organizationId: Int
 )
 
 data class FeedbackInsertData(
@@ -118,7 +122,8 @@ data class FeedbackInsertData(
     val userIpAddress: String,
     val sdkName: String,
     val sdkVersion: String,
-    val tags: Map<String, String>?
+    val tags: Map<String, String>?,
+    val organizationId: Int
 )
 
 data class ReplayEventInsertData(
@@ -146,7 +151,8 @@ data class ReplayEventInsertData(
     val deviceName: String,
     val deviceFamily: String,
     val activity: Int,
-    val tags: String
+    val tags: String,
+    val organizationId: Int
 )
 
 data class ReplayRecordingInsertData(
@@ -154,7 +160,8 @@ data class ReplayRecordingInsertData(
     val projectId: Long,
     val segmentId: Int,
     val timestampMs: Long,
-    val recordingData: String
+    val recordingData: String,
+    val organizationId: Int
 )
 
 data class LlmGenerationInsertData(
@@ -178,7 +185,8 @@ data class LlmGenerationInsertData(
     val userId: String,
     val environment: String,
     val release: String,
-    val tags: Map<String, String>?
+    val tags: Map<String, String>?,
+    val organizationId: Int
 )
 
 data class ProfileInsertData(
