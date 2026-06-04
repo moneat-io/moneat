@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { isDemo, setDemoEpoch } from '../demo'
+import { isDemo, setDemoEpoch, syncDemoEpochFromUser } from '../demo'
 
 export const API_BASE = `${import.meta.env.VITE_BACKEND_URL || ''}/v1`
 const AUTH_PAGE_PATHS = new Set([
@@ -293,9 +293,14 @@ export function createApiClientCore(): ApiClientCore {
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
           globalThis.sessionStorage?.removeItem('authenticated')
+          setDemoEpoch(null)
         }
         return false
       }
+      const user = await response
+        .json()
+        .catch(() => null) as { demoEpochMs?: number | null } | null
+      syncDemoEpochFromUser(user)
       globalThis.sessionStorage?.setItem('authenticated', 'true')
       return true
     } catch {

@@ -22,7 +22,7 @@ import {CommandPalette} from '../components/CommandPalette'
 import {CommandPaletteProvider} from '../contexts/CommandPaletteProvider'
 import {Toaster} from '../components/ui/toaster'
 import {api} from '../lib/api'
-import {setDemoEpoch} from '../lib/demo'
+import {isDemo} from '../lib/demo'
 import {APP_OVERVIEW_SEARCH, isPublicLandingRoute} from '../lib/overview-route'
 import {DemoBanner} from '../components/demo/DemoBanner'
 import {AiFloatingPanel} from '../components/AiFloatingPanel'
@@ -264,11 +264,13 @@ function RootComponent() {
     return () => observer.disconnect()
   }, [])
 
-  const { data: user } = useQuery({
+  const { data: user, isFetching: isUserFetching } = useQuery({
     queryKey: ['currentUser'],
     queryFn: () => api.getCurrentUser(),
     enabled: isAuthenticated,
   })
+  const demoEpochMs = user?.demoEpochMs ?? null
+  const showDemoBanner = demoEpochMs !== null && !isUserFetching && isDemo()
   const isLandingPage = isPublicLandingRoute(currentPath, router.location.search)
   const isPublicRoute = (
     isLandingPage ||
@@ -278,13 +280,6 @@ function RootComponent() {
     currentPath.startsWith('/legal/') ||
     currentPath.startsWith('/docs')
   )
-
-  // Initialize demo mode when user data is loaded
-  useEffect(() => {
-    if (user?.demoEpochMs) {
-      setDemoEpoch(user.demoEpochMs)
-    }
-  }, [user?.demoEpochMs])
 
   useEffect(() => {
     document.title = getDocumentTitle(currentPath, isLandingPage)
@@ -368,7 +363,7 @@ function RootComponent() {
         <CommandPaletteProvider>
           {/* Fixed header: optional demo banner */}
           <div ref={headerRef} className="fixed top-0 left-0 right-0 z-50 w-full">
-            <DemoBanner />
+            <DemoBanner isDemoMode={showDemoBanner} />
           </div>
           <Sidebar
             isExpanded={isSidebarExpanded}
@@ -385,7 +380,7 @@ function RootComponent() {
           className="transition-[margin-left] duration-300"
           style={{ marginLeft: 0 }}
         >
-          {isAuthenticated && !isPublicRoute && <DemoBanner />}
+          {isAuthenticated && !isPublicRoute && <DemoBanner isDemoMode={showDemoBanner} />}
           <Outlet />
         </div>
       )}

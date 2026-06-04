@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { setDemoEpoch, isDemo, getNow, getNowDate, getDemoEpochMs } from '@/lib/demo'
+import {
+  setDemoEpoch,
+  syncDemoEpochFromUser,
+  isDemo,
+  getNow,
+  getNowDate,
+  getDemoEpochMs,
+} from '@/lib/demo'
 
 describe('demo', () => {
   beforeEach(() => {
@@ -34,6 +41,21 @@ describe('demo', () => {
       sessionStorage.setItem('demoEpochMs', '1700000000000')
       // Module state is null but sessionStorage has value
       expect(isDemo()).toBe(true)
+    })
+  })
+
+  describe('syncDemoEpochFromUser', () => {
+    it('clears demo mode when the user is not a demo user', () => {
+      setDemoEpoch(1700000000000)
+      syncDemoEpochFromUser({demoEpochMs: null})
+      expect(isDemo()).toBe(false)
+      expect(sessionStorage.getItem('demoEpochMs')).toBeNull()
+    })
+
+    it('sets demo mode when the user is a demo user', () => {
+      syncDemoEpochFromUser({demoEpochMs: 1700000000000})
+      expect(isDemo()).toBe(true)
+      expect(getDemoEpochMs()).toBe(1700000000000)
     })
   })
 
