@@ -3,6 +3,12 @@ import type {Project} from '@/lib/api'
 import type {FacetFilter} from '@/lib/filters/types'
 import {
   facetValues,
+  hasAccessibleServices,
+  HOME_OVERVIEW_FEEDBACK_OPTIONS,
+  HOME_OVERVIEW_ISSUES_QUERY,
+  HOME_OVERVIEW_REPLAYS_OPTIONS,
+  issueDetailSearch,
+  primaryServiceResourceId,
   serviceNamesForQuery,
   serviceRailSections,
   serviceScopeKey,
@@ -82,5 +88,26 @@ describe('service facet scope', () => {
         options: [{value: 'API Service'}, {value: 'Worker Service'}],
       },
     ])
+  })
+
+  it('resolves the first accessible service for legacy home queries', () => {
+    expect(primaryServiceResourceId(projects)).toBe('svc-api')
+    expect(hasAccessibleServices(projects)).toBe(true)
+    expect(primaryServiceResourceId([])).toBeUndefined()
+    expect(hasAccessibleServices([])).toBe(false)
+  })
+
+  it('defines organization-wide home overview query options', () => {
+    expect(HOME_OVERVIEW_ISSUES_QUERY).toEqual({
+      page: 1,
+      limit: 100,
+      status: 'unresolved',
+    })
+    expect(HOME_OVERVIEW_REPLAYS_OPTIONS).toEqual({limit: 5, period: '24h'})
+    expect(HOME_OVERVIEW_FEEDBACK_OPTIONS).toEqual({limit: 5})
+  })
+
+  it('links organization issues back through their owning service', () => {
+    expect(issueDetailSearch({projectResourceId: 'svc-worker'})).toEqual({projectId: 'svc-worker'})
   })
 })

@@ -25,10 +25,10 @@ import {DataSourceMapperModal} from '@/components/dashboards/DataSourceMapperMod
 import {VariableSettingsDialog} from '@/components/dashboards/VariableSettingsDialog'
 import {useWidgetClipboard} from '@/components/dashboards/useWidgetClipboard'
 import {useCallback, useEffect, useRef, useState} from 'react'
-import {useProject} from '@/contexts/ProjectContext'
 import {isDemo} from '@/lib/demo'
 import {EmptyState} from '@/components/ui/empty-state'
 import {LayoutDashboard} from 'lucide-react'
+import {primaryServiceResourceId} from '@/lib/service-facet-scope'
 
 interface DashboardSearch {
   edit?: boolean
@@ -45,7 +45,6 @@ function DashboardViewPage() {
   const {dashboardId} = Route.useParams()
   const {edit} = Route.useSearch()
   const queryClient = useQueryClient()
-  const {selectedProjectId} = useProject()
 
   const [isEditing, setIsEditing] = useState(edit ?? false)
   const [selectedWidget, setSelectedWidget] = useState<DashboardWidget | null>(null)
@@ -80,6 +79,11 @@ function DashboardViewPage() {
     queryFn: () => api.getDashboard(id),
     enabled: !isNaN(id),
   })
+  const {data: projects = []} = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => api.getProjects(),
+  })
+  const primaryServiceId = primaryServiceResourceId(projects)
 
   // Initialize variable values from dashboard variable defaults on first load
   useEffect(() => {
@@ -341,7 +345,7 @@ function DashboardViewPage() {
         widgets={dashboard.widgets}
         isEditing={isEditing}
         dashboardId={id}
-        projectId={selectedProjectId ?? undefined}
+        projectId={primaryServiceId}
         timeRange={timeRange}
         autoRefresh={autoRefresh}
         variableValues={variableValues}
@@ -356,7 +360,7 @@ function DashboardViewPage() {
           onSave={handleWidgetSave}
           onClose={() => setSelectedWidget(null)}
           dashboardId={id}
-          projectId={selectedProjectId ?? undefined}
+          projectId={primaryServiceId}
         />
       )}
 
