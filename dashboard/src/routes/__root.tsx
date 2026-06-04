@@ -69,7 +69,7 @@ const STATIC_TITLES: Record<string, string> = {
   '/signoz-alternative': 'SigNoz Alternative 2026',
   '/docs': 'Documentation',
   '/blog': 'Blog',
-  '/projects': 'Projects',
+  '/projects': 'Sources / Ingestion',
   '/feedback': 'Feedback',
   '/performance': 'Traces',
   '/performance/traces': 'Traces',
@@ -165,8 +165,8 @@ function getDocumentTitle(pathname: string, isPublicLandingPage: boolean): strin
   }
 
   const dynamicMatchers: Array<[RegExp, (matches: RegExpMatchArray) => string]> = [
-    [/^\/projects\/([^/]+)\/settings$/, (match) => `Project ${formatEntityId(match[1])} Settings`],
-    [/^\/projects\/([^/]+)$/, (match) => `Project ${formatEntityId(match[1])}`],
+    [/^\/projects\/([^/]+)\/settings$/, (match) => `Service ${formatEntityId(match[1])} Settings`],
+    [/^\/projects\/([^/]+)$/, (match) => `Sources / Ingestion ${formatEntityId(match[1])}`],
     [/^\/issues\/([^/]+)$/, (match) => `Issue ${formatEntityId(match[1])}`],
     [/^\/feedback\/([^/]+)$/, (match) => `Feedback ${formatEntityId(match[1])}`],
     [/^\/performance\/traces\/([^/]+)$/, (match) => `Trace ${formatEntityId(match[1])}`],

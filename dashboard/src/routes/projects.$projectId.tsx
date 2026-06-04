@@ -31,10 +31,10 @@ export const Route = createFileRoute('/projects/$projectId')({
     const project = await api.getProject(params.projectId)
     return { project }
   },
-  component: SetupPage,
+  component: SourcesIngestionPage,
 })
 
-function SetupPage() {
+function SourcesIngestionPage() {
   const routerState = useRouterState()
   const showingChildPage = /^\/projects\/[^/]+\/(settings|traces|spans)\/?/.test(routerState.location.pathname)
   const { project } = Route.useLoaderData()

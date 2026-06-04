@@ -459,7 +459,7 @@ export const platforms: PlatformType[] = [
   {
     id: 'other',
     name: 'Other Platform',
-    description: 'Generic project setup',
+    description: 'Generic source setup',
     icon: Code2,
     color: '#4b5563',
     category: 'backend',
