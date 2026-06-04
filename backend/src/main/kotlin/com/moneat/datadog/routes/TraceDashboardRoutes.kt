@@ -150,7 +150,7 @@ fun Route.traceDashboardRoutes() {
                 ?: return@get call.respondUnauthorized()
             // Accept a multi-select `services` list (comma-separated); fall back to
             // the legacy single `service` param for backward compatibility.
-            val services = call.serviceFilters()
+            val services = call.apmErrorServiceFilters()
                 ?: return@get call.respondBadRequest(INVALID_SERVICES_ERROR)
             val limit = (
                 call.parameters["limit"]
@@ -292,6 +292,23 @@ private fun ApplicationCall.serviceFilters(): List<String>? {
         ?.map { it.trim() }
         ?.filter { it.isNotEmpty() }
     val rawServices = (parsedServices ?: emptyList()) + listOfNotNull(serviceFilter())
+    if (rawServices.size > MAX_SERVICE_FILTERS) return null
+
+    val services = rawServices.distinct()
+    if (services.size > MAX_SERVICE_FILTERS) return null
+    return services.takeIf {
+        it.all { service -> service.length <= MAX_SERVICE_FILTER_LENGTH }
+    }
+}
+
+private fun ApplicationCall.apmErrorServiceFilters(): List<String>? {
+    val parsedServices = parameters["services"]
+        ?.split(",")
+        ?.map { it.trim() }
+        ?.filter { it.isNotEmpty() }
+    val rawServices = parsedServices
+        ?.takeIf { it.isNotEmpty() }
+        ?: listOfNotNull(serviceFilter())
     if (rawServices.size > MAX_SERVICE_FILTERS) return null
 
     val services = rawServices.distinct()
