@@ -3,6 +3,7 @@ import {createFileRoute} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {useAnalyticsParams} from '@/contexts/UseAnalyticsParams'
+import {serviceNamesForQuery} from '@/lib/service-facet-scope'
 import {AnalyticsFilterBar} from '@/components/analytics/AnalyticsFilterBar'
 import {AnalyticsKpiCards, AnalyticsKpiCardsSkeleton} from '@/components/analytics/AnalyticsKpiCards'
 import {AnalyticsChart} from '@/components/analytics/AnalyticsChart'
@@ -44,21 +45,6 @@ function facetValues(filters: readonly FacetFilter[], key: string, exclude: bool
   return filters
     .filter((filter) => filter.key === key && Boolean(filter.exclude) === exclude)
     .map((filter) => filter.value)
-}
-
-function serviceNamesForQuery(
-  services: readonly Project[],
-  includedServices: readonly string[],
-  excludedServices: readonly string[]
-): string[] {
-  if (includedServices.length === 0 && excludedServices.length === 0) return []
-
-  const excluded = new Set(excludedServices)
-  const candidates = includedServices.length > 0
-    ? includedServices
-    : services.map((service) => service.name)
-
-  return candidates.filter((service) => !excluded.has(service))
 }
 
 function analyticsScopeKey(serviceNames: readonly string[], hasServiceFilters: boolean): string {

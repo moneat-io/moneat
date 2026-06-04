@@ -20,6 +20,7 @@ import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import type {ApmErrorGroup, ApmTimeRange, Issue, Project} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
+import {serviceNamesForQuery} from '@/lib/service-facet-scope'
 import {formatRelativeTime, cn} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
@@ -143,21 +144,6 @@ function facetValues(filters: readonly FacetFilter[], key: string, exclude: bool
   return filters
     .filter((filter) => filter.key === key && Boolean(filter.exclude) === exclude)
     .map((filter) => filter.value)
-}
-
-function serviceNamesForQuery(
-  services: readonly Project[],
-  includedServices: readonly string[],
-  excludedServices: readonly string[]
-): string[] {
-  if (includedServices.length === 0 && excludedServices.length === 0) return []
-
-  const excluded = new Set(excludedServices)
-  const candidates = includedServices.length > 0
-    ? includedServices
-    : services.map((service) => service.name)
-
-  return candidates.filter((service) => !excluded.has(service))
 }
 
 function serverStatusFilter(statusIncludes: readonly string[], statusExcludes: readonly string[]): string | undefined {

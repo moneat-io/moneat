@@ -379,7 +379,7 @@ describe('Issues Index - data coverage', () => {
     await screen.findByRole('textbox')
     // Creation/config moved to the sidebar + Configuration page.
     expect(screen.queryByText('New Service')).not.toBeInTheDocument()
-    expect(screen.queryByText('New Service')).not.toBeInTheDocument()
+    expect(screen.queryByText('New Project')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Service settings')).not.toBeInTheDocument()
   })
 })

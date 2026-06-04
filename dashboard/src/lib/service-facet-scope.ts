@@ -1,6 +1,8 @@
 import type {Issue, IssueListParams, Project} from '@/lib/api'
 import type {FacetFilter, FacetRailSection} from '@/lib/filters/types'
 
+type ServiceList = readonly Project[] | null | undefined
+
 export const HOME_OVERVIEW_ISSUES_QUERY = {
   page: 1,
   limit: 100,
@@ -22,11 +24,11 @@ export function facetValues(filters: readonly FacetFilter[], key: string, exclud
     .map((filter) => filter.value)
 }
 
-export function hasAccessibleServices(services: readonly Project[] | null | undefined): boolean {
+export function hasAccessibleServices(services: ServiceList): boolean {
   return (services?.length ?? 0) > 0
 }
 
-export function primaryServiceResourceId(services: readonly Project[] | null | undefined): string | undefined {
+export function primaryServiceResourceId(services: ServiceList): string | undefined {
   return services?.[0]?.resourceId
 }
 
