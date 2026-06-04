@@ -27,6 +27,9 @@ interface ProjectRepository {
     fun getOrganizationIdsForUser(userId: Int): List<Int>
     fun getProjectsForOrganizations(orgIds: List<Int>): List<ProjectRow>
     fun getProjectById(projectId: Long): ProjectRow?
+    fun getServiceNameForProject(projectId: Long): String?
+    fun resolveServiceId(orgId: Int, serviceName: String, serviceNamespace: String = ""): Long?
+    fun resolveServiceNames(projectIds: List<Long>): Map<Long, String>
     fun getProjectCountForOrganization(orgId: Int): Int
     fun findProjectByNameOrSlug(orgId: Int, name: String, slug: String): ProjectRow?
     fun createProject(orgId: Int, name: String, slug: String, framework: String?): Long

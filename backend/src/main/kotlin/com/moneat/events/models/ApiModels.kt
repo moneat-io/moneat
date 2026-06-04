@@ -76,7 +76,9 @@ data class ProjectResponse(
     val framework: String?,
     val keys: List<ProjectKeyResponse>,
     val dsn: String, // First key's DSN for backward compatibility
-    val issueCount: Long = 0
+    val issueCount: Long = 0,
+    val serviceId: Long = id,
+    val serviceName: String = slug
 )
 
 @Serializable

@@ -17,7 +17,14 @@
 package com.moneat.events.repositories
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.events.repositories.models.ErrorEventInsertData
+import com.moneat.events.repositories.models.FeedbackInsertData
+import com.moneat.events.repositories.models.LlmGenerationInsertData
+import com.moneat.events.repositories.models.ReplayEventInsertData
+import com.moneat.events.repositories.models.ReplayRecordingInsertData
 import com.moneat.events.repositories.models.SessionInsertData
+import com.moneat.events.repositories.models.SpanInsertData
+import com.moneat.events.repositories.models.TransactionEventInsertData
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.ProjectKeys
 import com.moneat.shared.models.Projects
@@ -129,6 +136,15 @@ class EventRepositoryTest {
         assertNull(result)
     }
 
+    // ──── getServiceNameForProject ────
+
+    @Test
+    fun `getServiceNameForProject returns project slug`() {
+        val (projectId, _) = seedProjectWithKey(projectSlug = "checkout-api")
+
+        assertEquals("checkout-api", repository.getServiceNameForProject(projectId))
+    }
+
     // ──── insertSessions ────
 
     @Test
@@ -152,6 +168,7 @@ class EventRepositoryTest {
                         SessionInsertData(
                             sessionId = "11111111-1111-1111-1111-111111111111",
                             projectId = 42L,
+                            organizationId = 7,
                             startedMs = 1767225600000L,
                             durationMs = 1500.0,
                             status = "ok",
@@ -171,8 +188,11 @@ class EventRepositoryTest {
         }
 
         val sql = queries.single()
+        val compactSql = sql.replace(Regex("\\s+"), " ")
         assertTrue(sql.contains("INSERT INTO `test`.sessions"))
+        assertTrue(sql.contains("session_id, project_id, organization_id"))
         assertTrue(sql.contains("toUUID('11111111-1111-1111-1111-111111111111')"))
+        assertTrue(compactSql.contains("42, 7, fromUnixTimestamp64Milli(1767225600000)"))
         assertTrue(sql.contains("fromUnixTimestamp64Milli(1767225600000)"))
         assertTrue(sql.contains("1500.0"))
         assertTrue(sql.contains("'ok'"))
@@ -180,4 +200,209 @@ class EventRepositoryTest {
         assertTrue(sql.contains("'production'"))
         assertTrue(sql.contains("'user-123'"))
     }
+
+    @Test
+    fun `ClickHouse inserts include organization id across event row types`() = runBlocking {
+        val queries = mutableListOf<String>()
+        try {
+            MockHttpServer { exchange ->
+                queries += exchange.requestBodyText()
+                exchange.respond(200, "", contentType = "text/plain")
+            }.use { server ->
+                ClickHouseClient.close()
+                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+
+                assertTrue(repository.insertErrorEvent(errorEventData()))
+                assertTrue(repository.insertTransaction(transactionEventData()))
+                repository.insertSpans(listOf(spanData()))
+                assertTrue(repository.insertFeedback(feedbackData()))
+                assertTrue(repository.insertReplayEvent(replayEventData()))
+                repository.insertReplayRecording(replayRecordingData())
+                assertTrue(repository.insertLlmGenerations(listOf(llmGenerationData())))
+            }
+        } finally {
+            ClickHouseClient.close()
+        }
+
+        val compactSql = queries.joinToString("\n").replace(Regex("\\s+"), " ")
+        assertTrue(compactSql.contains("event_id, project_id, organization_id"))
+        assertTrue(compactSql.contains("transaction_id, project_id, organization_id"))
+        assertTrue(
+            compactSql.contains(
+                "span_id, parent_span_id, trace_id, transaction_id, project_id, organization_id"
+            )
+        )
+        assertTrue(compactSql.contains("feedback_id, project_id, organization_id"))
+        assertTrue(compactSql.contains("replay_id, project_id, organization_id"))
+        assertTrue(compactSql.contains("generation_id, project_id, organization_id"))
+        assertTrue(compactSql.contains("42, 7"))
+        assertTrue(compactSql.contains("project_id, organization_id, bucket_start"))
+        assertTrue(compactSql.contains("project_id, organization_id, issue_id"))
+    }
+
+    private fun errorEventData(): ErrorEventInsertData =
+        ErrorEventInsertData(
+            eventId = "11111111-1111-1111-1111-111111111111",
+            projectId = 42L,
+            organizationId = 7,
+            timestampMs = 1767225600000L,
+            level = "error",
+            message = "boom",
+            platform = "jvm",
+            environment = "production",
+            release = "1.0.0",
+            dist = "",
+            serverName = "api",
+            userId = "user-1",
+            userEmail = "user@example.com",
+            userUsername = "user",
+            userIpAddress = "127.0.0.1",
+            exceptionType = "Error",
+            exceptionValue = "boom",
+            stackTrace = "stack",
+            fingerprint = listOf("fp"),
+            issueId = "issue-1",
+            tags = mapOf("service.name" to "checkout"),
+            contexts = "{}",
+            breadcrumbs = "[]",
+            request = "{}",
+            sdkName = "sentry",
+            sdkVersion = "1.0.0"
+        )
+
+    private fun transactionEventData(): TransactionEventInsertData =
+        TransactionEventInsertData(
+            eventId = "22222222-2222-2222-2222-222222222222",
+            projectId = 42L,
+            organizationId = 7,
+            timestampMs = 1767225600000L,
+            level = "info",
+            message = "GET /checkout",
+            platform = "jvm",
+            environment = "production",
+            release = "1.0.0",
+            dist = "",
+            serverName = "api",
+            userId = "user-1",
+            userEmail = "user@example.com",
+            userUsername = "user",
+            userIpAddress = "127.0.0.1",
+            transactionName = "GET /checkout",
+            transactionOp = "http.server",
+            durationMs = 125.0,
+            tags = mapOf("service.name" to "checkout"),
+            contexts = "{}",
+            breadcrumbs = "[]",
+            request = "{}",
+            sdkName = "sentry",
+            sdkVersion = "1.0.0"
+        )
+
+    private fun spanData(): SpanInsertData =
+        SpanInsertData(
+            spanId = "span-1",
+            parentSpanId = "root",
+            traceId = "trace-1",
+            transactionId = "22222222-2222-2222-2222-222222222222",
+            projectId = 42L,
+            organizationId = 7,
+            op = "db.query",
+            description = "SELECT 1",
+            startTimestampMs = 1767225600000L,
+            endTimestampMs = 1767225600100L,
+            durationMs = 100.0,
+            status = "ok",
+            tags = mapOf("db.system" to "postgresql"),
+            data = "{}"
+        )
+
+    private fun feedbackData(): FeedbackInsertData =
+        FeedbackInsertData(
+            feedbackId = "33333333-3333-3333-3333-333333333333",
+            projectId = 42L,
+            organizationId = 7,
+            timestampMs = 1767225600000L,
+            message = "help",
+            contactEmail = "user@example.com",
+            name = "User",
+            url = "https://example.com",
+            associatedEventId = "11111111-1111-1111-1111-111111111111",
+            replayId = "",
+            environment = "production",
+            release = "1.0.0",
+            platform = "browser",
+            userId = "user-1",
+            userEmail = "user@example.com",
+            userUsername = "user",
+            userIpAddress = "127.0.0.1",
+            sdkName = "sentry",
+            sdkVersion = "1.0.0",
+            tags = mapOf("service.name" to "checkout")
+        )
+
+    private fun replayEventData(): ReplayEventInsertData =
+        ReplayEventInsertData(
+            replayId = "44444444-4444-4444-4444-444444444444",
+            projectId = 42L,
+            organizationId = 7,
+            segmentId = 0,
+            timestampMs = 1767225600000L,
+            replayStartTimestampMs = 1767225599000L,
+            urls = listOf("https://example.com"),
+            errorIds = listOf("11111111-1111-1111-1111-111111111111"),
+            traceIds = listOf("trace-1"),
+            environment = "production",
+            release = "1.0.0",
+            platform = "browser",
+            userId = "user-1",
+            userEmail = "user@example.com",
+            userUsername = "user",
+            userIpAddress = "127.0.0.1",
+            sdkName = "sentry",
+            sdkVersion = "1.0.0",
+            browserName = "Chrome",
+            browserVersion = "120",
+            osName = "macOS",
+            osVersion = "14",
+            deviceName = "Mac",
+            deviceFamily = "desktop",
+            activity = 1,
+            tags = "{}"
+        )
+
+    private fun replayRecordingData(): ReplayRecordingInsertData =
+        ReplayRecordingInsertData(
+            replayId = "44444444-4444-4444-4444-444444444444",
+            projectId = 42L,
+            organizationId = 7,
+            segmentId = 0,
+            timestampMs = 1767225600000L,
+            recordingData = "[]"
+        )
+
+    private fun llmGenerationData(): LlmGenerationInsertData =
+        LlmGenerationInsertData(
+            generationId = "55555555-5555-5555-5555-555555555555",
+            projectId = 42L,
+            organizationId = 7,
+            traceId = "trace-1",
+            spanId = "span-1",
+            parentSpanId = "root",
+            timestampMs = 1767225600000L,
+            durationMs = 500.0,
+            name = "chat",
+            model = "gpt-4",
+            provider = "openai",
+            type = "chat",
+            input = "{}",
+            output = "{}",
+            inputTokens = 10,
+            outputTokens = 20,
+            totalTokens = 30,
+            status = "ok",
+            userId = "user-1",
+            environment = "production",
+            release = "1.0.0",
+            tags = mapOf("service.name" to "checkout")
+        )
 }
