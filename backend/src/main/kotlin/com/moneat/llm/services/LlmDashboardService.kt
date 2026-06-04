@@ -48,6 +48,21 @@ private val logger = KotlinLogging.logger {}
 private const val MILLIS_PER_SECOND = 1000.0
 private const val DATETIME64_PRECISION_MS = 3
 
+data class LlmGenerationFilters(
+    val model: String? = null,
+    val provider: String? = null,
+    val type: String? = null,
+    val status: String? = null
+)
+
+data class LlmGenerationsQuery(
+    val range: String,
+    val filters: LlmGenerationFilters = LlmGenerationFilters(),
+    val page: Int,
+    val pageSize: Int,
+    val demoEpochMs: Long? = null
+)
+
 class LlmDashboardService {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val json = Json { ignoreUnknownKeys = true }
@@ -65,6 +80,13 @@ class LlmDashboardService {
         } else {
             "project_id = $projectId"
         }
+    }
+
+    private fun serviceScopeClause(scope: LlmQueryScope): String {
+        val serviceIds = scope.serviceIds
+        if (serviceIds.isEmpty()) return "0 = 1"
+        if (serviceIds.size == 1) return projectIdClause(serviceIds.first())
+        return "toInt64(project_id) IN (${serviceIds.joinToString(", ")})"
     }
 
     private suspend fun extractBody(response: HttpResponse): String? {
@@ -120,9 +142,16 @@ class LlmDashboardService {
         projectId: Long,
         range: String,
         demoEpochMs: Long? = null
+    ): LlmOverviewResponse =
+        getOverview(LlmQueryScope.service(projectId), range, demoEpochMs)
+
+    suspend fun getOverview(
+        scope: LlmQueryScope,
+        range: String,
+        demoEpochMs: Long? = null
     ): LlmOverviewResponse {
         val bucket = bucketFromRange(range)
-        val projectFilter = projectIdClause(projectId)
+        val serviceFilter = serviceScopeClause(scope)
         val timeFilter = rangeClause(range, demoEpochMs)
 
         // Stats query
@@ -135,7 +164,7 @@ class LlmDashboardService {
                 avg(duration_ms) as avg_duration_ms,
                 countIf(status = 'error') * 100.0 / greatest(count(), 1) as error_rate
             FROM `$clickhouseDb`.llm_generations
-            WHERE $projectFilter
+            WHERE $serviceFilter
               AND $timeFilter
             FORMAT JSONEachRow
             """.trimIndent()
@@ -150,7 +179,7 @@ class LlmDashboardService {
                 sum(cost_usd) as cost,
                 countIf(status = 'error') as errors
             FROM `$clickhouseDb`.llm_generations
-            WHERE $projectFilter
+            WHERE $serviceFilter
               AND $timeFilter
             GROUP BY ts
             ORDER BY ts
@@ -169,7 +198,7 @@ class LlmDashboardService {
                 avg(duration_ms) as avg_duration_ms,
                 countIf(status = 'error') * 100.0 / greatest(count(), 1) as error_rate
             FROM `$clickhouseDb`.llm_generations
-            WHERE $projectFilter
+            WHERE $serviceFilter
               AND $timeFilter
             GROUP BY model, provider
             ORDER BY call_count DESC
@@ -224,27 +253,26 @@ class LlmDashboardService {
 
     suspend fun getGenerations(
         projectId: Long,
-        range: String,
-        model: String?,
-        provider: String?,
-        type: String?,
-        status: String?,
-        page: Int,
-        pageSize: Int,
-        demoEpochMs: Long? = null
+        query: LlmGenerationsQuery
+    ): LlmGenerationsListResponse =
+        getGenerations(LlmQueryScope.service(projectId), query)
+
+    suspend fun getGenerations(
+        scope: LlmQueryScope,
+        query: LlmGenerationsQuery
     ): LlmGenerationsListResponse {
-        val offset = (page - 1) * pageSize
-        val projectFilter = projectIdClause(projectId)
-        val timeFilter = rangeClause(range, demoEpochMs)
+        val offset = (query.page - 1) * query.pageSize
+        val serviceFilter = serviceScopeClause(scope)
+        val timeFilter = rangeClause(query.range, query.demoEpochMs)
 
         val filters =
             buildList {
-                add(projectFilter)
+                add(serviceFilter)
                 add(timeFilter)
-                model?.let { add("model = '${ClickHouseSqlUtils.escapeSql(it)}'") }
-                provider?.let { add("provider = '${ClickHouseSqlUtils.escapeSql(it)}'") }
-                type?.let { add("type = '${ClickHouseSqlUtils.escapeSql(it)}'") }
-                status?.let { add("status = '${ClickHouseSqlUtils.escapeSql(it)}'") }
+                query.filters.model?.let { add("model = '${ClickHouseSqlUtils.escapeSql(it)}'") }
+                query.filters.provider?.let { add("provider = '${ClickHouseSqlUtils.escapeSql(it)}'") }
+                query.filters.type?.let { add("type = '${ClickHouseSqlUtils.escapeSql(it)}'") }
+                query.filters.status?.let { add("status = '${ClickHouseSqlUtils.escapeSql(it)}'") }
             }
         val where = filters.joinToString(" AND ")
 
@@ -267,7 +295,7 @@ class LlmDashboardService {
             FROM `$clickhouseDb`.llm_generations
             WHERE $where
             ORDER BY timestamp DESC
-            LIMIT $pageSize OFFSET $offset
+            LIMIT ${query.pageSize} OFFSET $offset
             FORMAT JSONEachRow
             """.trimIndent()
 
@@ -313,17 +341,23 @@ class LlmDashboardService {
         return LlmGenerationsListResponse(
             generations = generations,
             total = total,
-            page = page,
-            pageSize = pageSize
+            page = query.page,
+            pageSize = query.pageSize
         )
     }
 
     suspend fun getGenerationDetail(
         projectId: Long,
         generationId: String
+    ): LlmGenerationDetailResponse? =
+        getGenerationDetail(LlmQueryScope.service(projectId), generationId)
+
+    suspend fun getGenerationDetail(
+        scope: LlmQueryScope,
+        generationId: String
     ): LlmGenerationDetailResponse? {
         val escapedId = ClickHouseSqlUtils.escapeSql(generationId)
-        val projectFilter = projectIdClause(projectId)
+        val serviceFilter = serviceScopeClause(scope)
         val query =
             """
             SELECT
@@ -339,7 +373,7 @@ class LlmDashboardService {
                 user_id, session_id, environment, release,
                 tags, metadata
             FROM `$clickhouseDb`.llm_generations
-            WHERE $projectFilter AND toString(generation_id) = '$escapedId'
+            WHERE $serviceFilter AND toString(generation_id) = '$escapedId'
             LIMIT 1
             FORMAT JSONEachRow
             """.trimIndent()
@@ -387,9 +421,15 @@ class LlmDashboardService {
     suspend fun getTrace(
         projectId: Long,
         traceId: String
+    ): LlmTraceResponse? =
+        getTrace(LlmQueryScope.service(projectId), traceId)
+
+    suspend fun getTrace(
+        scope: LlmQueryScope,
+        traceId: String
     ): LlmTraceResponse? {
         val escapedTraceId = ClickHouseSqlUtils.escapeSql(traceId)
-        val projectFilter = projectIdClause(projectId)
+        val serviceFilter = serviceScopeClause(scope)
         val query =
             """
             SELECT
@@ -405,7 +445,7 @@ class LlmDashboardService {
                 user_id, session_id, environment, release,
                 tags, metadata
             FROM `$clickhouseDb`.llm_generations
-            WHERE $projectFilter AND trace_id = '$escapedTraceId'
+            WHERE $serviceFilter AND trace_id = '$escapedTraceId'
             ORDER BY timestamp ASC
             FORMAT JSONEachRow
             """.trimIndent()
@@ -469,9 +509,16 @@ class LlmDashboardService {
         projectId: Long,
         range: String,
         demoEpochMs: Long? = null
+    ): LlmCostsResponse =
+        getCosts(LlmQueryScope.service(projectId), range, demoEpochMs)
+
+    suspend fun getCosts(
+        scope: LlmQueryScope,
+        range: String,
+        demoEpochMs: Long? = null
     ): LlmCostsResponse {
         val bucket = bucketFromRange(range)
-        val projectFilter = projectIdClause(projectId)
+        val serviceFilter = serviceScopeClause(scope)
         val timeFilter = rangeClause(range, demoEpochMs)
 
         val breakdownQuery =
@@ -482,7 +529,7 @@ class LlmDashboardService {
                 sum(total_tokens) as total_tokens,
                 count() as call_count
             FROM `$clickhouseDb`.llm_generations
-            WHERE $projectFilter AND $timeFilter
+            WHERE $serviceFilter AND $timeFilter
             GROUP BY model, provider
             ORDER BY total_cost DESC
             FORMAT JSONEachRow
@@ -497,7 +544,7 @@ class LlmDashboardService {
                 sum(cost_usd) as cost,
                 countIf(status = 'error') as errors
             FROM `$clickhouseDb`.llm_generations
-            WHERE $projectFilter AND $timeFilter
+            WHERE $serviceFilter AND $timeFilter
             GROUP BY ts
             ORDER BY ts
             FORMAT JSONEachRow
@@ -541,8 +588,15 @@ class LlmDashboardService {
         projectId: Long,
         range: String,
         demoEpochMs: Long? = null
+    ): List<LlmModelStats> =
+        getModels(LlmQueryScope.service(projectId), range, demoEpochMs)
+
+    suspend fun getModels(
+        scope: LlmQueryScope,
+        range: String,
+        demoEpochMs: Long? = null
     ): List<LlmModelStats> {
-        val projectFilter = projectIdClause(projectId)
+        val serviceFilter = serviceScopeClause(scope)
         val timeFilter = rangeClause(range, demoEpochMs)
         val query =
             """
@@ -554,7 +608,7 @@ class LlmDashboardService {
                 avg(duration_ms) as avg_duration_ms,
                 countIf(status = 'error') * 100.0 / greatest(count(), 1) as error_rate
             FROM `$clickhouseDb`.llm_generations
-            WHERE $projectFilter AND $timeFilter
+            WHERE $serviceFilter AND $timeFilter
             GROUP BY model, provider
             ORDER BY call_count DESC
             FORMAT JSONEachRow
