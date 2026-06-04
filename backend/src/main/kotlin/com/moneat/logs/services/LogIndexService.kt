@@ -21,6 +21,8 @@ import com.moneat.config.isClickHouseError
 import com.moneat.logs.models.CreateLogIndexRequest
 import com.moneat.logs.models.LogIndexResponse
 import com.moneat.logs.models.LogIndexTestResponse
+import com.moneat.logs.models.LogIndexUsageResponse
+import com.moneat.logs.models.QueuedLogEntry
 import com.moneat.logs.models.UpdateLogIndexRequest
 import com.moneat.shared.models.LogIndexes
 import com.moneat.shared.services.CacheService
@@ -34,6 +36,7 @@ import kotlinx.serialization.json.longOrNull
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -48,11 +51,15 @@ private const val CACHE_TTL_SECONDS = 60L
 private const val MAX_SAMPLING_RATE = 1.0f
 private const val MIN_SAMPLING_RATE = 0.0f
 private const val MAX_RETENTION_DAYS = 365
+private const val BYTES_PER_GB = 1024L * 1024L * 1024L
+private const val ERROR_BODY_SHORT_CHARS = 500
+private const val POSTGRES_UNIQUE_VIOLATION_SQLSTATE = "23505"
 
 class LogIndexService {
 
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val queryParser = LogQueryParser()
+    private val filterEvaluator = LogEntryFilterEvaluator(queryParser)
 
     fun create(
         organizationId: Int,
@@ -60,22 +67,25 @@ class LogIndexService {
     ): LogIndexResponse {
         val name = request.name.trim()
         if (name.isEmpty()) throw IllegalArgumentException("Index name cannot be empty")
+        ensureIndexNameAvailable(organizationId, name)
         val now = Clock.System.now()
-        val id = transaction {
-            LogIndexes.insert {
-                it[LogIndexes.organizationId] = organizationId
-                it[LogIndexes.name] = name
-                it[LogIndexes.filterQuery] = request.filterQuery
-                it[LogIndexes.retentionDays] = request.retentionDays
-                    .coerceIn(1, MAX_RETENTION_DAYS)
-                it[LogIndexes.samplingRate] = request.samplingRate
-                    .coerceIn(MIN_SAMPLING_RATE, MAX_SAMPLING_RATE)
-                it[LogIndexes.priority] = request.priority
-                it[LogIndexes.isActive] = true
-                it[LogIndexes.dailyQuotaGb] = request.dailyQuotaGb
-                it[LogIndexes.createdAt] = now
-                it[LogIndexes.updatedAt] = now
-            }[LogIndexes.id]
+        val id = mapDuplicateIndexName {
+            transaction {
+                LogIndexes.insert {
+                    it[LogIndexes.organizationId] = organizationId
+                    it[LogIndexes.name] = name
+                    it[LogIndexes.filterQuery] = request.filterQuery
+                    it[LogIndexes.retentionDays] = request.retentionDays
+                        .coerceIn(1, MAX_RETENTION_DAYS)
+                    it[LogIndexes.samplingRate] = request.samplingRate
+                        .coerceIn(MIN_SAMPLING_RATE, MAX_SAMPLING_RATE)
+                    it[LogIndexes.priority] = request.priority
+                    it[LogIndexes.isActive] = true
+                    it[LogIndexes.dailyQuotaGb] = request.dailyQuotaGb
+                    it[LogIndexes.createdAt] = now
+                    it[LogIndexes.updatedAt] = now
+                }[LogIndexes.id]
+            }
         }
         invalidateCache(organizationId)
         return getById(organizationId, id)!!
@@ -86,38 +96,43 @@ class LogIndexService {
         indexId: Int,
         request: UpdateLogIndexRequest
     ): LogIndexResponse? {
+        request.name?.trim()?.takeIf { it.isNotEmpty() }?.let { name ->
+            ensureIndexNameAvailable(organizationId, name, indexId)
+        }
         val now = Clock.System.now()
-        val updated = transaction {
-            LogIndexes.update({
-                (LogIndexes.id eq indexId) and
-                    (LogIndexes.organizationId eq organizationId)
-            }) {
-                request.name?.let { v ->
-                    val trimmed = v.trim()
-                    if (trimmed.isEmpty()) throw IllegalArgumentException("Index name cannot be empty")
-                    it[LogIndexes.name] = trimmed
+        val updated = mapDuplicateIndexName {
+            transaction {
+                LogIndexes.update({
+                    (LogIndexes.id eq indexId) and
+                        (LogIndexes.organizationId eq organizationId)
+                }) {
+                    request.name?.let { v ->
+                        val trimmed = v.trim()
+                        if (trimmed.isEmpty()) throw IllegalArgumentException("Index name cannot be empty")
+                        it[LogIndexes.name] = trimmed
+                    }
+                    request.filterQuery?.let { v ->
+                        it[LogIndexes.filterQuery] = v
+                    }
+                    request.retentionDays?.let { v ->
+                        it[LogIndexes.retentionDays] =
+                            v.coerceIn(1, MAX_RETENTION_DAYS)
+                    }
+                    request.samplingRate?.let { v ->
+                        it[LogIndexes.samplingRate] =
+                            v.coerceIn(MIN_SAMPLING_RATE, MAX_SAMPLING_RATE)
+                    }
+                    request.priority?.let { v ->
+                        it[LogIndexes.priority] = v
+                    }
+                    request.isActive?.let { v ->
+                        it[LogIndexes.isActive] = v
+                    }
+                    request.dailyQuotaGb?.let { v ->
+                        it[LogIndexes.dailyQuotaGb] = v
+                    }
+                    it[LogIndexes.updatedAt] = now
                 }
-                request.filterQuery?.let { v ->
-                    it[LogIndexes.filterQuery] = v
-                }
-                request.retentionDays?.let { v ->
-                    it[LogIndexes.retentionDays] =
-                        v.coerceIn(1, MAX_RETENTION_DAYS)
-                }
-                request.samplingRate?.let { v ->
-                    it[LogIndexes.samplingRate] =
-                        v.coerceIn(MIN_SAMPLING_RATE, MAX_SAMPLING_RATE)
-                }
-                request.priority?.let { v ->
-                    it[LogIndexes.priority] = v
-                }
-                request.isActive?.let { v ->
-                    it[LogIndexes.isActive] = v
-                }
-                request.dailyQuotaGb?.let { v ->
-                    it[LogIndexes.dailyQuotaGb] = v
-                }
-                it[LogIndexes.updatedAt] = now
             }
         }
         if (updated == 0) return null
@@ -211,6 +226,87 @@ class LogIndexService {
         return ""
     }
 
+    suspend fun usageStats(organizationId: Int): List<LogIndexUsageResponse> {
+        val indexes = list(organizationId).associateBy { it.name }
+        val orgClause = ClickHouseQueryUtils.orgIdClause(organizationId.toLong())
+        val sql = """
+            SELECT
+                index_name,
+                count() AS cnt,
+                sum(length(message) + length(body)) AS bytes
+            FROM `$clickhouseDb`.logs
+            WHERE $orgClause
+              AND timestamp >= toStartOfDay(now())
+              AND index_name != ''
+            GROUP BY index_name
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        val rows = executeUsageQuery(sql)
+        return indexes.values.map { index ->
+            val row = rows[index.name]
+            LogIndexUsageResponse(
+                indexName = index.name,
+                bytesToday = row?.bytes ?: 0L,
+                countToday = row?.count ?: 0L,
+                quotaGb = index.dailyQuotaGb,
+                retentionDays = index.retentionDays
+            )
+        }
+    }
+
+    suspend fun enforceRetention(organizationId: Int): Int {
+        var applied = 0
+        for (index in list(organizationId)) {
+            val sql = """
+                ALTER TABLE `$clickhouseDb`.logs
+                DELETE WHERE organization_id = ${organizationId.toLong()}
+                  AND index_name = '${escapeSql(index.name)}'
+                  AND timestamp < now() - INTERVAL ${index.retentionDays} DAY
+            """.trimIndent()
+            val response = ClickHouseClient.execute(sql)
+            val body = response.bodyAsText()
+            if (response.isClickHouseError(body)) {
+                logger.warn {
+                    "Retention delete failed for log index '${index.name}': " +
+                        body.take(ERROR_BODY_SHORT_CHARS)
+                }
+            } else {
+                applied += 1
+            }
+        }
+        return applied
+    }
+
+    suspend fun filterWithinDailyQuota(
+        organizationId: Int,
+        entries: List<QueuedLogEntry>,
+        indexes: List<LogIndexResponse>
+    ): List<QueuedLogEntry> {
+        if (entries.isEmpty()) return entries
+        val quotaIndexes = indexes
+            .filter { it.dailyQuotaGb != null && it.dailyQuotaGb > 0f }
+            .associateBy { it.name }
+        if (quotaIndexes.isEmpty()) return entries
+
+        val usedBytes = usageStats(organizationId).associate { usage ->
+            usage.indexName to usage.bytesToday
+        }.toMutableMap()
+
+        return entries.filter { entry ->
+            val index = quotaIndexes[entry.indexName] ?: return@filter true
+            val quotaBytes = ((index.dailyQuotaGb ?: return@filter true) * BYTES_PER_GB).toLong()
+            val entryBytes = (entry.message.length + entry.body.length).toLong()
+            val current = usedBytes[entry.indexName] ?: 0L
+            if (current + entryBytes > quotaBytes) {
+                false
+            } else {
+                usedBytes[entry.indexName] = current + entryBytes
+                true
+            }
+        }
+    }
+
     /**
      * Test a filter query against the last hour of logs and return
      * match/total counts.
@@ -273,87 +369,7 @@ class LogIndexService {
         filterQuery: String,
         logEntry: Map<String, String>
     ): Boolean {
-        val parsed = queryParser.parse(filterQuery)
-        if (parsed.rootNode == null) return true
-        return evaluateNode(parsed.rootNode, logEntry)
-    }
-
-    private fun evaluateNode(
-        node: LogQueryParser.QueryNode,
-        entry: Map<String, String>
-    ): Boolean {
-        return when (node) {
-            is LogQueryParser.QueryNode.FieldNode -> {
-                val value = entry[node.field] ?: return false
-                if (node.isWildcard) {
-                    val escaped = Regex.escape(node.value)
-                    val pattern = escaped
-                        .replace("\\*", ".*")
-                        .replace("\\?", ".")
-                    suspendRunCatching {
-                        value.matches(Regex(pattern, RegexOption.IGNORE_CASE))
-                    }.getOrElse { _ ->
-                        false
-                    }
-                } else {
-                    value.equals(node.value, ignoreCase = true)
-                }
-            }
-            is LogQueryParser.QueryNode.FullTextNode -> {
-                val searchFields = listOf(
-                    "message",
-                    "body",
-                    "service",
-                    "environment",
-                    "host",
-                    "container_name"
-                )
-                searchFields.any { field ->
-                    val v = entry[field] ?: return@any false
-                    v.contains(node.term, ignoreCase = true)
-                }
-            }
-            is LogQueryParser.QueryNode.AndNode ->
-                evaluateNode(node.left, entry) &&
-                    evaluateNode(node.right, entry)
-            is LogQueryParser.QueryNode.OrNode ->
-                evaluateNode(node.left, entry) ||
-                    evaluateNode(node.right, entry)
-            is LogQueryParser.QueryNode.NotNode ->
-                !evaluateNode(node.node, entry)
-            is LogQueryParser.QueryNode.ExistsNode -> {
-                val v = entry[node.field]
-                v != null && v.isNotEmpty()
-            }
-            is LogQueryParser.QueryNode.TagExistsNode -> {
-                entry.containsKey(node.tagKey)
-            }
-            is LogQueryParser.QueryNode.TermNode -> {
-                entry.values.any {
-                    it.contains(node.term, ignoreCase = true)
-                }
-            }
-            is LogQueryParser.QueryNode.RangeNode -> {
-                val v = entry[node.field]?.toDoubleOrNull()
-                    ?: return false
-                val min = node.min.toDoubleOrNull() ?: return false
-                val max = node.max.toDoubleOrNull() ?: return false
-                v in min..max
-            }
-            is LogQueryParser.QueryNode.ComparisonNode -> {
-                val v = entry[node.field]?.toDoubleOrNull()
-                    ?: return false
-                val target = node.value.toDoubleOrNull()
-                    ?: return false
-                when (node.operator) {
-                    ">" -> v > target
-                    ">=" -> v >= target
-                    "<" -> v < target
-                    "<=" -> v <= target
-                    else -> false
-                }
-            }
-        }
+        return filterEvaluator.matches(filterQuery, logEntry)
     }
 
     private suspend fun executeCountQuery(sql: String): Long {
@@ -374,6 +390,36 @@ class LogIndexService {
         }
     }
 
+    private suspend fun executeUsageQuery(sql: String): Map<String, UsageRow> {
+        return suspendRunCatching {
+            val response = ClickHouseClient.execute(sql)
+            val body = response.bodyAsText()
+            if (response.isClickHouseError(body)) {
+                logger.warn { "Usage query failed: ${body.take(ERROR_BODY_SHORT_CHARS)}" }
+                emptyMap()
+            } else {
+                body.lineSequence()
+                    .filter { it.isNotBlank() }
+                    .mapNotNull { line ->
+                        val obj = json.parseToJsonElement(line).jsonObject
+                        val name = obj["index_name"]?.jsonPrimitive?.content ?: return@mapNotNull null
+                        val count = obj["cnt"]?.jsonPrimitive?.longOrNull ?: 0L
+                        val bytes = obj["bytes"]?.jsonPrimitive?.longOrNull ?: 0L
+                        name to UsageRow(count = count, bytes = bytes)
+                    }
+                    .toMap()
+            }
+        }.getOrElse { e ->
+            logger.warn(e) { "Usage query failed: $sql" }
+            emptyMap()
+        }
+    }
+
+    private data class UsageRow(
+        val count: Long,
+        val bytes: Long
+    )
+
     private fun toResponse(
         row: org.jetbrains.exposed.v1.core.ResultRow
     ): LogIndexResponse {
@@ -390,6 +436,35 @@ class LogIndexService {
             updatedAt = row[LogIndexes.updatedAt].toString()
         )
     }
+
+    private fun ensureIndexNameAvailable(
+        organizationId: Int,
+        name: String,
+        excludeId: Int? = null
+    ) {
+        val duplicate = transaction {
+            LogIndexes
+                .selectAll()
+                .where {
+                    (LogIndexes.organizationId eq organizationId) and
+                        (LogIndexes.name eq name)
+                }
+                .firstOrNull()
+                ?.let { excludeId == null || it[LogIndexes.id] != excludeId }
+                ?: false
+        }
+        if (duplicate) throw IllegalArgumentException("Index name already exists")
+    }
+
+    private fun <T> mapDuplicateIndexName(block: () -> T): T =
+        try {
+            block()
+        } catch (error: ExposedSQLException) {
+            if (error.sqlState == POSTGRES_UNIQUE_VIOLATION_SQLSTATE) {
+                throw IllegalArgumentException("Index name already exists")
+            }
+            throw error
+        }
 
     private fun invalidateCache(organizationId: Int) {
         CacheService.invalidate("logindex:active:$organizationId")

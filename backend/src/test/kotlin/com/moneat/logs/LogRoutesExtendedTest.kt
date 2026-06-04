@@ -16,11 +16,12 @@
 
 package com.moneat.logs
 
-import com.moneat.logs.routes.logRoutes
 import com.moneat.logs.models.LogIndexResponse
 import com.moneat.logs.models.LogIndexTestResponse
+import com.moneat.logs.routes.logRoutes as installLogRoutes
 import com.moneat.logs.services.LogIndexService
 import com.moneat.logs.services.LogService
+import com.moneat.org.services.OrgMembershipService
 import com.moneat.otlp.models.CreateOtlpApiKeyResponse
 import com.moneat.otlp.models.OtlpApiKeyResponse
 import com.moneat.otlp.models.OtlpObservedServiceResponse
@@ -41,6 +42,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
+import io.ktor.server.routing.Route
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
@@ -57,6 +59,7 @@ class LogRoutesExtendedTest {
     private val mockLogService = mockk<LogService>(relaxed = true)
     private val mockOtlpApiKeyService = mockk<OtlpApiKeyService>(relaxed = true)
     private val mockLogIndexService = mockk<LogIndexService>(relaxed = true)
+    private val mockMembershipService = mockk<OrgMembershipService>(relaxed = true)
     private val mockOtlpServiceRoutingService = mockk<OtlpServiceRoutingService>(relaxed = true)
 
     @BeforeTest
@@ -67,6 +70,34 @@ class LogRoutesExtendedTest {
     @AfterTest
     fun teardown() {
         stopTestKoin()
+    }
+
+    private fun Route.logRoutes(
+        logService: LogService,
+        otlpApiKeyService: OtlpApiKeyService,
+        logIndexService: LogIndexService
+    ) {
+        installLogRoutes(
+            logService = logService,
+            otlpApiKeyService = otlpApiKeyService,
+            logIndexService = logIndexService,
+            membershipService = mockMembershipService
+        )
+    }
+
+    private fun Route.logRoutes(
+        logService: LogService,
+        otlpApiKeyService: OtlpApiKeyService,
+        logIndexService: LogIndexService,
+        otlpServiceRoutingService: OtlpServiceRoutingService
+    ) {
+        installLogRoutes(
+            logService = logService,
+            otlpApiKeyService = otlpApiKeyService,
+            logIndexService = logIndexService,
+            otlpServiceRoutingService = otlpServiceRoutingService,
+            membershipService = mockMembershipService
+        )
     }
 
     // ──── Auth checks (401 without JWT) ────

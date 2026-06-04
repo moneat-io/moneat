@@ -66,6 +66,7 @@ import com.moneat.llm.services.LlmDashboardService
 import com.moneat.logs.repositories.LogRepository
 import com.moneat.logs.repositories.LogRepositoryImpl
 import com.moneat.logs.services.LogIndexService
+import com.moneat.logs.services.LogManagementService
 import com.moneat.logs.services.LogService
 import com.moneat.monitor.repositories.HostAlertRepository
 import com.moneat.monitor.repositories.HostAlertRepositoryImpl
@@ -259,6 +260,7 @@ val logsModule = module {
     single { OtlpApiKeyService() }
     single { OtlpServiceRoutingService() }
     single { LogIndexService() }
+    single { LogManagementService() }
 }
 
 /** Uptime monitoring and status pages. */

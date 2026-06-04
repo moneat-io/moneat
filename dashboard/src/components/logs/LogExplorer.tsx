@@ -30,12 +30,13 @@ import {LogHistogram} from '@/components/logs/LogHistogram'
 import {LogTopList} from '@/components/logs/LogTopList'
 import {LogPieChart} from '@/components/logs/LogPieChart'
 import {LogAggregateTable} from '@/components/logs/LogAggregateTable'
+import {LogManagementSheet} from '@/components/logs/LogManagementSheet'
 import {Button} from '@/components/ui/button'
 import {type FacetFilter, type FacetRailSection, type FacetSchema} from '@/lib/filters/types'
 import {TIME_PRESETS} from '@/lib/filters/time'
 import {logLevelBadgeClass} from '@/lib/severity'
 import {cn} from '@/lib/utils'
-import {ChevronDown, ChevronLeft, Download, ListFilter, Loader2, TerminalSquare} from 'lucide-react'
+import {ChevronDown, ChevronLeft, Database, Download, ListFilter, Loader2, Radio, TerminalSquare} from 'lucide-react'
 import {useQuery} from '@tanstack/react-query'
 import {
   type LogViewSearch,
@@ -46,6 +47,7 @@ import {
 } from '@/components/logs/logViewUrlState'
 import {logIntervalToMs} from '@/components/logs/logInterval'
 import {getNowDate} from '@/lib/demo'
+import type {LogSavedViewState} from '@/lib/api'
 
 interface LogExplorerProps {
   systemId?: string
@@ -117,6 +119,27 @@ function formatLogCount(n: number): string {
 
 function toFacetRailOptions(options: LogFilterOptionsWithCounts['services']) {
   return options.map((option) => ({value: option.value, count: option.count}))
+}
+
+function mapLiveLogRow(row: Record<string, unknown>): LogEntry {
+  return {
+    logId: (row.logId ?? row.log_id) as string,
+    timestamp: row.timestamp as string,
+    level: row.level as string,
+    message: row.message as string,
+    body: (row.body ?? '') as string,
+    service: (row.service ?? '') as string,
+    environment: (row.environment ?? '') as string,
+    host: (row.host ?? '') as string,
+    source: (row.source ?? 'sdk') as string,
+    containerName: (row.containerName ?? row.container_name ?? '') as string,
+    containerId: (row.containerId ?? row.container_id ?? '') as string,
+    containerImage: (row.containerImage ?? row.container_image ?? '') as string,
+    traceId: (row.traceId ?? row.trace_id ?? '') as string,
+    spanId: (row.spanId ?? row.span_id ?? '') as string,
+    tags: (row.tags ?? {}) as Record<string, string>,
+    resourceAttributes: (row.resourceAttributes ?? row.resource_attributes ?? {}) as Record<string, string>,
+  }
 }
 
 function keepPreviousLogFilterOptions(
@@ -310,6 +333,8 @@ export function LogExplorer({
 
   // Auto-refresh state
   const [autoRefreshInterval, setAutoRefreshInterval] = useState<RefreshInterval>(null)
+  const [liveTailActive, setLiveTailActive] = useState(false)
+  const [liveTailStatus, setLiveTailStatus] = useState<'idle' | 'connecting' | 'open' | 'error'>('idle')
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const isHydratingRef = useRef(false)
   const didMountRef = useRef(false)
@@ -637,6 +662,78 @@ export function LogExplorer({
   const logs = accumulatedLogs
   const totalCount = logPage?.totalCount ?? null
 
+  const currentSavedViewState = useMemo<LogSavedViewState>(() => {
+    const facets = facetFilters.reduce<Record<string, string>>((acc, filter) => {
+      if (!filter.exclude) {
+        acc[filter.key] = filter.value
+      }
+      return acc
+    }, {})
+    return {
+      query,
+      levels: hasCustomLevelFilter ? levels : [],
+      facets,
+      time_preset: timePreset,
+      from: customFrom || null,
+      to: customTo || null,
+      visualization: vizMode,
+      group_by: groupBy,
+      top_field: topField,
+    }
+  }, [query, levels, hasCustomLevelFilter, facetFilters, timePreset, customFrom, customTo, vizMode, groupBy, topField])
+
+  const applySavedView = useCallback((state: LogSavedViewState) => {
+    setQuery(state.query)
+    setLevels(state.levels.length > 0 ? state.levels : [...LEVEL_OPTIONS])
+    setFacetFilters(Object.entries(state.facets).map(([key, value]) => ({key, value})))
+    setTimePreset(state.time_preset || defaultTimeRange)
+    setCustomFrom(state.from ?? '')
+    setCustomTo(state.to ?? '')
+    setVizMode((state.visualization || 'timeseries') as LogVizMode)
+    setGroupBy(resolveLogGroupBy(state.group_by ?? undefined))
+    setTopField(state.top_field || 'service')
+  }, [defaultTimeRange])
+
+  const toggleLiveTail = useCallback(() => {
+    setLiveTailStatus(liveTailActive ? 'idle' : 'connecting')
+    setLiveTailActive((active) => !active)
+  }, [liveTailActive])
+
+  useEffect(() => {
+    if (!liveTailActive || systemId) {
+      return undefined
+    }
+
+    const stream = api.createLogTailStream({
+      query: query || undefined,
+      levels: hasCustomLevelFilter ? levels : undefined,
+      service: derivedFilters.service,
+      environment: derivedFilters.environment,
+      containerName: derivedFilters.containerName,
+      tags: Object.keys(derivedFilters.tags).length > 0 ? derivedFilters.tags : undefined,
+      excludeService: derivedFilters.excludeService,
+      excludeEnvironment: derivedFilters.excludeEnvironment,
+      excludeContainerName: derivedFilters.excludeContainerName,
+      excludeTags: Object.keys(derivedFilters.excludeTags).length > 0 ? derivedFilters.excludeTags : undefined,
+    })
+    stream.onopen = () => setLiveTailStatus('open')
+    stream.onerror = () => setLiveTailStatus('error')
+    stream.onmessage = (event) => {
+      try {
+        const nextLog = mapLiveLogRow(JSON.parse(event.data) as Record<string, unknown>)
+        setAccumulatedLogs((prev) => {
+          const existing = new Set(prev.map((log) => `${log.logId}:${log.timestamp}`))
+          if (existing.has(`${nextLog.logId}:${nextLog.timestamp}`)) return prev
+          return [nextLog, ...prev].slice(0, 500)
+        })
+      } catch (error) {
+        console.error('Live tail event parse failed:', formatErrorForLogging(error))
+      }
+    }
+
+    return () => stream.close()
+  }, [liveTailActive, systemId, query, hasCustomLevelFilter, levels, derivedFilters])
+
   // Aggregate query for histogram - org-scoped only (monitor systems don't have aggregate)
   const {data: aggregateData} = useQuery({
     queryKey: [
@@ -874,12 +971,42 @@ export function LogExplorer({
             )}
           />
         )}
-        actions={enableAutoRefresh ? (
-          <AutoRefreshToggle
-            interval={autoRefreshInterval}
-            onIntervalChange={setAutoRefreshInterval}
-          />
-        ) : undefined}
+        actions={(
+          <div className="flex items-center gap-2">
+            {!systemId && (
+              <LogManagementSheet
+                currentQuery={query}
+                currentLevels={hasCustomLevelFilter ? levels : []}
+                currentViewState={currentSavedViewState}
+                currentLogs={logs}
+                onApplySavedView={applySavedView}
+                trigger={(
+                  <Button variant="outline" size="sm" className="h-8 gap-1.5">
+                    <Database className="h-3.5 w-3.5" />
+                    Manage
+                  </Button>
+                )}
+              />
+            )}
+            {!systemId && (
+              <Button
+                variant={liveTailActive ? 'default' : 'outline'}
+                size="sm"
+                className="h-8 gap-1.5"
+                onClick={toggleLiveTail}
+              >
+                <Radio className={cn('h-3.5 w-3.5', liveTailStatus === 'open' && 'animate-pulse')} />
+                {liveTailActive ? 'Pause live' : 'Live tail'}
+              </Button>
+            )}
+            {enableAutoRefresh && (
+              <AutoRefreshToggle
+                interval={autoRefreshInterval}
+                onIntervalChange={setAutoRefreshInterval}
+              />
+            )}
+          </div>
+        )}
         rail={enableFacets ? (
           <FacetRail
             title="Facets"

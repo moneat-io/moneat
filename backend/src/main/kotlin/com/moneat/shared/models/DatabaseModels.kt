@@ -273,6 +273,47 @@ object LogIndexes : Table("log_indexes") {
     override val primaryKey = PrimaryKey(id)
 }
 
+object LogPipelines : Table("log_pipelines") {
+    val id = integer("id").autoIncrement()
+    val organizationId = integer("organization_id").references(Organizations.id)
+    val name = varchar("name", 255)
+    val description = text("description").default("")
+    val stepsJson = text("steps_json").default("[]")
+    val priority = integer("priority").default(0)
+    val isActive = bool("is_active").default(true)
+    val createdBy = integer("created_by").references(Users.id).nullable()
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
+object LogSavedViews : Table("log_saved_views") {
+    val id = integer("id").autoIncrement()
+    val organizationId = integer("organization_id").references(Organizations.id)
+    val name = varchar("name", 255)
+    val viewStateJson = text("view_state_json")
+    val isShared = bool("is_shared").default(true)
+    val createdBy = integer("created_by").references(Users.id).nullable()
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
+object LogMetricRules : Table("log_metric_rules") {
+    val id = integer("id").autoIncrement()
+    val organizationId = integer("organization_id").references(Organizations.id)
+    val name = varchar("name", 255)
+    val query = text("query").default("")
+    val levelsJson = text("levels_json").default("[]")
+    val groupBy = varchar("group_by", 128).nullable()
+    val interval = varchar("interval", 16).default("5m")
+    val isActive = bool("is_active").default(true)
+    val createdBy = integer("created_by").references(Users.id).nullable()
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
 object AgentApiKeys : Table("agent_api_keys") {
     val id = integer("id").autoIncrement()
     val organization_id = integer("organization_id").references(Organizations.id)

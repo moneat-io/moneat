@@ -291,6 +291,30 @@ class LogService(private val logRepository: LogRepository) {
         if (!filters.environment.isNullOrBlank() && !log.environment.equals(filters.environment, ignoreCase = true)) {
             return false
         }
+        if (!filters.containerName.isNullOrBlank() &&
+            !log.containerName.equals(filters.containerName, ignoreCase = true)
+        ) {
+            return false
+        }
+        if (!filters.excludeService.isNullOrBlank() && log.service.equals(filters.excludeService, ignoreCase = true)) {
+            return false
+        }
+        if (!filters.excludeEnvironment.isNullOrBlank() &&
+            log.environment.equals(filters.excludeEnvironment, ignoreCase = true)
+        ) {
+            return false
+        }
+        if (!filters.excludeContainerName.isNullOrBlank() &&
+            log.containerName.equals(filters.excludeContainerName, ignoreCase = true)
+        ) {
+            return false
+        }
+        if (filters.tags.any { (key, value) -> log.tags[key] != value }) {
+            return false
+        }
+        if (filters.excludeTags.any { (key, value) -> log.tags[key] == value }) {
+            return false
+        }
         if (!filters.query.isNullOrBlank()) {
             val query = filters.query.lowercase()
             val haystack = "${log.message}\n${log.body}".lowercase()

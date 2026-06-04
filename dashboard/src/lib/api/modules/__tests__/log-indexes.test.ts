@@ -33,7 +33,7 @@ describe('Log Indexes API', () => {
   it('fetches log indexes', async () => {
     const mockResponse = {
       indexes: [
-        { id: 1, name: 'main', filterQuery: 'service:api', retentionDays: 30 },
+        { id: 1, name: 'main', filter_query: 'service:api', retention_days: 30 },
       ],
     }
 
@@ -50,15 +50,15 @@ describe('Log Indexes API', () => {
   // ──── createLogIndex ────
 
   it('creates a log index', async () => {
-    const request = { name: 'errors', filterQuery: 'level:error', retentionDays: 90 }
+    const request = { name: 'errors', filter_query: 'level:error', retention_days: 90 }
     const mockIndex = { id: 2, ...request }
 
     server.use(
       http.post(`${API_BASE}/v1/logs/indexes`, async ({ request: req }) => {
         const body = (await req.json()) as Record<string, unknown>
         expect(body.name).toBe('errors')
-        expect(body.filterQuery).toBe('level:error')
-        expect(body.retentionDays).toBe(90)
+        expect(body.filter_query).toBe('level:error')
+        expect(body.retention_days).toBe(90)
         return HttpResponse.json(mockIndex)
       })
     )
@@ -70,8 +70,8 @@ describe('Log Indexes API', () => {
   // ──── updateLogIndex ────
 
   it('updates a log index', async () => {
-    const updateReq = { name: 'errors-updated', filterQuery: 'level:error OR level:fatal' }
-    const mockIndex = { id: 2, ...updateReq, retentionDays: 90 }
+    const updateReq = { name: 'errors-updated', filter_query: 'level:error OR level:fatal' }
+    const mockIndex = { id: 2, ...updateReq, retention_days: 90 }
 
     server.use(
       http.put(`${API_BASE}/v1/logs/indexes/2`, async ({ request }) => {

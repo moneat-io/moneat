@@ -45,6 +45,11 @@ type KnownRbacPermission =
   | 'connections:read'
   | 'connections:write'
   | 'connections:resolve'
+  | 'logs:read'
+  | 'logs:manage'
+  | 'logs:live-tail'
+  | 'logs:metrics'
+  | 'logs:monitors'
 
 type PermissionOption = {
   key: KnownRbacPermission
@@ -103,6 +108,37 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
         key: 'connections:resolve',
         label: 'Resolve secrets',
         description: 'Use stored connection credentials when workflow steps execute.',
+      },
+    ],
+  },
+  {
+    title: 'Log management',
+    description: 'Controls log Explorer management workflows and derived log signals.',
+    permissions: [
+      {
+        key: 'logs:read',
+        label: 'View logs',
+        description: 'See log data and saved Explorer state.',
+      },
+      {
+        key: 'logs:manage',
+        label: 'Manage logs',
+        description: 'Create and update log indexes, pipelines, saved views, and retention actions.',
+      },
+      {
+        key: 'logs:live-tail',
+        label: 'Live tail logs',
+        description: 'Stream matching logs in real time from the Explorer.',
+      },
+      {
+        key: 'logs:metrics',
+        label: 'Create log metrics',
+        description: 'Create, preview, and roll up metrics derived from log queries.',
+      },
+      {
+        key: 'logs:monitors',
+        label: 'Create log monitors',
+        description: 'Create monitor drafts and dashboard alerts from log queries.',
       },
     ],
   },

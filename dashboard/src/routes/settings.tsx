@@ -86,7 +86,6 @@ import {
 } from 'lucide-react'
 import {SsoTab} from '@/components/SsoSettings'
 import {TeamSettings} from '@/components/settings/TeamSettings'
-import {LogIndexesTab} from '@/components/settings/LogIndexesTab'
 import {useAuth} from '@/hooks/useAuth'
 import {useEnterpriseFeatures, useIsSelfHosted, hasEnterpriseModule} from '@/hooks/useEnterpriseFeatures'
 import {CONFIGURABLE_SIDEBAR_ITEMS, getAllSidebarItemKeys} from '@/lib/sidebar-config'
@@ -148,8 +147,9 @@ function isExpired(expiresAt: string | null | undefined): boolean {
 
 export const Route = createFileRoute('/settings')({
   validateSearch: (search: Record<string, unknown>) => {
+    const requestedTab = search.tab === 'log-indexes' ? 'api-keys' : search.tab
     return {
-      tab: (search.tab as string) || 'api-keys',
+      tab: (requestedTab as string) || 'api-keys',
       ...(search.checkout ? { checkout: search.checkout as string } : {}),
     }
   },
@@ -248,13 +248,6 @@ function SettingsPage() {
                 <BellOff className="h-4 w-4 mr-2" />
                 Silence Periods
               </TabsTrigger>
-              <TabsTrigger 
-                value="log-indexes" 
-                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground"
-              >
-                <Database className="h-4 w-4 mr-2" />
-                Log Indexes
-              </TabsTrigger>
               {(canManageTeam || canViewRbacTab || canViewSsoTab) && (
                 <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 mt-4">
                   Organization
@@ -329,9 +322,6 @@ function SettingsPage() {
             </TabsContent>
             <TabsContent value="silence" className="space-y-4 mt-0">
               <SilencePeriodsTab />
-            </TabsContent>
-            <TabsContent value="log-indexes" className="space-y-4 mt-0">
-              <LogIndexesTab />
             </TabsContent>
             {canManageTeam && (
               <TabsContent value="team" className="space-y-4 mt-0">

@@ -45,6 +45,7 @@ class LogIngestionWorker(
     private val workerCount: Int,
     private val logService: LogService = LogService(LogRepositoryImpl()),
     private val logIndexService: LogIndexService = LogIndexService(),
+    private val logManagementService: LogManagementService = LogManagementService(),
 ) {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var jobs: List<Job> = emptyList()
@@ -105,18 +106,29 @@ class LogIngestionWorker(
             } else {
                 emptyList()
             }
+            val pipelines = if (orgId in Int.MIN_VALUE..Int.MAX_VALUE) {
+                logManagementService.getActivePipelinesCached(orgId.toInt())
+            } else {
+                emptyList()
+            }
+            val processedLogs = logManagementService.applyPipelines(batch.logs, pipelines)
 
             val taggedLogs = if (indexes.isEmpty()) {
-                batch.logs
+                processedLogs
             } else {
-                batch.logs.mapNotNull { entry ->
+                processedLogs.mapNotNull { entry ->
                     applyIndexRouting(entry, indexes)
                 }
             }
+            val quotaFilteredLogs = if (orgId in Int.MIN_VALUE..Int.MAX_VALUE) {
+                logIndexService.filterWithinDailyQuota(orgId.toInt(), taggedLogs, indexes)
+            } else {
+                taggedLogs
+            }
 
-            if (taggedLogs.isEmpty()) return
+            if (quotaFilteredLogs.isEmpty()) return
 
-            val taggedBatch = batch.copy(logs = taggedLogs)
+            val taggedBatch = batch.copy(logs = quotaFilteredLogs)
             val inserted = logService.insertBatch(taggedBatch)
             logService.publishLiveLogs(orgId, inserted)
             OperationalMetrics.recordWorkerMessageProcessed("Log", workerId)
@@ -157,22 +169,13 @@ class LogIngestionWorker(
             "span_id" to entry.spanId
         ) + entry.tags + entry.resourceAttributes
 
-        val parser = LogQueryParser()
+        val filterEvaluator = LogEntryFilterEvaluator()
         for (index in indexes) {
             val matches = if (index.filterQuery.isBlank()) {
                 true
             } else {
                 suspendRunCatching {
-                    val parsed = parser.parse(index.filterQuery)
-                    if (parsed.rootNode == null) {
-                        logger.debug {
-                            "Filter '${index.filterQuery}' for index '${index.name}' " +
-                                "produced null AST; treating as non-match"
-                        }
-                        false
-                    } else {
-                        evaluateFilter(parsed.rootNode, entryMap)
-                    }
+                    filterEvaluator.matches(index.filterQuery, entryMap)
                 }.getOrElse { _ ->
                     false
                 }
@@ -188,76 +191,5 @@ class LogIngestionWorker(
             }
         }
         return entry
-    }
-
-    private fun evaluateFilter(
-        node: LogQueryParser.QueryNode,
-        entry: Map<String, String>
-    ): Boolean {
-        return when (node) {
-            is LogQueryParser.QueryNode.FieldNode -> {
-                val value = entry[node.field] ?: return false
-                if (node.isWildcard) {
-                    val escaped = Regex.escape(node.value)
-                    val pattern = escaped
-                        .replace("\\*", ".*")
-                        .replace("\\?", ".")
-                    suspendRunCatching {
-                        value.matches(Regex(pattern, RegexOption.IGNORE_CASE))
-                    }.getOrElse { _ ->
-                        false
-                    }
-                } else {
-                    value.equals(node.value, ignoreCase = true)
-                }
-            }
-            is LogQueryParser.QueryNode.FullTextNode -> {
-                val fields = listOf(
-                    "message",
-                    "body",
-                    "service",
-                    "environment",
-                    "host",
-                    "container_name"
-                )
-                fields.any { f ->
-                    val v = entry[f] ?: return@any false
-                    v.contains(node.term, ignoreCase = true)
-                }
-            }
-            is LogQueryParser.QueryNode.AndNode ->
-                evaluateFilter(node.left, entry) &&
-                    evaluateFilter(node.right, entry)
-            is LogQueryParser.QueryNode.OrNode ->
-                evaluateFilter(node.left, entry) ||
-                    evaluateFilter(node.right, entry)
-            is LogQueryParser.QueryNode.NotNode ->
-                !evaluateFilter(node.node, entry)
-            is LogQueryParser.QueryNode.ExistsNode ->
-                !entry[node.field].isNullOrEmpty()
-            is LogQueryParser.QueryNode.TagExistsNode ->
-                entry.containsKey(node.tagKey)
-            is LogQueryParser.QueryNode.TermNode ->
-                entry.values.any {
-                    it.contains(node.term, ignoreCase = true)
-                }
-            is LogQueryParser.QueryNode.RangeNode -> {
-                val v = entry[node.field]?.toDoubleOrNull() ?: return false
-                val min = node.min.toDoubleOrNull() ?: return false
-                val max = node.max.toDoubleOrNull() ?: return false
-                v in min..max
-            }
-            is LogQueryParser.QueryNode.ComparisonNode -> {
-                val v = entry[node.field]?.toDoubleOrNull() ?: return false
-                val target = node.value.toDoubleOrNull() ?: return false
-                when (node.operator) {
-                    ">" -> v > target
-                    ">=" -> v >= target
-                    "<" -> v < target
-                    "<=" -> v <= target
-                    else -> false
-                }
-            }
-        }
     }
 }
