@@ -1,19 +1,18 @@
 import {createFileRoute, Outlet} from '@tanstack/react-router'
 import {BarChart3} from 'lucide-react'
-import {useProject} from '@/contexts/ProjectContext'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {AnalyticsParamsProvider} from '@/contexts/AnalyticsParamsProvider'
 import {useAnalyticsParams} from '@/contexts/UseAnalyticsParams'
 import {AnalyticsDatePicker} from '@/components/analytics/AnalyticsDatePicker'
 import {AnalyticsRealtimeBadge} from '@/components/analytics/AnalyticsRealtimeBadge'
+import {primaryServiceResourceId} from '@/lib/service-facet-scope'
 
 export const Route = createFileRoute('/analytics')({
   component: AnalyticsLayout,
 })
 
 function AnalyticsLayoutInner() {
-  const {selectedProjectId} = useProject()
   const {period, setPeriod, customFrom, customTo, onCustomRangeChange} = useAnalyticsParams()
 
   const {data: projects} = useQuery({
@@ -21,8 +20,7 @@ function AnalyticsLayoutInner() {
     queryFn: () => api.getProjects(),
   })
 
-  const hasSelectedProject = selectedProjectId != null && projects?.some(p => p.resourceId === selectedProjectId)
-  const projectId = (hasSelectedProject ? selectedProjectId : null) || projects?.[0]?.resourceId
+  const projectId = primaryServiceResourceId(projects)
   const project = projects?.find(p => p.resourceId === projectId)
 
   return (

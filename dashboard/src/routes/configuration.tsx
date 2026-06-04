@@ -19,7 +19,6 @@ import {createFileRoute, redirect} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {Plus, SlidersHorizontal} from 'lucide-react'
 import {api} from '@/lib/api'
-import {useProject} from '@/contexts/ProjectContext'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {Label} from '@/components/ui/label'
@@ -55,23 +54,20 @@ function loadSourcesForService(serviceId: string | null): TelemetrySourceId[] {
 }
 
 function ConfigurationPage() {
-  const {selectedProjectId} = useProject()
-
   const {data: projects, isLoading} = useQuery({
     queryKey: ['projects'],
     queryFn: () => api.getProjects(),
     enabled: api.isAuthenticated(),
   })
 
-  // Local selection, seeded from the global chooser but not written back to it.
+  // Local service selection for this page only.
   const [chosenId, setChosenId] = useState<string | null>(null)
   const selectedId = useMemo(() => {
     if (!projects || projects.length === 0) return null
     const ids = projects.map((project) => project.resourceId)
     if (chosenId && ids.includes(chosenId)) return chosenId
-    if (selectedProjectId && ids.includes(selectedProjectId)) return selectedProjectId
     return projects[0].resourceId
-  }, [projects, chosenId, selectedProjectId])
+  }, [projects, chosenId])
 
   // Telemetry-source selection for the chosen service, persisted to localStorage.
   // Reload (without an effect) whenever the selected service changes.

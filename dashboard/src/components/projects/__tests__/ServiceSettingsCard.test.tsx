@@ -2,7 +2,6 @@ import React from 'react'
 import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {fireEvent, render, screen, waitFor} from '@testing-library/react'
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
-import {ProjectProvider} from '@/contexts/ProjectContext'
 
 const {mockApi} = vi.hoisted(() => ({
   mockApi: {
@@ -52,9 +51,7 @@ function renderCard(sourceIds: TelemetrySourceId[], onDeleted?: () => void) {
   })
   return render(
     <QueryClientProvider client={queryClient}>
-      <ProjectProvider>
-        <ServiceSettingsCard projectId="proj-1" sourceIds={sourceIds} onDeleted={onDeleted} />
-      </ProjectProvider>
+      <ServiceSettingsCard projectId="proj-1" sourceIds={sourceIds} onDeleted={onDeleted} />
     </QueryClientProvider>
   )
 }
@@ -183,7 +180,6 @@ describe('ServiceSettingsCard', () => {
   })
 
   it('deletes the selected service and calls the supplied delete callback', async () => {
-    localStorage.setItem('selectedProjectId', 'proj-1')
     const onDeleted = vi.fn()
 
     renderCard(['opentelemetry'], onDeleted)
@@ -194,6 +190,5 @@ describe('ServiceSettingsCard', () => {
       expect(mockApi.deleteProject).toHaveBeenCalledWith('proj-1')
       expect(onDeleted).toHaveBeenCalledTimes(1)
     })
-    expect(localStorage.getItem('selectedProjectId')).toBeNull()
   })
 })
