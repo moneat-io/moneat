@@ -190,9 +190,9 @@ class EventRepositoryTest {
         val sql = queries.single()
         val compactSql = sql.replace(Regex("\\s+"), " ")
         assertTrue(sql.contains("INSERT INTO `test`.sessions"))
-        assertTrue(sql.contains("session_id, project_id, organization_id"))
+        assertTrue(sql.contains("session_id, service_id, project_id, organization_id"))
         assertTrue(sql.contains("toUUID('11111111-1111-1111-1111-111111111111')"))
-        assertTrue(compactSql.contains("42, 7, fromUnixTimestamp64Milli(1767225600000)"))
+        assertTrue(compactSql.contains("42, 42, 7, fromUnixTimestamp64Milli(1767225600000)"))
         assertTrue(sql.contains("fromUnixTimestamp64Milli(1767225600000)"))
         assertTrue(sql.contains("1500.0"))
         assertTrue(sql.contains("'ok'"))
@@ -225,19 +225,19 @@ class EventRepositoryTest {
         }
 
         val compactSql = queries.joinToString("\n").replace(Regex("\\s+"), " ")
-        assertTrue(compactSql.contains("event_id, project_id, organization_id"))
-        assertTrue(compactSql.contains("transaction_id, project_id, organization_id"))
+        assertTrue(compactSql.contains("event_id, service_id, project_id, organization_id"))
+        assertTrue(compactSql.contains("transaction_id, service_id, project_id, organization_id"))
         assertTrue(
             compactSql.contains(
-                "span_id, parent_span_id, trace_id, transaction_id, project_id, organization_id"
+                "span_id, parent_span_id, trace_id, transaction_id, service_id, project_id, organization_id"
             )
         )
-        assertTrue(compactSql.contains("feedback_id, project_id, organization_id"))
-        assertTrue(compactSql.contains("replay_id, project_id, organization_id"))
-        assertTrue(compactSql.contains("generation_id, project_id, organization_id"))
+        assertTrue(compactSql.contains("feedback_id, service_id, project_id, organization_id"))
+        assertTrue(compactSql.contains("replay_id, service_id, project_id, organization_id"))
+        assertTrue(compactSql.contains("generation_id, service_id, project_id, organization_id"))
         assertTrue(compactSql.contains("42, 7"))
-        assertTrue(compactSql.contains("project_id, organization_id, bucket_start"))
-        assertTrue(compactSql.contains("project_id, organization_id, issue_id"))
+        assertTrue(compactSql.contains("service_id, project_id, organization_id, bucket_start"))
+        assertTrue(compactSql.contains("service_id, project_id, organization_id, issue_id"))
     }
 
     private fun errorEventData(): ErrorEventInsertData =

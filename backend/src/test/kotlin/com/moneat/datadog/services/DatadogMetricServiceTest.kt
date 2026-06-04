@@ -344,6 +344,7 @@ class DatadogMetricServiceTest {
             val row = jsonRows(query).single()
             assertNull(row["metric_id"])
             assertEquals("42", row["organization_id"]?.jsonPrimitive?.content)
+            assertEquals("0", row["service_id"]?.jsonPrimitive?.content)
             assertEquals("0", row["project_id"]?.jsonPrimitive?.content)
             assertEquals("2023-11-14 22:13:20.123", row["timestamp"]?.jsonPrimitive?.content)
             assertEquals("O'Brien \"prod\"\nline", row["tags"]?.jsonObject?.get("odd")?.jsonPrimitive?.content)
@@ -379,6 +380,7 @@ class DatadogMetricServiceTest {
 
             val query = queries.single { it.contains("INSERT INTO `test_db`.metrics ") }
             val row = jsonRows(query).single()
+            assertEquals("7", row["service_id"]?.jsonPrimitive?.content)
             assertEquals("7", row["project_id"]?.jsonPrimitive?.content)
         } finally {
             unmockkObject(ClickHouseClient)
@@ -412,8 +414,8 @@ class DatadogMetricServiceTest {
             )
 
             val query = queries.single { it.contains("INSERT INTO `test_db`.metric_sketches ") }
-            assertTrue(query.contains("organization_id, project_id, metric_name"))
-            assertTrue(Regex("""(?s)\(\s*42,\s*7,\s*'latency'""").containsMatchIn(query))
+            assertTrue(query.contains("organization_id, service_id, project_id, metric_name"))
+            assertTrue(Regex("""(?s)\(\s*42,\s*7,\s*7,\s*'latency'""").containsMatchIn(query))
         } finally {
             unmockkObject(ClickHouseClient)
         }

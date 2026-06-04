@@ -214,7 +214,7 @@ class RetentionBackgroundServiceTest {
                 )
                 assertTrue(
                     logQ[0].contains(
-                        "project_id IN ($projectId)"
+                        "service_id IN ($projectId)"
                     ),
                     "Log query scoped to project"
                 )
@@ -237,13 +237,12 @@ class RetentionBackgroundServiceTest {
     @Test
     fun `runSweep submits LLM deletes`() = runBlocking {
         val orgId = seedOrg()
-        seedProject(orgId)
+        val projectId = seedProject(orgId)
         mockAllRetention(orgId)
 
         withSweep { queries ->
-            listOf("llm_generations", "llm_generations_hourly_mv").forEach {
-                assertTableDeleteWithRetention(queries, it, LLM_RETENTION)
-            }
+            assertProjectScopedDelete(queries, "llm_generations", projectId, LLM_RETENTION)
+            assertDeprecatedProjectScopedDelete(queries, "llm_generations_hourly_mv", projectId, LLM_RETENTION)
         }
     }
 
@@ -350,7 +349,7 @@ class RetentionBackgroundServiceTest {
 
             withSweep { queries ->
                 val projQ = queries.filter {
-                    it.contains("project_id")
+                    it.contains("service_id")
                 }
                 assertTrue(
                     projQ.isEmpty(),
@@ -399,6 +398,22 @@ class RetentionBackgroundServiceTest {
     }
 
     private fun assertProjectScopedDelete(
+        queries: List<String>,
+        table: String,
+        projectId: Long,
+        retentionDays: Int
+    ) {
+        assertTrue(
+            queries.any {
+                it.contains("`testdb`.`$table`") &&
+                    it.contains("service_id IN ($projectId)") &&
+                    it.contains("INTERVAL $retentionDays DAY")
+            },
+            "Missing DELETE for $table"
+        )
+    }
+
+    private fun assertDeprecatedProjectScopedDelete(
         queries: List<String>,
         table: String,
         projectId: Long,

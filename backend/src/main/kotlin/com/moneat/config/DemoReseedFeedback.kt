@@ -34,7 +34,7 @@ private val logger = KotlinLogging.logger {}
 internal suspend fun checkFreshFeedbackCount(): Long {
     val query = """
         SELECT count() FROM user_feedback
-        WHERE project_id IN ($P1, $P2, $P3)
+        WHERE service_id IN ($P1, $P2, $P3)
             AND timestamp >= now() - INTERVAL 7 DAY
     """.trimIndent()
     return suspendRunCatching {
@@ -53,7 +53,7 @@ internal suspend fun checkFreshFeedbackCount(): Long {
 internal suspend fun purgeFeedbackDemoData() {
     suspendRunCatching {
         requireClickHouse2xx(
-            ClickHouseClient.execute("ALTER TABLE user_feedback DELETE WHERE project_id IN ($P1, $P2, $P3)"),
+            ClickHouseClient.execute("ALTER TABLE user_feedback DELETE WHERE service_id IN ($P1, $P2, $P3)"),
             "Purge user_feedback"
         )
     }.onFailure { logger.warn { "Purge user_feedback failed (non-fatal): ${it.message}" } }
@@ -69,12 +69,13 @@ internal suspend fun reseedFeedback() {
 private fun buildFeedbackInsertSql(): String =
     """
         INSERT INTO user_feedback (
-            feedback_id, project_id, timestamp, received_at, message, contact_email, name, url,
+            feedback_id, service_id, project_id, timestamp, received_at, message, contact_email, name, url,
             associated_event_id, replay_id, environment, release, platform, user_id, user_email,
             user_username, user_ip_address, sdk_name, sdk_version, tags, status, updated_at
         )
         SELECT
             generateUUIDv4(),
+            arrayElement([$P1, $P2, $P3], number % 3 + 1),
             arrayElement([$P1, $P2, $P3], number % 3 + 1),
             now64(3) - INTERVAL (number * 67 % 20160) MINUTE,
             now64(3) - INTERVAL (number * 67 % 20160) MINUTE,

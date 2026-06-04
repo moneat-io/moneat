@@ -87,7 +87,8 @@ data class QueuedOtlpMetricsBatch(
 @Serializable
 private data class OtlpMetricJsonEachRow(
     @SerialName("organization_id") val organizationId: Long,
-    @SerialName("project_id") val projectId: Long,
+    @SerialName("service_id") val projectId: Long,
+    @SerialName("project_id") val deprecatedProjectId: Long,
     @SerialName("metric_name") val metricName: String,
     @SerialName("metric_type") val metricType: String,
     val timestamp: String,
@@ -658,7 +659,7 @@ class OtlpMetricsService(
 
         val insert = """
             INSERT INTO `$clickhouseDb`.metrics (
-                organization_id, project_id, metric_name, metric_type,
+                organization_id, service_id, project_id, metric_name, metric_type,
                 timestamp, value, host, tags, unit, source_type_name,
                 source, is_monotonic, aggregation_temporality,
                 hist_count, hist_sum, hist_min, hist_max,
@@ -698,6 +699,7 @@ class OtlpMetricsService(
         OtlpMetricJsonEachRow(
             organizationId = organizationId,
             projectId = projectId ?: 0L,
+            deprecatedProjectId = projectId ?: 0L,
             metricName = metricName,
             metricType = metricType,
             timestamp = formatClickHouseDateTime64MillisUtc(timestampMs),
