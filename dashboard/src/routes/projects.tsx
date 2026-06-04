@@ -478,13 +478,13 @@ export const Route = createFileRoute('/projects')({
 
 function ProjectsLayout() {
   const matches = useMatches()
-  // Check if we're showing a child route (project detail)
+  // Check if we're showing a child route (service detail)
   const showingChild = matches.some(match => match.id.includes('projectId'))
 
   if (showingChild) {
     return <Outlet />
   }
 
-  // /projects base path now redirects to dashboard - project list is in the sidebar
+  // /projects base path now redirects to the overview; service setup lives under child routes.
   return <Navigate to="/" search={APP_OVERVIEW_SEARCH} />
 }

@@ -25,7 +25,7 @@ import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/c
 import {useToast} from '@/hooks/useToast'
 import {ApiKeysTabBase} from './ApiKeysTabBase'
 
-const UNMAPPED_PROJECT_VALUE = '__unmapped__'
+const UNMAPPED_SERVICE_VALUE = '__unmapped__'
 
 function serviceLabel(service: OtlpObservedService) {
   if (!service.serviceNamespace) return service.serviceName
@@ -48,7 +48,7 @@ export function OtlpApiKeysTab() {
         cardTitle="OTLP API Keys"
         cardDescription={
           'Create organization credentials for OpenTelemetry ingestion. ' +
-          'Services route to projects by service.name mappings below.'
+          'Services route to Moneat services by service.name mappings below.'
         }
         docsHref="/docs/logging"
         icon={ScrollText}
@@ -94,22 +94,22 @@ function OtlpServiceRoutingPanel() {
     queryFn: () => api.getOtlpObservedServices(),
     enabled: api.isAuthenticated(),
   })
-  const {data: projects = []} = useQuery({
+  const {data: moneatServices = []} = useQuery({
     queryKey: ['projects'],
     queryFn: () => api.getProjects(),
     enabled: api.isAuthenticated(),
   })
 
   const upsertMapping = useMutation({
-    mutationFn: (input: {service: OtlpObservedService; projectId: string | number}) =>
+    mutationFn: (input: {service: OtlpObservedService; serviceId: string | number}) =>
       api.upsertOtlpServiceMapping(
         input.service.serviceName,
-        input.projectId,
+        input.serviceId,
         input.service.serviceNamespace
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['otlpObservedServices']})
-      toast({title: 'Service mapped', description: 'OTLP telemetry will route to the selected project.'})
+      toast({title: 'Service mapped', description: 'OTLP telemetry will route to the selected service.'})
     },
     onError: (error: Error) => {
       toast({title: 'Failed to map service', description: error.message, variant: 'destructive'})
@@ -134,7 +134,7 @@ function OtlpServiceRoutingPanel() {
       <CardHeader>
         <CardTitle className="text-base">Service routing</CardTitle>
         <CardDescription>
-          Map OpenTelemetry services to Moneat projects. Unmapped services continue ingesting at
+          Map OpenTelemetry services to Moneat services. Unmapped services continue ingesting at
           organization scope.
         </CardDescription>
       </CardHeader>
@@ -155,7 +155,7 @@ function OtlpServiceRoutingPanel() {
                 <TableHead>Service</TableHead>
                 <TableHead>Signals</TableHead>
                 <TableHead>Environment</TableHead>
-                <TableHead>Project</TableHead>
+                <TableHead>Moneat service</TableHead>
                 <TableHead className="w-[80px]">
                   <span className="sr-only">Actions</span>
                 </TableHead>
@@ -166,8 +166,8 @@ function OtlpServiceRoutingPanel() {
                 <OtlpServiceRoutingRow
                   key={service.id}
                   service={service}
-                  projects={projects}
-                  upsertMapping={(projectId) => upsertMapping.mutate({service, projectId})}
+                  moneatServices={moneatServices}
+                  upsertMapping={(serviceId) => upsertMapping.mutate({service, serviceId})}
                   deleteMapping={() => {
                     if (service.mappingId != null) deleteMapping.mutate(service.mappingId)
                   }}
@@ -184,13 +184,13 @@ function OtlpServiceRoutingPanel() {
 
 function OtlpServiceRoutingRow(props: {
   readonly service: OtlpObservedService
-  readonly projects: Project[]
-  readonly upsertMapping: (projectId: string | number) => void
+  readonly moneatServices: Project[]
+  readonly upsertMapping: (serviceId: string | number) => void
   readonly deleteMapping: () => void
   readonly isPending: boolean
 }) {
-  const {service, projects, upsertMapping, deleteMapping, isPending} = props
-  const selectedProject = service.projectResourceId ?? UNMAPPED_PROJECT_VALUE
+  const {service, moneatServices, upsertMapping, deleteMapping, isPending} = props
+  const selectedMoneatService = service.projectResourceId ?? UNMAPPED_SERVICE_VALUE
 
   return (
     <TableRow>
@@ -218,10 +218,10 @@ function OtlpServiceRoutingRow(props: {
       </TableCell>
       <TableCell className="min-w-[220px]">
         <Select
-          value={selectedProject}
-          disabled={isPending || projects.length === 0}
+          value={selectedMoneatService}
+          disabled={isPending || moneatServices.length === 0}
           onValueChange={(value) => {
-            if (value === UNMAPPED_PROJECT_VALUE) {
+            if (value === UNMAPPED_SERVICE_VALUE) {
               if (service.mappingId != null) deleteMapping()
               return
             }
@@ -229,14 +229,14 @@ function OtlpServiceRoutingRow(props: {
           }}
         >
           <SelectTrigger>
-            <SelectValue placeholder="Select project" />
+            <SelectValue placeholder="Select service" />
           </SelectTrigger>
           <SelectContent>
             <SelectGroup>
-              <SelectItem value={UNMAPPED_PROJECT_VALUE}>Unmapped</SelectItem>
-              {projects.map((project) => (
-                <SelectItem key={project.id} value={project.resourceId}>
-                  {project.name}
+              <SelectItem value={UNMAPPED_SERVICE_VALUE}>Unmapped</SelectItem>
+              {moneatServices.map((moneatService) => (
+                <SelectItem key={moneatService.id} value={moneatService.resourceId}>
+                  {moneatService.name}
                 </SelectItem>
               ))}
             </SelectGroup>

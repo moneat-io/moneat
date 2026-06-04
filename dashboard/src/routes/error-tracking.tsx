@@ -89,7 +89,7 @@ const config: FeaturePageConfig = {
   tagline: 'Triage production exceptions',
   description:
     'Catch, group, and triage errors with smart fingerprinting. See full stack traces, breadcrumbs, and user ' +
-    'context for every exception across all your projects. Works with Sentry-compatible SDKs.',
+    'context for every exception across all your services. Works with Sentry-compatible SDKs.',
   metaDescription: pageSeo.metaDescription,
   icon: Activity,
   iconColor: 'text-sky-400',

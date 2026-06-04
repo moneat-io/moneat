@@ -354,7 +354,7 @@ function ReplaysPage() {
           <EmptyState
             icon={Play}
             title="No replays yet"
-            description="Session replays are recorded when you enable replay capture in a compatible SDK. Configure replays in your project setup to start capturing user sessions."
+            description="Session replays are recorded when you enable replay capture in a compatible SDK. Configure replays in your service setup to start capturing user sessions."
           />
         ) : filteredReplays.length === 0 ? (
           <EmptyState

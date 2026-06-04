@@ -29,15 +29,15 @@ import {
 
 type PlatformFilter = 'all' | 'mobile' | 'frontend' | 'backend' | 'desktop-gaming'
 
-export interface ProjectSetupSubmission {
+export interface ServiceSetupSubmission {
   name: string
   framework: string
   targets?: string[]
   sourceIds: TelemetrySourceId[]
 }
 
-interface ProjectSetupFormProps {
-  readonly onSubmit: (submission: ProjectSetupSubmission) => void
+interface ServiceSetupFormProps {
+  readonly onSubmit: (submission: ServiceSetupSubmission) => void
   readonly isSubmitting?: boolean
   readonly submitLabel?: string
   readonly submittingLabel?: string
@@ -64,7 +64,7 @@ function getDefaultTargets(platformId: string): string[] {
   return []
 }
 
-export function ProjectSetupForm({
+export function ServiceSetupForm({
   onSubmit,
   isSubmitting = false,
   submitLabel = 'Create Service',
@@ -74,8 +74,8 @@ export function ProjectSetupForm({
   error,
   autoFocus = false,
   initialSourceIds = DEFAULT_SELECTED_TELEMETRY_SOURCE_IDS,
-}: ProjectSetupFormProps) {
-  const [projectName, setProjectName] = useState('')
+}: ServiceSetupFormProps) {
+  const [serviceName, setServiceName] = useState('')
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null)
   const [selectedTargets, setSelectedTargets] = useState<string[]>([])
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all')
@@ -100,7 +100,7 @@ export function ProjectSetupForm({
   const requiresTargets = Boolean(selectedPlatformInfo?.targets)
   const hasValidTargets = !requiresTargets || selectedTargets.length > 0
   const canSubmit =
-    projectName.trim().length > 0 &&
+    serviceName.trim().length > 0 &&
     Boolean(selectedPlatform) &&
     hasValidTargets &&
     selectedSourceIds.length > 0 &&
@@ -124,7 +124,7 @@ export function ProjectSetupForm({
     if (!canSubmit || !selectedPlatform) return
 
     onSubmit({
-      name: projectName.trim(),
+      name: serviceName.trim(),
       framework: selectedPlatform,
       targets: requiresTargets ? selectedTargets : undefined,
       sourceIds: selectedSourceIds,
@@ -140,12 +140,12 @@ export function ProjectSetupForm({
       ) : null}
 
       <div className="flex flex-col gap-2">
-        <Label htmlFor="project-name">Service name</Label>
+        <Label htmlFor="service-name">Service name</Label>
         <Input
-          id="project-name"
+          id="service-name"
           placeholder="Checkout API"
-          value={projectName}
-          onChange={(event) => setProjectName(event.target.value)}
+          value={serviceName}
+          onChange={(event) => setServiceName(event.target.value)}
           autoFocus={autoFocus}
         />
       </div>

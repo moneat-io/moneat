@@ -28,8 +28,8 @@ import {TelemetrySourcePicker} from '@/components/projects/TelemetrySourcePicker
 import {ServiceSettingsCard} from '@/components/projects/ServiceSettingsCard'
 import {
   DEFAULT_SELECTED_TELEMETRY_SOURCE_IDS,
-  loadTelemetrySourceIdsForProject,
-  storeTelemetrySourceIdsForProject,
+  loadTelemetrySourceIdsForService,
+  storeTelemetrySourceIdsForService,
   type TelemetrySourceId,
 } from '@/lib/telemetry-sources'
 
@@ -44,17 +44,17 @@ export const Route = createFileRoute('/configuration')({
 
 // Creation is owned by the sidebar's shared dialog — Configuration just opens it.
 function openCreateServiceDialog() {
-  globalThis.dispatchEvent(new CustomEvent('open-create-project-dialog'))
+  globalThis.dispatchEvent(new CustomEvent('open-create-service-dialog'))
 }
 
 function loadSourcesForService(serviceId: string | null): TelemetrySourceId[] {
   if (!serviceId) return DEFAULT_SELECTED_TELEMETRY_SOURCE_IDS
-  const stored = loadTelemetrySourceIdsForProject(serviceId)
+  const stored = loadTelemetrySourceIdsForService(serviceId)
   return stored.length > 0 ? stored : DEFAULT_SELECTED_TELEMETRY_SOURCE_IDS
 }
 
 function ConfigurationPage() {
-  const {data: projects, isLoading} = useQuery({
+  const {data: services, isLoading} = useQuery({
     queryKey: ['projects'],
     queryFn: () => api.getProjects(),
     enabled: api.isAuthenticated(),
@@ -63,11 +63,11 @@ function ConfigurationPage() {
   // Local service selection for this page only.
   const [chosenId, setChosenId] = useState<string | null>(null)
   const selectedId = useMemo(() => {
-    if (!projects || projects.length === 0) return null
-    const ids = projects.map((project) => project.resourceId)
+    if (!services || services.length === 0) return null
+    const ids = services.map((service) => service.resourceId)
     if (chosenId && ids.includes(chosenId)) return chosenId
-    return projects[0].resourceId
-  }, [projects, chosenId])
+    return services[0].resourceId
+  }, [services, chosenId])
 
   // Telemetry-source selection for the chosen service, persisted to localStorage.
   // Reload (without an effect) whenever the selected service changes.
@@ -80,7 +80,7 @@ function ConfigurationPage() {
 
   const handleSourcesChange = (next: TelemetrySourceId[]) => {
     setSources(next)
-    if (selectedId) storeTelemetrySourceIdsForProject(selectedId, next)
+    if (selectedId) storeTelemetrySourceIdsForService(selectedId, next)
   }
 
   return (
@@ -99,7 +99,7 @@ function ConfigurationPage() {
 
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading services…</p>
-      ) : !projects || projects.length === 0 ? (
+      ) : !services || services.length === 0 ? (
         <EmptyState
           icon={SlidersHorizontal}
           title="No services yet"
@@ -121,9 +121,9 @@ function ConfigurationPage() {
               onChange={(event) => setChosenId(event.target.value)}
               className="h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
-              {projects.map((project) => (
-                <option key={project.resourceId} value={project.resourceId}>
-                  {project.name}
+              {services.map((service) => (
+                <option key={service.resourceId} value={service.resourceId}>
+                  {service.name}
                 </option>
               ))}
             </select>
@@ -145,7 +145,7 @@ function ConfigurationPage() {
 
               <ServiceSettingsCard
                 key={selectedId}
-                projectId={selectedId}
+                serviceId={selectedId}
                 sourceIds={sources}
                 onDeleted={() => setChosenId(null)}
               />

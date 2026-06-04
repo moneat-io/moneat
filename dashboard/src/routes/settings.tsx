@@ -95,7 +95,7 @@ import {TIMEZONES} from '@/lib/timezones'
 import {formatDate as formatDateUtil, formatDateTime as formatDateTimeUtil} from '@/lib/date-format'
 
 const AUTH_TOKEN_SCOPES = [
-  { group: 'Project', scopes: ['project:read', 'project:write'] },
+  { group: 'Service', scopes: ['project:read', 'project:write'] },
   { group: 'Releases', scopes: ['releases:read', 'releases:write'] },
   { group: 'Source Maps', scopes: ['sourcemaps:read', 'sourcemaps:write'] },
   { group: 'Events', scopes: ['event:read'] },
@@ -104,8 +104,8 @@ const AUTH_TOKEN_SCOPES = [
 ] as const
 
 const SCOPE_DESCRIPTIONS: Record<string, string> = {
-  'project:read': 'List and view project details.',
-  'project:write': 'Create, update, and delete projects.',
+  'project:read': 'List and view service details.',
+  'project:write': 'Create, update, and delete services.',
   'releases:read': 'List releases and view release metadata.',
   'releases:write': 'Create and manage releases (e.g. for version tracking).',
   'sourcemaps:read': 'List and download source map files.',
@@ -2514,34 +2514,34 @@ function NotificationsTab() {
     },
   })
 
-  const updateProjectMutation = useMutation({
-    mutationFn: ({ projectId, prefs }: {
-      projectId: string
+  const updateServiceMutation = useMutation({
+    mutationFn: ({ serviceId, prefs }: {
+      serviceId: string
       prefs: Partial<{
         issueAlerts: boolean
         errorAlerts: boolean
         weeklySummary: boolean
         alertFrequencyMinutes: number
       }>
-    }) => api.updateProjectNotificationPreferences(projectId, prefs),
+    }) => api.updateProjectNotificationPreferences(serviceId, prefs),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notificationPreferences'] })
-      toast({ title: 'Project preferences updated' })
+      toast({ title: 'Service preferences updated' })
     },
     onError: (err: Error) => {
       toast({
-        title: 'Failed to update project preferences',
+        title: 'Failed to update service preferences',
         description: err.message,
         variant: 'destructive',
       })
     },
   })
 
-  const deleteProjectMutation = useMutation({
-    mutationFn: (projectId: string) => api.deleteProjectNotificationPreferences(projectId),
+  const deleteServiceMutation = useMutation({
+    mutationFn: (serviceId: string) => api.deleteProjectNotificationPreferences(serviceId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notificationPreferences'] })
-      toast({ title: 'Project override removed', description: 'Using global preferences for this project.' })
+      toast({ title: 'Service override removed', description: 'Using global preferences for this service.' })
     },
     onError: (err: Error) => {
       toast({
@@ -2604,7 +2604,7 @@ function NotificationsTab() {
     alertFrequencyMinutes: 30,
   }
 
-  const projects = preferences?.projects || []
+  const servicePreferences = preferences?.projects || []
 
   return (
     <div className="space-y-6">
@@ -2666,7 +2666,7 @@ function NotificationsTab() {
               Error Alert Frequency
             </Label>
             <p className="text-sm text-muted-foreground mb-2">
-              Minimum time between alerts for the same project
+              Minimum time between alerts for the same service
             </p>
             <Select
               value={global.alertFrequencyMinutes.toString()}
@@ -2694,23 +2694,23 @@ function NotificationsTab() {
               <Layers className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <CardTitle>Per-Project Overrides</CardTitle>
+              <CardTitle>Per-Service Overrides</CardTitle>
               <CardDescription>
-                Customize notification settings for specific projects
+                Customize notification settings for specific services
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          {projects.length === 0 ? (
+          {servicePreferences.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No project-specific overrides configured. All projects use the global preferences above.
+              No service-specific overrides configured. All services use the global preferences above.
             </p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Project</TableHead>
+                  <TableHead>Service</TableHead>
                   <TableHead className="text-center">Issues</TableHead>
                   <TableHead className="text-center">Errors</TableHead>
                   <TableHead className="text-center">Weekly</TableHead>
@@ -2719,15 +2719,15 @@ function NotificationsTab() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {projects.map((project) => (
-                  <TableRow key={project.projectResourceId}>
-                    <TableCell className="font-medium">{project.projectName}</TableCell>
+                {servicePreferences.map((servicePreference) => (
+                  <TableRow key={servicePreference.projectResourceId}>
+                    <TableCell className="font-medium">{servicePreference.projectName}</TableCell>
                     <TableCell className="text-center">
                       <Checkbox
-                        checked={project.issueAlerts}
+                        checked={servicePreference.issueAlerts}
                         onCheckedChange={(checked) =>
-                          updateProjectMutation.mutate({
-                            projectId: project.projectResourceId,
+                          updateServiceMutation.mutate({
+                            serviceId: servicePreference.projectResourceId,
                             prefs: { issueAlerts: checked === true },
                           })
                         }
@@ -2735,10 +2735,10 @@ function NotificationsTab() {
                     </TableCell>
                     <TableCell className="text-center">
                       <Checkbox
-                        checked={project.errorAlerts}
+                        checked={servicePreference.errorAlerts}
                         onCheckedChange={(checked) =>
-                          updateProjectMutation.mutate({
-                            projectId: project.projectResourceId,
+                          updateServiceMutation.mutate({
+                            serviceId: servicePreference.projectResourceId,
                             prefs: { errorAlerts: checked === true },
                           })
                         }
@@ -2746,25 +2746,25 @@ function NotificationsTab() {
                     </TableCell>
                     <TableCell className="text-center">
                       <Checkbox
-                        checked={project.weeklySummary}
+                        checked={servicePreference.weeklySummary}
                         onCheckedChange={(checked) =>
-                          updateProjectMutation.mutate({
-                            projectId: project.projectResourceId,
+                          updateServiceMutation.mutate({
+                            serviceId: servicePreference.projectResourceId,
                             prefs: { weeklySummary: checked === true },
                           })
                         }
                       />
                     </TableCell>
                     <TableCell className="text-center text-sm text-muted-foreground">
-                      {project.alertFrequencyMinutes >= 60
-                        ? `${project.alertFrequencyMinutes / 60}h`
-                        : `${project.alertFrequencyMinutes}m`}
+                      {servicePreference.alertFrequencyMinutes >= 60
+                        ? `${servicePreference.alertFrequencyMinutes / 60}h`
+                        : `${servicePreference.alertFrequencyMinutes}m`}
                     </TableCell>
                     <TableCell>
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => deleteProjectMutation.mutate(project.projectResourceId)}
+                        onClick={() => deleteServiceMutation.mutate(servicePreference.projectResourceId)}
                       >
                         Reset
                       </Button>
@@ -3475,7 +3475,7 @@ function AccountTab() {
                 What will be deleted:
               </h4>
               <ul className="text-sm text-danger-fg/90 space-y-1 list-disc list-inside">
-                <li>All projects and their events</li>
+                <li>All services and their events</li>
                 <li>All error data, transactions, sessions, and replays</li>
                 <li>All monitoring data and uptime checks</li>
                 <li>All team members will be removed</li>

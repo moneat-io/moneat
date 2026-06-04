@@ -146,7 +146,7 @@ function facetValues(filters: readonly FacetFilter[], key: string, exclude: bool
 }
 
 function serviceNamesForQuery(
-  projects: readonly Project[],
+  services: readonly Project[],
   includedServices: readonly string[],
   excludedServices: readonly string[]
 ): string[] {
@@ -155,7 +155,7 @@ function serviceNamesForQuery(
   const excluded = new Set(excludedServices)
   const candidates = includedServices.length > 0
     ? includedServices
-    : projects.map((project) => project.name)
+    : services.map((service) => service.name)
 
   return candidates.filter((service) => !excluded.has(service))
 }
@@ -164,20 +164,20 @@ function serverStatusFilter(statusIncludes: readonly string[], statusExcludes: r
   return statusIncludes.length === 1 && statusExcludes.length === 0 ? statusIncludes[0] : undefined
 }
 
-function projectMaps(projects: readonly Project[]): {
+function serviceNameMaps(services: readonly Project[]): {
   byResourceId: Map<string, string>
   byId: Map<string, string>
 } {
   return {
-    byResourceId: new Map(projects.map((project) => [project.resourceId, project.name])),
-    byId: new Map(projects.map((project) => [String(project.id), project.name])),
+    byResourceId: new Map(services.map((service) => [service.resourceId, service.name])),
+    byId: new Map(services.map((service) => [String(service.id), service.name])),
   }
 }
 
 function toSafeIssue(
   issue: Issue,
-  projectsByResourceId: ReadonlyMap<string, string>,
-  projectsById: ReadonlyMap<string, string>
+  servicesByResourceId: ReadonlyMap<string, string>,
+  servicesById: ReadonlyMap<string, string>
 ): SafeIssue | null {
   const id = toSafeId(issue.id)
   if (!id) return null
@@ -186,8 +186,8 @@ function toSafeIssue(
   if (!projectResourceId) return null
 
   const service =
-    projectsByResourceId.get(projectResourceId) ??
-    projectsById.get(toSafeId(issue.projectId)) ??
+    servicesByResourceId.get(projectResourceId) ??
+    servicesById.get(toSafeId(issue.projectId)) ??
     projectResourceId
 
   return {
@@ -315,11 +315,11 @@ function DashboardPage() {
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
-  const { data: projects, isLoading, isError: projectsError, error: projectsErrorObj } = useQuery({
+  const { data: services, isLoading, isError: servicesError, error: servicesErrorObj } = useQuery({
     queryKey: ['projects'],
     queryFn: () => api.getProjects(),
   })
-  const hasProjects = (projects?.length ?? 0) > 0
+  const hasServices = (services?.length ?? 0) > 0
 
   const effectiveFacetFilters = facetFilters
   const includedServices = useMemo(
@@ -348,10 +348,10 @@ function DashboardPage() {
   )
   const serviceFiltersActive = includedServices.length > 0 || excludedServices.length > 0
   const selectedServices = useMemo(
-    () => serviceNamesForQuery(projects ?? [], includedServices, excludedServices),
-    [excludedServices, includedServices, projects]
+    () => serviceNamesForQuery(services ?? [], includedServices, excludedServices),
+    [excludedServices, includedServices, services]
   )
-  const issuesQueryEnabled = hasProjects && (!serviceFiltersActive || selectedServices.length > 0)
+  const issuesQueryEnabled = hasServices && (!serviceFiltersActive || selectedServices.length > 0)
   const statusParam = serverStatusFilter(statusIncludes, statusExcludes)
 
   const {
@@ -509,15 +509,15 @@ function DashboardPage() {
     resolveNextReleaseMutation.mutate(selectedIssueTargets)
   }
 
-  const {byResourceId: projectNameByResourceId, byId: projectNameById} = useMemo(
-    () => projectMaps(projects ?? []),
-    [projects]
+  const {byResourceId: serviceNameByResourceId, byId: serviceNameById} = useMemo(
+    () => serviceNameMaps(services ?? []),
+    [services]
   )
   const safeIssues = useMemo(
     () => organizationIssues
-      .map((issue) => toSafeIssue(issue, projectNameByResourceId, projectNameById))
+      .map((issue) => toSafeIssue(issue, serviceNameByResourceId, serviceNameById))
       .filter((issue): issue is SafeIssue => issue !== null),
-    [organizationIssues, projectNameById, projectNameByResourceId]
+    [organizationIssues, serviceNameById, serviceNameByResourceId]
   )
 
   const safeIssuesByKey = useMemo(() => {
@@ -570,17 +570,17 @@ function DashboardPage() {
     setPage(1)
   }
 
-  const projectNames = useMemo(() => (projects ?? []).map((p) => p.name), [projects])
+  const serviceNames = useMemo(() => (services ?? []).map((service) => service.name), [services])
   const issueSchema: FacetSchema = useMemo(
     () => [
-      {key: 'service', suggestions: projectNames},
+      {key: 'service', suggestions: serviceNames},
       {
         key: 'status',
         suggestions: ['unresolved', 'resolved', 'ignored', 'resolvedInNextRelease'],
       },
       {key: 'level', suggestions: ['error', 'warning', 'fatal', 'info', 'debug']},
     ],
-    [projectNames]
+    [serviceNames]
   )
   const issueRailSections: FacetRailSection[] = useMemo(
     () => [
@@ -588,7 +588,7 @@ function DashboardPage() {
         key: 'service',
         label: 'Service',
         color: 'bg-primary',
-        options: (projects ?? []).map((p) => ({value: p.name})),
+        options: (services ?? []).map((service) => ({value: service.name})),
       },
       {
         key: 'status',
@@ -614,18 +614,18 @@ function DashboardPage() {
         ],
       },
     ],
-    [projects]
+    [services]
   )
 
   if (isLoading) return <div className="p-8">Loading...</div>
 
-  if (projectsError) return (
+  if (servicesError) return (
     <div className="p-8 text-destructive">
-      Failed to load projects: {projectsErrorObj instanceof Error ? projectsErrorObj.message : 'Unknown error'}
+      Failed to load services: {servicesErrorObj instanceof Error ? servicesErrorObj.message : 'Unknown error'}
     </div>
   )
 
-  if (!hasProjects) {
+  if (!hasServices) {
     return (
       <div className="px-6 py-4">
         <Card className="p-12 text-center border-primary/20 bg-gradient-to-b from-card to-primary/5">
@@ -645,7 +645,7 @@ function DashboardPage() {
               <Button
                 size="lg"
                 className="w-full max-w-sm sm:w-auto sm:mx-auto"
-                onClick={() => globalThis.dispatchEvent(new CustomEvent('open-create-project-dialog'))}
+                onClick={() => globalThis.dispatchEvent(new CustomEvent('open-create-service-dialog'))}
               >
                 <Plus className="h-4 w-4" />
                 Create your first service

@@ -96,7 +96,7 @@ const notificationTypes: Array<{
   {
     type: 'error_alert',
     label: 'Error Alert',
-    description: 'New error or exception detected in a project',
+    description: 'New error or exception detected in a service',
     icon: AlertCircle,
     supportsEmail: true,
     supportsSlack: true,

@@ -56,8 +56,8 @@ const platformFilterTabs: Array<{id: PlatformFilter; label: string; icon: React.
 ]
 
 interface ServiceSettingsCardProps {
-  /** Internal project resource id of the service to edit. */
-  readonly projectId: string
+  /** Stable service resource id used by the legacy project API contract. */
+  readonly serviceId: string
   /** The service's enabled telemetry sources — gates which config sections show. */
   readonly sourceIds: TelemetrySourceId[]
   /** Called after a successful delete. When omitted, navigates to the overview. */
@@ -70,19 +70,19 @@ interface ServiceSettingsCardProps {
  * enabled telemetry sources: Sentry slug/CLI/DSN-targets only with the Sentry SDK
  * source; short OTLP/Datadog pointers with those sources. General + Danger always.
  *
- * Loads its own project by id, so callers that switch services should pass a
- * `key={projectId}` to reset local edits on change.
+ * Loads its own service by id, so callers that switch services should pass a
+ * `key={serviceId}` to reset local edits on change.
  */
-export function ServiceSettingsCard({projectId, sourceIds, onDeleted}: ServiceSettingsCardProps) {
+export function ServiceSettingsCard({serviceId, sourceIds, onDeleted}: ServiceSettingsCardProps) {
   const router = useRouter()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const {toast} = useToast()
 
   const {data: project, isLoading} = useQuery({
-    queryKey: ['project', projectId],
-    queryFn: () => api.getProject(projectId),
-    enabled: !!projectId,
+    queryKey: ['project', serviceId],
+    queryFn: () => api.getProject(serviceId),
+    enabled: !!serviceId,
   })
 
   const [localName, setName] = useState<string | undefined>(undefined)
@@ -123,12 +123,12 @@ export function ServiceSettingsCard({projectId, sourceIds, onDeleted}: ServiceSe
     })
   }, [platformFilter])
 
-  const updateProjectMutation = useMutation({
-    mutationFn: (updates: {name?: string; framework?: string}) => api.updateProject(projectId, updates),
+  const updateServiceMutation = useMutation({
+    mutationFn: (updates: {name?: string; framework?: string}) => api.updateProject(serviceId, updates),
     onSuccess: async () => {
-      trackEvent('Project Update')
+      trackEvent('Service Update')
       await queryClient.invalidateQueries({queryKey: ['projects']})
-      await queryClient.invalidateQueries({queryKey: ['project', projectId]})
+      await queryClient.invalidateQueries({queryKey: ['project', serviceId]})
       await router.invalidate()
       toast({title: 'Service updated', description: 'Service settings were saved successfully.'})
     },
@@ -137,10 +137,10 @@ export function ServiceSettingsCard({projectId, sourceIds, onDeleted}: ServiceSe
     },
   })
 
-  const deleteProjectMutation = useMutation({
-    mutationFn: () => api.deleteProject(projectId),
+  const deleteServiceMutation = useMutation({
+    mutationFn: () => api.deleteProject(serviceId),
     onSuccess: async () => {
-      trackEvent('Project Delete')
+      trackEvent('Service Delete')
       await queryClient.invalidateQueries({queryKey: ['projects']})
       toast({title: 'Service deleted', description: `"${project?.name ?? 'Service'}" has been deleted.`})
       if (onDeleted) {
@@ -155,10 +155,10 @@ export function ServiceSettingsCard({projectId, sourceIds, onDeleted}: ServiceSe
   })
 
   const addTargetMutation = useMutation({
-    mutationFn: (target: string) => api.addProjectTarget(projectId, target),
+    mutationFn: (target: string) => api.addProjectTarget(serviceId, target),
     onSuccess: async () => {
       await queryClient.invalidateQueries({queryKey: ['projects']})
-      await queryClient.invalidateQueries({queryKey: ['project', projectId]})
+      await queryClient.invalidateQueries({queryKey: ['project', serviceId]})
       await router.invalidate()
       toast({title: 'Target added', description: 'A new platform target and DSN were created.'})
     },
@@ -204,7 +204,7 @@ export function ServiceSettingsCard({projectId, sourceIds, onDeleted}: ServiceSe
     if (frameworkChanged) updates.framework = framework
 
     if (Object.keys(updates).length === 0) return
-    updateProjectMutation.mutate(updates)
+    updateServiceMutation.mutate(updates)
   }
 
   const copySlug = () => {
@@ -231,9 +231,9 @@ export function ServiceSettingsCard({projectId, sourceIds, onDeleted}: ServiceSe
           </div>
           <Button
             onClick={handleSave}
-            disabled={!trimmedName || (!nameChanged && !frameworkChanged) || updateProjectMutation.isPending}
+            disabled={!trimmedName || (!nameChanged && !frameworkChanged) || updateServiceMutation.isPending}
           >
-            {updateProjectMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {updateServiceMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Save Changes
           </Button>
         </CardHeader>
@@ -427,7 +427,7 @@ export function ServiceSettingsCard({projectId, sourceIds, onDeleted}: ServiceSe
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Link to="/projects/$projectId" params={{projectId}}>
+            <Link to="/projects/$projectId" params={{projectId: serviceId}}>
               <Button variant="outline" size="sm">
                 <ExternalLink className="h-4 w-4" />
                 View ingestion setup
@@ -444,7 +444,7 @@ export function ServiceSettingsCard({projectId, sourceIds, onDeleted}: ServiceSe
             <CardDescription>Point a compatible agent at Moneat and tag it with this service.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Link to="/projects/$projectId" params={{projectId}}>
+            <Link to="/projects/$projectId" params={{projectId: serviceId}}>
               <Button variant="outline" size="sm">
                 <ExternalLink className="h-4 w-4" />
                 View ingestion setup
@@ -482,15 +482,15 @@ export function ServiceSettingsCard({projectId, sourceIds, onDeleted}: ServiceSe
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={deleteProjectMutation.isPending}>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={deleteServiceMutation.isPending}>
               Cancel
             </Button>
             <Button
               variant="destructive"
-              onClick={() => deleteProjectMutation.mutate()}
-              disabled={deleteProjectMutation.isPending}
+              onClick={() => deleteServiceMutation.mutate()}
+              disabled={deleteServiceMutation.isPending}
             >
-              {deleteProjectMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              {deleteServiceMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
               Delete Service
             </Button>
           </DialogFooter>

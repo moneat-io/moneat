@@ -51,7 +51,7 @@ function renderCard(sourceIds: TelemetrySourceId[], onDeleted?: () => void) {
   })
   return render(
     <QueryClientProvider client={queryClient}>
-      <ServiceSettingsCard projectId="proj-1" sourceIds={sourceIds} onDeleted={onDeleted} />
+      <ServiceSettingsCard serviceId="proj-1" sourceIds={sourceIds} onDeleted={onDeleted} />
     </QueryClientProvider>
   )
 }

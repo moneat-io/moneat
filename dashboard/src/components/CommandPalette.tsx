@@ -75,7 +75,7 @@ const PAGE_ITEMS: Array<{
 }> = [
   {
     label: 'Overview',
-    description: 'Project metrics and key stats',
+    description: 'Service metrics and key stats',
     href: APP_OVERVIEW_HREF,
     icon: Home,
     keywords: ['home'],

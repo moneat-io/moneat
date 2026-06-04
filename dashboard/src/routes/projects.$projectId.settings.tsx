@@ -20,7 +20,7 @@ import {api} from '@/lib/api'
 import {ServiceSettingsCard} from '@/components/projects/ServiceSettingsCard'
 import {
   DEFAULT_SELECTED_TELEMETRY_SOURCE_IDS,
-  loadTelemetrySourceIdsForProject,
+  loadTelemetrySourceIdsForService,
 } from '@/lib/telemetry-sources'
 
 export const Route = createFileRoute('/projects/$projectId/settings')({
@@ -30,15 +30,15 @@ export const Route = createFileRoute('/projects/$projectId/settings')({
     }
   },
   loader: async ({params}) => {
-    const project = await api.getProject(params.projectId)
-    return {project}
+    const service = await api.getProject(params.projectId)
+    return {service}
   },
-  component: ProjectSettingsPage,
+  component: ServiceSettingsPage,
 })
 
-function ProjectSettingsPage() {
-  const {project} = Route.useLoaderData()
-  const stored = loadTelemetrySourceIdsForProject(project.resourceId)
+function ServiceSettingsPage() {
+  const {service} = Route.useLoaderData()
+  const stored = loadTelemetrySourceIdsForService(service.resourceId)
   const sourceIds = stored.length > 0 ? stored : DEFAULT_SELECTED_TELEMETRY_SOURCE_IDS
 
   return (
@@ -47,7 +47,7 @@ function ProjectSettingsPage() {
         <div className="space-y-2">
           <Link
             to="/projects/$projectId"
-            params={{projectId: project.resourceId}}
+            params={{projectId: service.resourceId}}
             className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -59,7 +59,7 @@ function ProjectSettingsPage() {
           </div>
         </div>
 
-        <ServiceSettingsCard projectId={project.resourceId} sourceIds={sourceIds} />
+        <ServiceSettingsCard serviceId={service.resourceId} sourceIds={sourceIds} />
       </div>
     </div>
   )

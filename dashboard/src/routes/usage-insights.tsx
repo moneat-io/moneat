@@ -229,7 +229,7 @@ function UsageInsightsPage() {
                     <TableHead>Source</TableHead>
                     <TableHead>Service</TableHead>
                     <TableHead>Operation</TableHead>
-                    <TableHead>Project</TableHead>
+                    <TableHead>Moneat service</TableHead>
                     <TableHead className="text-right">Spans</TableHead>
                     <TableHead className="text-right">Share</TableHead>
                     <TableHead className="text-right">Errors</TableHead>

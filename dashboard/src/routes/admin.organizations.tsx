@@ -190,7 +190,7 @@ function AdminOrganizationsPage() {
                     <SortIndicator column="quota" sortBy={sortBy} sortDir={sortDir} />
                   </TableHead>
                   <TableHead className="text-right">Members</TableHead>
-                  <TableHead className="text-right">Projects</TableHead>
+                  <TableHead className="text-right">Services</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

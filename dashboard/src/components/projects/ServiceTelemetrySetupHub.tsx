@@ -45,17 +45,17 @@ import {
   TELEMETRY_SOURCES,
   getTelemetrySource,
   getTelemetrySourceStatus,
-  loadTelemetrySourceIdsForProject,
+  loadTelemetrySourceIdsForService,
   parseTelemetrySourceIds,
   serializeTelemetrySourceIds,
-  storeTelemetrySourceIdsForProject,
+  storeTelemetrySourceIdsForService,
   toggleTelemetrySourceId,
   type TelemetrySourceId,
   type TelemetrySourceStatusState,
 } from '@/lib/telemetry-sources'
 
-interface ProjectTelemetrySetupHubProps {
-  readonly project: Project
+interface ServiceTelemetrySetupHubProps {
+  readonly service: Project
   readonly selectedSourcesParam?: string
 }
 
@@ -117,7 +117,7 @@ function getInitialSourceIds(projectId: string | number, selectedSourcesParam?: 
   const sourceIdsFromSearch = parseTelemetrySourceIds(selectedSourcesParam)
   if (sourceIdsFromSearch.length > 0) return sourceIdsFromSearch
 
-  const storedSourceIds = loadTelemetrySourceIdsForProject(projectId)
+  const storedSourceIds = loadTelemetrySourceIdsForService(projectId)
   if (storedSourceIds.length > 0) return storedSourceIds
 
   return ALL_TELEMETRY_SOURCE_IDS
@@ -127,29 +127,29 @@ function getTargetLabel(target: string): string {
   return target.split('-').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
 }
 
-function getProjectKey(project: Project, targetId: string | null): ProjectKey {
-  if (!targetId || targetId === 'default') return project.keys[0]
-  return project.keys.find((key) => key.platformTarget === targetId) ?? project.keys[0]
+function getServiceKey(service: Project, targetId: string | null): ProjectKey {
+  if (!targetId || targetId === 'default') return service.keys[0]
+  return service.keys.find((key) => key.platformTarget === targetId) ?? service.keys[0]
 }
 
 function getDocsForTarget(
-  project: Project,
+  service: Project,
   selectedTarget: string | null,
   sdkVersions: Record<string, string> | undefined,
   setupOptions: {orgSlug?: string; projectSlug: string; backendUrl: string}
 ): PlatformSetupDocs | null {
-  const key = getProjectKey(project, selectedTarget)
+  const key = getServiceKey(service, selectedTarget)
   if (!selectedTarget || selectedTarget === 'default') {
-    return getSetupDocs(project.framework, project.dsn, sdkVersions, setupOptions)
+    return getSetupDocs(service.framework, service.dsn, sdkVersions, setupOptions)
   }
 
   const targetDocs = getSetupDocs(
-    `${project.framework}-${selectedTarget}`,
+    `${service.framework}-${selectedTarget}`,
     key.dsn,
     sdkVersions,
     setupOptions
   )
-  return targetDocs || getSetupDocs(project.framework, key.dsn, sdkVersions, setupOptions)
+  return targetDocs || getSetupDocs(service.framework, key.dsn, sdkVersions, setupOptions)
 }
 
 function keyPlaceholder(createdKey: string | null, fallback: string): string {
@@ -306,25 +306,25 @@ function httpLogsSnippet(apiKey: string): string {
 }
 
 function TargetPlatformSection({
-  project,
+  service,
   selectedTarget,
   onSelectedTargetChange,
 }: {
-  readonly project: Project
+  readonly service: Project
   readonly selectedTarget: string | null
   readonly onSelectedTargetChange: (target: string | null) => void
 }) {
   const queryClient = useQueryClient()
   const router = useRouter()
-  const platformInfo = getPlatformInfo(project.framework)
-  const existingTargets = project.keys
+  const platformInfo = getPlatformInfo(service.framework)
+  const existingTargets = service.keys
     .map((key) => key.platformTarget)
     .filter(Boolean) as string[]
   const availableTargets = platformInfo?.targets?.filter((target) => !existingTargets.includes(target.id)) ?? []
   const [showAddPlatform, setShowAddPlatform] = useState(false)
 
   const addTargetMutation = useMutation({
-    mutationFn: (target: string) => api.addProjectTarget(project.resourceId, target),
+    mutationFn: (target: string) => api.addProjectTarget(service.resourceId, target),
     onSuccess: (_key, target) => {
       queryClient.invalidateQueries({queryKey: ['projects']})
       router.invalidate()
@@ -333,7 +333,7 @@ function TargetPlatformSection({
     },
   })
 
-  if (project.keys.length <= 1 && availableTargets.length === 0) return null
+  if (service.keys.length <= 1 && availableTargets.length === 0) return null
 
   return (
     <FlatSetupSection
@@ -354,7 +354,7 @@ function TargetPlatformSection({
     >
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap gap-2">
-          {project.keys.map((key) => {
+          {service.keys.map((key) => {
             const target = key.platformTarget ?? 'default'
             const isSelected = (selectedTarget ?? 'default') === target
             return (
@@ -426,11 +426,11 @@ function TargetPlatformSection({
 }
 
 function DsnSection({
-  project,
+  service,
   selectedTarget,
   onSelectedTargetChange,
 }: {
-  readonly project: Project
+  readonly service: Project
   readonly selectedTarget: string | null
   readonly onSelectedTargetChange: (target: string | null) => void
 }) {
@@ -442,7 +442,7 @@ function DsnSection({
     setTimeout(() => setCopiedTarget(null), COPY_RESET_MS)
   }
 
-  if (project.keys.length > 1) {
+  if (service.keys.length > 1) {
     return (
       <FlatSetupSection
         title="Service DSNs"
@@ -450,7 +450,7 @@ function DsnSection({
       >
         <Tabs value={selectedTarget ?? 'default'} onValueChange={onSelectedTargetChange}>
           <TabsList className="mb-4 flex h-auto flex-wrap gap-1">
-            {project.keys.map((key) => {
+            {service.keys.map((key) => {
               const target = key.platformTarget ?? 'default'
               return (
                 <TabsTrigger key={target} value={target}>
@@ -459,7 +459,7 @@ function DsnSection({
               )
             })}
           </TabsList>
-          {project.keys.map((key) => {
+          {service.keys.map((key) => {
             const target = key.platformTarget ?? 'default'
             return (
               <TabsContent key={target} value={target}>
@@ -489,13 +489,13 @@ function DsnSection({
     <FlatSetupSection title="Service DSN" description="Use this DSN in a Sentry-compatible SDK.">
       <div className="flex items-center gap-2">
         <code className="min-w-0 flex-1 break-all rounded-lg bg-muted px-3 py-2.5 text-sm">
-          {project.dsn}
+          {service.dsn}
         </code>
         <Button
           type="button"
           variant="outline"
           size="icon"
-          onClick={() => handleCopyDsn(project.dsn, 'default')}
+          onClick={() => handleCopyDsn(service.dsn, 'default')}
           aria-label="Copy DSN"
         >
           {copiedTarget === 'default' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
@@ -506,12 +506,12 @@ function DsnSection({
 }
 
 function SentrySetupPanel({
-  project,
+  service,
   selectedTarget,
   onSelectedTargetChange,
   docs,
 }: {
-  readonly project: Project
+  readonly service: Project
   readonly selectedTarget: string | null
   readonly onSelectedTargetChange: (target: string | null) => void
   readonly docs: PlatformSetupDocs | null
@@ -527,12 +527,12 @@ function SentrySetupPanel({
   return (
     <div className="flex flex-col gap-4">
       <TargetPlatformSection
-        project={project}
+        service={service}
         selectedTarget={selectedTarget}
         onSelectedTargetChange={onSelectedTargetChange}
       />
       <DsnSection
-        project={project}
+        service={service}
         selectedTarget={selectedTarget}
         onSelectedTargetChange={onSelectedTargetChange}
       />
@@ -788,10 +788,10 @@ function DatadogAgentPanel({
   )
 }
 
-export function ProjectTelemetrySetupHub({
-  project,
+export function ServiceTelemetrySetupHub({
+  service,
   selectedSourcesParam,
-}: ProjectTelemetrySetupHubProps) {
+}: ServiceTelemetrySetupHubProps) {
   const navigate = useNavigate({from: '/projects/$projectId'})
   const queryClient = useQueryClient()
   const {toast} = useToast()
@@ -800,7 +800,7 @@ export function ProjectTelemetrySetupHub({
     [selectedSourcesParam]
   )
   const [storedSourceIds, setStoredSourceIds] = useState<TelemetrySourceId[]>(
-    () => getInitialSourceIds(project.resourceId)
+    () => getInitialSourceIds(service.resourceId)
   )
   const selectedSourceIds = sourceIdsFromSearch.length > 0 ? sourceIdsFromSearch : storedSourceIds
   const [requestedActiveSourceId, setRequestedActiveSourceId] = useState<TelemetrySourceId>(selectedSourceIds[0])
@@ -808,7 +808,7 @@ export function ProjectTelemetrySetupHub({
     ? requestedActiveSourceId
     : selectedSourceIds[0]
   const [selectedTarget, setSelectedTarget] = useState<string | null>(
-    () => project.keys[0]?.platformTarget ?? 'default'
+    () => service.keys[0]?.platformTarget ?? 'default'
   )
   const [copiedResourceId, setCopiedResourceId] = useState(false)
   const [createdOtlpKey, setCreatedOtlpKey] = useState<string | null>(null)
@@ -816,7 +816,7 @@ export function ProjectTelemetrySetupHub({
 
   const copyResourceId = async () => {
     try {
-      await navigator.clipboard.writeText(project.resourceId)
+      await navigator.clipboard.writeText(service.resourceId)
       setCopiedResourceId(true)
       setTimeout(() => setCopiedResourceId(false), COPY_RESET_MS)
     } catch (error) {
@@ -830,8 +830,8 @@ export function ProjectTelemetrySetupHub({
   }
 
   useEffect(() => {
-    storeTelemetrySourceIdsForProject(project.resourceId, selectedSourceIds)
-  }, [project.resourceId, selectedSourceIds])
+    storeTelemetrySourceIdsForService(service.resourceId, selectedSourceIds)
+  }, [service.resourceId, selectedSourceIds])
 
   const {data: sdkVersionsResponse} = useQuery({
     queryKey: ['sdk-versions'],
@@ -844,8 +844,8 @@ export function ProjectTelemetrySetupHub({
     staleTime: 30 * 60 * 1000,
   })
   const {data: projectStats} = useQuery({
-    queryKey: ['projectStats', project.resourceId, '24h'],
-    queryFn: () => api.getProjectStats(project.resourceId, '24h'),
+    queryKey: ['serviceStats', service.resourceId, '24h'],
+    queryFn: () => api.getProjectStats(service.resourceId, '24h'),
   })
   const {data: otlpKeyResponse} = useQuery({
     queryKey: ['otlpApiKeys'],
@@ -865,19 +865,19 @@ export function ProjectTelemetrySetupHub({
 
   const setupOptions = {
     orgSlug: currentUser?.organizationSlug,
-    projectSlug: project.slug,
+    projectSlug: service.slug,
     backendUrl: backendBaseUrl,
   }
   const sentryDocs = getDocsForTarget(
-    project,
+    service,
     selectedTarget,
     sdkVersionsResponse?.versions,
     setupOptions
   )
-  const platformInfo = getPlatformInfo(project.framework)
+  const platformInfo = getPlatformInfo(service.framework)
   const PlatformIcon = platformInfo?.icon
   const sourceStatusInput = useMemo(() => ({
-    projectEventCount: projectStats?.totalEvents,
+    serviceEventCount: projectStats?.totalEvents,
     otlpKeys: otlpKeyResponse?.keys,
     agentKeys: agentKeyResponse?.keys,
     monitorHosts,
@@ -886,7 +886,7 @@ export function ProjectTelemetrySetupHub({
   const hasExistingAgentKey = (agentKeyResponse?.keys.length ?? 0) > 0
 
   const createOtlpKeyMutation = useMutation({
-    mutationFn: () => api.createOtlpApiKey(`${project.name} OTLP`),
+    mutationFn: () => api.createOtlpApiKey(`${service.name} OTLP`),
     onSuccess: (response) => {
       setCreatedOtlpKey(response.key)
       queryClient.invalidateQueries({queryKey: ['otlpApiKeys']})
@@ -895,7 +895,7 @@ export function ProjectTelemetrySetupHub({
   })
 
   const createAgentKeyMutation = useMutation({
-    mutationFn: () => api.createAgentApiKey(`${project.name} Agent`),
+    mutationFn: () => api.createAgentApiKey(`${service.name} Agent`),
     onSuccess: (response) => {
       setCreatedAgentKey(response.key)
       queryClient.invalidateQueries({queryKey: ['agentApiKeys']})
@@ -905,7 +905,7 @@ export function ProjectTelemetrySetupHub({
 
   const updateSelectedSources = (sourceIds: TelemetrySourceId[]) => {
     setStoredSourceIds(sourceIds)
-    storeTelemetrySourceIdsForProject(project.resourceId, sourceIds)
+    storeTelemetrySourceIdsForService(service.resourceId, sourceIds)
     navigate({
       search: (previous) => ({
         ...previous,
@@ -938,7 +938,7 @@ export function ProjectTelemetrySetupHub({
               ) : null}
               <Badge variant={statusVariant(activeStatus.state)}>{activeStatus.label}</Badge>
             </div>
-            <p className="text-sm font-medium text-muted-foreground">{project.name}</p>
+            <p className="text-sm font-medium text-muted-foreground">{service.name}</p>
             <h1 className="text-3xl font-bold">Sources / Ingestion</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               Connect telemetry sources and manage this service's stable ID, DSNs, and ingestion keys.
@@ -946,7 +946,7 @@ export function ProjectTelemetrySetupHub({
             <div className="mt-1 flex max-w-full items-center gap-2 text-xs text-muted-foreground">
               <span>Service ID</span>
               <code className="max-w-[min(28rem,70vw)] truncate rounded bg-muted px-1.5 py-0.5 font-mono text-foreground">
-                {project.resourceId}
+                {service.resourceId}
               </code>
               <Button
                 type="button"
@@ -961,7 +961,7 @@ export function ProjectTelemetrySetupHub({
             </div>
           </div>
           <Button asChild variant="outline" size="icon" aria-label="Service settings">
-            <Link to="/projects/$projectId/settings" params={{projectId: project.resourceId}}>
+            <Link to="/projects/$projectId/settings" params={{projectId: service.resourceId}}>
               <Settings className="h-4 w-4" />
             </Link>
           </Button>
@@ -1042,7 +1042,7 @@ export function ProjectTelemetrySetupHub({
 
             <TabsContent value="sentry-sdk" className="mt-0">
               <SentrySetupPanel
-                project={project}
+                service={service}
                 selectedTarget={selectedTarget}
                 onSelectedTargetChange={setSelectedTarget}
                 docs={sentryDocs}

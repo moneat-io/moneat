@@ -128,7 +128,7 @@ const config: FeaturePageConfig = {
     {icon: Mail, title: 'Email Alerts', description: 'Detailed email notifications with error context, stack traces, and direct links to investigate.', iconColor: 'text-blue-400'},
     {icon: Phone, title: 'Phone & SMS', description: 'Critical alerts that call or text the on-call responder when immediate attention is needed.', iconColor: 'text-amber-400'},
     {icon: Filter, title: 'Alert Rules', description: 'Configure alert thresholds on error rates, log patterns, uptime, or any metric you track.', iconColor: 'text-violet-400'},
-    {icon: Workflow, title: 'Routing Rules', description: 'Route different alert types to different channels and teams based on project, severity, or tags.', iconColor: 'text-cyan-400'},
+    {icon: Workflow, title: 'Routing Rules', description: 'Route different alert types to different channels and teams based on service, severity, or tags.', iconColor: 'text-cyan-400'},
     {icon: Bell, title: 'Digest & Dedup', description: 'Group related alerts together to avoid notification fatigue during incident storms.', iconColor: 'text-green-400'},
   ],
   heroVisual: <AlertingHero />,

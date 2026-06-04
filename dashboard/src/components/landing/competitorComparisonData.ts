@@ -342,11 +342,11 @@ export const competitorPages: CompetitorPageData[] = [
     migrationSteps: [
       {
         title: 'Start with one DSN swap',
-        detail: 'Point one project at Moneat and verify grouping, release context, source maps, and alert behavior.',
+        detail: 'Point one service at Moneat and verify grouping, release context, source maps, and alert behavior.',
       },
       {
         title: 'Add operating context',
-        detail: 'Bring in logs, traces, hosts, and uptime checks around the same project before changing broader SDK rollout.',
+        detail: 'Bring in logs, traces, hosts, and uptime checks around the same service before changing broader SDK rollout.',
       },
       {
         title: 'Move response workflows last',
@@ -504,7 +504,7 @@ export const competitorPages: CompetitorPageData[] = [
       },
       {
         title: 'Test telemetry compatibility',
-        detail: 'Send one Sentry SDK project, one Datadog Agent host, and one OTLP service to Moneat.',
+        detail: 'Send one Sentry SDK service, one Datadog Agent host, and one OTLP service to Moneat.',
       },
       {
         title: 'Decide hosted vs controlled',
@@ -662,7 +662,7 @@ export const competitorPages: CompetitorPageData[] = [
       },
       {
         title: 'Add non-OTel migration paths',
-        detail: 'Test a Sentry SDK project and a Datadog Agent host if your estate is not purely OpenTelemetry.',
+        detail: 'Test a Sentry SDK service and a Datadog Agent host if your estate is not purely OpenTelemetry.',
       },
       {
         title: 'Validate response workflows',

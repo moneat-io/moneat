@@ -173,7 +173,7 @@ describe('OtlpApiKeysTab', () => {
     })
   })
 
-  it('maps an unmapped service from the project selector', async () => {
+  it('maps an unmapped service from the service selector', async () => {
     let capturedBody: Record<string, unknown> | null = null
     const user = userEvent.setup()
     server.use(
