@@ -33,8 +33,9 @@ private val logger = KotlinLogging.logger {}
 // SecurityIngestionService.insertBatch path the ingestion worker uses, so the
 // demo exercises the real agent insert code rather than fabricating rows in SQL.
 
-/** Demo org ids matching the negative-ID convention used across demo tables. */
-private val DEMO_ORG_IDS = listOf(-1, -2, -3)
+/** Security data is organization-scoped; the demo account has one organization with three projects. */
+private const val DEMO_SECURITY_ORG_ID = -1
+private val DEMO_SECURITY_ORG_IDS = listOf(DEMO_SECURITY_ORG_ID)
 
 private const val DEMO_EVENT_COUNT = 60
 private const val DEMO_FINDING_COUNT = 100
@@ -162,7 +163,7 @@ private fun spreadTimestampMs(now: Long, index: Int, step: Long, spreadMinutes: 
 internal suspend fun checkFreshSecurityDataCount(): Long {
     val query = """
         SELECT count() FROM security_events
-        WHERE organization_id IN ($P1, $P2, $P3)
+        WHERE organization_id = $ORG1
             AND timestamp >= now() - INTERVAL 2 HOUR
     """.trimIndent()
     return suspendRunCatching {
@@ -232,17 +233,17 @@ private fun buildDumpEntry(now: Long, index: Int): QueuedActivityDumpEntry =
     )
 
 /**
- * Build per-org batches so each [QueuedSecurityBatch] carries a single organization id (matching
- * the agent ingest shape) while the generated rows are spread across the demo orgs round-robin.
+ * Build per-org batches so each [QueuedSecurityBatch] carries a single organization id, matching
+ * the agent ingest shape.
  */
 private fun <T> buildBatchesPerOrg(
     count: Int,
     build: (index: Int) -> T,
     assign: (orgId: Int, entries: List<T>) -> QueuedSecurityBatch,
 ): List<QueuedSecurityBatch> {
-    val byOrg = DEMO_ORG_IDS.associateWith { mutableListOf<T>() }
+    val byOrg = DEMO_SECURITY_ORG_IDS.associateWith { mutableListOf<T>() }
     for (index in 0 until count) {
-        val orgId = DEMO_ORG_IDS[index % DEMO_ORG_IDS.size]
+        val orgId = DEMO_SECURITY_ORG_IDS[index % DEMO_SECURITY_ORG_IDS.size]
         byOrg.getValue(orgId).add(build(index))
     }
     return byOrg.entries
