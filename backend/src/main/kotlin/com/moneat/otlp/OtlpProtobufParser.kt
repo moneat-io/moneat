@@ -58,8 +58,7 @@ object OtlpProtobufParser {
             attributes = attrs,
             serviceNamespace = attrs["service.namespace"] ?: "",
             serviceName = attrs["service.name"] ?: "",
-            environment = attrs["deployment.environment"]
-                ?: attrs["service.environment"] ?: "",
+            environment = OtlpParsingUtils.extractDeploymentEnvironment(attrs),
             hostName = attrs["host.name"] ?: "",
             serviceVersion = attrs["service.version"] ?: "",
         )
