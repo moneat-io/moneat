@@ -26,6 +26,7 @@ import {
   HardDrive,
   Layers3,
   Map as MapIcon,
+  Network,
   Save,
   Search,
   Trash2,
@@ -36,6 +37,7 @@ import {
   useMemo,
   useState,
   type ComponentProps,
+  type ComponentType,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from 'react'
@@ -43,6 +45,7 @@ import {api} from '@/lib/api'
 import type {DdHostResponse} from '@/lib/api/types/hosts'
 import type {DdContainerResponse} from '@/lib/api/types/infrastructure'
 import {useToast} from '@/hooks/useToast'
+import {ServiceMap} from '@/components/apm/ServiceMap'
 import {ExplorerShell} from '@/components/filters/ExplorerShell'
 import {SearchFilterBar} from '@/components/filters/SearchFilterBar'
 import {MapCanvas} from '@/components/maps/MapCanvas'
@@ -97,8 +100,10 @@ interface Option<TValue extends string> {
   label: string
 }
 
-interface ResourceOption extends Option<InfrastructureResourceKind> {
-  icon: typeof HardDrive
+export type MonitoringMapScope = InfrastructureResourceKind | 'services'
+
+interface ResourceOption extends Option<MonitoringMapScope> {
+  icon: ComponentType<{className?: string}>
 }
 
 interface ToneClasses {
@@ -125,6 +130,7 @@ interface InfrastructureGroupNodeData {
 }
 
 const RESOURCE_OPTIONS: ResourceOption[] = [
+  {value: 'services', label: 'Services', icon: Network},
   {value: 'hosts', label: 'Hosts', icon: HardDrive},
   {value: 'containers', label: 'Containers', icon: Box},
 ]
@@ -237,32 +243,46 @@ const INFRA_LEGEND_ITEMS = [
   {label: 'Neutral', color: TONE_CLASSES.neutral.color},
 ]
 
-export function InfrastructureMap() {
+interface InfrastructureMapProps {
+  initialScope?: MonitoringMapScope
+  onScopeChange?: (scope: MonitoringMapScope) => void
+}
+
+export function InfrastructureMap({initialScope = 'hosts', onScopeChange}: InfrastructureMapProps) {
   const queryClient = useQueryClient()
   const {toast} = useToast()
-  const [viewState, setViewState] = useState<InfrastructureMapViewState>(DEFAULT_HOST_VIEW)
+  const [viewState, setViewState] = useState<InfrastructureMapViewState>(
+    initialScope === 'containers' ? DEFAULT_CONTAINER_VIEW : DEFAULT_HOST_VIEW,
+  )
+  const [serviceSearchQuery, setServiceSearchQuery] = useState('')
   const [selectedSavedViewId, setSelectedSavedViewId] = useState(NO_SAVED_VIEW_ID)
   const [savedViewName, setSavedViewName] = useState('')
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+  const mapScope = initialScope
+  const isServicesScope = mapScope === 'services'
+  const activeViewState = useMemo(() => {
+    if (isServicesScope || viewState.resourceKind === mapScope) return viewState
+    return {...getDefaultView(mapScope), searchQuery: viewState.searchQuery}
+  }, [isServicesScope, mapScope, viewState])
 
   const hostsQuery = useQuery({
     queryKey: ['hosts'],
     queryFn: () => api.getHosts(),
-    enabled: api.isAuthenticated(),
+    enabled: api.isAuthenticated() && !isServicesScope,
     refetchInterval: HOST_REFRESH_MS,
   })
 
   const containersQuery = useQuery({
     queryKey: ['containers', 'map'],
     queryFn: () => api.getContainers({limit: CONTAINER_LIMIT}),
-    enabled: api.isAuthenticated() && viewState.resourceKind === 'containers',
+    enabled: api.isAuthenticated() && activeViewState.resourceKind === 'containers' && !isServicesScope,
     refetchInterval: CONTAINER_REFRESH_MS,
   })
 
   const savedViewsQuery = useQuery({
     queryKey: INFRASTRUCTURE_MAP_SAVED_VIEWS_QUERY_KEY,
     queryFn: () => api.getInfrastructureMapSavedViews(),
-    enabled: api.isAuthenticated(),
+    enabled: api.isAuthenticated() && !isServicesScope,
   })
 
   const saveSavedViewMutation = useMutation({
@@ -315,26 +335,26 @@ export function InfrastructureMap() {
   const savedViews = savedViewsQuery.data?.views ?? EMPTY_SAVED_VIEWS
   const resources = useMemo(
     () => createInfrastructureMapResources({
-      resourceKind: viewState.resourceKind,
+      resourceKind: activeViewState.resourceKind,
       hosts,
       containers,
     }),
-    [containers, hosts, viewState.resourceKind],
+    [activeViewState.resourceKind, containers, hosts],
   )
   const mapResult = useMemo(
-    () => buildInfrastructureMapGroups(resources, viewState),
-    [resources, viewState],
+    () => buildInfrastructureMapGroups(resources, activeViewState),
+    [activeViewState, resources],
   )
   const mapGraph = useMemo(
-    () => buildInfrastructureFlowGraph(mapResult, viewState.resourceKind, selectedNodeId),
-    [mapResult, selectedNodeId, viewState.resourceKind],
+    () => buildInfrastructureFlowGraph(mapResult, activeViewState.resourceKind, selectedNodeId),
+    [activeViewState.resourceKind, mapResult, selectedNodeId],
   )
   const fitSignature = [
-    viewState.resourceKind,
-    viewState.groupBy,
-    viewState.fillBy,
-    viewState.sizeBy,
-    viewState.searchQuery,
+    activeViewState.resourceKind,
+    activeViewState.groupBy,
+    activeViewState.fillBy,
+    activeViewState.sizeBy,
+    activeViewState.searchQuery,
     mapResult.summary.groupCount,
     mapResult.summary.visibleResources,
   ].join(':')
@@ -342,20 +362,24 @@ export function InfrastructureMap() {
     () => mapResult.groups.flatMap((group) => group.nodes).find((node) => node.id === selectedNodeId) ?? null,
     [mapResult.groups, selectedNodeId],
   )
-  const groupOptions = getGroupOptions(viewState.resourceKind)
-  const fillOptions = getFillOptions(viewState.resourceKind)
-  const sizeOptions = getSizeOptions(viewState.resourceKind)
-  const isLoading = hostsQuery.isLoading || (viewState.resourceKind === 'containers' && containersQuery.isLoading)
-  const isError = hostsQuery.isError || (viewState.resourceKind === 'containers' && containersQuery.isError)
+  const groupOptions = getGroupOptions(activeViewState.resourceKind)
+  const fillOptions = getFillOptions(activeViewState.resourceKind)
+  const sizeOptions = getSizeOptions(activeViewState.resourceKind)
+  const isLoading = !isServicesScope && (
+    hostsQuery.isLoading || (activeViewState.resourceKind === 'containers' && containersQuery.isLoading)
+  )
+  const isError = !isServicesScope && (
+    hostsQuery.isError || (activeViewState.resourceKind === 'containers' && containersQuery.isError)
+  )
   const unhealthyResources = mapResult.summary.visibleResources - mapResult.summary.healthyResources
   const containerTotalCount = containersQuery.data?.totalCount ?? containers.length
   const containerLimitNotice =
-    viewState.resourceKind === 'containers' && containerTotalCount > CONTAINER_LIMIT
+    activeViewState.resourceKind === 'containers' && containerTotalCount > CONTAINER_LIMIT
       ? `Showing first ${CONTAINER_LIMIT} of ${containerTotalCount}`
       : null
 
   function updateViewState(nextViewState: Partial<InfrastructureMapViewState>) {
-    setViewState((current) => normalizeViewState({...current, ...nextViewState}))
+    setViewState(normalizeViewState({...activeViewState, ...nextViewState}))
     setSelectedSavedViewId(NO_SAVED_VIEW_ID)
     setSelectedNodeId(null)
   }
@@ -367,12 +391,21 @@ export function InfrastructureMap() {
     setSelectedNodeId(null)
   }
 
+  function updateMapScope(nextScope: MonitoringMapScope) {
+    onScopeChange?.(nextScope)
+    setSelectedNodeId(null)
+    if (nextScope !== 'services') {
+      updateResourceKind(nextScope)
+    }
+  }
+
   function loadSavedView(savedViewId: string) {
     setSelectedSavedViewId(savedViewId)
     if (savedViewId === NO_SAVED_VIEW_ID) return
 
     const savedView = savedViews.find((view) => view.id === savedViewId)
     if (!savedView) return
+    onScopeChange?.(savedView.resourceKind)
     setViewState(normalizeViewState(savedView))
     setSavedViewName(savedView.name)
     setSelectedNodeId(null)
@@ -381,9 +414,9 @@ export function InfrastructureMap() {
   function saveCurrentView() {
     const name = savedViewName.trim().slice(0, SAVED_VIEW_NAME_MAX_LENGTH)
     if (!name) return
-    const searchQuery = viewState.searchQuery.trim().slice(0, SAVED_VIEW_SEARCH_QUERY_MAX_LENGTH)
+    const searchQuery = activeViewState.searchQuery.trim().slice(0, SAVED_VIEW_SEARCH_QUERY_MAX_LENGTH)
 
-    saveSavedViewMutation.mutate({...viewState, name, searchQuery})
+    saveSavedViewMutation.mutate({...activeViewState, name, searchQuery})
   }
 
   function deleteSelectedView() {
@@ -405,7 +438,7 @@ export function InfrastructureMap() {
           'min-h-0 overflow-hidden bg-gradient-to-br',
           'from-background via-background to-[hsl(var(--primary)/0.03)]',
         )}
-        title="Infrastructure Map"
+        title="Map Explorer"
         icon={(
           <div
             className={cn(
@@ -418,39 +451,47 @@ export function InfrastructureMap() {
         )}
         searchBar={(
           <SearchFilterBar
-            query={viewState.searchQuery}
-            onQueryChange={(searchQuery) => updateViewState({searchQuery})}
+            query={isServicesScope ? serviceSearchQuery : activeViewState.searchQuery}
+            onQueryChange={(searchQuery) => {
+              if (isServicesScope) {
+                setServiceSearchQuery(searchQuery)
+              } else {
+                updateViewState({searchQuery})
+              }
+            }}
             facetFilters={EMPTY_FACET_FILTERS}
             onFacetFiltersChange={ignoreFacetFilters}
             schema={INFRASTRUCTURE_MAP_SEARCH_SCHEMA}
-            placeholder="Search hosts, images, tags..."
+            placeholder={isServicesScope ? 'Search services and dependencies...' : 'Search hosts, images, tags...'}
           />
         )}
         actions={(
           <>
-            <ResourceKindToggle
-              resourceKind={viewState.resourceKind}
-              onChange={updateResourceKind}
+            <MapScopeToggle
+              scope={mapScope}
+              onChange={updateMapScope}
             />
-            <SavedViewsPopover
-              savedViews={savedViews}
-              selectedSavedViewId={selectedSavedViewId}
-              savedViewName={savedViewName}
-              isLoading={savedViewsQuery.isLoading}
-              isSaving={saveSavedViewMutation.isPending}
-              isDeleting={deleteSavedViewMutation.isPending}
-              onLoadSavedView={loadSavedView}
-              onSavedViewNameChange={setSavedViewName}
-              onSaveCurrentView={saveCurrentView}
-              onDeleteSelectedView={deleteSelectedView}
-            />
+            {!isServicesScope && (
+              <SavedViewsPopover
+                savedViews={savedViews}
+                selectedSavedViewId={selectedSavedViewId}
+                savedViewName={savedViewName}
+                isLoading={savedViewsQuery.isLoading}
+                isSaving={saveSavedViewMutation.isPending}
+                isDeleting={deleteSavedViewMutation.isPending}
+                onLoadSavedView={loadSavedView}
+                onSavedViewNameChange={setSavedViewName}
+                onSaveCurrentView={saveCurrentView}
+                onDeleteSelectedView={deleteSelectedView}
+              />
+            )}
           </>
         )}
-        toolbar={(
+        toolbar={isServicesScope ? undefined : (
           <InfrastructureMapToolbar
-            groupBy={viewState.groupBy}
-            fillBy={viewState.fillBy}
-            sizeBy={viewState.sizeBy}
+            groupBy={activeViewState.groupBy}
+            fillBy={activeViewState.fillBy}
+            sizeBy={activeViewState.sizeBy}
             groupOptions={groupOptions}
             fillOptions={fillOptions}
             sizeOptions={sizeOptions}
@@ -463,35 +504,42 @@ export function InfrastructureMap() {
           />
         )}
       >
-        <InfrastructureMapBody
-          isError={isError}
-          isLoading={isLoading}
-          mapGraph={mapGraph}
-          mapResult={mapResult}
-          resourceKind={viewState.resourceKind}
-          fitSignature={fitSignature}
-          selectedNode={selectedNode}
-          onCloseDetail={() => setSelectedNodeId(null)}
-          onNodeClick={handleNodeClick}
-          onPaneClick={handlePaneClick}
-        />
+        {isServicesScope ? (
+          <ServiceMap
+            className="service-map h-full rounded-none border-0"
+            searchQuery={serviceSearchQuery}
+          />
+        ) : (
+          <InfrastructureMapBody
+            isError={isError}
+            isLoading={isLoading}
+            mapGraph={mapGraph}
+            mapResult={mapResult}
+            resourceKind={activeViewState.resourceKind}
+            fitSignature={fitSignature}
+            selectedNode={selectedNode}
+            onCloseDetail={() => setSelectedNodeId(null)}
+            onNodeClick={handleNodeClick}
+            onPaneClick={handlePaneClick}
+          />
+        )}
       </ExplorerShell>
     </div>
   )
 }
 
-function ResourceKindToggle({
-  resourceKind,
+function MapScopeToggle({
+  scope,
   onChange,
 }: {
-  resourceKind: InfrastructureResourceKind
-  onChange: (resourceKind: InfrastructureResourceKind) => void
+  scope: MonitoringMapScope
+  onChange: (scope: MonitoringMapScope) => void
 }) {
   return (
     <div className="flex rounded-md border bg-background p-0.5">
       {RESOURCE_OPTIONS.map((option) => {
         const Icon = option.icon
-        const isActive = option.value === resourceKind
+        const isActive = option.value === scope
         return (
           <button
             key={option.value}

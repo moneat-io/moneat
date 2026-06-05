@@ -250,7 +250,12 @@ const nodeTypes = {service: ServiceNode}
 
 // --- Main component ---
 
-export function ServiceMap() {
+interface ServiceMapProps {
+  className?: string
+  searchQuery?: string
+}
+
+export function ServiceMap({className, searchQuery = ''}: ServiceMapProps = {}) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const {data, isLoading} = useQuery({
@@ -261,21 +266,30 @@ export function ServiceMap() {
   })
 
   const services = data?.services ?? []
+  const normalizedSearch = searchQuery.trim().toLowerCase()
+  const visibleServices = useMemo(() => {
+    if (!normalizedSearch) return services
+    return services.filter((service) => {
+      const calls = service.callsTo.join(' ').toLowerCase()
+      return service.service.toLowerCase().includes(normalizedSearch) || calls.includes(normalizedSearch)
+    })
+  }, [normalizedSearch, services])
 
   const {nodes, edges} = useMemo(
-    () => buildGraph(services, selectedId),
-    [services, selectedId],
+    () => buildGraph(visibleServices, selectedId),
+    [visibleServices, selectedId],
   )
 
   const onNodeClick = useCallback((_event: ReactMouseEvent, node: Node) => {
     setSelectedId((previousId) => (previousId === node.id ? null : node.id))
-  }, [])
+  }, [setSelectedId])
 
-  const onPaneClick = useCallback(() => setSelectedId(null), [])
+  const onPaneClick = useCallback(() => setSelectedId(null), [setSelectedId])
 
   const selected = selectedId
-    ? services.find((service) => service.service === selectedId)
+    ? visibleServices.find((service) => service.service === selectedId)
     : null
+  const isFilteredEmpty = services.length > 0 && visibleServices.length === 0
 
   return (
     <MapCanvas
@@ -285,10 +299,13 @@ export function ServiceMap() {
       onNodeClick={onNodeClick}
       onPaneClick={onPaneClick}
       isLoading={isLoading}
-      isEmpty={services.length === 0}
-      emptyTitle="No services found"
-      emptyDescription="Service map populates automatically as traces are ingested."
-      className="service-map h-[calc(100vh-260px)] min-h-[420px]"
+      isEmpty={visibleServices.length === 0}
+      emptyTitle={isFilteredEmpty ? 'No services match your search' : 'No services found'}
+      emptyDescription={isFilteredEmpty
+        ? 'Adjust search to show more service nodes.'
+        : 'Service map populates automatically as trace telemetry is ingested.'}
+      className={className ?? 'service-map h-[calc(100vh-260px)] min-h-[420px]'}
+      fitSignature={`services-${visibleServices.map((service) => service.service).join('|')}`}
     >
       <MapLegend
         items={[

@@ -67,7 +67,6 @@ const allTabs = [
   {id: 'hosts', label: 'Hosts', href: '/monitoring', icon: HardDrive},
   {id: 'map', label: 'Map', href: '/monitoring/map', icon: MapIcon},
   {id: 'containers', label: 'Containers', href: '/monitoring/containers', icon: Box},
-  {id: 'service-map', label: 'Service Map', href: '/monitoring/service-map', icon: Network},
   {id: 'processes', label: 'Processes', href: '/monitoring/processes', icon: Terminal, requiresDatadog: true},
   {id: 'network', label: 'Network', href: '/monitoring/network', icon: Network, requiresDatadog: true},
   {id: 'events', label: 'Events', href: '/monitoring/events', icon: CalendarClock, requiresDatadog: true},
