@@ -30,7 +30,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {Filter, Zap, Clock, CheckCircle2, ChevronRight, Inbox, Eye, AlertTriangle, AlertCircle} from 'lucide-react'
-import {useState, useEffect} from 'react'
+import {useEffect, useReducer, useState} from 'react'
 import {cn} from '@/lib/utils'
 
 export const Route = createFileRoute('/on-call/alerts')({
@@ -117,14 +117,14 @@ function Alerts() {
   const pathname = useRouterState({select: state => state.location.pathname})
   const [statusFilter, setStatusFilter] = useState<AlertStatusFilter>(DEFAULT_ALERT_STATUS_FILTER)
   const [priorityFilter, setPriorityFilter] = useState<string>('all')
-  const [, setTick] = useState(0)
+  const [, forceTick] = useReducer((tick: number) => tick + 1, 0)
   const isAlertDetailRoute = pathname.startsWith('/on-call/alerts/')
 
   // Re-render every 30s to update "escalating soon" badges
   useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 30000)
+    const interval = setInterval(forceTick, 30000)
     return () => clearInterval(interval)
-  }, [])
+  }, [forceTick])
 
   const {data: alerts, isLoading} = useQuery({
     queryKey: ['alerts', statusFilter, priorityFilter],
@@ -141,6 +141,7 @@ function Alerts() {
   const triggeredCount = alerts?.filter(i => i.status === 'TRIGGERED').length || 0
   const acknowledgedCount = alerts?.filter(i => i.status === 'ACKNOWLEDGED').length || 0
   const resolvedCount = alerts?.filter(i => i.status === 'RESOLVED').length || 0
+  const hasAlerts = alerts !== undefined && alerts.length > 0
 
   if (isAlertDetailRoute) {
     return <Outlet />
@@ -243,13 +244,14 @@ function Alerts() {
       </div>
 
       {/* Alerts List */}
-      {isLoading ? (
+      {isLoading && (
         <div className="flex items-center justify-center py-10">
           <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-primary" />
         </div>
-      ) : alerts && alerts.length > 0 ? (
+      )}
+      {!isLoading && hasAlerts && (
         <div className="space-y-2">
-          {alerts.map((alert) => {
+          {alerts?.map((alert) => {
             const statusCfg = getStatusConfig(alert.status)
             const StatusIcon = statusCfg.icon
             const escalatingSoon = isEscalatingSoon(alert.nextEscalationAt)
@@ -330,7 +332,8 @@ function Alerts() {
             )
           })}
         </div>
-      ) : (
+      )}
+      {!isLoading && !hasAlerts && (
         <EmptyState
           icon={statusFilter !== 'all' || priorityFilter !== 'all' ? AlertCircle : Inbox}
           title="No alerts found"

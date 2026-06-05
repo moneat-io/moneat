@@ -6,6 +6,7 @@ package com.moneat.enterprise.oncall.services
 
 import com.moneat.shared.services.TaskLock
 import com.moneat.config.RedisClient
+import com.moneat.enterprise.oncall.models.EscalationStepTarget
 import com.moneat.enterprise.oncall.models.OnCallAlert
 import com.moneat.enterprise.oncall.models.OnCallAlertTimeline
 import com.moneat.enterprise.oncall.models.OnCallAlerts
@@ -201,41 +202,15 @@ class EscalationEngine(
             // Notify all targets in this step
             logger.info("Escalation step $stepIndex for incident $incidentId has ${step.targets.size} target(s)")
             step.targets.forEach { target ->
-                when (target.targetType) {
-                    "USER" -> {
-                        logger.info("Notifying user ${target.targetId} for incident $incidentId")
-                        notifyUser(
-                            incidentId,
-                            target.targetId,
-                            incident[OnCallAlerts.title],
-                            incident[OnCallAlerts.priority],
-                            step.smsFallbackDelayMinutes,
-                            stepIndex,
-                            iteration
-                        )
-                    }
-
-                    "ON_CALL_SCHEDULE" -> {
-                        val onCall = onCallScheduleService.getCurrentOnCall(target.targetId)
-                        if (onCall != null) {
-                            logger.info(
-                                "Notifying on-call user ${onCall.userId} from schedule ${target.targetId} " +
-                                    "for incident $incidentId",
-                            )
-                            notifyUser(
-                                incidentId,
-                                onCall.userId,
-                                incident[OnCallAlerts.title],
-                                incident[OnCallAlerts.priority],
-                                step.smsFallbackDelayMinutes,
-                                stepIndex,
-                                iteration
-                            )
-                        } else {
-                            logger.warn("No on-call user found for schedule ${target.targetId}")
-                        }
-                    }
-                }
+                notifyEscalationTarget(
+                    incidentId = incidentId,
+                    target = target,
+                    title = incident[OnCallAlerts.title],
+                    priority = incident[OnCallAlerts.priority],
+                    smsFallbackDelayMinutes = step.smsFallbackDelayMinutes,
+                    stepIndex = stepIndex,
+                    iteration = iteration,
+                )
             }
 
             logTimelineEvent(
@@ -251,6 +226,54 @@ class EscalationEngine(
             // Schedule timeout
             scheduleTimeout(incidentId, step.timeoutMinutes.toLong(), stepIndex + 1, iteration)
         }
+    }
+
+    private fun notifyEscalationTarget(
+        incidentId: Int,
+        target: EscalationStepTarget,
+        title: String,
+        priority: String,
+        smsFallbackDelayMinutes: Int,
+        stepIndex: Int,
+        iteration: Int,
+    ) {
+        when (target.targetType) {
+            "USER" -> {
+                logger.info("Notifying user ${target.targetId} for incident $incidentId")
+                notifyUser(incidentId, target.targetId, title, priority, smsFallbackDelayMinutes, stepIndex, iteration)
+            }
+
+            "ON_CALL_SCHEDULE" -> notifyCurrentOnCall(
+                incidentId,
+                target,
+                title,
+                priority,
+                smsFallbackDelayMinutes,
+                stepIndex,
+                iteration,
+            )
+        }
+    }
+
+    private fun notifyCurrentOnCall(
+        incidentId: Int,
+        target: EscalationStepTarget,
+        title: String,
+        priority: String,
+        smsFallbackDelayMinutes: Int,
+        stepIndex: Int,
+        iteration: Int,
+    ) {
+        val onCall = onCallScheduleService.getCurrentOnCall(target.targetId)
+        if (onCall == null) {
+            logger.warn("No on-call user found for schedule ${target.targetId}")
+            return
+        }
+
+        logger.info(
+            "Notifying on-call user ${onCall.userId} from schedule ${target.targetId} for incident $incidentId",
+        )
+        notifyUser(incidentId, onCall.userId, title, priority, smsFallbackDelayMinutes, stepIndex, iteration)
     }
 
     private fun notifyUser(

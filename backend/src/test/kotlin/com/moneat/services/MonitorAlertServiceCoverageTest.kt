@@ -35,6 +35,7 @@ import com.moneat.shared.models.OrganizationAlertTemplates
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.workflows.services.AlertResolvedWorkflowEvent
 import com.moneat.workflows.services.WorkflowService
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
@@ -71,6 +72,22 @@ import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
+
+private fun expectedResolvedWorkflowEvent(
+    organizationId: Int,
+    hostId: Int,
+    deduplicationKey: String,
+    hostName: String = "host-alert-workflow",
+): AlertResolvedWorkflowEvent =
+    AlertResolvedWorkflowEvent(
+        organizationId = organizationId,
+        source = AlertSource.HOST_ALERT.name,
+        deduplicationKey = deduplicationKey,
+        title = "$hostName - CPU Usage recovered",
+        description = "The alert for CPU Usage is no longer active.",
+        moneatUrl = "https://moneat.io/monitoring/hosts/$hostId",
+        priority = AlertPriority.P1,
+    )
 
 class MonitorAlertServiceCoverageTest {
 
@@ -287,13 +304,7 @@ class MonitorAlertServiceCoverageTest {
             assertNull(clearedLastTriggeredAt)
             coVerify(exactly = 1) {
                 workflowService.publishAlertResolved(
-                    fixture.orgId,
-                    AlertSource.HOST_ALERT.name,
-                    deduplicationKey,
-                    any(),
-                    any(),
-                    any(),
-                    AlertPriority.P1,
+                    expectedResolvedWorkflowEvent(fixture.orgId, fixture.hostId, deduplicationKey),
                 )
             }
             coVerify(exactly = 1) {
@@ -327,13 +338,7 @@ class MonitorAlertServiceCoverageTest {
 
             coVerify(exactly = 1) {
                 workflowService.publishAlertResolved(
-                    fixture.orgId,
-                    AlertSource.HOST_ALERT.name,
-                    deduplicationKey,
-                    any(),
-                    any(),
-                    any(),
-                    AlertPriority.P1,
+                    expectedResolvedWorkflowEvent(fixture.orgId, fixture.hostId, deduplicationKey),
                 )
             }
             val clearedLastTriggeredAt =
@@ -407,13 +412,7 @@ class MonitorAlertServiceCoverageTest {
 
             coVerify(exactly = 1) {
                 workflowService.publishAlertResolved(
-                    orgId,
-                    AlertSource.HOST_ALERT.name,
-                    deduplicationKey,
-                    any(),
-                    any(),
-                    any(),
-                    AlertPriority.P1,
+                    expectedResolvedWorkflowEvent(orgId, hostId, deduplicationKey, "global-alert-workflow"),
                 )
             }
             val clearedTemplateState =

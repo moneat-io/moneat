@@ -475,6 +475,9 @@ function DashboardPage() {
   const unresolvedIssues = issues.filter(i => i.status === 'unresolved')
   const activeIncidents = incidents.filter(i => i.status !== 'RESOLVED')
   const triggeredIncidents = incidents.filter(i => i.status === 'TRIGGERED')
+  const recentAlerts = activeIncidents.length > 0 ? activeIncidents : incidents
+  const isOnCallLoading = isLoadingIncidents || isLoadingSchedules
+  const hasRecentAlerts = recentAlerts.length > 0
   const uptimeUp = uptimeMonitors.filter(m => m.status === 'up').length
   const uptimeDown = uptimeMonitors.filter(m => m.status === 'down').length
   const hostsUp = monitorHosts.filter(h => normalizeHostStatus(h.status) === 'up').length
@@ -649,13 +652,15 @@ function DashboardPage() {
             )}
 
             {/* Recent alerts */}
-            {isLoadingIncidents || isLoadingSchedules ? (
+            {isOnCallLoading && (
               <SkeletonSection />
-            ) : activeIncidents.length === 0 && incidents.length === 0 ? (
+            )}
+            {!isOnCallLoading && !hasRecentAlerts && (
               <EmptySection message="No alerts" />
-            ) : (
+            )}
+            {!isOnCallLoading && hasRecentAlerts && (
               <div className="space-y-0.5">
-                {(activeIncidents.length > 0 ? activeIncidents : incidents)
+                {recentAlerts
                   .slice(0, 5)
                   .map(alert => (
                     <a

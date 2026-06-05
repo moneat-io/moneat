@@ -281,8 +281,11 @@ export function AlertConfigForm({
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div>
-              <label className="text-xs text-muted-foreground mb-0.5 block">Alert priority</label>
+              <label htmlFor="alert-priority" className="text-xs text-muted-foreground mb-0.5 block">
+                Alert priority
+              </label>
               <select
+                id="alert-priority"
                 className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
                 value={form.alert_priority ?? ''}
                 onChange={(e) =>

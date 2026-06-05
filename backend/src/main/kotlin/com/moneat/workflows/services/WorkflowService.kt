@@ -136,6 +136,17 @@ private val ALERT_METADATA_REFERENCES =
         ALERT_CURRENT_VALUE_REFERENCE
     )
 
+data class AlertResolvedWorkflowEvent(
+    val organizationId: Int,
+    val source: String,
+    val deduplicationKey: String,
+    val title: String = "Alert resolved",
+    val description: String = "Moneat resolved alert $deduplicationKey",
+    val moneatUrl: String = "",
+    val priority: AlertPriority? = null,
+    val severity: AlertPriority? = null,
+)
+
 class WorkflowService(
     private val emailService: EmailService = EmailService(),
     private val slackService: SlackService = SlackService(),
@@ -675,34 +686,25 @@ class WorkflowService(
         }
     }
 
-    suspend fun publishAlertResolved(
-        organizationId: Int,
-        source: String,
-        deduplicationKey: String,
-        title: String = "Alert resolved",
-        description: String = "Moneat resolved alert $deduplicationKey",
-        moneatUrl: String = "",
-        priority: AlertPriority? = null,
-        severity: AlertPriority? = null
-    ) {
-        val alertSource = AlertSource.entries.firstOrNull { it.name == source }
+    suspend fun publishAlertResolved(event: AlertResolvedWorkflowEvent) {
+        val alertSource = AlertSource.entries.firstOrNull { it.name == event.source }
         if (alertSource == null) {
             logger.warn {
-                "Skipping resolved alert workflow for unknown AlertSource '$source' " +
-                    "with deduplicationKey='$deduplicationKey' and organizationId=$organizationId"
+                "Skipping resolved alert workflow for unknown AlertSource '${event.source}' " +
+                    "with deduplicationKey='${event.deduplicationKey}' and organizationId=${event.organizationId}"
             }
             return
         }
         publishResolvedAlertEvent(
             AlertLifecycleEvent(
-                title = title,
-                description = description,
-                priority = priority ?: severity ?: AlertPriority.P3,
+                title = event.title,
+                description = event.description,
+                priority = event.priority ?: event.severity ?: AlertPriority.P3,
                 status = AlertStatus.RESOLVED,
                 source = alertSource,
-                deduplicationKey = deduplicationKey,
-                organizationId = organizationId,
-                moneatUrl = moneatUrl
+                deduplicationKey = event.deduplicationKey,
+                organizationId = event.organizationId,
+                moneatUrl = event.moneatUrl
             )
         )
     }

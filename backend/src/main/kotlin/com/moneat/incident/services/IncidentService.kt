@@ -29,6 +29,7 @@ import com.moneat.incident.models.ProviderConfig
 import com.moneat.shared.models.EscalationPolicies
 import com.moneat.shared.models.EscalationPolicyAlertSources
 import com.moneat.utils.suspendRunCatching
+import com.moneat.workflows.services.AlertResolvedWorkflowEvent
 import com.moneat.workflows.services.WorkflowService
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -152,12 +153,14 @@ class IncidentService(
         if (publishWorkflow) {
             suspendRunCatching {
                 workflowService.publishAlertResolved(
-                    organizationId = organizationId,
-                    source = source.name,
-                    deduplicationKey = deduplicationKey,
-                    title = title,
-                    description = description,
-                    moneatUrl = moneatUrl
+                    AlertResolvedWorkflowEvent(
+                        organizationId = organizationId,
+                        source = source.name,
+                        deduplicationKey = deduplicationKey,
+                        title = title,
+                        description = description,
+                        moneatUrl = moneatUrl,
+                    )
                 )
             }.getOrElse { e ->
                 logger.error("Error publishing alert-resolved workflow", e)

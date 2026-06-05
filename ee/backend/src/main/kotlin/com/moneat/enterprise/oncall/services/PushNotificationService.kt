@@ -14,6 +14,7 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
@@ -120,31 +121,44 @@ class PushNotificationService {
                     setBody(messages)
                 }
 
-            val body = response.bodyAsText()
-            if (response.status.value in 200..299) {
-                val result = Json.decodeFromString<ExpoResponse>(body)
-                result.data?.forEachIndexed { index, ticket ->
-                    if (ticket.status == "error") {
-                        logger.error(
-                            "Push failed for token ${tokens[index]}: ${ticket.message} " +
-                                "(details: ${ticket.details})",
-                        )
-                        if (ticket.details?.get("error") == "DeviceNotRegistered") {
-                            removeDeviceToken(tokens[index])
-                        }
-                    } else {
-                        val prefix = tokens[index].take(TOKEN_LOG_PREFIX_LENGTH)
-                        logger.info(
-                            "Push ticket ok for user $userId, ticketId=${ticket.id}, token prefix=$prefix",
-                        )
-                    }
-                }
-            } else {
-                logger.error("Push request failed HTTP ${response.status}: $body")
-            }
+            handleExpoResponse(userId, tokens, response)
         } catch (e: Exception) {
             logger.error("Failed to send push notification", e)
         }
+    }
+
+    private suspend fun handleExpoResponse(
+        userId: Int,
+        tokens: List<String>,
+        response: HttpResponse,
+    ) {
+        val body = response.bodyAsText()
+        if (response.status.value !in 200..299) {
+            logger.error("Push request failed HTTP ${response.status}: $body")
+            return
+        }
+
+        val result = Json.decodeFromString<ExpoResponse>(body)
+        result.data?.forEachIndexed { index, ticket ->
+            handleExpoTicket(userId, tokens[index], ticket)
+        }
+    }
+
+    private fun handleExpoTicket(
+        userId: Int,
+        token: String,
+        ticket: ExpoTicket,
+    ) {
+        if (ticket.status == "error") {
+            logger.error("Push failed for token $token: ${ticket.message} (details: ${ticket.details})")
+            if (ticket.details?.get("error") == "DeviceNotRegistered") {
+                removeDeviceToken(token)
+            }
+            return
+        }
+
+        val prefix = token.take(TOKEN_LOG_PREFIX_LENGTH)
+        logger.info("Push ticket ok for user $userId, ticketId=${ticket.id}, token prefix=$prefix")
     }
 
     suspend fun sendIncidentAlert(

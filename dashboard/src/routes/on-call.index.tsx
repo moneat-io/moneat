@@ -72,6 +72,70 @@ const avatarColors = [
   'bg-chart-5', 'bg-chart-6', 'bg-chart-7', 'bg-chart-8',
 ]
 
+type OnCallScheduleSummary = {
+  currentOnCall?: {userId?: number | null} | null
+}
+
+type OnCallAlertSummary = {
+  status: string
+  priority: string
+}
+
+type BusinessHoursSummary = {
+  enabled: boolean
+  timezone: string
+  windows?: Array<{
+    dayOfWeek: number
+    startTime: string
+    endTime: string
+  }>
+}
+
+function isActiveAlert(alert: OnCallAlertSummary): boolean {
+  return alert.status === 'TRIGGERED' || alert.status === 'ACKNOWLEDGED'
+}
+
+function isPageableAlert(alert: OnCallAlertSummary): boolean {
+  return alert.priority.startsWith('P0') || alert.priority.startsWith('P1') || alert.priority.startsWith('P2')
+}
+
+function isLowPriorityAlert(alert: OnCallAlertSummary): boolean {
+  return alert.priority.startsWith('P3') || alert.priority.startsWith('P4') || alert.priority.startsWith('P5')
+}
+
+function userOnCallSchedules<T extends OnCallScheduleSummary>(schedules: T[] | undefined, userId: number | undefined) {
+  return schedules?.filter(s => s.currentOnCall?.userId === userId) || []
+}
+
+function businessHoursActiveNow(businessHours: BusinessHoursSummary | undefined): boolean | null {
+  if (!businessHours?.enabled || !businessHours.windows?.length) return null
+  try {
+    const now = new Date()
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: businessHours.timezone,
+      weekday: 'long',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: false,
+    })
+    const parts = formatter.formatToParts(now)
+    const weekday = parts.find(p => p.type === 'weekday')?.value?.toUpperCase()
+    const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0')
+    const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0')
+    const nowMinutes = hour * 60 + minute
+
+    const dayIndex = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'].indexOf(weekday || '')
+    const todayWindows = businessHours.windows.filter(w => w.dayOfWeek === dayIndex)
+    return todayWindows.some(w => {
+      const [startHour, startMinute] = w.startTime.split(':').map(Number)
+      const [endHour, endMinute] = w.endTime.split(':').map(Number)
+      return nowMinutes >= startHour * 60 + startMinute && nowMinutes < endHour * 60 + endMinute
+    })
+  } catch {
+    return null
+  }
+}
+
 function OnCallOverview() {
   const {user} = useAuth()
 
@@ -100,52 +164,15 @@ function OnCallOverview() {
     queryFn: () => api.getBusinessHours(),
   })
 
-  const activeAlerts = alerts?.filter((i) => i.status === 'TRIGGERED' || i.status === 'ACKNOWLEDGED') || []
+  const activeAlerts = alerts?.filter(isActiveAlert) || []
   const hasActiveAlerts = activeAlerts.length > 0
 
-  // Determine which schedules the current user is on-call for
-  const userOnCallSchedules = schedules?.filter(s => s.currentOnCall?.userId === user?.id) || []
-  const isCurrentlyOnCall = userOnCallSchedules.length > 0
+  const currentUserOnCallSchedules = userOnCallSchedules(schedules, user?.id)
+  const isCurrentlyOnCall = currentUserOnCallSchedules.length > 0
 
-  // Split alerts by paging behavior
-  const pageableAlerts = activeAlerts.filter(i => {
-    const level = i.priority
-    return level?.startsWith('P0') || level?.startsWith('P1') || level?.startsWith('P2')
-  })
-  const lowPriorityAlerts = activeAlerts.filter(i => {
-    const level = i.priority
-    return level?.startsWith('P3') || level?.startsWith('P4') || level?.startsWith('P5')
-  })
-
-  // Check if currently within business hours
-  const isWithinBusinessHours = (() => {
-    if (!businessHours?.enabled || !businessHours?.windows?.length) return null
-    try {
-      const now = new Date()
-      const formatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: businessHours.timezone,
-        weekday: 'long',
-        hour: 'numeric',
-        minute: 'numeric',
-        hour12: false,
-      })
-      const parts = formatter.formatToParts(now)
-      const weekday = parts.find(p => p.type === 'weekday')?.value?.toUpperCase()
-      const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0')
-      const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0')
-      const nowMinutes = hour * 60 + minute
-
-      const dayIndex = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'].indexOf(weekday || '')
-      const todayWindows = businessHours.windows.filter(w => w.dayOfWeek === dayIndex)
-      return todayWindows.some(w => {
-        const [sh, sm] = w.startTime.split(':').map(Number)
-        const [eh, em] = w.endTime.split(':').map(Number)
-        return nowMinutes >= sh * 60 + sm && nowMinutes < eh * 60 + em
-      })
-    } catch {
-      return null
-    }
-  })()
+  const pageableAlerts = activeAlerts.filter(isPageableAlert)
+  const lowPriorityAlerts = activeAlerts.filter(isLowPriorityAlert)
+  const isWithinBusinessHours = businessHoursActiveNow(businessHours)
 
   return (
     <div className="space-y-4">
@@ -192,7 +219,7 @@ function OnCallOverview() {
         >
           <p className="-mt-1 mb-3 text-xs text-muted-foreground">
             {isCurrentlyOnCall
-              ? `You're on call for ${userOnCallSchedules.length} schedule${userOnCallSchedules.length > 1 ? 's' : ''}`
+              ? `You're on call for ${currentUserOnCallSchedules.length} schedule${currentUserOnCallSchedules.length > 1 ? 's' : ''}`
               : "You're not currently on call"}
           </p>
           <div className="space-y-3">
@@ -201,7 +228,7 @@ function OnCallOverview() {
               <div className="space-y-2">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">On call for</p>
                 <div className="flex flex-wrap gap-2">
-                  {userOnCallSchedules.map(s => (
+                  {currentUserOnCallSchedules.map(s => (
                     <Badge key={s.id} variant="info" className="gap-1.5">
                       <Calendar className="h-3 w-3" />
                       {s.name}

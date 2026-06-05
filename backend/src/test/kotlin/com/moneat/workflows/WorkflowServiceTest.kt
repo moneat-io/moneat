@@ -49,6 +49,7 @@ import com.moneat.workflows.models.WorkflowUsageEvents
 import com.moneat.workflows.models.WorkflowVersions
 import com.moneat.workflows.models.Workflows
 import com.moneat.workflows.models.typedWorkflowScope
+import com.moneat.workflows.services.AlertResolvedWorkflowEvent
 import com.moneat.workflows.services.WorkflowService
 import io.mockk.clearMocks
 import io.mockk.coEvery
@@ -1195,9 +1196,11 @@ class WorkflowServiceTest {
                 )
             )
             service.publishAlertResolved(
-                organizationId = orgId,
-                source = AlertSource.UPTIME_MONITOR.name,
-                deduplicationKey = "uptime-1"
+                AlertResolvedWorkflowEvent(
+                    organizationId = orgId,
+                    source = AlertSource.UPTIME_MONITOR.name,
+                    deduplicationKey = "uptime-1",
+                )
             )
 
             val queuedRun = service.listRuns(orgId, workflow.id).single()
@@ -1250,9 +1253,11 @@ class WorkflowServiceTest {
             )
 
             service.publishAlertResolved(
-                organizationId = orgId,
-                source = AlertSource.HOST_ALERT.name,
-                deduplicationKey = "host-1"
+                AlertResolvedWorkflowEvent(
+                    organizationId = orgId,
+                    source = AlertSource.HOST_ALERT.name,
+                    deduplicationKey = "host-1",
+                )
             )
             service.publishAlertTriggered(alertEvent())
 
@@ -1378,9 +1383,11 @@ class WorkflowServiceTest {
             publish(workflow.id)
 
             service.publishAlertResolved(
-                organizationId = orgId,
-                source = "UNKNOWN_SOURCE",
-                deduplicationKey = "host-1"
+                AlertResolvedWorkflowEvent(
+                    organizationId = orgId,
+                    source = "UNKNOWN_SOURCE",
+                    deduplicationKey = "host-1",
+                )
             )
 
             assertEquals(emptyList(), runIdentities(workflow.id))

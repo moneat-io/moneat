@@ -29,11 +29,12 @@ import org.jetbrains.exposed.v1.jdbc.update
 import org.slf4j.LoggerFactory
 import kotlin.time.Clock
 
+private val logger = LoggerFactory.getLogger(OnCallIncidentService::class.java)
+private const val ALERT_NOT_FOUND_MESSAGE = "Alert not found"
+
 class OnCallIncidentService(
     private val workflowService: WorkflowService = WorkflowService(),
 ) {
-    private val logger = LoggerFactory.getLogger(OnCallIncidentService::class.java)
-
     suspend fun declareIncident(
         organizationId: Int,
         userId: Int,
@@ -109,10 +110,10 @@ class OnCallIncidentService(
             OnCallAlerts
                 .selectAll()
                 .where { OnCallAlerts.id eq alertId }
-                .singleOrNull() ?: throw IllegalArgumentException("Alert not found")
+                .singleOrNull() ?: throw IllegalArgumentException(ALERT_NOT_FOUND_MESSAGE)
 
         require(alert[OnCallAlerts.organizationId] == organizationId) {
-            "Alert not found"
+            ALERT_NOT_FOUND_MESSAGE
         }
 
         val existingLink =
@@ -153,7 +154,7 @@ class OnCallIncidentService(
         // Check alert exists
         val alert =
             OnCallAlerts.selectAll().where { OnCallAlerts.id eq alertId }.singleOrNull()
-                ?: throw IllegalArgumentException("Alert not found")
+                ?: throw IllegalArgumentException(ALERT_NOT_FOUND_MESSAGE)
 
         // Insert if not exists
         val exists =

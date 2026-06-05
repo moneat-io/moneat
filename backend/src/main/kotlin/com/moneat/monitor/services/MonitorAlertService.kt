@@ -33,6 +33,7 @@ import com.moneat.shared.models.HostAlerts
 import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.OrganizationAlertTemplates
 import com.moneat.shared.services.TaskLock
+import com.moneat.workflows.services.AlertResolvedWorkflowEvent
 import com.moneat.workflows.services.WorkflowService
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
@@ -392,13 +393,15 @@ class MonitorAlertService(
     ) {
         suspendRunCatching {
             workflowService.publishAlertResolved(
-                organizationId = organizationId,
-                source = AlertSource.HOST_ALERT.name,
-                deduplicationKey = deduplicationKey,
-                title = title,
-                description = description,
-                moneatUrl = dashboardUrl,
-                priority = priority
+                AlertResolvedWorkflowEvent(
+                    organizationId = organizationId,
+                    source = AlertSource.HOST_ALERT.name,
+                    deduplicationKey = deduplicationKey,
+                    title = title,
+                    description = description,
+                    moneatUrl = dashboardUrl,
+                    priority = priority,
+                )
             )
         }.getOrElse { e ->
             logger.error(e) { "Failed to publish recovered host alert workflow ${alert.id}" }

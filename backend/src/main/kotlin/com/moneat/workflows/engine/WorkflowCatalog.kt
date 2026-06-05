@@ -36,6 +36,7 @@ import kotlinx.serialization.Serializable
 
 private const val EQUALS_LABEL = "is equal to"
 private const val NOT_EQUALS_LABEL = "is not equal to"
+private const val AT_LEAST_LABEL = "is at least"
 private const val ALERT_STATUS_REFERENCE = "alert.status"
 private const val ALERT_DEDUPLICATION_KEY_REFERENCE = "alert.deduplication_key"
 private const val ALERT_CHANNEL_EMAIL_REFERENCE = "alert.channels.email"
@@ -64,6 +65,7 @@ private const val SECURITY_SEVERITY_REFERENCE = "security.severity"
 private const val SECURITY_RESOURCE_REFERENCE = "security.resource"
 
 private const val DEDUPLICATION_KEY_LABEL = "Deduplication key"
+private const val INCIDENT_SEVERITY_LABEL = "Incident severity"
 private const val ORGANIZATION_ID_LABEL = "Organization ID"
 private const val PROJECT_ID_LABEL = "Project ID"
 
@@ -194,17 +196,17 @@ object WorkflowCatalog {
             operations = listOf(
                 WorkflowOperationDefinition("eq", EQUALS_LABEL, "AlertPriority"),
                 WorkflowOperationDefinition("neq", NOT_EQUALS_LABEL, "AlertPriority"),
-                WorkflowOperationDefinition("at_least", "is at least", "AlertPriority")
+                WorkflowOperationDefinition("at_least", AT_LEAST_LABEL, "AlertPriority")
             )
         ),
         WorkflowResourceDefinition(
             type = "IncidentSeverity",
-            label = "Incident severity",
+            label = INCIDENT_SEVERITY_LABEL,
             fieldConfig = WorkflowFieldConfig(type = "select", placeholder = "SEV-0, SEV-1, SEV-2, SEV-3, SEV-4"),
             operations = listOf(
                 WorkflowOperationDefinition("eq", EQUALS_LABEL, "IncidentSeverity"),
                 WorkflowOperationDefinition("neq", NOT_EQUALS_LABEL, "IncidentSeverity"),
-                WorkflowOperationDefinition("at_least", "is at least", "IncidentSeverity")
+                WorkflowOperationDefinition("at_least", AT_LEAST_LABEL, "IncidentSeverity")
             )
         ),
         WorkflowResourceDefinition(
@@ -244,7 +246,7 @@ object WorkflowCatalog {
             operations = listOf(
                 WorkflowOperationDefinition("eq", EQUALS_LABEL, "SecuritySeverity"),
                 WorkflowOperationDefinition("neq", NOT_EQUALS_LABEL, "SecuritySeverity"),
-                WorkflowOperationDefinition("at_least", "is at least", "SecuritySeverity")
+                WorkflowOperationDefinition("at_least", AT_LEAST_LABEL, "SecuritySeverity")
             )
         )
     )
@@ -298,7 +300,7 @@ object WorkflowCatalog {
         WorkflowScopeReferenceDefinition(INCIDENT_ID_REFERENCE, "Incident ID", "String"),
         WorkflowScopeReferenceDefinition(INCIDENT_TITLE_REFERENCE, "Incident title", "String"),
         WorkflowScopeReferenceDefinition(INCIDENT_STATUS_REFERENCE, "Incident status", "IncidentStatus"),
-        WorkflowScopeReferenceDefinition(INCIDENT_SEVERITY_REFERENCE, "Incident severity", "IncidentSeverity"),
+        WorkflowScopeReferenceDefinition(INCIDENT_SEVERITY_REFERENCE, INCIDENT_SEVERITY_LABEL, "IncidentSeverity"),
         WorkflowScopeReferenceDefinition(ALERT_DEDUPLICATION_KEY_REFERENCE, DEDUPLICATION_KEY_LABEL, "String"),
         WorkflowScopeReferenceDefinition(ALERT_EPISODE_ID_REFERENCE, "Episode ID", "String"),
         WorkflowScopeReferenceDefinition(ALERT_EPISODE_KEY_REFERENCE, "Episode key", "String"),
@@ -575,7 +577,7 @@ object WorkflowCatalog {
             params = listOf(
                 WorkflowStepParamDefinition("title", "Title", "String"),
                 WorkflowStepParamDefinition("description", "Description", "Text", required = false),
-                WorkflowStepParamDefinition("incident_severity", "Incident severity", "String"),
+                WorkflowStepParamDefinition("incident_severity", INCIDENT_SEVERITY_LABEL, "String"),
                 WorkflowStepParamDefinition("alert_id", "Alert ID", "Number", required = false)
             )
         ),

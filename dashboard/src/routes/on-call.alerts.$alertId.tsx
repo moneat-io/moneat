@@ -86,10 +86,16 @@ function timeAgo(date: string) {
   return `${days}d ago`
 }
 
+function detailString(value: unknown): string | null {
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return null
+}
+
 function getTimelineDescription(event: IncidentTimeline): string | null {
   if (event.eventType === 'NOTIFICATION_SENT' && event.details) {
-    const toName = event.details.toUserName || event.actorUserName
-    const channel = event.details.channel
+    const toName = detailString(event.details.toUserName) ?? event.actorUserName
+    const channel = detailString(event.details.channel)
     if (toName && channel) return `to ${toName} via ${channel}`
     if (toName) return `to ${toName}`
     if (channel) return `via ${channel}`
@@ -97,8 +103,9 @@ function getTimelineDescription(event: IncidentTimeline): string | null {
   if (event.eventType === 'ESCALATED' && event.details?.stepNumber !== undefined) {
     return `to step ${Number(event.details.stepNumber) + 1}`
   }
-  if (event.eventType === 'REASSIGNED' && event.details?.toUserName) {
-    return `to ${event.details.toUserName}`
+  const reassignedUser = detailString(event.details?.toUserName)
+  if (event.eventType === 'REASSIGNED' && reassignedUser) {
+    return `to ${reassignedUser}`
   }
   if (event.eventType === 'REASSIGNED' && event.details?.reason === 'unavailable') {
     return 'user marked as unavailable'
@@ -411,10 +418,14 @@ function IncidentDetailPage() {
                     icon: Clock,
                     color: 'text-muted-foreground',
                     bgColor: 'bg-muted',
-                    label: event.eventType.replace(/_/g, ' '),
+                    label: event.eventType.replaceAll('_', ' '),
                   }
                   const Icon = config.icon
                   const description = getTimelineDescription(event)
+                  const note =
+                    event.eventType === 'NOTE_ADDED' && event.details
+                      ? detailString(event.details.note)
+                      : null
 
                   return (
                     <div key={event.id} className="flex gap-3 pb-6 last:pb-0 relative">
@@ -444,8 +455,8 @@ function IncidentDetailPage() {
                         {description && (
                           <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
                         )}
-                        {event.details && event.eventType === 'NOTE_ADDED' && !!event.details.note && (
-                          <p className="italic bg-muted/50 rounded-lg p-2.5 mt-1.5 text-xs text-muted-foreground">&quot;{String(event.details.note)}&quot;</p>
+                        {note && (
+                          <p className="italic bg-muted/50 rounded-lg p-2.5 mt-1.5 text-xs text-muted-foreground">&quot;{note}&quot;</p>
                         )}
                       </div>
                     </div>

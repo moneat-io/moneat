@@ -96,6 +96,7 @@ function DeclaredIncidents() {
 
   const openCount = incidents?.filter(i => i.status === 'OPEN').length || 0
   const resolvedCount = incidents?.filter(i => i.status === 'RESOLVED').length || 0
+  const hasIncidents = incidents !== undefined && incidents.length > 0
 
   if (isDetailRoute) {
     return <Outlet />
@@ -183,13 +184,14 @@ function DeclaredIncidents() {
       </div>
 
       {/* Incidents List */}
-      {isLoading ? (
+      {isLoading && (
         <div className="flex items-center justify-center py-10">
           <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-primary" />
         </div>
-      ) : incidents && incidents.length > 0 ? (
+      )}
+      {!isLoading && hasIncidents && (
         <div className="space-y-2">
-          {incidents.map((incident) => {
+          {incidents?.map((incident) => {
             const statusCfg = getStatusConfig(incident.status)
             const StatusIcon = statusCfg.icon
             return (
@@ -251,7 +253,8 @@ function DeclaredIncidents() {
             )
           })}
         </div>
-      ) : (
+      )}
+      {!isLoading && !hasIncidents && (
         <EmptyState
           icon={FileText}
           title="No incidents found"

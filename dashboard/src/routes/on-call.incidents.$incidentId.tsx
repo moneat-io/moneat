@@ -107,27 +107,41 @@ function timeAgo(date: string) {
   return `${days}d ago`
 }
 
-function getTimelineDescription(event: DeclaredIncidentTimelineEvent): string | null {
-  if (event.eventType === 'NOTIFICATION_SENT' && event.details) {
-    const toName = event.details.toUserName || event.actorUserName
-    const channel = event.details.channel
-    if (toName && channel) return `to ${toName} via ${channel}`
-    if (toName) return `to ${toName}`
-    if (channel) return `via ${channel}`
-  }
-  if (event.eventType === 'ESCALATED' && event.details?.stepNumber !== undefined) {
-    return `to step ${Number(event.details.stepNumber) + 1}`
-  }
-  if (event.eventType === 'REASSIGNED' && event.details?.toUserName) {
-    return `to ${event.details.toUserName}`
-  }
-  if (event.eventType === 'REASSIGNED' && event.details?.reason === 'unavailable') {
-    return 'user marked as unavailable'
-  }
-  if (event.eventType === 'ALERT_LINKED' && event.details?.alertTitle) {
-    return event.details.alertTitle as string
-  }
+function detailString(value: unknown): string | null {
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
   return null
+}
+
+function getTimelineDescription(event: DeclaredIncidentTimelineEvent): string | null {
+  switch (event.eventType) {
+    case 'NOTIFICATION_SENT':
+      return notificationDescription(event)
+    case 'ESCALATED':
+      return event.details?.stepNumber !== undefined ? `to step ${Number(event.details.stepNumber) + 1}` : null
+    case 'REASSIGNED':
+      return reassignmentDescription(event)
+    case 'ALERT_LINKED':
+      return detailString(event.details?.alertTitle)
+    default:
+      return null
+  }
+}
+
+function notificationDescription(event: DeclaredIncidentTimelineEvent): string | null {
+  if (!event.details) return null
+  const toName = detailString(event.details.toUserName) ?? event.actorUserName
+  const channel = detailString(event.details.channel)
+  if (toName && channel) return `to ${toName} via ${channel}`
+  if (toName) return `to ${toName}`
+  if (channel) return `via ${channel}`
+  return null
+}
+
+function reassignmentDescription(event: DeclaredIncidentTimelineEvent): string | null {
+  const toName = detailString(event.details?.toUserName)
+  if (toName) return `to ${toName}`
+  return event.details?.reason === 'unavailable' ? 'user marked as unavailable' : null
 }
 
 function DeclaredIncidentDetailComponent() {
