@@ -172,7 +172,7 @@ class WorkflowInterpreterWorkflowTest {
                                 kind = "if",
                                 conditions = listOf(
                                     WorkflowConditionConfig(
-                                        reference = "alert.severity",
+                                        reference = "alert.priority",
                                         operation = "eq",
                                         value = "critical"
                                     )
@@ -189,7 +189,7 @@ class WorkflowInterpreterWorkflowTest {
                             WorkflowGraphEdge("severity-check", "email", branch = "true")
                         )
                     ),
-                    scope = mapOf("alert.severity" to JsonPrimitive("critical"))
+                    scope = mapOf("alert.priority" to JsonPrimitive("critical"))
                 )
             )
 

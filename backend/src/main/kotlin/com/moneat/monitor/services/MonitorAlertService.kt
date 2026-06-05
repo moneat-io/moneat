@@ -20,7 +20,7 @@ import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertLifecycleEvent
-import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertStatus
 import com.moneat.incident.services.IncidentService
 import com.moneat.monitor.models.AlertData
@@ -355,7 +355,7 @@ class MonitorAlertService(
         val metricLabel = getMetricLabel(alert.metric)
         val frontendUrl = config.property(EMAIL_FRONTEND_URL_CONFIG).getString()
         val dashboardUrl = "$frontendUrl/monitoring/hosts/${alert.hostId}"
-        val alertSeverityOverride = hostAlertSeverityOverride(alert)
+        val alertPriorityOverride = hostAlertPriorityOverride(alert)
         val title = "$hostName - $metricLabel recovered"
         val description = "The alert for $metricLabel is no longer active."
         val deduplicationKey = hostAlertDedupKey(alert)
@@ -367,7 +367,7 @@ class MonitorAlertService(
             title = title,
             description = description,
             dashboardUrl = dashboardUrl,
-            severity = alertSeverityOverride ?: AlertSeverity.HIGH
+            priority = alertPriorityOverride ?: AlertPriority.P1
         )
         autoResolveRecoveredHostIncident(
             alert = alert,
@@ -376,7 +376,7 @@ class MonitorAlertService(
             title = title,
             description = description,
             dashboardUrl = dashboardUrl,
-            alertSeverityOverride = alertSeverityOverride
+            alertPriorityOverride = alertPriorityOverride
         )
         logger.info { "Alert ${alert.id} recovered for host ${alert.hostId}" }
     }
@@ -388,7 +388,7 @@ class MonitorAlertService(
         title: String,
         description: String,
         dashboardUrl: String,
-        severity: AlertSeverity
+        priority: AlertPriority
     ) {
         suspendRunCatching {
             workflowService.publishAlertResolved(
@@ -398,7 +398,7 @@ class MonitorAlertService(
                 title = title,
                 description = description,
                 moneatUrl = dashboardUrl,
-                severity = severity
+                priority = priority
             )
         }.getOrElse { e ->
             logger.error(e) { "Failed to publish recovered host alert workflow ${alert.id}" }
@@ -412,9 +412,9 @@ class MonitorAlertService(
         title: String,
         description: String,
         dashboardUrl: String,
-        alertSeverityOverride: AlertSeverity?
+        alertPriorityOverride: AlertPriority?
     ) {
-        if (alertSeverityOverride == null) return
+        if (alertPriorityOverride == null) return
 
         suspendRunCatching {
             incidentService.autoResolveAlert(
@@ -747,14 +747,14 @@ class MonitorAlertService(
         val formattedThreshold = formatMetricValue(alert.metric, alert.threshold)
         val frontendUrl = config.property(EMAIL_FRONTEND_URL_CONFIG).getString()
 
-        val alertSeverity = hostAlertSeverityOverride(alert)
+        val alertPriority = hostAlertPriorityOverride(alert)
         val alertLifecycleEvent =
             AlertLifecycleEvent(
                 title = "$hostName - $metricLabel ${alert.condition} ${alert.threshold}",
                 description =
                 "Metric: $metricLabel\nCondition: ${alert.condition} $formattedThreshold" +
                     "\nCurrent Value: $formattedValue",
-                severity = alertSeverity ?: AlertSeverity.HIGH,
+                priority = alertPriority ?: AlertPriority.P1,
                 status = AlertStatus.FIRING,
                 source = AlertSource.HOST_ALERT,
                 deduplicationKey = hostAlertDedupKey(alert),
@@ -775,24 +775,24 @@ class MonitorAlertService(
         }.getOrElse { e ->
             logger.error(e) { "Failed to publish host alert workflow" }
         }
-        if (alertSeverity != null) {
+        if (alertPriority != null) {
             suspendRunCatching {
                 incidentService.fireAlert(alertLifecycleEvent, publishWorkflow = false)
             }.getOrElse { e ->
-                logger.error(e) { "Failed to fire host alert incident" }
+                logger.error(e) { "Failed to fire host alert" }
             }
         }
     }
 
-    private fun hostAlertSeverityOverride(alert: AlertData): AlertSeverity? =
+    private fun hostAlertPriorityOverride(alert: AlertData): AlertPriority? =
         if (alert.scope == MonitorService.ALERT_SCOPE_GLOBAL && alert.templateAlertId != null) {
             transaction {
                 OrganizationAlertTemplates
                     .selectAll()
                     .where { OrganizationAlertTemplates.id eq alert.templateAlertId }
                     .firstOrNull()
-                    ?.get(OrganizationAlertTemplates.incident_severity)
-                    ?.let { AlertSeverity.fromString(it) }
+                    ?.get(OrganizationAlertTemplates.alert_priority)
+                    ?.let { AlertPriority.fromString(it) }
             }
         } else {
             transaction {
@@ -800,8 +800,8 @@ class MonitorAlertService(
                     .selectAll()
                     .where { HostAlerts.id eq alert.id }
                     .firstOrNull()
-                    ?.get(HostAlerts.incident_severity)
-                    ?.let { AlertSeverity.fromString(it) }
+                    ?.get(HostAlerts.alert_priority)
+                    ?.let { AlertPriority.fromString(it) }
             }
         }
 
@@ -890,7 +890,7 @@ class MonitorAlertService(
                 AlertLifecycleEvent(
                     title = "Host Down: $hostName",
                     description = "The monitoring agent has stopped reporting metrics.\nStatus: $lastSeenText",
-                    severity = AlertSeverity.CRITICAL,
+                    priority = AlertPriority.P0,
                     status = AlertStatus.FIRING,
                     source = AlertSource.HOST_DOWN,
                     deduplicationKey = hostDownDedupKey(hostId),

@@ -16,6 +16,7 @@
 
 package com.moneat.uptime.repositories
 
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.config.ClickHouseClient
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
@@ -39,6 +40,14 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
 class UptimeMonitorRepositoryImpl : UptimeMonitorRepository {
+    private fun canonicalAlertPriority(alertPriority: String?): String? =
+        alertPriority?.let { AlertPriority.fromString(it)?.wire }
+
+    private fun CreateUptimeMonitorRequest.resolvedAlertPriority(): String? =
+        canonicalAlertPriority(alertPriority ?: legacyIncidentSeverity)
+
+    private fun UpdateUptimeMonitorRequest.resolvedAlertPriority(): String? =
+        canonicalAlertPriority(alertPriority ?: legacyIncidentSeverity)
 
     override fun getMonitorCountForOrganization(organizationId: Int): Int =
         transaction {
@@ -100,6 +109,7 @@ class UptimeMonitorRepositoryImpl : UptimeMonitorRepository {
                 it[lastStatusChangeAt] = now
                 it[consecutiveFailures] = 0
                 it[UptimeMonitors.pushToken] = pushToken
+                it[alertPriority] = request.resolvedAlertPriority()
                 it[createdAt] = now
                 it[updatedAt] = now
             }
@@ -147,6 +157,7 @@ class UptimeMonitorRepositoryImpl : UptimeMonitorRepository {
                 request.timeoutSeconds?.let { v -> it[timeoutSeconds] = v }
                 request.retries?.let { v -> it[retries] = v }
                 request.retryIntervalSeconds?.let { v -> it[retryIntervalSeconds] = v }
+                request.resolvedAlertPriority()?.let { v -> it[alertPriority] = v }
                 it[updatedAt] = Clock.System.now()
             } > 0
         }
@@ -325,6 +336,7 @@ class UptimeMonitorRepositoryImpl : UptimeMonitorRepository {
             lastStatusChangeAt = row[UptimeMonitors.lastStatusChangeAt],
             consecutiveFailures = row[UptimeMonitors.consecutiveFailures],
             pushToken = row[UptimeMonitors.pushToken],
+            alertPriority = row[UptimeMonitors.alertPriority],
             createdAt = row[UptimeMonitors.createdAt],
             updatedAt = row[UptimeMonitors.updatedAt]
         )

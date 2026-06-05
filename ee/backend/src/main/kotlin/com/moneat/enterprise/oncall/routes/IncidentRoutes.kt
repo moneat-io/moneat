@@ -4,7 +4,8 @@
 
 package com.moneat.enterprise.oncall.routes
 
-import com.moneat.enterprise.oncall.services.IncidentManagementService
+import com.moneat.alerts.models.IncidentSeverity
+import com.moneat.enterprise.oncall.services.OnCallAlertService
 import com.moneat.enterprise.oncall.services.OnCallIncidentService
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.MessageResponse
@@ -37,7 +38,6 @@ private fun parseStatusFilters(rawStatuses: List<String>?): List<String> =
 data class DeclareIncidentRequest(
     val title: String,
     val description: String? = null,
-    val priorityLevel: String? = null,
     val severity: String? = null,
 )
 
@@ -56,10 +56,10 @@ data class AddNoteRequest(
     val note: String,
 )
 
-fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementService) {
+fun Route.incidentRoutes(alertServiceProvider: () -> OnCallAlertService) {
     val onCallIncidentService = OnCallIncidentService()
 
-    route("/v1/incidents") {
+    route("/v1/on-call/alerts") {
         authenticate("auth-jwt") {
             get {
                 val principal = call.principal<JWTPrincipal>()
@@ -71,7 +71,7 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 }
 
                 val statuses = parseStatusFilters(call.request.queryParameters.getAll("status"))
-                val priorityLevel = call.request.queryParameters["priority"]
+                val priority = call.request.queryParameters["priority"]
                 val rawLimit = call.request.queryParameters["limit"]?.toIntOrNull()
                 val limit =
                     when {
@@ -82,17 +82,17 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                     }
                 val offset = call.request.queryParameters["offset"]?.toIntOrNull() ?: 0
 
-                val incidentService = incidentServiceProvider()
-                val incidents =
-                    incidentService.listIncidents(
+                val alertService = alertServiceProvider()
+                val alerts =
+                    alertService.listAlerts(
                         organizationId = organizationId,
                         statuses = statuses.ifEmpty { null },
-                        priorityLevel = priorityLevel,
+                        priority = priority,
                         limit = limit,
                         offset = offset,
                         currentUserId = principal.payload.getClaim("userId").asInt(),
                     )
-                call.respond(incidents)
+                call.respond(alerts)
             }
 
             get("/{id}") {
@@ -106,16 +106,16 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 }
 
                 if (incidentId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
                     return@get
                 }
 
-                val incidentService = incidentServiceProvider()
-                val incident = incidentService.getIncident(incidentId, principal.payload.getClaim("userId").asInt())
+                val alertService = alertServiceProvider()
+                val incident = alertService.getAlert(incidentId, principal.payload.getClaim("userId").asInt())
                 if (incident != null && incident.organizationId == organizationId) {
                     call.respond(incident)
                 } else {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
                 }
             }
 
@@ -130,18 +130,18 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 }
 
                 if (incidentId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
                     return@get
                 }
 
-                val incidentService = incidentServiceProvider()
-                val incident = incidentService.getIncident(incidentId)
+                val alertService = alertServiceProvider()
+                val incident = alertService.getAlert(incidentId)
                 if (incident == null || incident.organizationId != organizationId) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
                     return@get
                 }
 
-                val timeline = incidentService.getTimeline(incidentId)
+                val timeline = alertService.getTimeline(incidentId)
                 call.respond(timeline)
             }
 
@@ -157,7 +157,7 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 }
 
                 if (incidentId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
                     return@post
                 }
 
@@ -166,18 +166,18 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                     return@post
                 }
 
-                val incidentService = incidentServiceProvider()
-                val incident = incidentService.getIncident(incidentId)
+                val alertService = alertServiceProvider()
+                val incident = alertService.getAlert(incidentId)
                 if (incident == null || incident.organizationId != organizationId) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
                     return@post
                 }
 
-                val acknowledged = incidentService.acknowledge(incidentId, jwtUserId)
+                val acknowledged = alertService.acknowledge(incidentId, jwtUserId)
                 if (acknowledged) {
-                    call.respond(HttpStatusCode.OK, MessageResponse("Incident acknowledged"))
+                    call.respond(HttpStatusCode.OK, MessageResponse("Alert acknowledged"))
                 } else {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Could not acknowledge incident"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Could not acknowledge alert"))
                 }
             }
 
@@ -193,7 +193,7 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 }
 
                 if (incidentId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
                     return@post
                 }
 
@@ -202,18 +202,18 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                     return@post
                 }
 
-                val incidentService = incidentServiceProvider()
-                val incident = incidentService.getIncident(incidentId)
+                val alertService = alertServiceProvider()
+                val incident = alertService.getAlert(incidentId)
                 if (incident == null || incident.organizationId != organizationId) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
                     return@post
                 }
 
-                val resolved = incidentService.resolve(incidentId, jwtUserId)
+                val resolved = alertService.resolve(incidentId, jwtUserId)
                 if (resolved) {
-                    call.respond(HttpStatusCode.OK, MessageResponse("Incident resolved"))
+                    call.respond(HttpStatusCode.OK, MessageResponse("Alert resolved"))
                 } else {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Could not resolve incident"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Could not resolve alert"))
                 }
             }
 
@@ -229,7 +229,7 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 }
 
                 if (incidentId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
                     return@post
                 }
 
@@ -238,20 +238,20 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                     return@post
                 }
 
-                val incidentService = incidentServiceProvider()
-                val incident = incidentService.getIncident(incidentId)
+                val alertService = alertServiceProvider()
+                val incident = alertService.getAlert(incidentId)
                 if (incident == null || incident.organizationId != organizationId) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
                     return@post
                 }
 
                 val request = call.receive<ReassignIncidentRequest>()
 
-                val reassigned = incidentService.reassign(incidentId, request.toUserId, byUserId)
+                val reassigned = alertService.reassign(incidentId, request.toUserId, byUserId)
                 if (reassigned) {
-                    call.respond(HttpStatusCode.OK, MessageResponse("Incident reassigned"))
+                    call.respond(HttpStatusCode.OK, MessageResponse("Alert reassigned"))
                 } else {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Could not reassign incident"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Could not reassign alert"))
                 }
             }
 
@@ -267,7 +267,7 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 }
 
                 if (incidentId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
                     return@post
                 }
 
@@ -276,16 +276,16 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                     return@post
                 }
 
-                val incidentService = incidentServiceProvider()
-                val incident = incidentService.getIncident(incidentId)
+                val alertService = alertServiceProvider()
+                val incident = alertService.getAlert(incidentId)
                 if (incident == null || incident.organizationId != organizationId) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
                     return@post
                 }
 
                 val request = call.receive<AddNoteRequest>()
 
-                val event = incidentService.addNote(incidentId, userId, request.note)
+                val event = alertService.addNote(incidentId, userId, request.note)
                 call.respond(HttpStatusCode.Created, event)
             }
 
@@ -301,19 +301,19 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 }
 
                 if (incidentId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
                     return@post
                 }
 
-                val incidentService = incidentServiceProvider()
-                val incident = incidentService.getIncident(incidentId)
+                val alertService = alertServiceProvider()
+                val incident = alertService.getAlert(incidentId)
                 if (incident == null || incident.organizationId != organizationId) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
                     return@post
                 }
 
-                incidentService.viewIncident(incidentId, userId)
-                call.respond(HttpStatusCode.OK, MessageResponse("Incident viewed"))
+                alertService.viewAlert(incidentId, userId)
+                call.respond(HttpStatusCode.OK, MessageResponse("Alert viewed"))
             }
 
             post("/{id}/unavailable") {
@@ -328,26 +328,26 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 }
 
                 if (incidentId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident ID"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
                     return@post
                 }
 
-                val incidentService = incidentServiceProvider()
-                val incident = incidentService.getIncident(incidentId)
+                val alertService = alertServiceProvider()
+                val incident = alertService.getAlert(incidentId)
                 if (incident == null || incident.organizationId != organizationId) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
                     return@post
                 }
 
-                val result = incidentService.markUnavailable(incidentId, userId)
+                val result = alertService.markUnavailable(incidentId, userId)
                 if (result) {
                     call.respond(HttpStatusCode.OK, MessageResponse("Escalated to next on-call"))
                 } else {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Could not escalate incident"))
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Could not escalate alert"))
                 }
             }
 
-            post("/{alertId}/declare") {
+            post("/{alertId}/declare-incident") {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
                 val userId = principal?.payload?.getClaim("userId")?.asInt()
@@ -363,8 +363,8 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                     return@post
                 }
 
-                val incidentService = incidentServiceProvider()
-                val alert = incidentService.getIncident(alertId)
+                val alertService = alertServiceProvider()
+                val alert = alertService.getAlert(alertId)
                 if (alert == null || alert.organizationId != organizationId) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
                     return@post
@@ -372,10 +372,16 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
 
                 val request = call.receive<DeclareIncidentRequest>()
 
-                val priorityLevel = request.priorityLevel?.trim() ?: request.severity?.trim()
+                val severity = request.severity?.trim()
 
-                if (priorityLevel.isNullOrBlank()) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing priority level"))
+                if (severity.isNullOrBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing incident severity"))
+                    return@post
+                }
+
+                val incidentSeverity = IncidentSeverity.wireValue(severity)
+                if (incidentSeverity == null) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident severity"))
                     return@post
                 }
 
@@ -387,7 +393,7 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                             alertId = alertId,
                             title = request.title,
                             description = request.description,
-                            priorityLevel = priorityLevel,
+                            severity = incidentSeverity,
                         )
                     call.respond(HttpStatusCode.Created, incident)
                 } catch (e: IllegalStateException) {
@@ -399,7 +405,7 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
         }
     }
 
-    route("/v1/on-call-incidents") {
+    route("/v1/on-call/incidents") {
         authenticate("auth-jwt") {
             get {
                 val principal = call.principal<JWTPrincipal>()
@@ -411,8 +417,8 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 }
 
                 val status = call.request.queryParameters["status"]
-                val priorityLevel = call.request.queryParameters["priorityLevel"]
-                val incidents = onCallIncidentService.getIncidents(organizationId, status, priorityLevel)
+                val severity = call.request.queryParameters["severity"]
+                val incidents = onCallIncidentService.getIncidents(organizationId, status, severity)
                 call.respond(incidents)
             }
 
@@ -494,8 +500,8 @@ fun Route.incidentRoutes(incidentServiceProvider: () -> IncidentManagementServic
                 }
 
                 val request = call.receive<AddAlertToIncidentRequest>()
-                val incidentService = incidentServiceProvider()
-                val alert = incidentService.getIncident(request.alertId)
+                val alertService = alertServiceProvider()
+                val alert = alertService.getAlert(request.alertId)
 
                 if (alert == null || alert.organizationId != organizationId) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Alert not found or not in organization"))

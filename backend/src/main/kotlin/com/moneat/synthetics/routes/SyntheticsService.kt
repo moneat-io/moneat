@@ -17,7 +17,7 @@
 package com.moneat.synthetics.routes
 
 import com.moneat.alerts.models.AlertLifecycleEvent
-import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertStatus
 import com.moneat.billing.services.BillingQuotaService
@@ -390,7 +390,7 @@ class SyntheticsService(
             AlertLifecycleEvent(
                 title = subject,
                 description = message,
-                severity = AlertSeverity.HIGH,
+                priority = AlertPriority.P1,
                 status = AlertStatus.FIRING,
                 source = AlertSource.SYNTHETIC_TEST,
                 deduplicationKey = "moneat-synthetic-${test.id}",
@@ -409,7 +409,7 @@ class SyntheticsService(
             AlertLifecycleEvent(
                 title = "Synthetic test recovered: ${test.name}",
                 description = "Test '${test.name}' (${test.testType}) passed after previous failures.",
-                severity = AlertSeverity.LOW,
+                priority = AlertPriority.P3,
                 status = AlertStatus.RESOLVED,
                 source = AlertSource.SYNTHETIC_TEST,
                 deduplicationKey = "moneat-synthetic-${test.id}",

@@ -78,7 +78,7 @@ class LinearGraphAdapterTest {
         val graph =
             LinearGraphAdapter.graphFromLegacy(
                 triggerName = "alert.triggered",
-                conditions = listOf(WorkflowConditionConfig("alert.severity", "at_least", "HIGH")),
+                conditions = listOf(WorkflowConditionConfig("alert.priority", "at_least", "HIGH")),
                 steps = listOf(
                     WorkflowStepConfig("notification.slack"),
                     WorkflowStepConfig("notification.email")
@@ -148,7 +148,7 @@ class LinearGraphAdapterTest {
 
     @Test
     fun `conditionsFromGraph returns conditions of the first if node`() {
-        val expected = WorkflowConditionConfig("alert.severity", "at_least", "HIGH")
+        val expected = WorkflowConditionConfig("alert.priority", "at_least", "HIGH")
         val graph =
             WorkflowGraphConfig(
                 nodes = listOf(

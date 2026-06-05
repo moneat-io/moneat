@@ -18,9 +18,10 @@ package com.moneat.workflows
 
 import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.alerts.models.AlertEpisodes
-import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertStatus
+import com.moneat.alerts.models.IncidentSeverity
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.SlackService
@@ -259,10 +260,11 @@ class WorkflowServiceTest {
     fun `catalog exposes alert triggers resources steps and lookup helpers`() {
         val response = service.catalog()
 
-        assertEquals(9, response.resources.size)
+        assertEquals(10, response.resources.size)
         assertTrue(response.resources.any { it.type == "Boolean" })
-        assertTrue(response.resources.any { it.type == "AlertSeverity" })
+        assertTrue(response.resources.any { it.type == "AlertPriority" })
         assertTrue(response.resources.any { it.type == "AlertStatus" })
+        assertTrue(response.resources.any { it.type == "IncidentSeverity" })
         assertTrue(response.resources.any { it.type == "SecuritySeverity" })
         assertTrue(
             response.resources
@@ -285,17 +287,17 @@ class WorkflowServiceTest {
         assertTrue(response.triggers.any { it.name == "security.signal" })
         assertTrue(response.steps.any { it.name == "moneat.logs.search" })
         assertTrue(response.steps.any { it.name == "statuspage.incident.create" })
+        assertTrue(response.steps.any { it.name == "oncall.incident.declare" })
         // http.request and transform.graaljs are hidden unless WORKFLOWS_EGRESS_ENABLED is set;
         // their visibility in both states is covered by WorkflowCatalogTest.
         assertFalse(response.steps.any { it.name == "http.request" })
         assertFalse(response.steps.any { it.name == "transform.graaljs" })
         assertEquals("Email organization members", WorkflowCatalog.step("notification.email_org")?.label)
-        assertEquals("AlertSeverity", WorkflowCatalog.scopeType("alert.triggered", "alert.severity"))
-        assertEquals("String", WorkflowCatalog.scopeType("alert.triggered", "alert.priority"))
+        assertEquals("AlertPriority", WorkflowCatalog.scopeType("alert.triggered", "alert.priority"))
         assertEquals("Boolean", WorkflowCatalog.scopeType("alert.triggered", "alert.channels.email"))
         assertNull(WorkflowCatalog.trigger("missing.trigger"))
         assertNull(WorkflowCatalog.step("notification.unknown"))
-        assertNull(WorkflowCatalog.scopeType("missing.trigger", "alert.severity"))
+        assertNull(WorkflowCatalog.scopeType("missing.trigger", "alert.priority"))
     }
 
     @Test
@@ -352,18 +354,18 @@ class WorkflowServiceTest {
             )
 
         assertEquals("RESOLVED", response.scope["alert.status"])
-        assertEquals("[P3]", response.scope["alert.priority"])
+        assertEquals("P3", response.scope["alert.priority"])
         assertEquals(2, response.previews.size)
         val emailPreview = response.previews.first { it.channel == "email" }
-        assertEquals("[Moneat] [P3] Resolved: Worker failures detected", emailPreview.subject)
+        assertEquals("[Moneat] P3 Resolved: Worker failures detected", emailPreview.subject)
         assertEquals("#2EB67D", emailPreview.color)
         assertTrue(emailPreview.htmlBody.orEmpty().contains("View"))
         assertTrue(emailPreview.htmlBody.orEmpty().contains("/favicon.svg"))
         assertFalse(emailPreview.htmlBody.orEmpty().contains(">APP</span>"))
         assertTrue(emailPreview.fields.any { it.label == "Dashboard" })
-        assertTrue(emailPreview.fields.any { it.label == "Priority" && it.value == "[P3]" })
+        assertTrue(emailPreview.fields.any { it.label == "Priority" && it.value == "P3" })
         val slackPreview = response.previews.first { it.channel == "slack" }
-        assertEquals("[P3] Resolved: Worker failures detected", slackPreview.title)
+        assertEquals("P3 Resolved: Worker failures detected", slackPreview.title)
         assertEquals("View", slackPreview.ctaLabel)
         assertTrue(slackPreview.textBody.contains("Status: Resolved"))
     }
@@ -435,7 +437,7 @@ class WorkflowServiceTest {
             verify(exactly = 1) {
                 emailService.sendEmail(
                     "verified@moneat.io",
-                    "[Moneat] [P1] Worker failures detected",
+                    "[Moneat] P1 Worker failures detected",
                     match { it.contains("Added by Moneat") && it.contains("/favicon.svg") },
                     match { it.contains("View: https://moneat.io/dashboards/13") },
                     "workflow"
@@ -447,14 +449,14 @@ class WorkflowServiceTest {
             coVerify(exactly = 1) {
                 slackService.sendWorkflowAlertMessage(
                     orgId,
-                    match { it.ctaLabel == "View" && it.title.contains("[P1]") },
+                    match { it.ctaLabel == "View" && it.title.contains("P1") },
                     false
                 )
             }
             coVerify(exactly = 1) {
                 discordService.sendWorkflowAlertMessage(
                     orgId,
-                    match { it.ctaLabel == "View" && it.title.contains("[P1]") },
+                    match { it.ctaLabel == "View" && it.title.contains("P1") },
                     false
                 )
             }
@@ -533,7 +535,7 @@ class WorkflowServiceTest {
             coVerify(exactly = 1) {
                 discordService.sendWorkflowAlertMessage(
                     orgId,
-                    match { it.title.contains("[P1]") },
+                    match { it.title.contains("P1") },
                     false
                 )
             }
@@ -551,7 +553,7 @@ class WorkflowServiceTest {
                         WorkflowConditionConfig("alert.title", "is_set"),
                         WorkflowConditionConfig("alert.description", "contains", "cpu"),
                         WorkflowConditionConfig("alert.source", "neq", "ERROR_ALERT"),
-                        WorkflowConditionConfig("alert.severity", "at_least", "HIGH")
+                        WorkflowConditionConfig("alert.priority", "at_least", "P1")
                     ),
                     steps = listOf(slackStep(), discordStep()),
                     onceForTemplate = listOf("alert.deduplication_key", "alert.status")
@@ -680,7 +682,7 @@ class WorkflowServiceTest {
             coVerify(exactly = 1) {
                 slackService.sendWorkflowAlertMessage(
                     orgId,
-                    match { it.title == "[P0] CPU saturation" && it.ctaLabel == "View" },
+                    match { it.title == "P0 CPU saturation" && it.ctaLabel == "View" },
                     true
                 )
             }
@@ -710,7 +712,7 @@ class WorkflowServiceTest {
                             WorkflowConditionConfig("alert.description", "contains", "cpu"),
                             WorkflowConditionConfig("alert.source", "eq", "HOST_ALERT"),
                             WorkflowConditionConfig("alert.status", "neq", "RESOLVED"),
-                            WorkflowConditionConfig("alert.severity", "at_least", "HIGH"),
+                            WorkflowConditionConfig("alert.priority", "at_least", "P1"),
                             WorkflowConditionConfig("alert.url", "not_contains", "localhost")
                         ),
                         steps = listOf(emailStep(), slackStep(), discordStep()),
@@ -1265,7 +1267,7 @@ class WorkflowServiceTest {
         }
 
     @Test
-    fun `incident workflows use alert episode identity`() =
+    fun `incident workflows use incident identity`() =
         runBlocking {
             val createdWorkflow =
                 service.createWorkflow(
@@ -1291,7 +1293,7 @@ class WorkflowServiceTest {
             service.publishIncidentCreated(alertEvent())
             service.publishIncidentCreated(alertEvent())
 
-            assertEquals(listOf("alert.episode_key=host-1#1"), runIdentities(createdWorkflow.id))
+            assertEquals(listOf("incident.id=host-1"), runIdentities(createdWorkflow.id))
             assertEquals(emptyList(), runIdentities(resolvedWorkflow.id))
 
             service.publishAlertTriggered(alertEvent())
@@ -1299,12 +1301,64 @@ class WorkflowServiceTest {
                 organizationId = orgId,
                 source = AlertSource.HOST_ALERT,
                 deduplicationKey = "host-1",
-                title = "CPU restored",
-                severity = AlertSeverity.HIGH
+                title = "CPU restored"
             )
 
             assertEquals(
-                listOf("alert.episode_key=host-1#1|incident.status=resolved"),
+                listOf("incident.id=host-1|incident.status=resolved"),
+                runIdentities(resolvedWorkflow.id)
+            )
+        }
+
+    @Test
+    fun `declared incident workflows use declared incident identity`() =
+        runBlocking {
+            val createdWorkflow =
+                service.createWorkflow(
+                    orgId,
+                    CreateWorkflowRequest(
+                        name = "Declared incident created",
+                        triggerName = "incident.created",
+                        steps = emptyList()
+                    )
+                )
+            val resolvedWorkflow =
+                service.createWorkflow(
+                    orgId,
+                    CreateWorkflowRequest(
+                        name = "Declared incident resolved",
+                        triggerName = "incident.resolved",
+                        steps = emptyList()
+                    )
+                )
+            publish(createdWorkflow.id)
+            publish(resolvedWorkflow.id)
+
+            service.publishDeclaredIncidentCreated(
+                organizationId = orgId,
+                incidentId = 42,
+                title = "Checkout degraded",
+                severity = IncidentSeverity.SEV1
+            )
+            service.publishDeclaredIncidentCreated(
+                organizationId = orgId,
+                incidentId = 42,
+                title = "Checkout degraded",
+                severity = IncidentSeverity.SEV1
+            )
+
+            assertEquals(listOf("incident.id=42"), runIdentities(createdWorkflow.id))
+            assertEquals(emptyList(), runIdentities(resolvedWorkflow.id))
+
+            service.publishDeclaredIncidentResolved(
+                organizationId = orgId,
+                incidentId = 42,
+                title = "Checkout degraded",
+                severity = IncidentSeverity.SEV1
+            )
+
+            assertEquals(
+                listOf("incident.id=42|incident.status=resolved"),
                 runIdentities(resolvedWorkflow.id)
             )
         }
@@ -1475,7 +1529,7 @@ class WorkflowServiceTest {
         AlertLifecycleEvent(
             title = "CPU saturation",
             description = "CPU is above 90%",
-            severity = AlertSeverity.CRITICAL,
+            priority = AlertPriority.P0,
             status = AlertStatus.FIRING,
             source = AlertSource.HOST_ALERT,
             deduplicationKey = "host-1",

@@ -57,6 +57,7 @@ class HostAlertRepositoryImpl : HostAlertRepository {
                         enabled = row[HostAlerts.enabled],
                         lastTriggeredAt = row[HostAlerts.last_triggered_at],
                         createdAt = row[HostAlerts.created_at],
+                        alertPriority = row[HostAlerts.alert_priority],
                         scope = SCOPE_HOST
                     )
                 }
@@ -84,6 +85,7 @@ class HostAlertRepositoryImpl : HostAlertRepository {
                         enabled = row[HostAlerts.enabled],
                         lastTriggeredAt = row[HostAlerts.last_triggered_at],
                         createdAt = row[HostAlerts.created_at],
+                        alertPriority = row[HostAlerts.alert_priority],
                         scope = SCOPE_HOST
                     )
                 }
@@ -141,6 +143,7 @@ class HostAlertRepositoryImpl : HostAlertRepository {
                     it[OrganizationAlertTemplates.threshold] = alert.threshold
                     it[OrganizationAlertTemplates.duration_seconds] = alert.durationSeconds
                     it[OrganizationAlertTemplates.enabled] = alert.enabled
+                    it[OrganizationAlertTemplates.alert_priority] = alert.alertPriority
                     it[OrganizationAlertTemplates.created_at] = now
                     it[OrganizationAlertTemplates.updated_at] = now
                 } get OrganizationAlertTemplates.id
@@ -153,6 +156,7 @@ class HostAlertRepositoryImpl : HostAlertRepository {
                     it[HostAlerts.threshold] = alert.threshold
                     it[HostAlerts.duration_seconds] = alert.durationSeconds
                     it[HostAlerts.enabled] = alert.enabled
+                    it[HostAlerts.alert_priority] = alert.alertPriority
                     it[HostAlerts.last_triggered_at] = null
                     it[HostAlerts.created_at] = now
                 } get HostAlerts.id
@@ -179,6 +183,7 @@ class HostAlertRepositoryImpl : HostAlertRepository {
                     data.threshold?.let { t -> it[OrganizationAlertTemplates.threshold] = t }
                     data.durationSeconds?.let { d -> it[OrganizationAlertTemplates.duration_seconds] = d }
                     data.enabled?.let { e -> it[OrganizationAlertTemplates.enabled] = e }
+                    data.alertPriority?.let { p -> it[OrganizationAlertTemplates.alert_priority] = p }
                     it[OrganizationAlertTemplates.updated_at] = now
                 }
                 count > 0
@@ -193,6 +198,7 @@ class HostAlertRepositoryImpl : HostAlertRepository {
                     data.threshold?.let { t -> it[HostAlerts.threshold] = t }
                     data.durationSeconds?.let { d -> it[HostAlerts.duration_seconds] = d }
                     data.enabled?.let { e -> it[HostAlerts.enabled] = e }
+                    data.alertPriority?.let { p -> it[HostAlerts.alert_priority] = p }
                 }
                 count > 0
             }
@@ -243,6 +249,7 @@ class HostAlertRepositoryImpl : HostAlertRepository {
                         enabled = row[OrganizationAlertTemplates.enabled],
                         lastTriggeredAt = templateStates[row[OrganizationAlertTemplates.id]],
                         createdAt = row[OrganizationAlertTemplates.created_at],
+                        alertPriority = row[OrganizationAlertTemplates.alert_priority],
                         scope = SCOPE_GLOBAL
                     )
                 }
@@ -266,6 +273,7 @@ class HostAlertRepositoryImpl : HostAlertRepository {
                         enabled = row[HostAlerts.enabled],
                         lastTriggeredAt = row[HostAlerts.last_triggered_at],
                         createdAt = row[HostAlerts.created_at],
+                        alertPriority = row[HostAlerts.alert_priority],
                         scope = SCOPE_HOST
                     )
                 }

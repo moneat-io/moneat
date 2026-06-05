@@ -154,7 +154,7 @@ class DashboardCrudToolTest {
                     warning_threshold DOUBLE PRECISION,
                     metric_index INT DEFAULT 0 NOT NULL,
                     duration_seconds INT DEFAULT 0 NOT NULL,
-                    incident_severity VARCHAR(20),
+                    alert_priority VARCHAR(20),
                     enabled BOOLEAN DEFAULT TRUE NOT NULL,
                     notification_channels TEXT NOT NULL,
                     last_triggered_at TIMESTAMP,
@@ -172,7 +172,7 @@ class DashboardCrudToolTest {
     // ──── Tests ────
 
     @Test
-    fun `create dashboard alert accepts MCP condition and severity aliases`() = runBlocking {
+    fun `create dashboard alert accepts MCP condition and priority aliases`() = runBlocking {
         val dashboardId = seedDashboard()
         val widgetId = seedWidget(dashboardId)
 
@@ -185,7 +185,7 @@ class DashboardCrudToolTest {
                     "condition" to JsonPrimitive("gt"),
                     "threshold" to JsonPrimitive(0.85),
                     "duration_seconds" to JsonPrimitive(300),
-                    "incident_severity" to JsonPrimitive("P0")
+                    "alert_priority" to JsonPrimitive("P0")
                 )
             ),
             context
@@ -194,12 +194,12 @@ class DashboardCrudToolTest {
         val response = decodeAlert(result.content.first().text!!)
         assertFalse(result.isError)
         assertEquals(">", response.condition)
-        assertEquals("CRITICAL", response.incidentSeverity)
+        assertEquals("P0", response.alertPriority)
         assertEquals(300, response.durationSeconds)
     }
 
     @Test
-    fun `update dashboard alert can update duration severity and gte condition`() = runBlocking {
+    fun `update dashboard alert can update duration priority and gte condition`() = runBlocking {
         val dashboardId = seedDashboard()
         val widgetId = seedWidget(dashboardId)
         val created = decodeAlert(
@@ -225,7 +225,7 @@ class DashboardCrudToolTest {
                     "condition" to JsonPrimitive("gte"),
                     "threshold" to JsonPrimitive(0.9),
                     "duration_seconds" to JsonPrimitive(600),
-                    "incident_severity" to JsonPrimitive("P1"),
+                    "alert_priority" to JsonPrimitive("P1"),
                     "enabled" to JsonPrimitive(false)
                 )
             ),
@@ -237,20 +237,20 @@ class DashboardCrudToolTest {
         assertEquals(">=", response.condition)
         assertEquals(0.9, response.threshold)
         assertEquals(600, response.durationSeconds)
-        assertEquals("HIGH", response.incidentSeverity)
+        assertEquals("P1", response.alertPriority)
         assertFalse(response.enabled)
     }
 
     @Test
     fun `dashboard alert schemas advertise aliases they accept`() {
         val createConditionEnum = enumValues(CreateDashboardAlertTool().inputSchema.properties, "condition")
-        val updateSeverityEnum = enumValues(UpdateDashboardAlertTool().inputSchema.properties, "incident_severity")
+        val updatePriorityEnum = enumValues(UpdateDashboardAlertTool().inputSchema.properties, "alert_priority")
 
         assertTrue("gte" in createConditionEnum)
         assertTrue(">=" in createConditionEnum)
-        assertTrue("P0" in updateSeverityEnum)
-        assertTrue("P1" in updateSeverityEnum)
-        assertTrue("CRITICAL" in updateSeverityEnum)
+        assertTrue("P0" in updatePriorityEnum)
+        assertTrue("P1" in updatePriorityEnum)
+        assertTrue("CRITICAL" in updatePriorityEnum)
     }
 
     @Test
@@ -279,7 +279,7 @@ class DashboardCrudToolTest {
     }
 
     @Test
-    fun `create dashboard alert rejects unknown severity aliases`() = runBlocking {
+    fun `create dashboard alert rejects unknown priority aliases`() = runBlocking {
         val dashboardId = seedDashboard()
         val widgetId = seedWidget(dashboardId)
 
@@ -291,7 +291,7 @@ class DashboardCrudToolTest {
                     "name" to JsonPrimitive("CPU high"),
                     "condition" to JsonPrimitive("gt"),
                     "threshold" to JsonPrimitive(0.85),
-                    "incident_severity" to JsonPrimitive("SEV0")
+                    "alert_priority" to JsonPrimitive("SEV0")
                 )
             ),
             context
@@ -299,13 +299,13 @@ class DashboardCrudToolTest {
 
         assertTrue(result.isError)
         assertEquals(
-            "Unknown dashboard alert severity: SEV0",
+            "Unknown dashboard alert priority: SEV0",
             result.content.first().text,
         )
     }
 
     @Test
-    fun `create dashboard alert accepts remaining condition and severity aliases`() = runBlocking {
+    fun `create dashboard alert accepts remaining condition and priority aliases`() = runBlocking {
         val dashboardId = seedDashboard()
         val widgetId = seedWidget(dashboardId)
         val conditionCases = listOf(
@@ -316,18 +316,18 @@ class DashboardCrudToolTest {
             "==" to "==",
             ">=" to ">=",
         )
-        val severityCases = listOf(
-            "P2" to "MEDIUM",
-            "MEDIUM" to "MEDIUM",
-            "P3" to "LOW",
-            "P4" to "LOW",
-            "P5" to "LOW",
-            "LOW" to "LOW",
-            "HIGH" to "HIGH",
-            "CRITICAL" to "CRITICAL",
+        val priorityCases = listOf(
+            "P2" to "P2",
+            "MEDIUM" to "P2",
+            "P3" to "P3",
+            "P4" to "P4",
+            "P5" to "P5",
+            "LOW" to "P3",
+            "HIGH" to "P1",
+            "CRITICAL" to "P0",
         )
 
-        severityCases.forEachIndexed { index, severityCase ->
+        priorityCases.forEachIndexed { index, priorityCase ->
             val conditionCase = conditionCases[index % conditionCases.size]
             val result = CreateDashboardAlertTool().execute(
                 JsonObject(
@@ -337,7 +337,7 @@ class DashboardCrudToolTest {
                         "name" to JsonPrimitive("Alias alert $index"),
                         "condition" to JsonPrimitive(conditionCase.first),
                         "threshold" to JsonPrimitive(index.toDouble()),
-                        "incident_severity" to JsonPrimitive(severityCase.first)
+                        "alert_priority" to JsonPrimitive(priorityCase.first)
                     )
                 ),
                 context
@@ -346,7 +346,7 @@ class DashboardCrudToolTest {
             val response = decodeAlert(result.content.first().text!!)
             assertFalse(result.isError)
             assertEquals(conditionCase.second, response.condition)
-            assertEquals(severityCase.second, response.incidentSeverity)
+            assertEquals(priorityCase.second, response.alertPriority)
         }
     }
 
@@ -377,8 +377,8 @@ class DashboardCrudToolTest {
                 "duration_seconds must be a valid integer",
             mapOf("condition" to JsonPrimitive("above")) to
                 "Unknown dashboard alert condition: above",
-            mapOf("incident_severity" to JsonPrimitive("SEV0")) to
-                "Unknown dashboard alert severity: SEV0",
+            mapOf("alert_priority" to JsonPrimitive("SEV0")) to
+                "Unknown dashboard alert priority: SEV0",
             emptyMap<String, JsonElement>() to
                 "At least one field must be provided to update",
         )

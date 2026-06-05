@@ -184,7 +184,7 @@ export default function AddMonitorDialog({open, onOpenChange}: AddMonitorDialogP
       intervalSeconds: formData.intervalSeconds,
       timeoutSeconds: formData.timeoutSeconds,
       retries: formData.retries,
-      incidentSeverity: formData.incidentSeverity,
+      alertPriority: formData.alertPriority,
     }
 
     let typeFields: Partial<CreateUptimeMonitorRequest> = {}
@@ -225,7 +225,7 @@ export default function AddMonitorDialog({open, onOpenChange}: AddMonitorDialogP
                     intervalSeconds: formData.intervalSeconds,
                     timeoutSeconds: formData.timeoutSeconds,
                     retries: formData.retries,
-                    incidentSeverity: formData.incidentSeverity,
+                    alertPriority: formData.alertPriority,
                     method: ['http', 'keyword'].includes(type.value) ? (formData.method ?? 'GET') : undefined,
                   })
                   setStep(2)
@@ -248,7 +248,7 @@ export default function AddMonitorDialog({open, onOpenChange}: AddMonitorDialogP
               formData={formData}
               monitorType={formData.type || 'http'}
               onChange={setFormData}
-              showAlertSeverity
+              showAlertPriority
             />
           </div>
         )}

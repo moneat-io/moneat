@@ -342,7 +342,7 @@ function WidgetCard({
     enabled: boolean
     last_triggered_at: string | null
     last_triggered_level?: string | null
-    incident_severity: string | null
+    alert_priority: string | null
   }[]
   onWidgetClick: (widget: DashboardWidget) => void
   onWidgetDelete: (widgetId: number) => void
@@ -381,13 +381,13 @@ function WidgetCard({
               return Date.parse(alert.last_triggered_at) > Date.parse(latest.last_triggered_at) ? alert : latest
             }, null)
             const firing = firingAlert != null
-            const severity = firingAlert?.incident_severity
+            const priority = firingAlert?.alert_priority
             const dotColor = firing
               ? firingAlert?.last_triggered_level === 'ERROR'
                 ? 'bg-danger-solid'
                 : firingAlert?.last_triggered_level === 'WARNING'
                   ? 'bg-warning-solid'
-                  : severity === 'CRITICAL' || severity === 'HIGH'
+                  : priority === 'P0' || priority === 'P1'
                     ? 'bg-danger-solid'
                     : 'bg-warning-solid'
               : 'bg-muted-foreground/40'

@@ -16,6 +16,7 @@
 
 package com.moneat.workflows.services
 
+import com.moneat.alerts.models.IncidentSeverity
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.events.services.DashboardService
 import com.moneat.logs.models.LogQueryRequest
@@ -88,6 +89,7 @@ class WorkflowTrustedActionExecutor(
             STATUS_PAGE_INCIDENT_CREATE_STEP -> executeStatusPageIncidentCreate(organizationId, params)
             ALERT_SILENCE_STEP -> executeAlertSilence(organizationId, params, actorUserId)
             ON_CALL_PAGE_STEP -> executeOnCallPage(organizationId, params)
+            ON_CALL_DECLARE_INCIDENT_STEP -> executeOnCallDeclareIncident(organizationId, params, actorUserId)
             in WORKFLOW_PREMIUM_CONNECTOR_ACTIONS ->
                 executePremiumConnector(organizationId, stepName, params, actorUserId)
             else -> throw IllegalArgumentException("Unknown workflow step $stepName")
@@ -273,17 +275,44 @@ class WorkflowTrustedActionExecutor(
                 "requires_enterprise" to JsonPrimitive(true),
                 "message" to JsonPrimitive("On-call paging requires an enabled on-call bridge")
             )
-        val incidentId =
+        val alertId =
             bridge.triggerEscalation(
                 organizationId = organizationId,
                 escalationPolicyId = params.requiredInt("escalation_policy_id"),
                 title = params.required("title"),
                 description = params.optional("description"),
-                priorityLevel = params.optional("priority_level") ?: "P2",
+                priority = params.optional("alert_priority") ?: params.optional("priority_level") ?: "P2",
                 alertSource = params.optional("alert_source") ?: "WORKFLOW",
                 deduplicationKey = params.optional("deduplication_key"),
                 metadata = params.optional("metadata")
             )
+        return mapOf(
+            "alert_id" to JsonPrimitive(alertId),
+            "incident_id" to JsonPrimitive(alertId)
+        )
+    }
+
+    private suspend fun executeOnCallDeclareIncident(
+        organizationId: Int,
+        params: Map<String, String>,
+        actorUserId: Int?
+    ): Map<String, JsonElement> {
+        val bridge = FeatureRegistry.getOnCallBridge()
+            ?: return mapOf(
+                "requires_enterprise" to JsonPrimitive(true),
+                "message" to JsonPrimitive("On-call incident declaration requires an enabled on-call bridge")
+            )
+        val severity = IncidentSeverity.wireValue(params.required("incident_severity"))
+            ?: throw IllegalArgumentException("Parameter incident_severity must be SEV-0 through SEV-4")
+        val incidentId =
+            bridge.declareIncident(
+                organizationId = organizationId,
+                userId = actorUserId ?: workflowActorUserId(organizationId),
+                alertId = params.optionalInt("alert_id"),
+                title = params.required("title"),
+                description = params.optional("description"),
+                severity = severity
+            ) ?: throw IllegalStateException("On-call incident declaration did not return an incident ID")
         return mapOf("incident_id" to JsonPrimitive(incidentId))
     }
 
@@ -340,6 +369,11 @@ class WorkflowTrustedActionExecutor(
     private fun Map<String, String>.requiredInt(name: String): Int =
         required(name).toIntOrNull() ?: throw IllegalArgumentException("Parameter $name must be an integer")
 
+    private fun Map<String, String>.optionalInt(name: String): Int? =
+        optional(name)?.let {
+            it.toIntOrNull() ?: throw IllegalArgumentException("Parameter $name must be an integer")
+        }
+
     private fun Map<String, String>.requiredLong(name: String): Long =
         required(name).toLongOrNull() ?: throw IllegalArgumentException("Parameter $name must be a number")
 
@@ -392,6 +426,7 @@ class WorkflowTrustedActionExecutor(
         const val STATUS_PAGE_INCIDENT_CREATE_STEP = "statuspage.incident.create"
         const val ALERT_SILENCE_STEP = "alert.silence"
         const val ON_CALL_PAGE_STEP = "oncall.page"
+        const val ON_CALL_DECLARE_INCIDENT_STEP = "oncall.incident.declare"
         const val JIRA_CREATE_ISSUE_STEP = CONNECTOR_JIRA_CREATE_ISSUE_ACTION
         const val PAGERDUTY_TRIGGER_INCIDENT_STEP = CONNECTOR_PAGERDUTY_TRIGGER_INCIDENT_ACTION
         const val GITHUB_CREATE_ISSUE_STEP = CONNECTOR_GITHUB_CREATE_ISSUE_ACTION
@@ -410,6 +445,7 @@ class WorkflowTrustedActionExecutor(
                 STATUS_PAGE_INCIDENT_CREATE_STEP,
                 ALERT_SILENCE_STEP,
                 ON_CALL_PAGE_STEP,
+                ON_CALL_DECLARE_INCIDENT_STEP,
             ) + WORKFLOW_PREMIUM_CONNECTOR_ACTIONS
     }
 }

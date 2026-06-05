@@ -1056,7 +1056,7 @@ fun Route.integrationCallbackRoutes() {
                                             return@post
                                         }
 
-                                        // Verify user's organization matches incident's organization
+                                        // Verify user's organization matches alert's organization
                                         val incident = bridge.getIncident(incidentId, userId)
                                         val userOrgId =
                                             transaction {
@@ -1074,7 +1074,7 @@ fun Route.integrationCallbackRoutes() {
                                             call.respond(
                                                 mapOf(
                                                     "response_type" to "ephemeral",
-                                                    "text" to "❌ Incident not found or access denied"
+                                                    "text" to "❌ Alert not found or access denied"
                                                 )
                                             )
                                             return@post
@@ -1087,14 +1087,14 @@ fun Route.integrationCallbackRoutes() {
                                             call.respond(
                                                 mapOf(
                                                     "response_type" to "in_channel",
-                                                    "text" to "✅ Incident acknowledged by <@$slackUserId>"
+                                                    "text" to "✅ Alert acknowledged by <@$slackUserId>"
                                                 )
                                             )
                                         } else {
                                             call.respond(
                                                 mapOf(
                                                     "response_type" to "ephemeral",
-                                                    "text" to "❌ Failed to acknowledge incident"
+                                                    "text" to "❌ Failed to acknowledge alert"
                                                 )
                                             )
                                         }

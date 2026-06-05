@@ -23,8 +23,8 @@ import java.time.LocalTime
 
 @Serializable
 data class UpdatePriorityRequest(
-    val severity: String,
-    val priorityLevel: String,
+    val priority: String? = null,
+    val priorityLevel: String? = null,
     val isPageable: Boolean,
     val label: String,
     val description: String? = null,
@@ -75,11 +75,16 @@ fun Route.priorityRoutes() {
                 val request = call.receive<UpdatePriorityRequest>()
 
                 try {
+                    val requestedPriority = request.priority ?: request.priorityLevel
+                    if (requestedPriority.isNullOrBlank()) {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing alert priority"))
+                        return@put
+                    }
+
                     val priority =
                         priorityService.updatePriority(
                             organizationId = organizationId,
-                            severity = request.severity,
-                            priorityLevel = request.priorityLevel,
+                            priority = requestedPriority,
                             isPageable = request.isPageable,
                             label = request.label,
                             description = request.description,

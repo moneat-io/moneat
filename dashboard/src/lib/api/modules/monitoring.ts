@@ -48,7 +48,7 @@ function mapHostAlert(row: Record<string, unknown>): HostAlert {
     threshold: row.threshold as number,
     durationSeconds: (row.durationSeconds ?? row.duration_seconds ?? 0) as number,
     enabled: row.enabled === true,
-    incidentSeverity: (row.incidentSeverity ?? row.incident_severity ?? null) as string | null,
+    alertPriority: (row.alertPriority ?? row.alert_priority ?? row.incidentSeverity ?? row.incident_severity ?? null) as string | null,
     lastTriggeredAt: (row.lastTriggeredAt ?? row.last_triggered_at) as number | undefined,
     createdAt: (row.createdAt ?? row.created_at) as number,
   }
@@ -312,7 +312,7 @@ export function monitoringMethods(core: ApiClientCore) {
         threshold: number
         durationSeconds?: number
         enabled?: boolean
-        incidentSeverity?: string
+        alertPriority?: string
       },
       scope: 'global' | 'host' = 'host'
     ) => {

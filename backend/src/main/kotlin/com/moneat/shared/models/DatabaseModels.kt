@@ -509,7 +509,7 @@ object HostAlerts : Table("host_alerts") {
     val duration_seconds = integer("duration_seconds")
     val enabled = bool("enabled")
     val last_triggered_at = timestamp("last_triggered_at").nullable()
-    val incident_severity = varchar("incident_severity", 20).nullable()
+    val alert_priority = varchar("alert_priority", 20).nullable()
     val created_at = timestamp("created_at")
     override val primaryKey = PrimaryKey(id)
 }
@@ -537,7 +537,7 @@ object OrganizationAlertTemplates : Table("organization_alert_templates") {
     val threshold = double("threshold")
     val duration_seconds = integer("duration_seconds").default(0)
     val enabled = bool("enabled").default(false)
-    val incident_severity = varchar("incident_severity", 20).nullable()
+    val alert_priority = varchar("alert_priority", 20).nullable()
     val created_at = timestamp("created_at")
     val updated_at = timestamp("updated_at")
     override val primaryKey = PrimaryKey(id)

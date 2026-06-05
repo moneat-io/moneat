@@ -6,9 +6,9 @@ package com.moneat.enterprise.oncall.services
 
 import com.moneat.shared.services.TaskLock
 import com.moneat.config.RedisClient
-import com.moneat.enterprise.oncall.models.Incident
-import com.moneat.enterprise.oncall.models.IncidentTimeline
-import com.moneat.enterprise.oncall.models.Incidents
+import com.moneat.enterprise.oncall.models.OnCallAlert
+import com.moneat.enterprise.oncall.models.OnCallAlertTimeline
+import com.moneat.enterprise.oncall.models.OnCallAlerts
 import com.moneat.notifications.services.SlackService
 import com.moneat.shared.models.EscalationPolicies
 import com.moneat.shared.models.Users
@@ -63,7 +63,7 @@ class EscalationEngine(
         private const val SMS_FALLBACK_KEY = "escalation:sms_fallback"
     }
 
-    private data class IncidentEscalationState(
+    private data class AlertEscalationState(
         val status: String,
         val escalationPolicyId: Int?,
         val currentStep: Int,
@@ -97,58 +97,55 @@ class EscalationEngine(
         escalationPolicyId: Int,
         title: String,
         description: String?,
-        priorityLevel: String,
+        priority: String,
         alertSource: String?,
         deduplicationKey: String?,
         metadata: Map<String, JsonElement>? = null,
-    ): Incident? {
+    ): OnCallAlert? {
         return transaction {
             val now = Clock.System.now()
 
-            // Check for existing open incident with same deduplication key
+            // Check for an existing open alert with the same deduplication key.
             if (deduplicationKey != null) {
                 val existing =
-                    Incidents
+                    OnCallAlerts
                         .selectAll()
                         .where {
-                            (Incidents.organizationId eq organizationId) and
-                                (Incidents.deduplicationKey eq deduplicationKey) and
-                                (Incidents.status inList listOf("TRIGGERED", "ACKNOWLEDGED"))
+                            (OnCallAlerts.organizationId eq organizationId) and
+                                (OnCallAlerts.deduplicationKey eq deduplicationKey) and
+                                (OnCallAlerts.status inList listOf("TRIGGERED", "ACKNOWLEDGED"))
                         }.singleOrNull()
 
                 if (existing != null) {
-                    logger.info("Incident already exists for dedup key: $deduplicationKey")
+                    logger.info("Alert already exists for dedup key: $deduplicationKey")
                     return@transaction null
                 }
             }
 
-            // Create incident
-            val incidentId =
-                Incidents
+            val alertId =
+                OnCallAlerts
                     .insertAndGetId {
-                        it[Incidents.organizationId] = organizationId
-                        it[Incidents.escalationPolicyId] = escalationPolicyId
-                        it[Incidents.title] = title
-                        it[Incidents.description] = description
-                        it[Incidents.priorityLevel] = priorityLevel
-                        it[Incidents.status] = "TRIGGERED"
-                        it[Incidents.alertSource] = alertSource
-                        it[Incidents.deduplicationKey] = deduplicationKey
+                        it[OnCallAlerts.organizationId] = organizationId
+                        it[OnCallAlerts.escalationPolicyId] = escalationPolicyId
+                        it[OnCallAlerts.title] = title
+                        it[OnCallAlerts.description] = description
+                        it[OnCallAlerts.priority] = priority
+                        it[OnCallAlerts.status] = "TRIGGERED"
+                        it[OnCallAlerts.alertSource] = alertSource
+                        it[OnCallAlerts.deduplicationKey] = deduplicationKey
                         it[currentStep] = 0
                         it[repeatIteration] = 0
                         it[triggeredAt] = now
-                        it[Incidents.metadata] = metadata
+                        it[OnCallAlerts.metadata] = metadata
                         it[createdAt] = now
                         it[updatedAt] = now
                     }.value
 
-            // Log timeline event
-            logTimelineEvent(incidentId, "TRIGGERED", null, mapOf("priority" to JsonPrimitive(priorityLevel)))
+            logTimelineEvent(alertId, "TRIGGERED", null, mapOf("priority" to JsonPrimitive(priority)))
 
-            // Start escalation
-            processEscalationStep(incidentId, 0, 0)
+            processEscalationStep(alertId, 0, 0)
 
-            getIncident(incidentId)
+            getAlert(alertId)
         }
     }
 
@@ -159,19 +156,19 @@ class EscalationEngine(
     ) {
         transaction {
             val incident =
-                Incidents
+                OnCallAlerts
                     .selectAll()
-                    .where { Incidents.id eq incidentId }
+                    .where { OnCallAlerts.id eq incidentId }
                     .singleOrNull() ?: return@transaction
 
             // Check if incident is still in TRIGGERED status
-            if (incident[Incidents.status] != "TRIGGERED") {
+            if (incident[OnCallAlerts.status] != "TRIGGERED") {
                 logger.info("Incident $incidentId no longer in TRIGGERED status, stopping escalation")
                 removeTimeout(incidentId)
                 return@transaction
             }
 
-            val policyId = incident[Incidents.escalationPolicyId] ?: return@transaction
+            val policyId = incident[OnCallAlerts.escalationPolicyId] ?: return@transaction
             val policy = escalationPolicyService.getPolicy(policyId) ?: return@transaction
 
             // Check if we've exhausted all steps
@@ -179,7 +176,7 @@ class EscalationEngine(
                 if (iteration < policy.repeatCount) {
                     // Loop back to step 0, increment iteration
                     logger.info("Repeating escalation for incident $incidentId, iteration ${iteration + 1}")
-                    Incidents.update({ Incidents.id eq incidentId }) {
+                    OnCallAlerts.update({ OnCallAlerts.id eq incidentId }) {
                         it[currentStep] = 0
                         it[repeatIteration] = iteration + 1
                         it[updatedAt] = Clock.System.now()
@@ -196,7 +193,7 @@ class EscalationEngine(
             logger.info("Processing escalation step $stepIndex for incident $incidentId")
 
             // Update current step
-            Incidents.update({ Incidents.id eq incidentId }) {
+            OnCallAlerts.update({ OnCallAlerts.id eq incidentId }) {
                 it[currentStep] = stepIndex
                 it[updatedAt] = Clock.System.now()
             }
@@ -210,8 +207,8 @@ class EscalationEngine(
                         notifyUser(
                             incidentId,
                             target.targetId,
-                            incident[Incidents.title],
-                            incident[Incidents.priorityLevel],
+                            incident[OnCallAlerts.title],
+                            incident[OnCallAlerts.priority],
                             step.smsFallbackDelayMinutes,
                             stepIndex,
                             iteration
@@ -228,8 +225,8 @@ class EscalationEngine(
                             notifyUser(
                                 incidentId,
                                 onCall.userId,
-                                incident[Incidents.title],
-                                incident[Incidents.priorityLevel],
+                                incident[OnCallAlerts.title],
+                                incident[OnCallAlerts.priority],
                                 step.smsFallbackDelayMinutes,
                                 stepIndex,
                                 iteration
@@ -260,7 +257,7 @@ class EscalationEngine(
         incidentId: Int,
         userId: Int,
         title: String,
-        priorityLevel: String,
+        priority: String,
         smsFallbackDelayMinutes: Int = 2,
         stepIndex: Int,
         iteration: Int
@@ -278,7 +275,7 @@ class EscalationEngine(
             val shouldSendPush = prefs.isChannelEnabled("push") || prefs.allDisabled()
             if (shouldSendPush) {
                 try {
-                    pushNotificationService.sendIncidentAlert(userId, incidentId, title, priorityLevel)
+                    pushNotificationService.sendIncidentAlert(userId, incidentId, title, priority)
                 } catch (e: Exception) {
                     logger.error("Failed to send push notification for incident $incidentId, user $userId", e)
                 }
@@ -287,7 +284,7 @@ class EscalationEngine(
             // Slack: respect user preference
             if (prefs.isChannelEnabled("slack")) {
                 try {
-                    slackService.sendOnCallAlert(userId, incidentId, title, priorityLevel)
+                    slackService.sendOnCallAlert(userId, incidentId, title, priority)
                 } catch (e: Exception) {
                     logger.error("Failed to send Slack DM for incident $incidentId, user $userId", e)
                 }
@@ -322,7 +319,7 @@ class EscalationEngine(
                             userId = userId,
                             phoneNumber = phoneNumber,
                             title = title,
-                            priorityLevel = priorityLevel,
+                            priority = priority,
                             delayMinutes = smsFallbackDelayMinutes.toLong(),
                             stepIndex = stepIndex,
                             iteration = iteration
@@ -390,7 +387,7 @@ class EscalationEngine(
         userId: Int,
         phoneNumber: String,
         title: String,
-        priorityLevel: String,
+        priority: String,
         delayMinutes: Long,
         stepIndex: Int,
         iteration: Int
@@ -402,7 +399,7 @@ class EscalationEngine(
                 "userId" to userId.toString(),
                 "phoneNumber" to phoneNumber,
                 "title" to title,
-                "priorityLevel" to priorityLevel,
+                "priority" to priority,
                 "stepIndex" to stepIndex.toString(),
                 "iteration" to iteration.toString(),
             )
@@ -413,15 +410,15 @@ class EscalationEngine(
 
     private fun isFallbackStillValid(incidentId: Int, userId: Int, stepIndex: Int, iteration: Int): Boolean {
         val state = transaction {
-            Incidents.selectAll()
-                .where { Incidents.id eq incidentId }
+            OnCallAlerts.selectAll()
+                .where { OnCallAlerts.id eq incidentId }
                 .singleOrNull()
                 ?.let { row ->
-                    IncidentEscalationState(
-                        status = row[Incidents.status],
-                        escalationPolicyId = row[Incidents.escalationPolicyId],
-                        currentStep = row[Incidents.currentStep],
-                        repeatIteration = row[Incidents.repeatIteration]
+                    AlertEscalationState(
+                        status = row[OnCallAlerts.status],
+                        escalationPolicyId = row[OnCallAlerts.escalationPolicyId],
+                        currentStep = row[OnCallAlerts.currentStep],
+                        repeatIteration = row[OnCallAlerts.repeatIteration]
                     )
                 }
         } ?: return false
@@ -468,7 +465,7 @@ class EscalationEngine(
                 val userId = data["userId"]?.toIntOrNull() ?: return@forEach
                 val phoneNumber = data["phoneNumber"] ?: return@forEach
                 val title = data["title"] ?: return@forEach
-                val priorityLevel = data["priorityLevel"] ?: return@forEach
+                val priority = data["priority"] ?: data["priorityLevel"] ?: return@forEach
                 val stepIndex = data["stepIndex"]?.toIntOrNull() ?: return@forEach
                 val iteration = data["iteration"]?.toIntOrNull() ?: return@forEach
 
@@ -476,8 +473,8 @@ class EscalationEngine(
                     logger.info("SMS/call fallback firing for incident $incidentId, user $userId")
                     scope.launch {
                         try {
-                            twilioService.sendSms(phoneNumber, incidentId, title, priorityLevel, userId)
-                            twilioService.makeCall(phoneNumber, incidentId, title, priorityLevel, userId)
+                            twilioService.sendSms(phoneNumber, incidentId, title, priority, userId)
+                            twilioService.makeCall(phoneNumber, incidentId, title, priority, userId)
                             logTimelineEvent(
                                 incidentId,
                                 "NOTIFICATION_SENT",
@@ -530,7 +527,7 @@ class EscalationEngine(
         }
     }
 
-    fun acknowledgeIncident(
+    fun acknowledgeAlert(
         incidentId: Int,
         userId: Int,
     ): Boolean =
@@ -538,8 +535,8 @@ class EscalationEngine(
             val now = Clock.System.now()
 
             val updated =
-                Incidents.update({
-                    (Incidents.id eq incidentId) and (Incidents.status eq "TRIGGERED")
+                OnCallAlerts.update({
+                    (OnCallAlerts.id eq incidentId) and (OnCallAlerts.status eq "TRIGGERED")
                 }) {
                     it[status] = "ACKNOWLEDGED"
                     it[acknowledgedAt] = now
@@ -558,12 +555,12 @@ class EscalationEngine(
             }
         }
 
-    fun acknowledgeIncidentByPhone(incidentId: Int): Boolean =
+    fun acknowledgeAlertByPhone(incidentId: Int): Boolean =
         transaction {
             val now = Clock.System.now()
             val updated =
-                Incidents.update({
-                    (Incidents.id eq incidentId) and (Incidents.status eq "TRIGGERED")
+                OnCallAlerts.update({
+                    (OnCallAlerts.id eq incidentId) and (OnCallAlerts.status eq "TRIGGERED")
                 }) {
                     it[status] = "ACKNOWLEDGED"
                     it[acknowledgedAt] = now
@@ -580,7 +577,7 @@ class EscalationEngine(
             }
         }
 
-    fun resolveIncident(
+    fun resolveAlert(
         incidentId: Int,
         userId: Int,
     ): Boolean =
@@ -588,8 +585,8 @@ class EscalationEngine(
             val now = Clock.System.now()
 
             val updated =
-                Incidents.update({
-                    (Incidents.id eq incidentId) and (Incidents.status inList listOf("TRIGGERED", "ACKNOWLEDGED"))
+                OnCallAlerts.update({
+                    (OnCallAlerts.id eq incidentId) and (OnCallAlerts.status inList listOf("TRIGGERED", "ACKNOWLEDGED"))
                 }) {
                     it[status] = "RESOLVED"
                     it[resolvedAt] = now
@@ -608,19 +605,19 @@ class EscalationEngine(
             }
         }
 
-    fun reassignIncident(
+    fun reassignAlert(
         incidentId: Int,
         toUserId: Int,
         byUserId: Int,
     ): Boolean =
         transaction {
             val incident =
-                Incidents
+                OnCallAlerts
                     .selectAll()
-                    .where { Incidents.id eq incidentId }
+                    .where { OnCallAlerts.id eq incidentId }
                     .singleOrNull() ?: return@transaction false
 
-            if (incident[Incidents.status] != "TRIGGERED") {
+            if (incident[OnCallAlerts.status] != "TRIGGERED") {
                 return@transaction false
             }
 
@@ -628,10 +625,10 @@ class EscalationEngine(
             notifyUser(
                 incidentId,
                 toUserId,
-                incident[Incidents.title],
-                incident[Incidents.priorityLevel],
-                stepIndex = incident[Incidents.currentStep],
-                iteration = incident[Incidents.repeatIteration]
+                incident[OnCallAlerts.title],
+                incident[OnCallAlerts.priority],
+                stepIndex = incident[OnCallAlerts.currentStep],
+                iteration = incident[OnCallAlerts.repeatIteration]
             )
 
             logTimelineEvent(
@@ -652,11 +649,11 @@ class EscalationEngine(
         details: Map<String, JsonElement>?,
     ) {
         transaction {
-            IncidentTimeline.insert {
-                it[IncidentTimeline.incidentId] = incidentId
-                it[IncidentTimeline.eventType] = eventType
-                it[IncidentTimeline.actorUserId] = actorUserId
-                it[IncidentTimeline.details] = details
+            OnCallAlertTimeline.insert {
+                it[OnCallAlertTimeline.alertId] = incidentId
+                it[OnCallAlertTimeline.eventType] = eventType
+                it[OnCallAlertTimeline.actorUserId] = actorUserId
+                it[OnCallAlertTimeline.details] = details
                 it[createdAt] = Clock.System.now()
             }
         }
@@ -683,16 +680,16 @@ class EscalationEngine(
     ): Boolean =
         transaction {
             val incident =
-                Incidents
+                OnCallAlerts
                     .selectAll()
-                    .where { Incidents.id eq incidentId }
+                    .where { OnCallAlerts.id eq incidentId }
                     .singleOrNull() ?: return@transaction false
 
-            if (incident[Incidents.status] != "TRIGGERED") return@transaction false
+            if (incident[OnCallAlerts.status] != "TRIGGERED") return@transaction false
 
-            val policyId = incident[Incidents.escalationPolicyId] ?: return@transaction false
+            val policyId = incident[OnCallAlerts.escalationPolicyId] ?: return@transaction false
             val policy = escalationPolicyService.getPolicy(policyId) ?: return@transaction false
-            val currentStepIndex = incident[Incidents.currentStep]
+            val currentStepIndex = incident[OnCallAlerts.currentStep]
 
             // Find the next step's first user target to reassign to
             val nextStepIndex = currentStepIndex + 1
@@ -718,7 +715,7 @@ class EscalationEngine(
                         )
                         // Force advance to next step immediately
                         removeTimeout(incidentId)
-                        processEscalationStep(incidentId, nextStepIndex, incident[Incidents.repeatIteration])
+                        processEscalationStep(incidentId, nextStepIndex, incident[OnCallAlerts.repeatIteration])
                         return@transaction true
                     }
                 }
@@ -727,36 +724,55 @@ class EscalationEngine(
             false
         }
 
-    private fun getIncident(incidentId: Int): Incident? =
+    fun acknowledgeIncident(
+        incidentId: Int,
+        userId: Int,
+    ): Boolean = acknowledgeAlert(incidentId, userId)
+
+    fun acknowledgeIncidentByPhone(incidentId: Int): Boolean = acknowledgeAlertByPhone(incidentId)
+
+    fun resolveIncident(
+        incidentId: Int,
+        userId: Int,
+    ): Boolean = resolveAlert(incidentId, userId)
+
+    fun reassignIncident(
+        incidentId: Int,
+        toUserId: Int,
+        byUserId: Int,
+    ): Boolean = reassignAlert(incidentId, toUserId, byUserId)
+
+    private fun getAlert(incidentId: Int): OnCallAlert? =
         transaction {
             val row =
-                Incidents
-                    .join(EscalationPolicies, JoinType.LEFT, Incidents.escalationPolicyId, EscalationPolicies.id)
+                OnCallAlerts
+                    .join(EscalationPolicies, JoinType.LEFT, OnCallAlerts.escalationPolicyId, EscalationPolicies.id)
                     .selectAll()
-                    .where { Incidents.id eq incidentId }
+                    .where { OnCallAlerts.id eq incidentId }
                     .singleOrNull() ?: return@transaction null
 
-            Incident(
-                id = row[Incidents.id].value,
-                organizationId = row[Incidents.organizationId],
-                escalationPolicyId = row[Incidents.escalationPolicyId],
+            OnCallAlert(
+                id = row[OnCallAlerts.id].value,
+                organizationId = row[OnCallAlerts.organizationId],
+                declaredIncidentId = row[OnCallAlerts.declaredIncidentId],
+                escalationPolicyId = row[OnCallAlerts.escalationPolicyId],
                 escalationPolicyName = row.getOrNull(EscalationPolicies.name),
-                title = row[Incidents.title],
-                description = row[Incidents.description],
-                priorityLevel = row[Incidents.priorityLevel],
-                status = row[Incidents.status],
-                alertSource = row[Incidents.alertSource],
-                deduplicationKey = row[Incidents.deduplicationKey],
-                currentStep = row[Incidents.currentStep],
-                repeatIteration = row[Incidents.repeatIteration],
-                triggeredAt = row[Incidents.triggeredAt].toString(),
-                acknowledgedAt = row[Incidents.acknowledgedAt]?.toString(),
-                acknowledgedBy = row[Incidents.acknowledgedBy],
-                resolvedAt = row[Incidents.resolvedAt]?.toString(),
-                resolvedBy = row[Incidents.resolvedBy],
-                metadata = row[Incidents.metadata],
-                createdAt = row[Incidents.createdAt].toString(),
-                updatedAt = row[Incidents.updatedAt].toString(),
+                title = row[OnCallAlerts.title],
+                description = row[OnCallAlerts.description],
+                priority = row[OnCallAlerts.priority],
+                status = row[OnCallAlerts.status],
+                alertSource = row[OnCallAlerts.alertSource],
+                deduplicationKey = row[OnCallAlerts.deduplicationKey],
+                currentStep = row[OnCallAlerts.currentStep],
+                repeatIteration = row[OnCallAlerts.repeatIteration],
+                triggeredAt = row[OnCallAlerts.triggeredAt].toString(),
+                acknowledgedAt = row[OnCallAlerts.acknowledgedAt]?.toString(),
+                acknowledgedBy = row[OnCallAlerts.acknowledgedBy],
+                resolvedAt = row[OnCallAlerts.resolvedAt]?.toString(),
+                resolvedBy = row[OnCallAlerts.resolvedBy],
+                metadata = row[OnCallAlerts.metadata],
+                createdAt = row[OnCallAlerts.createdAt].toString(),
+                updatedAt = row[OnCallAlerts.updatedAt].toString(),
             )
         }
 }

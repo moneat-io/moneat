@@ -87,21 +87,21 @@ fun Route.twilioWebhookRoutes() {
 
             val twiml =
                 if (digits == "1" && incidentId != null) {
-                    // Acknowledge the incident - use system user 0 as "phone acknowledge"
+                    // Acknowledge the alert - use system user 0 as "phone acknowledge"
                     val escalationEngine = EscalationEngineHolder.instance
                     if (escalationEngine != null) {
                         val acknowledged = escalationEngine.acknowledgeIncidentByPhone(incidentId)
                         if (acknowledged) {
-                            logger.info { "Incident $incidentId acknowledged via phone call" }
-                            """<Response><Say voice="alice">Incident acknowledged. """ +
+                            logger.info { "Alert $incidentId acknowledged via phone call" }
+                            """<Response><Say voice="alice">Alert acknowledged. """ +
                                 """Thank you. Goodbye.</Say></Response>"""
                         } else {
-                            """<Response><Say voice="alice">This incident has already been acknowledged """ +
+                            """<Response><Say voice="alice">This alert has already been acknowledged """ +
                                 """or resolved. Goodbye.</Say></Response>"""
                         }
                     } else {
                         logger.error {
-                            "EscalationEngine not available; cannot acknowledge incident $incidentId via phone"
+                            "EscalationEngine not available; cannot acknowledge alert $incidentId via phone"
                         }
                         """<Response><Say voice="alice">Acknowledgement is temporarily unavailable. """ +
                             """Please try the app. Goodbye.</Say></Response>"""

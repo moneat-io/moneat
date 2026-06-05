@@ -104,7 +104,7 @@ import { Route as PerformanceTransactionIdRouteImport } from './routes/performan
 import { Route as OnCallSchedulesRouteImport } from './routes/on-call.schedules'
 import { Route as OnCallIncidentsRouteImport } from './routes/on-call.incidents'
 import { Route as OnCallEscalationPoliciesRouteImport } from './routes/on-call.escalation-policies'
-import { Route as OnCallDeclaredIncidentsRouteImport } from './routes/on-call.declared-incidents'
+import { Route as OnCallAlertsRouteImport } from './routes/on-call.alerts'
 import { Route as MonitoringServiceMapRouteImport } from './routes/monitoring.service-map'
 import { Route as MonitoringSbomRouteImport } from './routes/monitoring.sbom'
 import { Route as MonitoringProcessesRouteImport } from './routes/monitoring.processes'
@@ -143,7 +143,7 @@ import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects
 import { Route as ProfilesServiceServiceRouteImport } from './routes/profiles.service.$service'
 import { Route as PerformanceTracesTraceIdRouteImport } from './routes/performance.traces.$traceId'
 import { Route as OnCallIncidentsIncidentIdRouteImport } from './routes/on-call.incidents.$incidentId'
-import { Route as OnCallDeclaredIncidentsIncidentIdRouteImport } from './routes/on-call.declared-incidents.$incidentId'
+import { Route as OnCallAlertsAlertIdRouteImport } from './routes/on-call.alerts.$alertId'
 import { Route as MonitoringNetworkDevicesTrapsRouteImport } from './routes/monitoring.network-devices.traps'
 import { Route as MonitoringNetworkDevicesPathsRouteImport } from './routes/monitoring.network-devices.paths'
 import { Route as MonitoringNetworkDevicesFlowsRouteImport } from './routes/monitoring.network-devices.flows'
@@ -633,9 +633,9 @@ const OnCallEscalationPoliciesRoute =
     path: '/escalation-policies',
     getParentRoute: () => OnCallRoute,
   } as any)
-const OnCallDeclaredIncidentsRoute = OnCallDeclaredIncidentsRouteImport.update({
-  id: '/declared-incidents',
-  path: '/declared-incidents',
+const OnCallAlertsRoute = OnCallAlertsRouteImport.update({
+  id: '/alerts',
+  path: '/alerts',
   getParentRoute: () => OnCallRoute,
 } as any)
 const MonitoringServiceMapRoute = MonitoringServiceMapRouteImport.update({
@@ -833,12 +833,11 @@ const OnCallIncidentsIncidentIdRoute =
     path: '/$incidentId',
     getParentRoute: () => OnCallIncidentsRoute,
   } as any)
-const OnCallDeclaredIncidentsIncidentIdRoute =
-  OnCallDeclaredIncidentsIncidentIdRouteImport.update({
-    id: '/$incidentId',
-    path: '/$incidentId',
-    getParentRoute: () => OnCallDeclaredIncidentsRoute,
-  } as any)
+const OnCallAlertsAlertIdRoute = OnCallAlertsAlertIdRouteImport.update({
+  id: '/$alertId',
+  path: '/$alertId',
+  getParentRoute: () => OnCallAlertsRoute,
+} as any)
 const MonitoringNetworkDevicesTrapsRoute =
   MonitoringNetworkDevicesTrapsRouteImport.update({
     id: '/traps',
@@ -986,7 +985,7 @@ export interface FileRoutesByFullPath {
   '/monitoring/processes': typeof MonitoringProcessesRoute
   '/monitoring/sbom': typeof MonitoringSbomRoute
   '/monitoring/service-map': typeof MonitoringServiceMapRoute
-  '/on-call/declared-incidents': typeof OnCallDeclaredIncidentsRouteWithChildren
+  '/on-call/alerts': typeof OnCallAlertsRouteWithChildren
   '/on-call/escalation-policies': typeof OnCallEscalationPoliciesRoute
   '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
   '/on-call/schedules': typeof OnCallSchedulesRoute
@@ -1033,7 +1032,7 @@ export interface FileRoutesByFullPath {
   '/monitoring/network-devices/flows': typeof MonitoringNetworkDevicesFlowsRoute
   '/monitoring/network-devices/paths': typeof MonitoringNetworkDevicesPathsRoute
   '/monitoring/network-devices/traps': typeof MonitoringNetworkDevicesTrapsRoute
-  '/on-call/declared-incidents/$incidentId': typeof OnCallDeclaredIncidentsIncidentIdRoute
+  '/on-call/alerts/$alertId': typeof OnCallAlertsAlertIdRoute
   '/on-call/incidents/$incidentId': typeof OnCallIncidentsIncidentIdRoute
   '/performance/traces/$traceId': typeof PerformanceTracesTraceIdRoute
   '/profiles/service/$service': typeof ProfilesServiceServiceRoute
@@ -1119,7 +1118,7 @@ export interface FileRoutesByTo {
   '/monitoring/processes': typeof MonitoringProcessesRoute
   '/monitoring/sbom': typeof MonitoringSbomRoute
   '/monitoring/service-map': typeof MonitoringServiceMapRoute
-  '/on-call/declared-incidents': typeof OnCallDeclaredIncidentsRouteWithChildren
+  '/on-call/alerts': typeof OnCallAlertsRouteWithChildren
   '/on-call/escalation-policies': typeof OnCallEscalationPoliciesRoute
   '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
   '/on-call/schedules': typeof OnCallSchedulesRoute
@@ -1165,7 +1164,7 @@ export interface FileRoutesByTo {
   '/monitoring/network-devices/flows': typeof MonitoringNetworkDevicesFlowsRoute
   '/monitoring/network-devices/paths': typeof MonitoringNetworkDevicesPathsRoute
   '/monitoring/network-devices/traps': typeof MonitoringNetworkDevicesTrapsRoute
-  '/on-call/declared-incidents/$incidentId': typeof OnCallDeclaredIncidentsIncidentIdRoute
+  '/on-call/alerts/$alertId': typeof OnCallAlertsAlertIdRoute
   '/on-call/incidents/$incidentId': typeof OnCallIncidentsIncidentIdRoute
   '/performance/traces/$traceId': typeof PerformanceTracesTraceIdRoute
   '/profiles/service/$service': typeof ProfilesServiceServiceRoute
@@ -1266,7 +1265,7 @@ export interface FileRoutesById {
   '/monitoring/processes': typeof MonitoringProcessesRoute
   '/monitoring/sbom': typeof MonitoringSbomRoute
   '/monitoring/service-map': typeof MonitoringServiceMapRoute
-  '/on-call/declared-incidents': typeof OnCallDeclaredIncidentsRouteWithChildren
+  '/on-call/alerts': typeof OnCallAlertsRouteWithChildren
   '/on-call/escalation-policies': typeof OnCallEscalationPoliciesRoute
   '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
   '/on-call/schedules': typeof OnCallSchedulesRoute
@@ -1313,7 +1312,7 @@ export interface FileRoutesById {
   '/monitoring/network-devices/flows': typeof MonitoringNetworkDevicesFlowsRoute
   '/monitoring/network-devices/paths': typeof MonitoringNetworkDevicesPathsRoute
   '/monitoring/network-devices/traps': typeof MonitoringNetworkDevicesTrapsRoute
-  '/on-call/declared-incidents/$incidentId': typeof OnCallDeclaredIncidentsIncidentIdRoute
+  '/on-call/alerts/$alertId': typeof OnCallAlertsAlertIdRoute
   '/on-call/incidents/$incidentId': typeof OnCallIncidentsIncidentIdRoute
   '/performance/traces/$traceId': typeof PerformanceTracesTraceIdRoute
   '/profiles/service/$service': typeof ProfilesServiceServiceRoute
@@ -1415,7 +1414,7 @@ export interface FileRouteTypes {
     | '/monitoring/processes'
     | '/monitoring/sbom'
     | '/monitoring/service-map'
-    | '/on-call/declared-incidents'
+    | '/on-call/alerts'
     | '/on-call/escalation-policies'
     | '/on-call/incidents'
     | '/on-call/schedules'
@@ -1462,7 +1461,7 @@ export interface FileRouteTypes {
     | '/monitoring/network-devices/flows'
     | '/monitoring/network-devices/paths'
     | '/monitoring/network-devices/traps'
-    | '/on-call/declared-incidents/$incidentId'
+    | '/on-call/alerts/$alertId'
     | '/on-call/incidents/$incidentId'
     | '/performance/traces/$traceId'
     | '/profiles/service/$service'
@@ -1548,7 +1547,7 @@ export interface FileRouteTypes {
     | '/monitoring/processes'
     | '/monitoring/sbom'
     | '/monitoring/service-map'
-    | '/on-call/declared-incidents'
+    | '/on-call/alerts'
     | '/on-call/escalation-policies'
     | '/on-call/incidents'
     | '/on-call/schedules'
@@ -1594,7 +1593,7 @@ export interface FileRouteTypes {
     | '/monitoring/network-devices/flows'
     | '/monitoring/network-devices/paths'
     | '/monitoring/network-devices/traps'
-    | '/on-call/declared-incidents/$incidentId'
+    | '/on-call/alerts/$alertId'
     | '/on-call/incidents/$incidentId'
     | '/performance/traces/$traceId'
     | '/profiles/service/$service'
@@ -1694,7 +1693,7 @@ export interface FileRouteTypes {
     | '/monitoring/processes'
     | '/monitoring/sbom'
     | '/monitoring/service-map'
-    | '/on-call/declared-incidents'
+    | '/on-call/alerts'
     | '/on-call/escalation-policies'
     | '/on-call/incidents'
     | '/on-call/schedules'
@@ -1741,7 +1740,7 @@ export interface FileRouteTypes {
     | '/monitoring/network-devices/flows'
     | '/monitoring/network-devices/paths'
     | '/monitoring/network-devices/traps'
-    | '/on-call/declared-incidents/$incidentId'
+    | '/on-call/alerts/$alertId'
     | '/on-call/incidents/$incidentId'
     | '/performance/traces/$traceId'
     | '/profiles/service/$service'
@@ -2492,11 +2491,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnCallEscalationPoliciesRouteImport
       parentRoute: typeof OnCallRoute
     }
-    '/on-call/declared-incidents': {
-      id: '/on-call/declared-incidents'
-      path: '/declared-incidents'
-      fullPath: '/on-call/declared-incidents'
-      preLoaderRoute: typeof OnCallDeclaredIncidentsRouteImport
+    '/on-call/alerts': {
+      id: '/on-call/alerts'
+      path: '/alerts'
+      fullPath: '/on-call/alerts'
+      preLoaderRoute: typeof OnCallAlertsRouteImport
       parentRoute: typeof OnCallRoute
     }
     '/monitoring/service-map': {
@@ -2765,12 +2764,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnCallIncidentsIncidentIdRouteImport
       parentRoute: typeof OnCallIncidentsRoute
     }
-    '/on-call/declared-incidents/$incidentId': {
-      id: '/on-call/declared-incidents/$incidentId'
-      path: '/$incidentId'
-      fullPath: '/on-call/declared-incidents/$incidentId'
-      preLoaderRoute: typeof OnCallDeclaredIncidentsIncidentIdRouteImport
-      parentRoute: typeof OnCallDeclaredIncidentsRoute
+    '/on-call/alerts/$alertId': {
+      id: '/on-call/alerts/$alertId'
+      path: '/$alertId'
+      fullPath: '/on-call/alerts/$alertId'
+      preLoaderRoute: typeof OnCallAlertsAlertIdRouteImport
+      parentRoute: typeof OnCallAlertsRoute
     }
     '/monitoring/network-devices/traps': {
       id: '/monitoring/network-devices/traps'
@@ -3044,20 +3043,17 @@ const MonitoringRouteWithChildren = MonitoringRoute._addFileChildren(
   MonitoringRouteChildren,
 )
 
-interface OnCallDeclaredIncidentsRouteChildren {
-  OnCallDeclaredIncidentsIncidentIdRoute: typeof OnCallDeclaredIncidentsIncidentIdRoute
+interface OnCallAlertsRouteChildren {
+  OnCallAlertsAlertIdRoute: typeof OnCallAlertsAlertIdRoute
 }
 
-const OnCallDeclaredIncidentsRouteChildren: OnCallDeclaredIncidentsRouteChildren =
-  {
-    OnCallDeclaredIncidentsIncidentIdRoute:
-      OnCallDeclaredIncidentsIncidentIdRoute,
-  }
+const OnCallAlertsRouteChildren: OnCallAlertsRouteChildren = {
+  OnCallAlertsAlertIdRoute: OnCallAlertsAlertIdRoute,
+}
 
-const OnCallDeclaredIncidentsRouteWithChildren =
-  OnCallDeclaredIncidentsRoute._addFileChildren(
-    OnCallDeclaredIncidentsRouteChildren,
-  )
+const OnCallAlertsRouteWithChildren = OnCallAlertsRoute._addFileChildren(
+  OnCallAlertsRouteChildren,
+)
 
 interface OnCallIncidentsRouteChildren {
   OnCallIncidentsIncidentIdRoute: typeof OnCallIncidentsIncidentIdRoute
@@ -3072,7 +3068,7 @@ const OnCallIncidentsRouteWithChildren = OnCallIncidentsRoute._addFileChildren(
 )
 
 interface OnCallRouteChildren {
-  OnCallDeclaredIncidentsRoute: typeof OnCallDeclaredIncidentsRouteWithChildren
+  OnCallAlertsRoute: typeof OnCallAlertsRouteWithChildren
   OnCallEscalationPoliciesRoute: typeof OnCallEscalationPoliciesRoute
   OnCallIncidentsRoute: typeof OnCallIncidentsRouteWithChildren
   OnCallSchedulesRoute: typeof OnCallSchedulesRoute
@@ -3080,7 +3076,7 @@ interface OnCallRouteChildren {
 }
 
 const OnCallRouteChildren: OnCallRouteChildren = {
-  OnCallDeclaredIncidentsRoute: OnCallDeclaredIncidentsRouteWithChildren,
+  OnCallAlertsRoute: OnCallAlertsRouteWithChildren,
   OnCallEscalationPoliciesRoute: OnCallEscalationPoliciesRoute,
   OnCallIncidentsRoute: OnCallIncidentsRouteWithChildren,
   OnCallSchedulesRoute: OnCallSchedulesRoute,

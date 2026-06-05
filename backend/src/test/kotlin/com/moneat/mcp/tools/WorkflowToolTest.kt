@@ -130,7 +130,7 @@ class WorkflowToolTest {
         assertFalse(result.isError, result.content.firstOrNull()?.text)
         assertEquals("incident.severity", requestSlot.captured.conditions.single().reference)
         assertEquals("equals", requestSlot.captured.conditions.single().operation)
-        assertEquals("critical", requestSlot.captured.conditions.single().value)
+        assertEquals("SEV-1", requestSlot.captured.conditions.single().value)
         assertEquals("slack", requestSlot.captured.steps.single().name)
         assertEquals("#ops", requestSlot.captured.steps.single().params["channel"])
     }
@@ -412,7 +412,7 @@ class WorkflowToolTest {
                     mapOf(
                         "reference" to JsonPrimitive("incident.severity"),
                         "operation" to JsonPrimitive("equals"),
-                        "value" to JsonPrimitive("critical"),
+                        "value" to JsonPrimitive("SEV-1"),
                     )
                 )
             )
@@ -458,7 +458,7 @@ class WorkflowToolTest {
         private const val WEBHOOK_GRAPH_JSON =
             """{"nodes":[{"id":"trigger","type":"trigger","trigger":"webhook"}],"edges":[]}"""
         private const val CONDITIONS_JSON =
-            """[{"reference":"incident.severity","operation":"equals","value":"critical"}]"""
+            """[{"reference":"incident.severity","operation":"equals","value":"SEV-1"}]"""
         private const val STEPS_JSON =
             """[{"name":"slack","params":{"channel":"#ops"}}]"""
     }

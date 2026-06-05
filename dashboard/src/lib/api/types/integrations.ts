@@ -88,20 +88,20 @@ export interface IncidentRoutingRule {
   id: number
   alertSource: string
   alertType?: string | null
-  incidentSeverity: string
+  alertPriority: string
 }
 
 export interface UpsertRoutingRuleRequest {
   alertSource: string
   alertType?: string | null
-  incidentSeverity: string
+  alertPriority: string
 }
 
 export interface IncidentEventLogEntry {
   id: number
   alertSource: string
   deduplicationKey: string
-  incidentSeverity: string
+  alertPriority: string
   incidentStatus: string
   title: string
   description?: string | null

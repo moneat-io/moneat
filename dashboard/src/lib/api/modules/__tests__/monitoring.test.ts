@@ -466,7 +466,7 @@ describe('Monitoring API module', () => {
                 threshold: 90,
                 duration_seconds: 300,
                 enabled: true,
-                incident_severity: 'CRITICAL',
+                alert_priority: 'P0',
                 last_triggered_at: 1700000000,
                 created_at: 1690000000,
               },
@@ -481,7 +481,7 @@ describe('Monitoring API module', () => {
                 threshold: 80,
                 duration_seconds: 60,
                 enabled: false,
-                incident_severity: null,
+                alert_priority: null,
                 created_at: 1690000000,
               },
             ],
@@ -494,7 +494,7 @@ describe('Monitoring API module', () => {
                 threshold: 90,
                 duration_seconds: 300,
                 enabled: true,
-                incident_severity: 'CRITICAL',
+                alert_priority: 'P0',
                 created_at: 1690000000,
               },
             ],
@@ -512,7 +512,7 @@ describe('Monitoring API module', () => {
         threshold: 90,
         durationSeconds: 300,
         enabled: true,
-        incidentSeverity: 'CRITICAL',
+        alertPriority: 'P0',
         createdAt: 1690000000,
       })
       expect(config.hostAlerts).toHaveLength(1)
@@ -543,7 +543,7 @@ describe('Monitoring API module', () => {
                 threshold: 95,
                 durationSeconds: 120,
                 enabled: true,
-                incidentSeverity: 'HIGH',
+                alertPriority: 'P1',
                 createdAt: 1695000000,
               },
             ],
@@ -560,7 +560,7 @@ describe('Monitoring API module', () => {
         hostId: 2,
         metric: 'disk',
         durationSeconds: 120,
-        incidentSeverity: 'HIGH',
+        alertPriority: 'P1',
       })
     })
 
@@ -579,7 +579,7 @@ describe('Monitoring API module', () => {
                 threshold: 1000,
                 duration_seconds: 0,
                 enabled: true,
-                incident_severity: null,
+                alert_priority: null,
                 created_at: 1690000000,
               },
             ],
@@ -626,7 +626,7 @@ describe('Monitoring API module', () => {
             threshold: 90,
             duration_seconds: 300,
             enabled: true,
-            incident_severity: null,
+            alert_priority: null,
             created_at: 1700000000,
           })
         })
@@ -684,7 +684,7 @@ describe('Monitoring API module', () => {
             threshold: 95,
             duration_seconds: 300,
             enabled: true,
-            incident_severity: null,
+            alert_priority: null,
             created_at: 1700000000,
           })
         })

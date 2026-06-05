@@ -79,7 +79,7 @@ class IncidentIoProvider : IncidentProvider {
             // Convert metadata JsonElement values to strings for incident.io API
             val baseMetadata =
                 mapOf(
-                    "severity" to event.severity.name.lowercase(),
+                    "priority" to event.priority.wire.lowercase(),
                     "source" to event.source.name,
                     "moneat_url" to event.moneatUrl
                 )

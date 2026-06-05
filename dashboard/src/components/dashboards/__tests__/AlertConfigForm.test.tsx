@@ -45,7 +45,7 @@ const makeAlert = (overrides: Partial<DashboardWidgetAlert> = {}): DashboardWidg
   warning_threshold: null,
   metric_index: 0,
   duration_seconds: 0,
-  incident_severity: null,
+  alert_priority: null,
   enabled: true,
   notification_channels: {email: true, slack: true, discord: true},
   last_triggered_at: null,
@@ -148,12 +148,12 @@ describe('AlertConfigForm', () => {
       expect(conditionSelect.querySelectorAll('option')).toHaveLength(5)
     })
 
-    it('renders all severity options including None', async () => {
+    it('renders all priority options including None', async () => {
       const user = userEvent.setup()
       renderAlertForm()
       await user.click(await screen.findByText('Add alert'))
-      const severitySelect = screen.getByDisplayValue('None')
-      expect(severitySelect.querySelectorAll('option')).toHaveLength(5)
+      const prioritySelect = screen.getByDisplayValue('None')
+      expect(prioritySelect.querySelectorAll('option')).toHaveLength(7)
     })
 
     it('renders notification channel checkboxes', async () => {
@@ -191,24 +191,24 @@ describe('AlertConfigForm', () => {
       expect(conditionSelect).toHaveValue('<')
     })
 
-    it('can change severity select', async () => {
+    it('can change priority select', async () => {
       const user = userEvent.setup()
       renderAlertForm()
       await user.click(await screen.findByText('Add alert'))
-      const severitySelect = screen.getByDisplayValue('None')
-      await user.selectOptions(severitySelect, 'CRITICAL')
-      expect(severitySelect).toHaveValue('CRITICAL')
+      const prioritySelect = screen.getByDisplayValue('None')
+      await user.selectOptions(prioritySelect, 'P0')
+      expect(prioritySelect).toHaveValue('P0')
     })
 
-    it('can set severity back to None (null)', async () => {
+    it('can set priority back to None (null)', async () => {
       const user = userEvent.setup()
       renderAlertForm()
       await user.click(await screen.findByText('Add alert'))
-      const severitySelect = screen.getByDisplayValue('None')
-      await user.selectOptions(severitySelect, 'HIGH')
-      expect(severitySelect).toHaveValue('HIGH')
-      await user.selectOptions(severitySelect, '')
-      expect(severitySelect).toHaveValue('')
+      const prioritySelect = screen.getByDisplayValue('None')
+      await user.selectOptions(prioritySelect, 'P1')
+      expect(prioritySelect).toHaveValue('P1')
+      await user.selectOptions(prioritySelect, '')
+      expect(prioritySelect).toHaveValue('')
     })
 
     it('can change threshold input', async () => {

@@ -361,7 +361,7 @@ class IncidentRoutesTest {
         val configId = insertProviderConfig()
         val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORG_ID)
         val rulesBody =
-            """[{"alertSource":"monitor","alertType":"metric","incidentSeverity":"critical"}]"""
+            """[{"alertSource":"monitor","alertType":"metric","alertPriority":"critical"}]"""
         val response = client.put("/api/incident-providers/$configId/rules") {
             withAuth(token)
             contentType(ContentType.Application.Json)

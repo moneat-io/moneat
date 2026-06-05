@@ -151,50 +151,50 @@ export function onCallMethods(core: ApiClientCore) {
     getIncidents: (filters?: IncidentListFilters) => {
       const params = new URLSearchParams()
       appendIncidentStatusFilters(params, filters?.status)
-      if (filters?.priorityLevel) params.append('priority', filters.priorityLevel)
+      if (filters?.priority) params.append('priority', filters.priority)
       if (filters?.fromDate) params.append('fromDate', filters.fromDate)
       if (filters?.toDate) params.append('toDate', filters.toDate)
       const query = params.toString()
       return core.request<Incident[]>(
-        urlWithQuery(`${base}/incidents`, query)
+        urlWithQuery(`${base}/on-call/alerts`, query)
       )
     },
 
     getIncident: (id: number) =>
-      core.request<IncidentDetail>(`${base}/incidents/${id}`),
+      core.request<IncidentDetail>(`${base}/on-call/alerts/${id}`),
 
     getIncidentTimeline: (id: number) =>
-      core.request<IncidentTimeline[]>(`${base}/incidents/${id}/timeline`),
+      core.request<IncidentTimeline[]>(`${base}/on-call/alerts/${id}/timeline`),
 
     acknowledgeIncident: (id: number) =>
-      core.request<Incident>(`${base}/incidents/${id}/acknowledge`, {
+      core.request<Incident>(`${base}/on-call/alerts/${id}/acknowledge`, {
         method: 'POST',
       }),
 
     resolveIncident: (id: number) =>
-      core.request<Incident>(`${base}/incidents/${id}/resolve`, {
+      core.request<Incident>(`${base}/on-call/alerts/${id}/resolve`, {
         method: 'POST',
       }),
 
     reassignIncident: (id: number, toUserId: number) =>
-      core.request<Incident>(`${base}/incidents/${id}/reassign`, {
+      core.request<Incident>(`${base}/on-call/alerts/${id}/reassign`, {
         method: 'POST',
         body: JSON.stringify({ toUserId }),
       }),
 
     addIncidentNote: (id: number, note: string) =>
-      core.request<IncidentTimeline>(`${base}/incidents/${id}/notes`, {
+      core.request<IncidentTimeline>(`${base}/on-call/alerts/${id}/notes`, {
         method: 'POST',
         body: JSON.stringify({ note }),
       }),
 
     viewIncident: (id: number) =>
-      core.request<void>(`${base}/incidents/${id}/view`, {
+      core.request<void>(`${base}/on-call/alerts/${id}/view`, {
         method: 'POST',
       }),
 
     markUnavailable: (id: number) =>
-      core.request<void>(`${base}/incidents/${id}/unavailable`, {
+      core.request<void>(`${base}/on-call/alerts/${id}/unavailable`, {
         method: 'POST',
       }),
 
@@ -211,40 +211,40 @@ export function onCallMethods(core: ApiClientCore) {
 
     declareIncident: (
       alertId: number,
-      data: { title: string; description: string; priorityLevel: string }
+      data: { title: string; description: string; severity: string }
     ) =>
-      core.request<{ id: number }>(`${base}/incidents/${alertId}/declare`, {
+      core.request<{ id: number }>(`${base}/on-call/alerts/${alertId}/declare-incident`, {
         method: 'POST',
         body: JSON.stringify(data),
       }),
 
     getOnCallIncidents: (
-      filters: { status?: string; priorityLevel?: string } = {}
+      filters: { status?: string; severity?: string } = {}
     ) => {
       const params = new URLSearchParams()
       if (filters.status) params.append('status', filters.status)
-      if (filters.priorityLevel) params.append('priorityLevel', filters.priorityLevel)
+      if (filters.severity) params.append('severity', filters.severity)
       return core.request<OnCallIncident[]>(
-        urlWithQuery(`${base}/on-call-incidents`, params.toString())
+        urlWithQuery(`${base}/on-call/incidents`, params.toString())
       )
     },
 
     getOnCallIncident: (id: number) =>
-      core.request<OnCallIncidentDetail>(`${base}/on-call-incidents/${id}`),
+      core.request<OnCallIncidentDetail>(`${base}/on-call/incidents/${id}`),
 
     resolveOnCallIncident: (id: number) =>
-      core.request<OnCallIncident>(`${base}/on-call-incidents/${id}/resolve`, {
+      core.request<OnCallIncident>(`${base}/on-call/incidents/${id}/resolve`, {
         method: 'POST',
       }),
 
     getOnCallIncidentTimeline: (id: number) =>
       core.request<IncidentTimeline[]>(
-        `${base}/on-call-incidents/${id}/timeline`
+        `${base}/on-call/incidents/${id}/timeline`
       ),
 
     addOnCallIncidentNote: (id: number, note: string) =>
       core.request<{ message: string }>(
-        `${base}/on-call-incidents/${id}/notes`,
+        `${base}/on-call/incidents/${id}/notes`,
         {
           method: 'POST',
           body: JSON.stringify({ note }),

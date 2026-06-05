@@ -25,7 +25,7 @@ import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.incident.models.IncidentEventLog
 import com.moneat.incident.models.IncidentProviderConfigs
 import com.moneat.incident.models.IncidentRoutingRules
-import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertStatus
 import com.moneat.incident.services.IncidentService
 import com.moneat.shared.models.EscalationPolicies
@@ -106,7 +106,7 @@ class IncidentServiceExtendedTest {
                 it[providerConfigId] = this@IncidentServiceExtendedTest.providerConfigId
                 it[alertSource] = AlertSource.UPTIME_MONITOR.name
                 it[alertType] = null
-                it[incidentSeverity] = "high"
+                it[alertPriority] = "high"
                 it[createdAt] = Clock.System.now()
                 it[updatedAt] = Clock.System.now()
             }
@@ -123,13 +123,13 @@ class IncidentServiceExtendedTest {
 
     private fun makeEvent(
         source: AlertSource = AlertSource.UPTIME_MONITOR,
-        severity: AlertSeverity = AlertSeverity.HIGH,
+        priority: AlertPriority = AlertPriority.P1,
         status: AlertStatus = AlertStatus.FIRING,
         dedupKey: String = "dedup-1"
     ): AlertLifecycleEvent = AlertLifecycleEvent(
         title = "Test Alert",
         description = "Something went wrong",
-        severity = severity,
+        priority = priority,
         status = status,
         source = source,
         deduplicationKey = dedupKey,
@@ -229,7 +229,7 @@ class IncidentServiceExtendedTest {
                 it[providerConfigId] = unknownConfigId
                 it[alertSource] = AlertSource.UPTIME_MONITOR.name
                 it[alertType] = null
-                it[incidentSeverity] = "high"
+                it[alertPriority] = "high"
                 it[createdAt] = Clock.System.now()
                 it[updatedAt] = Clock.System.now()
             }
@@ -352,7 +352,7 @@ class IncidentServiceExtendedTest {
                 it[providerConfigId] = this@IncidentServiceExtendedTest.providerConfigId
                 it[alertSource] = AlertSource.ERROR_ALERT.name
                 it[alertType] = null
-                it[incidentSeverity] = "high"
+                it[alertPriority] = "high"
                 it[createdAt] = Clock.System.now()
                 it[updatedAt] = Clock.System.now()
             }
@@ -372,38 +372,38 @@ class IncidentServiceExtendedTest {
         assertFalse(service.isAutoResolvableSource(AlertSource.ERROR_ALERT))
     }
 
-    // ──── resolveAlertSeverity edge cases ────
+    // ──── resolveAlertPriority edge cases ────
 
     @Test
-    fun `resolveAlertSeverity returns null when no routing rule exists for source`() {
-        val severity = service.resolveAlertSeverity(
+    fun `resolveAlertPriority returns null when no routing rule exists for source`() {
+        val severity = service.resolveAlertPriority(
             providerConfigId = providerConfigId,
             alertSource = AlertSource.DASHBOARD_ALERT,
-            monitorSeverityOverride = null
+            monitorPriorityOverride = null
         )
         assertNull(severity)
     }
 
     @Test
-    fun `resolveAlertSeverity returns all severity levels from override`() {
-        for (level in AlertSeverity.entries) {
-            val result = service.resolveAlertSeverity(
+    fun `resolveAlertPriority returns all severity levels from override`() {
+        for (level in AlertPriority.entries) {
+            val result = service.resolveAlertPriority(
                 providerConfigId = providerConfigId,
                 alertSource = AlertSource.UPTIME_MONITOR,
-                monitorSeverityOverride = level.name.lowercase()
+                monitorPriorityOverride = level.name.lowercase()
             )
             assertEquals(level, result)
         }
     }
 
     @Test
-    fun `resolveAlertSeverity is case insensitive for override`() {
-        val severity = service.resolveAlertSeverity(
+    fun `resolveAlertPriority is case insensitive for override`() {
+        val severity = service.resolveAlertPriority(
             providerConfigId = providerConfigId,
             alertSource = AlertSource.UPTIME_MONITOR,
-            monitorSeverityOverride = "CrItIcAl"
+            monitorPriorityOverride = "CrItIcAl"
         )
-        assertEquals(AlertSeverity.CRITICAL, severity)
+        assertEquals(AlertPriority.P0, severity)
     }
 
     // ──── fireAlert with native escalation ────
@@ -423,7 +423,7 @@ class IncidentServiceExtendedTest {
                 escalationPolicyId = any(),
                 title = any(),
                 description = any(),
-                priorityLevel = "P1",
+                priority = "P1",
                 alertSource = any(),
                 deduplicationKey = any(),
                 metadata = any()
@@ -564,7 +564,7 @@ class IncidentServiceExtendedTest {
                 it[providerConfigId] = configId
                 it[alertSource] = AlertSource.UPTIME_MONITOR.name
                 it[alertType] = null
-                it[incidentSeverity] = "high"
+                it[alertPriority] = "high"
                 it[createdAt] = Clock.System.now()
                 it[updatedAt] = Clock.System.now()
             }
@@ -589,7 +589,7 @@ class IncidentServiceExtendedTest {
         val eventWithMeta = AlertLifecycleEvent(
             title = "Metadata Alert",
             description = "With metadata",
-            severity = AlertSeverity.CRITICAL,
+            priority = AlertPriority.P0,
             status = AlertStatus.FIRING,
             source = AlertSource.UPTIME_MONITOR,
             deduplicationKey = "meta-dedup",
@@ -606,7 +606,7 @@ class IncidentServiceExtendedTest {
         assertEquals(1, logs.size)
         val metadata = logs[0][IncidentEventLog.metadata]
         assertTrue(metadata != null && metadata.contains("db-primary"))
-        assertEquals("CRITICAL", logs[0][IncidentEventLog.incidentSeverity])
+        assertEquals("CRITICAL", logs[0][IncidentEventLog.alertPriority])
         assertEquals("meta-dedup", logs[0][IncidentEventLog.deduplicationKey])
     }
 }

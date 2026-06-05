@@ -18,7 +18,7 @@ package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
-import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertSource
 import com.moneat.incident.services.IncidentService
 import com.moneat.monitor.models.AlertData
@@ -149,7 +149,7 @@ class MonitorAlertServiceCoverageTest {
         return fn.call(service, *args)
     }
 
-    private fun createHostAlertFixture(incidentSeverity: String? = "HIGH"): HostAlertFixture {
+    private fun createHostAlertFixture(alertPriority: String? = "HIGH"): HostAlertFixture {
         val now = Clock.System.now()
         return transaction {
             val orgId =
@@ -175,7 +175,7 @@ class MonitorAlertServiceCoverageTest {
                     it[duration_seconds] = 0
                     it[enabled] = true
                     it[last_triggered_at] = null
-                    it[incident_severity] = incidentSeverity
+                    it[alert_priority] = alertPriority
                     it[created_at] = now
                 } get HostAlerts.id
 
@@ -293,7 +293,7 @@ class MonitorAlertServiceCoverageTest {
                     any(),
                     any(),
                     any(),
-                    AlertSeverity.HIGH,
+                    AlertPriority.P1,
                 )
             }
             coVerify(exactly = 1) {
@@ -333,7 +333,7 @@ class MonitorAlertServiceCoverageTest {
                     any(),
                     any(),
                     any(),
-                    AlertSeverity.HIGH,
+                    AlertPriority.P1,
                 )
             }
             val clearedLastTriggeredAt =
@@ -374,7 +374,7 @@ class MonitorAlertServiceCoverageTest {
                             it[threshold] = 80.0
                             it[duration_seconds] = 0
                             it[enabled] = true
-                            it[incident_severity] = null
+                            it[alert_priority] = null
                             it[created_at] = now
                             it[updated_at] = now
                         } get OrganizationAlertTemplates.id
@@ -413,7 +413,7 @@ class MonitorAlertServiceCoverageTest {
                     any(),
                     any(),
                     any(),
-                    AlertSeverity.HIGH,
+                    AlertPriority.P1,
                 )
             }
             val clearedTemplateState =

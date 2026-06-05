@@ -16,6 +16,7 @@
 
 package com.moneat.uptime.routes
 
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.shared.models.Memberships
 import com.moneat.uptime.models.CheckResult
 import com.moneat.uptime.models.CreateUptimeMonitorRequest
@@ -276,6 +277,12 @@ fun Route.uptimeRoutes(
                         }
 
                     val request = call.receive<UpdateUptimeMonitorRequest>()
+                    val validationError = validateMonitorRequest(request)
+                    if (validationError != null) {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse(validationError))
+                        return@runUptimeRoute
+                    }
+
                     val monitor = uptimeService.updateMonitor(monitorId, organizationId, request)
 
                     if (monitor == null) {
@@ -467,8 +474,19 @@ private fun validateMonitorRequest(request: CreateUptimeMonitorRequest): String?
 
     if (request.intervalSeconds < MIN_INTERVAL_SECONDS) return "Check interval must be at least 10 seconds"
     if (request.timeoutSeconds < 1) return "Timeout must be at least 1 second"
+    return validateAlertPriority(request.alertPriority ?: request.legacyIncidentSeverity)
+}
 
-    return null
+private fun validateMonitorRequest(request: UpdateUptimeMonitorRequest): String? =
+    validateAlertPriority(request.alertPriority ?: request.legacyIncidentSeverity)
+
+private fun validateAlertPriority(priority: String?): String? {
+    if (priority == null) return null
+    return if (AlertPriority.fromString(priority) == null) {
+        "Alert priority must be one of P0, P1, P2, P3, P4, or P5"
+    } else {
+        null
+    }
 }
 
 private fun validateMonitorType(request: CreateUptimeMonitorRequest): String? =

@@ -66,6 +66,7 @@ object WorkflowBlueprintCatalog {
     private const val CATEGORY_TRIAGE = "triage"
 
     private const val EPISODE_KEY = "alert.episode_key"
+    private const val INCIDENT_ID = "incident.id"
     private const val NOTIFICATION_SEQUENCE = "alert.notification_sequence"
     private const val ALERT_STATUS = "alert.status"
     private const val INCIDENT_STATUS = "incident.status"
@@ -94,13 +95,13 @@ object WorkflowBlueprintCatalog {
             WorkflowBlueprint(
                 key = "alert_email_critical",
                 name = "Email team on critical alert",
-                description = "Email organization members when a critical-severity alert fires.",
+                description = "Email organization members when a high-priority alert fires.",
                 category = CATEGORY_ALERTING,
                 triggerName = TRIGGER_ALERT_TRIGGERED,
                 onceForTemplate = listOf(EPISODE_KEY, NOTIFICATION_SEQUENCE),
                 tags = listOf("email", "critical"),
                 conditions = listOf(
-                    WorkflowConditionConfig("alert.severity", "at_least", "HIGH")
+                    WorkflowConditionConfig("alert.priority", "at_least", "P1")
                 ),
                 steps = listOf(
                     emailAlertStep(
@@ -204,7 +205,7 @@ object WorkflowBlueprintCatalog {
                 description = "Page responders and announce a newly created incident on Slack.",
                 category = CATEGORY_INCIDENT,
                 triggerName = TRIGGER_INCIDENT_CREATED,
-                onceForTemplate = listOf(EPISODE_KEY),
+                onceForTemplate = listOf(INCIDENT_ID),
                 tags = listOf("incident", "oncall"),
                 steps = listOf(
                     oncallPageStep(
@@ -220,7 +221,7 @@ object WorkflowBlueprintCatalog {
                 description = "Create a status page incident when a new incident is created.",
                 category = CATEGORY_INCIDENT,
                 triggerName = TRIGGER_INCIDENT_CREATED,
-                onceForTemplate = listOf(EPISODE_KEY),
+                onceForTemplate = listOf(INCIDENT_ID),
                 tags = listOf("incident", "statuspage"),
                 steps = listOf(
                     statusIncidentStep(
@@ -235,7 +236,7 @@ object WorkflowBlueprintCatalog {
                 description = "Update the status page and notify Slack when an incident resolves.",
                 category = CATEGORY_INCIDENT,
                 triggerName = "incident.resolved",
-                onceForTemplate = listOf(EPISODE_KEY, INCIDENT_STATUS),
+                onceForTemplate = listOf(INCIDENT_ID, INCIDENT_STATUS),
                 tags = listOf("incident", "recovery"),
                 steps = listOf(
                     statusUpdateStep(description = "The incident has been resolved."),

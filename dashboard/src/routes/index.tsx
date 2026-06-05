@@ -617,7 +617,7 @@ function DashboardPage() {
                   {triggeredIncidents.length > 0 && (
                     <div className="flex items-center gap-1.5 text-danger-fg">
                       <Bell className="h-3.5 w-3.5" />
-                      <span>{triggeredIncidents.length} Triggered</span>
+                      <span>{triggeredIncidents.length} Triggered alerts</span>
                     </div>
                   )}
                   {activeIncidents.length > 0 && (
@@ -648,30 +648,30 @@ function DashboardPage() {
               </div>
             )}
 
-            {/* Recent incidents */}
+            {/* Recent alerts */}
             {isLoadingIncidents || isLoadingSchedules ? (
               <SkeletonSection />
             ) : activeIncidents.length === 0 && incidents.length === 0 ? (
-              <EmptySection message="No incidents" />
+              <EmptySection message="No alerts" />
             ) : (
               <div className="space-y-0.5">
                 {(activeIncidents.length > 0 ? activeIncidents : incidents)
                   .slice(0, 5)
-                  .map(incident => (
+                  .map(alert => (
                     <a
-                      key={incident.id}
-                      href="/on-call"
+                      key={alert.id}
+                      href={`/on-call/alerts/${alert.id}`}
                       className="grid grid-cols-[7.75rem_auto_minmax(0,1fr)_auto] items-center gap-2 py-2 px-2.5 rounded-md hover:bg-muted/50 transition"
                     >
-                      <Badge variant={incidentStatusVariant(incident.status)} className="w-full justify-center text-[10px] px-1.5 py-0 shrink-0">
-                        {incident.status}
+                      <Badge variant={incidentStatusVariant(alert.status)} className="w-full justify-center text-[10px] px-1.5 py-0 shrink-0">
+                        {alert.status}
                       </Badge>
-                      <span className={`text-[11px] font-semibold ${getPriorityColor(incident.priorityLevel)} shrink-0 tabular-nums`}>
-                        {incident.priorityLevel}
+                      <span className={`text-[11px] font-semibold ${getPriorityColor(alert.priority)} shrink-0 tabular-nums`}>
+                        {alert.priority}
                       </span>
-                      <span className="text-sm truncate flex-1">{incident.title}</span>
+                      <span className="text-sm truncate flex-1">{alert.title}</span>
                       <span className="text-[11px] text-muted-foreground shrink-0">
-                        {formatRelativeTime(incident.triggeredAt)}
+                        {formatRelativeTime(alert.triggeredAt)}
                       </span>
                     </a>
                   ))}

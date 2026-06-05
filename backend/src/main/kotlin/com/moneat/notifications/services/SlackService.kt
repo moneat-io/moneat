@@ -1049,7 +1049,7 @@ class SlackService {
         userId: Int,
         incidentId: Int,
         title: String,
-        priorityLevel: String
+        priority: String
     ) {
         try {
             // Get Slack user mapping
@@ -1072,7 +1072,7 @@ class SlackService {
                     ),
                     SlackBlock(
                         type = "section",
-                        text = SlackText(type = "mrkdwn", text = "*Priority:* $priorityLevel\n*Incident:* $title")
+                        text = SlackText(type = "mrkdwn", text = "*Priority:* $priority\n*Alert:* $title")
                     ),
                     SlackBlock(
                         type = "actions",
@@ -1080,7 +1080,7 @@ class SlackService {
                         listOf(
                             SlackElement(
                                 type = "button",
-                                text = SlackText(type = "plain_text", text = "Acknowledge", emoji = false),
+                                text = SlackText(type = "plain_text", text = "Acknowledge alert", emoji = false),
                                 actionId = "incident_acknowledge_$incidentId"
                             ),
                             SlackElement(
@@ -1089,7 +1089,7 @@ class SlackService {
                                 url = "${com.moneat.config.EnvConfig.get(
                                     "FRONTEND_URL",
                                     "https://moneat.io"
-                                )}/on-call/incidents/$incidentId",
+                                )}/on-call/alerts/$incidentId",
                                 actionId = "incident_view_$incidentId"
                             )
                         )
@@ -1104,7 +1104,7 @@ class SlackService {
                         SlackMessage(
                             channel = slackUserId, // DM to user
                             blocks = blocks,
-                            text = "[$priorityLevel] $title" // Fallback
+                            text = "[$priority] $title" // Fallback
                         )
                     )
                 }

@@ -80,8 +80,8 @@ function OnCallOverview() {
     queryFn: () => api.getOnCallSchedules(),
   })
 
-  const {data: incidents, isLoading: incidentsLoading} = useQuery({
-    queryKey: ['incidents', {active: true}],
+  const {data: alerts, isLoading: alertsLoading} = useQuery({
+    queryKey: ['alerts', {active: true}],
     queryFn: () => api.getIncidents(),
   })
 
@@ -100,20 +100,20 @@ function OnCallOverview() {
     queryFn: () => api.getBusinessHours(),
   })
 
-  const activeIncidents = incidents?.filter((i) => i.status === 'TRIGGERED' || i.status === 'ACKNOWLEDGED') || []
-  const hasActiveIncidents = activeIncidents.length > 0
+  const activeAlerts = alerts?.filter((i) => i.status === 'TRIGGERED' || i.status === 'ACKNOWLEDGED') || []
+  const hasActiveAlerts = activeAlerts.length > 0
 
   // Determine which schedules the current user is on-call for
   const userOnCallSchedules = schedules?.filter(s => s.currentOnCall?.userId === user?.id) || []
   const isCurrentlyOnCall = userOnCallSchedules.length > 0
 
-  // Split incidents by paging behavior
-  const pageableIncidents = activeIncidents.filter(i => {
-    const level = i.priorityLevel
+  // Split alerts by paging behavior
+  const pageableAlerts = activeAlerts.filter(i => {
+    const level = i.priority
     return level?.startsWith('P0') || level?.startsWith('P1') || level?.startsWith('P2')
   })
-  const lowPriorityIncidents = activeIncidents.filter(i => {
-    const level = i.priorityLevel
+  const lowPriorityAlerts = activeAlerts.filter(i => {
+    const level = i.priority
     return level?.startsWith('P3') || level?.startsWith('P4') || level?.startsWith('P5')
   })
 
@@ -152,11 +152,11 @@ function OnCallOverview() {
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard
-          label="Active incidents"
-          value={incidentsLoading ? '...' : activeIncidents.length}
+          label="Active alerts"
+          value={alertsLoading ? '...' : activeAlerts.length}
           icon={AlertTriangle}
-          tone={hasActiveIncidents ? 'danger' : 'neutral'}
-          subtitle={hasActiveIncidents ? 'Requires immediate attention' : 'All clear — no active incidents'}
+          tone={hasActiveAlerts ? 'danger' : 'neutral'}
+          subtitle={hasActiveAlerts ? 'Requires immediate attention' : 'All clear — no active alerts'}
         />
         <StatCard
           label="On-call schedules"
@@ -211,7 +211,7 @@ function OnCallOverview() {
               </div>
             )}
 
-            {/* Pageable incidents (P0-P2) */}
+            {/* Pageable alerts (P0-P2) */}
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <Bell className="h-3.5 w-3.5 text-danger-fg" />
@@ -219,30 +219,30 @@ function OnCallOverview() {
                   Pages 24/7 — P0 · P1 · P2
                 </p>
               </div>
-              {pageableIncidents.length > 0 ? (
+              {pageableAlerts.length > 0 ? (
                 <div className="space-y-1.5">
-                  {pageableIncidents.slice(0, 5).map(incident => (
+                  {pageableAlerts.slice(0, 5).map(alert => (
                     <Link
-                      key={incident.id}
-                      to="/on-call/incidents/$incidentId"
-                      params={{incidentId: String(incident.id)}}
+                      key={alert.id}
+                      to="/on-call/alerts/$alertId"
+                      params={{alertId: String(alert.id)}}
                       className="flex items-center justify-between px-3 py-2 rounded-md border hover:bg-accent/50 transition-colors group"
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <StatusDot tone={priorityTone(incident.priorityLevel)} />
-                        <span className="text-sm truncate">{incident.title}</span>
+                        <StatusDot tone={priorityTone(alert.priority)} />
+                        <span className="text-sm truncate">{alert.title}</span>
                       </div>
-                      <Badge variant={priorityBadgeVariant(incident.priorityLevel)} size="sm" className="ml-2 shrink-0">
-                        {incident.priorityLevel}
+                      <Badge variant={priorityBadgeVariant(alert.priority)} size="sm" className="ml-2 shrink-0">
+                        {alert.priority}
                       </Badge>
                     </Link>
                   ))}
-                  {pageableIncidents.length > 5 && (
-                    <p className="text-xs text-muted-foreground pl-3">+{pageableIncidents.length - 5} more</p>
+                  {pageableAlerts.length > 5 && (
+                    <p className="text-xs text-muted-foreground pl-3">+{pageableAlerts.length - 5} more</p>
                   )}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground pl-5">No active high-priority incidents</p>
+                <p className="text-sm text-muted-foreground pl-5">No active high-priority alerts</p>
               )}
             </div>
 
@@ -254,30 +254,30 @@ function OnCallOverview() {
                   Business hours only — P3+
                 </p>
               </div>
-              {lowPriorityIncidents.length > 0 ? (
+              {lowPriorityAlerts.length > 0 ? (
                 <div className="space-y-1.5">
-                  {lowPriorityIncidents.slice(0, 3).map(incident => (
+                  {lowPriorityAlerts.slice(0, 3).map(alert => (
                     <Link
-                      key={incident.id}
-                      to="/on-call/incidents/$incidentId"
-                      params={{incidentId: String(incident.id)}}
+                      key={alert.id}
+                      to="/on-call/alerts/$alertId"
+                      params={{alertId: String(alert.id)}}
                       className="flex items-center justify-between px-2.5 py-1.5 rounded-md border hover:bg-accent/50 transition-colors group"
                     >
                       <div className="flex items-center gap-1.5 min-w-0">
-                        <StatusDot tone={priorityTone(incident.priorityLevel)} size="sm" />
-                        <span className="text-xs truncate">{incident.title}</span>
+                        <StatusDot tone={priorityTone(alert.priority)} size="sm" />
+                        <span className="text-xs truncate">{alert.title}</span>
                       </div>
-                      <Badge variant={priorityBadgeVariant(incident.priorityLevel)} size="sm" className="ml-2 shrink-0">
-                        {incident.priorityLevel}
+                      <Badge variant={priorityBadgeVariant(alert.priority)} size="sm" className="ml-2 shrink-0">
+                        {alert.priority}
                       </Badge>
                     </Link>
                   ))}
-                  {lowPriorityIncidents.length > 3 && (
-                    <p className="text-xs text-muted-foreground pl-5">+{lowPriorityIncidents.length - 3} more</p>
+                  {lowPriorityAlerts.length > 3 && (
+                    <p className="text-xs text-muted-foreground pl-5">+{lowPriorityAlerts.length - 3} more</p>
                   )}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground pl-5">No low-priority incidents</p>
+                <p className="text-sm text-muted-foreground pl-5">No low-priority alerts</p>
               )}
             </div>
           </div>
@@ -371,47 +371,47 @@ function OnCallOverview() {
         </SectionCard>
       </div>
 
-      {/* Active Incidents - prominent when present */}
-      {hasActiveIncidents && (
+      {/* Active Alerts - prominent when present */}
+      {hasActiveAlerts && (
         <SectionCard
           title={
             <span className="flex items-center gap-2">
               <StatusDot tone="danger" pulse size="lg" />
-              Active incidents
+              Active alerts
             </span>
           }
           className="border-danger-border"
           actions={
             <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
-              <Link to="/on-call/incidents">
+              <Link to="/on-call/alerts">
                 View all <ArrowUpRight className="h-3 w-3 ml-1" />
               </Link>
             </Button>
           }
         >
           <div className="space-y-1.5">
-            {activeIncidents.slice(0, 5).map((incident) => {
-              const statusCfg = getStatusConfig(incident.status)
+            {activeAlerts.slice(0, 5).map((alert) => {
+              const statusCfg = getStatusConfig(alert.status)
               const StatusIcon = statusCfg.icon
               return (
                 <Link
-                  key={incident.id}
-                  to="/on-call/incidents/$incidentId"
-                  params={{incidentId: String(incident.id)}}
+                  key={alert.id}
+                  to="/on-call/alerts/$alertId"
+                  params={{alertId: String(alert.id)}}
                   className="flex items-center justify-between p-2.5 rounded-lg border hover:bg-accent/50 transition-colors group"
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    <StatusDot tone={priorityTone(incident.priorityLevel)} />
+                    <StatusDot tone={priorityTone(alert.priority)} />
                     <div className="min-w-0">
-                      <p className="font-medium text-sm truncate group-hover:text-foreground">{incident.title}</p>
+                      <p className="font-medium text-sm truncate group-hover:text-foreground">{alert.title}</p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(incident.triggeredAt).toLocaleString()}
+                        {new Date(alert.triggeredAt).toLocaleString()}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-                    <Badge variant={priorityBadgeVariant(incident.priorityLevel)} size="sm">
-                      {incident.priorityLevel}
+                    <Badge variant={priorityBadgeVariant(alert.priority)} size="sm">
+                      {alert.priority}
                     </Badge>
                     <Badge variant={statusCfg.variant} size="sm" className="gap-1">
                       <StatusIcon className="h-3 w-3" />

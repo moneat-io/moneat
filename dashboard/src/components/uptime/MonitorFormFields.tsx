@@ -39,7 +39,7 @@ export interface MonitorFormData {
   intervalSeconds?: number
   timeoutSeconds?: number
   retries?: number
-  incidentSeverity?: string
+  alertPriority?: string
 }
 
 interface MonitorFormFieldsProps {
@@ -47,7 +47,7 @@ interface MonitorFormFieldsProps {
   readonly monitorType: string
   readonly onChange: (patch: MonitorFormData) => void
   readonly showRetries?: boolean
-  readonly showAlertSeverity?: boolean
+  readonly showAlertPriority?: boolean
 }
 
 export function MonitorFormFields({
@@ -55,7 +55,7 @@ export function MonitorFormFields({
   monitorType,
   onChange,
   showRetries = false,
-  showAlertSeverity = false,
+  showAlertPriority = false,
 }: MonitorFormFieldsProps) {
   return (
     <div className="space-y-4">
@@ -213,13 +213,13 @@ export function MonitorFormFields({
         </div>
       )}
 
-      {showAlertSeverity && (
+      {showAlertPriority && (
         <div>
-          <Label htmlFor="incidentSeverity">Alert Severity</Label>
+          <Label htmlFor="alertPriority">Alert priority</Label>
           <Select
-            value={formData.incidentSeverity || ''}
+            value={formData.alertPriority || ''}
             onValueChange={(value) =>
-              onChange({...formData, incidentSeverity: value === 'none' ? undefined : value})
+              onChange({...formData, alertPriority: value === 'none' ? undefined : value})
             }
           >
             <SelectTrigger>
@@ -227,14 +227,16 @@ export function MonitorFormFields({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">Use routing rule default</SelectItem>
-              <SelectItem value="CRITICAL">[P0] Critical</SelectItem>
-              <SelectItem value="HIGH">[P1] High</SelectItem>
-              <SelectItem value="MEDIUM">[P2] Medium</SelectItem>
-              <SelectItem value="LOW">[P3] Low</SelectItem>
+              <SelectItem value="P0">P0</SelectItem>
+              <SelectItem value="P1">P1</SelectItem>
+              <SelectItem value="P2">P2</SelectItem>
+              <SelectItem value="P3">P3</SelectItem>
+              <SelectItem value="P4">P4</SelectItem>
+              <SelectItem value="P5">P5</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground mt-1">
-            Override the default incident severity when this monitor triggers an alert. P0–P2 page on-call 24/7. P3 notifies during business hours only.
+            Override the default priority when this monitor triggers an alert. P0-P2 page by default; P3-P5 notify only unless configured otherwise.
           </p>
         </div>
       )}

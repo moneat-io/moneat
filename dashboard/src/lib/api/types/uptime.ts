@@ -52,7 +52,7 @@ export interface UptimeMonitor {
   lastStatusChangeAt?: number
   consecutiveFailures: number
   pushToken?: string
-  incidentSeverity?: string | null
+  alertPriority?: string | null
   uptime24h?: number
   uptime7d?: number
   uptime30d?: number
@@ -92,7 +92,7 @@ export interface CreateUptimeMonitorRequest {
   timeoutSeconds?: number
   retries?: number
   retryIntervalSeconds?: number
-  incidentSeverity?: string
+  alertPriority?: string
 }
 
 export interface UpdateUptimeMonitorRequest

@@ -4,6 +4,7 @@
 
 package com.moneat.enterprise.oncall.services
 
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.config.EnvConfig
 import com.moneat.enterprise.oncall.models.UserDeviceToken
 import com.moneat.enterprise.oncall.models.UserDeviceTokens
@@ -75,20 +76,20 @@ class PushNotificationService {
         val details: Map<String, String>? = null,
     )
 
-    suspend fun sendIncidentAlert(
+    suspend fun sendOnCallAlert(
         userId: Int,
-        incidentId: Int,
+        alertId: Int,
         title: String,
-        priorityLevel: String,
+        priority: String,
     ) {
         val tokens = getUserDeviceTokens(userId)
 
         if (tokens.isEmpty()) {
-            logger.info("No device tokens found for user $userId — push notification skipped for incident $incidentId")
+            logger.info("No device tokens found for user $userId — push notification skipped for alert $alertId")
             return
         }
 
-        val isCritical = priorityLevel in listOf("P0", "P1")
+        val isCritical = AlertPriority.fromString(priority) in setOf(AlertPriority.P0, AlertPriority.P1)
         val channelId = if (isCritical) "critical" else "default"
         val interruptionLevel = if (isCritical) "critical" else null
 
@@ -96,13 +97,13 @@ class PushNotificationService {
             tokens.map { token ->
                 ExpoMessage(
                     to = token,
-                    title = "[$priorityLevel] $title",
-                    body = "Tap to view incident details",
+                    title = "[$priority] $title",
+                    body = "Tap to view alert details",
                     data =
                         mapOf(
-                            "type" to "incident",
-                            "incidentId" to incidentId.toString(),
-                            "priority" to priorityLevel,
+                            "type" to "alert",
+                            "alertId" to alertId.toString(),
+                            "priority" to priority,
                         ),
                     channelId = channelId,
                     interruptionLevel = interruptionLevel,
@@ -144,6 +145,15 @@ class PushNotificationService {
         } catch (e: Exception) {
             logger.error("Failed to send push notification", e)
         }
+    }
+
+    suspend fun sendIncidentAlert(
+        userId: Int,
+        incidentId: Int,
+        title: String,
+        priority: String,
+    ) {
+        sendOnCallAlert(userId, incidentId, title, priority)
     }
 
     suspend fun sendOnCallAssignmentAlert(

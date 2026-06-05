@@ -88,7 +88,7 @@ export interface DashboardWidgetAlertNotificationChannels {
 
 export type DashboardAlertCondition = '>' | '<' | '>=' | '<=' | '=='
 
-export type AlertSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | null
+export type AlertPriority = 'P0' | 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | null
 export type DashboardAlertLevel = 'WARNING' | 'ERROR' | null
 
 export interface DashboardWidgetAlert {
@@ -101,7 +101,7 @@ export interface DashboardWidgetAlert {
   warning_threshold: number | null
   metric_index: number
   duration_seconds: number
-  incident_severity: AlertSeverity
+  alert_priority: AlertPriority
   enabled: boolean
   notification_channels: DashboardWidgetAlertNotificationChannels
   last_triggered_at: string | null
@@ -119,7 +119,7 @@ export interface CreateDashboardAlertRequest {
   warning_threshold?: number | null
   metric_index?: number
   duration_seconds?: number
-  incident_severity?: AlertSeverity
+  alert_priority?: AlertPriority
   enabled?: boolean
   notification_channels?: DashboardWidgetAlertNotificationChannels
 }
@@ -131,7 +131,7 @@ export interface UpdateDashboardAlertRequest {
   warning_threshold?: number | null
   metric_index?: number
   duration_seconds?: number
-  incident_severity?: AlertSeverity
+  alert_priority?: AlertPriority
   enabled?: boolean
   notification_channels?: DashboardWidgetAlertNotificationChannels
 }

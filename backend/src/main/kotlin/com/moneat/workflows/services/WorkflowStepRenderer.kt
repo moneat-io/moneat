@@ -16,7 +16,8 @@
 
 package com.moneat.workflows.services
 
-import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertPriority
+import com.moneat.alerts.models.IncidentSeverity
 import com.moneat.alerts.models.AlertStatus
 import com.moneat.config.EnvConfig
 import com.moneat.workflows.models.ALERT_EPISODE_ID_REFERENCE
@@ -32,7 +33,6 @@ import com.moneat.workflows.models.WorkflowStepPreview
 
 internal const val ALERT_TITLE_REFERENCE = "alert.title"
 internal const val ALERT_DESCRIPTION_REFERENCE = "alert.description"
-internal const val ALERT_SEVERITY_REFERENCE = "alert.severity"
 internal const val ALERT_PRIORITY_REFERENCE = "alert.priority"
 internal const val ALERT_STATUS_REFERENCE = "alert.status"
 internal const val ALERT_SOURCE_REFERENCE = "alert.source"
@@ -94,7 +94,7 @@ class WorkflowStepRenderer {
     private fun alertSampleScope(triggerName: String): Map<String, String> {
         val resolved = triggerName in RESOLVED_ALERT_TRIGGERS
         val status = if (resolved) AlertStatus.RESOLVED.name else AlertStatus.FIRING.name
-        val severity = if (resolved) AlertSeverity.LOW.name else AlertSeverity.HIGH.name
+        val priority = if (resolved) AlertPriority.P3.wire else AlertPriority.P1.wire
         val title = if (resolved) {
             "Dashboard Alert Resolved: Worker failures detected"
         } else {
@@ -110,8 +110,7 @@ class WorkflowStepRenderer {
             ALERT_TITLE_REFERENCE to title,
             ALERT_DISPLAY_TITLE_REFERENCE to "Worker failures detected",
             ALERT_DESCRIPTION_REFERENCE to description,
-            ALERT_SEVERITY_REFERENCE to severity,
-            ALERT_PRIORITY_REFERENCE to priorityLabelForSeverity(severity),
+            ALERT_PRIORITY_REFERENCE to priority,
             ALERT_STATUS_REFERENCE to status,
             ALERT_SOURCE_REFERENCE to "DASHBOARD_ALERT",
             ALERT_DEDUPLICATION_KEY_REFERENCE to "moneat-dashboard-alert-preview",
@@ -165,7 +164,7 @@ class WorkflowStepRenderer {
             "incident.id" to "incident-123",
             "incident.title" to "Checkout latency incident",
             "incident.status" to status,
-            "incident.severity" to AlertSeverity.HIGH.name,
+            "incident.severity" to IncidentSeverity.SEV1.wire,
             ALERT_DEDUPLICATION_KEY_REFERENCE to "incident-checkout-latency",
             ALERT_EPISODE_ID_REFERENCE to "42",
             ALERT_EPISODE_KEY_REFERENCE to "incident-checkout-latency#3",
@@ -205,14 +204,8 @@ class WorkflowStepRenderer {
             else -> "workflow"
         }
 
-    fun priorityLabelForSeverity(severity: String?): String =
-        when (severity?.uppercase()) {
-            AlertSeverity.CRITICAL.name -> "[P0]"
-            AlertSeverity.HIGH.name -> "[P1]"
-            AlertSeverity.MEDIUM.name -> "[P2]"
-            AlertSeverity.LOW.name -> "[P3]"
-            else -> ""
-        }
+    fun priorityLabel(priority: String?): String =
+        AlertPriority.fromString(priority)?.wire.orEmpty()
 
     private fun renderFreeformStepPreview(
         step: WorkflowStepConfig,
@@ -372,15 +365,17 @@ class WorkflowStepRenderer {
 
     private fun alertLifecycleColor(scope: Map<String, String>): String {
         if (scope[ALERT_STATUS_REFERENCE] == AlertStatus.RESOLVED.name) return ALERT_COLOR_GREEN
-        return when (scope[ALERT_SEVERITY_REFERENCE]) {
-            AlertSeverity.CRITICAL.name, AlertSeverity.HIGH.name -> ALERT_COLOR_RED
-            else -> ALERT_COLOR_YELLOW
+        val priority = AlertPriority.fromString(scope[ALERT_PRIORITY_REFERENCE])
+        return if (priority in setOf(AlertPriority.P0, AlertPriority.P1)) {
+            ALERT_COLOR_RED
+        } else {
+            ALERT_COLOR_YELLOW
         }
     }
 
     private fun priorityLabel(scope: Map<String, String>): String =
-        scope[ALERT_PRIORITY_REFERENCE]?.takeIf { it.isNotBlank() }
-            ?: priorityLabelForSeverity(scope[ALERT_SEVERITY_REFERENCE])
+        priorityLabel(scope[ALERT_PRIORITY_REFERENCE]).takeIf { it.isNotBlank() }
+            ?: scope[ALERT_PRIORITY_REFERENCE].orEmpty()
 
     private fun sourceLabel(source: String?): String =
         when (source) {

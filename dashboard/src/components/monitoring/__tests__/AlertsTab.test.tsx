@@ -41,7 +41,7 @@ function alertResponse(enabled: boolean) {
     threshold: 90,
     duration_seconds: 60,
     enabled,
-    incident_severity: null,
+    alert_priority: null,
     last_triggered_at: null,
     created_at: 1700000000,
   }
