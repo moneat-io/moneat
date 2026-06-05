@@ -401,6 +401,16 @@ function isAggregateVizMode(vizMode: LogVizMode): boolean {
   return vizMode === 'toplist' || vizMode === 'pie' || vizMode === 'table'
 }
 
+function formatResultSummary(aggregateData: LogAggregateResponse | undefined, logsCount: number): string {
+  const totalCount = aggregateData?.totalCount
+  if (typeof totalCount === 'number') {
+    return `${formatLogCount(totalCount)} results found`
+  }
+
+  const suffix = logsCount === 1 ? '' : 's'
+  return `${logsCount} result${suffix} shown`
+}
+
 function LogLevelPicker({
   levels,
   onToggleLevel,
@@ -546,9 +556,7 @@ function LogExplorerToolbar({
   cursorHistoryLength,
   onPreviousPage,
 }: LogExplorerToolbarProps) {
-  const resultSummary = aggregateData?.totalCount != null
-    ? `${formatLogCount(aggregateData.totalCount)} results found`
-    : `${logsCount} result${logsCount !== 1 ? 's' : ''} shown`
+  const resultSummary = formatResultSummary(aggregateData, logsCount)
 
   return (
     <>
@@ -806,26 +814,36 @@ function InfiniteScrollFooter({
   logPageLoaded: boolean
   logsCount: number
 }>) {
+  let footerContent: ReactNode = null
+  const showLoadingMore = (isLoadingMore || isFetching) && hasMore
+  if (showLoadingMore) {
+    footerContent = (
+      <div className="flex items-center justify-center gap-2 py-2">
+        <div className="h-1 w-full max-w-xs overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full w-1/2 animate-pulse bg-primary"
+            style={{animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite'}}
+          />
+        </div>
+      </div>
+    )
+  } else if (hasMore) {
+    footerContent = (
+      <div className="text-center text-xs text-muted-foreground/50">
+        Scroll for more
+      </div>
+    )
+  } else if (logPageLoaded) {
+    footerContent = (
+      <div className="border-t pt-2 text-center text-[11px] text-muted-foreground/70">
+        End of results • {logsCount} logs loaded
+      </div>
+    )
+  }
+
   return (
     <div ref={refObject} className="px-2 py-2">
-      {(isLoadingMore || isFetching) && hasMore ? (
-        <div className="flex items-center justify-center gap-2 py-2">
-          <div className="h-1 w-full max-w-xs overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full w-1/2 animate-pulse bg-primary"
-              style={{animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite'}}
-            />
-          </div>
-        </div>
-      ) : hasMore ? (
-        <div className="text-center text-xs text-muted-foreground/50">
-          Scroll for more
-        </div>
-      ) : logPageLoaded ? (
-        <div className="border-t pt-2 text-center text-[11px] text-muted-foreground/70">
-          End of results • {logsCount} logs loaded
-        </div>
-      ) : null}
+      {footerContent}
     </div>
   )
 }
