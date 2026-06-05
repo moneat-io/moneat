@@ -298,98 +298,56 @@ private fun buildClickHouseListQuery(
     """.trimIndent()
 }
 
-private val clickHouseListRoutes = listOf(
+private fun clickHouseRoute(
+    path: String,
+    responseKey: String,
+    tableName: String,
+    orderColumn: String,
+    vararg filters: ClickHouseFilter
+): ClickHouseListRouteConfig =
     ClickHouseListRouteConfig(
-        path = "/infra/events",
-        responseKey = "events",
-        tableName = "infra_events",
-        orderColumn = "timestamp",
-        filters = listOf(
-            ClickHouseFilter(parameterName = "host", columnName = "host"),
-            ClickHouseFilter(parameterName = "alert_type", columnName = "alert_type")
-        )
-    ),
-    ClickHouseListRouteConfig(
-        path = "/infra/service-checks",
-        responseKey = "serviceChecks",
-        tableName = "service_checks",
-        orderColumn = "timestamp"
-    ),
-    ClickHouseListRouteConfig(
-        path = "/infra/processes",
-        responseKey = "processes",
-        tableName = "processes",
-        orderColumn = "timestamp",
-        filters = listOf(ClickHouseFilter(parameterName = "host", columnName = "host"))
-    ),
-    ClickHouseListRouteConfig(
-        path = "/infra/containers",
-        responseKey = "containers",
-        tableName = "containers",
-        orderColumn = "timestamp",
-        filters = listOf(ClickHouseFilter(parameterName = "host", columnName = "host"))
-    ),
-    ClickHouseListRouteConfig(
-        path = "/infra/connections",
-        responseKey = "connections",
-        tableName = "network_connections",
-        orderColumn = "timestamp"
-    ),
-    ClickHouseListRouteConfig(
-        path = "/infra/k8s-resources",
-        responseKey = "resources",
-        tableName = "k8s_resources",
-        orderColumn = "collected_at",
-        filters = listOf(ClickHouseFilter(parameterName = "resource_type", columnName = "resource_type"))
-    ),
-    ClickHouseListRouteConfig(
-        path = "/infra/dbm/queries",
-        responseKey = "queries",
-        tableName = "dbm_queries",
-        orderColumn = "timestamp"
-    ),
-    ClickHouseListRouteConfig(
-        path = "/infra/debugger/logs",
-        responseKey = "logs",
-        tableName = "debugger_logs",
-        orderColumn = "timestamp"
-    ),
-    ClickHouseListRouteConfig(
-        path = "/infra/debugger/diagnostics",
-        responseKey = "diagnostics",
-        tableName = "debugger_diagnostics",
-        orderColumn = "timestamp"
-    ),
-    ClickHouseListRouteConfig(
-        path = "/infra/sbom",
-        responseKey = "packages",
-        tableName = "sbom_packages",
-        orderColumn = "collected_at"
-    ),
-    ClickHouseListRouteConfig(
-        path = "/network-devices",
-        responseKey = "devices",
-        tableName = "ndm_devices",
-        orderColumn = "collected_at"
-    ),
-    ClickHouseListRouteConfig(
-        path = "/network-devices/flows",
-        responseKey = "flows",
-        tableName = "ndm_flows",
-        orderColumn = "sampled_at"
-    ),
-    ClickHouseListRouteConfig(
-        path = "/network-devices/traps",
-        responseKey = "traps",
-        tableName = "ndm_traps",
-        orderColumn = "received_at"
-    ),
-    ClickHouseListRouteConfig(
-        path = "/network-devices/paths",
-        responseKey = "paths",
-        tableName = "network_paths",
-        orderColumn = "collected_at"
+        path = path,
+        responseKey = responseKey,
+        tableName = tableName,
+        orderColumn = orderColumn,
+        filters = filters.toList()
     )
+
+private fun timestampRoute(
+    path: String,
+    responseKey: String,
+    tableName: String,
+    vararg filters: ClickHouseFilter
+): ClickHouseListRouteConfig =
+    clickHouseRoute(path, responseKey, tableName, "timestamp", *filters)
+
+private fun collectedRoute(
+    path: String,
+    responseKey: String,
+    tableName: String,
+    vararg filters: ClickHouseFilter
+): ClickHouseListRouteConfig =
+    clickHouseRoute(path, responseKey, tableName, "collected_at", *filters)
+
+private val hostFilter = ClickHouseFilter(parameterName = "host", columnName = "host")
+private val alertTypeFilter = ClickHouseFilter(parameterName = "alert_type", columnName = "alert_type")
+private val resourceTypeFilter = ClickHouseFilter(parameterName = "resource_type", columnName = "resource_type")
+
+private val clickHouseListRoutes = listOf(
+    timestampRoute("/infra/events", "events", "infra_events", hostFilter, alertTypeFilter),
+    timestampRoute("/infra/service-checks", "serviceChecks", "service_checks"),
+    timestampRoute("/infra/processes", "processes", "processes", hostFilter),
+    timestampRoute("/infra/containers", "containers", "containers", hostFilter),
+    timestampRoute("/infra/connections", "connections", "network_connections"),
+    collectedRoute("/infra/k8s-resources", "resources", "k8s_resources", resourceTypeFilter),
+    timestampRoute("/infra/dbm/queries", "queries", "dbm_queries"),
+    timestampRoute("/infra/debugger/logs", "logs", "debugger_logs"),
+    timestampRoute("/infra/debugger/diagnostics", "diagnostics", "debugger_diagnostics"),
+    collectedRoute("/infra/sbom", "packages", "sbom_packages"),
+    collectedRoute("/network-devices", "devices", "ndm_devices"),
+    clickHouseRoute("/network-devices/flows", "flows", "ndm_flows", "sampled_at"),
+    clickHouseRoute("/network-devices/traps", "traps", "ndm_traps", "received_at"),
+    collectedRoute("/network-devices/paths", "paths", "network_paths")
 )
 
 private suspend fun executeChQuery(query: String): List<JsonObject>? {
