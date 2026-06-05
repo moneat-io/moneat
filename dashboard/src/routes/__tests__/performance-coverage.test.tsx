@@ -190,7 +190,8 @@ describe('Performance routes', () => {
 
     expect(thrown).toMatchObject({
       __redirect: true,
-      to: '/monitoring/service-map',
+      to: '/monitoring/map',
+      search: {scope: 'services'},
     })
   })
 
