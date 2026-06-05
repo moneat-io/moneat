@@ -1248,7 +1248,11 @@ export function LogExplorer({
       excludeTags: hasRecordValues(derivedFilters.excludeTags) ? derivedFilters.excludeTags : undefined,
     })
     stream.onopen = () => setLiveTailStatus('open')
-    stream.onerror = () => setLiveTailStatus('error')
+    stream.onerror = () => {
+      setLiveTailStatus('error')
+      stream.close()
+      setLiveTailActive(false)
+    }
     stream.onmessage = (event) => handleLiveTailMessage(event, setAccumulatedLogs)
 
     return () => stream.close()
