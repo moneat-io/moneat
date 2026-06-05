@@ -42,6 +42,12 @@ data class ResourceContext(
  */
 object OtlpParsingUtils {
 
+    fun extractDeploymentEnvironment(attributes: Map<String, String>): String =
+        attributes["deployment.environment.name"]
+            ?: attributes["deployment.environment"]
+            ?: attributes["service.environment"]
+            ?: ""
+
     fun attributesToMap(attributes: JsonElement?): Map<String, String> {
         val array = attributes as? JsonArray ?: return emptyMap()
         return array
@@ -76,8 +82,7 @@ object OtlpParsingUtils {
             attributes = attrs,
             serviceNamespace = attrs["service.namespace"] ?: "",
             serviceName = attrs["service.name"] ?: "",
-            environment = attrs["deployment.environment"]
-                ?: attrs["service.environment"] ?: "",
+            environment = extractDeploymentEnvironment(attrs),
             hostName = attrs["host.name"] ?: "",
             serviceVersion = attrs["service.version"] ?: ""
         )

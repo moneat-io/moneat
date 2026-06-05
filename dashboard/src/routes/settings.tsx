@@ -471,10 +471,10 @@ function AuthTokensSection() {
           <div>
             <CardTitle className="flex items-center gap-2">
               <Key className="h-5 w-5" />
-              Sentry API Tokens
+              API Tokens
             </CardTitle>
             <CardDescription>
-              Create tokens for sentry-cli, source maps, releases, and Sentry-compatible API access.
+              Create tokens for release automation, source maps, and Sentry-compatible API access.
             </CardDescription>
           </div>
           <TooltipProvider>
@@ -486,7 +486,7 @@ function AuthTokensSection() {
                       href="/docs/api-tokens"
                       target="_blank"
                       rel="noopener noreferrer"
-                      aria-label="Sentry API token docs"
+                      aria-label="API token docs"
                       title="Docs"
                     >
                       <BookOpen className="h-4 w-4" />

@@ -27,6 +27,10 @@ import com.moneat.datadog.services.DdApmQueryTimeUnit
 import com.moneat.datadog.services.DdResourceStatsQuery
 import com.moneat.datadog.services.DdTraceListQuery
 import com.moneat.datadog.services.TraceIngestionService
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.OtelServiceProjectMappings
+import com.moneat.shared.models.Projects
+import com.moneat.testsupport.TestDatabaseHelper
 import io.sentry.ISpan
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -35,6 +39,8 @@ import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.msgpack.core.MessagePack
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -58,6 +64,13 @@ class TraceIngestionServiceCoverageTest {
 
     @BeforeTest
     fun setup() {
+        val db = Database.connect(
+            url = "jdbc:h2:mem:moneat_trace_ingestion_coverage;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+            driver = "org.h2.Driver",
+        )
+        TransactionManager.defaultDatabase = db
+        TestDatabaseHelper.resetSchema(Organizations, Projects, OtelServiceProjectMappings)
+
         mockkObject(ClickHouseClient)
         every { ClickHouseClient.getDatabase() } returns "test_db"
     }

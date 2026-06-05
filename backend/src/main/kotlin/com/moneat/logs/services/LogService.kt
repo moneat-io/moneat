@@ -1436,7 +1436,7 @@ class LogService(private val logRepository: LogRepository) {
             service = resourceCtx.serviceName.ifEmpty { attributes["service.name"] },
             serviceNamespace = resourceCtx.serviceNamespace.ifEmpty { attributes["service.namespace"] },
             environment = resourceCtx.environment.ifEmpty {
-                attributes["deployment.environment"] ?: attributes["service.environment"]
+                OtlpParsingUtils.extractDeploymentEnvironment(attributes)
             },
             host = resourceCtx.hostName.ifEmpty { attributes["host.name"] },
             source = "otlp",
@@ -1514,7 +1514,7 @@ class LogService(private val logRepository: LogRepository) {
             service = resourceCtx.serviceName.ifEmpty { attributes["service.name"] },
             serviceNamespace = resourceCtx.serviceNamespace.ifEmpty { attributes["service.namespace"] },
             environment = resourceCtx.environment.ifEmpty {
-                attributes["deployment.environment"] ?: attributes["service.environment"]
+                OtlpParsingUtils.extractDeploymentEnvironment(attributes)
             },
             host = resourceCtx.hostName.ifEmpty { attributes["host.name"] },
             source = "otlp",

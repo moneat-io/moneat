@@ -17,7 +17,7 @@
 import {createFileRoute, Link, Navigate} from '@tanstack/react-router'
 import {LandingPage} from '@/components/landing/LandingPage'
 import {useQuery} from '@tanstack/react-query'
-import {useState, useEffect} from 'react'
+import {type ReactNode, useState, useEffect} from 'react'
 import {api, type StatusPageDetail, type UptimeHeartbeat} from '@/lib/api'
 import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
 import {formatRelativeTime} from '@/lib/utils'
@@ -303,6 +303,44 @@ function SkeletonSection() {
   )
 }
 
+type DashboardReleaseSummary = {
+  version: string
+  eventCount: number
+  userCount: number
+  crashFreeRate?: number | null
+}
+
+function renderDashboardReleasesContent(
+  isLoadingReleases: boolean,
+  recentReleases: DashboardReleaseSummary[]
+): ReactNode {
+  if (isLoadingReleases) return <SkeletonSection />
+  if (recentReleases.length === 0) return <EmptySection message="No releases" />
+
+  return (
+    <div className="space-y-0.5">
+      {recentReleases.map(release => (
+        <Link
+          key={release.version}
+          to="/releases/$version"
+          params={{version: release.version}}
+          className="flex items-center gap-2 py-2 px-2.5 rounded-md hover:bg-muted/50 transition"
+        >
+          <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <span className="text-sm font-mono truncate flex-1">{release.version}</span>
+          <div className="flex items-center gap-3 shrink-0 text-[11px] text-muted-foreground tabular-nums">
+            <span>{formatCount(release.eventCount)} signals</span>
+            <span>{release.userCount} users</span>
+            {release.crashFreeRate != null && (
+              <span>{release.crashFreeRate.toFixed(1)}% crash-free</span>
+            )}
+          </div>
+        </Link>
+      ))}
+    </div>
+  )
+}
+
 function normalizePercent(value?: number | null): number | null {
   if (value == null || Number.isNaN(value)) return null
   return Math.max(0, Math.min(100, value))
@@ -468,6 +506,8 @@ function DashboardPage() {
     acc[i.level] = (acc[i.level] || 0) + 1
     return acc
   }, {} as Record<string, number>)
+
+  const releasesSectionContent = renderDashboardReleasesContent(isLoadingReleases, recentReleases)
 
   // Feedback status counts
   const newFeedback = feedback.filter(f => f.status === 'new' || f.status === 'unresolved').length
@@ -1049,32 +1089,7 @@ function DashboardPage() {
               ) : null
             }
           >
-            {isLoadingReleases ? (
-              <SkeletonSection />
-            ) : recentReleases.length === 0 ? (
-              <EmptySection message="No releases" />
-            ) : (
-              <div className="space-y-0.5">
-                {recentReleases.map(release => (
-                  <Link
-                    key={release.version}
-                    to="/releases/$version"
-                    params={{version: release.version}}
-                    className="flex items-center gap-2 py-2 px-2.5 rounded-md hover:bg-muted/50 transition"
-                  >
-                    <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    <span className="text-sm font-mono truncate flex-1">{release.version}</span>
-                    <div className="flex items-center gap-3 shrink-0 text-[11px] text-muted-foreground tabular-nums">
-                      <span>{formatCount(release.eventCount)} events</span>
-                      <span>{release.userCount} users</span>
-                      {release.crashFreeRate != null && (
-                        <span>{release.crashFreeRate.toFixed(1)}% crash-free</span>
-                      )}
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
+            {releasesSectionContent}
           </DashboardSection>
 
           {/* ── Replays ─────────────────────────────────────────────── */}

@@ -17,7 +17,7 @@
 import {createFileRoute, Link, Outlet, redirect, useMatches} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api, formatErrorForLogging} from '@/lib/api'
-import {useMemo, useState} from 'react'
+import {type ReactNode, useMemo, useState} from 'react'
 import {FacetRail} from '@/components/filters/FacetRail'
 import {Card, CardContent} from '@/components/ui/card'
 import {Input} from '@/components/ui/input'
@@ -57,6 +57,19 @@ function ReleasesLayout() {
 }
 
 type SortBy = 'latest' | 'events' | 'issues' | 'stability'
+type CrashFreeTone = 'success' | 'warning' | 'danger'
+
+function crashFreeTone(rate: number): CrashFreeTone {
+  if (rate >= 99) return 'success'
+  if (rate >= 95) return 'warning'
+  return 'danger'
+}
+
+function crashFreeTextClass(tone: CrashFreeTone): string {
+  if (tone === 'success') return 'text-success-fg'
+  if (tone === 'warning') return 'text-warning-fg'
+  return 'text-danger-fg'
+}
 
 function ReleasesPage() {
   const [searchQuery, setSearchQuery] = useState('')
@@ -170,6 +183,192 @@ function ReleasesPage() {
     })
   }
 
+  const avgCrashFreeRateValue =
+    summary.avgCrashFreeRate == null
+      ? 'N/A'
+      : `${summary.avgCrashFreeRate.toFixed(1)}%`
+
+  let releasesContent: ReactNode
+  if (projectsLoading) {
+    releasesContent = <div className="p-6 text-center text-sm">Loading services...</div>
+  } else if (projectsError) {
+    releasesContent = (
+      <div className="p-8 text-destructive">
+        Failed to load services: {projectsError instanceof Error ? projectsError.message : 'Unknown error'}
+      </div>
+    )
+  } else if (projectList.length === 0) {
+    releasesContent = (
+      <EmptyState
+        icon={Package}
+        title="No services yet"
+        description="Create a service to view releases."
+      />
+    )
+  } else if (!hasReleaseScope) {
+    releasesContent = (
+      <EmptyState
+        icon={Package}
+        title="No services match filters"
+        description="Adjust the selected services to view releases."
+      />
+    )
+  } else if (isLoading) {
+    releasesContent = <div className="p-6 text-center text-sm">Loading releases...</div>
+  } else if (!releases || releases.length === 0) {
+    releasesContent = (
+      <EmptyState
+        icon={Package}
+        title="No releases detected"
+        description="Releases are auto-detected when telemetry includes a release or service version."
+      />
+    )
+  } else {
+    releasesContent = (
+      <div className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
+          <StatsCard
+            compact
+            title="Tracked Releases"
+            value={releaseList.length.toLocaleString()}
+            icon={Package}
+            accent="blue"
+          />
+          <StatsCard
+            compact
+            title="Healthy Releases"
+            value={summary.healthyCount.toLocaleString()}
+            icon={ShieldCheck}
+            accent="emerald"
+          />
+          <StatsCard
+            compact
+            title="Regressing Releases"
+            value={summary.regressingCount.toLocaleString()}
+            icon={Flame}
+            accent="amber"
+          />
+          <StatsCard
+            compact
+            title="Avg Crash-Free Rate"
+            value={avgCrashFreeRateValue}
+            icon={Activity}
+            accent="violet"
+          />
+        </div>
+
+        <Card>
+          <CardContent className="p-2">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
+              <div className="relative w-full lg:max-w-sm">
+                <Search className="h-3 w-3 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by release version"
+                  className="pl-8 h-8 text-xs"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortBy)}>
+                  <SelectTrigger className="w-[180px] h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="latest">Sort: Latest seen</SelectItem>
+                    <SelectItem value="events">Sort: Most signals</SelectItem>
+                    <SelectItem value="issues">Sort: Most new issues</SelectItem>
+                    <SelectItem value="stability">Sort: Most stable</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Badge variant="outline" className="text-xs py-0">
+                  {filteredAndSortedReleases.length} of {releaseList.length} releases
+                </Badge>
+                <Badge variant="outline" className="text-xs py-0">Most active: {summary.mostActiveVersion}</Badge>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {filteredAndSortedReleases.map((release) => {
+          let releaseTone: CrashFreeTone | null = null
+          if (release.crashFreeRate != null) {
+            releaseTone = crashFreeTone(release.crashFreeRate)
+          }
+
+          return (
+            <Link
+              key={release.version}
+              to="/releases/$version"
+              params={{ version: release.version }}
+              className="block"
+            >
+              <Card className="hover:bg-accent/50 transition-colors cursor-pointer">
+                <CardContent className="p-2">
+                  <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:justify-between">
+                    <div className="flex min-w-0 items-start gap-2 sm:gap-3">
+                      <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-muted shrink-0">
+                        <Package className="h-3 w-3 text-muted-foreground" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-mono font-semibold text-sm break-all">{release.version}</span>
+                          {release.version === summary.latestVersion && (
+                            <Badge variant="accent" size="sm" shape="pill">
+                              Latest
+                            </Badge>
+                          )}
+                          {release.newIssueCount > 0 && (
+                            <Badge
+                              variant="warning"
+                              size="sm"
+                              className="max-w-full whitespace-normal break-words"
+                            >
+                              Regression risk
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground break-words">
+                          {formatDate(release.firstSeen)}
+                          {release.firstSeen !== release.lastSeen && (
+                            <> – {formatDate(release.lastSeen)}</>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 md:justify-end md:gap-4">
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <Activity className="h-3 w-3 text-muted-foreground" />
+                        <span>{release.eventCount.toLocaleString()} signals</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <AlertCircle className="h-3 w-3 text-muted-foreground" />
+                        <span>{release.newIssueCount} new issues</span>
+                      </div>
+                      {release.crashFreeRate != null && releaseTone != null && (
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <StatusDot size="sm" tone={releaseTone} />
+                          <span className={crashFreeTextClass(releaseTone)}>
+                            {release.crashFreeRate.toFixed(1)}% crash-free
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <Users className="h-3 w-3 text-muted-foreground" />
+                        <span>{release.userCount.toLocaleString()} users</span>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          )
+        })}
+      </div>
+    )
+  }
+
   return (
     <div className="grid gap-2 p-3 lg:grid-cols-[220px_minmax(0,1fr)]">
       <FacetRail
@@ -185,192 +384,10 @@ function ReleasesPage() {
           <PageHeader
             icon={Package}
             title="Releases"
-            description="Track release health, new issues, and crash-free rates"
+            description="Track release health, new issues, and telemetry by version"
           />
 
-          {projectsLoading ? (
-          <div className="p-6 text-center text-sm">Loading services...</div>
-        ) : projectsError ? (
-          <div className="p-8 text-destructive">
-            Failed to load services: {projectsError instanceof Error ? projectsError.message : 'Unknown error'}
-          </div>
-        ) : projectList.length === 0 ? (
-          <EmptyState
-            icon={Package}
-            title="No services yet"
-            description="Create a service to view releases."
-          />
-        ) : !hasReleaseScope ? (
-          <EmptyState
-            icon={Package}
-            title="No services match filters"
-            description="Adjust the selected services to view releases."
-          />
-        ) : isLoading ? (
-          <div className="p-6 text-center text-sm">Loading releases...</div>
-        ) : !releases || releases.length === 0 ? (
-          <EmptyState
-            icon={Package}
-            title="No releases detected"
-            description="Releases are auto-detected when events include a release version. Configure your SDK with a release version to start tracking."
-          />
-          ) : (
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
-              <StatsCard
-                compact
-                title="Tracked Releases"
-                value={releaseList.length.toLocaleString()}
-                icon={Package}
-                accent="blue"
-              />
-              <StatsCard
-                compact
-                title="Healthy Releases"
-                value={summary.healthyCount.toLocaleString()}
-                icon={ShieldCheck}
-                accent="emerald"
-              />
-              <StatsCard
-                compact
-                title="Regressing Releases"
-                value={summary.regressingCount.toLocaleString()}
-                icon={Flame}
-                accent="amber"
-              />
-              <StatsCard
-                compact
-                title="Avg Crash-Free Rate"
-                value={
-                  summary.avgCrashFreeRate == null
-                    ? 'N/A'
-                    : `${summary.avgCrashFreeRate.toFixed(1)}%`
-                }
-                icon={Activity}
-                accent="violet"
-              />
-            </div>
-
-            <Card>
-              <CardContent className="p-2">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
-                  <div className="relative w-full lg:max-w-sm">
-                    <Search className="h-3 w-3 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2" />
-                    <Input
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search by release version"
-                      className="pl-8 h-8 text-xs"
-                    />
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortBy)}>
-                      <SelectTrigger className="w-[180px] h-8 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="latest">Sort: Latest seen</SelectItem>
-                        <SelectItem value="events">Sort: Most events</SelectItem>
-                        <SelectItem value="issues">Sort: Most new issues</SelectItem>
-                        <SelectItem value="stability">Sort: Most stable</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Badge variant="outline" className="text-xs py-0">
-                      {filteredAndSortedReleases.length} of {releaseList.length} releases
-                    </Badge>
-                    <Badge variant="outline" className="text-xs py-0">Most active: {summary.mostActiveVersion}</Badge>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {filteredAndSortedReleases.map((release) => (
-              <Link
-                key={release.version}
-                to="/releases/$version"
-                params={{ version: release.version }}
-                className="block"
-              >
-                <Card className="hover:bg-accent/50 transition-colors cursor-pointer">
-                  <CardContent className="p-2">
-                    <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:justify-between">
-                      <div className="flex min-w-0 items-start gap-2 sm:gap-3">
-                        <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-muted shrink-0">
-                          <Package className="h-3 w-3 text-muted-foreground" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="font-mono font-semibold text-sm break-all">{release.version}</span>
-                            {release.version === summary.latestVersion && (
-                              <Badge variant="accent" size="sm" shape="pill">
-                                Latest
-                              </Badge>
-                            )}
-                            {release.newIssueCount > 0 && (
-                              <Badge
-                                variant="warning"
-                                size="sm"
-                                className="max-w-full whitespace-normal break-words"
-                              >
-                                Regression risk
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="text-xs text-muted-foreground break-words">
-                            {formatDate(release.firstSeen)}
-                            {release.firstSeen !== release.lastSeen && (
-                              <> – {formatDate(release.lastSeen)}</>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 md:justify-end md:gap-4">
-                        <div className="flex items-center gap-1.5 text-xs">
-                          <Activity className="h-3 w-3 text-muted-foreground" />
-                          <span>{release.eventCount.toLocaleString()} events</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-xs">
-                          <AlertCircle className="h-3 w-3 text-muted-foreground" />
-                          <span>{release.newIssueCount} new issues</span>
-                        </div>
-                        {release.crashFreeRate != null && (
-                          <div className="flex items-center gap-1.5 text-xs">
-                            <StatusDot
-                              size="sm"
-                              tone={
-                                release.crashFreeRate >= 99
-                                  ? 'success'
-                                  : release.crashFreeRate >= 95
-                                    ? 'warning'
-                                    : 'danger'
-                              }
-                            />
-                            <span
-                              className={
-                                release.crashFreeRate >= 99
-                                  ? 'text-success-fg'
-                                  : release.crashFreeRate >= 95
-                                    ? 'text-warning-fg'
-                                    : 'text-danger-fg'
-                              }
-                            >
-                              {release.crashFreeRate.toFixed(1)}% crash-free
-                            </span>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-1.5 text-xs">
-                          <Users className="h-3 w-3 text-muted-foreground" />
-                          <span>{release.userCount.toLocaleString()} users</span>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
-          )}
+          {releasesContent}
         </div>
       </div>
     </div>
