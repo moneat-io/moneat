@@ -604,7 +604,7 @@ function MapScopeToggle({
   onChange,
 }: MapScopeToggleProps) {
   return (
-    <div className="flex rounded-md border bg-background p-0.5">
+    <div className="flex rounded-md border bg-background p-0.5" role="group" aria-label="Map scope">
       {RESOURCE_OPTIONS.map((option) => {
         const Icon = option.icon
         const isActive = option.value === scope
@@ -613,6 +613,7 @@ function MapScopeToggle({
             key={option.value}
             type="button"
             aria-label={`${option.label} map`}
+            aria-pressed={isActive}
             title={`${option.label} map`}
             onClick={() => onChange(option.value)}
             className={cn(
@@ -933,7 +934,7 @@ const InfrastructureGroupNode = memo(function InfrastructureGroupNode({
 }: Readonly<NodeProps<Node<InfrastructureGroupNodeData>>>) {
   return (
     <div
-      className="rounded-lg border border-border/70 bg-card/45 shadow-sm backdrop-blur-sm"
+      className="rounded-lg border border-border/70 bg-card/45 backdrop-blur-sm"
       style={{width: data.width, height: data.height}}
     >
       <div className="flex h-[30px] items-center justify-between gap-3 border-b border-border/50 px-3 text-xs">

@@ -71,12 +71,22 @@ type ServiceEdgeBuildOptions = Readonly<{
   connectedEdges: Set<string>
 }>
 
-const SERVICE_COLORS: Record<ServiceType, string> = {
-  database: '#7B61FF',
-  cache: '#FF6B6B',
-  queue: '#FFA94D',
-  web: '#51CF66',
-  service: '#339AF0',
+const SERVICE_TYPES: ServiceType[] = ['database', 'cache', 'queue', 'web', 'service']
+
+const SERVICE_CHART_VAR: Record<ServiceType, string> = {
+  database: '--chart-2',
+  cache: '--chart-8',
+  queue: '--chart-6',
+  web: '--chart-4',
+  service: '--chart-1',
+}
+
+function serviceColor(type: ServiceType): string {
+  return `hsl(var(${SERVICE_CHART_VAR[type]}))`
+}
+
+function serviceTint(type: ServiceType): string {
+  return `hsl(var(${SERVICE_CHART_VAR[type]}) / 0.15)`
 }
 
 const SERVICE_ICONS: Record<ServiceType, ComponentType<{className?: string}>> = {
@@ -87,9 +97,9 @@ const SERVICE_ICONS: Record<ServiceType, ComponentType<{className?: string}>> = 
   service: Server,
 }
 
-const SERVICE_LEGEND_ITEMS = Object.entries(SERVICE_COLORS).map(([type, color]) => ({
+const SERVICE_LEGEND_ITEMS = SERVICE_TYPES.map((type) => ({
   label: type.charAt(0).toUpperCase() + type.slice(1),
-  color,
+  color: serviceColor(type),
 }))
 
 function formatDuration(ns: number): string {
@@ -342,7 +352,7 @@ const handleStyle: CSSProperties = {
 }
 
 const ServiceNode = memo(function ServiceNode({data}: Readonly<NodeProps<Node<ServiceNodeData>>>) {
-  const color = SERVICE_COLORS[data.serviceType]
+  const accent = serviceColor(data.serviceType)
   const Icon = SERVICE_ICONS[data.serviceType]
   const hasErrors = data.errorCount > 0
   const metrics = data.isExternal ? undefined : (
@@ -364,8 +374,8 @@ const ServiceNode = memo(function ServiceNode({data}: Readonly<NodeProps<Node<Se
         title={data.label}
         subtitle={data.isExternal ? 'External dependency' : undefined}
         icon={<Icon className="h-4 w-4" />}
-        iconContainerStyle={{backgroundColor: `${color}22`, color}}
-        borderColor={getServiceBorderColor({color, hasErrors, selected: data.selected})}
+        iconContainerStyle={{backgroundColor: serviceTint(data.serviceType), color: accent}}
+        borderColor={getServiceBorderColor({color: accent, hasErrors, selected: data.selected})}
         minWidth={data.isExternal ? 140 : 180}
         selected={data.selected}
         dimmed={data.dimmed}
