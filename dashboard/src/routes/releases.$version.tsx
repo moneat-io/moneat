@@ -68,14 +68,14 @@ function ReleaseDetailPage() {
           <EmptyState
             icon={AlertTriangle}
             title="Release not found"
-            description="This release was not found or has no events yet."
+            description="This release was not found or has no telemetry yet."
           />
         ) : (
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
               <StatsCard
                 compact
-                title="Total Events"
+                title="Total Signals"
                 value={stats.totalEvents.toLocaleString()}
                 icon={Activity}
               />
@@ -104,13 +104,13 @@ function ReleaseDetailPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <EventsChart
                 data={stats.eventsTimeline}
-                title="Events Over Time"
+                title="Signals Over Time"
                 height={240}
               />
               {Object.keys(stats.eventsByLevel).length > 0 && (
                 <BarChart
                   data={stats.eventsByLevel}
-                  title="Events by Level"
+                  title="Signals by Type"
                   color="hsl(var(--chart-1))"
                   height={240}
                 />
@@ -148,7 +148,7 @@ function ReleaseDetailPage() {
                           {issue.count.toLocaleString()}
                         </div>
                         <div className="text-[11px] text-muted-foreground">
-                          events
+                          error events
                         </div>
                       </div>
                     </Link>

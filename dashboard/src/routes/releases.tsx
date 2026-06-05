@@ -185,7 +185,7 @@ function ReleasesPage() {
           <PageHeader
             icon={Package}
             title="Releases"
-            description="Track release health, new issues, and crash-free rates"
+            description="Track release health, new issues, and telemetry by version"
           />
 
           {projectsLoading ? (
@@ -212,7 +212,7 @@ function ReleasesPage() {
           <EmptyState
             icon={Package}
             title="No releases detected"
-            description="Releases are auto-detected when events include a release version. Configure your SDK with a release version to start tracking."
+            description="Releases are auto-detected when telemetry includes a release or service version."
           />
           ) : (
           <div className="space-y-3">
@@ -271,7 +271,7 @@ function ReleasesPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="latest">Sort: Latest seen</SelectItem>
-                        <SelectItem value="events">Sort: Most events</SelectItem>
+                        <SelectItem value="events">Sort: Most signals</SelectItem>
                         <SelectItem value="issues">Sort: Most new issues</SelectItem>
                         <SelectItem value="stability">Sort: Most stable</SelectItem>
                       </SelectContent>
@@ -328,7 +328,7 @@ function ReleasesPage() {
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 md:justify-end md:gap-4">
                         <div className="flex items-center gap-1.5 text-xs">
                           <Activity className="h-3 w-3 text-muted-foreground" />
-                          <span>{release.eventCount.toLocaleString()} events</span>
+                          <span>{release.eventCount.toLocaleString()} signals</span>
                         </div>
                         <div className="flex items-center gap-1.5 text-xs">
                           <AlertCircle className="h-3 w-3 text-muted-foreground" />

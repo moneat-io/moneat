@@ -51,6 +51,7 @@ import com.moneat.datadog.models.DdStatsPayload
 import com.moneat.datadog.models.DdTraceDetailResponse
 import com.moneat.datadog.models.DdTraceListItem
 import com.moneat.datadog.models.DdTraceListResponse
+import com.moneat.shared.services.ServiceIdentityResolver
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.doubleMapToSqlMap
@@ -158,6 +159,7 @@ object TraceIngestionService {
     private val clickhouseDb by lazy { ClickHouseClient.getDatabase() }
     private val json = Json { ignoreUnknownKeys = true }
     private val usageTracking = UsageTrackingService.instance
+    private val serviceIdentityResolver = ServiceIdentityResolver()
 
     /**
      * Parse a MessagePack trace payload (v0.4 format).
@@ -248,11 +250,13 @@ object TraceIngestionService {
         val allSpans = traces.flatten()
         if (allSpans.isEmpty()) return
 
+        val serviceIdsByName = resolveServiceIds(organizationId, allSpans)
         val rows = allSpans.joinToString(",\n") { span ->
             val host = span.meta["_dd.hostname"]
                 ?: hostname
             val spanEnv = span.meta["env"] ?: env
             val ver = span.meta["version"] ?: appVersion
+            val serviceId = serviceIdsByName[span.service.trim()] ?: 0L
             val parentIdHex = if (span.parentId != 0UL) {
                 java.lang.Long.toUnsignedString(span.parentId.toLong(), HEX_RADIX)
             } else {
@@ -267,6 +271,8 @@ object TraceIngestionService {
                 ${span.parentId},
                 0,
                 $organizationId,
+                $serviceId,
+                $serviceId,
                 '${escapeSql(span.name)}',
                 '${escapeSql(span.service)}',
                 '${escapeSql(span.resource)}',
@@ -289,6 +295,7 @@ object TraceIngestionService {
         val insert = """
             INSERT INTO `$clickhouseDb`.apm_spans (
                 span_id, span_id_high, trace_id, trace_id_high, parent_id, parent_id_high, organization_id,
+                service_id, project_id,
                 name, service, resource, type,
                 start, duration, error,
                 meta, metrics, host, env, version,
@@ -316,6 +323,20 @@ object TraceIngestionService {
         }
         usageTracking.recordOrgUsage(organizationId, "dd_trace", allSpans.size, totalBytes)
     }
+
+    private fun resolveServiceIds(
+        organizationId: Int,
+        spans: List<DdSpan>,
+    ): Map<String, Long> =
+        spans
+            .map { span -> span.service.trim() }
+            .filter { service -> service.isNotBlank() }
+            .distinct()
+            .mapNotNull { service ->
+                serviceIdentityResolver.resolveServiceId(organizationId, service)
+                    ?.let { serviceId -> service to serviceId }
+            }
+            .toMap()
 
     /**
      * Insert trace stats into ClickHouse trace_stats table.

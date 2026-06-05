@@ -17,11 +17,23 @@
 package com.moneat.datadog.services
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.datadog.models.DdSpan
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.OtelServiceProjectMappings
+import com.moneat.shared.models.Projects
+import com.moneat.testsupport.TestDatabaseHelper
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.HttpStatusCode
 import io.mockk.coEvery
 import io.mockk.every
+import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.Test
 import org.msgpack.core.MessageBufferPacker
 import org.msgpack.core.MessagePack
@@ -533,6 +545,65 @@ class TraceIngestionServiceTest {
     fun `parseTraceId rejects non numeric input`() {
         assertEquals(null, TraceIngestionService.parseTraceId("0 OR 1=1"))
         assertEquals(null, TraceIngestionService.parseTraceId("abc"))
+    }
+
+    @Test
+    fun `insertTraces writes mapped service id and release version`() = runBlocking {
+        val db = Database.connect(
+            url = "jdbc:h2:mem:moneat_dd_trace_release;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+            driver = "org.h2.Driver",
+        )
+        TransactionManager.defaultDatabase = db
+        TestDatabaseHelper.resetSchema(Organizations, Projects, OtelServiceProjectMappings)
+        val projectId = transaction {
+            val orgId = Organizations.insert {
+                it[name] = "Test Org"
+                it[slug] = "test-org"
+            } get Organizations.id
+            Projects.insert {
+                it[organization_id] = orgId
+                it[name] = "Checkout API"
+                it[slug] = "checkout-api"
+            } get Projects.id
+        }
+
+        val queries = mutableListOf<String>()
+        val response = mockk<HttpResponse>()
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "test_db"
+            every { response.status } returns HttpStatusCode.OK
+            coEvery { ClickHouseClient.execute(capture(queries)) } returns response
+
+            TraceIngestionService.insertTraces(
+                organizationId = 1,
+                traces = listOf(
+                    listOf(
+                        DdSpan(
+                            traceId = 1uL,
+                            spanId = 2uL,
+                            parentId = 0uL,
+                            name = "rack.request",
+                            service = "checkout-api",
+                            resource = "GET /checkout",
+                            type = "web",
+                            start = 1_700_000_000_000_000_000L,
+                            duration = 50_000_000L,
+                            error = 0,
+                            meta = mapOf("version" to "2026.06.04"),
+                            metrics = emptyMap(),
+                        )
+                    )
+                ),
+            )
+
+            val insert = queries.single { it.contains(".apm_spans") && it.contains("INSERT INTO") }
+            assertTrue(insert.contains("service_id, project_id"))
+            assertTrue(Regex("""(?s),\s*$projectId,\s*$projectId,\s*'rack.request'""").containsMatchIn(insert))
+            assertTrue(insert.contains("'2026.06.04'"))
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
     }
 
     // ──── HELPERS ────

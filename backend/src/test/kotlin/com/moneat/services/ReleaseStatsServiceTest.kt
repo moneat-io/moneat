@@ -154,6 +154,8 @@ class ReleaseStatsServiceTest {
 
             assertEquals(1, releases.size)
             assertTrue(queries.any { it.contains("project_id IN (1, 2)") })
+            assertTrue(queries.any { it.contains("apm_spans") && it.contains("service_id IN (1, 2)") })
+            assertTrue(queries.any { it.contains("source IN ('datadog', 'otlp')") })
         }
     }
 
@@ -166,8 +168,10 @@ class ReleaseStatsServiceTest {
 
     @Test
     fun `getReleaseStats returns detailed release stats`() = runBlocking {
+        val queries = java.util.Collections.synchronizedList(mutableListOf<String>())
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
+            queries += query
             when {
                 query.contains("count() as total") && query.contains("first_release") -> {
                     exchange.respond(
@@ -243,6 +247,8 @@ class ReleaseStatsServiceTest {
             assertTrue(stats.eventsTimeline.isNotEmpty())
             assertTrue(stats.eventsByLevel.isNotEmpty())
             assertTrue(stats.topIssues.isNotEmpty())
+            assertTrue(queries.any { it.contains("apm_spans") && it.contains("version = '1.0.0'") })
+            assertTrue(queries.any { it.contains("source IN ('datadog', 'otlp')") })
         }
     }
 

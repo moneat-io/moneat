@@ -1065,7 +1065,7 @@ function DashboardPage() {
                     <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                     <span className="text-sm font-mono truncate flex-1">{release.version}</span>
                     <div className="flex items-center gap-3 shrink-0 text-[11px] text-muted-foreground tabular-nums">
-                      <span>{formatCount(release.eventCount)} events</span>
+                      <span>{formatCount(release.eventCount)} signals</span>
                       <span>{release.userCount} users</span>
                       {release.crashFreeRate != null && (
                         <span>{release.crashFreeRate.toFixed(1)}% crash-free</span>
