@@ -20,6 +20,7 @@ package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.logs.models.CreateLogIndexRequest
+import com.moneat.logs.models.QueuedLogEntry
 import com.moneat.logs.models.UpdateLogIndexRequest
 import com.moneat.logs.services.LogIndexService
 import com.moneat.shared.models.LogIndexes
@@ -54,6 +55,7 @@ class LogIndexServiceTest {
         private const val SERVICE_API = "service:api"
         private const val API_INDEX = "api-index"
         private const val TEXT_PLAIN = "text/plain"
+        private const val TEST_TIMESTAMP_MS = 1_720_000_000_000L
     }
 
     @BeforeTest
@@ -596,6 +598,133 @@ class LogIndexServiceTest {
         assertEquals("", noMatch)
     }
 
+    // ──── usage, retention, and quota ────
+
+    @Test
+    fun `usageStats maps ClickHouse usage onto configured indexes`() =
+        runBlocking {
+            createIndex(name = "errors", dailyQuotaGb = 1.5f)
+            createIndex(name = "empty", retentionDays = 14)
+
+            MockHttpServer { exchange ->
+                val body = exchange.requestBodyText()
+                assertTrue(body.contains("GROUP BY index_name"))
+                exchange.respond(
+                    200,
+                    """
+                    {"index_name":"errors","cnt":12,"bytes":1024}
+                    {"index_name":"unknown","cnt":99,"bytes":4096}
+                    """.trimIndent(),
+                    contentType = TEXT_PLAIN
+                )
+            }.use { server ->
+                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+
+                val stats = service.usageStats(ORG_ID)
+
+                val errors = stats.first { it.indexName == "errors" }
+                assertEquals(1024L, errors.bytesToday)
+                assertEquals(12L, errors.countToday)
+                assertEquals(1.5f, errors.quotaGb)
+
+                val empty = stats.first { it.indexName == "empty" }
+                assertEquals(0L, empty.bytesToday)
+                assertEquals(0L, empty.countToday)
+                assertEquals(14, empty.retentionDays)
+            }
+        }
+
+    @Test
+    fun `usageStats returns zero usage when ClickHouse errors`() =
+        runBlocking {
+            createIndex(name = "errors", dailyQuotaGb = 2.0f)
+
+            MockHttpServer { exchange ->
+                exchange.respond(500, "Code: 60. Table does not exist", contentType = TEXT_PLAIN)
+            }.use { server ->
+                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+
+                val usage = service.usageStats(ORG_ID).single()
+
+                assertEquals("errors", usage.indexName)
+                assertEquals(0L, usage.bytesToday)
+                assertEquals(0L, usage.countToday)
+                assertEquals(2.0f, usage.quotaGb)
+            }
+        }
+
+    @Test
+    fun `enforceRetention counts successful deletes and skips ClickHouse failures`() =
+        runBlocking {
+            createIndex(name = "audit's", retentionDays = 7, priority = 0)
+            createIndex(name = "errors", retentionDays = 30, priority = 1)
+            val statements = mutableListOf<String>()
+
+            MockHttpServer { exchange ->
+                val body = exchange.requestBodyText()
+                statements.add(body)
+                if (statements.size == 1) {
+                    exchange.respond(200, "", contentType = TEXT_PLAIN)
+                } else {
+                    exchange.respond(500, "Code: 241. Memory limit", contentType = TEXT_PLAIN)
+                }
+            }.use { server ->
+                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+
+                val applied = service.enforceRetention(ORG_ID)
+
+                assertEquals(1, applied)
+                assertEquals(2, statements.size)
+                assertTrue(statements.first().contains("INTERVAL 7 DAY"))
+                assertTrue(statements.first().contains("index_name = 'audit\\'s'"))
+            }
+        }
+
+    @Test
+    fun `filterWithinDailyQuota returns immediately for empty and unmetered inputs`() =
+        runBlocking {
+            val unmetered = createIndex(name = "unmetered", dailyQuotaGb = null)
+            val entry = queuedLog(indexName = "unmetered")
+
+            assertEquals(
+                emptyList(),
+                service.filterWithinDailyQuota(ORG_ID, emptyList(), listOf(unmetered))
+            )
+            assertEquals(
+                listOf(entry),
+                service.filterWithinDailyQuota(ORG_ID, listOf(entry), listOf(unmetered))
+            )
+        }
+
+    @Test
+    fun `filterWithinDailyQuota enforces daily quota cumulatively`() =
+        runBlocking {
+            val quotaIndex = createIndex(name = "quota", dailyQuotaGb = 0.000001f)
+            val unmetered = createIndex(name = "unmetered", dailyQuotaGb = null)
+            val allowed = queuedLog(indexName = "quota", message = "1234567890", body = "1234567890")
+            val dropped = queuedLog(indexName = "quota", message = "x".repeat(80), body = "")
+            val withoutQuota = queuedLog(indexName = "unmetered", message = "x".repeat(200), body = "")
+            val unknown = queuedLog(indexName = "unknown", message = "x".repeat(200), body = "")
+
+            MockHttpServer { exchange ->
+                exchange.respond(
+                    200,
+                    """{"index_name":"quota","cnt":50,"bytes":1000}""",
+                    contentType = TEXT_PLAIN
+                )
+            }.use { server ->
+                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+
+                val result = service.filterWithinDailyQuota(
+                    ORG_ID,
+                    listOf(allowed, dropped, withoutQuota, unknown),
+                    listOf(quotaIndex, unmetered)
+                )
+
+                assertEquals(listOf(allowed, withoutQuota, unknown), result)
+            }
+        }
+
     // ──── testFilter (ClickHouse) ────
 
     @Test
@@ -693,4 +822,27 @@ class LogIndexServiceTest {
                 assertEquals(0L, result.matchCount)
             }
         }
+
+    private fun queuedLog(
+        indexName: String,
+        message: String = "hello",
+        body: String = "body"
+    ): QueuedLogEntry =
+        QueuedLogEntry(
+            logId = "log-$indexName-$message",
+            timestampMs = TEST_TIMESTAMP_MS,
+            level = "info",
+            message = message,
+            body = body,
+            service = "api",
+            environment = "prod",
+            host = "host-1",
+            source = "sdk",
+            containerName = "",
+            containerId = "",
+            containerImage = "",
+            traceId = "",
+            spanId = "",
+            indexName = indexName
+        )
 }
