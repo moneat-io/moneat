@@ -34,6 +34,7 @@ import {
 import {
   memo,
   useCallback,
+  useEffect,
   useMemo,
   useState,
   type ComponentProps,
@@ -314,6 +315,7 @@ type InfrastructureDetailPanelProps = Readonly<{
 export function InfrastructureMap({initialScope = 'services', onScopeChange}: InfrastructureMapProps) {
   const queryClient = useQueryClient()
   const {toast} = useToast()
+  const [mapScope, setMapScope] = useState<MonitoringMapScope>(initialScope)
   const [viewState, setViewState] = useState<InfrastructureMapViewState>(
     initialScope === 'containers' ? DEFAULT_CONTAINER_VIEW : DEFAULT_HOST_VIEW,
   )
@@ -321,8 +323,12 @@ export function InfrastructureMap({initialScope = 'services', onScopeChange}: In
   const [selectedSavedViewId, setSelectedSavedViewId] = useState(NO_SAVED_VIEW_ID)
   const [savedViewName, setSavedViewName] = useState('')
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
-  const mapScope = initialScope
   const isServicesScope = mapScope === 'services'
+
+  useEffect(() => {
+    setMapScope(initialScope)
+  }, [initialScope])
+
   const activeViewState = useMemo(() => {
     if (isServicesScope || viewState.resourceKind === mapScope) return viewState
     return {...getDefaultView(mapScope), searchQuery: viewState.searchQuery}
@@ -455,6 +461,7 @@ export function InfrastructureMap({initialScope = 'services', onScopeChange}: In
   }
 
   function updateMapScope(nextScope: MonitoringMapScope) {
+    setMapScope(nextScope)
     onScopeChange?.(nextScope)
     setSelectedNodeId(null)
     if (nextScope !== 'services') {
@@ -468,6 +475,7 @@ export function InfrastructureMap({initialScope = 'services', onScopeChange}: In
 
     const savedView = savedViews.find((view) => view.id === savedViewId)
     if (!savedView) return
+    setMapScope(savedView.resourceKind)
     onScopeChange?.(savedView.resourceKind)
     setViewState(normalizeViewState(savedView))
     setSavedViewName(savedView.name)
