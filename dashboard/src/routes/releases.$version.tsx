@@ -48,15 +48,7 @@ function ReleaseDetailPage() {
   let releaseContent: ReactNode
   if (isLoading) {
     releaseContent = <div className="p-8 text-center">Loading release stats...</div>
-  } else if (!stats) {
-    releaseContent = (
-      <EmptyState
-        icon={AlertTriangle}
-        title="Release not found"
-        description="This release was not found or has no telemetry yet."
-      />
-    )
-  } else {
+  } else if (stats) {
     releaseContent = (
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -144,6 +136,14 @@ function ReleaseDetailPage() {
           </SectionCard>
         )}
       </div>
+    )
+  } else {
+    releaseContent = (
+      <EmptyState
+        icon={AlertTriangle}
+        title="Release not found"
+        description="This release was not found or has no telemetry yet."
+      />
     )
   }
 
