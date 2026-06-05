@@ -14,7 +14,7 @@ import {cn} from '@/lib/utils'
 
 type ReactFlowProps = ComponentProps<typeof ReactFlow>
 
-interface MapCanvasProps {
+type MapCanvasProps = Readonly<{
   nodes: Node[]
   edges?: Edge[]
   nodeTypes?: ReactFlowProps['nodeTypes']
@@ -33,7 +33,12 @@ interface MapCanvasProps {
   fitViewOptions?: ReactFlowProps['fitViewOptions']
   minZoom?: number
   maxZoom?: number
-}
+}>
+
+type MapCanvasFrameProps = Readonly<{
+  children: ReactNode
+  className?: string
+}>
 
 export function MapCanvas({
   nodes,
@@ -125,7 +130,7 @@ export function MapCanvas({
   )
 }
 
-function MapCanvasFrame({children, className}: {children: ReactNode; className?: string}) {
+function MapCanvasFrame({children, className}: MapCanvasFrameProps) {
   return (
     <div className={cn('map-canvas relative rounded-lg border bg-card/50 overflow-hidden', className)}>
       {children}

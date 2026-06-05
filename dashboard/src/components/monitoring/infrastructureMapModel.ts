@@ -140,12 +140,12 @@ export function buildInfrastructureMapGroups(
     if (resource.isHealthy) group.healthyCount += 1
   }
 
-  const groups = Array.from(groupsByLabel.values())
-    .map((group) => ({
-      ...group,
-      nodes: group.nodes.sort(sortNodes),
-    }))
-    .sort(sortGroups)
+  const groups = Array.from(groupsByLabel.values()).map((group) => {
+    const sortedNodes = [...group.nodes]
+    sortedNodes.sort(sortNodes)
+    return {...group, nodes: sortedNodes}
+  })
+  groups.sort(sortGroups)
 
   return {
     groups,
@@ -445,12 +445,14 @@ function buildSearchText(values: Array<string | undefined>, tags: Record<string,
 
 function sortGroups(a: InfrastructureMapGroup, b: InfrastructureMapGroup): number {
   const rankDifference = getGroupRank(a.label) - getGroupRank(b.label)
-  return rankDifference !== 0 ? rankDifference : a.label.localeCompare(b.label)
+  if (rankDifference === 0) return a.label.localeCompare(b.label)
+  return rankDifference
 }
 
 function sortNodes(a: InfrastructureMapNode, b: InfrastructureMapNode): number {
   const toneDifference = getToneRank(a.fillTone) - getToneRank(b.fillTone)
-  return toneDifference !== 0 ? toneDifference : a.label.localeCompare(b.label)
+  if (toneDifference === 0) return a.label.localeCompare(b.label)
+  return toneDifference
 }
 
 function getGroupRank(label: string): number {

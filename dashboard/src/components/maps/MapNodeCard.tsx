@@ -9,7 +9,7 @@
 import type {CSSProperties, ReactNode} from 'react'
 import {cn} from '@/lib/utils'
 
-interface MapNodeCardProps {
+type MapNodeCardProps = Readonly<{
   title: string
   subtitle?: string
   icon?: ReactNode
@@ -25,7 +25,7 @@ interface MapNodeCardProps {
   iconContainerClassName?: string
   iconContainerStyle?: CSSProperties
   className?: string
-}
+}>
 
 export function MapNodeCard({
   title,

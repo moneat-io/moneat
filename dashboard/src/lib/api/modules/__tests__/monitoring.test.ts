@@ -358,7 +358,7 @@ describe('Monitoring API module', () => {
           new HttpResponse(null, { status: 204 })
         )
       )
-      await api.deleteInfrastructureMapSavedView('9')
+      await expect(api.deleteInfrastructureMapSavedView('9')).resolves.toBeUndefined()
     })
   })
 

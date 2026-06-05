@@ -10,11 +10,11 @@ import {X} from 'lucide-react'
 import type {ReactNode} from 'react'
 import {Button} from '@/components/ui/button'
 
-interface MapDetailPanelProps {
+type MapDetailPanelProps = Readonly<{
   title: string
   onClose: () => void
   children: ReactNode
-}
+}>
 
 export function MapDetailPanel({title, onClose, children}: MapDetailPanelProps) {
   return (

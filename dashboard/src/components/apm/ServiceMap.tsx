@@ -46,6 +46,31 @@ type ServiceNodeData = {
   selected: boolean
 }
 
+type ServiceGraphSelection = Readonly<{
+  connectedServices: Set<string>
+  connectedEdges: Set<string>
+}>
+
+type ServiceNodeBuildOptions = Readonly<{
+  services: ApmServiceMapEntry[]
+  graph: Dagre.graphlib.Graph
+  selectedId: string | null
+  connectedServices: Set<string>
+}>
+
+type ExternalNodeBuildOptions = Readonly<{
+  externalServices: Set<string>
+  graph: Dagre.graphlib.Graph
+  selectedId: string | null
+  connectedServices: Set<string>
+}>
+
+type ServiceEdgeBuildOptions = Readonly<{
+  services: ApmServiceMapEntry[]
+  selectedId: string | null
+  connectedEdges: Set<string>
+}>
+
 const SERVICE_COLORS: Record<ServiceType, string> = {
   database: '#7B61FF',
   cache: '#FF6B6B',
@@ -93,43 +118,107 @@ function buildGraph(
   services: ApmServiceMapEntry[],
   selectedId: string | null,
 ): {nodes: Node[]; edges: Edge[]} {
-  const known = new Set(services.map((service) => service.service))
+  const knownServices = new Set(services.map((service) => service.service))
+  const externalServices = getExternalServices(services, knownServices)
+  const selection = getServiceSelection(services, selectedId)
+  const graph = createServiceLayoutGraph(services, externalServices)
+  const nodes = [
+    ...createServiceNodes({
+      services,
+      graph,
+      selectedId,
+      connectedServices: selection.connectedServices,
+    }),
+    ...createExternalNodes({
+      externalServices,
+      graph,
+      selectedId,
+      connectedServices: selection.connectedServices,
+    }),
+  ]
+  const edges = createServiceEdges({
+    services,
+    selectedId,
+    connectedEdges: selection.connectedEdges,
+  })
+
+  return {nodes, edges}
+}
+
+function getExternalServices(services: ApmServiceMapEntry[], knownServices: Set<string>): Set<string> {
   const external = new Set<string>()
   for (const service of services) {
     for (const target of service.callsTo) {
-      if (!known.has(target)) external.add(target)
+      if (!knownServices.has(target)) external.add(target)
     }
   }
+  return external
+}
 
-  const connected = new Set<string>()
+function getServiceSelection(
+  services: ApmServiceMapEntry[],
+  selectedId: string | null,
+): ServiceGraphSelection {
+  const connectedServices = new Set<string>()
   const connectedEdges = new Set<string>()
   if (selectedId) {
-    connected.add(selectedId)
-    for (const service of services) {
-      for (const target of service.callsTo) {
-        if (service.service === selectedId || target === selectedId) {
-          connected.add(service.service)
-          connected.add(target)
-          connectedEdges.add(`${service.service}->${target}`)
-        }
+    connectedServices.add(selectedId)
+    addSelectedServiceConnections({
+      services,
+      selectedId,
+      connectedServices,
+      connectedEdges,
+    })
+  }
+  return {connectedServices, connectedEdges}
+}
+
+function addSelectedServiceConnections({
+  services,
+  selectedId,
+  connectedServices,
+  connectedEdges,
+}: Readonly<{
+  services: ApmServiceMapEntry[]
+  selectedId: string
+  connectedServices: Set<string>
+  connectedEdges: Set<string>
+}>) {
+  for (const service of services) {
+    for (const target of service.callsTo) {
+      if (service.service === selectedId || target === selectedId) {
+        connectedServices.add(service.service)
+        connectedServices.add(target)
+        connectedEdges.add(getServiceEdgeId(service.service, target))
       }
     }
   }
+}
 
+function createServiceLayoutGraph(
+  services: ApmServiceMapEntry[],
+  externalServices: Set<string>,
+): Dagre.graphlib.Graph {
   const graph = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}))
   graph.setGraph({rankdir: 'LR', nodesep: 50, ranksep: 160, marginx: 40, marginy: 40})
 
   for (const service of services) graph.setNode(service.service, {width: NODE_W, height: NODE_H})
-  for (const name of external) graph.setNode(name, {width: EXT_W, height: EXT_H})
+  for (const name of externalServices) graph.setNode(name, {width: EXT_W, height: EXT_H})
   for (const service of services) {
     for (const target of service.callsTo) graph.setEdge(service.service, target)
   }
 
   Dagre.layout(graph)
+  return graph
+}
 
-  const shouldDim = (id: string) => selectedId !== null && !connected.has(id)
-
-  const nodes: Node[] = services.map((service) => {
+function createServiceNodes({
+  services,
+  graph,
+  selectedId,
+  connectedServices,
+}: ServiceNodeBuildOptions): Node[] {
+  return services.map((service) => {
     const position = graph.node(service.service)
     return {
       id: service.service,
@@ -142,13 +231,21 @@ function buildGraph(
         avgDurationNs: service.avgDurationNs,
         serviceType: inferServiceType(service.service),
         isExternal: false,
-        dimmed: shouldDim(service.service),
+        dimmed: isServiceDimmed(service.service, selectedId, connectedServices),
         selected: selectedId === service.service,
       } satisfies ServiceNodeData,
     }
   })
+}
 
-  for (const name of external) {
+function createExternalNodes({
+  externalServices,
+  graph,
+  selectedId,
+  connectedServices,
+}: ExternalNodeBuildOptions): Node[] {
+  const nodes: Node[] = []
+  for (const name of externalServices) {
     const position = graph.node(name)
     nodes.push({
       id: name,
@@ -161,17 +258,24 @@ function buildGraph(
         avgDurationNs: 0,
         serviceType: inferServiceType(name),
         isExternal: true,
-        dimmed: shouldDim(name),
+        dimmed: isServiceDimmed(name, selectedId, connectedServices),
         selected: selectedId === name,
       } satisfies ServiceNodeData,
     })
   }
+  return nodes
+}
 
+function createServiceEdges({
+  services,
+  selectedId,
+  connectedEdges,
+}: ServiceEdgeBuildOptions): Edge[] {
   const edges: Edge[] = []
   for (const service of services) {
     for (const target of service.callsTo) {
-      const id = `${service.service}->${target}`
-      const isDimmed = selectedId !== null && !connectedEdges.has(id)
+      const id = getServiceEdgeId(service.service, target)
+      const isDimmed = isServiceEdgeDimmed(id, selectedId, connectedEdges)
       edges.push({
         id,
         source: service.service,
@@ -196,7 +300,27 @@ function buildGraph(
     }
   }
 
-  return {nodes, edges}
+  return edges
+}
+
+function getServiceEdgeId(source: string, target: string): string {
+  return `${source}->${target}`
+}
+
+function isServiceDimmed(
+  serviceId: string,
+  selectedId: string | null,
+  connectedServices: Set<string>,
+): boolean {
+  return selectedId !== null && !connectedServices.has(serviceId)
+}
+
+function isServiceEdgeDimmed(
+  edgeId: string,
+  selectedId: string | null,
+  connectedEdges: Set<string>,
+): boolean {
+  return selectedId !== null && !connectedEdges.has(edgeId)
 }
 
 // --- Custom node ---
@@ -208,10 +332,21 @@ const handleStyle: CSSProperties = {
   background: 'hsl(var(--muted-foreground) / 0.4)',
 }
 
-const ServiceNode = memo(function ServiceNode({data}: NodeProps<Node<ServiceNodeData>>) {
+const ServiceNode = memo(function ServiceNode({data}: Readonly<NodeProps<Node<ServiceNodeData>>>) {
   const color = SERVICE_COLORS[data.serviceType]
   const Icon = SERVICE_ICONS[data.serviceType]
   const hasErrors = data.errorCount > 0
+  const metrics = data.isExternal ? undefined : (
+    <>
+      <span>{data.spanCount.toLocaleString()} spans</span>
+      <span>{formatDuration(data.avgDurationNs)}</span>
+      {hasErrors && (
+        <span className="font-semibold text-destructive">
+          {data.errorCount} err
+        </span>
+      )}
+    </>
+  )
 
   return (
     <>
@@ -229,17 +364,7 @@ const ServiceNode = memo(function ServiceNode({data}: NodeProps<Node<ServiceNode
         statusIndicator={hasErrors ? (
           <span className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-destructive" />
         ) : null}
-        metrics={!data.isExternal ? (
-          <>
-            <span>{data.spanCount.toLocaleString()} spans</span>
-            <span>{formatDuration(data.avgDurationNs)}</span>
-            {hasErrors && (
-              <span className="font-semibold text-destructive">
-                {data.errorCount} err
-              </span>
-            )}
-          </>
-        ) : undefined}
+        metrics={metrics}
       />
       <Handle type="source" position={Position.Right} style={handleStyle} />
     </>
@@ -250,15 +375,15 @@ const nodeTypes = {service: ServiceNode}
 
 // --- Main component ---
 
-interface ServiceMapProps {
+type ServiceMapProps = Readonly<{
   className?: string
   searchQuery?: string
-}
+}>
 
 export function ServiceMap({className, searchQuery = ''}: ServiceMapProps = {}) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  const {data, isLoading} = useQuery({
+  const {data, isError, isLoading} = useQuery({
     queryKey: ['apmServiceMap'],
     queryFn: () => api.getApmServiceMap(),
     enabled: api.isAuthenticated(),
@@ -299,11 +424,19 @@ export function ServiceMap({className, searchQuery = ''}: ServiceMapProps = {}) 
       onNodeClick={onNodeClick}
       onPaneClick={onPaneClick}
       isLoading={isLoading}
-      isEmpty={visibleServices.length === 0}
+      isEmpty={!isError && visibleServices.length === 0}
       emptyTitle={isFilteredEmpty ? 'No services match your search' : 'No services found'}
       emptyDescription={isFilteredEmpty
         ? 'Adjust search to show more service nodes.'
         : 'Service map populates automatically as trace telemetry is ingested.'}
+      fallback={isError ? (
+        <div className="max-w-sm text-center">
+          <p className="text-sm font-medium text-muted-foreground">Map data unavailable</p>
+          <p className="mt-1 text-xs text-muted-foreground/75">
+            Refresh the page or try again after the telemetry API responds.
+          </p>
+        </div>
+      ) : undefined}
       className={className ?? 'service-map h-[calc(100vh-260px)] min-h-[420px]'}
       fitSignature={`services-${visibleServices.map((service) => service.service).join('|')}`}
     >

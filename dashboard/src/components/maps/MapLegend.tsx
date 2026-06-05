@@ -9,18 +9,18 @@
 import type {ReactNode} from 'react'
 import {cn} from '@/lib/utils'
 
-export interface MapLegendItem {
+export type MapLegendItem = Readonly<{
   label: string
   color?: string
   dashed?: boolean
   className?: string
-}
+}>
 
-interface MapLegendProps {
+type MapLegendProps = Readonly<{
   items: MapLegendItem[]
   trailing?: ReactNode
   className?: string
-}
+}>
 
 export function MapLegend({items, trailing, className}: MapLegendProps) {
   return (

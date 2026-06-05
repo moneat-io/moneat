@@ -95,16 +95,16 @@ const INFRASTRUCTURE_MAP_SAVED_VIEWS_QUERY_KEY = ['infrastructure-map-saved-view
 
 type BadgeVariant = NonNullable<ComponentProps<typeof Badge>['variant']>
 
-interface Option<TValue extends string> {
+type Option<TValue extends string> = Readonly<{
   value: TValue
   label: string
-}
+}>
 
 export type MonitoringMapScope = InfrastructureResourceKind | 'services'
 
-interface ResourceOption extends Option<MonitoringMapScope> {
+type ResourceOption = Option<MonitoringMapScope> & Readonly<{
   icon: ComponentType<{className?: string}>
-}
+}>
 
 interface ToneClasses {
   border: string
@@ -243,10 +243,73 @@ const INFRA_LEGEND_ITEMS = [
   {label: 'Neutral', color: TONE_CLASSES.neutral.color},
 ]
 
-interface InfrastructureMapProps {
+type InfrastructureMapProps = Readonly<{
   initialScope?: MonitoringMapScope
   onScopeChange?: (scope: MonitoringMapScope) => void
-}
+}>
+
+type MapScopeToggleProps = Readonly<{
+  scope: MonitoringMapScope
+  onChange: (scope: MonitoringMapScope) => void
+}>
+
+type SavedViewsPopoverProps = Readonly<{
+  savedViews: SavedInfrastructureMapView[]
+  selectedSavedViewId: string
+  savedViewName: string
+  isLoading: boolean
+  isSaving: boolean
+  isDeleting: boolean
+  onLoadSavedView: (savedViewId: string) => void
+  onSavedViewNameChange: (name: string) => void
+  onSaveCurrentView: () => void
+  onDeleteSelectedView: () => void
+}>
+
+type InfrastructureMapToolbarProps = Readonly<{
+  groupBy: InfrastructureGroupBy
+  fillBy: InfrastructureFillBy
+  sizeBy: InfrastructureSizeBy
+  groupOptions: Array<Option<InfrastructureGroupBy>>
+  fillOptions: Array<Option<InfrastructureFillBy>>
+  sizeOptions: Array<Option<InfrastructureSizeBy>>
+  summary: ReturnType<typeof buildInfrastructureMapGroups>['summary']
+  unhealthyResources: number
+  limitNotice: string | null
+  onGroupByChange: (groupBy: InfrastructureGroupBy) => void
+  onFillByChange: (fillBy: InfrastructureFillBy) => void
+  onSizeByChange: (sizeBy: InfrastructureSizeBy) => void
+}>
+
+type CompactSelectProps<TValue extends string> = Readonly<{
+  label: string
+  value: TValue
+  options: Array<Option<TValue>>
+  onChange: (value: TValue) => void
+}>
+
+type SummaryItemProps = Readonly<{
+  icon: ReactNode
+  label: string
+}>
+
+type InfrastructureMapBodyProps = Readonly<{
+  isError: boolean
+  isLoading: boolean
+  mapGraph: {nodes: Node[]; edges: Edge[]}
+  mapResult: ReturnType<typeof buildInfrastructureMapGroups>
+  resourceKind: InfrastructureResourceKind
+  fitSignature: string
+  selectedNode: InfrastructureMapNode | null
+  onCloseDetail: () => void
+  onNodeClick: (event: ReactMouseEvent, node: Node) => void
+  onPaneClick: () => void
+}>
+
+type InfrastructureDetailPanelProps = Readonly<{
+  node: InfrastructureMapNode
+  onClose: () => void
+}>
 
 export function InfrastructureMap({initialScope = 'services', onScopeChange}: InfrastructureMapProps) {
   const queryClient = useQueryClient()
@@ -531,10 +594,7 @@ export function InfrastructureMap({initialScope = 'services', onScopeChange}: In
 function MapScopeToggle({
   scope,
   onChange,
-}: {
-  scope: MonitoringMapScope
-  onChange: (scope: MonitoringMapScope) => void
-}) {
+}: MapScopeToggleProps) {
   return (
     <div className="flex rounded-md border bg-background p-0.5">
       {RESOURCE_OPTIONS.map((option) => {
@@ -572,18 +632,7 @@ function SavedViewsPopover({
   onSavedViewNameChange,
   onSaveCurrentView,
   onDeleteSelectedView,
-}: {
-  savedViews: SavedInfrastructureMapView[]
-  selectedSavedViewId: string
-  savedViewName: string
-  isLoading: boolean
-  isSaving: boolean
-  isDeleting: boolean
-  onLoadSavedView: (savedViewId: string) => void
-  onSavedViewNameChange: (name: string) => void
-  onSaveCurrentView: () => void
-  onDeleteSelectedView: () => void
-}) {
+}: SavedViewsPopoverProps) {
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -675,20 +724,7 @@ function InfrastructureMapToolbar({
   onGroupByChange,
   onFillByChange,
   onSizeByChange,
-}: {
-  groupBy: InfrastructureGroupBy
-  fillBy: InfrastructureFillBy
-  sizeBy: InfrastructureSizeBy
-  groupOptions: Array<Option<InfrastructureGroupBy>>
-  fillOptions: Array<Option<InfrastructureFillBy>>
-  sizeOptions: Array<Option<InfrastructureSizeBy>>
-  summary: ReturnType<typeof buildInfrastructureMapGroups>['summary']
-  unhealthyResources: number
-  limitNotice: string | null
-  onGroupByChange: (groupBy: InfrastructureGroupBy) => void
-  onFillByChange: (fillBy: InfrastructureFillBy) => void
-  onSizeByChange: (sizeBy: InfrastructureSizeBy) => void
-}) {
+}: InfrastructureMapToolbarProps) {
   return (
     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
       <CompactSelect
@@ -736,12 +772,7 @@ function CompactSelect<TValue extends string>({
   value,
   options,
   onChange,
-}: {
-  label: string
-  value: TValue
-  options: Array<Option<TValue>>
-  onChange: (value: TValue) => void
-}) {
+}: CompactSelectProps<TValue>) {
   return (
     <div className="flex items-center gap-1.5">
       <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
@@ -763,7 +794,7 @@ function CompactSelect<TValue extends string>({
   )
 }
 
-function SummaryItem({icon, label}: {icon: ReactNode; label: string}) {
+function SummaryItem({icon, label}: SummaryItemProps) {
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
       {icon}
@@ -783,26 +814,11 @@ function InfrastructureMapBody({
   onCloseDetail,
   onNodeClick,
   onPaneClick,
-}: {
-  isError: boolean
-  isLoading: boolean
-  mapGraph: {nodes: Node[]; edges: Edge[]}
-  mapResult: ReturnType<typeof buildInfrastructureMapGroups>
-  resourceKind: InfrastructureResourceKind
-  fitSignature: string
-  selectedNode: InfrastructureMapNode | null
-  onCloseDetail: () => void
-  onNodeClick: (event: ReactMouseEvent, node: Node) => void
-  onPaneClick: () => void
-}) {
+}: InfrastructureMapBodyProps) {
   const hasNoResources = mapResult.summary.totalResources === 0
   const hasNoVisibleResources = mapResult.summary.totalResources > 0 && mapResult.summary.visibleResources === 0
-  const emptyIcon = hasNoVisibleResources ? Search : resourceKind === 'hosts' ? HardDrive : Box
-  const emptyTitle = hasNoVisibleResources
-    ? 'No resources match your filters'
-    : resourceKind === 'hosts'
-      ? 'No hosts yet'
-      : 'No containers yet'
+  const emptyIcon = getInfrastructureEmptyIcon(hasNoVisibleResources, resourceKind)
+  const emptyTitle = getInfrastructureEmptyTitle(hasNoVisibleResources, resourceKind)
   const emptyDescription = hasNoVisibleResources
     ? 'Adjust search or map controls.'
     : 'Connect infrastructure telemetry to populate this map.'
@@ -839,9 +855,27 @@ function InfrastructureMapBody({
   )
 }
 
+function getInfrastructureEmptyIcon(
+  hasNoVisibleResources: boolean,
+  resourceKind: InfrastructureResourceKind,
+): ComponentType<{className?: string}> {
+  if (hasNoVisibleResources) return Search
+  if (resourceKind === 'hosts') return HardDrive
+  return Box
+}
+
+function getInfrastructureEmptyTitle(
+  hasNoVisibleResources: boolean,
+  resourceKind: InfrastructureResourceKind,
+): string {
+  if (hasNoVisibleResources) return 'No resources match your filters'
+  if (resourceKind === 'hosts') return 'No hosts yet'
+  return 'No containers yet'
+}
+
 const InfrastructureResourceNode = memo(function InfrastructureResourceNode({
   data,
-}: NodeProps<Node<InfrastructureFlowNodeData>>) {
+}: Readonly<NodeProps<Node<InfrastructureFlowNodeData>>>) {
   const tone = TONE_CLASSES[data.fillTone]
   const Icon = data.resourceKind === 'hosts' ? HardDrive : Box
 
@@ -883,7 +917,7 @@ const InfrastructureResourceNode = memo(function InfrastructureResourceNode({
 
 const InfrastructureGroupNode = memo(function InfrastructureGroupNode({
   data,
-}: NodeProps<Node<InfrastructureGroupNodeData>>) {
+}: Readonly<NodeProps<Node<InfrastructureGroupNodeData>>>) {
   return (
     <div
       className="rounded-lg border border-border/70 bg-card/45 shadow-sm backdrop-blur-sm"
@@ -907,10 +941,7 @@ const infrastructureNodeTypes = {
 function InfrastructureDetailPanel({
   node,
   onClose,
-}: {
-  node: InfrastructureMapNode
-  onClose: () => void
-}) {
+}: InfrastructureDetailPanelProps) {
   const tone = TONE_CLASSES[node.fillTone]
 
   return (
