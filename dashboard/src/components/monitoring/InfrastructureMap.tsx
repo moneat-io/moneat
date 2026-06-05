@@ -74,6 +74,7 @@ const HOST_REFRESH_MS = 30_000
 const CONTAINER_REFRESH_MS = 10_000
 const CONTAINER_LIMIT = 500
 const SAVED_VIEW_NAME_MAX_LENGTH = 48
+const SAVED_VIEW_SEARCH_QUERY_MAX_LENGTH = 200
 const EMPTY_HOSTS: DdHostResponse[] = []
 const EMPTY_CONTAINERS: DdContainerResponse[] = []
 const EMPTY_SAVED_VIEWS: SavedInfrastructureMapView[] = []
@@ -380,8 +381,9 @@ export function InfrastructureMap() {
   function saveCurrentView() {
     const name = savedViewName.trim().slice(0, SAVED_VIEW_NAME_MAX_LENGTH)
     if (!name) return
+    const searchQuery = viewState.searchQuery.trim().slice(0, SAVED_VIEW_SEARCH_QUERY_MAX_LENGTH)
 
-    saveSavedViewMutation.mutate({...viewState, name})
+    saveSavedViewMutation.mutate({...viewState, name, searchQuery})
   }
 
   function deleteSelectedView() {

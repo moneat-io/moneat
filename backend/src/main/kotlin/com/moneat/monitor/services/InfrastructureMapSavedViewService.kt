@@ -135,9 +135,14 @@ class InfrastructureMapSavedViewService {
     }
 
     private fun normalizeName(value: String): String {
-        val name = value.trim().take(SAVED_VIEW_NAME_MAX_LENGTH)
+        val name = value.trim()
         if (name.isBlank()) {
             throw InvalidInfrastructureMapSavedViewException("Saved view name is required")
+        }
+        if (name.length > SAVED_VIEW_NAME_MAX_LENGTH) {
+            throw InvalidInfrastructureMapSavedViewException(
+                "Saved view name must be at most $SAVED_VIEW_NAME_MAX_LENGTH characters"
+            )
         }
         return name
     }

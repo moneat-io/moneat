@@ -64,6 +64,8 @@ class InfraRoutesTest {
     companion object {
         private const val INFRA_EVENTS_PATH = "/v1/infra/events"
         private const val SAVED_VIEWS_PATH = "/v1/infra/map/saved-views"
+        private const val SAVED_VIEW_NAME_MAX_LENGTH = 48
+        private const val OVERLONG_SAVED_VIEW_NAME_LENGTH = SAVED_VIEW_NAME_MAX_LENGTH + 1
     }
 
     private data class SavedMapViewRequest(
@@ -369,6 +371,32 @@ class InfraRoutesTest {
 
             assertEquals(HttpStatusCode.BadRequest, response.status)
             assertTrue(response.bodyAsText().contains("Invalid group option"))
+        }
+
+    @Test
+    fun `POST saved map view rejects names that exceed the persisted key limit`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+
+            application {
+                installAuth()
+                routing { infraRoutes() }
+            }
+
+            val response = createSavedMapView(
+                client,
+                token(userId, orgId),
+                SavedMapViewRequest(
+                    name = "x".repeat(OVERLONG_SAVED_VIEW_NAME_LENGTH)
+                )
+            )
+
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+            assertTrue(
+                response.bodyAsText().contains(
+                    "Saved view name must be at most $SAVED_VIEW_NAME_MAX_LENGTH characters"
+                )
+            )
         }
 
     // ──── GET /infra/events ────
