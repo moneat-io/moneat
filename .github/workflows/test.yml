@@ -64,7 +64,7 @@ jobs:
           else
             while IFS= read -r changed_file; do
               case "$changed_file" in
-                .github/workflows/test.yml|.github/workflows/release.yml|.github/actions/*)
+                .github/workflows/test.yml|.github/workflows/release.yml|.github/actions/*|sonar-project.properties)
                   backend=true
                   frontend=true
                   ;;
@@ -183,13 +183,25 @@ jobs:
           name: backend-detekt-report
           path: backend/build/reports/detekt/
 
-  # SonarQube: reuse backend-unit artifacts (JaCoCo + detekt); compile only, then scan
+  # SonarQube: reuse backend and frontend artifacts, then scan Kotlin and dashboard sources
   sonarqube:
     name: SonarQube Analysis
-    if: github.event_name != 'schedule'
-    needs: [backend-unit, backend-detekt]
+    if: >-
+      ${{
+        always() &&
+        github.event_name != 'schedule' &&
+        (needs.backend-unit.result == 'success' || needs.backend-unit.result == 'skipped') &&
+        (needs.backend-detekt.result == 'success' || needs.backend-detekt.result == 'skipped') &&
+        (needs.frontend-unit.result == 'success' || needs.frontend-unit.result == 'skipped') &&
+        (
+          needs.backend-unit.result == 'success' ||
+          needs.backend-detekt.result == 'success' ||
+          needs.frontend-unit.result == 'success'
+        )
+      }}
+    needs: [backend-unit, backend-detekt, frontend-unit]
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     permissions:
       contents: read
       pull-requests: write
@@ -212,6 +224,13 @@ jobs:
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: dashboard/package-lock.json
+
       - name: Cache Gradle packages
         uses: actions/cache@v5
         with:
@@ -227,12 +246,25 @@ jobs:
         with:
           name: backend-coverage-report
           path: backend/build/reports/jacoco/test/
+        continue-on-error: true
 
       - name: Download detekt report
         uses: actions/download-artifact@v8
         with:
           name: backend-detekt-report
           path: backend/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download frontend coverage
+        uses: actions/download-artifact@v8
+        with:
+          name: frontend-test-results
+          path: dashboard/coverage/
+        continue-on-error: true
+
+      - name: Install dashboard dependencies
+        working-directory: dashboard
+        run: npm ci
 
       - name: Compile Kotlin (bytecode for Sonar)
         working-directory: backend
@@ -253,7 +285,6 @@ jobs:
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v6
         with:
-          projectBaseDir: backend
           args: >
             -Dsonar.projectVersion=${{ steps.sonar-version.outputs.version }}
         env:
@@ -265,7 +296,7 @@ jobs:
         uses: sonarsource/sonarqube-quality-gate-action@master
         with:
           pollingTimeoutSec: 600
-          scanMetadataReportFile: backend/.scannerwork/report-task.txt
+          scanMetadataReportFile: .scannerwork/report-task.txt
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonar.moneat.io
@@ -282,7 +313,7 @@ jobs:
           SONAR_HOST="https://sonar.moneat.io"
           PROJECT_KEY="moneat"
           PR_NUMBER="${{ github.event.pull_request.number }}"
-          REPORT_FILE="backend/.scannerwork/report-task.txt"
+          REPORT_FILE=".scannerwork/report-task.txt"
 
           if [[ ! -f "$REPORT_FILE" ]]; then
             echo "::warning::$REPORT_FILE not found — skipping PR comment"
