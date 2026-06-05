@@ -3,7 +3,7 @@ import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {screen} from '@testing-library/react'
 import {clearAuthStorage, renderRoute} from '@/test/utils'
 
-const {mockApi} = vi.hoisted(() => ({
+const {mockApi, mockEnterpriseFeatures, mockRouteSearch} = vi.hoisted(() => ({
   mockApi: {
     isAuthenticated: vi.fn(),
     checkAuth: vi.fn(),
@@ -25,6 +25,12 @@ const {mockApi} = vi.hoisted(() => ({
     getStatusPages: vi.fn(),
     getStatusPage: vi.fn(),
   },
+  mockEnterpriseFeatures: {
+    current: {enterprise: true, modules: ['oncall'], selfHost: false},
+  },
+  mockRouteSearch: {
+    current: {view: 'overview'},
+  },
 }))
 
 vi.mock('@/lib/api', () => ({
@@ -32,9 +38,11 @@ vi.mock('@/lib/api', () => ({
 }))
 
 vi.mock('@/hooks/useEnterpriseFeatures', () => ({
-  hasEnterpriseModule: () => true,
+  hasEnterpriseModule: (features: {modules?: string[]} | undefined, module: string) => (
+    Boolean(features?.modules?.includes(module))
+  ),
   useEnterpriseFeatures: () => ({
-    data: {enterprise: true, modules: ['oncall'], selfHost: false},
+    data: mockEnterpriseFeatures.current,
     isLoading: false,
   }),
 }))
@@ -47,7 +55,7 @@ vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (options: Record<string, unknown>) => ({
     ...options,
     options,
-    useSearch: () => ({view: 'overview'}),
+    useSearch: () => mockRouteSearch.current,
   }),
   Link: ({children, ...props}: {children: React.ReactNode}) => React.createElement('a', props, children),
   Navigate: ({to}: {to: string}) => <div data-testid="navigate">{to}</div>,
@@ -220,10 +228,40 @@ const feedback = {
   platform: 'javascript',
 }
 
+function makeAlert(overrides: Record<string, unknown> = {}) {
+  return {...alert, ...overrides}
+}
+
+function makeIssue(overrides: Record<string, unknown> = {}) {
+  return {...issue, ...overrides}
+}
+
+function makeUptimeMonitor(overrides: Record<string, unknown> = {}) {
+  return {...uptimeMonitor, ...overrides}
+}
+
+function makeHost(overrides: Record<string, unknown> = {}) {
+  return {...host, ...overrides}
+}
+
+function makeStatusPage(overrides: Record<string, unknown> = {}) {
+  return {...statusPage, ...overrides}
+}
+
+function makeReplay(overrides: Record<string, unknown> = {}) {
+  return {...replay, ...overrides}
+}
+
+function makeFeedback(overrides: Record<string, unknown> = {}) {
+  return {...feedback, ...overrides}
+}
+
 describe('overview alert and incident dashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     clearAuthStorage()
+    mockEnterpriseFeatures.current = {enterprise: true, modules: ['oncall'], selfHost: false}
+    mockRouteSearch.current = {view: 'overview'}
     mockApi.isAuthenticated.mockReturnValue(true)
     mockApi.checkAuth.mockResolvedValue(true)
     mockApi.getProjects.mockResolvedValue([project])
@@ -302,5 +340,337 @@ describe('overview alert and incident dashboard', () => {
     expect(screen.getByText('Business hours only — P3+')).toBeInTheDocument()
     expect(screen.getAllByText('API Rotation').length).toBeGreaterThan(0)
     expect(screen.getByText('Escalation policies')).toBeInTheDocument()
+  })
+
+  it('renders empty overview states without promoting alerts to incidents', async () => {
+    mockApi.getProjectStats.mockResolvedValue({...projectStats, eventsTimeline: [], totalEvents: 0})
+    mockApi.getOrganizationIssues.mockResolvedValue([])
+    mockApi.getPerformanceStats.mockResolvedValue(null)
+    mockApi.getOrganizationReleases.mockResolvedValue([])
+    mockApi.getOrganizationReplays.mockResolvedValue([])
+    mockApi.getOrganizationFeedback.mockResolvedValue([])
+    mockApi.getUptimeMonitors.mockResolvedValue([])
+    mockApi.getMonitorHosts.mockResolvedValue([])
+    mockApi.getIncidents.mockResolvedValue([])
+    mockApi.getOnCallSchedules.mockResolvedValue([])
+    mockApi.getStatusPages.mockResolvedValue([])
+
+    renderRoute(OverviewRoute)
+
+    expect(await screen.findByText('Overview')).toBeInTheDocument()
+    expect(await screen.findByText('No alerts')).toBeInTheDocument()
+    expect(await screen.findByText('No unresolved issues')).toBeInTheDocument()
+    expect(await screen.findByText('No uptime monitors configured')).toBeInTheDocument()
+    expect(await screen.findByText('No hosts being monitored')).toBeInTheDocument()
+    expect(await screen.findByText('No performance data')).toBeInTheDocument()
+    expect(await screen.findByText('No status pages configured')).toBeInTheDocument()
+    expect(await screen.findByText('No releases')).toBeInTheDocument()
+    expect(await screen.findByText('No recent replays')).toBeInTheDocument()
+    expect(await screen.findByText('No feedback received')).toBeInTheDocument()
+  })
+
+  it('renders degraded overview states and fallback labels', async () => {
+    const staleCheckAt = Date.now() - 60 * 60 * 1000
+    const downMonitor = makeUptimeMonitor({
+      id: 'uptime-down',
+      name: 'Database availability',
+      status: 'down',
+      type: 'smtp',
+      lastCheckAt: staleCheckAt,
+      uptime24h: null,
+      avgResponseTime: 0.5,
+    })
+    const degradedMonitor = makeUptimeMonitor({
+      id: 'uptime-degraded',
+      name: 'Cache availability',
+      status: 'degraded',
+      type: 'tcp',
+      active: false,
+      lastCheckAt: staleCheckAt,
+      uptime24h: 65.432,
+      avgResponseTime: 1234,
+    })
+    const privateStatusPage = makeStatusPage({
+      id: 'status-private',
+      name: 'Private Ops',
+      slug: 'private-ops',
+      description: '',
+      isPublic: false,
+    })
+    const pendingStatusPage = makeStatusPage({
+      id: 'status-pending',
+      name: 'Pending Status',
+      slug: 'pending-status',
+      description: '',
+    })
+    const emptyStatusPage = makeStatusPage({
+      id: 'status-empty',
+      name: 'Empty Status',
+      slug: 'empty-status',
+      description: '',
+    })
+
+    mockApi.getProjectStats.mockResolvedValue({
+      ...projectStats,
+      totalEvents: 123_456,
+      unresolvedIssues: 12_345,
+      affectedUsers: 1_234,
+    })
+    mockApi.getOrganizationIssues.mockResolvedValue([
+      makeIssue({id: 'issue-ios', title: 'Fatal checkout', level: 'fatal', platform: 'ios', eventCount: 123_456}),
+      makeIssue({id: 'issue-android', title: 'Android crash', level: 'error', platform: 'android', eventCount: 12_345}),
+      makeIssue({id: 'issue-python', title: '', culprit: 'Worker failed', level: 'warning', platform: 'python', eventCount: 1_234}),
+      makeIssue({id: 'issue-unknown', title: 'Unknown platform', level: 'info', platform: 'rust', lastSeen: null}),
+    ])
+    mockApi.getPerformanceStats.mockResolvedValue({
+      apdex: 0.82,
+      throughput: [],
+      slowestTransactions: [
+        {eventId: 'event-fast', name: 'GET /fast', op: 'http', duration: 0.5, timestamp: ''},
+        {eventId: 'event-slow', name: 'POST /slow', op: 'http', duration: 1234, timestamp: ''},
+      ],
+      totalTransactions: 2,
+      avgDuration: 1234,
+    })
+    mockApi.getIncidents.mockResolvedValue([
+      makeAlert({id: 102, title: 'Database acknowledged', priority: 'P1', status: 'ACKNOWLEDGED'}),
+      makeAlert({id: 103, title: 'Cache warning', priority: 'P2', status: 'TRIGGERED'}),
+      makeAlert({id: 104, title: 'Analytics delayed', priority: 'P3', status: 'TRIGGERED'}),
+      makeAlert({id: 105, title: 'Low signal alert', priority: 'P5', status: 'SUPPRESSED'}),
+    ])
+    mockApi.getOnCallSchedules.mockResolvedValue([{...schedule, id: 8, name: 'Empty Rotation', currentOnCall: null}])
+    mockApi.getOrganizationReleases.mockResolvedValue([{...release, version: '2.0.0', crashFreeRate: null}])
+    mockApi.getOrganizationReplays.mockResolvedValue([
+      makeReplay({replayId: 'replay-user', user: {username: 'anonymous-user'}, errorCount: 0, browserName: null}),
+      makeReplay({replayId: 'replay-url', user: null, urls: ['https://app.example.com/cart'], errorCount: 0}),
+      makeReplay({replayId: 'replay-session', user: null, urls: [], errorCount: 0, browserName: null}),
+    ])
+    mockApi.getOrganizationFeedback.mockResolvedValue([
+      makeFeedback({feedbackId: 'feedback-no-contact', contactEmail: null, status: 'unresolved'}),
+    ])
+    mockApi.getUptimeMonitors.mockResolvedValue([downMonitor, degradedMonitor])
+    mockApi.getUptimeHeartbeats.mockImplementation((monitorId: string) => {
+      if (monitorId === 'uptime-down') return Promise.resolve([])
+      return Promise.resolve([
+        {timestamp: Date.now() - 2_000, status: 1, responseTimeMs: 111, statusCode: 200, message: 'ok'},
+        {timestamp: Date.now() - 3_000, status: 0, responseTimeMs: 1300, statusCode: 503, message: 'older'},
+        {timestamp: Date.now(), status: 0, responseTimeMs: 1234, statusCode: 503, message: 'degraded'},
+      ])
+    })
+    mockApi.getMonitorHosts.mockResolvedValue([
+      makeHost({id: 88, name: null, hostname: 'offline-host', status: 'offline', os: null, latest_metrics: null}),
+      makeHost({
+        id: 89,
+        name: 'degraded-host',
+        hostname: 'degraded-host',
+        status: 'degraded',
+        latest_metrics: {...host.latest_metrics, cpu_percent: 90, mem_percent: 75, disk_percent: null},
+      }),
+      makeHost({id: 90, name: 'unknown-host', hostname: 'unknown-host', status: 'mystery'}),
+    ])
+    mockApi.getStatusPages.mockResolvedValue([privateStatusPage, pendingStatusPage, emptyStatusPage])
+    mockApi.getStatusPage.mockImplementation((pageId: string) => {
+      if (pageId === 'status-private') {
+        return Promise.resolve({
+          ...privateStatusPage,
+          monitors: [{id: 1, monitorId: 'uptime-down', monitorName: 'Database availability', sortOrder: 0}],
+          customDomains: [],
+        })
+      }
+      if (pageId === 'status-pending') {
+        return Promise.resolve({
+          ...pendingStatusPage,
+          monitors: [{id: 2, monitorId: 'missing-monitor', monitorName: 'Missing monitor', sortOrder: 0}],
+          customDomains: [],
+        })
+      }
+      return Promise.resolve({...emptyStatusPage, monitors: [], customDomains: []})
+    })
+
+    renderRoute(OverviewRoute)
+
+    expect(await screen.findByText('Database acknowledged')).toBeInTheDocument()
+    expect(await screen.findByText('ACKNOWLEDGED')).toBeInTheDocument()
+    expect(await screen.findByText('P1')).toBeInTheDocument()
+    expect(await screen.findByText('P2')).toBeInTheDocument()
+    expect(await screen.findByText('P3')).toBeInTheDocument()
+    expect(await screen.findByText('P5')).toBeInTheDocument()
+    expect(await screen.findByText('Fatal checkout')).toBeInTheDocument()
+    expect(await screen.findByText('Android')).toBeInTheDocument()
+    expect(await screen.findByText('Backend')).toBeInTheDocument()
+    expect(await screen.findByText('Database availability')).toBeInTheDocument()
+    expect(await screen.findByText('stale')).toBeInTheDocument()
+    expect(await screen.findByText('No heartbeat data')).toBeInTheDocument()
+    expect(await screen.findByText('SMTP')).toBeInTheDocument()
+    expect(await screen.findByText('offline-host')).toBeInTheDocument()
+    expect(await screen.findByText('degraded-host')).toBeInTheDocument()
+    expect((await screen.findAllByText('1 down')).length).toBeGreaterThan(0)
+    expect(await screen.findByText('1 pending')).toBeInTheDocument()
+    expect(await screen.findByText('No monitors')).toBeInTheDocument()
+    expect((await screen.findAllByText('No description provided')).length).toBeGreaterThan(0)
+    expect(await screen.findByText('Private')).toBeInTheDocument()
+    expect(await screen.findByText('anonymous-user')).toBeInTheDocument()
+    expect(await screen.findByText('https://app.example.com/cart')).toBeInTheDocument()
+    expect(await screen.findByText('Session')).toBeInTheDocument()
+  })
+
+  it('renders non-page and empty on-call priority states', async () => {
+    mockApi.getOnCallSchedules.mockResolvedValue([{...schedule, id: 9, name: 'Backup Rotation', currentOnCall: null}])
+    mockApi.getIncidents.mockResolvedValue([
+      makeAlert({id: 201, title: 'Primary P0', priority: 'P0', status: 'TRIGGERED'}),
+      makeAlert({id: 202, title: 'Primary P1', priority: 'P1', status: 'ACKNOWLEDGED'}),
+      makeAlert({id: 203, title: 'Primary P2', priority: 'P2', status: 'TRIGGERED'}),
+      makeAlert({id: 204, title: 'Secondary P2', priority: 'P2', status: 'ACKNOWLEDGED'}),
+      makeAlert({id: 205, title: 'Tertiary P1', priority: 'P1', status: 'TRIGGERED'}),
+      makeAlert({id: 206, title: 'Overflow P0', priority: 'P0', status: 'TRIGGERED'}),
+      makeAlert({id: 207, title: 'Low P3', priority: 'P3', status: 'TRIGGERED'}),
+      makeAlert({id: 208, title: 'Low P4', priority: 'P4', status: 'ACKNOWLEDGED'}),
+      makeAlert({id: 209, title: 'Low P5', priority: 'P5', status: 'TRIGGERED'}),
+      makeAlert({id: 210, title: 'Low Overflow P5', priority: 'P5', status: 'ACKNOWLEDGED'}),
+    ])
+    mockApi.getBusinessHours.mockResolvedValue({
+      id: 2,
+      organizationId: 1,
+      enabled: true,
+      timezone: 'America/New_York',
+      windows: [{id: 2, businessHoursId: 2, dayOfWeek: 0, startTime: '00:00', endTime: '00:01'}],
+    })
+
+    renderRoute(OnCallOverviewRoute)
+
+    expect(await screen.findByText("You're not currently on call")).toBeInTheDocument()
+    expect(await screen.findByText('Outside business hours')).toBeInTheDocument()
+    expect(await screen.findByText('No one assigned')).toBeInTheDocument()
+    expect((await screen.findAllByText('Primary P1')).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('Acknowledged')).length).toBeGreaterThan(0)
+    expect(await screen.findByText('Low P3')).toBeInTheDocument()
+    expect(await screen.findByText('P4')).toBeInTheDocument()
+    expect((await screen.findAllByText('+1 more')).length).toBeGreaterThan(0)
+
+    mockApi.getOnCallSchedules.mockResolvedValue([])
+    mockApi.getIncidents.mockResolvedValue([])
+    mockApi.getBusinessHours.mockResolvedValue({
+      id: 3,
+      organizationId: 1,
+      enabled: false,
+      timezone: 'America/New_York',
+      windows: [],
+    })
+
+    renderRoute(OnCallOverviewRoute)
+
+    expect(await screen.findByText('No active high-priority alerts')).toBeInTheDocument()
+    expect(await screen.findByText('No low-priority alerts')).toBeInTheDocument()
+    expect(await screen.findByText('No schedules configured')).toBeInTheDocument()
+  })
+
+  it('checks auth and renders resolved alerts without primary service data', async () => {
+    mockApi.isAuthenticated.mockReturnValueOnce(false).mockReturnValueOnce(false).mockReturnValue(true)
+    mockApi.getProjects.mockResolvedValue([])
+    mockApi.getProjectStats.mockResolvedValue(null)
+    mockApi.getOrganizationIssues.mockResolvedValue([])
+    mockApi.getPerformanceStats.mockResolvedValue(null)
+    mockApi.getOrganizationReleases.mockResolvedValue([])
+    mockApi.getOrganizationReplays.mockResolvedValue([])
+    mockApi.getOrganizationFeedback.mockResolvedValue([])
+    mockApi.getIncidents.mockResolvedValue([
+      makeAlert({id: 301, title: 'Resolved low-priority alert', priority: 'P4', status: 'RESOLVED'}),
+    ])
+    mockApi.getOnCallSchedules.mockResolvedValue([])
+    mockApi.getUptimeMonitors.mockResolvedValue([
+      makeUptimeMonitor({
+        id: 'uptime-push',
+        name: 'Push heartbeat',
+        type: 'push',
+        status: 'paused',
+        active: true,
+        lastCheckAt: undefined,
+        intervalSeconds: undefined,
+        uptime24h: undefined,
+        avgResponseTime: undefined,
+      }),
+      makeUptimeMonitor({
+        id: 'uptime-default-interval',
+        name: 'Default interval heartbeat',
+        type: 'http',
+        status: 'up',
+        active: false,
+        lastCheckAt: Date.now() - 10_000,
+        intervalSeconds: undefined,
+      }),
+    ])
+    mockApi.getUptimeHeartbeats.mockResolvedValue([])
+    mockApi.getMonitorHosts.mockResolvedValue([
+      makeHost({
+        id: 91,
+        name: undefined,
+        hostname: 'fallback-host',
+        status: undefined,
+        latest_metrics: {
+          ...host.latest_metrics,
+          cpu_percent: undefined,
+          mem_percent: undefined,
+          disk_percent: undefined,
+        },
+      }),
+    ])
+    mockApi.getStatusPages.mockResolvedValue([])
+
+    renderRoute(OverviewRoute)
+
+    expect(await screen.findByText('Overview')).toBeInTheDocument()
+    expect(mockApi.checkAuth).toHaveBeenCalled()
+    expect(await screen.findByText('Resolved low-priority alert')).toBeInTheDocument()
+    expect(await screen.findByText('RESOLVED')).toBeInTheDocument()
+    expect(await screen.findByText('P4')).toBeInTheDocument()
+    expect(await screen.findByText('Push heartbeat')).toBeInTheDocument()
+    expect(await screen.findByText('Push')).toBeInTheDocument()
+    expect(await screen.findByText('Default interval heartbeat')).toBeInTheDocument()
+    expect(await screen.findByText('fallback-host')).toBeInTheDocument()
+  })
+
+  it('renders plural on-call assignments and assignee fallbacks', async () => {
+    mockApi.getOnCallSchedules.mockResolvedValue([
+      {...schedule, id: 11, name: 'Primary Rotation', currentOnCall: {userId: 5, userName: 'Ada Lovelace'}},
+      {...schedule, id: 12, name: 'Secondary Rotation', currentOnCall: {userId: 5, userName: 'Grace Hopper'}},
+      {...schedule, id: 13, name: 'Fallback Rotation', currentOnCall: {userName: 'Fallback User'}},
+    ])
+    mockApi.getIncidents.mockResolvedValue([])
+    mockApi.getBusinessHours.mockResolvedValue({
+      id: 4,
+      organizationId: 1,
+      enabled: false,
+      timezone: 'America/New_York',
+      windows: [],
+    })
+
+    renderRoute(OnCallOverviewRoute)
+
+    expect(await screen.findByText("You're on call for 2 schedules")).toBeInTheDocument()
+    expect(await screen.findByText('Grace Hopper')).toBeInTheDocument()
+    expect(await screen.findByText('Fallback User')).toBeInTheDocument()
+  })
+
+  it('routes self-host non-overview traffic without rendering the public landing', async () => {
+    mockRouteSearch.current = {view: 'marketing'}
+    mockEnterpriseFeatures.current = {enterprise: true, modules: ['oncall'], selfHost: true}
+
+    mockApi.isAuthenticated.mockReturnValue(false)
+    renderRoute(OverviewRoute)
+    expect(await screen.findByTestId('navigate')).toHaveTextContent('/login')
+
+    mockApi.isAuthenticated.mockReturnValue(true)
+    renderRoute(OverviewRoute)
+    expect(screen.getAllByTestId('navigate').some((element) => element.textContent === '/')).toBe(true)
+  })
+
+  it('omits the on-call overview when the module is unavailable', async () => {
+    mockEnterpriseFeatures.current = {enterprise: true, modules: [], selfHost: false}
+
+    renderRoute(OverviewRoute)
+
+    expect(await screen.findByText('Overview')).toBeInTheDocument()
+    expect(await screen.findByText('Checkout failed')).toBeInTheDocument()
+    expect(screen.queryByText('On-Call')).not.toBeInTheDocument()
   })
 })
