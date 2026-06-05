@@ -42,6 +42,24 @@ class ServiceIdentityResolver {
         }
     }
 
+    fun resolveServiceIds(
+        organizationId: Int,
+        serviceNames: Collection<String>,
+        serviceNamespace: String = ""
+    ): Map<String, Long> {
+        val normalizedNames = serviceNames
+            .mapNotNull(::normalizeServiceName)
+            .distinct()
+        if (normalizedNames.isEmpty()) return emptyMap()
+
+        val normalizedNamespace = serviceNamespace.trim()
+        return transaction {
+            val mappedIds = findMappedServiceIds(organizationId, normalizedNames, normalizedNamespace)
+            val unmappedNames = normalizedNames.filterNot(mappedIds::containsKey)
+            mappedIds + findProjectServiceIds(organizationId, unmappedNames)
+        }
+    }
+
     fun serviceNameForProject(projectId: Long): String? =
         transaction {
             Projects
@@ -81,6 +99,22 @@ class ServiceIdentityResolver {
             .firstOrNull()
             ?.get(OtelServiceProjectMappings.project_id)
 
+    private fun findMappedServiceIds(
+        organizationId: Int,
+        serviceNames: List<String>,
+        serviceNamespace: String
+    ): Map<String, Long> =
+        OtelServiceProjectMappings
+            .selectAll()
+            .where {
+                (OtelServiceProjectMappings.organization_id eq organizationId) and
+                    (OtelServiceProjectMappings.service_namespace eq serviceNamespace) and
+                    (OtelServiceProjectMappings.service_name inList serviceNames)
+            }
+            .associate { row ->
+                row[OtelServiceProjectMappings.service_name] to row[OtelServiceProjectMappings.project_id]
+            }
+
     private fun findProjectServiceId(organizationId: Int, serviceName: String): Long? {
         val normalizedName = serviceName.lowercase()
         return Projects
@@ -94,6 +128,37 @@ class ServiceIdentityResolver {
             }
             .firstOrNull()
             ?.get(Projects.id)
+    }
+
+    private fun findProjectServiceIds(organizationId: Int, serviceNames: List<String>): Map<String, Long> {
+        if (serviceNames.isEmpty()) return emptyMap()
+
+        val namesByLowercase = serviceNames.groupBy { serviceName -> serviceName.lowercase() }
+        return Projects
+            .selectAll()
+            .where {
+                (Projects.organization_id eq organizationId) and
+                    (
+                        (Projects.slug.lowerCase() inList namesByLowercase.keys) or
+                            (Projects.name.lowerCase() inList namesByLowercase.keys)
+                        )
+            }
+            .fold(mutableMapOf<String, Long>()) { serviceIds, row ->
+                val projectId = row[Projects.id]
+                assignProjectServiceId(serviceIds, namesByLowercase, row[Projects.slug], projectId)
+                assignProjectServiceId(serviceIds, namesByLowercase, row[Projects.name], projectId)
+                serviceIds
+            }
+    }
+
+    private fun assignProjectServiceId(
+        serviceIds: MutableMap<String, Long>,
+        namesByLowercase: Map<String, List<String>>,
+        projectName: String,
+        projectId: Long
+    ) {
+        namesByLowercase[projectName.lowercase()]
+            ?.forEach { serviceName -> serviceIds.putIfAbsent(serviceName, projectId) }
     }
 
     private fun projectServiceName(row: ResultRow): String =

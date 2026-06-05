@@ -555,16 +555,17 @@ class TraceIngestionServiceTest {
         )
         TransactionManager.defaultDatabase = db
         TestDatabaseHelper.resetSchema(Organizations, Projects, OtelServiceProjectMappings)
-        val projectId = transaction {
-            val orgId = Organizations.insert {
+        val (orgId, projectId) = transaction {
+            val insertedOrgId = Organizations.insert {
                 it[name] = "Test Org"
                 it[slug] = "test-org"
             } get Organizations.id
-            Projects.insert {
-                it[organization_id] = orgId
+            val insertedProjectId = Projects.insert {
+                it[organization_id] = insertedOrgId
                 it[name] = "Checkout API"
                 it[slug] = "checkout-api"
             } get Projects.id
+            insertedOrgId to insertedProjectId
         }
 
         val queries = mutableListOf<String>()
@@ -576,7 +577,7 @@ class TraceIngestionServiceTest {
             coEvery { ClickHouseClient.execute(capture(queries)) } returns response
 
             TraceIngestionService.insertTraces(
-                organizationId = 1,
+                organizationId = orgId,
                 traces = listOf(
                     listOf(
                         DdSpan(

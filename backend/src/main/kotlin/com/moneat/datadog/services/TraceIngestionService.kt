@@ -332,11 +332,7 @@ object TraceIngestionService {
             .map { span -> span.service.trim() }
             .filter { service -> service.isNotBlank() }
             .distinct()
-            .mapNotNull { service ->
-                serviceIdentityResolver.resolveServiceId(organizationId, service)
-                    ?.let { serviceId -> service to serviceId }
-            }
-            .toMap()
+            .let { serviceNames -> serviceIdentityResolver.resolveServiceIds(organizationId, serviceNames) }
 
     /**
      * Insert trace stats into ClickHouse trace_stats table.
