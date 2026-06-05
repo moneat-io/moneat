@@ -54,14 +54,53 @@ import {
   Trash2,
 } from 'lucide-react'
 
-interface LogManagementSheetProps {
+type LogManagementSheetProps = Readonly<{
   trigger: React.ReactNode
   currentQuery: string
   currentLevels: string[]
   currentViewState: LogSavedViewState
   currentLogs: LogEntry[]
   onApplySavedView: (state: LogSavedViewState) => void
-}
+}>
+
+type IndexesPanelProps = Readonly<{currentQuery: string}>
+
+type IndexRowProps = Readonly<{
+  index: LogIndex
+  usage?: {bytes_today: number; count_today: number; quota_gb?: number | null}
+  onToggle: (checked: boolean) => void
+  onDelete: () => void
+}>
+
+type PipelinesPanelProps = Readonly<{
+  currentQuery: string
+  currentLogs: LogEntry[]
+}>
+
+type SavedViewsPanelProps = Readonly<{
+  currentViewState: LogSavedViewState
+  onApplySavedView: (state: LogSavedViewState) => void
+}>
+
+type QueryLevelsPanelProps = Readonly<{
+  currentQuery: string
+  currentLevels: string[]
+}>
+
+type ListRowsProps<T> = Readonly<{
+  rows: T[]
+  getTitle: (row: T) => string
+  getDescription: (row: T) => string
+  onDelete?: (row: T) => void
+  onAction?: (row: T) => void
+  actionLabel?: string
+}>
+
+type FieldProps = Readonly<{
+  label: string
+  className?: string
+  children: React.ReactNode
+}>
 
 const DEFAULT_RETENTION_DAYS = 30
 const MIN_RETENTION_DAYS = 1
@@ -69,7 +108,7 @@ const MAX_RETENTION_DAYS = 365
 const FULL_SAMPLING_RATE = 1
 const MIN_SAMPLING_RATE = 0
 const MIN_DAILY_QUOTA_GB = 0
-const DEFAULT_PIPELINE_PATTERN = '(?i)(password|token|secret)=([^\\s]+)'
+const DEFAULT_PIPELINE_PATTERN = String.raw`(?i)(password|token|secret)=([^\s]+)`
 const DEFAULT_PIPELINE_REPLACEMENT = '$1=[redacted]'
 const DEFAULT_METRIC_INTERVAL = '5m'
 const DEFAULT_MONITOR_THRESHOLD = 10
@@ -195,7 +234,7 @@ export function LogManagementSheet({
   )
 }
 
-function IndexesPanel({currentQuery}: {currentQuery: string}) {
+function IndexesPanel({currentQuery}: IndexesPanelProps) {
   const queryClient = useQueryClient()
   const {toast} = useToast()
   const [name, setName] = useState('')
@@ -332,12 +371,7 @@ function IndexRow({
   usage,
   onToggle,
   onDelete,
-}: {
-  index: LogIndex
-  usage?: {bytes_today: number; count_today: number; quota_gb?: number | null}
-  onToggle: (checked: boolean) => void
-  onDelete: () => void
-}) {
+}: IndexRowProps) {
   const quota = usage?.quota_gb ?? index.daily_quota_gb
   const quotaText = quota ? ` / ${quota} GB` : ''
   return (
@@ -366,7 +400,7 @@ function IndexRow({
   )
 }
 
-function PipelinesPanel({currentQuery, currentLogs}: {currentQuery: string; currentLogs: LogEntry[]}) {
+function PipelinesPanel({currentQuery, currentLogs}: PipelinesPanelProps) {
   const queryClient = useQueryClient()
   const {toast} = useToast()
   const [name, setName] = useState('')
@@ -440,10 +474,7 @@ function PipelinesPanel({currentQuery, currentLogs}: {currentQuery: string; curr
 function SavedViewsPanel({
   currentViewState,
   onApplySavedView,
-}: {
-  currentViewState: LogSavedViewState
-  onApplySavedView: (state: LogSavedViewState) => void
-}) {
+}: SavedViewsPanelProps) {
   const queryClient = useQueryClient()
   const {toast} = useToast()
   const [name, setName] = useState('')
@@ -489,7 +520,7 @@ function SavedViewsPanel({
   )
 }
 
-function MetricsPanel({currentQuery, currentLevels}: {currentQuery: string; currentLevels: string[]}) {
+function MetricsPanel({currentQuery, currentLevels}: QueryLevelsPanelProps) {
   const queryClient = useQueryClient()
   const {toast} = useToast()
   const [name, setName] = useState('')
@@ -552,7 +583,7 @@ function MetricsPanel({currentQuery, currentLevels}: {currentQuery: string; curr
   )
 }
 
-function MonitorsPanel({currentQuery, currentLevels}: {currentQuery: string; currentLevels: string[]}) {
+function MonitorsPanel({currentQuery, currentLevels}: QueryLevelsPanelProps) {
   const [name, setName] = useState('')
   const [threshold, setThreshold] = useState(DEFAULT_MONITOR_THRESHOLD)
   const [draft, setDraft] = useState<string>('')
@@ -601,14 +632,7 @@ function ListRows<T>({
   onDelete,
   onAction,
   actionLabel,
-}: {
-  rows: T[]
-  getTitle: (row: T) => string
-  getDescription: (row: T) => string
-  onDelete?: (row: T) => void
-  onAction?: (row: T) => void
-  actionLabel?: string
-}) {
+}: ListRowsProps<T>) {
   if (rows.length === 0) {
     return <p className="py-6 text-center text-sm text-muted-foreground">No entries yet.</p>
   }
@@ -642,11 +666,7 @@ function Field({
   label,
   className,
   children,
-}: {
-  label: string
-  className?: string
-  children: React.ReactNode
-}) {
+}: FieldProps) {
   return (
     <div className={cn('space-y-1.5', className)}>
       <Label className="text-xs text-muted-foreground">{label}</Label>
