@@ -101,9 +101,9 @@ describe('InfrastructureMap', () => {
     renderWithQueryClient(<InfrastructureMap />)
 
     expect(screen.getByText('Map Explorer')).toBeInTheDocument()
-    expect(screen.getByText('Service Map')).toBeInTheDocument()
-    expect(screen.getByText('Host Map')).toBeInTheDocument()
-    expect(screen.getByText('Container Map')).toBeInTheDocument()
+    expect(screen.getByText('Services')).toBeInTheDocument()
+    expect(screen.getByText('Hosts')).toBeInTheDocument()
+    expect(screen.getByText('Containers')).toBeInTheDocument()
     expect(screen.queryByText('Views')).not.toBeInTheDocument()
 
     await user.type(
@@ -120,7 +120,7 @@ describe('InfrastructureMap', () => {
 
     renderWithQueryClient(<InfrastructureMap />)
 
-    await user.click(screen.getByRole('button', {name: 'Host Map'}))
+    await user.click(screen.getByRole('button', {name: 'Hosts map'}))
 
     expect(screen.getByPlaceholderText('Search hosts, images, tags...')).toBeInTheDocument()
     expect(screen.getByText('Views')).toBeInTheDocument()
@@ -137,7 +137,7 @@ describe('InfrastructureMap', () => {
     expect(await screen.findByText('No resources match your filters')).toBeInTheDocument()
     expect(screen.getByText('0 shown')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', {name: 'Service Map'}))
+    await user.click(screen.getByRole('button', {name: 'Services map'}))
 
     expect(screen.getByPlaceholderText('Search services and dependencies...')).toBeInTheDocument()
     expect(screen.queryByText('Views')).not.toBeInTheDocument()

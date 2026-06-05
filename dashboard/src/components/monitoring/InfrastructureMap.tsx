@@ -131,9 +131,9 @@ interface InfrastructureGroupNodeData {
 }
 
 const RESOURCE_OPTIONS: ResourceOption[] = [
-  {value: 'services', label: 'Service Map', icon: Network},
-  {value: 'hosts', label: 'Host Map', icon: HardDrive},
-  {value: 'containers', label: 'Container Map', icon: Box},
+  {value: 'services', label: 'Services', icon: Network},
+  {value: 'hosts', label: 'Hosts', icon: HardDrive},
+  {value: 'containers', label: 'Containers', icon: Box},
 ]
 
 const HOST_GROUP_OPTIONS: Array<Option<InfrastructureGroupBy>> = [
@@ -612,6 +612,8 @@ function MapScopeToggle({
           <button
             key={option.value}
             type="button"
+            aria-label={`${option.label} map`}
+            title={`${option.label} map`}
             onClick={() => onChange(option.value)}
             className={cn(
               'inline-flex h-7 items-center gap-1.5 rounded px-2 text-xs font-medium transition-colors',
@@ -734,7 +736,7 @@ function InfrastructureMapToolbar({
   onSizeByChange,
 }: InfrastructureMapToolbarProps) {
   return (
-    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+    <div className="grid w-full min-w-0 grid-cols-1 gap-2 sm:flex sm:flex-1 sm:flex-wrap sm:items-center">
       <CompactSelect
         label="Group"
         value={groupBy}
@@ -753,7 +755,7 @@ function InfrastructureMapToolbar({
         options={sizeOptions}
         onChange={onSizeByChange}
       />
-      <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2 text-xs text-muted-foreground">
+      <div className="flex w-full min-w-0 flex-wrap items-center justify-start gap-x-3 gap-y-1 text-xs text-muted-foreground sm:ml-auto sm:w-auto sm:justify-end sm:gap-2">
         <SummaryItem icon={<Layers3 className="h-3.5 w-3.5" />} label={`${summary.groupCount} groups`} />
         <SummaryItem icon={<Filter className="h-3.5 w-3.5" />} label={`${summary.visibleResources} shown`} />
         <SummaryItem
@@ -782,10 +784,10 @@ function CompactSelect<TValue extends string>({
   onChange,
 }: CompactSelectProps<TValue>) {
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="grid w-full gap-1 sm:flex sm:w-auto sm:items-center sm:gap-1.5">
       <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
       <Select value={value} onValueChange={(nextValue) => onChange(nextValue as TValue)}>
-        <SelectTrigger className="h-7 w-[132px] bg-background px-2 text-xs">
+        <SelectTrigger className="h-9 w-full bg-background px-2 text-xs sm:h-7 sm:w-[132px]">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
