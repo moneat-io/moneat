@@ -606,7 +606,7 @@ class IncidentServiceExtendedTest {
         assertEquals(1, logs.size)
         val metadata = logs[0][IncidentEventLog.metadata]
         assertTrue(metadata != null && metadata.contains("db-primary"))
-        assertEquals("CRITICAL", logs[0][IncidentEventLog.alertPriority])
+        assertEquals("P0", logs[0][IncidentEventLog.alertPriority])
         assertEquals("meta-dedup", logs[0][IncidentEventLog.deduplicationKey])
     }
 }
