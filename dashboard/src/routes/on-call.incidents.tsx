@@ -45,8 +45,8 @@ type IncidentSeverityFilter = IncidentSeverity | 'all'
 const DEFAULT_DECLARED_INCIDENT_STATUS_FILTER: IncidentStatus = 'OPEN'
 
 // Incident severity mapped onto the shared status language.
-function severityTone(severity: IncidentSeverity | string): StatusTone {
-  const severityMatch = /^SEV-?([0-9])/i.exec(severity)
+function severityTone(severity: string): StatusTone {
+  const severityMatch = /^SEV-?(\d)/i.exec(severity)
   const severityLevel = severityMatch?.[1]
   if (severityLevel === '0' || severityLevel === '1') return 'danger'
   if (severityLevel === '2') return 'warning'

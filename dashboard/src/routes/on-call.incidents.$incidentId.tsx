@@ -80,7 +80,7 @@ export const Route = createFileRoute('/on-call/incidents/$incidentId')({
 
 // Incident severity mapped onto the shared status language.
 function severityBadgeVariant(severity: string): BadgeProps['variant'] {
-  const severityMatch = /^SEV-?([0-9])/i.exec(severity)
+  const severityMatch = /^SEV-?(\d)/i.exec(severity)
   const severityLevel = severityMatch?.[1]
   if (severityLevel === '0' || severityLevel === '1') return 'danger'
   if (severityLevel === '2') return 'warning'

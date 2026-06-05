@@ -1,9 +1,16 @@
 import React from 'react'
 import {beforeEach, describe, expect, it, vi} from 'vitest'
-import {screen} from '@testing-library/react'
+import {fireEvent, screen, waitFor} from '@testing-library/react'
 import {clearAuthStorage, renderRoute} from '@/test/utils'
 
-const {mockApi, mockEnterpriseFeatures, mockRouteSearch} = vi.hoisted(() => ({
+const {
+  mockApi,
+  mockEnterpriseFeatures,
+  mockRouteSearch,
+  mockRouteParams,
+  mockRoutePathname,
+  mockNavigate,
+} = vi.hoisted(() => ({
   mockApi: {
     isAuthenticated: vi.fn(),
     checkAuth: vi.fn(),
@@ -24,6 +31,19 @@ const {mockApi, mockEnterpriseFeatures, mockRouteSearch} = vi.hoisted(() => ({
     getBusinessHours: vi.fn(),
     getStatusPages: vi.fn(),
     getStatusPage: vi.fn(),
+    getIncident: vi.fn(),
+    getIncidentTimeline: vi.fn(),
+    viewIncident: vi.fn(),
+    acknowledgeIncident: vi.fn(),
+    resolveIncident: vi.fn(),
+    markUnavailable: vi.fn(),
+    addIncidentNote: vi.fn(),
+    declareIncident: vi.fn(),
+    getOnCallIncidents: vi.fn(),
+    getOnCallIncident: vi.fn(),
+    getOnCallIncidentTimeline: vi.fn(),
+    resolveOnCallIncident: vi.fn(),
+    addOnCallIncidentNote: vi.fn(),
   },
   mockEnterpriseFeatures: {
     current: {enterprise: true, modules: ['oncall'], selfHost: false},
@@ -31,6 +51,13 @@ const {mockApi, mockEnterpriseFeatures, mockRouteSearch} = vi.hoisted(() => ({
   mockRouteSearch: {
     current: {view: 'overview'},
   },
+  mockRouteParams: {
+    current: {} as Record<string, string>,
+  },
+  mockRoutePathname: {
+    current: '/',
+  },
+  mockNavigate: vi.fn(),
 }))
 
 vi.mock('@/lib/api', () => ({
@@ -56,9 +83,14 @@ vi.mock('@tanstack/react-router', () => ({
     ...options,
     options,
     useSearch: () => mockRouteSearch.current,
+    useParams: () => mockRouteParams.current,
   }),
   Link: ({children, ...props}: {children: React.ReactNode}) => React.createElement('a', props, children),
   Navigate: ({to}: {to: string}) => <div data-testid="navigate">{to}</div>,
+  Outlet: () => <div data-testid="outlet" />,
+  useNavigate: () => mockNavigate,
+  useRouterState: ({select}: {select: (state: {location: {pathname: string}}) => unknown}) =>
+    select({location: {pathname: mockRoutePathname.current}}),
 }))
 
 vi.mock('@/components/charts/EventsChart', () => ({
@@ -71,6 +103,10 @@ vi.mock('@/components/uptime/HeartbeatBar', () => ({
 }))
 
 import {Route as OverviewRoute} from '../index'
+import {Route as AlertDetailRoute} from '../on-call.alerts.$alertId'
+import {Route as AlertsRoute} from '../on-call.alerts'
+import {Route as IncidentDetailRoute} from '../on-call.incidents.$incidentId'
+import {Route as IncidentsRoute} from '../on-call.incidents'
 import {Route as OnCallOverviewRoute} from '../on-call.index'
 
 const project = {
@@ -121,6 +157,62 @@ const alert = {
   alertSource: 'monitor',
   triggeredAt: '2026-06-05T12:00:00.000Z',
 }
+
+const alertTimeline = [
+  {
+    id: 1,
+    incidentId: 101,
+    eventType: 'NOTIFICATION_SENT',
+    actorUserName: 'Moneat',
+    details: {toUserName: 'Ada Lovelace', channel: 'email'},
+    createdAt: '2026-06-05T12:01:00.000Z',
+  },
+  {
+    id: 2,
+    incidentId: 101,
+    eventType: 'NOTE_ADDED',
+    actorUserName: 'Ada Lovelace',
+    details: {note: 'Investigating payment failures'},
+    createdAt: '2026-06-05T12:02:00.000Z',
+  },
+]
+
+const declaredIncident = {
+  id: 501,
+  organizationId: 1,
+  title: 'Checkout incident',
+  description: 'Customer checkout is unavailable',
+  severity: 'SEV-1',
+  status: 'OPEN',
+  declaredBy: 5,
+  declaredByName: 'Ada Lovelace',
+  declaredAt: '2026-06-05T12:03:00.000Z',
+  alertCount: 1,
+  alerts: [{id: 101, title: 'Payments outage', status: 'TRIGGERED', priority: 'P0'}],
+  createdAt: '2026-06-05T12:03:00.000Z',
+  updatedAt: '2026-06-05T12:03:00.000Z',
+}
+
+const declaredIncidentTimeline = [
+  {
+    id: 11,
+    incidentId: 501,
+    eventType: 'DECLARED',
+    source: 'incident',
+    actorName: 'Ada Lovelace',
+    details: {},
+    createdAt: '2026-06-05T12:03:00.000Z',
+  },
+  {
+    id: 12,
+    incidentId: 501,
+    eventType: 'ALERT_LINKED',
+    source: 'alert',
+    alertTitle: 'Payments outage',
+    details: {alertTitle: 'Payments outage'},
+    createdAt: '2026-06-05T12:04:00.000Z',
+  },
+]
 
 const schedule = {
   id: 7,
@@ -228,6 +320,11 @@ const feedback = {
   platform: 'javascript',
 }
 
+function clickLastText(text: string) {
+  const matches = screen.getAllByText(text)
+  fireEvent.click(matches[matches.length - 1])
+}
+
 function makeAlert(overrides: Record<string, unknown> = {}) {
   return {...alert, ...overrides}
 }
@@ -262,6 +359,8 @@ describe('overview alert and incident dashboard', () => {
     clearAuthStorage()
     mockEnterpriseFeatures.current = {enterprise: true, modules: ['oncall'], selfHost: false}
     mockRouteSearch.current = {view: 'overview'}
+    mockRouteParams.current = {}
+    mockRoutePathname.current = '/'
     mockApi.isAuthenticated.mockReturnValue(true)
     mockApi.checkAuth.mockResolvedValue(true)
     mockApi.getProjects.mockResolvedValue([project])
@@ -309,6 +408,19 @@ describe('overview alert and incident dashboard', () => {
       monitors: [{id: 1, monitorId: 'uptime-1', monitorName: 'API availability', sortOrder: 0}],
       customDomains: [],
     })
+    mockApi.getIncident.mockResolvedValue({...alert, description: 'Payments API is down'})
+    mockApi.getIncidentTimeline.mockResolvedValue(alertTimeline)
+    mockApi.viewIncident.mockResolvedValue(undefined)
+    mockApi.acknowledgeIncident.mockResolvedValue({...alert, status: 'ACKNOWLEDGED'})
+    mockApi.resolveIncident.mockResolvedValue({...alert, status: 'RESOLVED'})
+    mockApi.markUnavailable.mockResolvedValue(undefined)
+    mockApi.addIncidentNote.mockResolvedValue(alertTimeline[1])
+    mockApi.declareIncident.mockResolvedValue(declaredIncident)
+    mockApi.getOnCallIncidents.mockResolvedValue([declaredIncident])
+    mockApi.getOnCallIncident.mockResolvedValue(declaredIncident)
+    mockApi.getOnCallIncidentTimeline.mockResolvedValue(declaredIncidentTimeline)
+    mockApi.resolveOnCallIncident.mockResolvedValue({...declaredIncident, status: 'RESOLVED'})
+    mockApi.addOnCallIncidentNote.mockResolvedValue(declaredIncidentTimeline[0])
   })
 
   it('renders alert priority and incident overview sections', async () => {
@@ -672,5 +784,281 @@ describe('overview alert and incident dashboard', () => {
     expect(await screen.findByText('Overview')).toBeInTheDocument()
     expect(await screen.findByText('Checkout failed')).toBeInTheDocument()
     expect(screen.queryByText('On-Call')).not.toBeInTheDocument()
+  })
+
+  it('renders the alert list route with P-priority alerts', async () => {
+    mockRoutePathname.current = '/on-call/alerts'
+    mockApi.getIncidents.mockResolvedValue([
+      makeAlert({
+        id: 401,
+        title: 'Escalating payment alert',
+        description: 'Payment latency is rising',
+        priority: 'P2',
+        status: 'TRIGGERED',
+        alertSource: 'uptime',
+        nextEscalationAt: new Date(Date.now() + 60_000).toISOString(),
+        viewedByCurrentUser: true,
+      }),
+      makeAlert({
+        id: 402,
+        title: 'Resolved analytics alert',
+        priority: 'P5',
+        status: 'RESOLVED',
+        resolvedByName: 'Grace Hopper',
+      }),
+    ])
+
+    renderRoute(AlertsRoute)
+
+    expect(await screen.findByText('Alerts')).toBeInTheDocument()
+    expect(await screen.findByText('Escalating payment alert')).toBeInTheDocument()
+    expect(await screen.findByText('P2')).toBeInTheDocument()
+    expect(await screen.findByText('Escalating soon')).toBeInTheDocument()
+    expect(await screen.findByText('uptime')).toBeInTheDocument()
+    expect(await screen.findByText('Resolved analytics alert')).toBeInTheDocument()
+    expect(await screen.findByText('Resolved by Grace Hopper')).toBeInTheDocument()
+
+    fireEvent.click(await screen.findByText('1 Triggered'))
+    expect(await screen.findByText('Clear filters')).toBeInTheDocument()
+    fireEvent.click(await screen.findByText('1 Triggered'))
+    fireEvent.click(await screen.findByText('1 Resolved'))
+    expect(await screen.findByText('Clear filters')).toBeInTheDocument()
+  })
+
+  it('renders alert detail with timeline and incident declaration controls', async () => {
+    mockRouteParams.current = {alertId: '101'}
+
+    renderRoute(AlertDetailRoute)
+
+    expect(await screen.findByText('Payments outage')).toBeInTheDocument()
+    expect(await screen.findByText('Payments API is down')).toBeInTheDocument()
+    expect(await screen.findByText('Priority')).toBeInTheDocument()
+    expect((await screen.findAllByText('P0')).length).toBeGreaterThan(0)
+    expect(await screen.findByText('Alert history and updates')).toBeInTheDocument()
+    expect(await screen.findByText('to Ada Lovelace via email')).toBeInTheDocument()
+    expect(await screen.findByText('"Investigating payment failures"')).toBeInTheDocument()
+    expect(await screen.findByText('Declare Incident')).toBeInTheDocument()
+    expect(mockApi.viewIncident).toHaveBeenCalledWith(101)
+
+    fireEvent.click(await screen.findByText('Acknowledge'))
+    await waitFor(() => expect(mockApi.acknowledgeIncident).toHaveBeenCalledWith(101))
+    fireEvent.click(await screen.findByText('Resolve'))
+    await waitFor(() => expect(mockApi.resolveIncident).toHaveBeenCalledWith(101))
+    fireEvent.click(await screen.findByText("I'm not available"))
+    await waitFor(() => expect(mockApi.markUnavailable).toHaveBeenCalledWith(101))
+    fireEvent.change(screen.getByPlaceholderText('Enter your note...'), {target: {value: 'Adding context'}})
+    clickLastText('Add note')
+    await waitFor(() => expect(mockApi.addIncidentNote).toHaveBeenCalledWith(101, 'Adding context'))
+  })
+
+  it('renders invalid alert identifiers without fetching alert data', async () => {
+    mockRouteParams.current = {alertId: 'not-a-number'}
+
+    renderRoute(AlertDetailRoute)
+
+    expect(await screen.findByText('Invalid alert ID')).toBeInTheDocument()
+    expect(mockApi.getIncident).not.toHaveBeenCalled()
+  })
+
+  it('renders declared incident list route with SEV severity', async () => {
+    mockRoutePathname.current = '/on-call/incidents'
+    mockApi.getOnCallIncidents.mockResolvedValue([
+      declaredIncident,
+      {
+        ...declaredIncident,
+        id: 502,
+        title: 'Resolved deploy incident',
+        severity: 'SEV-3',
+        status: 'RESOLVED',
+        resolvedByName: 'Grace Hopper',
+        resolvedAt: '2026-06-05T13:00:00.000Z',
+      },
+    ])
+
+    renderRoute(IncidentsRoute)
+
+    expect(await screen.findByText('Incidents')).toBeInTheDocument()
+    expect(await screen.findByText('Checkout incident')).toBeInTheDocument()
+    expect(await screen.findByText('SEV-1')).toBeInTheDocument()
+    expect(await screen.findByText('Resolved deploy incident')).toBeInTheDocument()
+    expect(await screen.findByText('Resolved by Grace Hopper')).toBeInTheDocument()
+
+    fireEvent.click(await screen.findByText('1 Open'))
+    fireEvent.click(await screen.findByText('1 Open'))
+    fireEvent.click(await screen.findByText('1 Resolved'))
+    expect(await screen.findByText('Clear filters')).toBeInTheDocument()
+  })
+
+  it('renders declared incident detail with linked alerts and timeline', async () => {
+    mockRouteParams.current = {incidentId: '501'}
+
+    renderRoute(IncidentDetailRoute)
+
+    expect(await screen.findByText('Checkout incident')).toBeInTheDocument()
+    expect(await screen.findByText('Customer checkout is unavailable')).toBeInTheDocument()
+    expect(await screen.findByText('Severity')).toBeInTheDocument()
+    expect((await screen.findAllByText('SEV-1')).length).toBeGreaterThan(0)
+    expect(await screen.findByText('Linked alerts')).toBeInTheDocument()
+    expect(await screen.findByText('Alert #101 · TRIGGERED')).toBeInTheDocument()
+    expect(await screen.findByText('from Payments outage')).toBeInTheDocument()
+    expect(await screen.findByText('Resolve incident')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByPlaceholderText('Enter your note...'), {target: {value: 'Incident update'}})
+    clickLastText('Add note')
+    await waitFor(() => expect(mockApi.addOnCallIncidentNote).toHaveBeenCalledWith(501, 'Incident update'))
+  })
+
+  it('renders nested route outlets for alert and incident list shells', async () => {
+    mockRoutePathname.current = '/on-call/alerts/101'
+    renderRoute(AlertsRoute)
+    expect(await screen.findByTestId('outlet')).toBeInTheDocument()
+
+    mockRoutePathname.current = '/on-call/incidents/501'
+    renderRoute(IncidentsRoute)
+    expect((await screen.findAllByTestId('outlet')).length).toBeGreaterThan(1)
+  })
+
+  it('renders empty alert and declared incident list states', async () => {
+    mockRoutePathname.current = '/on-call/alerts'
+    mockApi.getIncidents.mockResolvedValue([])
+    renderRoute(AlertsRoute)
+    expect(await screen.findByText('No alerts found')).toBeInTheDocument()
+    expect(await screen.findByText('No alerts match your current filters. Try adjusting or clearing filters.'))
+      .toBeInTheDocument()
+
+    mockRoutePathname.current = '/on-call/incidents'
+    mockApi.getOnCallIncidents.mockResolvedValue([])
+    renderRoute(IncidentsRoute)
+    expect(await screen.findByText('No incidents found')).toBeInTheDocument()
+    expect(await screen.findByText('No incidents match your current filters. Try adjusting or clearing filters.'))
+      .toBeInTheDocument()
+  })
+
+  it('renders alert detail not-found, acknowledged, and resolved states', async () => {
+    mockRouteParams.current = {alertId: '404'}
+    mockApi.getIncident.mockResolvedValueOnce(null)
+    renderRoute(AlertDetailRoute)
+    expect(await screen.findByText('Alert not found')).toBeInTheDocument()
+
+    mockRouteParams.current = {alertId: '102'}
+    mockApi.getIncident.mockResolvedValueOnce({
+      ...alert,
+      id: 102,
+      status: 'ACKNOWLEDGED',
+      priority: 'P2',
+      acknowledgedBy: 5,
+      acknowledgedByName: 'Ada Lovelace',
+      acknowledgedAt: '2026-06-05T12:05:00.000Z',
+      description: '',
+    })
+    mockApi.getIncidentTimeline.mockResolvedValueOnce([
+      {
+        id: 21,
+        incidentId: 102,
+        eventType: 'ESCALATED',
+        details: {stepNumber: 1},
+        createdAt: '2026-06-05T12:06:00.000Z',
+      },
+      {
+        id: 22,
+        incidentId: 102,
+        eventType: 'REASSIGNED',
+        details: {reason: 'unavailable'},
+        createdAt: '2026-06-05T12:07:00.000Z',
+      },
+      {
+        id: 23,
+        incidentId: 102,
+        eventType: 'UNKNOWN_EVENT',
+        details: {},
+        createdAt: '2026-06-05T12:08:00.000Z',
+      },
+    ])
+    renderRoute(AlertDetailRoute)
+    expect(await screen.findByText('Alert acknowledged')).toBeInTheDocument()
+    expect(await screen.findByText('Acknowledged By')).toBeInTheDocument()
+    expect(await screen.findByText('to step 2')).toBeInTheDocument()
+    expect(await screen.findByText('user marked as unavailable')).toBeInTheDocument()
+    expect(await screen.findByText('UNKNOWN EVENT')).toBeInTheDocument()
+
+    mockRouteParams.current = {alertId: '103'}
+    mockApi.getIncident.mockResolvedValueOnce({
+      ...alert,
+      id: 103,
+      status: 'RESOLVED',
+      priority: 'P4',
+      resolvedBy: 7,
+      resolvedByName: 'Grace Hopper',
+      resolvedAt: '2026-06-05T12:09:00.000Z',
+    })
+    mockApi.getIncidentTimeline.mockResolvedValueOnce([])
+    renderRoute(AlertDetailRoute)
+    expect(await screen.findByText('Resolved By')).toBeInTheDocument()
+    expect(await screen.findByText('Grace Hopper')).toBeInTheDocument()
+  })
+
+  it('renders declared incident not-found and resolved detail states', async () => {
+    mockRouteParams.current = {incidentId: '404'}
+    mockApi.getOnCallIncident.mockResolvedValueOnce(null)
+    renderRoute(IncidentDetailRoute)
+    expect(await screen.findByText('Incident not found')).toBeInTheDocument()
+
+    mockRouteParams.current = {incidentId: '502'}
+    mockApi.getOnCallIncident.mockResolvedValueOnce({
+      ...declaredIncident,
+      id: 502,
+      title: 'Resolved deploy incident',
+      description: '',
+      severity: 'SEV3',
+      status: 'RESOLVED',
+      alerts: [],
+      resolvedBy: 7,
+      resolvedByName: 'Grace Hopper',
+      resolvedAt: '2026-06-05T13:00:00.000Z',
+    })
+    mockApi.getOnCallIncidentTimeline.mockResolvedValueOnce([
+      {
+        id: 31,
+        incidentId: 502,
+        eventType: 'NOTIFICATION_SENT',
+        actorUserName: 'Moneat',
+        actorName: 'Moneat',
+        details: {channel: 'sms'},
+        createdAt: '2026-06-05T12:10:00.000Z',
+      },
+      {
+        id: 32,
+        incidentId: 502,
+        eventType: 'REASSIGNED',
+        actorName: 'Ada Lovelace',
+        details: {toUserName: 'Grace Hopper'},
+        createdAt: '2026-06-05T12:11:00.000Z',
+      },
+      {
+        id: 33,
+        incidentId: 502,
+        eventType: 'NOTE_ADDED',
+        actorName: 'Grace Hopper',
+        details: {note: 'Deployment rolled back'},
+        createdAt: '2026-06-05T12:12:00.000Z',
+      },
+      {
+        id: 34,
+        incidentId: 502,
+        eventType: 'CUSTOM_EVENT',
+        source: 'alert',
+        alertTitle: 'Deploy alert',
+        details: {},
+        createdAt: '2026-06-05T12:13:00.000Z',
+      },
+    ])
+    renderRoute(IncidentDetailRoute)
+    expect(await screen.findByText('Resolved deploy incident')).toBeInTheDocument()
+    expect((await screen.findAllByText('SEV3')).length).toBeGreaterThan(0)
+    expect(await screen.findByText('Resolved By')).toBeInTheDocument()
+    expect(await screen.findByText('to Moneat via sms')).toBeInTheDocument()
+    expect(await screen.findByText('to Grace Hopper')).toBeInTheDocument()
+    expect(await screen.findByText('"Deployment rolled back"')).toBeInTheDocument()
+    expect(await screen.findByText('from Deploy alert')).toBeInTheDocument()
   })
 })

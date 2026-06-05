@@ -147,10 +147,10 @@ function onCallSummarySubtitle(scheduleCount: number): string {
 function BusinessHoursBadge({
   businessHours,
   isWithinBusinessHours,
-}: {
+}: Readonly<{
   businessHours?: BusinessHours
   isWithinBusinessHours: boolean | null
-}) {
+}>) {
   if (!businessHours?.enabled || isWithinBusinessHours === null) return null
 
   return (
@@ -161,7 +161,7 @@ function BusinessHoursBadge({
   )
 }
 
-function CurrentUserScheduleBadges({schedules}: { schedules: OnCallSchedule[] }) {
+function CurrentUserScheduleBadges({schedules}: Readonly<{ schedules: OnCallSchedule[] }>) {
   if (schedules.length === 0) return null
 
   return (
@@ -184,12 +184,12 @@ function PriorityAlertList({
   limit,
   emptyMessage,
   compact = false,
-}: {
+}: Readonly<{
   alerts: Incident[]
   limit: number
   emptyMessage: string
   compact?: boolean
-}) {
+}>) {
   if (alerts.length === 0) {
     return <p className="text-sm text-muted-foreground pl-5">{emptyMessage}</p>
   }
@@ -233,12 +233,12 @@ function AlertSummarySection({
   icon: Icon,
   iconClassName,
   children,
-}: {
+}: Readonly<{
   title: string
   icon: ComponentType<{ className?: string }>
   iconClassName: string
   children: ReactNode
-}) {
+}>) {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
@@ -256,13 +256,13 @@ function YourAlertSummaryCard({
   currentUserOnCallSchedules,
   pageableAlerts,
   lowPriorityAlerts,
-}: {
+}: Readonly<{
   businessHours?: BusinessHours
   isWithinBusinessHours: boolean | null
   currentUserOnCallSchedules: OnCallSchedule[]
   pageableAlerts: Incident[]
   lowPriorityAlerts: Incident[]
-}) {
+}>) {
   return (
     <SectionCard
       title="Your alert summary"
@@ -290,10 +290,10 @@ function YourAlertSummaryCard({
 function OnCallSchedulesCard({
   schedules,
   schedulesLoading,
-}: {
+}: Readonly<{
   schedules?: OnCallSchedule[]
   schedulesLoading: boolean
-}) {
+}>) {
   let content: ReactNode
 
   if (schedulesLoading) {
@@ -343,7 +343,7 @@ function OnCallSchedulesCard({
   )
 }
 
-function OnCallScheduleList({schedules}: { schedules: OnCallSchedule[] }) {
+function OnCallScheduleList({schedules}: Readonly<{ schedules: OnCallSchedule[] }>) {
   return (
     <div className="space-y-2">
       {schedules.map((schedule, idx) => (
@@ -375,7 +375,7 @@ function OnCallScheduleList({schedules}: { schedules: OnCallSchedule[] }) {
   )
 }
 
-function CurrentOnCallAssignee({schedule}: { schedule: OnCallSchedule }) {
+function CurrentOnCallAssignee({schedule}: Readonly<{ schedule: OnCallSchedule }>) {
   if (!schedule.currentOnCall) {
     return (
       <Badge variant="neutral" size="sm">
@@ -405,7 +405,7 @@ function CurrentOnCallAssignee({schedule}: { schedule: OnCallSchedule }) {
   )
 }
 
-function ActiveAlertsCard({activeAlerts}: { activeAlerts: Incident[] }) {
+function ActiveAlertsCard({activeAlerts}: Readonly<{ activeAlerts: Incident[] }>) {
   if (activeAlerts.length === 0) return null
 
   return (
@@ -432,7 +432,7 @@ function ActiveAlertsCard({activeAlerts}: { activeAlerts: Incident[] }) {
   )
 }
 
-function ActiveAlertRow({alert}: { alert: Incident }) {
+function ActiveAlertRow({alert}: Readonly<{ alert: Incident }>) {
   const statusCfg = getStatusConfig(alert.status)
   const StatusIcon = statusCfg.icon
 
@@ -472,14 +472,14 @@ function OnCallStatsGrid({
   scheduleCount,
   policiesLoading,
   policyCount,
-}: {
+}: Readonly<{
   alertsLoading: boolean
   activeAlertCount: number
   schedulesLoading: boolean
   scheduleCount: number
   policiesLoading: boolean
   policyCount: number
-}) {
+}>) {
   return (
     <div className="grid gap-4 md:grid-cols-3">
       <StatCard

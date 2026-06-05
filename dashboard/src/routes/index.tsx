@@ -261,7 +261,7 @@ function DashboardSection({
   headerRight,
   iconClassName,
   iconBgClassName,
-}: {
+}: Readonly<{
   title: string
   icon: ComponentType<{ className?: string }>
   to: string
@@ -269,7 +269,7 @@ function DashboardSection({
   headerRight?: ReactNode
   iconClassName?: string
   iconBgClassName?: string
-}) {
+}>) {
   return (
     <Card className="overflow-hidden border-border/60">
       <CardHeader className="px-5 py-3.5 flex flex-row items-center justify-between space-y-0 border-b border-border/40">
@@ -295,7 +295,7 @@ function DashboardSection({
   )
 }
 
-function EmptySection({message}: { message: string }) {
+function EmptySection({message}: Readonly<{ message: string }>) {
   return (
     <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
       {message}
@@ -371,10 +371,10 @@ function getUtilizationFillColor(percent: number | null): string {
 function UtilizationBar({
   label,
   value,
-}: {
+}: Readonly<{
   label: string
   value?: number | null
-}) {
+}>) {
   const percent = normalizePercent(value)
 
   return (
@@ -395,7 +395,7 @@ function UtilizationBar({
   )
 }
 
-type DashboardStatsOverviewProps = {
+type DashboardStatsOverviewProps = Readonly<{
   isLoading: boolean
   stats?: ProjectStats | null
   unresolvedIssueCount: number
@@ -406,7 +406,7 @@ type DashboardStatsOverviewProps = {
   hostsUp: number
   hostsDown: number
   hostCount: number
-}
+}>
 
 function DashboardStatsOverview({
   isLoading,
@@ -480,10 +480,10 @@ function DashboardStatsOverview({
 function DashboardEventsOverview({
   isLoading,
   stats,
-}: {
+}: Readonly<{
   isLoading: boolean
   stats?: ProjectStats | null
-}) {
+}>) {
   if (isLoading) {
     return (
       <div className="mb-5 h-[100px]">
@@ -522,7 +522,7 @@ function renderOnCallHeader(triggeredAlerts: Incident[], activeAlerts: Incident[
   )
 }
 
-function OnCallCurrentAssignments({schedules}: { schedules: OnCallSchedule[] }) {
+function OnCallCurrentAssignments({schedules}: Readonly<{ schedules: OnCallSchedule[] }>) {
   const currentSchedules = schedules.filter(schedule => schedule.currentOnCall)
   if (currentSchedules.length === 0) return null
 
@@ -545,10 +545,10 @@ function OnCallCurrentAssignments({schedules}: { schedules: OnCallSchedule[] }) 
 function OnCallRecentAlertsContent({
   isLoading,
   alerts,
-}: {
+}: Readonly<{
   isLoading: boolean
   alerts: Incident[]
-}) {
+}>) {
   if (isLoading) return <SkeletonSection />
   if (alerts.length === 0) return <EmptySection message="No alerts" />
 
@@ -583,14 +583,14 @@ function OnCallDashboardSection({
   recentAlerts,
   isLoading,
   schedules,
-}: {
+}: Readonly<{
   hasOnCall: boolean
   triggeredAlerts: Incident[]
   activeAlerts: Incident[]
   recentAlerts: Incident[]
   isLoading: boolean
   schedules: OnCallSchedule[]
-}) {
+}>) {
   if (!hasOnCall) return null
 
   return (
@@ -651,7 +651,7 @@ function renderIssuesHeader(unresolvedCount: number, issueLevelCounts: Record<st
   )
 }
 
-function IssueOverviewRow({issue}: { issue: Issue }) {
+function IssueOverviewRow({issue}: Readonly<{ issue: Issue }>) {
   const levelAccent = levelBorderClass(issue.level)
   const platformInfo = getIssuePlatformInfo(issue.platform)
 
@@ -691,11 +691,11 @@ function IssuesDashboardSection({
   isLoading,
   unresolvedIssues,
   issueLevelCounts,
-}: {
+}: Readonly<{
   isLoading: boolean
   unresolvedIssues: Issue[]
   issueLevelCounts: Record<string, number>
-}) {
+}>) {
   let content: ReactNode
 
   if (isLoading) {
@@ -758,11 +758,11 @@ function UptimeMonitorOverviewRow({
   monitor,
   heartbeats,
   nowMs,
-}: {
+}: Readonly<{
   monitor: UptimeMonitor
   heartbeats: UptimeHeartbeat[]
   nowMs: number
-}) {
+}>) {
   const latestHeartbeat = getLatestHeartbeat(heartbeats)
   const isHeartbeatFresh = isRecentHeartbeat(monitor.lastCheckAt, monitor.intervalSeconds, nowMs)
   const sampledSuccess = sampledSuccessPercent(heartbeats)
@@ -821,7 +821,7 @@ function UptimeDashboardSection({
   nowMs,
   uptimeUp,
   uptimeDown,
-}: {
+}: Readonly<{
   isLoading: boolean
   uptimeMonitors: UptimeMonitor[]
   dashboardUptimeMonitors: UptimeMonitor[]
@@ -829,7 +829,7 @@ function UptimeDashboardSection({
   nowMs: number
   uptimeUp: number
   uptimeDown: number
-}) {
+}>) {
   let content: ReactNode
 
   if (isLoading) {
@@ -894,7 +894,7 @@ function renderInfrastructureHeader(
   )
 }
 
-function InfrastructureHostOverviewRow({host}: { host: MonitorHostResponse }) {
+function InfrastructureHostOverviewRow({host}: Readonly<{ host: MonitorHostResponse }>) {
   return (
     <Link
       key={host.id}
@@ -929,12 +929,12 @@ function InfrastructureDashboardSection({
   monitorHosts,
   hostsUp,
   hostsDown,
-}: {
+}: Readonly<{
   isLoading: boolean
   monitorHosts: MonitorHostResponse[]
   hostsUp: number
   hostsDown: number
-}) {
+}>) {
   let content: ReactNode
 
   if (isLoading) {
@@ -983,25 +983,23 @@ function renderTracesHeader(perfStats?: PerformanceStats | null): ReactNode {
 function TracesDashboardSection({
   isLoading,
   perfStats,
-}: {
+}: Readonly<{
   isLoading: boolean
   perfStats?: PerformanceStats | null
-}) {
+}>) {
   let content: ReactNode
 
   if (isLoading) {
     content = <SkeletonSection />
-  } else if (!perfStats) {
-    content = <EmptySection message="No performance data" />
-  } else {
+  } else if (perfStats) {
     content = (
       <div>
         {perfStats.slowestTransactions.length > 0 && (
           <div>
             <p className="text-[11px] font-medium text-muted-foreground mb-1.5 px-1">Slowest Transactions</p>
             <div className="space-y-0.5">
-              {perfStats.slowestTransactions.slice(0, 4).map((tx, i) => (
-                <div key={i} className="flex items-center gap-2 py-1.5 px-2.5 rounded-md bg-muted/20">
+              {perfStats.slowestTransactions.slice(0, 4).map(tx => (
+                <div key={`${tx.name}-${tx.duration}`} className="flex items-center gap-2 py-1.5 px-2.5 rounded-md bg-muted/20">
                   <Timer className="h-3 w-3 text-muted-foreground shrink-0" />
                   <span className="text-sm truncate flex-1">{tx.name}</span>
                   <span className="text-sm font-medium tabular-nums shrink-0">
@@ -1014,6 +1012,8 @@ function TracesDashboardSection({
         )}
       </div>
     )
+  } else {
+    content = <EmptySection message="No performance data" />
   }
 
   return (
@@ -1065,11 +1065,11 @@ function StatusPageOverviewRow({
   page,
   detail,
   uptimeMonitorStatusById,
-}: {
+}: Readonly<{
   page: StatusPage
   detail?: StatusPageDetail
   uptimeMonitorStatusById: Map<string, string>
-}) {
+}>) {
   const monitorSummary = detail
     ? summarizeStatusPageMonitors(
       detail.monitors.map((monitor) => monitor.monitorId),
@@ -1117,12 +1117,12 @@ function StatusPagesDashboardSection({
   statusPages,
   statusPageDetailsById,
   uptimeMonitorStatusById,
-}: {
+}: Readonly<{
   isLoading: boolean
   statusPages: StatusPage[]
   statusPageDetailsById: Record<string, StatusPageDetail>
   uptimeMonitorStatusById: Map<string, string>
-}) {
+}>) {
   let content: ReactNode
 
   if (isLoading) {
@@ -1179,11 +1179,11 @@ function ReleasesDashboardSection({
   releases,
   recentReleases,
   content,
-}: {
+}: Readonly<{
   releases: Release[]
   recentReleases: Release[]
   content: ReactNode
-}) {
+}>) {
   return (
     <DashboardSection
       title="Releases"
@@ -1225,11 +1225,11 @@ function ReplaysDashboardSection({
   isLoading,
   replays,
   replaysWithErrors,
-}: {
+}: Readonly<{
   isLoading: boolean
   replays: Replay[]
   replaysWithErrors: number
-}) {
+}>) {
   let content: ReactNode
 
   if (isLoading) {
@@ -1297,12 +1297,12 @@ function FeedbackDashboardSection({
   feedback,
   recentFeedback,
   newFeedback,
-}: {
+}: Readonly<{
   isLoading: boolean
   feedback: Feedback[]
   recentFeedback: Feedback[]
   newFeedback: number
-}) {
+}>) {
   let content: ReactNode
 
   if (isLoading) {
