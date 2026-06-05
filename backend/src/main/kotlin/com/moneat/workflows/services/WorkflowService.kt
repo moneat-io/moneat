@@ -1318,7 +1318,7 @@ class WorkflowService(
         episode: AlertEpisodeContext
     ): Map<String, JsonElement> {
         val baseScope = mapOf(
-            INCIDENT_ID_REFERENCE to deduplicationKey,
+            INCIDENT_ID_REFERENCE to episode.id.toString(),
             INCIDENT_TITLE_REFERENCE to title,
             INCIDENT_STATUS_REFERENCE to status,
             INCIDENT_SEVERITY_REFERENCE to severity,

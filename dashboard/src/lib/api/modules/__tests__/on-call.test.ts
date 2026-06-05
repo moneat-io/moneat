@@ -513,14 +513,16 @@ describe('onCallMethods', () => {
   })
 
   describe('resolveOnCallIncident', () => {
-    it('sends POST to resolve on-call incident', async () => {
+    it('sends POST with optional note to resolve on-call incident', async () => {
       const mock = { id: 5, status: 'RESOLVED' }
       server.use(
-        http.post(`${API_BASE}/on-call/incidents/5/resolve`, () =>
-          HttpResponse.json(mock)
-        )
+        http.post(`${API_BASE}/on-call/incidents/5/resolve`, async ({ request }) => {
+          const body = await request.json() as Record<string, unknown>
+          expect(body.note).toBe('Restarted workers')
+          return HttpResponse.json(mock)
+        })
       )
-      const result = await api.resolveOnCallIncident(5)
+      const result = await api.resolveOnCallIncident(5, 'Restarted workers')
       expect(result).toEqual(mock)
     })
   })

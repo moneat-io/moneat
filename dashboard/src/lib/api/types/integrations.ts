@@ -14,6 +14,10 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import type {AlertPriority} from './dashboards'
+
+type RoutingAlertPriority = Exclude<AlertPriority, null>
+
 export interface OrganizationIntegration {
   id: number
   integrationType: string
@@ -88,20 +92,20 @@ export interface IncidentRoutingRule {
   id: number
   alertSource: string
   alertType?: string | null
-  alertPriority: string
+  alertPriority: RoutingAlertPriority
 }
 
 export interface UpsertRoutingRuleRequest {
   alertSource: string
   alertType?: string | null
-  alertPriority: string
+  alertPriority: RoutingAlertPriority
 }
 
 export interface IncidentEventLogEntry {
   id: number
   alertSource: string
   deduplicationKey: string
-  alertPriority: string
+  alertPriority: RoutingAlertPriority
   incidentStatus: string
   title: string
   description?: string | null

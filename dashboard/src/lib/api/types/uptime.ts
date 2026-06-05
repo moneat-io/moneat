@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import type {AlertPriority} from './dashboards'
+
 export interface UptimeMonitor {
   id: string
   organizationId: number
@@ -52,7 +54,7 @@ export interface UptimeMonitor {
   lastStatusChangeAt?: number
   consecutiveFailures: number
   pushToken?: string
-  alertPriority?: string | null
+  alertPriority?: AlertPriority
   uptime24h?: number
   uptime7d?: number
   uptime30d?: number
@@ -92,7 +94,7 @@ export interface CreateUptimeMonitorRequest {
   timeoutSeconds?: number
   retries?: number
   retryIntervalSeconds?: number
-  alertPriority?: string
+  alertPriority?: Exclude<AlertPriority, null>
 }
 
 export interface UpdateUptimeMonitorRequest

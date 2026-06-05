@@ -209,7 +209,7 @@ class OnCallModule :
         incidentId: Int,
         userId: Int,
     ): IncidentInfo? {
-        val incident = onCallAlertService.getAlert(incidentId, userId) ?: return null
+        val incident = onCallIncidentService.getIncident(incidentId) ?: return null
         return IncidentInfo(
             id = incident.id,
             organizationId = incident.organizationId,
@@ -221,5 +221,32 @@ class OnCallModule :
     override fun acknowledgeIncident(
         incidentId: Int,
         userId: Int,
-    ): Boolean = onCallAlertService.acknowledge(incidentId, userId)
+    ): Boolean {
+        val incident = onCallIncidentService.getIncident(incidentId) ?: return false
+        return incident.alerts.fold(false) { acknowledged, alert ->
+            if (alert.status == "TRIGGERED") {
+                onCallAlertService.acknowledge(alert.id, userId) || acknowledged
+            } else {
+                acknowledged
+            }
+        }
+    }
+
+    override fun getAlert(
+        alertId: Int,
+        userId: Int,
+    ): IncidentInfo? {
+        val alert = onCallAlertService.getAlert(alertId, userId) ?: return null
+        return IncidentInfo(
+            id = alert.id,
+            organizationId = alert.organizationId,
+            title = alert.title,
+            status = alert.status,
+        )
+    }
+
+    override fun acknowledgeAlert(
+        alertId: Int,
+        userId: Int,
+    ): Boolean = onCallAlertService.acknowledge(alertId, userId)
 }

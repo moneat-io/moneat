@@ -37,13 +37,20 @@ export const Route = createFileRoute('/on-call/incidents')({
   component: DeclaredIncidents,
 })
 
-const DEFAULT_DECLARED_INCIDENT_STATUS_FILTER = 'OPEN'
+type IncidentSeverity = 'SEV-0' | 'SEV-1' | 'SEV-2' | 'SEV-3' | 'SEV-4'
+type IncidentStatus = 'OPEN' | 'RESOLVED'
+type IncidentStatusFilter = IncidentStatus | 'all'
+type IncidentSeverityFilter = IncidentSeverity | 'all'
+
+const DEFAULT_DECLARED_INCIDENT_STATUS_FILTER: IncidentStatus = 'OPEN'
 
 // Incident severity mapped onto the shared status language.
-function severityTone(severity: string): StatusTone {
-  if (severity.startsWith('SEV-0') || severity.startsWith('SEV-1')) return 'danger'
-  if (severity.startsWith('SEV-2')) return 'warning'
-  if (severity.startsWith('SEV-3')) return 'info'
+function severityTone(severity: IncidentSeverity | string): StatusTone {
+  const severityMatch = /^SEV-?([0-9])/i.exec(severity)
+  const severityLevel = severityMatch?.[1]
+  if (severityLevel === '0' || severityLevel === '1') return 'danger'
+  if (severityLevel === '2') return 'warning'
+  if (severityLevel === '3') return 'info'
   return 'neutral'
 }
 
@@ -79,8 +86,9 @@ function timeAgo(date: string) {
 
 function DeclaredIncidents() {
   const pathname = useRouterState({select: state => state.location.pathname})
-  const [statusFilter, setStatusFilter] = useState<string>(DEFAULT_DECLARED_INCIDENT_STATUS_FILTER)
-  const [severityFilter, setSeverityFilter] = useState<string>('all')
+  const [statusFilter, setStatusFilter] =
+    useState<IncidentStatusFilter>(DEFAULT_DECLARED_INCIDENT_STATUS_FILTER)
+  const [severityFilter, setSeverityFilter] = useState<IncidentSeverityFilter>('all')
   const isDetailRoute = pathname.startsWith('/on-call/incidents/')
 
   const {data: incidents, isLoading} = useQuery({
@@ -147,7 +155,7 @@ function DeclaredIncidents() {
           <span>Filter:</span>
         </div>
         <div className="w-44">
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as IncidentStatusFilter)}>
             <SelectTrigger className="h-8">
               <SelectValue />
             </SelectTrigger>
@@ -159,7 +167,7 @@ function DeclaredIncidents() {
           </Select>
         </div>
         <div className="w-44">
-          <Select value={severityFilter} onValueChange={setSeverityFilter}>
+          <Select value={severityFilter} onValueChange={(value) => setSeverityFilter(value as IncidentSeverityFilter)}>
             <SelectTrigger className="h-8">
               <SelectValue />
             </SelectTrigger>

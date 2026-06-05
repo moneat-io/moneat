@@ -40,8 +40,12 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
 class UptimeMonitorRepositoryImpl : UptimeMonitorRepository {
-    private fun canonicalAlertPriority(alertPriority: String?): String? =
-        alertPriority?.let { AlertPriority.fromString(it)?.wire }
+    private fun canonicalAlertPriority(alertPriority: String?): String? {
+        if (alertPriority == null) return null
+        return requireNotNull(AlertPriority.fromString(alertPriority)?.wire) {
+            "Parameter alertPriority/incidentSeverity must be P0 through P5"
+        }
+    }
 
     private fun CreateUptimeMonitorRequest.resolvedAlertPriority(): String? =
         canonicalAlertPriority(alertPriority ?: legacyIncidentSeverity)

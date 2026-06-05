@@ -207,6 +207,9 @@ private fun Route.registerCreateMonitorRoute(uptimeService: UptimeService) {
             val monitor =
                 try {
                     uptimeService.createMonitor(context.organizationId, request)
+                } catch (e: IllegalArgumentException) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
+                    return@post
                 } catch (e: IllegalStateException) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
                     return@post
@@ -248,7 +251,13 @@ private fun Route.registerUpdateMonitorRoute(uptimeService: UptimeService) {
                 return@runUptimeRoute
             }
 
-            val monitor = uptimeService.updateMonitor(monitorId, context.organizationId, request)
+            val monitor =
+                try {
+                    uptimeService.updateMonitor(monitorId, context.organizationId, request)
+                } catch (e: IllegalArgumentException) {
+                    call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
+                    return@runUptimeRoute
+                }
             if (monitor == null) {
                 call.respond(HttpStatusCode.NotFound, ErrorResponse(MONITOR_NOT_FOUND_MESSAGE))
                 return@runUptimeRoute

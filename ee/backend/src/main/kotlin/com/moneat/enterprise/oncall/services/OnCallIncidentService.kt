@@ -16,6 +16,7 @@ import com.moneat.enterprise.oncall.models.OnCallTimelineEvent
 import com.moneat.shared.models.Users
 import com.moneat.utils.suspendRunCatching
 import com.moneat.workflows.services.WorkflowService
+import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
@@ -147,14 +148,17 @@ class OnCallIncidentService(
         incidentId: Int,
         alertId: Int,
     ) = transaction {
-        // Check existence
-        OnCallIncidents.selectAll().where { OnCallIncidents.id eq incidentId }.singleOrNull()
+        val incident =
+            OnCallIncidents.selectAll().where { OnCallIncidents.id eq incidentId }.singleOrNull()
             ?: throw IllegalArgumentException("Incident not found")
 
-        // Check alert exists
         val alert =
             OnCallAlerts.selectAll().where { OnCallAlerts.id eq alertId }.singleOrNull()
                 ?: throw IllegalArgumentException(ALERT_NOT_FOUND_MESSAGE)
+
+        require(incident[OnCallIncidents.organizationId] == alert[OnCallAlerts.organizationId]) {
+            ALERT_NOT_FOUND_MESSAGE
+        }
 
         // Insert if not exists
         val exists =
@@ -180,11 +184,11 @@ class OnCallIncidentService(
                 it[OnCallIncidentTimeline.incidentId] = incidentId
                 it[OnCallIncidentTimeline.eventType] = "ALERT_LINKED"
                 it[OnCallIncidentTimeline.actorUserId] = null
-                it[OnCallIncidentTimeline.details] =
-                    mapOf(
-                        "alertId" to kotlinx.serialization.json.JsonPrimitive(alertId),
-                        "alertTitle" to kotlinx.serialization.json.JsonPrimitive(alert[OnCallAlerts.title]),
-                    )
+                    it[OnCallIncidentTimeline.details] =
+                        mapOf(
+                            "alertId" to JsonPrimitive(alertId),
+                            "alertTitle" to JsonPrimitive(alert[OnCallAlerts.title]),
+                        )
                 it[OnCallIncidentTimeline.createdAt] = Clock.System.now()
             }
         }
@@ -193,6 +197,7 @@ class OnCallIncidentService(
     suspend fun resolveIncident(
         incidentId: Int,
         userId: Int,
+        resolutionNote: String? = null,
     ): OnCallIncident? {
         val result =
             transaction {
@@ -212,6 +217,12 @@ class OnCallIncidentService(
                 }
 
                 val now = Clock.System.now()
+                val resolutionDetails =
+                    resolutionNote
+                        ?.trim()
+                        ?.takeIf { it.isNotEmpty() }
+                        ?.let { note -> mapOf("note" to JsonPrimitive(note)) }
+                        ?: emptyMap()
 
                 val updated =
                     OnCallIncidents.update({
@@ -232,7 +243,7 @@ class OnCallIncidentService(
                     it[OnCallIncidentTimeline.incidentId] = incidentId
                     it[OnCallIncidentTimeline.eventType] = "RESOLVED"
                     it[OnCallIncidentTimeline.actorUserId] = userId
-                    it[OnCallIncidentTimeline.details] = emptyMap()
+                    it[OnCallIncidentTimeline.details] = resolutionDetails
                     it[OnCallIncidentTimeline.createdAt] = now
                 }
 
@@ -341,7 +352,7 @@ class OnCallIncidentService(
             it[OnCallIncidentTimeline.actorUserId] = userId
             it[OnCallIncidentTimeline.details] =
                 mapOf(
-                    "note" to kotlinx.serialization.json.JsonPrimitive(note),
+                    "note" to JsonPrimitive(note),
                 )
             it[OnCallIncidentTimeline.createdAt] = now
         }

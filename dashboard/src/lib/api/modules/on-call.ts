@@ -232,9 +232,10 @@ export function onCallMethods(core: ApiClientCore) {
     getOnCallIncident: (id: number) =>
       core.request<OnCallIncidentDetail>(`${base}/on-call/incidents/${id}`),
 
-    resolveOnCallIncident: (id: number) =>
+    resolveOnCallIncident: (id: number, note?: string) =>
       core.request<OnCallIncident>(`${base}/on-call/incidents/${id}/resolve`, {
         method: 'POST',
+        body: JSON.stringify({ note }),
       }),
 
     getOnCallIncidentTimeline: (id: number) =>

@@ -566,7 +566,7 @@ object WorkflowCatalog {
                 WorkflowStepParamDefinition("escalation_policy_id", "Escalation policy ID", "Number"),
                 WorkflowStepParamDefinition("title", "Title", "String"),
                 WorkflowStepParamDefinition("description", "Description", "Text", required = false),
-                WorkflowStepParamDefinition("alert_priority", "Alert priority", "String", required = false),
+                WorkflowStepParamDefinition("alert_priority", "Alert priority", "AlertPriority", required = false),
                 WorkflowStepParamDefinition("deduplication_key", DEDUPLICATION_KEY_LABEL, "String", required = false)
             )
         ),
@@ -577,7 +577,7 @@ object WorkflowCatalog {
             params = listOf(
                 WorkflowStepParamDefinition("title", "Title", "String"),
                 WorkflowStepParamDefinition("description", "Description", "Text", required = false),
-                WorkflowStepParamDefinition("incident_severity", INCIDENT_SEVERITY_LABEL, "String"),
+                WorkflowStepParamDefinition("incident_severity", INCIDENT_SEVERITY_LABEL, "IncidentSeverity"),
                 WorkflowStepParamDefinition("alert_id", "Alert ID", "Number", required = false)
             )
         ),

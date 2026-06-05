@@ -1057,7 +1057,7 @@ fun Route.integrationCallbackRoutes() {
                                         }
 
                                         // Verify user's organization matches alert's organization
-                                        val incident = bridge.getIncident(incidentId, userId)
+                                        val alert = bridge.getAlert(incidentId, userId)
                                         val userOrgId =
                                             transaction {
                                                 Memberships
@@ -1067,9 +1067,9 @@ fun Route.integrationCallbackRoutes() {
                                                     ?.get(Memberships.organization_id)
                                             }
 
-                                        if (incident == null ||
+                                        if (alert == null ||
                                             userOrgId == null ||
-                                            incident.organizationId != userOrgId
+                                            alert.organizationId != userOrgId
                                         ) {
                                             call.respond(
                                                 mapOf(
@@ -1080,7 +1080,7 @@ fun Route.integrationCallbackRoutes() {
                                             return@post
                                         }
 
-                                        val acknowledged = bridge.acknowledgeIncident(incidentId, userId)
+                                        val acknowledged = bridge.acknowledgeAlert(incidentId, userId)
 
                                         if (acknowledged) {
                                             // Send success response

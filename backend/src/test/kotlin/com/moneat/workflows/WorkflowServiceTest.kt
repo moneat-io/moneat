@@ -1297,8 +1297,16 @@ class WorkflowServiceTest {
 
             service.publishIncidentCreated(alertEvent())
             service.publishIncidentCreated(alertEvent())
+            val episodeId =
+                transaction {
+                    AlertEpisodes
+                        .selectAll()
+                        .where { AlertEpisodes.deduplicationKey eq "host-1" }
+                        .single()[AlertEpisodes.id]
+                        .value
+                }
 
-            assertEquals(listOf("incident.id=host-1"), runIdentities(createdWorkflow.id))
+            assertEquals(listOf("incident.id=$episodeId"), runIdentities(createdWorkflow.id))
             assertEquals(emptyList(), runIdentities(resolvedWorkflow.id))
 
             service.publishAlertTriggered(alertEvent())
@@ -1310,7 +1318,7 @@ class WorkflowServiceTest {
             )
 
             assertEquals(
-                listOf("incident.id=host-1|incident.status=resolved"),
+                listOf("incident.id=$episodeId|incident.status=resolved"),
                 runIdentities(resolvedWorkflow.id)
             )
         }

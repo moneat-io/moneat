@@ -123,10 +123,15 @@ function IncidentDetailPage() {
   const [declareTitle, setDeclareTitle] = useState('')
   const [declareDesc, setDeclareDesc] = useState('')
   const [declareSeverity, setDeclareSeverity] = useState('SEV-2')
+  const parsedAlertId = Number(alertId)
+  const hasValidAlertId = Number.isInteger(parsedAlertId) && parsedAlertId > 0
+  const alertQueryKey = ['incident', parsedAlertId] as const
+  const alertTimelineQueryKey = ['incident-timeline', parsedAlertId] as const
 
   const {data: incident, isLoading} = useQuery({
-    queryKey: ['incident', alertId],
-    queryFn: () => api.getIncident(Number(alertId)),
+    queryKey: alertQueryKey,
+    queryFn: () => api.getIncident(parsedAlertId),
+    enabled: hasValidAlertId,
   })
 
   // Initialize declare form when dialog opens
@@ -142,12 +147,18 @@ function IncidentDetailPage() {
   }, [declareOpen, incident])
 
   const declareMutation = useMutation({
-    mutationFn: () => api.declareIncident(Number(alertId), {
-      title: declareTitle,
-      description: declareDesc,
-      severity: declareSeverity
-    }),
-    onSuccess: () => {
+    mutationFn: () =>
+      api.declareIncident(parsedAlertId, {
+        title: declareTitle,
+        description: declareDesc,
+        severity: declareSeverity,
+      }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({queryKey: alertQueryKey}),
+        queryClient.invalidateQueries({queryKey: alertTimelineQueryKey}),
+        queryClient.invalidateQueries({queryKey: ['alerts']}),
+      ])
       setDeclareOpen(false)
       toast({title: 'Incident Declared', description: 'New incident created successfully.'})
     },
@@ -157,23 +168,24 @@ function IncidentDetailPage() {
   })
 
   const {data: timeline = [], isLoading: timelineLoading} = useQuery({
-    queryKey: ['incident-timeline', alertId],
-    queryFn: () => api.getIncidentTimeline(Number(alertId)),
+    queryKey: alertTimelineQueryKey,
+    queryFn: () => api.getIncidentTimeline(parsedAlertId),
+    enabled: hasValidAlertId,
   })
 
   // Mark as viewed (deduplicated on backend)
   const incidentLoaded = !!incident
   useEffect(() => {
-    if (incidentLoaded) {
-      api.viewIncident(Number(alertId)).catch(() => {})
+    if (hasValidAlertId && incidentLoaded) {
+      api.viewIncident(parsedAlertId).catch(() => {})
     }
-  }, [incidentLoaded, alertId])
+  }, [hasValidAlertId, incidentLoaded, parsedAlertId])
 
   const acknowledgeMutation = useMutation({
-    mutationFn: () => api.acknowledgeIncident(Number(alertId)),
+    mutationFn: () => api.acknowledgeIncident(parsedAlertId),
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['incident', alertId]})
-      queryClient.invalidateQueries({queryKey: ['incident-timeline', alertId]})
+      queryClient.invalidateQueries({queryKey: alertQueryKey})
+      queryClient.invalidateQueries({queryKey: alertTimelineQueryKey})
       queryClient.invalidateQueries({queryKey: ['alerts']})
       toast({
         title: 'Alert Acknowledged',
@@ -186,10 +198,10 @@ function IncidentDetailPage() {
   })
 
   const resolveMutation = useMutation({
-    mutationFn: () => api.resolveIncident(Number(alertId)),
+    mutationFn: () => api.resolveIncident(parsedAlertId),
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['incident', alertId]})
-      queryClient.invalidateQueries({queryKey: ['incident-timeline', alertId]})
+      queryClient.invalidateQueries({queryKey: alertQueryKey})
+      queryClient.invalidateQueries({queryKey: alertTimelineQueryKey})
       queryClient.invalidateQueries({queryKey: ['alerts']})
       toast({
         title: 'Alert Resolved',
@@ -202,10 +214,10 @@ function IncidentDetailPage() {
   })
 
   const markUnavailableMutation = useMutation({
-    mutationFn: () => api.markUnavailable(Number(alertId)),
+    mutationFn: () => api.markUnavailable(parsedAlertId),
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['incident', alertId]})
-      queryClient.invalidateQueries({queryKey: ['incident-timeline', alertId]})
+      queryClient.invalidateQueries({queryKey: alertQueryKey})
+      queryClient.invalidateQueries({queryKey: alertTimelineQueryKey})
       queryClient.invalidateQueries({queryKey: ['alerts']})
       toast({
         title: 'Marked Unavailable',
@@ -218,10 +230,10 @@ function IncidentDetailPage() {
   })
 
   const addNoteMutation = useMutation({
-    mutationFn: (note: string) => api.addIncidentNote(Number(alertId), note),
+    mutationFn: (note: string) => api.addIncidentNote(parsedAlertId, note),
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['incident', alertId]})
-      queryClient.invalidateQueries({queryKey: ['incident-timeline', alertId]})
+      queryClient.invalidateQueries({queryKey: alertQueryKey})
+      queryClient.invalidateQueries({queryKey: alertTimelineQueryKey})
       setNote('')
       toast({title: 'Note Added', description: 'Your note has been added to the alert timeline.'})
     },
@@ -229,6 +241,16 @@ function IncidentDetailPage() {
       toast({title: 'Error', description: error.message, variant: 'destructive'})
     },
   })
+
+  if (!hasValidAlertId) {
+    return (
+      <EmptyState
+        icon={AlertTriangle}
+        title="Invalid alert ID"
+        description="The alert identifier in the URL is invalid."
+      />
+    )
+  }
 
   if (isLoading || timelineLoading) {
     return (

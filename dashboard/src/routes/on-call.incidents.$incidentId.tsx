@@ -33,7 +33,22 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import {useToast} from '@/hooks/useToast'
-import {AlertTriangle, CheckCircle2, Clock, ArrowLeft, Zap, User, Calendar, CheckCircle, Bell, UserPlus, MessageSquare, Eye, Send, Link as LinkIcon} from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Bell,
+  Calendar,
+  CheckCircle,
+  CheckCircle2,
+  Clock,
+  Eye,
+  Link as LinkIcon,
+  MessageSquare,
+  Send,
+  User,
+  UserPlus,
+  Zap,
+} from 'lucide-react'
 import {useState} from 'react'
 import {cn} from '@/lib/utils'
 
@@ -65,9 +80,11 @@ export const Route = createFileRoute('/on-call/incidents/$incidentId')({
 
 // Incident severity mapped onto the shared status language.
 function severityBadgeVariant(severity: string): BadgeProps['variant'] {
-  if (severity.startsWith('SEV-0') || severity.startsWith('SEV-1')) return 'danger'
-  if (severity.startsWith('SEV-2')) return 'warning'
-  if (severity.startsWith('SEV-3')) return 'info'
+  const severityMatch = /^SEV-?([0-9])/i.exec(severity)
+  const severityLevel = severityMatch?.[1]
+  if (severityLevel === '0' || severityLevel === '1') return 'danger'
+  if (severityLevel === '2') return 'warning'
+  if (severityLevel === '3') return 'info'
   return 'neutral'
 }
 
@@ -168,9 +185,14 @@ function DeclaredIncidentDetailComponent() {
   })
 
   const resolveMutation = useMutation({
-    mutationFn: () => api.resolveOnCallIncident(Number(incidentId)),
+    mutationFn: () =>
+      api.resolveOnCallIncident(
+        Number(incidentId),
+        resolutionNote.trim() ? resolutionNote.trim() : undefined,
+      ),
     onSuccess: () => {
       setResolveOpen(false)
+      setResolutionNote('')
       queryClient.invalidateQueries({queryKey: ['declared-incident', incidentId]})
       queryClient.invalidateQueries({queryKey: ['declared-incident-timeline', incidentId]})
       queryClient.invalidateQueries({queryKey: ['on-call-incidents']})
@@ -426,7 +448,7 @@ function DeclaredIncidentDetailComponent() {
                 </Badge>
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Priority</p>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Severity</p>
                 <Badge variant={severityBadgeVariant(incident.severity)}>
                   {incident.severity}
                 </Badge>

@@ -16,6 +16,7 @@ import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
+import io.ktor.server.request.receiveNullable
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
@@ -65,6 +66,11 @@ data class ReassignIncidentRequest(
 @Serializable
 data class AddNoteRequest(
     val note: String,
+)
+
+@Serializable
+data class ResolveIncidentRequest(
+    val note: String? = null,
 )
 
 fun Route.incidentRoutes(alertServiceProvider: () -> OnCallAlertService) {
@@ -346,6 +352,7 @@ private suspend fun ApplicationCall.requireIncidentSeverity(severity: String?): 
     val incidentSeverity = IncidentSeverity.wireValue(trimmedSeverity)
     if (incidentSeverity == null) {
         respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident severity"))
+        return null
     }
     return incidentSeverity
 }
@@ -379,7 +386,8 @@ private fun Route.registerResolveDeclaredIncidentRoute(onCallIncidentService: On
         val context = call.requireUserContext() ?: return@post
         val incidentId = call.requireIncidentId() ?: return@post
         if (!call.ensureIncidentInOrganization(onCallIncidentService, incidentId, context.organizationId)) return@post
-        val incident = onCallIncidentService.resolveIncident(incidentId, context.userId)
+        val request = call.receiveNullable<ResolveIncidentRequest>() ?: ResolveIncidentRequest()
+        val incident = onCallIncidentService.resolveIncident(incidentId, context.userId, request.note)
         if (incident != null) {
             call.respond(incident)
         } else {

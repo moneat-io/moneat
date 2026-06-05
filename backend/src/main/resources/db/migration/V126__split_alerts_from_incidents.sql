@@ -17,6 +17,8 @@ SET priority = CASE UPPER(REPLACE(priority, '_', '-'))
     WHEN 'HIGH' THEN 'P1'
     WHEN 'MEDIUM' THEN 'P2'
     WHEN 'LOW' THEN 'P3'
+    WHEN 'SEV-0' THEN 'P0'
+    WHEN 'SEV0' THEN 'P0'
     WHEN 'SEV-1' THEN 'P0'
     WHEN 'SEV1' THEN 'P0'
     WHEN 'SEV-2' THEN 'P1'
@@ -32,7 +34,7 @@ UPDATE alert_priorities
 SET label = priority
 WHERE UPPER(REPLACE(label, '_', '-')) IN (
     'CRITICAL', 'HIGH', 'MEDIUM', 'LOW',
-    'SEV-1', 'SEV1', 'SEV-2', 'SEV2', 'SEV-3', 'SEV3', 'SEV-4', 'SEV4',
+    'SEV-0', 'SEV0', 'SEV-1', 'SEV1', 'SEV-2', 'SEV2', 'SEV-3', 'SEV3', 'SEV-4', 'SEV4',
     'P0', 'P1', 'P2', 'P3', 'P4', 'P5'
 );
 
@@ -44,6 +46,8 @@ SET priority = CASE UPPER(REPLACE(priority, '_', '-'))
     WHEN 'HIGH' THEN 'P1'
     WHEN 'MEDIUM' THEN 'P2'
     WHEN 'LOW' THEN 'P3'
+    WHEN 'SEV-0' THEN 'P0'
+    WHEN 'SEV0' THEN 'P0'
     WHEN 'SEV-1' THEN 'P0'
     WHEN 'SEV1' THEN 'P0'
     WHEN 'SEV-2' THEN 'P1'
@@ -93,6 +97,8 @@ SET alert_priority = CASE UPPER(REPLACE(alert_priority, '_', '-'))
     WHEN 'HIGH' THEN 'P1'
     WHEN 'MEDIUM' THEN 'P2'
     WHEN 'LOW' THEN 'P3'
+    WHEN 'SEV-0' THEN 'P0'
+    WHEN 'SEV0' THEN 'P0'
     WHEN 'SEV-1' THEN 'P0'
     WHEN 'SEV1' THEN 'P0'
     WHEN 'SEV-2' THEN 'P1'
@@ -111,6 +117,8 @@ SET alert_priority = CASE UPPER(REPLACE(alert_priority, '_', '-'))
     WHEN 'HIGH' THEN 'P1'
     WHEN 'MEDIUM' THEN 'P2'
     WHEN 'LOW' THEN 'P3'
+    WHEN 'SEV-0' THEN 'P0'
+    WHEN 'SEV0' THEN 'P0'
     WHEN 'SEV-1' THEN 'P0'
     WHEN 'SEV1' THEN 'P0'
     WHEN 'SEV-2' THEN 'P1'
@@ -128,6 +136,8 @@ SET alert_priority = CASE UPPER(REPLACE(alert_priority, '_', '-'))
     WHEN 'HIGH' THEN 'P1'
     WHEN 'MEDIUM' THEN 'P2'
     WHEN 'LOW' THEN 'P3'
+    WHEN 'SEV-0' THEN 'P0'
+    WHEN 'SEV0' THEN 'P0'
     WHEN 'SEV-1' THEN 'P0'
     WHEN 'SEV1' THEN 'P0'
     WHEN 'SEV-2' THEN 'P1'
@@ -145,6 +155,8 @@ SET alert_priority = CASE UPPER(REPLACE(alert_priority, '_', '-'))
     WHEN 'HIGH' THEN 'P1'
     WHEN 'MEDIUM' THEN 'P2'
     WHEN 'LOW' THEN 'P3'
+    WHEN 'SEV-0' THEN 'P0'
+    WHEN 'SEV0' THEN 'P0'
     WHEN 'SEV-1' THEN 'P0'
     WHEN 'SEV1' THEN 'P0'
     WHEN 'SEV-2' THEN 'P1'
@@ -163,6 +175,8 @@ SET alert_priority = CASE UPPER(REPLACE(alert_priority, '_', '-'))
     WHEN 'HIGH' THEN 'P1'
     WHEN 'MEDIUM' THEN 'P2'
     WHEN 'LOW' THEN 'P3'
+    WHEN 'SEV-0' THEN 'P0'
+    WHEN 'SEV0' THEN 'P0'
     WHEN 'SEV-1' THEN 'P0'
     WHEN 'SEV1' THEN 'P0'
     WHEN 'SEV-2' THEN 'P1'
@@ -181,6 +195,8 @@ SET alert_priority = CASE UPPER(REPLACE(alert_priority, '_', '-'))
     WHEN 'HIGH' THEN 'P1'
     WHEN 'MEDIUM' THEN 'P2'
     WHEN 'LOW' THEN 'P3'
+    WHEN 'SEV-0' THEN 'P0'
+    WHEN 'SEV0' THEN 'P0'
     WHEN 'SEV-1' THEN 'P0'
     WHEN 'SEV1' THEN 'P0'
     WHEN 'SEV-2' THEN 'P1'

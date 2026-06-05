@@ -382,7 +382,16 @@ fun Route.adminRoutes() {
                     val config = ApplicationConfig("application.conf")
                     val frontendUrl = config.property("email.frontendUrl").getString()
 
-                    val priority = AlertPriority.fromString(request.severity) ?: AlertPriority.P2
+                    val priority = AlertPriority.fromString(request.severity)
+                    if (priority == null) {
+                        logger.warn { "Invalid alert priority '${request.severity}' in admin manual trigger" }
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            com.moneat.utils.ErrorResponse("Invalid alert priority")
+                        )
+                        return@suspendRunCatching
+                    }
+
                     val sourceEnum =
                         suspendRunCatching {
                             AlertSource.valueOf(request.source)

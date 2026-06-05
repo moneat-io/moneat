@@ -32,7 +32,7 @@ import org.jetbrains.exposed.v1.jdbc.update
 import org.slf4j.LoggerFactory
 import kotlin.time.Clock
 
-private const val TOKEN_LOG_PREFIX_LENGTH = 40
+private const val TOKEN_LOG_SUFFIX_LENGTH = 4
 
 class PushNotificationService {
     private val logger = LoggerFactory.getLogger(PushNotificationService::class.java)
@@ -82,6 +82,9 @@ class PushNotificationService {
         alertId: Int,
         title: String,
         priority: String,
+        payloadType: String = "alert",
+        idKey: String = "alertId",
+        body: String = "Tap to view alert details",
     ) {
         val tokens = getUserDeviceTokens(userId)
 
@@ -99,11 +102,11 @@ class PushNotificationService {
                 ExpoMessage(
                     to = token,
                     title = "[$priority] $title",
-                    body = "Tap to view alert details",
+                    body = body,
                     data =
                         mapOf(
-                            "type" to "alert",
-                            "alertId" to alertId.toString(),
+                            "type" to payloadType,
+                            idKey to alertId.toString(),
                             "priority" to priority,
                         ),
                     channelId = channelId,
@@ -150,15 +153,16 @@ class PushNotificationService {
         ticket: ExpoTicket,
     ) {
         if (ticket.status == "error") {
-            logger.error("Push failed for token $token: ${ticket.message} (details: ${ticket.details})")
+            logger.error(
+                "Push failed for token ${redactToken(token)}: ${ticket.message} (details: ${ticket.details})",
+            )
             if (ticket.details?.get("error") == "DeviceNotRegistered") {
                 removeDeviceToken(token)
             }
             return
         }
 
-        val prefix = token.take(TOKEN_LOG_PREFIX_LENGTH)
-        logger.info("Push ticket ok for user $userId, ticketId=${ticket.id}, token prefix=$prefix")
+        logger.info("Push ticket ok for user $userId, ticketId=${ticket.id}, token=${redactToken(token)}")
     }
 
     suspend fun sendIncidentAlert(
@@ -167,7 +171,20 @@ class PushNotificationService {
         title: String,
         priority: String,
     ) {
-        sendOnCallAlert(userId, incidentId, title, priority)
+        sendOnCallAlert(
+            userId = userId,
+            alertId = incidentId,
+            title = title,
+            priority = priority,
+            payloadType = "incident",
+            idKey = "incidentId",
+            body = "Tap to view incident details",
+        )
+    }
+
+    private fun redactToken(token: String): String {
+        if (token.length <= TOKEN_LOG_SUFFIX_LENGTH) return "****"
+        return "****${token.takeLast(TOKEN_LOG_SUFFIX_LENGTH)}"
     }
 
     suspend fun sendOnCallAssignmentAlert(

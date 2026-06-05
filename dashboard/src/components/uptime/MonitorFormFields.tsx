@@ -17,6 +17,9 @@
 import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
+import type {AlertPriority} from '@/lib/api'
+
+type UptimeAlertPriority = Exclude<AlertPriority, null>
 
 function parseBoundedInteger(value: string, min: number, max: number): number | undefined {
   if (value === '') return undefined
@@ -39,7 +42,7 @@ export interface MonitorFormData {
   intervalSeconds?: number
   timeoutSeconds?: number
   retries?: number
-  alertPriority?: string
+  alertPriority?: UptimeAlertPriority
 }
 
 interface MonitorFormFieldsProps {
@@ -219,7 +222,10 @@ export function MonitorFormFields({
           <Select
             value={formData.alertPriority || ''}
             onValueChange={(value) =>
-              onChange({...formData, alertPriority: value === 'none' ? undefined : value})
+              onChange({
+                ...formData,
+                alertPriority: value === 'none' ? undefined : (value as UptimeAlertPriority),
+              })
             }
           >
             <SelectTrigger>

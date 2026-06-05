@@ -56,15 +56,27 @@ interface OnCallBridge {
         severity: String
     ): Int?
 
-    /** Get an on-call alert by ID for a user. */
+    /** Get a declared incident by ID for a user. */
     fun getIncident(
         incidentId: Int,
         userId: Int
     ): IncidentInfo?
 
-    /** Acknowledge an on-call alert. */
+    /** Acknowledge linked alerts for a declared incident. */
     fun acknowledgeIncident(
         incidentId: Int,
+        userId: Int
+    ): Boolean
+
+    /** Get an on-call alert by ID for a user. */
+    fun getAlert(
+        alertId: Int,
+        userId: Int
+    ): IncidentInfo?
+
+    /** Acknowledge an on-call alert. */
+    fun acknowledgeAlert(
+        alertId: Int,
         userId: Int
     ): Boolean
 }

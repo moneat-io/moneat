@@ -16,7 +16,7 @@
 
 import {useEffect, useMemo, useState} from 'react'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
-import type {CreateDashboardAlertRequest, DashboardAlertCondition, QueryDsl} from '@/lib/api'
+import type {AlertPriority, CreateDashboardAlertRequest, DashboardAlertCondition, QueryDsl} from '@/lib/api'
 import {api} from '@/lib/api'
 import {Button} from '@/components/ui/button'
 import {Bell, BellOff, Plus, Trash2} from 'lucide-react'
@@ -292,7 +292,7 @@ export function AlertConfigForm({
                   setForm({
                     ...form,
                     alert_priority: e.target.value
-                      ? (e.target.value as 'P0' | 'P1' | 'P2' | 'P3' | 'P4' | 'P5')
+                      ? (e.target.value as AlertPriority)
                       : null,
                   })
                 }
