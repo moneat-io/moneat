@@ -23,7 +23,8 @@ interface MonitoringMapSearch {
 }
 
 function parseMapScope(value: unknown): MonitoringMapScope {
-  return value === 'services' || value === 'containers' ? value : 'hosts'
+  if (value === 'hosts' || value === 'containers') return value
+  return 'services'
 }
 
 export const Route = createFileRoute('/monitoring/map')({

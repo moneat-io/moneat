@@ -130,9 +130,9 @@ interface InfrastructureGroupNodeData {
 }
 
 const RESOURCE_OPTIONS: ResourceOption[] = [
-  {value: 'services', label: 'Services', icon: Network},
-  {value: 'hosts', label: 'Hosts', icon: HardDrive},
-  {value: 'containers', label: 'Containers', icon: Box},
+  {value: 'services', label: 'Service Map', icon: Network},
+  {value: 'hosts', label: 'Host Map', icon: HardDrive},
+  {value: 'containers', label: 'Container Map', icon: Box},
 ]
 
 const HOST_GROUP_OPTIONS: Array<Option<InfrastructureGroupBy>> = [
@@ -248,7 +248,7 @@ interface InfrastructureMapProps {
   onScopeChange?: (scope: MonitoringMapScope) => void
 }
 
-export function InfrastructureMap({initialScope = 'hosts', onScopeChange}: InfrastructureMapProps) {
+export function InfrastructureMap({initialScope = 'services', onScopeChange}: InfrastructureMapProps) {
   const queryClient = useQueryClient()
   const {toast} = useToast()
   const [viewState, setViewState] = useState<InfrastructureMapViewState>(
