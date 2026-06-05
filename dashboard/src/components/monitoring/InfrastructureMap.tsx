@@ -604,7 +604,8 @@ function MapScopeToggle({
   onChange,
 }: MapScopeToggleProps) {
   return (
-    <div className="flex rounded-md border bg-background p-0.5" role="group" aria-label="Map scope">
+    <fieldset className="flex rounded-md border bg-background p-0.5">
+      <legend className="sr-only">Map scope</legend>
       {RESOURCE_OPTIONS.map((option) => {
         const Icon = option.icon
         const isActive = option.value === scope
@@ -628,7 +629,7 @@ function MapScopeToggle({
           </button>
         )
       })}
-    </div>
+    </fieldset>
   )
 }
 
