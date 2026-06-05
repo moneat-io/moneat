@@ -46,9 +46,7 @@ class LogEntryFilterEvaluator(
     ): Boolean {
         return when (node) {
             is LogQueryParser.QueryNode.FieldNode -> evaluateFieldNode(node, entry)
-            is LogQueryParser.QueryNode.FullTextNode -> searchableFields.any { field ->
-                entry[field]?.contains(node.term, ignoreCase = true) == true
-            }
+            is LogQueryParser.QueryNode.FullTextNode -> evaluateFullTextNode(node, entry)
             is LogQueryParser.QueryNode.AndNode ->
                 evaluate(node.left, entry) && evaluate(node.right, entry)
             is LogQueryParser.QueryNode.OrNode ->
@@ -59,10 +57,32 @@ class LogEntryFilterEvaluator(
                 !entry[node.field].isNullOrEmpty()
             is LogQueryParser.QueryNode.TagExistsNode ->
                 entry.containsKey(node.tagKey)
-            is LogQueryParser.QueryNode.TermNode ->
-                entry.values.any { it.contains(node.term, ignoreCase = true) }
+            is LogQueryParser.QueryNode.TermNode -> evaluateTermNode(node, entry)
             is LogQueryParser.QueryNode.RangeNode -> evaluateRangeNode(node, entry)
             is LogQueryParser.QueryNode.ComparisonNode -> evaluateComparisonNode(node, entry)
+        }
+    }
+
+    private fun evaluateFullTextNode(
+        node: LogQueryParser.QueryNode.FullTextNode,
+        entry: Map<String, String>
+    ): Boolean {
+        return searchableFields.any { field ->
+            val value = entry[field] ?: return@any false
+            matchesFullText(value, node)
+        }
+    }
+
+    private fun evaluateTermNode(
+        node: LogQueryParser.QueryNode.TermNode,
+        entry: Map<String, String>
+    ): Boolean {
+        return entry.values.any { value ->
+            if (node.isWildcard) {
+                matchesWildcard(value, node.term, partial = true)
+            } else {
+                value.contains(node.term, ignoreCase = true)
+            }
         }
     }
 
@@ -75,12 +95,58 @@ class LogEntryFilterEvaluator(
             return value.lowercase() == node.value.lowercase()
         }
 
-        val pattern = Regex.escape(node.value)
-            .replace("\\*", ".*")
-            .replace("\\?", ".")
+        return matchesWildcard(value, node.value, partial = false)
+    }
+
+    private fun matchesFullText(
+        value: String,
+        node: LogQueryParser.QueryNode.FullTextNode
+    ): Boolean {
+        if (node.isWildcard) {
+            return matchesWildcard(value, node.term, partial = true)
+        }
+
+        if (node.isPhrase) {
+            return containsPhrase(value, node.term)
+        }
+
+        return value.contains(node.term, ignoreCase = true)
+    }
+
+    private fun containsPhrase(
+        value: String,
+        phrase: String
+    ): Boolean {
+        return value.contains(phrase, ignoreCase = true)
+    }
+
+    private fun matchesWildcard(
+        value: String,
+        pattern: String,
+        partial: Boolean
+    ): Boolean {
+        val matcher = wildcardMatcher(pattern) ?: return false
+        return if (partial) {
+            matcher.containsMatchIn(value)
+        } else {
+            value.matches(matcher)
+        }
+    }
+
+    private fun wildcardMatcher(pattern: String): Regex? {
+        val regexPattern = buildString {
+            pattern.forEach { character ->
+                when (character) {
+                    '*' -> append(".*")
+                    '?' -> append('.')
+                    else -> append(Regex.escape(character.toString()))
+                }
+            }
+        }
+
         return suspendRunCatching {
-            value.matches(Regex(pattern, RegexOption.IGNORE_CASE))
-        }.getOrElse { false }
+            Regex(regexPattern, RegexOption.IGNORE_CASE)
+        }.getOrNull()
     }
 
     private fun evaluateRangeNode(

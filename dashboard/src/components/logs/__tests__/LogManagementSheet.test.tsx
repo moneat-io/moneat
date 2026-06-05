@@ -259,6 +259,36 @@ describe('LogManagementSheet', () => {
     })
   })
 
+  it('blocks invalid index quota values before creating an index', async () => {
+    let createRequests = 0
+
+    server.use(
+      http.post(`${API_BASE}/v1/logs/indexes`, () => {
+        createRequests += 1
+        return HttpResponse.json({id: 4, name: 'api-errors'})
+      })
+    )
+
+    renderSheet()
+    await openSheet()
+
+    fireEvent.change(screen.getByPlaceholderText('production-errors'), {target: {value: 'api-errors'}})
+    fireEvent.change(screen.getByPlaceholderText('optional'), {target: {value: '-1'}})
+
+    const createButton = screen.getByRole('button', {name: 'Create index'})
+    expect(createButton).toBeDisabled()
+    fireEvent.click(createButton)
+    expect(createRequests).toBe(0)
+
+    fireEvent.change(screen.getByPlaceholderText('optional'), {target: {value: '2'}})
+    expect(createButton).not.toBeDisabled()
+    fireEvent.click(createButton)
+
+    await waitFor(() => {
+      expect(createRequests).toBe(1)
+    })
+  })
+
   it('runs pipeline, saved-view, metric, and monitor actions from the current explorer state', async () => {
     const appliedView = vi.fn()
     const capturedBodies: Record<string, unknown>[] = []

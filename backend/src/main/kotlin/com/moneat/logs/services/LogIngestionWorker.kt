@@ -49,6 +49,7 @@ class LogIngestionWorker(
 ) {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var jobs: List<Job> = emptyList()
+    private val filterEvaluator = LogEntryFilterEvaluator()
 
     fun start() {
         logger.info { "Starting LogIngestionWorker with $workerCount workers, queue=$queueKey" }
@@ -169,7 +170,6 @@ class LogIngestionWorker(
             "span_id" to entry.spanId
         ) + entry.tags + entry.resourceAttributes
 
-        val filterEvaluator = LogEntryFilterEvaluator()
         for (index in indexes) {
             val matches = if (index.filterQuery.isBlank()) {
                 true

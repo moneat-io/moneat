@@ -64,11 +64,16 @@ interface LogManagementSheetProps {
 }
 
 const DEFAULT_RETENTION_DAYS = 30
+const MIN_RETENTION_DAYS = 1
+const MAX_RETENTION_DAYS = 365
 const FULL_SAMPLING_RATE = 1
+const MIN_SAMPLING_RATE = 0
+const MIN_DAILY_QUOTA_GB = 0
 const DEFAULT_PIPELINE_PATTERN = '(?i)(password|token|secret)=([^\\s]+)'
 const DEFAULT_PIPELINE_REPLACEMENT = '$1=[redacted]'
 const DEFAULT_METRIC_INTERVAL = '5m'
 const DEFAULT_MONITOR_THRESHOLD = 10
+const MIN_MONITOR_THRESHOLD = 0
 const BYTES_PER_GB = 1024 * 1024 * 1024
 const PREVIEW_LOG_LIMIT = 3
 
@@ -77,6 +82,43 @@ function formatBytes(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${bytes} B`
+}
+
+function parseFiniteInput(value: string): number | null {
+  const trimmed = value.trim()
+  if (trimmed === '') return null
+
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function optionalNumberAtLeast(value: string, min: number): number | null {
+  const parsed = parseFiniteInput(value)
+  if (parsed === null || parsed < min) return null
+  return parsed
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max)
+}
+
+function updateClampedNumber(
+  value: string,
+  min: number,
+  max: number,
+  onChange: (nextValue: number) => void
+) {
+  const parsed = parseFiniteInput(value)
+  if (parsed !== null) onChange(clampNumber(parsed, min, max))
+}
+
+function updateMinimumNumber(
+  value: string,
+  min: number,
+  onChange: (nextValue: number) => void
+) {
+  const parsed = parseFiniteInput(value)
+  if (parsed !== null) onChange(Math.max(parsed, min))
 }
 
 function sampleLogsForPreview(logs: LogEntry[]) {
@@ -174,6 +216,8 @@ function IndexesPanel({currentQuery}: {currentQuery: string}) {
     () => new Map((usageData?.usage ?? []).map((usage) => [usage.index_name, usage])),
     [usageData]
   )
+  const dailyQuotaGbValue = optionalNumberAtLeast(dailyQuotaGb, MIN_DAILY_QUOTA_GB)
+  const hasInvalidDailyQuota = dailyQuotaGb.trim() !== '' && dailyQuotaGbValue === null
 
   const createIndex = useMutation({
     mutationFn: () => api.createLogIndex({
@@ -181,7 +225,7 @@ function IndexesPanel({currentQuery}: {currentQuery: string}) {
       filter_query: filterQuery,
       retention_days: retentionDays,
       sampling_rate: samplingRate,
-      daily_quota_gb: dailyQuotaGb === '' ? null : Number(dailyQuotaGb),
+      daily_quota_gb: dailyQuotaGbValue,
     }),
     onSuccess: () => {
       setName('')
@@ -215,25 +259,36 @@ function IndexesPanel({currentQuery}: {currentQuery: string}) {
             <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="production-errors" />
           </Field>
           <Field label="Daily quota (GB)">
-            <Input value={dailyQuotaGb} onChange={(event) => setDailyQuotaGb(event.target.value)} placeholder="optional" />
+            <Input
+              type="number"
+              min={MIN_DAILY_QUOTA_GB}
+              value={dailyQuotaGb}
+              onChange={(event) => setDailyQuotaGb(event.target.value)}
+              placeholder="optional"
+              aria-invalid={hasInvalidDailyQuota}
+            />
           </Field>
           <Field label="Retention days">
             <Input
               type="number"
-              min={1}
-              max={365}
+              min={MIN_RETENTION_DAYS}
+              max={MAX_RETENTION_DAYS}
               value={retentionDays}
-              onChange={(event) => setRetentionDays(Number(event.target.value))}
+              onChange={(event) => {
+                updateClampedNumber(event.target.value, MIN_RETENTION_DAYS, MAX_RETENTION_DAYS, setRetentionDays)
+              }}
             />
           </Field>
           <Field label="Sampling rate">
             <Input
               type="number"
-              min={0}
-              max={1}
+              min={MIN_SAMPLING_RATE}
+              max={FULL_SAMPLING_RATE}
               step={0.05}
               value={samplingRate}
-              onChange={(event) => setSamplingRate(Number(event.target.value))}
+              onChange={(event) => {
+                updateClampedNumber(event.target.value, MIN_SAMPLING_RATE, FULL_SAMPLING_RATE, setSamplingRate)
+              }}
             />
           </Field>
         </div>
@@ -244,7 +299,7 @@ function IndexesPanel({currentQuery}: {currentQuery: string}) {
           <Button
             size="sm"
             onClick={() => createIndex.mutate()}
-            disabled={!name.trim() || createIndex.isPending}
+            disabled={!name.trim() || hasInvalidDailyQuota || createIndex.isPending}
           >
             {createIndex.isPending ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Plus className="mr-1.5 h-3.5 w-3.5" />}
             Create index
@@ -522,8 +577,11 @@ function MonitorsPanel({currentQuery, currentLevels}: {currentQuery: string; cur
           <Field label="Threshold">
             <Input
               type="number"
+              min={MIN_MONITOR_THRESHOLD}
               value={threshold}
-              onChange={(event) => setThreshold(Number(event.target.value))}
+              onChange={(event) => {
+                updateMinimumNumber(event.target.value, MIN_MONITOR_THRESHOLD, setThreshold)
+              }}
             />
           </Field>
         </div>

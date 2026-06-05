@@ -21,6 +21,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class LogEntryFilterEvaluatorTest {
+    // ──── setup ────
+
     private val evaluator = LogEntryFilterEvaluator()
     private val entry = mapOf(
         "message" to "Checkout timeout on shard a",
@@ -34,6 +36,8 @@ class LogEntryFilterEvaluatorTest {
         "status_code" to "503"
     )
 
+    // ──── matches ────
+
     @Test
     fun `matches treats blank and parsed queries as expected`() {
         assertTrue(evaluator.matches("", entry))
@@ -41,11 +45,16 @@ class LogEntryFilterEvaluatorTest {
         assertFalse(evaluator.matches("service:worker timeout", entry))
     }
 
+    // ──── evaluate text, existence, and boolean nodes ────
+
     @Test
     fun `evaluate covers text field existence and boolean nodes`() {
         assertTrue(evaluator.evaluate(LogQueryParser.QueryNode.FullTextNode("timeout"), entry))
+        assertTrue(evaluator.evaluate(LogQueryParser.QueryNode.FullTextNode("time*", true), entry))
+        assertTrue(evaluator.evaluate(LogQueryParser.QueryNode.FullTextNode("timeout on shard", false, true), entry))
         assertFalse(evaluator.evaluate(LogQueryParser.QueryNode.FullTextNode("missing"), entry))
         assertTrue(evaluator.evaluate(LogQueryParser.QueryNode.TermNode("checkout"), entry))
+        assertTrue(evaluator.evaluate(LogQueryParser.QueryNode.TermNode("check*", true), entry))
         assertFalse(evaluator.evaluate(LogQueryParser.QueryNode.TermNode("absent"), entry))
 
         assertTrue(evaluator.evaluate(LogQueryParser.QueryNode.ExistsNode("host"), entry))
@@ -62,14 +71,18 @@ class LogEntryFilterEvaluatorTest {
         assertTrue(evaluator.evaluate(LogQueryParser.QueryNode.NotNode(workerNode), entry))
     }
 
+    // ──── evaluate field wildcard nodes ────
+
     @Test
     fun `evaluate covers field wildcard nodes`() {
         assertTrue(evaluator.evaluate(LogQueryParser.QueryNode.FieldNode("service", "API"), entry))
         assertFalse(evaluator.evaluate(LogQueryParser.QueryNode.FieldNode("missing", "value"), entry))
         assertTrue(evaluator.evaluate(LogQueryParser.QueryNode.FieldNode("service", "api", true), entry))
-        assertFalse(evaluator.evaluate(LogQueryParser.QueryNode.FieldNode("service", "a?i", true), entry))
+        assertTrue(evaluator.evaluate(LogQueryParser.QueryNode.FieldNode("service", "a?i", true), entry))
         assertFalse(evaluator.evaluate(LogQueryParser.QueryNode.FieldNode("service", "web-*", true), entry))
     }
+
+    // ──── evaluate range and comparison nodes ────
 
     @Test
     fun `evaluate covers range and comparison nodes`() {
