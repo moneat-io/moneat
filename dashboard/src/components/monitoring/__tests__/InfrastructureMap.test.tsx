@@ -128,7 +128,7 @@ describe('InfrastructureMap', () => {
 
     const canvas = screen.getByTestId('map-canvas')
     expect(within(canvas).getAllByText(/up/).length).toBeGreaterThan(0)
-    expect(screen.getByText('1 groups')).toBeInTheDocument()
+    expect(screen.getByText('1 group')).toBeInTheDocument()
     expect(screen.getByText('1 shown')).toBeInTheDocument()
     expect(screen.getByText('1 healthy')).toBeInTheDocument()
 

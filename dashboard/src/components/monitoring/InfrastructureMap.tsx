@@ -756,7 +756,10 @@ function InfrastructureMapToolbar({
         onChange={onSizeByChange}
       />
       <div className="flex w-full min-w-0 flex-wrap items-center justify-start gap-x-3 gap-y-1 text-xs text-muted-foreground sm:ml-auto sm:w-auto sm:justify-end sm:gap-2">
-        <SummaryItem icon={<Layers3 className="h-3.5 w-3.5" />} label={`${summary.groupCount} groups`} />
+        <SummaryItem
+          icon={<Layers3 className="h-3.5 w-3.5" />}
+          label={`${summary.groupCount} ${summary.groupCount === 1 ? 'group' : 'groups'}`}
+        />
         <SummaryItem icon={<Filter className="h-3.5 w-3.5" />} label={`${summary.visibleResources} shown`} />
         <SummaryItem
           icon={<CircleCheck className="h-3.5 w-3.5 text-success-fg" />}

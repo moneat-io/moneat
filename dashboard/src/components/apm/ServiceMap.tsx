@@ -195,6 +195,15 @@ function addSelectedServiceConnections({
   }
 }
 
+function isSelectionInVisibleGraph(
+  services: ApmServiceMapEntry[],
+  selectedId: string,
+): boolean {
+  return services.some(
+    (service) => service.service === selectedId || service.callsTo.includes(selectedId),
+  )
+}
+
 function createServiceLayoutGraph(
   services: ApmServiceMapEntry[],
   externalServices: Set<string>,
@@ -400,9 +409,14 @@ export function ServiceMap({className, searchQuery = ''}: ServiceMapProps = {}) 
     })
   }, [normalizedSearch, services])
 
+  const effectiveSelectedId = useMemo(() => {
+    if (selectedId === null) return null
+    return isSelectionInVisibleGraph(visibleServices, selectedId) ? selectedId : null
+  }, [selectedId, visibleServices])
+
   const {nodes, edges} = useMemo(
-    () => buildGraph(visibleServices, selectedId),
-    [visibleServices, selectedId],
+    () => buildGraph(visibleServices, effectiveSelectedId),
+    [visibleServices, effectiveSelectedId],
   )
 
   const onNodeClick = useCallback((_event: ReactMouseEvent, node: Node) => {
@@ -411,8 +425,8 @@ export function ServiceMap({className, searchQuery = ''}: ServiceMapProps = {}) 
 
   const onPaneClick = useCallback(() => setSelectedId(null), [setSelectedId])
 
-  const selected = selectedId
-    ? visibleServices.find((service) => service.service === selectedId)
+  const selected = effectiveSelectedId
+    ? visibleServices.find((service) => service.service === effectiveSelectedId)
     : null
   const isFilteredEmpty = services.length > 0 && visibleServices.length === 0
 

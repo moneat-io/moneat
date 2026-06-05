@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import type {MouseEvent as ReactMouseEvent, ReactNode} from 'react'
+import {useState, type MouseEvent as ReactMouseEvent, type ReactNode} from 'react'
 import {fireEvent, screen, within} from '@testing-library/react'
 import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {http, HttpResponse} from 'msw'
@@ -25,7 +25,9 @@ import {ServiceMap} from '../ServiceMap'
 type MockMapNode = Readonly<{
   id: string
   data?: {
+    dimmed?: boolean
     label?: string
+    selected?: boolean
   }
 }>
 
@@ -55,6 +57,8 @@ vi.mock('@/components/maps/MapCanvas', () => ({
           <button
             key={node.id}
             type="button"
+            data-dimmed={String(node.data?.dimmed ?? false)}
+            data-selected={String(node.data?.selected ?? false)}
             onClick={(event) => onNodeClick?.(event, node)}
           >
             {node.data?.label ?? node.id}
@@ -103,6 +107,37 @@ describe('ServiceMap', () => {
     expect(screen.getAllByText('postgres')).toHaveLength(2)
   })
 
+  it('ignores a stale selected service after search filters it out', async () => {
+    server.use(
+      http.get(`${API_BASE}/v1/services/map`, () =>
+        HttpResponse.json({
+          services: [
+            serviceEntry('api-gateway', ['order-service', 'redis'], 120, 0),
+            serviceEntry('order-service', ['postgres'], 82, 3),
+            serviceEntry('user-service', [], 42, 0),
+          ],
+        })
+      )
+    )
+
+    renderWithQueryClient(<ServiceMapSearchHarness />)
+
+    await screen.findByText('api-gateway')
+    const nodes = await screen.findByTestId('map-nodes')
+    fireEvent.click(within(nodes).getByText('user-service'))
+
+    expect(within(nodes).getByText('user-service')).toHaveAttribute('data-selected', 'true')
+    expect(within(nodes).getByText('api-gateway')).toHaveAttribute('data-dimmed', 'true')
+
+    fireEvent.click(screen.getByRole('button', {name: 'Filter order'}))
+
+    const filteredNodes = await screen.findByTestId('map-nodes')
+    expect(within(filteredNodes).queryByText('user-service')).not.toBeInTheDocument()
+    expect(within(filteredNodes).getByText('api-gateway')).toHaveAttribute('data-dimmed', 'false')
+    expect(within(filteredNodes).getByText('order-service')).toHaveAttribute('data-dimmed', 'false')
+    expect(within(filteredNodes).getByText('postgres')).toHaveAttribute('data-dimmed', 'false')
+  })
+
   it('shows an explicit fallback when service map data cannot load', async () => {
     server.use(
       http.get(`${API_BASE}/v1/services/map`, () =>
@@ -116,6 +151,19 @@ describe('ServiceMap', () => {
     expect(screen.getByText(/telemetry API responds/i)).toBeInTheDocument()
   })
 })
+
+function ServiceMapSearchHarness() {
+  const [searchQuery, setSearchQuery] = useState('')
+
+  return (
+    <>
+      <button type="button" onClick={() => setSearchQuery('order')}>
+        Filter order
+      </button>
+      <ServiceMap searchQuery={searchQuery} />
+    </>
+  )
+}
 
 function serviceEntry(
   service: string,
