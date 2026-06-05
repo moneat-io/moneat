@@ -140,13 +140,11 @@ Step parameters support double-brace interpolation with trigger scope references
 ```text
 {{alert.title}}
 {{alert.display_title}}
-{{alert.severity}}
 {{alert.priority}}
 {{alert.url}}
 ```
 
-`alert.severity` keeps the internal enum value (`CRITICAL`, `HIGH`, `MEDIUM`, or `LOW`).
-`alert.priority` renders the alerting label (`[P0]` through `[P3]`) used in notification titles.
+`alert.priority` renders the alert priority (`P0` through `P5`) used in notification routing.
 
 Dashboard alert events also expose dashboard-specific fields such as `alert.dashboard.title`,
 `alert.widget.title`, `alert.condition`, `alert.threshold`, and `alert.current_value`.

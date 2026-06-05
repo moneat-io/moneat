@@ -33,7 +33,7 @@ object DashboardWidgetAlerts : Table("dashboard_widget_alerts") {
     val warningThreshold = double("warning_threshold").nullable()
     val metricIndex = integer("metric_index").default(0)
     val durationSeconds = integer("duration_seconds").default(0)
-    val incidentSeverity = varchar("incident_severity", 20).nullable()
+    val alertPriority = varchar("alert_priority", 20).nullable()
     val enabled = bool("enabled").default(true)
     val notificationChannels = jsonb("notification_channels")
     val lastTriggeredAt = timestamp("last_triggered_at").nullable()
@@ -64,7 +64,7 @@ data class DashboardAlertResponse(
     @SerialName("warning_threshold") val warningThreshold: Double? = null,
     @SerialName("metric_index") val metricIndex: Int = 0,
     @SerialName("duration_seconds") val durationSeconds: Int = 0,
-    @SerialName("incident_severity") val incidentSeverity: String? = null,
+    @SerialName("alert_priority") val alertPriority: String? = null,
     val enabled: Boolean = true,
     @SerialName("notification_channels") val notificationChannels: NotificationChannels = NotificationChannels(),
     @SerialName("last_triggered_at") val lastTriggeredAt: String? = null,
@@ -83,7 +83,8 @@ data class CreateDashboardAlertRequest(
     @SerialName("warning_threshold") val warningThreshold: Double? = null,
     @SerialName("metric_index") val metricIndex: Int = 0,
     @SerialName("duration_seconds") val durationSeconds: Int = 0,
-    @SerialName("incident_severity") val incidentSeverity: String? = null,
+    @SerialName("alert_priority") val alertPriority: String? = null,
+    @SerialName("incident_severity") val legacyIncidentSeverity: String? = null,
     val enabled: Boolean = true,
     @SerialName("notification_channels") val notificationChannels: NotificationChannels = NotificationChannels()
 )
@@ -96,7 +97,8 @@ data class UpdateDashboardAlertRequest(
     @SerialName("warning_threshold") val warningThreshold: Double? = null,
     @SerialName("metric_index") val metricIndex: Int? = null,
     @SerialName("duration_seconds") val durationSeconds: Int? = null,
-    @SerialName("incident_severity") val incidentSeverity: String? = null,
+    @SerialName("alert_priority") val alertPriority: String? = null,
+    @SerialName("incident_severity") val legacyIncidentSeverity: String? = null,
     val enabled: Boolean? = null,
     @SerialName("notification_channels") val notificationChannels: NotificationChannels? = null,
     @Transient val warningThresholdProvided: Boolean = false

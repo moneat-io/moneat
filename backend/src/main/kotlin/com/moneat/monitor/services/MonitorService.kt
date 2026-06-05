@@ -16,6 +16,7 @@
 
 package com.moneat.monitor.services
 
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.billing.models.PricingTier
 import com.moneat.billing.models.PricingTierConfigResponse
 import com.moneat.billing.services.PricingTierService
@@ -58,6 +59,25 @@ class MonitorService(
     private val pricingTierService: PricingTierService = PricingTierService(),
     private val retentionPolicyService: RetentionPolicyService = RetentionPolicyService(),
 ) {
+    private fun resolvedAlertPriority(request: CreateAlertRequest): String? =
+        canonicalAlertPriority(
+            request.alertPriority
+                ?: request.alertPrioritySnake
+                ?: request.incidentSeverity
+                ?: request.legacyIncidentSeveritySnake
+        )
+
+    private fun resolvedAlertPriority(request: UpdateAlertRequest): String? =
+        canonicalAlertPriority(
+            request.alertPriority
+                ?: request.alertPrioritySnake
+                ?: request.incidentSeverity
+                ?: request.legacyIncidentSeveritySnake
+        )
+
+    private fun canonicalAlertPriority(priority: String?): String? =
+        priority?.let { AlertPriority.fromString(it)?.wire }
+
     private data class DefaultAlertTemplate(
         val metric: String,
         val condition: String,
@@ -969,6 +989,7 @@ class MonitorService(
         if (scope == ALERT_SCOPE_GLOBAL) {
             ensureOrganizationAlertTemplates(organizationId)
             val now = Clock.System.now()
+            val alertPriority = resolvedAlertPriority(request)
             val alertId = hostAlertRepository.createAlert(
                 CreateAlertData(
                     hostId = hostId,
@@ -978,6 +999,7 @@ class MonitorService(
                     threshold = request.threshold,
                     durationSeconds = request.durationSeconds,
                     enabled = request.enabled,
+                    alertPriority = alertPriority,
                     scope = ALERT_SCOPE_GLOBAL
                 )
             )
@@ -990,6 +1012,7 @@ class MonitorService(
                 threshold = request.threshold,
                 durationSeconds = request.durationSeconds,
                 enabled = request.enabled,
+                alertPriority = alertPriority,
                 lastTriggeredAt = null,
                 createdAt = now.toEpochMilliseconds()
             )
@@ -997,6 +1020,7 @@ class MonitorService(
 
         ensureHostAlertsSeeded(hostId, organizationId)
         val now = Clock.System.now()
+        val alertPriority = resolvedAlertPriority(request)
         val alertId = hostAlertRepository.createAlert(
             CreateAlertData(
                 hostId = hostId,
@@ -1006,6 +1030,7 @@ class MonitorService(
                 threshold = request.threshold,
                 durationSeconds = request.durationSeconds,
                 enabled = request.enabled,
+                alertPriority = alertPriority,
                 scope = ALERT_SCOPE_HOST
             )
         )
@@ -1018,6 +1043,7 @@ class MonitorService(
             threshold = request.threshold,
             durationSeconds = request.durationSeconds,
             enabled = request.enabled,
+            alertPriority = alertPriority,
             lastTriggeredAt = null,
             createdAt = now.toEpochMilliseconds()
         )
@@ -1042,7 +1068,8 @@ class MonitorService(
                 condition = request.condition,
                 threshold = request.threshold,
                 durationSeconds = request.durationSeconds,
-                enabled = request.enabled
+                enabled = request.enabled,
+                alertPriority = resolvedAlertPriority(request)
             ),
             scope
         )
@@ -1078,6 +1105,7 @@ class MonitorService(
                     threshold = template.threshold,
                     durationSeconds = template.durationSeconds,
                     enabled = template.enabled,
+                    alertPriority = null,
                     scope = ALERT_SCOPE_GLOBAL
                 )
             )
@@ -1102,6 +1130,7 @@ class MonitorService(
                     threshold = template.threshold,
                     durationSeconds = template.durationSeconds,
                     enabled = template.enabled,
+                    alertPriority = null,
                     scope = ALERT_SCOPE_HOST
                 )
             }
@@ -1115,6 +1144,7 @@ class MonitorService(
                     threshold = template.threshold,
                     durationSeconds = template.durationSeconds,
                     enabled = template.enabled,
+                    alertPriority = template.alertPriority,
                     scope = ALERT_SCOPE_HOST
                 )
             }
@@ -1144,6 +1174,7 @@ class MonitorService(
                 threshold = row.threshold,
                 durationSeconds = row.durationSeconds,
                 enabled = row.enabled,
+                alertPriority = row.alertPriority,
                 lastTriggeredAt = row.lastTriggeredAt?.toEpochMilliseconds(),
                 createdAt = row.createdAt.toEpochMilliseconds()
             )
@@ -1163,6 +1194,7 @@ class MonitorService(
                 threshold = row.threshold,
                 durationSeconds = row.durationSeconds,
                 enabled = row.enabled,
+                alertPriority = row.alertPriority,
                 lastTriggeredAt = row.lastTriggeredAt?.toEpochMilliseconds(),
                 createdAt = row.createdAt.toEpochMilliseconds()
             )

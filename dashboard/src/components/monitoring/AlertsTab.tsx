@@ -122,7 +122,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
         threshold: number
         durationSeconds: number
         enabled: boolean
-        incidentSeverity?: string
+        alertPriority?: string
       }
     }) => api.createHostAlert(hostId, alert, scope),
     onSuccess: () => {
@@ -168,7 +168,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
   const handleCreateAlert = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
-    const severity = formData.get('incidentSeverity') as string
+    const priority = formData.get('alertPriority') as string
     const durationMinutes = parseInt(formData.get('durationMinutes') as string) || 0
 
     createMutation.mutate({
@@ -179,7 +179,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
         threshold: parseFloat(formData.get('threshold') as string),
         durationSeconds: durationMinutes * 60,
         enabled: createEnabled,
-        incidentSeverity: severity && severity !== 'none' ? severity : undefined,
+        alertPriority: priority && priority !== 'none' ? priority : undefined,
       },
     })
   }
@@ -189,7 +189,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
     if (!editingAlert) return
 
     const formData = new FormData(e.currentTarget)
-    const severity = formData.get('incidentSeverity') as string
+    const priority = formData.get('alertPriority') as string
     const durationMinutes = parseInt(formData.get('durationMinutes') as string) || 0
     updateMutation.mutate({
       alert: editingAlert,
@@ -198,7 +198,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
         condition: formData.get('condition') as string,
         threshold: parseFloat(formData.get('threshold') as string),
         durationSeconds: durationMinutes * 60,
-        incidentSeverity: severity && severity !== 'none' ? severity : null,
+        alertPriority: priority && priority !== 'none' ? priority : null,
       },
     })
   }
@@ -345,21 +345,23 @@ export function AlertsTab({hostId}: AlertsTabProps) {
                         </p>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="incidentSeverity">Alert Severity</Label>
-                        <Select name="incidentSeverity" defaultValue="">
+                        <Label htmlFor="alertPriority">Alert priority</Label>
+                        <Select name="alertPriority" defaultValue="">
                           <SelectTrigger>
                             <SelectValue placeholder="Use routing rule default" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="none">Use routing rule default</SelectItem>
-                            <SelectItem value="CRITICAL">[P0] Critical</SelectItem>
-                            <SelectItem value="HIGH">[P1] High</SelectItem>
-                            <SelectItem value="MEDIUM">[P2] Medium</SelectItem>
-                            <SelectItem value="LOW">[P3] Low</SelectItem>
+                            <SelectItem value="P0">P0</SelectItem>
+                            <SelectItem value="P1">P1</SelectItem>
+                            <SelectItem value="P2">P2</SelectItem>
+                            <SelectItem value="P3">P3</SelectItem>
+                            <SelectItem value="P4">P4</SelectItem>
+                            <SelectItem value="P5">P5</SelectItem>
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">
-                          Override the default severity when this alert triggers an incident. P0–P2 page on-call 24/7. P3 notifies during business hours only.
+                          Override the default priority when this alert fires. P0-P2 page by default; P3-P5 notify only unless configured otherwise.
                         </p>
                       </div>
                       <div className="flex items-center justify-between rounded-lg border p-3">
@@ -581,21 +583,23 @@ export function AlertsTab({hostId}: AlertsTabProps) {
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="edit-incidentSeverity">Alert Severity</Label>
-                  <Select name="incidentSeverity" defaultValue={editingAlert.incidentSeverity || ''}>
+                  <Label htmlFor="edit-alertPriority">Alert priority</Label>
+                  <Select name="alertPriority" defaultValue={editingAlert.alertPriority || ''}>
                     <SelectTrigger>
                       <SelectValue placeholder="Use routing rule default" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Use routing rule default</SelectItem>
-                      <SelectItem value="CRITICAL">[P0] Critical</SelectItem>
-                      <SelectItem value="HIGH">[P1] High</SelectItem>
-                      <SelectItem value="MEDIUM">[P2] Medium</SelectItem>
-                      <SelectItem value="LOW">[P3] Low</SelectItem>
+                      <SelectItem value="P0">P0</SelectItem>
+                      <SelectItem value="P1">P1</SelectItem>
+                      <SelectItem value="P2">P2</SelectItem>
+                      <SelectItem value="P3">P3</SelectItem>
+                      <SelectItem value="P4">P4</SelectItem>
+                      <SelectItem value="P5">P5</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    Override the default severity when this alert triggers an incident. P0–P2 page on-call 24/7. P3 notifies during business hours only.
+                    Override the default priority when this alert fires. P0-P2 page by default; P3-P5 notify only unless configured otherwise.
                   </p>
                 </div>
               </div>

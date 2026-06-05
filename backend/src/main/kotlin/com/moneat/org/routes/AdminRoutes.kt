@@ -25,7 +25,7 @@ import com.moneat.config.isClickHouseError
 import com.moneat.events.models.TriggerIncidentRequest
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertLifecycleEvent
-import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertStatus
 import com.moneat.incident.services.IncidentService
 import com.moneat.notifications.services.DiscordService
@@ -382,7 +382,16 @@ fun Route.adminRoutes() {
                     val config = ApplicationConfig("application.conf")
                     val frontendUrl = config.property("email.frontendUrl").getString()
 
-                    val severityEnum = AlertSeverity.fromString(request.severity) ?: AlertSeverity.MEDIUM
+                    val priority = AlertPriority.fromString(request.severity)
+                    if (priority == null) {
+                        logger.warn { "Invalid alert priority '${request.severity}' in admin manual trigger" }
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            com.moneat.utils.ErrorResponse("Invalid alert priority")
+                        )
+                        return@suspendRunCatching
+                    }
+
                     val sourceEnum =
                         suspendRunCatching {
                             AlertSource.valueOf(request.source)
@@ -396,7 +405,7 @@ fun Route.adminRoutes() {
                         AlertLifecycleEvent(
                             title = request.title,
                             description = request.description,
-                            severity = severityEnum,
+                            priority = priority,
                             status = AlertStatus.FIRING,
                             source = sourceEnum,
                             deduplicationKey = "manual-trigger-${java.util.UUID.randomUUID()}",

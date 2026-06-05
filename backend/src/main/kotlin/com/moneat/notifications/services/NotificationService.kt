@@ -20,7 +20,7 @@ import com.moneat.config.ClickHouseClient
 import com.moneat.events.models.SentryEvent
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertLifecycleEvent
-import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertStatus
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.shared.models.Memberships
@@ -167,7 +167,7 @@ class NotificationService(
                     title = "New Issue: ${emailData.issueTitle}",
                     description = "${emailData.projectName} reported ${emailData.issueLevel.uppercase()}: " +
                         emailData.issueMessage,
-                    severity = severityForIssueLevel(emailData.issueLevel),
+                    priority = priorityForIssueLevel(emailData.issueLevel),
                     status = AlertStatus.FIRING,
                     source = AlertSource.ERROR_ALERT,
                     deduplicationKey = "moneat-error-$issueId",
@@ -657,12 +657,12 @@ class NotificationService(
         return formatter.format(instant.atZone(ZoneId.of("UTC")))
     }
 
-    private fun severityForIssueLevel(level: String): AlertSeverity {
+    private fun priorityForIssueLevel(level: String): AlertPriority {
         return when (level.lowercase(Locale.getDefault())) {
-            "fatal" -> AlertSeverity.CRITICAL
-            "error" -> AlertSeverity.HIGH
-            "warning" -> AlertSeverity.MEDIUM
-            else -> AlertSeverity.LOW
+            "fatal" -> AlertPriority.P0
+            "error" -> AlertPriority.P1
+            "warning" -> AlertPriority.P2
+            else -> AlertPriority.P3
         }
     }
 

@@ -31,19 +31,18 @@ class WorkflowStepRendererTest {
     // ──── sampleScopeForTrigger ────
 
     @Test
-    fun `firing alert sample scope carries high-severity firing fields`() {
+    fun `firing alert sample scope carries high-priority firing fields`() {
         val scope = renderer.sampleScopeForTrigger(ALERT_TRIGGERED_TRIGGER)
         assertEquals("FIRING", scope[ALERT_STATUS_REFERENCE])
-        assertEquals("HIGH", scope[ALERT_SEVERITY_REFERENCE])
-        assertEquals("[P1]", scope[ALERT_PRIORITY_REFERENCE])
+        assertEquals("P1", scope[ALERT_PRIORITY_REFERENCE])
         assertEquals("12.00", scope[ALERT_CURRENT_VALUE_REFERENCE])
     }
 
     @Test
-    fun `resolved alert sample scope flips status severity and value`() {
+    fun `resolved alert sample scope flips status priority and value`() {
         val scope = renderer.sampleScopeForTrigger(ALERT_RESOLVED_TRIGGER)
         assertEquals("RESOLVED", scope[ALERT_STATUS_REFERENCE])
-        assertEquals("LOW", scope[ALERT_SEVERITY_REFERENCE])
+        assertEquals("P3", scope[ALERT_PRIORITY_REFERENCE])
         assertEquals("0.00", scope[ALERT_CURRENT_VALUE_REFERENCE])
     }
 
@@ -57,7 +56,7 @@ class WorkflowStepRendererTest {
         assertTrue(renderer.sampleScopeForTrigger(SECURITY_SIGNAL_TRIGGER).containsKey("security.rule_id"))
     }
 
-    // ──── channelForStep / priorityLabelForSeverity ────
+    // ──── channelForStep / priorityLabel ────
 
     @Test
     fun `channelForStep maps known steps and falls back to workflow`() {
@@ -68,13 +67,13 @@ class WorkflowStepRendererTest {
     }
 
     @Test
-    fun `priorityLabelForSeverity maps each severity`() {
-        assertEquals("[P0]", renderer.priorityLabelForSeverity("CRITICAL"))
-        assertEquals("[P1]", renderer.priorityLabelForSeverity("high"))
-        assertEquals("[P2]", renderer.priorityLabelForSeverity("MEDIUM"))
-        assertEquals("[P3]", renderer.priorityLabelForSeverity("LOW"))
-        assertEquals("", renderer.priorityLabelForSeverity(null))
-        assertEquals("", renderer.priorityLabelForSeverity("INFO"))
+    fun `priorityLabel maps each priority`() {
+        assertEquals("P0", renderer.priorityLabel("P0"))
+        assertEquals("P1", renderer.priorityLabel("p1"))
+        assertEquals("P2", renderer.priorityLabel("P2"))
+        assertEquals("P3", renderer.priorityLabel("P3"))
+        assertEquals("", renderer.priorityLabel(null))
+        assertEquals("", renderer.priorityLabel("INFO"))
     }
 
     // ──── renderStepPreview: freeform ────
@@ -139,14 +138,14 @@ class WorkflowStepRendererTest {
                 mapOf(
                     ALERT_DISPLAY_TITLE_REFERENCE to "Worker failures",
                     ALERT_STATUS_REFERENCE to "FIRING",
-                    ALERT_SEVERITY_REFERENCE to "HIGH",
+                    ALERT_PRIORITY_REFERENCE to "P1",
                     ALERT_SOURCE_REFERENCE to "DASHBOARD_ALERT",
                     ALERT_CONDITION_REFERENCE to ">",
                     ALERT_THRESHOLD_REFERENCE to "5.00",
                     ALERT_URL_REFERENCE to "https://moneat.io/x"
                 )
             )
-        assertEquals("[P1] Worker failures", preview.title)
+        assertEquals("P1 Worker failures", preview.title)
         assertEquals("#E01E5A", preview.color)
         assertEquals(VIEW_CTA_LABEL, preview.ctaLabel)
         assertEquals("Dashboard alert", preview.footer)
@@ -164,32 +163,31 @@ class WorkflowStepRendererTest {
                 mapOf(
                     ALERT_DISPLAY_TITLE_REFERENCE to "Worker failures",
                     ALERT_STATUS_REFERENCE to "RESOLVED",
-                    ALERT_SEVERITY_REFERENCE to "LOW"
+                    ALERT_PRIORITY_REFERENCE to "P3"
                 )
             )
         // Priority prefix is retained ahead of the "Resolved" marker.
-        assertEquals("[P3] Resolved: Worker failures", preview.title)
+        assertEquals("P3 Resolved: Worker failures", preview.title)
         assertEquals("#2EB67D", preview.color)
-        assertEquals("[Moneat] [P3] Resolved: Worker failures", preview.subject)
+        assertEquals("[Moneat] P3 Resolved: Worker failures", preview.subject)
         val htmlBody = preview.htmlBody
         assertNotNull(htmlBody)
         assertTrue(htmlBody.contains("Added by Moneat"))
     }
 
     @Test
-    fun `lifecycle medium severity uses yellow and derives title from raw alert title`() {
+    fun `lifecycle P2 priority uses yellow and derives title from raw alert title`() {
         val preview =
             renderer.renderStepPreview(
                 lifecycleStep(SLACK_STEP),
                 mapOf(
                     ALERT_TITLE_REFERENCE to "Dashboard Warning: Disk pressure",
                     ALERT_STATUS_REFERENCE to "FIRING",
-                    ALERT_SEVERITY_REFERENCE to "MEDIUM"
+                    ALERT_PRIORITY_REFERENCE to "P2"
                 )
             )
         assertEquals("#ECB22E", preview.color)
-        // Title prefix is stripped and priority derived from severity.
-        assertEquals("[P2] Disk pressure", preview.title)
+        assertEquals("P2 Disk pressure", preview.title)
         // No URL means no CTA.
         assertNull(preview.ctaUrl)
     }

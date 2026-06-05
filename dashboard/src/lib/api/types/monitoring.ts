@@ -121,7 +121,7 @@ export interface HostAlert {
   threshold: number
   durationSeconds: number
   enabled: boolean
-  incidentSeverity?: string | null
+  alertPriority?: string | null
   lastTriggeredAt?: number
   createdAt: number
 }

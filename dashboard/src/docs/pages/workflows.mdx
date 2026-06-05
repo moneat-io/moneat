@@ -45,7 +45,7 @@ Available alert references include:
 |-----------|-------------|
 | `alert.title` | Alert title |
 | `alert.description` | Alert description |
-| `alert.severity` | Alert severity |
+| `alert.priority` | Alert priority (`P0`-`P5`) |
 | `alert.status` | Firing or resolved state |
 | `alert.source` | Source system, such as host alerts or uptime monitors |
 | `alert.deduplication_key` | Stable key for the underlying alert condition |
@@ -132,7 +132,6 @@ View: {{alert.url}}
 ```
 
 When a workflow runs, Moneat replaces each variable with the matching alert value.
-`alert.severity` keeps the internal enum value, while `alert.priority` renders `[P0]` through `[P3]`.
 Dashboard alerts also expose `alert.dashboard.title`, `alert.widget.title`, `alert.condition`,
 `alert.threshold`, and `alert.current_value`.
 

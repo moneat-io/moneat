@@ -18,7 +18,7 @@ package com.moneat.workflows
 
 import com.moneat.alerts.models.AlertEpisodes
 import com.moneat.alerts.models.AlertLifecycleEvent
-import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertStatus
 import com.moneat.notifications.services.DiscordService
@@ -504,7 +504,7 @@ class WorkflowGovernanceServiceTest {
         AlertLifecycleEvent(
             title = "CPU saturation",
             description = "CPU is above 90%",
-            severity = AlertSeverity.CRITICAL,
+            priority = AlertPriority.P0,
             status = AlertStatus.FIRING,
             source = AlertSource.HOST_ALERT,
             deduplicationKey = "host-1",

@@ -36,6 +36,7 @@ import kotlinx.serialization.Serializable
 
 private const val EQUALS_LABEL = "is equal to"
 private const val NOT_EQUALS_LABEL = "is not equal to"
+private const val AT_LEAST_LABEL = "is at least"
 private const val ALERT_STATUS_REFERENCE = "alert.status"
 private const val ALERT_DEDUPLICATION_KEY_REFERENCE = "alert.deduplication_key"
 private const val ALERT_CHANNEL_EMAIL_REFERENCE = "alert.channels.email"
@@ -64,6 +65,7 @@ private const val SECURITY_SEVERITY_REFERENCE = "security.severity"
 private const val SECURITY_RESOURCE_REFERENCE = "security.resource"
 
 private const val DEDUPLICATION_KEY_LABEL = "Deduplication key"
+private const val INCIDENT_SEVERITY_LABEL = "Incident severity"
 private const val ORGANIZATION_ID_LABEL = "Organization ID"
 private const val PROJECT_ID_LABEL = "Project ID"
 
@@ -188,13 +190,23 @@ object WorkflowCatalog {
             )
         ),
         WorkflowResourceDefinition(
-            type = "AlertSeverity",
-            label = "Severity",
-            fieldConfig = WorkflowFieldConfig(type = "select", placeholder = "CRITICAL, HIGH, MEDIUM, LOW"),
+            type = "AlertPriority",
+            label = "Alert priority",
+            fieldConfig = WorkflowFieldConfig(type = "select", placeholder = "P0, P1, P2, P3, P4, P5"),
             operations = listOf(
-                WorkflowOperationDefinition("eq", EQUALS_LABEL, "AlertSeverity"),
-                WorkflowOperationDefinition("neq", NOT_EQUALS_LABEL, "AlertSeverity"),
-                WorkflowOperationDefinition("at_least", "is at least", "AlertSeverity")
+                WorkflowOperationDefinition("eq", EQUALS_LABEL, "AlertPriority"),
+                WorkflowOperationDefinition("neq", NOT_EQUALS_LABEL, "AlertPriority"),
+                WorkflowOperationDefinition("at_least", AT_LEAST_LABEL, "AlertPriority")
+            )
+        ),
+        WorkflowResourceDefinition(
+            type = "IncidentSeverity",
+            label = INCIDENT_SEVERITY_LABEL,
+            fieldConfig = WorkflowFieldConfig(type = "select", placeholder = "SEV-0, SEV-1, SEV-2, SEV-3, SEV-4"),
+            operations = listOf(
+                WorkflowOperationDefinition("eq", EQUALS_LABEL, "IncidentSeverity"),
+                WorkflowOperationDefinition("neq", NOT_EQUALS_LABEL, "IncidentSeverity"),
+                WorkflowOperationDefinition("at_least", AT_LEAST_LABEL, "IncidentSeverity")
             )
         ),
         WorkflowResourceDefinition(
@@ -234,7 +246,7 @@ object WorkflowCatalog {
             operations = listOf(
                 WorkflowOperationDefinition("eq", EQUALS_LABEL, "SecuritySeverity"),
                 WorkflowOperationDefinition("neq", NOT_EQUALS_LABEL, "SecuritySeverity"),
-                WorkflowOperationDefinition("at_least", "is at least", "SecuritySeverity")
+                WorkflowOperationDefinition("at_least", AT_LEAST_LABEL, "SecuritySeverity")
             )
         )
     )
@@ -243,8 +255,7 @@ object WorkflowCatalog {
         WorkflowScopeReferenceDefinition("alert.title", "Alert title", "String"),
         WorkflowScopeReferenceDefinition(ALERT_DISPLAY_TITLE_REFERENCE, "Display title", "String"),
         WorkflowScopeReferenceDefinition("alert.description", "Alert description", "Text"),
-        WorkflowScopeReferenceDefinition("alert.severity", "Severity", "AlertSeverity"),
-        WorkflowScopeReferenceDefinition(ALERT_PRIORITY_REFERENCE, "Priority", "String"),
+        WorkflowScopeReferenceDefinition(ALERT_PRIORITY_REFERENCE, "Priority", "AlertPriority"),
         WorkflowScopeReferenceDefinition(ALERT_STATUS_REFERENCE, "Status", "AlertStatus"),
         WorkflowScopeReferenceDefinition("alert.source", "Source", "AlertSource"),
         WorkflowScopeReferenceDefinition(ALERT_DEDUPLICATION_KEY_REFERENCE, DEDUPLICATION_KEY_LABEL, "String"),
@@ -289,7 +300,7 @@ object WorkflowCatalog {
         WorkflowScopeReferenceDefinition(INCIDENT_ID_REFERENCE, "Incident ID", "String"),
         WorkflowScopeReferenceDefinition(INCIDENT_TITLE_REFERENCE, "Incident title", "String"),
         WorkflowScopeReferenceDefinition(INCIDENT_STATUS_REFERENCE, "Incident status", "IncidentStatus"),
-        WorkflowScopeReferenceDefinition(INCIDENT_SEVERITY_REFERENCE, "Incident severity", "AlertSeverity"),
+        WorkflowScopeReferenceDefinition(INCIDENT_SEVERITY_REFERENCE, INCIDENT_SEVERITY_LABEL, "IncidentSeverity"),
         WorkflowScopeReferenceDefinition(ALERT_DEDUPLICATION_KEY_REFERENCE, DEDUPLICATION_KEY_LABEL, "String"),
         WorkflowScopeReferenceDefinition(ALERT_EPISODE_ID_REFERENCE, "Episode ID", "String"),
         WorkflowScopeReferenceDefinition(ALERT_EPISODE_KEY_REFERENCE, "Episode key", "String"),
@@ -371,14 +382,14 @@ object WorkflowCatalog {
             label = "When an incident is created",
             description = "Runs when incident routing creates or pages a response event.",
             scope = incidentScope,
-            defaultOnceForTemplate = listOf(ALERT_EPISODE_KEY_REFERENCE)
+            defaultOnceForTemplate = listOf(INCIDENT_ID_REFERENCE)
         ),
         WorkflowTriggerDefinition(
             name = "incident.resolved",
             label = "When an incident resolves",
             description = "Runs when incident routing resolves a response event.",
             scope = incidentScope,
-            defaultOnceForTemplate = listOf(ALERT_EPISODE_KEY_REFERENCE, INCIDENT_STATUS_REFERENCE)
+            defaultOnceForTemplate = listOf(INCIDENT_ID_REFERENCE, INCIDENT_STATUS_REFERENCE)
         ),
         WorkflowTriggerDefinition(
             name = "security.signal",
@@ -555,8 +566,19 @@ object WorkflowCatalog {
                 WorkflowStepParamDefinition("escalation_policy_id", "Escalation policy ID", "Number"),
                 WorkflowStepParamDefinition("title", "Title", "String"),
                 WorkflowStepParamDefinition("description", "Description", "Text", required = false),
-                WorkflowStepParamDefinition("priority_level", "Priority", "String", required = false),
+                WorkflowStepParamDefinition("alert_priority", "Alert priority", "AlertPriority", required = false),
                 WorkflowStepParamDefinition("deduplication_key", DEDUPLICATION_KEY_LABEL, "String", required = false)
+            )
+        ),
+        WorkflowStepDefinition(
+            name = "oncall.incident.declare",
+            label = "Declare incident",
+            description = "Declare an operational incident through the on-call bridge.",
+            params = listOf(
+                WorkflowStepParamDefinition("title", "Title", "String"),
+                WorkflowStepParamDefinition("description", "Description", "Text", required = false),
+                WorkflowStepParamDefinition("incident_severity", INCIDENT_SEVERITY_LABEL, "IncidentSeverity"),
+                WorkflowStepParamDefinition("alert_id", "Alert ID", "Number", required = false)
             )
         ),
         WorkflowStepDefinition(

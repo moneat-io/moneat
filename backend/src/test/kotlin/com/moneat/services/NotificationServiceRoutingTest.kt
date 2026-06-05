@@ -23,7 +23,7 @@ import com.moneat.events.models.StackFrame
 import com.moneat.events.models.StackTrace
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertLifecycleEvent
-import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertStatus
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.NotificationService
@@ -157,7 +157,7 @@ class NotificationServiceRoutingTest {
             val event = eventSlot.captured
             assertEquals("New Issue: Test error", event.title)
             assertTrue(event.description.contains("WorkflowProject reported ERROR"))
-            assertEquals(AlertSeverity.HIGH, event.severity)
+            assertEquals(AlertPriority.P1, event.priority)
             assertEquals(AlertStatus.FIRING, event.status)
             assertEquals(AlertSource.ERROR_ALERT, event.source)
             assertEquals("moneat-error-2001", event.deduplicationKey)
@@ -186,7 +186,7 @@ class NotificationServiceRoutingTest {
             val event = eventSlot.captured
             assertEquals("New Issue: Cannot invoke method on null", event.title)
             assertTrue(event.description.contains("ExceptionProject reported FATAL"))
-            assertEquals(AlertSeverity.CRITICAL, event.severity)
+            assertEquals(AlertPriority.P0, event.priority)
             assertEquals(orgId, event.organizationId)
         }
 

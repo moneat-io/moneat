@@ -471,7 +471,7 @@ Create an alert on a dashboard widget.
 | `condition` | string | Yes | `gt`, `lt`, `eq`, `gte`, `lte`, or persisted operators `>`, `<`, `==`, `>=`, `<=` |
 | `threshold` | number | Yes | Threshold value |
 | `duration_seconds` | integer | No | Duration before firing (default 0) |
-| `incident_severity` | string | No | `P0`-`P5` or `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`; `P0` maps to `CRITICAL` |
+| `alert_priority` | string | No | `P0`-`P5`; legacy `CRITICAL`, `HIGH`, `MEDIUM`, `LOW` inputs map to `P0`-`P3` |
 
 ### ✏️ `update_dashboard_alert`
 Update a dashboard alert.
@@ -484,7 +484,7 @@ Update a dashboard alert.
 | `condition` | string | No | `gt`, `lt`, `eq`, `gte`, `lte`, or persisted operators `>`, `<`, `==`, `>=`, `<=` |
 | `threshold` | number | No | Threshold value |
 | `duration_seconds` | integer | No | Duration before firing |
-| `incident_severity` | string | No | `P0`-`P5` or `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`; `P0` maps to `CRITICAL` |
+| `alert_priority` | string | No | `P0`-`P5`; legacy `CRITICAL`, `HIGH`, `MEDIUM`, `LOW` inputs map to `P0`-`P3` |
 | `enabled` | boolean | No | Enable or disable the alert |
 
 ### ✏️ `delete_dashboard_alert`
@@ -525,7 +525,7 @@ Create a monitoring alert on a host.
 | `condition` | string | Yes | `gt`, `lt`, `eq` |
 | `threshold` | number | Yes | Threshold value |
 | `duration_seconds` | number | No | Duration before triggering (default 300) |
-| `incident_severity` | string | No | `P0`-`P5` (default `P3`) |
+| `alert_priority` | string | No | `P0`-`P5` (default `P3`) |
 
 ### ✏️ `update_alert`
 Update a monitoring alert.

@@ -27,8 +27,8 @@ const tabs = [
   {id: 'overview', label: 'Overview', href: '/on-call', icon: Bell},
   {id: 'schedules', label: 'Schedules', href: '/on-call/schedules', icon: Calendar},
   {id: 'escalation-policies', label: 'Escalation Policies', href: '/on-call/escalation-policies', icon: ListChecks},
-  {id: 'alerts', label: 'Alerts', href: '/on-call/incidents', icon: AlertTriangle},
-  {id: 'incidents', label: 'Incidents', href: '/on-call/declared-incidents', icon: Shield},
+  {id: 'alerts', label: 'Alerts', href: '/on-call/alerts', icon: AlertTriangle},
+  {id: 'incidents', label: 'Incidents', href: '/on-call/incidents', icon: Shield},
 ]
 
 function OnCallLayout() {
@@ -40,7 +40,7 @@ function OnCallLayout() {
       <PageHeader
         icon={Shield}
         title="On-call management"
-        description="Manage schedules, escalation policies, and incidents"
+        description="Manage schedules, escalation policies, alerts, and incidents"
       />
 
       {/* Tab Navigation */}

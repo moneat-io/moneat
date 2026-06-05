@@ -4,6 +4,7 @@
 
 package com.moneat.enterprise.oncall.services
 
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.enterprise.oncall.models.BusinessHours
 import com.moneat.enterprise.oncall.models.BusinessHoursConfig
 import com.moneat.enterprise.oncall.models.BusinessHoursWindow
@@ -93,11 +94,11 @@ class BusinessHoursService {
 
     fun shouldEscalate(
         organizationId: Int,
-        priorityLevel: String,
+        priority: String,
     ): Boolean {
-        // P0-P2 always escalate, P3+ only during business hours
-        return when (priorityLevel) {
-            "P0", "P1", "P2" -> true
+        // P0 through P2 are pageable by default; lower priorities wait for business hours.
+        return when (AlertPriority.fromString(priority)) {
+            AlertPriority.P0, AlertPriority.P1, AlertPriority.P2 -> true
             else -> isWithinBusinessHours(organizationId)
         }
     }

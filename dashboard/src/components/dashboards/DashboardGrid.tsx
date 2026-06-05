@@ -41,6 +41,27 @@ interface DashboardGridProps {
   onWidgetDelete: (widgetId: number) => void
 }
 
+type WidgetCardAlert = {
+  widget_id: number
+  enabled: boolean
+  last_triggered_at: string | null
+  last_triggered_level?: string | null
+  alert_priority: string | null
+}
+
+type WidgetCardProps = Readonly<{
+  widget: DashboardWidget
+  isEditing: boolean
+  dashboardId: number
+  projectId?: string | number
+  timeRange: TimeRangeDef
+  autoRefresh: boolean
+  variableValues?: Record<string, string>
+  alerts: WidgetCardAlert[]
+  onWidgetClick: (widget: DashboardWidget) => void
+  onWidgetDelete: (widgetId: number) => void
+}>
+
 function getSectionMembership(widgets: DashboardWidget[]): Map<number, number> {
   const sorted = [...widgets].sort((a, b) => a.grid_y - b.grid_y || a.sort_order - b.sort_order)
   const membership = new Map<number, number>()
@@ -53,6 +74,17 @@ function getSectionMembership(widgets: DashboardWidget[]): Map<number, number> {
     }
   }
   return membership
+}
+
+function alertDotColor(
+  firing: boolean,
+  level: string | null | undefined,
+  priority: string | null | undefined,
+): string {
+  if (!firing) return 'bg-muted-foreground/40'
+  if (level === 'ERROR') return 'bg-danger-solid'
+  if (level === 'WARNING') return 'bg-warning-solid'
+  return priority === 'P0' || priority === 'P1' ? 'bg-danger-solid' : 'bg-warning-solid'
 }
 
 export function DashboardGrid({
@@ -329,24 +361,7 @@ function WidgetCard({
   alerts,
   onWidgetClick,
   onWidgetDelete,
-}: {
-  widget: DashboardWidget
-  isEditing: boolean
-  dashboardId: number
-  projectId?: string | number
-  timeRange: TimeRangeDef
-  autoRefresh: boolean
-  variableValues?: Record<string, string>
-  alerts: {
-    widget_id: number
-    enabled: boolean
-    last_triggered_at: string | null
-    last_triggered_level?: string | null
-    incident_severity: string | null
-  }[]
-  onWidgetClick: (widget: DashboardWidget) => void
-  onWidgetDelete: (widgetId: number) => void
-}) {
+}: WidgetCardProps) {
   return (
     <div
       className={`h-full rounded-lg border bg-card overflow-visible flex flex-col ${
@@ -381,16 +396,8 @@ function WidgetCard({
               return Date.parse(alert.last_triggered_at) > Date.parse(latest.last_triggered_at) ? alert : latest
             }, null)
             const firing = firingAlert != null
-            const severity = firingAlert?.incident_severity
-            const dotColor = firing
-              ? firingAlert?.last_triggered_level === 'ERROR'
-                ? 'bg-danger-solid'
-                : firingAlert?.last_triggered_level === 'WARNING'
-                  ? 'bg-warning-solid'
-                  : severity === 'CRITICAL' || severity === 'HIGH'
-                    ? 'bg-danger-solid'
-                    : 'bg-warning-solid'
-              : 'bg-muted-foreground/40'
+            const priority = firingAlert?.alert_priority
+            const dotColor = alertDotColor(firing, firingAlert?.last_triggered_level, priority)
             return (
               <span className="relative shrink-0" title={firing ? `Alert firing` : `${widgetAlerts.length} alert(s) configured`}>
                 <Bell className="h-3 w-3 text-muted-foreground" />

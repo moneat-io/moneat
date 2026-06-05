@@ -48,7 +48,7 @@ class WorkflowGraphValidatorTest {
                         id = "condition-1",
                         type = "condition",
                         kind = "if",
-                        conditions = listOf(WorkflowConditionConfig("alert.severity", "at_least", "HIGH"))
+                        conditions = listOf(WorkflowConditionConfig("alert.priority", "at_least", "HIGH"))
                     ),
                     action("action-1")
                 ),
@@ -273,7 +273,7 @@ class WorkflowGraphValidatorTest {
                         cases = listOf(
                             WorkflowSwitchCaseConfig(
                                 name = "high",
-                                conditions = listOf(WorkflowConditionConfig("alert.severity", "at_least", "HIGH"))
+                                conditions = listOf(WorkflowConditionConfig("alert.priority", "at_least", "HIGH"))
                             )
                         )
                     ),
@@ -527,7 +527,7 @@ class WorkflowGraphValidatorTest {
     fun `validateLegacy builds and validates a graph`() {
         validator.validateLegacy(
             triggerName = "alert.triggered",
-            conditions = listOf(WorkflowConditionConfig("alert.severity", "at_least", "HIGH")),
+            conditions = listOf(WorkflowConditionConfig("alert.priority", "at_least", "HIGH")),
             steps = listOf(
                 WorkflowStepConfig("notification.slack", mapOf("message" to "{{alert.title}}"))
             ),

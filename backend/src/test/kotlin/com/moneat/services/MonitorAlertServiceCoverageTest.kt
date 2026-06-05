@@ -18,7 +18,7 @@ package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
-import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertSource
 import com.moneat.incident.services.IncidentService
 import com.moneat.monitor.models.AlertData
@@ -35,6 +35,7 @@ import com.moneat.shared.models.OrganizationAlertTemplates
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.workflows.services.AlertResolvedWorkflowEvent
 import com.moneat.workflows.services.WorkflowService
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
@@ -71,6 +72,22 @@ import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
+
+private fun expectedResolvedWorkflowEvent(
+    organizationId: Int,
+    hostId: Int,
+    deduplicationKey: String,
+    hostName: String = "host-alert-workflow",
+): AlertResolvedWorkflowEvent =
+    AlertResolvedWorkflowEvent(
+        organizationId = organizationId,
+        source = AlertSource.HOST_ALERT.name,
+        deduplicationKey = deduplicationKey,
+        title = "$hostName - CPU Usage recovered",
+        description = "The alert for CPU Usage is no longer active.",
+        moneatUrl = "https://moneat.io/monitoring/hosts/$hostId",
+        priority = AlertPriority.P1,
+    )
 
 class MonitorAlertServiceCoverageTest {
 
@@ -149,7 +166,7 @@ class MonitorAlertServiceCoverageTest {
         return fn.call(service, *args)
     }
 
-    private fun createHostAlertFixture(incidentSeverity: String? = "HIGH"): HostAlertFixture {
+    private fun createHostAlertFixture(alertPriority: String? = "HIGH"): HostAlertFixture {
         val now = Clock.System.now()
         return transaction {
             val orgId =
@@ -175,7 +192,7 @@ class MonitorAlertServiceCoverageTest {
                     it[duration_seconds] = 0
                     it[enabled] = true
                     it[last_triggered_at] = null
-                    it[incident_severity] = incidentSeverity
+                    it[alert_priority] = alertPriority
                     it[created_at] = now
                 } get HostAlerts.id
 
@@ -287,13 +304,7 @@ class MonitorAlertServiceCoverageTest {
             assertNull(clearedLastTriggeredAt)
             coVerify(exactly = 1) {
                 workflowService.publishAlertResolved(
-                    fixture.orgId,
-                    AlertSource.HOST_ALERT.name,
-                    deduplicationKey,
-                    any(),
-                    any(),
-                    any(),
-                    AlertSeverity.HIGH,
+                    expectedResolvedWorkflowEvent(fixture.orgId, fixture.hostId, deduplicationKey),
                 )
             }
             coVerify(exactly = 1) {
@@ -327,13 +338,7 @@ class MonitorAlertServiceCoverageTest {
 
             coVerify(exactly = 1) {
                 workflowService.publishAlertResolved(
-                    fixture.orgId,
-                    AlertSource.HOST_ALERT.name,
-                    deduplicationKey,
-                    any(),
-                    any(),
-                    any(),
-                    AlertSeverity.HIGH,
+                    expectedResolvedWorkflowEvent(fixture.orgId, fixture.hostId, deduplicationKey),
                 )
             }
             val clearedLastTriggeredAt =
@@ -374,7 +379,7 @@ class MonitorAlertServiceCoverageTest {
                             it[threshold] = 80.0
                             it[duration_seconds] = 0
                             it[enabled] = true
-                            it[incident_severity] = null
+                            it[alert_priority] = null
                             it[created_at] = now
                             it[updated_at] = now
                         } get OrganizationAlertTemplates.id
@@ -407,13 +412,7 @@ class MonitorAlertServiceCoverageTest {
 
             coVerify(exactly = 1) {
                 workflowService.publishAlertResolved(
-                    orgId,
-                    AlertSource.HOST_ALERT.name,
-                    deduplicationKey,
-                    any(),
-                    any(),
-                    any(),
-                    AlertSeverity.HIGH,
+                    expectedResolvedWorkflowEvent(orgId, hostId, deduplicationKey, "global-alert-workflow"),
                 )
             }
             val clearedTemplateState =

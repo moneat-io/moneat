@@ -17,8 +17,23 @@
 import {createFileRoute, Link, Navigate} from '@tanstack/react-router'
 import {LandingPage} from '@/components/landing/LandingPage'
 import {useQuery} from '@tanstack/react-query'
-import {type ReactNode, useState, useEffect} from 'react'
-import {api, type StatusPageDetail, type UptimeHeartbeat} from '@/lib/api'
+import {type ComponentType, type ReactNode, useState, useEffect} from 'react'
+import {
+  api,
+  type Feedback,
+  type Incident,
+  type Issue,
+  type MonitorHostResponse,
+  type OnCallSchedule,
+  type PerformanceStats,
+  type ProjectStats,
+  type Release,
+  type Replay,
+  type StatusPage,
+  type StatusPageDetail,
+  type UptimeHeartbeat,
+  type UptimeMonitor,
+} from '@/lib/api'
 import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
 import {formatRelativeTime} from '@/lib/utils'
 import {APP_OVERVIEW_SEARCH, APP_OVERVIEW_VIEW, normalizeAppOverviewSearch} from '@/lib/overview-route'
@@ -246,15 +261,15 @@ function DashboardSection({
   headerRight,
   iconClassName,
   iconBgClassName,
-}: {
+}: Readonly<{
   title: string
-  icon: React.ComponentType<{ className?: string }>
+  icon: ComponentType<{ className?: string }>
   to: string
-  children: React.ReactNode
-  headerRight?: React.ReactNode
+  children: ReactNode
+  headerRight?: ReactNode
   iconClassName?: string
   iconBgClassName?: string
-}) {
+}>) {
   return (
     <Card className="overflow-hidden border-border/60">
       <CardHeader className="px-5 py-3.5 flex flex-row items-center justify-between space-y-0 border-b border-border/40">
@@ -280,7 +295,7 @@ function DashboardSection({
   )
 }
 
-function EmptySection({message}: { message: string }) {
+function EmptySection({message}: Readonly<{ message: string }>) {
   return (
     <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
       {message}
@@ -356,10 +371,10 @@ function getUtilizationFillColor(percent: number | null): string {
 function UtilizationBar({
   label,
   value,
-}: {
+}: Readonly<{
   label: string
   value?: number | null
-}) {
+}>) {
   const percent = normalizePercent(value)
 
   return (
@@ -377,6 +392,956 @@ function UtilizationBar({
         />
       </div>
     </div>
+  )
+}
+
+type DashboardStatsOverviewProps = Readonly<{
+  isLoading: boolean
+  stats?: ProjectStats | null
+  unresolvedIssueCount: number
+  activeIncidentCount: number
+  uptimeUp: number
+  uptimeDown: number
+  uptimeCount: number
+  hostsUp: number
+  hostsDown: number
+  hostCount: number
+}>
+
+function DashboardStatsOverview({
+  isLoading,
+  stats,
+  unresolvedIssueCount,
+  activeIncidentCount,
+  uptimeUp,
+  uptimeDown,
+  uptimeCount,
+  hostsUp,
+  hostsDown,
+  hostCount,
+}: DashboardStatsOverviewProps) {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-4">
+      {isLoading ? (
+        <>
+          <StatsCardSkeleton accent="amber" compact />
+          <StatsCardSkeleton accent="blue" compact />
+          <StatsCardSkeleton accent="rose" compact />
+          <StatsCardSkeleton accent="emerald" compact />
+          <StatsCardSkeleton accent="cyan" compact />
+          <StatsCardSkeleton accent="violet" compact />
+        </>
+      ) : (
+        <>
+          <StatsCard
+            title="Unresolved Issues"
+            value={formatCount(stats?.unresolvedIssues ?? unresolvedIssueCount)}
+            icon={AlertCircle}
+            accent="amber"
+            compact
+          />
+          <StatsCard
+            title="Errors (24h)"
+            value={formatCount(stats?.totalEvents ?? 0)}
+            icon={Activity}
+            accent="blue"
+            compact
+          />
+          <StatsCard title="Active Incidents" value={activeIncidentCount} icon={Bell} accent="rose" compact />
+          <StatsCard
+            title="Uptime Monitors"
+            value={`${uptimeUp}/${uptimeCount}`}
+            icon={HeartPulse}
+            accent="emerald"
+            subtitle={uptimeDown > 0 ? `${uptimeDown} down` : 'All healthy'}
+            compact
+          />
+          <StatsCard
+            title="Infrastructure"
+            value={`${hostsUp}/${hostCount}`}
+            icon={Server}
+            accent="cyan"
+            subtitle={hostsDown > 0 ? `${hostsDown} down` : 'All online'}
+            compact
+          />
+          <StatsCard
+            title="Users (24h)"
+            value={formatCount(stats?.affectedUsers ?? 0)}
+            icon={Users}
+            accent="violet"
+            compact
+          />
+        </>
+      )}
+    </div>
+  )
+}
+
+function DashboardEventsOverview({
+  isLoading,
+  stats,
+}: Readonly<{
+  isLoading: boolean
+  stats?: ProjectStats | null
+}>) {
+  if (isLoading) {
+    return (
+      <div className="mb-5 h-[100px]">
+        <EventsChartSkeleton fillHeight compact />
+      </div>
+    )
+  }
+
+  if (!stats || stats.eventsTimeline.length === 0) return null
+
+  return (
+    <div className="mb-5 h-[100px]">
+      <EventsChart data={stats.eventsTimeline} title="Errors — Last 24 Hours" fillHeight compact />
+    </div>
+  )
+}
+
+function renderOnCallHeader(triggeredAlerts: Incident[], activeAlerts: Incident[]): ReactNode {
+  if (triggeredAlerts.length === 0 && activeAlerts.length === 0) return null
+
+  return (
+    <div className="flex items-center gap-3 text-xs font-medium">
+      {triggeredAlerts.length > 0 && (
+        <div className="flex items-center gap-1.5 text-danger-fg">
+          <Bell className="h-3.5 w-3.5" />
+          <span>{triggeredAlerts.length} Triggered alerts</span>
+        </div>
+      )}
+      {activeAlerts.length > 0 && (
+        <div className="flex items-center gap-1.5 text-muted-foreground">
+          <Activity className="h-3.5 w-3.5" />
+          <span>{activeAlerts.length} Active</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function OnCallCurrentAssignments({schedules}: Readonly<{ schedules: OnCallSchedule[] }>) {
+  const currentSchedules = schedules.filter(schedule => schedule.currentOnCall)
+  if (currentSchedules.length === 0) return null
+
+  return (
+    <div className="mb-3 flex flex-wrap gap-1.5">
+      {currentSchedules.map(schedule => (
+        <div
+          key={schedule.id}
+          className="flex items-center gap-1.5 text-xs bg-muted/50 border border-border/40 rounded-md px-2.5 py-1"
+        >
+          <Shield className="h-3 w-3 text-muted-foreground" />
+          <span className="font-medium">{schedule.currentOnCall?.userName}</span>
+          <span className="text-muted-foreground">on {schedule.name}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function OnCallRecentAlertsContent({
+  isLoading,
+  alerts,
+}: Readonly<{
+  isLoading: boolean
+  alerts: Incident[]
+}>) {
+  if (isLoading) return <SkeletonSection />
+  if (alerts.length === 0) return <EmptySection message="No alerts" />
+
+  return (
+    <div className="space-y-0.5">
+      {alerts.slice(0, 5).map(alert => (
+        <a
+          key={alert.id}
+          href={`/on-call/alerts/${alert.id}`}
+          className="grid grid-cols-[7.75rem_auto_minmax(0,1fr)_auto] items-center gap-2 py-2 px-2.5 rounded-md hover:bg-muted/50 transition"
+        >
+          <Badge variant={incidentStatusVariant(alert.status)} className="w-full justify-center text-[10px] px-1.5 py-0 shrink-0">
+            {alert.status}
+          </Badge>
+          <span className={`text-[11px] font-semibold ${getPriorityColor(alert.priority)} shrink-0 tabular-nums`}>
+            {alert.priority}
+          </span>
+          <span className="text-sm truncate flex-1">{alert.title}</span>
+          <span className="text-[11px] text-muted-foreground shrink-0">
+            {formatRelativeTime(alert.triggeredAt)}
+          </span>
+        </a>
+      ))}
+    </div>
+  )
+}
+
+function OnCallDashboardSection({
+  hasOnCall,
+  triggeredAlerts,
+  activeAlerts,
+  recentAlerts,
+  isLoading,
+  schedules,
+}: Readonly<{
+  hasOnCall: boolean
+  triggeredAlerts: Incident[]
+  activeAlerts: Incident[]
+  recentAlerts: Incident[]
+  isLoading: boolean
+  schedules: OnCallSchedule[]
+}>) {
+  if (!hasOnCall) return null
+
+  return (
+    <DashboardSection
+      title="On-Call"
+      icon={Bell}
+      to="/on-call"
+      iconClassName="text-warning-fg"
+      iconBgClassName="bg-warning-bg"
+      headerRight={renderOnCallHeader(triggeredAlerts, activeAlerts)}
+    >
+      <OnCallCurrentAssignments schedules={schedules} />
+      <OnCallRecentAlertsContent isLoading={isLoading} alerts={recentAlerts} />
+    </DashboardSection>
+  )
+}
+
+type IssuePlatformInfo = {
+  Icon: ComponentType<{ className?: string }>
+  label: string
+}
+
+function getIssuePlatformInfo(platform?: string | null): IssuePlatformInfo | null {
+  const normalized = platform?.toLowerCase() ?? ''
+  if (normalized.includes('cocoa') || normalized.includes('ios')) {
+    return {Icon: Smartphone, label: 'iOS'}
+  }
+  if (normalized.includes('android')) return {Icon: Smartphone, label: 'Android'}
+  if (normalized.includes('javascript') || normalized.includes('node')) return {Icon: Globe, label: 'Web'}
+  if (normalized.includes('python') || normalized.includes('java') || normalized.includes('go')) {
+    return {Icon: Server, label: 'Backend'}
+  }
+  return null
+}
+
+function renderIssuesHeader(unresolvedCount: number, issueLevelCounts: Record<string, number>): ReactNode {
+  if (unresolvedCount === 0) return null
+
+  return (
+    <div className="flex items-center gap-3 text-xs font-medium">
+      <div className="flex items-center gap-1.5 text-muted-foreground">
+        <AlertCircle className="h-3.5 w-3.5" />
+        <span>{unresolvedCount} Total</span>
+      </div>
+      {issueLevelCounts.fatal > 0 && (
+        <div className="flex items-center gap-1.5 text-danger-fg">
+          <XCircle className="h-3.5 w-3.5" />
+          <span>{issueLevelCounts.fatal} Fatal</span>
+        </div>
+      )}
+      {issueLevelCounts.error > 0 && (
+        <div className="flex items-center gap-1.5 text-danger-fg">
+          <AlertTriangle className="h-3.5 w-3.5" />
+          <span>{issueLevelCounts.error} Error</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function IssueOverviewRow({issue}: Readonly<{ issue: Issue }>) {
+  const levelAccent = levelBorderClass(issue.level)
+  const platformInfo = getIssuePlatformInfo(issue.platform)
+
+  return (
+    <Link
+      key={issue.id}
+      to="/issues/$issueId"
+      params={{issueId: issue.id}}
+      search={issueDetailSearch(issue)}
+      className={`flex items-center gap-2 py-2 px-2.5 rounded-md border-l-2 ${levelAccent} hover:bg-muted/50 transition`}
+    >
+      <Badge variant={levelBadgeVariant(issue.level)} className="text-[10px] px-1.5 py-0 w-14 justify-center shrink-0">
+        {issue.level.toUpperCase()}
+      </Badge>
+      <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+        <span className="text-sm truncate">{issue.title || issue.culprit}</span>
+        <div className="flex items-center gap-2 text-[10px] text-muted-foreground/70">
+          {platformInfo && (
+            <span className="flex items-center gap-0.5" title={platformInfo.label}>
+              <platformInfo.Icon className="h-3 w-3 text-muted-foreground/60" />
+              <span>{platformInfo.label}</span>
+            </span>
+          )}
+          {issue.lastSeen && <span>{formatRelativeTime(issue.lastSeen)}</span>}
+        </div>
+      </div>
+      <div className="flex items-center gap-3 shrink-0">
+        <span className="text-[11px] text-muted-foreground tabular-nums">
+          {formatCount(issue.eventCount)} events
+        </span>
+      </div>
+    </Link>
+  )
+}
+
+function IssuesDashboardSection({
+  isLoading,
+  unresolvedIssues,
+  issueLevelCounts,
+}: Readonly<{
+  isLoading: boolean
+  unresolvedIssues: Issue[]
+  issueLevelCounts: Record<string, number>
+}>) {
+  let content: ReactNode
+
+  if (isLoading) {
+    content = <SkeletonSection />
+  } else if (unresolvedIssues.length === 0) {
+    content = <EmptySection message="No unresolved issues" />
+  } else {
+    content = (
+      <div className="space-y-0.5">
+        {unresolvedIssues.slice(0, 6).map(issue => <IssueOverviewRow key={issue.id} issue={issue} />)}
+      </div>
+    )
+  }
+
+  return (
+    <DashboardSection
+      title="Issues"
+      icon={AlertCircle}
+      to="/issues"
+      iconClassName="text-danger-fg"
+      iconBgClassName="bg-danger-bg"
+      headerRight={renderIssuesHeader(unresolvedIssues.length, issueLevelCounts)}
+    >
+      {content}
+    </DashboardSection>
+  )
+}
+
+function renderUptimeHeader(uptimeMonitors: UptimeMonitor[], uptimeUp: number, uptimeDown: number): ReactNode {
+  if (uptimeMonitors.length === 0) return null
+
+  return (
+    <div className="flex items-center gap-3 text-xs font-medium">
+      {uptimeDown > 0 && (
+        <div className="flex items-center gap-1.5 text-danger-fg">
+          <ArrowDown className="h-3.5 w-3.5" />
+          <span>{uptimeDown} Down</span>
+        </div>
+      )}
+      {uptimeUp > 0 && (
+        <div className="flex items-center gap-1.5 text-success-fg">
+          <ArrowUp className="h-3.5 w-3.5" />
+          <span>{uptimeUp} Up</span>
+        </div>
+      )}
+      <div className="flex items-center gap-1.5 text-muted-foreground">
+        <Activity className="h-3.5 w-3.5" />
+        <span>{uptimeMonitors.length} Total</span>
+      </div>
+    </div>
+  )
+}
+
+function sampledSuccessPercent(heartbeats: UptimeHeartbeat[]): number | null {
+  if (heartbeats.length === 0) return null
+  return (heartbeats.filter((heartbeat) => heartbeat.status === 1).length / heartbeats.length) * 100
+}
+
+function UptimeMonitorOverviewRow({
+  monitor,
+  heartbeats,
+  nowMs,
+}: Readonly<{
+  monitor: UptimeMonitor
+  heartbeats: UptimeHeartbeat[]
+  nowMs: number
+}>) {
+  const latestHeartbeat = getLatestHeartbeat(heartbeats)
+  const isHeartbeatFresh = isRecentHeartbeat(monitor.lastCheckAt, monitor.intervalSeconds, nowMs)
+  const sampledSuccess = sampledSuccessPercent(heartbeats)
+
+  return (
+    <Link
+      key={monitor.id}
+      to="/uptime/$monitorId"
+      params={{monitorId: monitor.id}}
+      className="grid gap-2 py-2 px-2.5 rounded-md hover:bg-muted/50 transition md:grid-cols-[minmax(12rem,26%)_minmax(0,1fr)_auto] md:items-center"
+    >
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className={`h-2 w-2 rounded-full shrink-0 ${getStatusDot(monitor.status)}`} />
+        <span className="text-sm truncate">{monitor.name}</span>
+        {!isHeartbeatFresh && monitor.active && monitor.status !== 'paused' && (
+          <Badge variant="warning" className="text-[10px] px-1.5 py-0">
+            stale
+          </Badge>
+        )}
+      </div>
+
+      <div className="min-w-0">
+        <HeartbeatBar heartbeats={heartbeats} maxBars={24} className="h-3.5 w-full" />
+        <div className="mt-1 flex items-center gap-3 text-[11px] text-muted-foreground tabular-nums">
+          <span>
+            {latestHeartbeat ? `Last beat ${formatRelativeTime(latestHeartbeat.timestamp)}` : 'No heartbeat data'}
+          </span>
+          {sampledSuccess != null && <span>{sampledSuccess.toFixed(0)}% success</span>}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 shrink-0">
+        {monitor.uptime24h != null && (
+          <span className="text-[11px] text-muted-foreground tabular-nums">
+            {monitor.uptime24h.toFixed(2)}%
+          </span>
+        )}
+        {monitor.avgResponseTime != null && (
+          <span className="text-[11px] text-muted-foreground tabular-nums">
+            {formatMs(monitor.avgResponseTime)}
+          </span>
+        )}
+        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+          {getMonitorTypeLabel(monitor.type)}
+        </Badge>
+      </div>
+    </Link>
+  )
+}
+
+function UptimeDashboardSection({
+  isLoading,
+  uptimeMonitors,
+  dashboardUptimeMonitors,
+  uptimeHeartbeatsByMonitor,
+  nowMs,
+  uptimeUp,
+  uptimeDown,
+}: Readonly<{
+  isLoading: boolean
+  uptimeMonitors: UptimeMonitor[]
+  dashboardUptimeMonitors: UptimeMonitor[]
+  uptimeHeartbeatsByMonitor: Record<string, UptimeHeartbeat[]>
+  nowMs: number
+  uptimeUp: number
+  uptimeDown: number
+}>) {
+  let content: ReactNode
+
+  if (isLoading) {
+    content = <SkeletonSection />
+  } else if (uptimeMonitors.length === 0) {
+    content = <EmptySection message="No uptime monitors configured" />
+  } else {
+    content = (
+      <div className="space-y-0.5">
+        {dashboardUptimeMonitors.map(monitor => (
+          <UptimeMonitorOverviewRow
+            key={monitor.id}
+            monitor={monitor}
+            heartbeats={uptimeHeartbeatsByMonitor[monitor.id] ?? []}
+            nowMs={nowMs}
+          />
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <DashboardSection
+      title="Uptime"
+      icon={HeartPulse}
+      to="/uptime"
+      iconClassName="text-success-fg"
+      iconBgClassName="bg-success-bg"
+      headerRight={renderUptimeHeader(uptimeMonitors, uptimeUp, uptimeDown)}
+    >
+      {content}
+    </DashboardSection>
+  )
+}
+
+function renderInfrastructureHeader(
+  monitorHosts: MonitorHostResponse[],
+  hostsUp: number,
+  hostsDown: number,
+): ReactNode {
+  if (monitorHosts.length === 0) return null
+
+  return (
+    <div className="flex items-center gap-3 text-xs font-medium">
+      {hostsDown > 0 && (
+        <div className="flex items-center gap-1.5 text-danger-fg">
+          <ArrowDown className="h-3.5 w-3.5" />
+          <span>{hostsDown} Offline</span>
+        </div>
+      )}
+      {hostsUp > 0 && (
+        <div className="flex items-center gap-1.5 text-chart-2">
+          <ArrowUp className="h-3.5 w-3.5" />
+          <span>{hostsUp} Online</span>
+        </div>
+      )}
+      <div className="flex items-center gap-1.5 text-muted-foreground">
+        <Server className="h-3.5 w-3.5" />
+        <span>{monitorHosts.length} Total</span>
+      </div>
+    </div>
+  )
+}
+
+function InfrastructureHostOverviewRow({host}: Readonly<{ host: MonitorHostResponse }>) {
+  return (
+    <Link
+      key={host.id}
+      to="/monitoring/hosts/$hostId"
+      params={{hostId: String(host.id)}}
+      className="grid gap-3 py-2 px-2.5 rounded-md hover:bg-muted/50 transition md:[grid-template-columns:minmax(12rem,15rem)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,11rem)] md:items-center"
+    >
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className={`h-2 w-2 rounded-full shrink-0 ${getStatusDot(normalizeHostStatus(host.status))}`} />
+        <span className="text-sm flex-1 truncate min-w-0">{host.name ?? host.hostname}</span>
+      </div>
+
+      <UtilizationBar label="CPU" value={host.latest_metrics?.cpu_percent} />
+      <UtilizationBar label="RAM" value={host.latest_metrics?.mem_percent} />
+      <UtilizationBar label="Disk" value={host.latest_metrics?.disk_percent} />
+      {host.os ? (
+        <Badge
+          variant="outline"
+          className="w-fit max-w-[11rem] justify-self-start truncate text-[10px] px-2 py-0"
+        >
+          {host.os}
+        </Badge>
+      ) : (
+        <span className="text-[10px] text-muted-foreground">—</span>
+      )}
+    </Link>
+  )
+}
+
+function InfrastructureDashboardSection({
+  isLoading,
+  monitorHosts,
+  hostsUp,
+  hostsDown,
+}: Readonly<{
+  isLoading: boolean
+  monitorHosts: MonitorHostResponse[]
+  hostsUp: number
+  hostsDown: number
+}>) {
+  let content: ReactNode
+
+  if (isLoading) {
+    content = <SkeletonSection />
+  } else if (monitorHosts.length === 0) {
+    content = <EmptySection message="No hosts being monitored" />
+  } else {
+    content = (
+      <div className="space-y-0.5">
+        {monitorHosts.slice(0, 6).map(host => <InfrastructureHostOverviewRow key={host.id} host={host} />)}
+      </div>
+    )
+  }
+
+  return (
+    <DashboardSection
+      title="Infrastructure"
+      icon={Server}
+      to="/monitoring"
+      iconClassName="text-chart-2"
+      iconBgClassName="bg-chart-2/15"
+      headerRight={renderInfrastructureHeader(monitorHosts, hostsUp, hostsDown)}
+    >
+      {content}
+    </DashboardSection>
+  )
+}
+
+function renderTracesHeader(perfStats?: PerformanceStats | null): ReactNode {
+  if (!perfStats) return null
+
+  return (
+    <div className="flex items-center gap-3 text-xs font-medium">
+      <div className="flex items-center gap-1.5 text-primary">
+        <Activity className="h-3.5 w-3.5" />
+        <span>{perfStats.apdex.toFixed(2)} Apdex</span>
+      </div>
+      <div className="flex items-center gap-1.5 text-muted-foreground">
+        <Clock className="h-3.5 w-3.5" />
+        <span>{formatMs(perfStats.avgDuration)}</span>
+      </div>
+    </div>
+  )
+}
+
+function TracesDashboardSection({
+  isLoading,
+  perfStats,
+}: Readonly<{
+  isLoading: boolean
+  perfStats?: PerformanceStats | null
+}>) {
+  let content: ReactNode
+
+  if (isLoading) {
+    content = <SkeletonSection />
+  } else if (perfStats) {
+    content = (
+      <div>
+        {perfStats.slowestTransactions.length > 0 && (
+          <div>
+            <p className="text-[11px] font-medium text-muted-foreground mb-1.5 px-1">Slowest Transactions</p>
+            <div className="space-y-0.5">
+              {perfStats.slowestTransactions.slice(0, 4).map(tx => (
+                <div key={`${tx.name}-${tx.duration}`} className="flex items-center gap-2 py-1.5 px-2.5 rounded-md bg-muted/20">
+                  <Timer className="h-3 w-3 text-muted-foreground shrink-0" />
+                  <span className="text-sm truncate flex-1">{tx.name}</span>
+                  <span className="text-sm font-medium tabular-nums shrink-0">
+                    {formatMs(tx.duration)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  } else {
+    content = <EmptySection message="No performance data" />
+  }
+
+  return (
+    <DashboardSection
+      title="Traces"
+      icon={Zap}
+      to="/performance/traces"
+      iconClassName="text-primary"
+      iconBgClassName="bg-[hsl(var(--primary)/0.12)]"
+      headerRight={renderTracesHeader(perfStats)}
+    >
+      {content}
+    </DashboardSection>
+  )
+}
+
+function renderStatusPagesHeader(statusPages: StatusPage[]): ReactNode {
+  if (statusPages.length === 0) return null
+
+  return (
+    <div className="flex items-center gap-3 text-xs font-medium">
+      <div className="flex items-center gap-1.5 text-chart-7">
+        <Globe className="h-3.5 w-3.5" />
+        <span>{statusPages.filter(page => page.isPublic).length} Public</span>
+      </div>
+      <div className="flex items-center gap-1.5 text-muted-foreground">
+        <Shield className="h-3.5 w-3.5" />
+        <span>{statusPages.length} Total</span>
+      </div>
+    </div>
+  )
+}
+
+function getMonitorStatusBadgeClass(monitorSummary: StatusPageMonitorSummary | null): string {
+  if (!monitorSummary || monitorSummary.total === 0) return 'text-muted-foreground'
+  if (monitorSummary.down > 0) return 'border-danger-border bg-danger-bg text-danger-fg'
+  if (monitorSummary.pending > 0) return 'border-warning-border bg-warning-bg text-warning-fg'
+  return 'border-success-border bg-success-bg text-success-fg'
+}
+
+function getMonitorStatusLabel(monitorSummary: StatusPageMonitorSummary | null): string {
+  if (!monitorSummary || monitorSummary.total === 0) return 'No monitors'
+  if (monitorSummary.down > 0) return `${monitorSummary.down} down`
+  if (monitorSummary.pending > 0) return `${monitorSummary.pending} pending`
+  return 'Operational'
+}
+
+function StatusPageOverviewRow({
+  page,
+  detail,
+  uptimeMonitorStatusById,
+}: Readonly<{
+  page: StatusPage
+  detail?: StatusPageDetail
+  uptimeMonitorStatusById: Map<string, string>
+}>) {
+  const monitorSummary = detail
+    ? summarizeStatusPageMonitors(
+      detail.monitors.map((monitor) => monitor.monitorId),
+      uptimeMonitorStatusById,
+    )
+    : null
+  const monitorStatusBadgeClass = getMonitorStatusBadgeClass(monitorSummary)
+
+  return (
+    <Link
+      key={page.id}
+      to="/status-pages/$pageId"
+      params={{pageId: page.id}}
+      className="grid gap-2.5 py-2.5 px-2.5 rounded-md hover:bg-muted/50 transition md:[grid-template-columns:minmax(0,15rem)_minmax(0,1fr)_auto] md:items-center"
+    >
+      <div className="flex min-w-0 items-center gap-2.5">
+        <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        <div className="min-w-0">
+          <p className="text-sm truncate">{page.name}</p>
+          <p className="text-[11px] text-muted-foreground truncate">/s/{page.slug}</p>
+        </div>
+      </div>
+
+      <p className="text-[11px] text-muted-foreground leading-relaxed md:truncate">
+        {page.description || 'No description provided'}
+      </p>
+
+      <div className="flex items-center gap-1.5 flex-wrap md:justify-end">
+        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${monitorStatusBadgeClass}`}>
+          {getMonitorStatusLabel(monitorSummary)}
+        </Badge>
+        <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground">
+          {monitorSummary ? `${monitorSummary.total} monitors` : 'Loading...'}
+        </Badge>
+        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+          {page.isPublic ? 'Public' : 'Private'}
+        </Badge>
+      </div>
+    </Link>
+  )
+}
+
+function StatusPagesDashboardSection({
+  isLoading,
+  statusPages,
+  statusPageDetailsById,
+  uptimeMonitorStatusById,
+}: Readonly<{
+  isLoading: boolean
+  statusPages: StatusPage[]
+  statusPageDetailsById: Record<string, StatusPageDetail>
+  uptimeMonitorStatusById: Map<string, string>
+}>) {
+  let content: ReactNode
+
+  if (isLoading) {
+    content = <SkeletonSection />
+  } else if (statusPages.length === 0) {
+    content = <EmptySection message="No status pages configured" />
+  } else {
+    content = (
+      <div className="space-y-0.5">
+        {statusPages.map(page => (
+          <StatusPageOverviewRow
+            key={page.id}
+            page={page}
+            detail={statusPageDetailsById[page.id]}
+            uptimeMonitorStatusById={uptimeMonitorStatusById}
+          />
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <DashboardSection
+      title="Status Pages"
+      icon={Globe}
+      to="/status-pages"
+      iconClassName="text-chart-7"
+      iconBgClassName="bg-chart-7/15"
+      headerRight={renderStatusPagesHeader(statusPages)}
+    >
+      {content}
+    </DashboardSection>
+  )
+}
+
+function renderReleasesHeader(releases: Release[], recentReleases: Release[]): ReactNode {
+  if (releases.length === 0) return null
+
+  return (
+    <div className="flex items-center gap-3 text-xs font-medium">
+      <div className="flex items-center gap-1.5 text-muted-foreground">
+        <Terminal className="h-3.5 w-3.5" />
+        <span className="font-mono">{recentReleases[0]?.version ?? '—'}</span>
+      </div>
+      <div className="flex items-center gap-1.5 text-muted-foreground">
+        <Package className="h-3.5 w-3.5" />
+        <span>{releases.length} Total</span>
+      </div>
+    </div>
+  )
+}
+
+function ReleasesDashboardSection({
+  releases,
+  recentReleases,
+  content,
+}: Readonly<{
+  releases: Release[]
+  recentReleases: Release[]
+  content: ReactNode
+}>) {
+  return (
+    <DashboardSection
+      title="Releases"
+      icon={Package}
+      to="/releases"
+      iconClassName="text-info-fg"
+      iconBgClassName="bg-info-bg"
+      headerRight={renderReleasesHeader(releases, recentReleases)}
+    >
+      {content}
+    </DashboardSection>
+  )
+}
+
+function renderReplaysHeader(replays: Replay[], replaysWithErrors: number): ReactNode {
+  if (replays.length === 0) return null
+
+  return (
+    <div className="flex items-center gap-3 text-xs font-medium">
+      {replaysWithErrors > 0 && (
+        <div className="flex items-center gap-1.5 text-danger-fg">
+          <AlertCircle className="h-3.5 w-3.5" />
+          <span>{replaysWithErrors} Errors</span>
+        </div>
+      )}
+      <div className="flex items-center gap-1.5 text-muted-foreground">
+        <Play className="h-3.5 w-3.5" />
+        <span>{replays.length} Sessions</span>
+      </div>
+    </div>
+  )
+}
+
+function replayTitle(replay: Replay): string {
+  return replay.user?.email || replay.user?.username || replay.urls[0] || 'Session'
+}
+
+function ReplaysDashboardSection({
+  isLoading,
+  replays,
+  replaysWithErrors,
+}: Readonly<{
+  isLoading: boolean
+  replays: Replay[]
+  replaysWithErrors: number
+}>) {
+  let content: ReactNode
+
+  if (isLoading) {
+    content = <SkeletonSection />
+  } else if (replays.length === 0) {
+    content = <EmptySection message="No recent replays" />
+  } else {
+    content = (
+      <div className="space-y-0.5">
+        {replays.slice(0, 5).map(replay => (
+          <Link
+            key={replay.replayId}
+            to="/replays/$replayId"
+            params={{replayId: replay.replayId}}
+            className="flex items-center gap-2 py-2 px-2.5 rounded-md hover:bg-muted/50 transition"
+          >
+            <Play className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <span className="text-sm truncate flex-1">{replayTitle(replay)}</span>
+            <div className="flex items-center gap-2 shrink-0 text-[11px] text-muted-foreground tabular-nums">
+              {replay.errorCount > 0 && <span className="text-danger-fg/80">{replay.errorCount} errors</span>}
+              <span>{Math.round(replay.durationMs / 1000)}s</span>
+              {replay.browserName && <span className="truncate max-w-[60px]">{replay.browserName}</span>}
+            </div>
+          </Link>
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <DashboardSection
+      title="Replays"
+      icon={Play}
+      to="/replays"
+      iconClassName="text-chart-3"
+      iconBgClassName="bg-chart-3/15"
+      headerRight={renderReplaysHeader(replays, replaysWithErrors)}
+    >
+      {content}
+    </DashboardSection>
+  )
+}
+
+function renderFeedbackHeader(feedback: Feedback[], newFeedback: number): ReactNode {
+  if (feedback.length === 0) return null
+
+  return (
+    <div className="flex items-center gap-3 text-xs font-medium">
+      {newFeedback > 0 && (
+        <div className="flex items-center gap-1.5 text-info-fg">
+          <MessageSquare className="h-3.5 w-3.5" />
+          <span>{newFeedback} New</span>
+        </div>
+      )}
+      <div className="flex items-center gap-1.5 text-muted-foreground">
+        <MessageSquare className="h-3.5 w-3.5" />
+        <span>{feedback.length} Total</span>
+      </div>
+    </div>
+  )
+}
+
+function FeedbackDashboardSection({
+  isLoading,
+  feedback,
+  recentFeedback,
+  newFeedback,
+}: Readonly<{
+  isLoading: boolean
+  feedback: Feedback[]
+  recentFeedback: Feedback[]
+  newFeedback: number
+}>) {
+  let content: ReactNode
+
+  if (isLoading) {
+    content = <SkeletonSection />
+  } else if (recentFeedback.length === 0) {
+    content = <EmptySection message="No feedback received" />
+  } else {
+    content = (
+      <div className="space-y-0.5">
+        {recentFeedback.map(fb => (
+          <Link
+            key={fb.feedbackId}
+            to="/feedback/$feedbackId"
+            params={{feedbackId: fb.feedbackId}}
+            className="flex items-center gap-2 py-2 px-2.5 rounded-md hover:bg-muted/50 transition"
+          >
+            <MessageSquare className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <span className="text-sm truncate flex-1">{fb.message}</span>
+            <div className="flex items-center gap-2 shrink-0 text-[11px] text-muted-foreground">
+              {fb.contactEmail && <span className="truncate max-w-[100px]">{fb.contactEmail}</span>}
+              <span>{formatRelativeTime(fb.timestamp)}</span>
+            </div>
+          </Link>
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <DashboardSection
+      title="Feedback"
+      icon={MessageSquare}
+      to="/feedback"
+      iconClassName="text-info-fg"
+      iconBgClassName="bg-info-bg"
+      headerRight={renderFeedbackHeader(feedback, newFeedback)}
+    >
+      {content}
+    </DashboardSection>
   )
 }
 
@@ -475,6 +1440,8 @@ function DashboardPage() {
   const unresolvedIssues = issues.filter(i => i.status === 'unresolved')
   const activeIncidents = incidents.filter(i => i.status !== 'RESOLVED')
   const triggeredIncidents = incidents.filter(i => i.status === 'TRIGGERED')
+  const recentAlerts = activeIncidents.length > 0 ? activeIncidents : incidents
+  const isOnCallLoading = isLoadingIncidents || isLoadingSchedules
   const uptimeUp = uptimeMonitors.filter(m => m.status === 'up').length
   const uptimeDown = uptimeMonitors.filter(m => m.status === 'down').length
   const hostsUp = monitorHosts.filter(h => normalizeHostStatus(h.status) === 'up').length
@@ -516,688 +1483,82 @@ function DashboardPage() {
   return (
     <div className="min-h-screen">
       <div className="px-6 py-3">
-        {/* Header */}
         <PageHeader
           className="mb-3"
           title="Overview"
           description="Overview of your systems, applications, and incidents"
         />
 
-        {/* ── Top-level stats ──────────────────────────────────────── */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-4">
-          {isLoadingServices || isLoadingStats || isLoadingIssues ? (
-            <>
-              <StatsCardSkeleton accent="amber" compact />
-              <StatsCardSkeleton accent="blue" compact />
-              <StatsCardSkeleton accent="rose" compact />
-              <StatsCardSkeleton accent="emerald" compact />
-              <StatsCardSkeleton accent="cyan" compact />
-              <StatsCardSkeleton accent="violet" compact />
-            </>
-          ) : (
-            <>
-              <StatsCard
-                title="Unresolved Issues"
-                value={formatCount(stats?.unresolvedIssues ?? unresolvedIssues.length)}
-                icon={AlertCircle}
-                accent="amber"
-                compact
-              />
-              <StatsCard
-                title="Errors (24h)"
-                value={formatCount(stats?.totalEvents ?? 0)}
-                icon={Activity}
-                accent="blue"
-                compact
-              />
-              <StatsCard
-                title="Active Incidents"
-                value={activeIncidents.length}
-                icon={Bell}
-                accent="rose"
-                compact
-              />
-              <StatsCard
-                title="Uptime Monitors"
-                value={`${uptimeUp}/${uptimeMonitors.length}`}
-                icon={HeartPulse}
-                accent="emerald"
-                subtitle={uptimeDown > 0 ? `${uptimeDown} down` : 'All healthy'}
-                compact
-              />
-              <StatsCard
-                title="Infrastructure"
-                value={`${hostsUp}/${monitorHosts.length}`}
-                icon={Server}
-                accent="cyan"
-                subtitle={hostsDown > 0 ? `${hostsDown} down` : 'All online'}
-                compact
-              />
-              <StatsCard
-                title="Users (24h)"
-                value={formatCount(stats?.affectedUsers ?? 0)}
-                icon={Users}
-                accent="violet"
-                compact
-              />
-            </>
-          )}
-        </div>
+        <DashboardStatsOverview
+          isLoading={isLoadingServices || isLoadingStats || isLoadingIssues}
+          stats={stats}
+          unresolvedIssueCount={unresolvedIssues.length}
+          activeIncidentCount={activeIncidents.length}
+          uptimeUp={uptimeUp}
+          uptimeDown={uptimeDown}
+          uptimeCount={uptimeMonitors.length}
+          hostsUp={hostsUp}
+          hostsDown={hostsDown}
+          hostCount={monitorHosts.length}
+        />
 
-        {/* ── Events Chart ─────────────────────────────────────────── */}
-        {isLoadingStats ? (
-          <div className="mb-5 h-[100px]">
-            <EventsChartSkeleton fillHeight compact />
-          </div>
-        ) : stats && stats.eventsTimeline.length > 0 ? (
-          <div className="mb-5 h-[100px]">
-            <EventsChart
-              data={stats.eventsTimeline}
-              title="Errors — Last 24 Hours"
-              fillHeight
-              compact
-            />
-          </div>
-        ) : null}
+        <DashboardEventsOverview isLoading={isLoadingStats} stats={stats} />
 
-        {/* ── Two-column grid for feature sections ─────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-
-          {/* ── On-Call / Incidents (Enterprise) ───────────────────── */}
-          {hasOnCall && (
-          <DashboardSection
-            title="On-Call"
-            icon={Bell}
-            to={"/on-call" as string}
-            iconClassName="text-warning-fg"
-            iconBgClassName="bg-warning-bg"
-            headerRight={
-              (triggeredIncidents.length > 0 || activeIncidents.length > 0) ? (
-                <div className="flex items-center gap-3 text-xs font-medium">
-                  {triggeredIncidents.length > 0 && (
-                    <div className="flex items-center gap-1.5 text-danger-fg">
-                      <Bell className="h-3.5 w-3.5" />
-                      <span>{triggeredIncidents.length} Triggered</span>
-                    </div>
-                  )}
-                  {activeIncidents.length > 0 && (
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <Activity className="h-3.5 w-3.5" />
-                      <span>{activeIncidents.length} Active</span>
-                    </div>
-                  )}
-                </div>
-              ) : null
-            }
-          >
-            {/* Who's on call */}
-            {onCallSchedules.length > 0 && onCallSchedules.some(s => s.currentOnCall) && (
-              <div className="mb-3 flex flex-wrap gap-1.5">
-                {onCallSchedules.map(schedule => (
-                  schedule.currentOnCall && (
-                    <div
-                      key={schedule.id}
-                      className="flex items-center gap-1.5 text-xs bg-muted/50 border border-border/40 rounded-md px-2.5 py-1"
-                    >
-                      <Shield className="h-3 w-3 text-muted-foreground" />
-                      <span className="font-medium">{schedule.currentOnCall.userName}</span>
-                      <span className="text-muted-foreground">on {schedule.name}</span>
-                    </div>
-                  )
-                ))}
-              </div>
-            )}
-
-            {/* Recent incidents */}
-            {isLoadingIncidents || isLoadingSchedules ? (
-              <SkeletonSection />
-            ) : activeIncidents.length === 0 && incidents.length === 0 ? (
-              <EmptySection message="No incidents" />
-            ) : (
-              <div className="space-y-0.5">
-                {(activeIncidents.length > 0 ? activeIncidents : incidents)
-                  .slice(0, 5)
-                  .map(incident => (
-                    <a
-                      key={incident.id}
-                      href="/on-call"
-                      className="grid grid-cols-[7.75rem_auto_minmax(0,1fr)_auto] items-center gap-2 py-2 px-2.5 rounded-md hover:bg-muted/50 transition"
-                    >
-                      <Badge variant={incidentStatusVariant(incident.status)} className="w-full justify-center text-[10px] px-1.5 py-0 shrink-0">
-                        {incident.status}
-                      </Badge>
-                      <span className={`text-[11px] font-semibold ${getPriorityColor(incident.priorityLevel)} shrink-0 tabular-nums`}>
-                        {incident.priorityLevel}
-                      </span>
-                      <span className="text-sm truncate flex-1">{incident.title}</span>
-                      <span className="text-[11px] text-muted-foreground shrink-0">
-                        {formatRelativeTime(incident.triggeredAt)}
-                      </span>
-                    </a>
-                  ))}
-              </div>
-            )}
-          </DashboardSection>
-          )}
-
-          {/* ── Issues ─────────────────────────────────────────────── */}
-          <DashboardSection
-            title="Issues"
-            icon={AlertCircle}
-            to="/issues"
-            iconClassName="text-danger-fg"
-            iconBgClassName="bg-danger-bg"
-            headerRight={
-              unresolvedIssues.length > 0 ? (
-                <div className="flex items-center gap-3 text-xs font-medium">
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <AlertCircle className="h-3.5 w-3.5" />
-                    <span>{unresolvedIssues.length} Total</span>
-                  </div>
-                  {issueLevelCounts['fatal'] > 0 && (
-                    <div className="flex items-center gap-1.5 text-danger-fg">
-                      <XCircle className="h-3.5 w-3.5" />
-                      <span>{issueLevelCounts['fatal']} Fatal</span>
-                    </div>
-                  )}
-                  {issueLevelCounts['error'] > 0 && (
-                    <div className="flex items-center gap-1.5 text-danger-fg">
-                      <AlertTriangle className="h-3.5 w-3.5" />
-                      <span>{issueLevelCounts['error']} Error</span>
-                    </div>
-                  )}
-                </div>
-              ) : null
-            }
-          >
-            {isLoadingIssues ? (
-              <SkeletonSection />
-            ) : unresolvedIssues.length === 0 ? (
-              <EmptySection message="No unresolved issues" />
-            ) : (
-              <div className="space-y-0.5">
-                {unresolvedIssues.slice(0, 6).map(issue => {
-                  const levelAccent = levelBorderClass(issue.level)
-
-                  const platformInfo = issue.platform?.toLowerCase().includes('cocoa') || issue.platform?.toLowerCase().includes('ios')
-                    ? { Icon: Smartphone, label: 'iOS' }
-                    : issue.platform?.toLowerCase().includes('android')
-                    ? { Icon: Smartphone, label: 'Android' }
-                    : issue.platform?.toLowerCase().includes('javascript') || issue.platform?.toLowerCase().includes('node')
-                    ? { Icon: Globe, label: 'Web' }
-                    : issue.platform?.toLowerCase().includes('python') || issue.platform?.toLowerCase().includes('java') || issue.platform?.toLowerCase().includes('go')
-                    ? { Icon: Server, label: 'Backend' }
-                    : null
-
-                  return (
-                    <Link
-                      key={issue.id}
-                      to="/issues/$issueId"
-                      params={{issueId: issue.id}}
-                      search={issueDetailSearch(issue)}
-                      className={`flex items-center gap-2 py-2 px-2.5 rounded-md border-l-2 ${levelAccent} hover:bg-muted/50 transition`}
-                    >
-                      <Badge variant={levelBadgeVariant(issue.level)} className="text-[10px] px-1.5 py-0 w-14 justify-center shrink-0">
-                        {issue.level.toUpperCase()}
-                      </Badge>
-                      <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                        <span className="text-sm truncate">{issue.title || issue.culprit}</span>
-                        <div className="flex items-center gap-2 text-[10px] text-muted-foreground/70">
-                          {platformInfo && (
-                            <span className="flex items-center gap-0.5" title={platformInfo.label}>
-                              <platformInfo.Icon className="h-3 w-3 text-muted-foreground/60" />
-                              <span>{platformInfo.label}</span>
-                            </span>
-                          )}
-                          {issue.lastSeen && (
-                            <span>{formatRelativeTime(issue.lastSeen)}</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <span className="text-[11px] text-muted-foreground tabular-nums">
-                          {formatCount(issue.eventCount)} events
-                        </span>
-                      </div>
-                    </Link>
-                  )
-                })}
-              </div>
-            )}
-          </DashboardSection>
-
-          {/* ── Uptime ─────────────────────────────────────────────── */}
-          <DashboardSection
-            title="Uptime"
-            icon={HeartPulse}
-            to="/uptime"
-            iconClassName="text-success-fg"
-            iconBgClassName="bg-success-bg"
-            headerRight={
-              uptimeMonitors.length > 0 ? (
-                <div className="flex items-center gap-3 text-xs font-medium">
-                  {uptimeDown > 0 && (
-                    <div className="flex items-center gap-1.5 text-danger-fg">
-                      <ArrowDown className="h-3.5 w-3.5" />
-                      <span>{uptimeDown} Down</span>
-                    </div>
-                  )}
-                  {uptimeUp > 0 && (
-                    <div className="flex items-center gap-1.5 text-success-fg">
-                      <ArrowUp className="h-3.5 w-3.5" />
-                      <span>{uptimeUp} Up</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <Activity className="h-3.5 w-3.5" />
-                    <span>{uptimeMonitors.length} Total</span>
-                  </div>
-                </div>
-              ) : null
-            }
-          >
-            {isLoadingUptime ? (
-              <SkeletonSection />
-            ) : uptimeMonitors.length === 0 ? (
-              <EmptySection message="No uptime monitors configured" />
-            ) : (
-              <div className="space-y-0.5">
-                {dashboardUptimeMonitors.map(monitor => {
-                  const heartbeats = uptimeHeartbeatsByMonitor[monitor.id] ?? []
-                  const latestHeartbeat = getLatestHeartbeat(heartbeats)
-                  const isHeartbeatFresh = isRecentHeartbeat(monitor.lastCheckAt, monitor.intervalSeconds, nowMs)
-                  const sampledSuccess = heartbeats.length > 0
-                    ? (heartbeats.filter((heartbeat) => heartbeat.status === 1).length / heartbeats.length) * 100
-                    : null
-
-                  return (
-                    <Link
-                      key={monitor.id}
-                      to="/uptime/$monitorId"
-                      params={{monitorId: monitor.id}}
-                      className="grid gap-2 py-2 px-2.5 rounded-md hover:bg-muted/50 transition md:grid-cols-[minmax(12rem,26%)_minmax(0,1fr)_auto] md:items-center"
-                    >
-                      <div className="flex min-w-0 items-center gap-2.5">
-                        <span className={`h-2 w-2 rounded-full shrink-0 ${getStatusDot(monitor.status)}`} />
-                        <span className="text-sm truncate">{monitor.name}</span>
-                        {!isHeartbeatFresh && monitor.active && monitor.status !== 'paused' && (
-                          <Badge variant="warning" className="text-[10px] px-1.5 py-0">
-                            stale
-                          </Badge>
-                        )}
-                      </div>
-
-                      <div className="min-w-0">
-                        <HeartbeatBar heartbeats={heartbeats} maxBars={24} className="h-3.5 w-full" />
-                        <div className="mt-1 flex items-center gap-3 text-[11px] text-muted-foreground tabular-nums">
-                          <span>
-                            {latestHeartbeat ? `Last beat ${formatRelativeTime(latestHeartbeat.timestamp)}` : 'No heartbeat data'}
-                          </span>
-                          {sampledSuccess != null && (
-                            <span>{sampledSuccess.toFixed(0)}% success</span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3 shrink-0">
-                        {monitor.uptime24h != null && (
-                          <span className="text-[11px] text-muted-foreground tabular-nums">
-                            {monitor.uptime24h.toFixed(2)}%
-                          </span>
-                        )}
-                        {monitor.avgResponseTime != null && (
-                          <span className="text-[11px] text-muted-foreground tabular-nums">
-                            {formatMs(monitor.avgResponseTime)}
-                          </span>
-                        )}
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                          {getMonitorTypeLabel(monitor.type)}
-                        </Badge>
-                      </div>
-                    </Link>
-                  )
-                })}
-              </div>
-            )}
-          </DashboardSection>
-
-          {/* ── Infrastructure Monitoring ───────────────────────────── */}
-          <DashboardSection
-            title="Infrastructure"
-            icon={Server}
-            to="/monitoring"
-            iconClassName="text-chart-2"
-            iconBgClassName="bg-chart-2/15"
-            headerRight={
-              monitorHosts.length > 0 ? (
-                <div className="flex items-center gap-3 text-xs font-medium">
-                  {hostsDown > 0 && (
-                    <div className="flex items-center gap-1.5 text-danger-fg">
-                      <ArrowDown className="h-3.5 w-3.5" />
-                      <span>{hostsDown} Offline</span>
-                    </div>
-                  )}
-                  {hostsUp > 0 && (
-                    <div className="flex items-center gap-1.5 text-chart-2">
-                      <ArrowUp className="h-3.5 w-3.5" />
-                      <span>{hostsUp} Online</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <Server className="h-3.5 w-3.5" />
-                    <span>{monitorHosts.length} Total</span>
-                  </div>
-                </div>
-              ) : null
-            }
-          >
-            {isLoadingMonitors ? (
-              <SkeletonSection />
-            ) : monitorHosts.length === 0 ? (
-              <EmptySection message="No hosts being monitored" />
-            ) : (
-              <div className="space-y-0.5">
-                {monitorHosts.slice(0, 6).map(host => (
-                  <Link
-                    key={host.id}
-                    to="/monitoring/hosts/$hostId"
-                    params={{hostId: String(host.id)}}
-                    className="grid gap-3 py-2 px-2.5 rounded-md hover:bg-muted/50 transition md:[grid-template-columns:minmax(12rem,15rem)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,11rem)] md:items-center"
-                  >
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      <span className={`h-2 w-2 rounded-full shrink-0 ${getStatusDot(normalizeHostStatus(host.status))}`} />
-                      <span className="text-sm flex-1 truncate min-w-0">{host.name ?? host.hostname}</span>
-                    </div>
-
-                    <UtilizationBar label="CPU" value={host.latest_metrics?.cpu_percent} />
-                    <UtilizationBar label="RAM" value={host.latest_metrics?.mem_percent} />
-                    <UtilizationBar label="Disk" value={host.latest_metrics?.disk_percent} />
-                    {host.os ? (
-                      <Badge
-                        variant="outline"
-                        className="w-fit max-w-[11rem] justify-self-start truncate text-[10px] px-2 py-0"
-                      >
-                        {host.os}
-                      </Badge>
-                    ) : (
-                      <span className="text-[10px] text-muted-foreground">—</span>
-                    )}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </DashboardSection>
-
-          {/* ── Traces ──────────────────────────────────────────────── */}
-          <DashboardSection
-            title="Traces"
-            icon={Zap}
-            to="/performance/traces"
-            iconClassName="text-primary"
-            iconBgClassName="bg-[hsl(var(--primary)/0.12)]"
-            headerRight={
-              perfStats ? (
-                <div className="flex items-center gap-3 text-xs font-medium">
-                  <div className="flex items-center gap-1.5 text-primary">
-                    <Activity className="h-3.5 w-3.5" />
-                    <span>{perfStats.apdex.toFixed(2)} Apdex</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <Clock className="h-3.5 w-3.5" />
-                    <span>{formatMs(perfStats.avgDuration)}</span>
-                  </div>
-                </div>
-              ) : null
-            }
-          >
-            {isLoadingPerf ? (
-              <SkeletonSection />
-            ) : !perfStats ? (
-              <EmptySection message="No performance data" />
-            ) : (
-              <div>
-                {perfStats.slowestTransactions.length > 0 && (
-                  <div>
-                    <p className="text-[11px] font-medium text-muted-foreground mb-1.5 px-1">Slowest Transactions</p>
-                    <div className="space-y-0.5">
-                      {perfStats.slowestTransactions.slice(0, 4).map((tx, i) => (
-                        <div key={i} className="flex items-center gap-2 py-1.5 px-2.5 rounded-md bg-muted/20">
-                          <Timer className="h-3 w-3 text-muted-foreground shrink-0" />
-                          <span className="text-sm truncate flex-1">{tx.name}</span>
-                          <span className="text-sm font-medium tabular-nums shrink-0">
-                            {formatMs(tx.duration)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </DashboardSection>
-
-          {/* ── Status Pages ────────────────────────────────────────── */}
-          <DashboardSection
-            title="Status Pages"
-            icon={Globe}
-            to="/status-pages"
-            iconClassName="text-chart-7"
-            iconBgClassName="bg-chart-7/15"
-            headerRight={
-              statusPages.length > 0 ? (
-                <div className="flex items-center gap-3 text-xs font-medium">
-                  <div className="flex items-center gap-1.5 text-chart-7">
-                    <Globe className="h-3.5 w-3.5" />
-                    <span>{statusPages.filter(p => p.isPublic).length} Public</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <Shield className="h-3.5 w-3.5" />
-                    <span>{statusPages.length} Total</span>
-                  </div>
-                </div>
-              ) : null
-            }
-          >
-            {isLoadingStatusPages ? (
-              <SkeletonSection />
-            ) : statusPages.length === 0 ? (
-              <EmptySection message="No status pages configured" />
-            ) : (
-              <div className="space-y-0.5">
-                {statusPages.map(page => {
-                  const detail = statusPageDetailsById[page.id]
-                  const monitorSummary = detail
-                    ? summarizeStatusPageMonitors(
-                      detail.monitors.map((monitor) => monitor.monitorId),
-                      uptimeMonitorStatusById,
-                    )
-                    : null
-                  const monitorStatusBadgeClass = !monitorSummary || monitorSummary.total === 0
-                    ? 'text-muted-foreground'
-                    : monitorSummary.down > 0
-                      ? 'border-danger-border bg-danger-bg text-danger-fg'
-                      : monitorSummary.pending > 0
-                        ? 'border-warning-border bg-warning-bg text-warning-fg'
-                        : 'border-success-border bg-success-bg text-success-fg'
-
-                  return (
-                    <Link
-                      key={page.id}
-                      to="/status-pages/$pageId"
-                      params={{pageId: page.id}}
-                      className="grid gap-2.5 py-2.5 px-2.5 rounded-md hover:bg-muted/50 transition md:[grid-template-columns:minmax(0,15rem)_minmax(0,1fr)_auto] md:items-center"
-                    >
-                      <div className="flex min-w-0 items-center gap-2.5">
-                        <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <div className="min-w-0">
-                          <p className="text-sm truncate">{page.name}</p>
-                          <p className="text-[11px] text-muted-foreground truncate">/s/{page.slug}</p>
-                        </div>
-                      </div>
-
-                      <p className="text-[11px] text-muted-foreground leading-relaxed md:truncate">
-                        {page.description || 'No description provided'}
-                      </p>
-
-                      <div className="flex items-center gap-1.5 flex-wrap md:justify-end">
-                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${monitorStatusBadgeClass}`}>
-                          {!monitorSummary || monitorSummary.total === 0
-                            ? 'No monitors'
-                            : monitorSummary.down > 0
-                              ? `${monitorSummary.down} down`
-                              : monitorSummary.pending > 0
-                                ? `${monitorSummary.pending} pending`
-                                : 'Operational'}
-                        </Badge>
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground">
-                          {monitorSummary ? `${monitorSummary.total} monitors` : 'Loading...'}
-                        </Badge>
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                          {page.isPublic ? 'Public' : 'Private'}
-                        </Badge>
-                      </div>
-                    </Link>
-                  )
-                })}
-              </div>
-            )}
-          </DashboardSection>
+          <OnCallDashboardSection
+            hasOnCall={hasOnCall}
+            triggeredAlerts={triggeredIncidents}
+            activeAlerts={activeIncidents}
+            recentAlerts={recentAlerts}
+            isLoading={isOnCallLoading}
+            schedules={onCallSchedules}
+          />
+          <IssuesDashboardSection
+            isLoading={isLoadingIssues}
+            unresolvedIssues={unresolvedIssues}
+            issueLevelCounts={issueLevelCounts}
+          />
+          <UptimeDashboardSection
+            isLoading={isLoadingUptime}
+            uptimeMonitors={uptimeMonitors}
+            dashboardUptimeMonitors={dashboardUptimeMonitors}
+            uptimeHeartbeatsByMonitor={uptimeHeartbeatsByMonitor}
+            nowMs={nowMs}
+            uptimeUp={uptimeUp}
+            uptimeDown={uptimeDown}
+          />
+          <InfrastructureDashboardSection
+            isLoading={isLoadingMonitors}
+            monitorHosts={monitorHosts}
+            hostsUp={hostsUp}
+            hostsDown={hostsDown}
+          />
+          <TracesDashboardSection isLoading={isLoadingPerf} perfStats={perfStats} />
+          <StatusPagesDashboardSection
+            isLoading={isLoadingStatusPages}
+            statusPages={statusPages}
+            statusPageDetailsById={statusPageDetailsById}
+            uptimeMonitorStatusById={uptimeMonitorStatusById}
+          />
         </div>
 
-        {/* ── Third row: Releases, Replays, Feedback ───────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-          {/* ── Releases ────────────────────────────────────────────── */}
-          <DashboardSection
-            title="Releases"
-            icon={Package}
-            to="/releases"
-            iconClassName="text-info-fg"
-            iconBgClassName="bg-info-bg"
-            headerRight={
-              releases.length > 0 ? (
-                <div className="flex items-center gap-3 text-xs font-medium">
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <Terminal className="h-3.5 w-3.5" />
-                    <span className="font-mono">{recentReleases[0]?.version ?? '—'}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <Package className="h-3.5 w-3.5" />
-                    <span>{releases.length} Total</span>
-                  </div>
-                </div>
-              ) : null
-            }
-          >
-            {releasesSectionContent}
-          </DashboardSection>
-
-          {/* ── Replays ─────────────────────────────────────────────── */}
-          <DashboardSection
-            title="Replays"
-            icon={Play}
-            to="/replays"
-            iconClassName="text-chart-3"
-            iconBgClassName="bg-chart-3/15"
-            headerRight={
-              replays.length > 0 ? (
-                <div className="flex items-center gap-3 text-xs font-medium">
-                  {replaysWithErrors > 0 && (
-                    <div className="flex items-center gap-1.5 text-danger-fg">
-                      <AlertCircle className="h-3.5 w-3.5" />
-                      <span>{replaysWithErrors} Errors</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <Play className="h-3.5 w-3.5" />
-                    <span>{replays.length} Sessions</span>
-                  </div>
-                </div>
-              ) : null
-            }
-          >
-            {isLoadingReplays ? (
-              <SkeletonSection />
-            ) : replays.length === 0 ? (
-              <EmptySection message="No recent replays" />
-            ) : (
-              <div className="space-y-0.5">
-                {replays.slice(0, 5).map(replay => (
-                  <Link
-                    key={replay.replayId}
-                    to="/replays/$replayId"
-                    params={{replayId: replay.replayId}}
-                    className="flex items-center gap-2 py-2 px-2.5 rounded-md hover:bg-muted/50 transition"
-                  >
-                    <Play className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    <span className="text-sm truncate flex-1">
-                      {replay.user?.email || replay.user?.username || replay.urls[0] || 'Session'}
-                    </span>
-                    <div className="flex items-center gap-2 shrink-0 text-[11px] text-muted-foreground tabular-nums">
-                      {replay.errorCount > 0 && (
-                        <span className="text-danger-fg/80">{replay.errorCount} errors</span>
-                      )}
-                      <span>{Math.round(replay.durationMs / 1000)}s</span>
-                      {replay.browserName && (
-                        <span className="truncate max-w-[60px]">{replay.browserName}</span>
-                      )}
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </DashboardSection>
-
-          {/* ── Feedback ────────────────────────────────────────────── */}
-          <DashboardSection
-            title="Feedback"
-            icon={MessageSquare}
-            to="/feedback"
-            iconClassName="text-info-fg"
-            iconBgClassName="bg-info-bg"
-            headerRight={
-              feedback.length > 0 ? (
-                <div className="flex items-center gap-3 text-xs font-medium">
-                  {newFeedback > 0 && (
-                    <div className="flex items-center gap-1.5 text-info-fg">
-                      <MessageSquare className="h-3.5 w-3.5" />
-                      <span>{newFeedback} New</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <MessageSquare className="h-3.5 w-3.5" />
-                    <span>{feedback.length} Total</span>
-                  </div>
-                </div>
-              ) : null
-            }
-          >
-            {isLoadingFeedback ? (
-              <SkeletonSection />
-            ) : recentFeedback.length === 0 ? (
-              <EmptySection message="No feedback received" />
-            ) : (
-              <div className="space-y-0.5">
-                {recentFeedback.map(fb => (
-                  <Link
-                    key={fb.feedbackId}
-                    to="/feedback/$feedbackId"
-                    params={{feedbackId: fb.feedbackId}}
-                    className="flex items-center gap-2 py-2 px-2.5 rounded-md hover:bg-muted/50 transition"
-                  >
-                    <MessageSquare className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    <span className="text-sm truncate flex-1">{fb.message}</span>
-                    <div className="flex items-center gap-2 shrink-0 text-[11px] text-muted-foreground">
-                      {fb.contactEmail && (
-                        <span className="truncate max-w-[100px]">{fb.contactEmail}</span>
-                      )}
-                      <span>{formatRelativeTime(fb.timestamp)}</span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </DashboardSection>
+          <ReleasesDashboardSection
+            releases={releases}
+            recentReleases={recentReleases}
+            content={releasesSectionContent}
+          />
+          <ReplaysDashboardSection
+            isLoading={isLoadingReplays}
+            replays={replays}
+            replaysWithErrors={replaysWithErrors}
+          />
+          <FeedbackDashboardSection
+            isLoading={isLoadingFeedback}
+            feedback={feedback}
+            recentFeedback={recentFeedback}
+            newFeedback={newFeedback}
+          />
         </div>
       </div>
     </div>

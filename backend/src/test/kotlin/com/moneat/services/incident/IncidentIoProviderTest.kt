@@ -18,7 +18,7 @@ package com.moneat.services.incident
 
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertLifecycleEvent
-import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertStatus
 import com.moneat.incident.models.ProviderConfig
 import com.moneat.incident.services.IncidentIoProvider
@@ -33,7 +33,7 @@ class IncidentIoProviderTest {
         AlertLifecycleEvent(
             title = "Database down",
             description = "Primary database is unavailable",
-            severity = AlertSeverity.HIGH,
+            priority = AlertPriority.P1,
             status = AlertStatus.FIRING,
             source = AlertSource.HOST_DOWN,
             deduplicationKey = "db-down-1",

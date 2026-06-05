@@ -17,7 +17,8 @@
 package com.moneat.workflows.services
 
 import com.moneat.alerts.models.AlertLifecycleEvent
-import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertPriority
+import com.moneat.alerts.models.IncidentSeverity
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertStatus
 import com.moneat.alerts.services.AlertEpisodeContext
@@ -134,6 +135,17 @@ private val ALERT_METADATA_REFERENCES =
         ALERT_THRESHOLD_REFERENCE,
         ALERT_CURRENT_VALUE_REFERENCE
     )
+
+data class AlertResolvedWorkflowEvent(
+    val organizationId: Int,
+    val source: String,
+    val deduplicationKey: String,
+    val title: String = "Alert resolved",
+    val description: String = "Moneat resolved alert $deduplicationKey",
+    val moneatUrl: String = "",
+    val priority: AlertPriority? = null,
+    val severity: AlertPriority? = null,
+)
 
 class WorkflowService(
     private val emailService: EmailService = EmailService(),
@@ -674,38 +686,33 @@ class WorkflowService(
         }
     }
 
-    suspend fun publishAlertResolved(
-        organizationId: Int,
-        source: String,
-        deduplicationKey: String,
-        title: String = "Alert resolved",
-        description: String = "Moneat resolved alert $deduplicationKey",
-        moneatUrl: String = "",
-        severity: AlertSeverity? = null
-    ) {
-        val alertSource = AlertSource.entries.firstOrNull { it.name == source }
+    suspend fun publishAlertResolved(event: AlertResolvedWorkflowEvent) {
+        val alertSource = AlertSource.entries.firstOrNull { it.name == event.source }
         if (alertSource == null) {
             logger.warn {
-                "Skipping resolved alert workflow for unknown AlertSource '$source' " +
-                    "with deduplicationKey='$deduplicationKey' and organizationId=$organizationId"
+                "Skipping resolved alert workflow for unknown AlertSource '${event.source}' " +
+                    "with deduplicationKey='${event.deduplicationKey}' and organizationId=${event.organizationId}"
             }
             return
         }
         publishResolvedAlertEvent(
             AlertLifecycleEvent(
-                title = title,
-                description = description,
-                severity = severity ?: AlertSeverity.LOW,
+                title = event.title,
+                description = event.description,
+                priority = event.priority ?: event.severity ?: AlertPriority.P3,
                 status = AlertStatus.RESOLVED,
                 source = alertSource,
-                deduplicationKey = deduplicationKey,
-                organizationId = organizationId,
-                moneatUrl = moneatUrl
+                deduplicationKey = event.deduplicationKey,
+                organizationId = event.organizationId,
+                moneatUrl = event.moneatUrl
             )
         )
     }
 
-    suspend fun publishIncidentCreated(event: AlertLifecycleEvent) {
+    suspend fun publishIncidentCreated(
+        event: AlertLifecycleEvent,
+        severity: IncidentSeverity = IncidentSeverity.SEV2
+    ) {
         val episode = alertEpisodeService.ensureOpenEpisodeForWorkflow(event) ?: return
         publishTrigger(
             WorkflowTriggerEvent(
@@ -715,7 +722,7 @@ class WorkflowService(
                     organizationId = event.organizationId,
                     status = INCIDENT_STATUS_CREATED,
                     title = event.title,
-                    severity = event.severity.name,
+                    severity = severity.wire,
                     deduplicationKey = event.deduplicationKey,
                     episode = episode
                 )
@@ -728,7 +735,7 @@ class WorkflowService(
         source: AlertSource,
         deduplicationKey: String,
         title: String,
-        severity: AlertSeverity? = null
+        severity: IncidentSeverity? = null
     ) {
         val episode = alertEpisodeService.latestEpisodeForWorkflow(
             organizationId = organizationId,
@@ -743,9 +750,51 @@ class WorkflowService(
                     organizationId = organizationId,
                     status = INCIDENT_STATUS_RESOLVED,
                     title = title,
-                    severity = severity?.name.orEmpty(),
+                    severity = severity?.wire.orEmpty(),
                     deduplicationKey = deduplicationKey,
                     episode = episode
+                )
+            )
+        )
+    }
+
+    suspend fun publishDeclaredIncidentCreated(
+        organizationId: Int,
+        incidentId: Int,
+        title: String,
+        severity: IncidentSeverity
+    ) {
+        publishTrigger(
+            WorkflowTriggerEvent(
+                triggerName = INCIDENT_CREATED_TRIGGER,
+                organizationId = organizationId,
+                scope = declaredIncidentScope(
+                    organizationId = organizationId,
+                    incidentId = incidentId,
+                    status = INCIDENT_STATUS_CREATED,
+                    title = title,
+                    severity = severity
+                )
+            )
+        )
+    }
+
+    suspend fun publishDeclaredIncidentResolved(
+        organizationId: Int,
+        incidentId: Int,
+        title: String,
+        severity: IncidentSeverity
+    ) {
+        publishTrigger(
+            WorkflowTriggerEvent(
+                triggerName = INCIDENT_RESOLVED_TRIGGER,
+                organizationId = organizationId,
+                scope = declaredIncidentScope(
+                    organizationId = organizationId,
+                    incidentId = incidentId,
+                    status = INCIDENT_STATUS_RESOLVED,
+                    title = title,
+                    severity = severity
                 )
             )
         )
@@ -1218,8 +1267,7 @@ class WorkflowService(
             mapOf(
                 ALERT_TITLE_REFERENCE to event.title,
                 ALERT_DESCRIPTION_REFERENCE to event.description,
-                ALERT_SEVERITY_REFERENCE to event.severity.name,
-                ALERT_PRIORITY_REFERENCE to stepRenderer.priorityLabelForSeverity(event.severity.name),
+                ALERT_PRIORITY_REFERENCE to event.priority.wire,
                 ALERT_STATUS_REFERENCE to event.status.name,
                 ALERT_SOURCE_REFERENCE to event.source.name,
                 ALERT_DEDUPLICATION_KEY_REFERENCE to event.deduplicationKey,
@@ -1270,7 +1318,7 @@ class WorkflowService(
         episode: AlertEpisodeContext
     ): Map<String, JsonElement> {
         val baseScope = mapOf(
-            INCIDENT_ID_REFERENCE to deduplicationKey,
+            INCIDENT_ID_REFERENCE to episode.id.toString(),
             INCIDENT_TITLE_REFERENCE to title,
             INCIDENT_STATUS_REFERENCE to status,
             INCIDENT_SEVERITY_REFERENCE to severity,
@@ -1278,6 +1326,29 @@ class WorkflowService(
             ORGANIZATION_ID_REFERENCE to organizationId.toString()
         ).typedWorkflowScope()
         return baseScope + episodeScopeFromContext(episode, status)
+    }
+
+    private fun declaredIncidentScope(
+        organizationId: Int,
+        incidentId: Int,
+        status: String,
+        title: String,
+        severity: IncidentSeverity
+    ): Map<String, JsonElement> {
+        val workflowIncidentKey = "incident-$incidentId"
+        return mapOf(
+            INCIDENT_ID_REFERENCE to incidentId.toString(),
+            INCIDENT_TITLE_REFERENCE to title,
+            INCIDENT_STATUS_REFERENCE to status,
+            INCIDENT_SEVERITY_REFERENCE to severity.wire,
+            ALERT_DEDUPLICATION_KEY_REFERENCE to workflowIncidentKey,
+            ALERT_EPISODE_ID_REFERENCE to incidentId.toString(),
+            ALERT_EPISODE_KEY_REFERENCE to workflowIncidentKey,
+            ALERT_EPISODE_SEQ_REFERENCE to "1",
+            ALERT_NOTIFICATION_SEQUENCE_REFERENCE to "1",
+            ALERT_NOTIFICATION_KIND_REFERENCE to status,
+            ORGANIZATION_ID_REFERENCE to organizationId.toString()
+        ).typedWorkflowScope()
     }
 
     private fun securitySignalScope(

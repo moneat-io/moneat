@@ -17,7 +17,7 @@
 package com.moneat.uptime.services
 
 import com.moneat.alerts.models.AlertLifecycleEvent
-import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertStatus
 import com.moneat.billing.services.BillingQuotaService
@@ -350,12 +350,12 @@ class UptimeScheduler(
         result: CheckResult,
         baseUrl: String
     ): AlertLifecycleEvent {
-        val severityOverride = monitor.incidentSeverity?.let { AlertSeverity.fromString(it) }
-        val severity = severityOverride ?: AlertSeverity.HIGH
+        val priorityOverride = monitor.alertPriority?.let { AlertPriority.fromString(it) }
+        val priority = priorityOverride ?: AlertPriority.P1
         return AlertLifecycleEvent(
             title = "Uptime Monitor Down: ${monitor.name}",
             description = "Monitor '${monitor.name}' (${monitor.type}) is down.\nError: ${result.message}",
-            severity = severity,
+            priority = priority,
             status = AlertStatus.FIRING,
             source = AlertSource.UPTIME_MONITOR,
             deduplicationKey = "moneat-uptime-${monitor.id}",
