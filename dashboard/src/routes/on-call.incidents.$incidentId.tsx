@@ -118,7 +118,8 @@ function getTimelineDescription(event: DeclaredIncidentTimelineEvent): string | 
     case 'NOTIFICATION_SENT':
       return notificationDescription(event)
     case 'ESCALATED':
-      return event.details?.stepNumber !== undefined ? `to step ${Number(event.details.stepNumber) + 1}` : null
+      if (event.details?.stepNumber === undefined) return null
+      return `to step ${Number(event.details.stepNumber) + 1}`
     case 'REASSIGNED':
       return reassignmentDescription(event)
     case 'ALERT_LINKED':
