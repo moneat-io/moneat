@@ -124,7 +124,7 @@ class ApmServiceRoutesTest {
         }
 
         assertEquals(HttpStatusCode.Unauthorized, response.status)
-        assertTrue(response.bodyAsText().contains("Invalid token"))
+        assertTrue(response.bodyAsText().contains("Unauthorized"))
     }
 
     @Test

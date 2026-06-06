@@ -34,7 +34,7 @@ import io.ktor.server.routing.get
 private const val DEFAULT_LIMIT = 50
 private const val MAX_LIMIT = 200
 private const val DEFAULT_APM_TIME_RANGE = "24h"
-private const val INVALID_TOKEN_ERROR = "Invalid token"
+private const val UNAUTHORIZED_ERROR = "Unauthorized"
 private const val INVALID_TIME_RANGE_ERROR = "Invalid timeRange"
 private const val INVALID_SERVICE_ERROR = "Invalid service"
 private const val INVALID_RESOURCE_ERROR = "Invalid resource"
@@ -165,7 +165,7 @@ private fun ApplicationCall.organizationId(): Int? =
 private suspend fun ApplicationCall.respondUnauthorized() {
     respond(
         HttpStatusCode.Unauthorized,
-        mapOf("error" to INVALID_TOKEN_ERROR)
+        mapOf("error" to UNAUTHORIZED_ERROR)
     )
 }
 
