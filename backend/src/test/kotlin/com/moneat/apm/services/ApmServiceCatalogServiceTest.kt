@@ -36,7 +36,7 @@ class ApmServiceCatalogServiceTest {
         val queries = java.util.Collections.synchronizedList(mutableListOf<String>())
         try {
             every { ClickHouseClient.getDatabase() } returns "moneat"
-            coEvery { ClickHouseClient.executeWithFormat(any(), any()) } answers {
+            coEvery { ClickHouseClient.executeWithFormat(any(), any(), any<Map<String, String>>()) } answers {
                 val query = firstArg<String>()
                 queries += query
                 when {
@@ -74,7 +74,7 @@ class ApmServiceCatalogServiceTest {
         mockkObject(ClickHouseClient)
         try {
             every { ClickHouseClient.getDatabase() } returns "moneat"
-            coEvery { ClickHouseClient.executeWithFormat(any(), any()) } answers {
+            coEvery { ClickHouseClient.executeWithFormat(any(), any(), any<Map<String, String>>()) } answers {
                 val query = firstArg<String>()
                 when {
                     "GROUP BY service, bucket_start" in query ->
@@ -115,7 +115,7 @@ class ApmServiceCatalogServiceTest {
         mockkObject(ClickHouseClient)
         try {
             every { ClickHouseClient.getDatabase() } returns "moneat"
-            coEvery { ClickHouseClient.executeWithFormat(any(), any()) } answers {
+            coEvery { ClickHouseClient.executeWithFormat(any(), any(), any<Map<String, String>>()) } answers {
                 val query = firstArg<String>()
                 when {
                     "FROM `moneat`.containers_latest_by_host" in query ->
@@ -124,10 +124,16 @@ class ApmServiceCatalogServiceTest {
                             "\"cpu\":42,\"mem_usage\":2147483648,\"mem_limit\":4294967296," +
                             "\"restarts\":2,\"state\":\"running\"}"
                     "GROUP BY version" in query ->
-                        """
-                        {"version":"v3.1.2","first_seen":"2026-06-06T03:00:00.000Z","last_seen":"2026-06-06T03:20:00.000Z","deploy_t":"03:00","span_count":60,"error_count":3,"p95_ns":240000000}
-                        {"version":"v3.1.1","first_seen":"2026-06-06T02:00:00.000Z","last_seen":"2026-06-06T02:59:00.000Z","deploy_t":"02:00","span_count":30,"error_count":0,"p95_ns":180000000}
-                        """.trimIndent()
+                        listOf(
+                            "{" +
+                                "\"version\":\"v3.1.2\",\"first_seen\":\"2026-06-06T03:00:00.000Z\"," +
+                                "\"last_seen\":\"2026-06-06T03:20:00.000Z\",\"deploy_t\":\"03:00\"," +
+                                "\"span_count\":60,\"error_count\":3,\"p95_ns\":240000000}",
+                            "{" +
+                                "\"version\":\"v3.1.1\",\"first_seen\":\"2026-06-06T02:00:00.000Z\"," +
+                                "\"last_seen\":\"2026-06-06T02:59:00.000Z\",\"deploy_t\":\"02:00\"," +
+                                "\"span_count\":30,\"error_count\":0,\"p95_ns\":180000000}",
+                        ).joinToString("\n")
                     "previous_span_count" in query ->
                         "{" +
                             "\"previous_span_count\":30,\"previous_error_count\":0," +
@@ -193,7 +199,7 @@ class ApmServiceCatalogServiceTest {
         mockkObject(ClickHouseClient)
         try {
             every { ClickHouseClient.getDatabase() } returns "moneat"
-            coEvery { ClickHouseClient.executeWithFormat(any(), any()) } answers {
+            coEvery { ClickHouseClient.executeWithFormat(any(), any(), any<Map<String, String>>()) } answers {
                 val query = firstArg<String>()
                 when {
                     "GROUP BY service" in query ->
@@ -239,7 +245,7 @@ class ApmServiceCatalogServiceTest {
         val queries = java.util.Collections.synchronizedList(mutableListOf<String>())
         try {
             every { ClickHouseClient.getDatabase() } returns "moneat"
-            coEvery { ClickHouseClient.executeWithFormat(any(), any()) } answers {
+            coEvery { ClickHouseClient.executeWithFormat(any(), any(), any<Map<String, String>>()) } answers {
                 val query = firstArg<String>()
                 queries += query
                 when {
@@ -277,14 +283,15 @@ class ApmServiceCatalogServiceTest {
     }
 
     @Test
-    fun `getServiceDetail uses an exact service lookup without catalog paging`() = runBlocking {
+    fun `getServiceDetail uses parameterized exact service lookup without catalog paging`() = runBlocking {
         mockkObject(ClickHouseClient)
-        val queries = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val calls = java.util.Collections.synchronizedList(mutableListOf<Pair<String, Map<String, String>>>())
+        val serviceName = "worker-low-volume';DROP TABLE apm_spans;--"
         try {
             every { ClickHouseClient.getDatabase() } returns "moneat"
-            coEvery { ClickHouseClient.executeWithFormat(any(), any()) } answers {
+            coEvery { ClickHouseClient.executeWithFormat(any(), any(), any<Map<String, String>>()) } answers {
                 val query = firstArg<String>()
-                queries += query
+                calls += query to thirdArg()
                 when {
                     "GROUP BY service" in query ->
                         "{" +
@@ -299,13 +306,16 @@ class ApmServiceCatalogServiceTest {
 
             val detail = ApmServiceCatalogService.getServiceDetail(
                 organizationId = 12,
-                serviceName = "worker-low-volume",
+                serviceName = serviceName,
                 query = ApmServiceQuery(timeRange = defaultApmQueryTimeRange),
             )
 
             requireNotNull(detail)
-            val serviceAggregateQuery = queries.single { "GROUP BY service" in it }
-            assertTrue("service = 'worker-low-volume'" in serviceAggregateQuery)
+            val serviceAggregateCall = calls.single { (query, _) -> "GROUP BY service" in query }
+            val serviceAggregateQuery = serviceAggregateCall.first
+            assertTrue("service = {p0:String}" in serviceAggregateQuery)
+            assertTrue(serviceName !in serviceAggregateQuery)
+            assertTrue(serviceAggregateCall.second.values.contains(serviceName))
             assertTrue("LIMIT 1" in serviceAggregateQuery)
             assertTrue("OFFSET" !in serviceAggregateQuery)
         } finally {
@@ -320,7 +330,7 @@ class ApmServiceCatalogServiceTest {
         val maxActiveQueries = AtomicInteger(0)
         try {
             every { ClickHouseClient.getDatabase() } returns "moneat"
-            coEvery { ClickHouseClient.executeWithFormat(any(), any()) } coAnswers {
+            coEvery { ClickHouseClient.executeWithFormat(any(), any(), any<Map<String, String>>()) } coAnswers {
                 val query = firstArg<String>()
                 if ("GROUP BY service" in query) {
                     return@coAnswers "{" +

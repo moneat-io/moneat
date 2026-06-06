@@ -35,6 +35,7 @@ import mu.KotlinLogging
 import java.util.Locale
 
 private val CLICKHOUSE_ERROR_CODE = Regex("""^Code:\s*(\d+)""")
+private val CLICKHOUSE_PARAMETER_NAME = Regex("^[A-Za-z][A-Za-z0-9_]*$")
 private val logger = KotlinLogging.logger {}
 
 class ClickHouseQueryException(
@@ -113,7 +114,8 @@ object ClickHouseClient {
 
     suspend fun execute(
         query: String,
-        span: ISpan? = null
+        span: ISpan? = null,
+        queryParameters: Map<String, String> = emptyMap(),
     ): HttpResponse {
         val client = checkNotNull(httpClient) { NOT_INITIALIZED_MESSAGE }
         return if (span != null && Sentry.isEnabled()) {
@@ -122,10 +124,10 @@ object ClickHouseClient {
                 childSpan?.setData("db.name", database)
                 childSpan?.setData("db.statement", query.take(QUERY_LOG_MAX_LEN)) // Truncate long queries
 
-                executePost(client, query, "execute")
+                executePost(client, query, "execute", queryParameters)
             }
         } else {
-            executePost(client, query, "execute")
+            executePost(client, query, "execute", queryParameters)
         }
     }
 
@@ -133,7 +135,8 @@ object ClickHouseClient {
     private suspend fun executePost(
         client: HttpClient,
         query: String,
-        operation: String
+        operation: String,
+        queryParameters: Map<String, String> = emptyMap(),
     ): HttpResponse {
         val startedAt = System.nanoTime()
         try {
@@ -143,6 +146,10 @@ object ClickHouseClient {
                     parameter("max_execution_time", READ_QUERY_MAX_EXECUTION_SECONDS)
                     parameter("timeout_overflow_mode", "throw")
                     parameter("timeout_before_checking_execution_speed", "0")
+                }
+                queryParameters.forEach { (name, value) ->
+                    require(CLICKHOUSE_PARAMETER_NAME.matches(name)) { "Invalid ClickHouse parameter name: $name" }
+                    parameter("param_$name", value)
                 }
                 header("X-ClickHouse-User", user)
                 header("X-ClickHouse-Key", password)
@@ -186,14 +193,15 @@ object ClickHouseClient {
     suspend fun executeWithFormat(
         query: String,
         format: String,
-        span: ISpan? = null
+        span: ISpan? = null,
+        queryParameters: Map<String, String> = emptyMap(),
     ): String {
         val queryWithFormat = if (query.trimEnd().uppercase(Locale.ROOT).contains("FORMAT")) {
             query
         } else {
             "$query FORMAT $format"
         }
-        val response = execute(queryWithFormat, span)
+        val response = execute(queryWithFormat, span, queryParameters)
         val body = response.bodyAsText()
         val isError = response.isClickHouseError(body)
         if (isError) {
@@ -208,6 +216,13 @@ object ClickHouseClient {
         }
         return body
     }
+
+    suspend fun executeWithFormat(
+        query: String,
+        format: String,
+        queryParameters: Map<String, String>,
+    ): String =
+        executeWithFormat(query, format, null, queryParameters)
 
     private fun isClickHouseTimeout(body: String, errorCode: String): Boolean {
         return errorCode == CLICKHOUSE_TIMEOUT_ERROR_CODE ||

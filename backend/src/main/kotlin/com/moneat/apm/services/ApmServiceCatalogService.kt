@@ -41,8 +41,9 @@ import com.moneat.apm.models.ApmWaterfallRow
 import com.moneat.config.ClickHouseClient
 import com.moneat.datadog.services.DdApmQueryTimeRange
 import com.moneat.datadog.services.defaultApmQueryTimeRange
+import com.moneat.utils.ClickHouseQueryParameters
+import com.moneat.utils.ClickHouseQuerySpec
 import com.moneat.utils.ClickHouseQueryUtils
-import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.sentry.ISpan
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -207,6 +208,11 @@ private data class ContainerAggregate(
     val memLimit: Long,
     val restarts: Int,
     val state: String,
+)
+
+private data class SpanFilterSet(
+    val filters: MutableList<String>,
+    val params: ClickHouseQueryParameters,
 )
 
 object ApmServiceCatalogService {
@@ -388,8 +394,8 @@ object ApmServiceCatalogService {
         query: ApmServiceQuery,
         parentSpan: ISpan?,
     ): List<ServiceAggregate> {
-        val sql = serviceAggregateSql(organizationId, serviceName, query)
-        val rows = jsonRows(sql, parentSpan)
+        val querySpec = serviceAggregateSql(organizationId, serviceName, query)
+        val rows = jsonRows(querySpec, parentSpan)
         if (rows.isEmpty()) return emptyList()
         return rows.map { row ->
             ServiceAggregate(
@@ -416,8 +422,9 @@ object ApmServiceCatalogService {
         organizationId: Int,
         serviceName: String?,
         query: ApmServiceQuery,
-    ): String {
-        val filters = spanFilters(organizationId, query, serviceName, null)
+    ): ClickHouseQuerySpec {
+        val filterSet = spanFilters(organizationId, query, serviceName, null)
+        val filters = filterSet.filters
         val limit = query.limit.coerceIn(1, MAX_SERVICE_LIMIT)
         val apdexTargetNs = APDEX_TARGET_MS * NANOSECONDS_PER_MILLISECOND
         val limitClause = if (serviceName == null) {
@@ -425,7 +432,7 @@ object ApmServiceCatalogService {
         } else {
             "LIMIT $EXACT_SERVICE_LIMIT"
         }
-        return """
+        val sql = """
             SELECT
                 service as name,
                 count() as span_count,
@@ -463,7 +470,11 @@ object ApmServiceCatalogService {
                     ),
                     nullIf(argMaxIf(meta['language'], start, meta['language'] != ''), ''),
                     nullIf(
-                        argMaxIf(resource_attributes['process.runtime.name'], start, resource_attributes['process.runtime.name'] != ''),
+                        argMaxIf(
+                            resource_attributes['process.runtime.name'],
+                            start,
+                            resource_attributes['process.runtime.name'] != ''
+                        ),
                         ''
                     ),
                     ''
@@ -475,6 +486,7 @@ object ApmServiceCatalogService {
             $limitClause
             FORMAT JSONEachRow
         """.trimIndent()
+        return ClickHouseQuerySpec(sql, filterSet.params.asMap())
     }
 
     private suspend fun serviceSparklineSeries(
@@ -484,8 +496,9 @@ object ApmServiceCatalogService {
         parentSpan: ISpan?,
     ): Map<String, List<Int>> {
         if (services.isEmpty()) return emptyMap()
-        val filters = spanFilters(organizationId, query, null, null)
-        val serviceList = services.joinToString(", ") { service -> "'${escapeSql(service)}'" }
+        val filterSet = spanFilters(organizationId, query, null, null)
+        val filters = filterSet.filters
+        val serviceList = services.joinToString(", ") { service -> filterSet.params.string(service) }
         filters.add("service IN ($serviceList)")
         val bucketSeconds = (query.timeRange.seconds() / DEFAULT_SERIES_POINT_COUNT).coerceAtLeast(1)
         val sql = """
@@ -500,7 +513,7 @@ object ApmServiceCatalogService {
             LIMIT ${services.size * DEFAULT_SERIES_POINT_COUNT}
             FORMAT JSONEachRow
         """.trimIndent()
-        return jsonRows(sql, parentSpan)
+        return jsonRows(sql, parentSpan, filterSet.params.asMap())
             .groupBy { row -> row.stringValue("service") }
             .mapValues { (_, rows) ->
                 rows.map { row -> row.longValue("span_count").toInt().coerceIn(SPARK_MIN, SPARK_MAX) }
@@ -542,8 +555,8 @@ object ApmServiceCatalogService {
         query: ApmServiceQuery,
         parentSpan: ISpan?,
     ): List<ResourceAggregate> {
-        val sql = resourceAggregateSql(organizationId, serviceName, query)
-        return jsonRows(sql, parentSpan).map { row ->
+        val querySpec = resourceAggregateSql(organizationId, serviceName, query)
+        return jsonRows(querySpec, parentSpan).map { row ->
             ResourceAggregate(
                 resource = row.stringValue("resource").ifBlank { row.stringValue("name") },
                 name = row.stringValue("name"),
@@ -561,9 +574,9 @@ object ApmServiceCatalogService {
         organizationId: Int,
         serviceName: String,
         query: ApmServiceQuery,
-    ): String {
-        val filters = spanFilters(organizationId, query, serviceName, null)
-        return """
+    ): ClickHouseQuerySpec {
+        val filterSet = spanFilters(organizationId, query, serviceName, null)
+        val sql = """
             SELECT
                 resource,
                 argMax(name, start) as name,
@@ -574,13 +587,14 @@ object ApmServiceCatalogService {
                 toUInt64(quantile(0.95)(duration)) as p95_ns,
                 toUInt64(quantile(0.99)(duration)) as p99_ns
             FROM `$clickhouseDb`.apm_spans
-            WHERE ${filters.joinToString(" AND ")}
+            WHERE ${filterSet.filters.joinToString(" AND ")}
               AND resource != ''
             GROUP BY resource
             ORDER BY error_count DESC, p95_ns DESC, span_count DESC
             LIMIT 50
             FORMAT JSONEachRow
         """.trimIndent()
+        return ClickHouseQuerySpec(sql, filterSet.params.asMap())
     }
 
     private suspend fun latencySeries(
@@ -590,7 +604,7 @@ object ApmServiceCatalogService {
         query: ApmServiceQuery,
         parentSpan: ISpan?,
     ): List<ApmLatencyPoint> {
-        val filters = spanFilters(organizationId, query, serviceName, resource)
+        val filterSet = spanFilters(organizationId, query, serviceName, resource)
         val sql = """
             SELECT
                 toStartOfHour(start) as bucket_start,
@@ -600,13 +614,13 @@ object ApmServiceCatalogService {
                 toUInt64(quantile(0.95)(duration)) as p95_ns,
                 toUInt64(quantile(0.99)(duration)) as p99_ns
             FROM `$clickhouseDb`.apm_spans
-            WHERE ${filters.joinToString(" AND ")}
+            WHERE ${filterSet.filters.joinToString(" AND ")}
             GROUP BY bucket_start
             ORDER BY bucket_start ASC
             LIMIT 48
             FORMAT JSONEachRow
         """.trimIndent()
-        return jsonRows(sql, parentSpan).map { row ->
+        return jsonRows(sql, parentSpan, filterSet.params.asMap()).map { row ->
             ApmLatencyPoint(
                 t = row.stringValue("t"),
                 p50 = row.millisValue("p50", "p50_ns"),
@@ -624,7 +638,7 @@ object ApmServiceCatalogService {
         query: ApmServiceQuery,
         parentSpan: ISpan?,
     ): List<ApmThroughputPoint> {
-        val filters = spanFilters(organizationId, query, serviceName, resource)
+        val filterSet = spanFilters(organizationId, query, serviceName, resource)
         val sql = """
             SELECT
                 toStartOfHour(start) as bucket_start,
@@ -632,13 +646,13 @@ object ApmServiceCatalogService {
                 count() / $SECONDS_PER_HOUR as rps,
                 sum(error) / $SECONDS_PER_HOUR as errors
             FROM `$clickhouseDb`.apm_spans
-            WHERE ${filters.joinToString(" AND ")}
+            WHERE ${filterSet.filters.joinToString(" AND ")}
             GROUP BY bucket_start
             ORDER BY bucket_start ASC
             LIMIT 48
             FORMAT JSONEachRow
         """.trimIndent()
-        return jsonRows(sql, parentSpan).map { row ->
+        return jsonRows(sql, parentSpan, filterSet.params.asMap()).map { row ->
             ApmThroughputPoint(
                 t = row.stringValue("t"),
                 rps = row.doubleValue("rps"),
@@ -671,7 +685,7 @@ object ApmServiceCatalogService {
         query: ApmServiceQuery,
         parentSpan: ISpan?,
     ): PreviousWindowAggregate? {
-        val filters = previousSpanFilters(organizationId, query, serviceName, resource)
+        val filterSet = previousSpanFilters(organizationId, query, serviceName, resource)
         val apdexTargetNs = APDEX_TARGET_MS * NANOSECONDS_PER_MILLISECOND
         val sql = """
             SELECT
@@ -685,10 +699,10 @@ object ApmServiceCatalogService {
                     AND duration <= ${apdexTargetNs * APDEX_TOLERATING_MULTIPLIER}
                 ) as previous_apdex_tolerating
             FROM `$clickhouseDb`.apm_spans
-            WHERE ${filters.joinToString(" AND ")}
+            WHERE ${filterSet.filters.joinToString(" AND ")}
             FORMAT JSONEachRow
         """.trimIndent()
-        return jsonRows(sql, parentSpan).firstOrNull()?.let { row ->
+        return jsonRows(sql, parentSpan, filterSet.params.asMap()).firstOrNull()?.let { row ->
             PreviousWindowAggregate(
                 spanCount = row.longValue("previous_span_count"),
                 errorCount = row.longValue("previous_error_count"),
@@ -722,7 +736,8 @@ object ApmServiceCatalogService {
         query: ApmServiceQuery,
         parentSpan: ISpan?,
     ): List<DeploymentAggregate> {
-        val filters = spanFilters(organizationId, query, serviceName, null)
+        val filterSet = spanFilters(organizationId, query, serviceName, null)
+        val filters = filterSet.filters
         filters.add("version != ''")
         val sql = """
             SELECT
@@ -736,7 +751,14 @@ object ApmServiceCatalogService {
                 coalesce(
                     nullIf(argMaxIf(meta['deployment.user'], start, meta['deployment.user'] != ''), ''),
                     nullIf(argMaxIf(meta['git.commit.author.name'], start, meta['git.commit.author.name'] != ''), ''),
-                    nullIf(argMaxIf(resource_attributes['deployment.user'], start, resource_attributes['deployment.user'] != ''), ''),
+                    nullIf(
+                        argMaxIf(
+                            resource_attributes['deployment.user'],
+                            start,
+                            resource_attributes['deployment.user'] != ''
+                        ),
+                        ''
+                    ),
                     ''
                 ) as deployer
             FROM `$clickhouseDb`.apm_spans
@@ -746,7 +768,7 @@ object ApmServiceCatalogService {
             LIMIT $DEPLOYMENT_ROW_LIMIT
             FORMAT JSONEachRow
         """.trimIndent()
-        return jsonRows(sql, parentSpan).map { row ->
+        return jsonRows(sql, parentSpan, filterSet.params.asMap()).map { row ->
             DeploymentAggregate(
                 version = row.stringValue("version"),
                 firstSeen = row.stringValue("first_seen"),
@@ -766,7 +788,8 @@ object ApmServiceCatalogService {
         parentSpan: ISpan?,
     ): List<ContainerAggregate> {
         val orgClause = ClickHouseQueryUtils.orgIdClause(organizationId.toLong())
-        val service = escapeSql(serviceName)
+        val params = ClickHouseQueryParameters()
+        val service = params.string(serviceName)
         val sql = """
             SELECT
                 argMax(name, timestamp) as pod,
@@ -780,16 +803,16 @@ object ApmServiceCatalogService {
             WHERE $orgClause
               AND timestamp >= now64(3) - INTERVAL 30 DAY
               AND (
-                  tags['service'] = '$service'
-                  OR positionCaseInsensitive(name, '$service') > 0
-                  OR positionCaseInsensitive(image, '$service') > 0
+                  tags['service'] = $service
+                  OR positionCaseInsensitive(name, $service) > 0
+                  OR positionCaseInsensitive(image, $service) > 0
               )
             GROUP BY host, container_id
             ORDER BY pod ASC
             LIMIT $CONTAINER_ROW_LIMIT
             FORMAT JSONEachRow
         """.trimIndent()
-        return jsonRows(sql, parentSpan).map { row ->
+        return jsonRows(sql, parentSpan, params.asMap()).map { row ->
             ContainerAggregate(
                 pod = row.stringValue("pod"),
                 node = row.stringValue("node"),
@@ -810,7 +833,7 @@ object ApmServiceCatalogService {
         query: ApmServiceQuery,
         parentSpan: ISpan?,
     ): List<ApmDistBar> {
-        val filters = spanFilters(organizationId, query, serviceName, resource)
+        val filterSet = spanFilters(organizationId, query, serviceName, resource)
         val bucketSizeNs = (
             (maxDurationMs.coerceAtLeast(1) * NANOSECONDS_PER_MILLISECOND) / LATENCY_DISTRIBUTION_BAR_COUNT
             ).coerceAtLeast(1)
@@ -819,12 +842,12 @@ object ApmServiceCatalogService {
                 least(intDiv(duration, $bucketSizeNs), ${LATENCY_DISTRIBUTION_BAR_COUNT - 1}) as bucket_idx,
                 count() as span_count
             FROM `$clickhouseDb`.apm_spans
-            WHERE ${filters.joinToString(" AND ")}
+            WHERE ${filterSet.filters.joinToString(" AND ")}
             GROUP BY bucket_idx
             ORDER BY bucket_idx ASC
             FORMAT JSONEachRow
         """.trimIndent()
-        val counts = jsonRows(sql, parentSpan).associate { row ->
+        val counts = jsonRows(sql, parentSpan, filterSet.params.asMap()).associate { row ->
             row.longValue("bucket_idx").toInt() to row.longValue("span_count")
         }
         return latencyDistribution(counts)
@@ -850,13 +873,14 @@ object ApmServiceCatalogService {
     ): List<ApmDependencyRow> {
         val serviceColumn = if (incoming) "to_service" else "from_service"
         val peerColumn = if (incoming) "from_service" else "to_service"
+        val params = ClickHouseQueryParameters()
         val filters = mutableListOf(
             ClickHouseQueryUtils.orgIdClause(organizationId.toLong()),
             query.timeRange.bucketStartClause(),
-            "$serviceColumn = '${escapeSql(serviceName)}'",
+            "$serviceColumn = ${params.string(serviceName)}",
         )
-        query.env?.let { env -> filters.add("env = '${escapeSql(env)}'") }
-        query.source?.let { source -> filters.add("source = '${escapeSql(source)}'") }
+        query.env?.let { env -> filters.add("env = ${params.string(env)}") }
+        query.source?.let { source -> filters.add("source = ${params.string(source)}") }
         val sql = """
             SELECT
                 $peerColumn as peer_service,
@@ -870,7 +894,7 @@ object ApmServiceCatalogService {
             LIMIT 10
             FORMAT JSONEachRow
         """.trimIndent()
-        return jsonRows(sql, parentSpan).map { row ->
+        return jsonRows(sql, parentSpan, params.asMap()).map { row ->
             val errorRate = ratio(row.longValue("error_count"), row.longValue("call_count"))
             ApmDependencyRow(
                 name = row.stringValue("peer_service"),
@@ -891,7 +915,7 @@ object ApmServiceCatalogService {
         query: ApmServiceQuery,
         parentSpan: ISpan?,
     ): List<ApmTraceRow> {
-        val filters = spanFilters(organizationId, query, serviceName, resource)
+        val filterSet = spanFilters(organizationId, query, serviceName, resource)
         val sql = """
             SELECT
                 if(trace_id_hex != '', trace_id_hex, toString(trace_id)) as trace_id_out,
@@ -902,13 +926,13 @@ object ApmServiceCatalogService {
                 count() as span_count,
                 formatDateTime(max(start), '%H:%i:%S') as time
             FROM `$clickhouseDb`.apm_spans
-            WHERE ${filters.joinToString(" AND ")}
+            WHERE ${filterSet.filters.joinToString(" AND ")}
             GROUP BY trace_id_out
             ORDER BY duration_ms DESC
             LIMIT 20
             FORMAT JSONEachRow
         """.trimIndent()
-        return jsonRows(sql, parentSpan).map { row ->
+        return jsonRows(sql, parentSpan, filterSet.params.asMap()).map { row ->
             ApmTraceRow(
                 time = row.stringValue("time"),
                 traceId = row.stringValue("trace_id_out"),
@@ -929,7 +953,8 @@ object ApmServiceCatalogService {
         query: ApmServiceQuery,
         parentSpan: ISpan?,
     ): List<ApmErrorRow> {
-        val filters = spanFilters(organizationId, query, serviceName, resource)
+        val filterSet = spanFilters(organizationId, query, serviceName, resource)
+        val filters = filterSet.filters
         filters.add("error = 1")
         val sql = """
             SELECT
@@ -983,7 +1008,7 @@ object ApmServiceCatalogService {
             LIMIT 20
             FORMAT JSONEachRow
         """.trimIndent()
-        return jsonRows(sql, parentSpan).map { row ->
+        return jsonRows(sql, parentSpan, filterSet.params.asMap()).map { row ->
             val errorType = row.stringValue("error_type").ifBlank { "Trace error" }
             val message = row.stringValue("error_message").ifBlank { "Trace contains errored spans" }
             val version = row.stringValue("version")
@@ -1008,12 +1033,13 @@ object ApmServiceCatalogService {
         query: ApmServiceQuery,
         parentSpan: ISpan?,
     ): List<ApmErrorRow> {
+        val params = ClickHouseQueryParameters()
         val filters = mutableListOf(
             ClickHouseQueryUtils.orgIdClause(organizationId.toLong()),
             query.timeRange.bucketStartClause(),
-            "service = '${escapeSql(serviceName)}'",
+            "service = ${params.string(serviceName)}",
         )
-        resource?.let { resourceName -> filters.add("resource = '${escapeSql(resourceName)}'") }
+        resource?.let { resourceName -> filters.add("resource = ${params.string(resourceName)}") }
         val sql = """
             SELECT
                 resource,
@@ -1028,7 +1054,7 @@ object ApmServiceCatalogService {
             LIMIT 20
             FORMAT JSONEachRow
         """.trimIndent()
-        return jsonRows(sql, parentSpan).map { row ->
+        return jsonRows(sql, parentSpan, params.asMap()).map { row ->
             val errorType = row.stringValue("error_type").ifBlank { "Trace error" }
             val message = row.stringValue("error_message").ifBlank { "Trace contains errored spans" }
             ApmErrorRow(
@@ -1047,7 +1073,8 @@ object ApmServiceCatalogService {
         parentSpan: ISpan?,
     ): List<SpanAggregate> {
         val orgClause = ClickHouseQueryUtils.orgIdClause(organizationId.toLong())
-        val escapedTraceId = escapeSql(traceId)
+        val params = ClickHouseQueryParameters()
+        val traceIdParam = params.string(traceId)
         val sql = """
             SELECT
                 if(span_id_hex != '', span_id_hex, toString(span_id)) as span_id_out,
@@ -1062,12 +1089,12 @@ object ApmServiceCatalogService {
                 status_code
             FROM `$clickhouseDb`.apm_spans
             WHERE $orgClause
-              AND (trace_id_hex = '$escapedTraceId' OR toString(trace_id) = '$escapedTraceId')
+              AND (trace_id_hex = $traceIdParam OR toString(trace_id) = $traceIdParam)
             ORDER BY start_ns ASC
             LIMIT 200
             FORMAT JSONEachRow
         """.trimIndent()
-        return jsonRows(sql, parentSpan).map { row ->
+        return jsonRows(sql, parentSpan, params.asMap()).map { row ->
             SpanAggregate(
                 spanId = row.stringValue("span_id_out"),
                 parentId = row.stringValue("parent_id_out").takeUnless { it == "0" } ?: ROOT_PARENT_ID,
@@ -1088,7 +1115,7 @@ object ApmServiceCatalogService {
         query: ApmServiceQuery,
         serviceName: String?,
         resource: String?,
-    ): MutableList<String> {
+    ): SpanFilterSet {
         return spanFiltersForTimeClause(organizationId, query, serviceName, resource, query.timeRange.startClause())
     }
 
@@ -1097,7 +1124,7 @@ object ApmServiceCatalogService {
         query: ApmServiceQuery,
         serviceName: String?,
         resource: String?,
-    ): MutableList<String> {
+    ): SpanFilterSet {
         return spanFiltersForTimeClause(
             organizationId,
             query,
@@ -1113,36 +1140,44 @@ object ApmServiceCatalogService {
         serviceName: String?,
         resource: String?,
         timeClause: String,
-    ): MutableList<String> {
+    ): SpanFilterSet {
+        val params = ClickHouseQueryParameters()
         val filters = mutableListOf(
             ClickHouseQueryUtils.orgIdClause(organizationId.toLong()),
             timeClause,
             "service != ''",
         )
-        serviceName?.let { service -> filters.add("service = '${escapeSql(service)}'") }
-        resource?.let { resourceName -> filters.add("resource = '${escapeSql(resourceName)}'") }
-        query.env?.let { env -> filters.add("env = '${escapeSql(env)}'") }
-        query.source?.let { source -> filters.add("source = '${escapeSql(source)}'") }
-        query.search?.let { search -> filters.add(searchClause(search)) }
-        return filters
+        serviceName?.let { service -> filters.add("service = ${params.string(service)}") }
+        resource?.let { resourceName -> filters.add("resource = ${params.string(resourceName)}") }
+        query.env?.let { env -> filters.add("env = ${params.string(env)}") }
+        query.source?.let { source -> filters.add("source = ${params.string(source)}") }
+        query.search?.let { search -> filters.add(searchClause(search, params)) }
+        return SpanFilterSet(filters, params)
     }
 
-    private fun searchClause(search: String): String {
-        val escapedSearch = escapeSql(search)
+    private fun searchClause(search: String, params: ClickHouseQueryParameters): String {
+        val searchParam = params.string(search)
         return """
             (
-                positionCaseInsensitive(service, '$escapedSearch') > 0 OR
-                positionCaseInsensitive(resource, '$escapedSearch') > 0 OR
-                positionCaseInsensitive(name, '$escapedSearch') > 0
+                positionCaseInsensitive(service, $searchParam) > 0 OR
+                positionCaseInsensitive(resource, $searchParam) > 0 OR
+                positionCaseInsensitive(name, $searchParam) > 0
             )
         """.trimIndent()
     }
 
-    private suspend fun jsonRows(query: String, parentSpan: ISpan?): List<JsonObject> {
+    private suspend fun jsonRows(query: ClickHouseQuerySpec, parentSpan: ISpan?): List<JsonObject> =
+        jsonRows(query.sql, parentSpan, query.parameters)
+
+    private suspend fun jsonRows(
+        query: String,
+        parentSpan: ISpan?,
+        queryParameters: Map<String, String> = emptyMap(),
+    ): List<JsonObject> {
         val result = if (parentSpan == null) {
-            ClickHouseClient.executeWithFormat(query, "")
+            ClickHouseClient.executeWithFormat(query, "", queryParameters)
         } else {
-            ClickHouseClient.executeWithFormat(query, "", parentSpan)
+            ClickHouseClient.executeWithFormat(query, "", parentSpan, queryParameters)
         }
         return result.lines()
             .filter { line -> line.isNotBlank() }
