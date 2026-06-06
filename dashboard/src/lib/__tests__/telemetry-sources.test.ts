@@ -1,6 +1,7 @@
 import {describe, expect, it} from 'vitest'
 import {
   ALL_TELEMETRY_SOURCE_IDS,
+  feedbackSourceLabel,
   getTelemetrySourceStatus,
   loadTelemetrySourceIdsForService,
   parseTelemetrySourceIds,
@@ -61,5 +62,13 @@ describe('telemetry-sources', () => {
       'sentry-sdk',
       'datadog-agent',
     ])
+  })
+
+  it('labels feedback telemetry sources from source metadata', () => {
+    expect(feedbackSourceLabel('otlp', '')).toBe('OpenTelemetry')
+    expect(feedbackSourceLabel('datadog', null)).toBe('Datadog')
+    expect(feedbackSourceLabel('sentry', undefined)).toBe('Sentry-compatible SDK')
+    expect(feedbackSourceLabel('custom', '  Embedded widget  ')).toBe('Embedded widget')
+    expect(feedbackSourceLabel('custom', '')).toBe('Telemetry source')
   })
 })

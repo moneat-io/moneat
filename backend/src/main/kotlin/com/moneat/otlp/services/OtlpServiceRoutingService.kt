@@ -51,6 +51,7 @@ enum class OtlpSignalType {
     LOGS,
     TRACES,
     METRICS,
+    FEEDBACK,
 }
 
 class OtlpServiceRoutingService {
@@ -107,6 +108,7 @@ class OtlpServiceRoutingService {
                         seenLogs = row[OtelObservedServices.seen_logs],
                         seenTraces = row[OtelObservedServices.seen_traces],
                         seenMetrics = row[OtelObservedServices.seen_metrics],
+                        seenFeedback = row[OtelObservedServices.seen_feedback],
                         lastEnvironment = row[OtelObservedServices.last_environment],
                         firstSeenAt = row[OtelObservedServices.first_seen_at].toString(),
                         lastSeenAt = row[OtelObservedServices.last_seen_at].toString(),
@@ -211,6 +213,7 @@ class OtlpServiceRoutingService {
             it[OtelObservedServices.seen_logs] = signalType == OtlpSignalType.LOGS
             it[OtelObservedServices.seen_traces] = signalType == OtlpSignalType.TRACES
             it[OtelObservedServices.seen_metrics] = signalType == OtlpSignalType.METRICS
+            it[OtelObservedServices.seen_feedback] = signalType == OtlpSignalType.FEEDBACK
             it[OtelObservedServices.last_environment] = environment
         }
         OtelObservedServices.update({
@@ -224,6 +227,7 @@ class OtlpServiceRoutingService {
                 OtlpSignalType.LOGS -> it[OtelObservedServices.seen_logs] = true
                 OtlpSignalType.TRACES -> it[OtelObservedServices.seen_traces] = true
                 OtlpSignalType.METRICS -> it[OtelObservedServices.seen_metrics] = true
+                OtlpSignalType.FEEDBACK -> it[OtelObservedServices.seen_feedback] = true
             }
         }
     }

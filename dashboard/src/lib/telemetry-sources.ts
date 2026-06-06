@@ -162,6 +162,16 @@ export function storeTelemetrySourceIdsForService(
   globalThis.localStorage?.setItem(telemetrySourcesStorageKey(serviceId), serializeTelemetrySourceIds(sourceIds))
 }
 
+export function feedbackSourceLabel(sourceType?: string | null, sourceName?: string | null): string {
+  const trimmedSourceName = sourceName?.trim()
+  if (trimmedSourceName) return trimmedSourceName
+
+  if (sourceType === 'otlp') return 'OpenTelemetry'
+  if (sourceType === 'datadog') return 'Datadog'
+  if (sourceType === 'sentry') return 'Sentry-compatible SDK'
+  return 'Telemetry source'
+}
+
 export function getTelemetrySourceStatus(
   sourceId: TelemetrySourceId,
   input: TelemetrySourceStatusInput

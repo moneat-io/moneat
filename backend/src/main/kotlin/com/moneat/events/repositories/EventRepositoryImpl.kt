@@ -264,12 +264,14 @@ class EventRepositoryImpl(
 
     override suspend fun insertFeedback(data: FeedbackInsertData): Boolean {
         val tagsMap = tagsToMap(data.tags)
+        val resourceAttributesMap = tagsToMap(data.resourceAttributes)
         val sql = """
             INSERT INTO `$db`.user_feedback (
                 feedback_id, service_id, project_id, organization_id, timestamp, message, contact_email, name, url,
                 associated_event_id, replay_id, environment, release, platform,
                 user_id, user_email, user_username, user_ip_address,
-                sdk_name, sdk_version, tags, status
+                sdk_name, sdk_version, tags, status,
+                source_type, source_name, source_event_name, trace_id, span_id, resource_attributes
             ) VALUES (
                 toUUID('${escapeSql(data.feedbackId)}'),
                 ${data.projectId},
@@ -292,7 +294,13 @@ class EventRepositoryImpl(
                 '${escapeSql(data.sdkName)}',
                 '${escapeSql(data.sdkVersion)}',
                 $tagsMap,
-                'unresolved'
+                'unresolved',
+                '${escapeSql(data.sourceType)}',
+                '${escapeSql(data.sourceName)}',
+                '${escapeSql(data.sourceEventName)}',
+                '${escapeSql(data.traceId)}',
+                '${escapeSql(data.spanId)}',
+                $resourceAttributesMap
             )
         """.trimIndent()
         return executeInsert(sql)

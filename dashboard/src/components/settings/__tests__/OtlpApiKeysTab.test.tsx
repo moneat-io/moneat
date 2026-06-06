@@ -86,6 +86,7 @@ function mockBaseResponses() {
             seen_logs: true,
             seen_traces: true,
             seen_metrics: false,
+            seen_feedback: true,
             last_environment: 'production',
             first_seen_at: '2026-01-01T00:00:00Z',
             last_seen_at: '2026-01-01T01:00:00Z',
@@ -100,6 +101,7 @@ function mockBaseResponses() {
             seen_logs: false,
             seen_traces: false,
             seen_metrics: true,
+            seen_feedback: false,
             last_environment: null,
             first_seen_at: '2026-01-01T00:00:00Z',
             last_seen_at: '2026-01-01T01:00:00Z',
@@ -139,6 +141,7 @@ describe('OtlpApiKeysTab', () => {
     expect(screen.getByText('logs')).toBeInTheDocument()
     expect(screen.getByText('traces')).toBeInTheDocument()
     expect(screen.getByText('metrics')).toBeInTheDocument()
+    expect(screen.getByText('feedback')).toBeInTheDocument()
     expect(screen.getByRole('button', {name: 'Remove mapping for checkout/api'})).toBeEnabled()
     expect(screen.getByRole('button', {name: 'Remove mapping for worker'})).toBeDisabled()
   })

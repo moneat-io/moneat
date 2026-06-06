@@ -76,6 +76,7 @@ function mapOtlpObservedService(service: Record<string, unknown>): OtlpObservedS
     seenLogs: (service.seenLogs ?? service.seen_logs ?? false) as boolean,
     seenTraces: (service.seenTraces ?? service.seen_traces ?? false) as boolean,
     seenMetrics: (service.seenMetrics ?? service.seen_metrics ?? false) as boolean,
+    seenFeedback: (service.seenFeedback ?? service.seen_feedback ?? false) as boolean,
     lastEnvironment: (service.lastEnvironment ?? service.last_environment) as string | null | undefined,
     firstSeenAt: (service.firstSeenAt ?? service.first_seen_at) as string,
     lastSeenAt: (service.lastSeenAt ?? service.last_seen_at) as string,

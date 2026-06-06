@@ -129,6 +129,7 @@ describe('OTLP API Keys', () => {
                 seen_logs: true,
                 seen_traces: true,
                 seen_metrics: false,
+                seen_feedback: true,
                 last_environment: 'production',
                 first_seen_at: '2026-01-01T00:00:00Z',
                 last_seen_at: '2026-01-01T01:00:00Z',
@@ -151,6 +152,7 @@ describe('OTLP API Keys', () => {
           seenLogs: true,
           seenTraces: true,
           seenMetrics: false,
+          seenFeedback: true,
           lastEnvironment: 'production',
           firstSeenAt: '2026-01-01T00:00:00Z',
           lastSeenAt: '2026-01-01T01:00:00Z',
@@ -183,6 +185,7 @@ describe('OTLP API Keys', () => {
         seenLogs: false,
         seenTraces: false,
         seenMetrics: false,
+        seenFeedback: false,
         firstSeenAt: '2026-01-02T00:00:00Z',
         lastSeenAt: '2026-01-02T01:00:00Z',
       })

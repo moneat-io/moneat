@@ -1,15 +1,18 @@
 ---
 title: User Feedback
-description: Collect and manage user feedback submitted through Sentry SDKs.
+description: Collect and manage user feedback submitted through Sentry-compatible SDKs or OTLP events.
 ---
 
 # User Feedback
 
-User feedback lets your users report problems directly from your application. Feedback is ingested via the Sentry envelope endpoint and stored alongside your error and replay data.
+User feedback lets your users report problems directly from your application. Moneat stores feedback from
+Sentry-compatible SDKs and OTLP events in the same feedback inbox, alongside related error and replay data.
 
 ## Submitting Feedback
 
-Use the Sentry SDK's feedback API to capture feedback from users:
+### Sentry-compatible SDKs
+
+Use the Sentry SDK feedback API to capture feedback from users:
 
 ```javascript
 Sentry.captureFeedback({
@@ -19,7 +22,64 @@ Sentry.captureFeedback({
 });
 ```
 
-Feedback can optionally be linked to an error event or a session replay by including the associated event ID or replay ID.
+Feedback can optionally be linked to an error event or a session replay by including the associated event ID
+or replay ID.
+
+### OTLP Events
+
+Send OpenTelemetry Events as LogRecords to the feedback OTLP endpoint:
+
+```bash
+curl https://api.moneat.io/v1/feedback/otlp \
+  -H "Authorization: Bearer $MONEAT_OTLP_API_KEY" \
+  -H "Content-Type: application/json" \
+  --data @feedback-otlp.json
+```
+
+`feedback-otlp.json`:
+
+```json
+{
+  "resourceLogs": [
+    {
+      "resource": {
+        "attributes": [
+          {"key": "service.name", "value": {"stringValue": "checkout-api"}},
+          {"key": "service.version", "value": {"stringValue": "2026.06.06"}},
+          {"key": "deployment.environment.name", "value": {"stringValue": "production"}},
+          {"key": "telemetry.sdk.language", "value": {"stringValue": "javascript"}}
+        ]
+      },
+      "scopeLogs": [
+        {
+          "logRecords": [
+            {
+              "timeUnixNano": "1780776000000000000",
+              "eventName": "moneat.user_feedback",
+              "body": {"stringValue": "The checkout button does not work"},
+              "attributes": [
+                {"key": "moneat.feedback.contact_email", "value": {"stringValue": "user@example.com"}},
+                {"key": "moneat.feedback.name", "value": {"stringValue": "Jane"}},
+                {"key": "url.full", "value": {"stringValue": "https://app.example.com/checkout"}},
+                {"key": "moneat.feedback.associated_event_id", "value": {"stringValue": "event-id"}},
+                {"key": "moneat.feedback.replay_id", "value": {"stringValue": "replay-id"}},
+                {"key": "feature", "value": {"stringValue": "checkout"}}
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+The endpoint also accepts OTLP protobuf with `Content-Type: application/x-protobuf`. Moneat stores records
+whose `eventName` is `moneat.user_feedback`; when `eventName` is absent, it falls back to the `event.name`
+attribute.
+
+This release does not include a Datadog feedback parser. A later integration can map Datadog browser custom
+actions to the same feedback model.
 
 ## Viewing Feedback
 
@@ -29,7 +89,8 @@ Navigate to **Feedback** in the sidebar. The list view shows:
 - Search and status filtering
 - Bulk actions (resolve, archive)
 
-Click a feedback entry to see the full message, submitter details (name, email, URL), environment and SDK metadata, tags, and links to any associated error or replay.
+Click a feedback entry to see the full message, submitter details (name, email, URL), source metadata,
+environment and SDK metadata, tags, and links to any associated error or replay.
 
 ## Status Management
 

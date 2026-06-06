@@ -64,6 +64,12 @@ export interface Feedback {
   user?: { id?: string; email?: string; username?: string }
   associatedEventId?: string | null
   replayId?: string | null
+  sourceType: string
+  sourceName: string
+  sourceEventName: string
+  traceId: string
+  spanId: string
+  resourceAttributes: Record<string, string>
 }
 
 export interface FeedbackDetail extends Feedback {
