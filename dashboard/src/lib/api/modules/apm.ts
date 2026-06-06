@@ -21,6 +21,7 @@ import type {
   ApmTraceListResponse,
   ApmTraceDetailResponse,
   ApmServiceMapResponse,
+  ApmServiceLatency,
   ApmErrorsResponse,
   ApmResourceStatsResponse,
   ApmStatusFilter,
@@ -51,6 +52,18 @@ function appendApmListParams(searchParams: URLSearchParams, params: ApmListParam
   if (params.limit != null) searchParams.set('limit', String(params.limit))
   if (params.offset != null) searchParams.set('offset', String(params.offset))
   if (params.timeRange) searchParams.set('timeRange', params.timeRange)
+}
+
+type ApmServiceMapParams = {
+  timeRange?: ApmTimeRange
+  env?: string
+  source?: string
+}
+
+function appendServiceMapParams(searchParams: URLSearchParams, params: ApmServiceMapParams): void {
+  if (params.timeRange) searchParams.set('timeRange', params.timeRange)
+  if (params.env) searchParams.set('env', params.env)
+  if (params.source) searchParams.set('source', params.source)
 }
 
 function normalizeStringMap(raw: unknown): Record<string, string> {
@@ -143,8 +156,21 @@ export function apmMethods(core: ApiClientCore) {
       }
     },
 
-    getApmServiceMap: () =>
-      core.request<ApmServiceMapResponse>(`${base}/services/map`),
+    getApmServiceMap: (params: ApmServiceMapParams = {}) => {
+      const searchParams = new URLSearchParams()
+      appendServiceMapParams(searchParams, params)
+      return core.request<ApmServiceMapResponse>(
+        urlWithQuery(`${base}/services/map`, searchParams.toString())
+      )
+    },
+
+    getApmServiceLatency: (service: string, params: ApmServiceMapParams = {}) => {
+      const searchParams = new URLSearchParams()
+      appendServiceMapParams(searchParams, params)
+      return core.request<ApmServiceLatency>(
+        urlWithQuery(`${base}/services/${encodeURIComponent(service)}/latency`, searchParams.toString())
+      )
+    },
 
     getApmErrors: (
       params: ApmListParams = {}

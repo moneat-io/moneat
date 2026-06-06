@@ -221,8 +221,27 @@ data class DdServiceMapEntry(
 )
 
 @Serializable
+data class DdServiceEdge(
+    val fromService: String,
+    val toService: String,
+    val callCount: Long,
+    val errorCount: Long,
+    val avgDurationNs: Double,
+)
+
+@Serializable
 data class DdServiceMapResponse(
     val services: List<DdServiceMapEntry>,
+    val edges: List<DdServiceEdge> = emptyList(),
+)
+
+@Serializable
+data class DdServiceLatencyResponse(
+    val service: String,
+    val p50DurationNs: Long,
+    val p90DurationNs: Long,
+    val p99DurationNs: Long,
+    val sampleCount: Long,
 )
 
 // --- APM Resource Stats Models ---

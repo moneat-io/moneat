@@ -40,11 +40,14 @@ private const val INVALID_TOKEN_ERROR = "Invalid token"
 private const val INVALID_TIME_RANGE_ERROR = "Invalid timeRange"
 private const val INVALID_STATUS_ERROR = "Invalid status"
 private const val INVALID_SERVICES_ERROR = "Invalid services"
+private const val INVALID_SERVICE_ERROR = "Invalid service"
+private const val INVALID_SERVICE_MAP_FILTER_ERROR = "Invalid service map filter"
 private const val STATUS_ERROR = "error"
 private const val STATUS_OK = "ok"
 private const val MAX_TRACE_SEARCH_LENGTH = 200
 private const val MAX_SERVICE_FILTERS = 50
 private const val MAX_SERVICE_FILTER_LENGTH = 200
+private const val MAX_SERVICE_PARAM_LENGTH = 200
 private val hexTraceIdPattern = Regex("^[0-9a-fA-F]+$")
 
 private val apmTimeRanges = mapOf(
@@ -140,7 +143,38 @@ fun Route.traceDashboardRoutes() {
         get("/v1/services/map") {
             val orgId = call.organizationId()
                 ?: return@get call.respondUnauthorized()
-            val result = TraceIngestionService.getServiceMap(orgId, call.getSentryTransaction())
+            val timeRange = call.apmTimeRange()
+                ?: return@get call.respondBadRequest(INVALID_TIME_RANGE_ERROR)
+            val scope = call.serviceMapScope()
+                ?: return@get call.respondBadRequest(INVALID_SERVICE_MAP_FILTER_ERROR)
+            val result = TraceIngestionService.getServiceMap(
+                orgId,
+                timeRange,
+                scope.env,
+                scope.source,
+                call.getSentryTransaction(),
+            )
+            call.respond(result)
+        }
+
+        // GET /v1/services/{service}/latency - focused-service latency percentiles
+        get("/v1/services/{service}/latency") {
+            val orgId = call.organizationId()
+                ?: return@get call.respondUnauthorized()
+            val service = call.requiredServiceMapParam("service")
+                ?: return@get call.respondBadRequest(INVALID_SERVICE_ERROR)
+            val timeRange = call.apmTimeRange()
+                ?: return@get call.respondBadRequest(INVALID_TIME_RANGE_ERROR)
+            val scope = call.serviceMapScope()
+                ?: return@get call.respondBadRequest(INVALID_SERVICE_MAP_FILTER_ERROR)
+            val result = TraceIngestionService.getServiceLatencyPercentiles(
+                orgId,
+                service,
+                timeRange,
+                scope.env,
+                scope.source,
+                call.getSentryTransaction(),
+            )
             call.respond(result)
         }
 
@@ -259,6 +293,34 @@ private fun ApplicationCall.apmTimeRange(): DdApmQueryTimeRange? {
     val rawValue = parameters["timeRange"] ?: parameters["range"] ?: DEFAULT_APM_TIME_RANGE
     return apmTimeRanges[rawValue]
 }
+
+private data class ServiceMapScope(
+    val env: String?,
+    val source: String?,
+)
+
+private data class ServiceMapParam(
+    val value: String?,
+)
+
+private fun ApplicationCall.serviceMapScope(): ServiceMapScope? {
+    val env = optionalServiceMapParam("env") ?: return null
+    val source = optionalServiceMapParam("source") ?: return null
+    return ServiceMapScope(env.value, source.value)
+}
+
+private fun ApplicationCall.optionalServiceMapParam(name: String): ServiceMapParam? {
+    val rawValue = parameters[name] ?: return ServiceMapParam(null)
+    val value = rawValue.trim()
+    if (value.length > MAX_SERVICE_PARAM_LENGTH) return null
+    return ServiceMapParam(value.takeIf { it.isNotEmpty() })
+}
+
+private fun ApplicationCall.requiredServiceMapParam(name: String): String? =
+    parameters[name]
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?.takeIf { it.length <= MAX_SERVICE_PARAM_LENGTH }
 
 private fun ApplicationCall.apmStatus(): String? {
     val rawValue = parameters["status"] ?: return ""
