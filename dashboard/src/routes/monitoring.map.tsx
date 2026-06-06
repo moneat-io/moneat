@@ -16,7 +16,7 @@
 
 import {createFileRoute, redirect, useNavigate} from '@tanstack/react-router'
 import {api} from '@/lib/api'
-import {InfrastructureMap, type MonitoringMapScope} from '@/components/monitoring/InfrastructureMap'
+import {MonitoringMap, type MonitoringMapScope} from '@/components/monitoring/MonitoringMap'
 
 interface MonitoringMapSearch {
   scope: MonitoringMapScope
@@ -44,7 +44,7 @@ function MonitoringMapPage() {
   const navigate = useNavigate({from: '/monitoring/map'})
 
   return (
-    <InfrastructureMap
+    <MonitoringMap
       initialScope={scope}
       onScopeChange={(nextScope) => {
         navigate({search: {scope: nextScope}, replace: true})

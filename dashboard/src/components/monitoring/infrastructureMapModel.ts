@@ -80,6 +80,7 @@ export interface InfrastructureMapNode {
   sizeLabel: string
   sizePercent: number
   details: Array<{label: string; value: string}>
+  tags: Record<string, string>
 }
 
 export interface InfrastructureMapGroup {
@@ -284,6 +285,7 @@ function createMapNode(
     sizeLabel: formatSizeValue(resource, view.sizeBy),
     sizePercent: getSizePercent(getMetricValue(resource, view.sizeBy), maxSizeValue, view.sizeBy),
     details: resource.details,
+    tags: resource.tags,
   }
 }
 
