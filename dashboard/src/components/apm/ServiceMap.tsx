@@ -16,62 +16,44 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from 'react'
 import {useQuery} from '@tanstack/react-query'
+import {Link} from '@tanstack/react-router'
 import {
   Handle,
   Position,
-  MarkerType,
   type Node,
-  type Edge,
   type NodeProps,
 } from '@xyflow/react'
-import Dagre from '@dagrejs/dagre'
-import {api, type ApmServiceMapEntry} from '@/lib/api'
+import {api, type ApmServiceEdge, type ApmTimeRange} from '@/lib/api'
+import type {FacetFilter} from '@/lib/filters/types'
 import {Badge} from '@/components/ui/badge'
-import {Database, Globe, Server, Layers} from 'lucide-react'
+import {Button} from '@/components/ui/button'
+import {Database, Globe, Server, Layers, FileText, Flame, ListTree} from 'lucide-react'
 import {MapCanvas} from '@/components/maps/MapCanvas'
-import {MapDetailPanel} from '@/components/maps/MapDetailPanel'
+import {MapDetailDock} from '@/components/maps/MapDetailDock'
 import {MapLegend} from '@/components/maps/MapLegend'
 import {MapNodeCard} from '@/components/maps/MapNodeCard'
-
-type ServiceType = 'database' | 'cache' | 'queue' | 'web' | 'service'
-
-type ServiceNodeData = {
-  label: string
-  spanCount: number
-  errorCount: number
-  avgDurationNs: number
-  serviceType: ServiceType
-  isExternal: boolean
-  dimmed: boolean
-  selected: boolean
-}
-
-type ServiceGraphSelection = Readonly<{
-  connectedServices: Set<string>
-  connectedEdges: Set<string>
-}>
-
-type ServiceNodeBuildOptions = Readonly<{
-  services: ApmServiceMapEntry[]
-  graph: Dagre.graphlib.Graph
-  selectedId: string | null
-  connectedServices: Set<string>
-}>
-
-type ExternalNodeBuildOptions = Readonly<{
-  externalServices: Set<string>
-  graph: Dagre.graphlib.Graph
-  selectedId: string | null
-  connectedServices: Set<string>
-}>
-
-type ServiceEdgeBuildOptions = Readonly<{
-  services: ApmServiceMapEntry[]
-  selectedId: string | null
-  connectedEdges: Set<string>
-}>
-
-const SERVICE_TYPES: ServiceType[] = ['database', 'cache', 'queue', 'web', 'service']
+import {cn} from '@/lib/utils'
+import {
+  buildServiceMapGraph,
+  formatCount,
+  formatDurationNs,
+  formatPercent,
+  formatRatePerMin,
+  timeRangeSeconds,
+  type HealthTone,
+  type ServiceMapEdgeModel,
+  type ServiceMapNodeModel,
+  type ServiceType,
+} from './serviceMapModel'
+import {
+  layoutPositions,
+  timeRangeSecondsForNode,
+  toFlowEdges,
+  toFlowNodes,
+  DEFAULT_TIME_RANGE,
+  TONE_COLOR,
+  type ServiceNodeData,
+} from './serviceMapFlow'
 
 const SERVICE_CHART_VAR: Record<ServiceType, string> = {
   database: '--chart-2',
@@ -79,14 +61,6 @@ const SERVICE_CHART_VAR: Record<ServiceType, string> = {
   queue: '--chart-6',
   web: '--chart-4',
   service: '--chart-1',
-}
-
-function serviceColor(type: ServiceType): string {
-  return `hsl(var(${SERVICE_CHART_VAR[type]}))`
-}
-
-function serviceTint(type: ServiceType): string {
-  return `hsl(var(${SERVICE_CHART_VAR[type]}) / 0.15)`
 }
 
 const SERVICE_ICONS: Record<ServiceType, ComponentType<{className?: string}>> = {
@@ -97,249 +71,24 @@ const SERVICE_ICONS: Record<ServiceType, ComponentType<{className?: string}>> = 
   service: Server,
 }
 
-const SERVICE_LEGEND_ITEMS = SERVICE_TYPES.map((type) => ({
-  label: type.charAt(0).toUpperCase() + type.slice(1),
-  color: serviceColor(type),
-}))
-
-function formatDuration(ns: number): string {
-  if (ns < 1_000_000) return `${(ns / 1000).toFixed(0)}µs`
-  if (ns < 1_000_000_000) return `${(ns / 1_000_000).toFixed(1)}ms`
-  return `${(ns / 1_000_000_000).toFixed(2)}s`
+// Node health borders use the soft status-border tokens (matching the sibling
+// infrastructure map), so healthy nodes stay calm and warning/error nodes draw
+// the eye. Selection is conveyed by the primary ring, not the border color.
+const TONE_BORDER_CLASS: Record<HealthTone, string> = {
+  success: 'border-success-border hover:border-success-fg',
+  warning: 'border-warning-border hover:border-warning-fg',
+  danger: 'border-danger-border hover:border-danger-fg',
+  neutral: 'border-border hover:border-foreground/30',
 }
 
-function inferServiceType(name: string): ServiceType {
-  const lower = name.toLowerCase()
-  if (/postgres|mysql|mongo|clickhouse|sqlite|mariadb|cockroach|\bdb\b/.test(lower)) return 'database'
-  if (/redis|cache|memcached|varnish/.test(lower)) return 'cache'
-  if (/kafka|rabbitmq|queue|sqs|sns|nats|pulsar/.test(lower)) return 'queue'
-  if (/web|api|gateway|nginx|envoy|proxy|frontend/.test(lower)) return 'web'
-  return 'service'
+const PIVOT_BUTTON_CLASS = 'h-auto flex-col gap-1 px-1 py-1.5 text-[10px]'
+
+function serviceColor(type: ServiceType): string {
+  return `hsl(var(${SERVICE_CHART_VAR[type]}))`
 }
 
-// --- Layout ---
-
-const NODE_W = 200
-const NODE_H = 80
-const EXT_W = 160
-const EXT_H = 56
-
-function buildGraph(
-  services: ApmServiceMapEntry[],
-  selectedId: string | null,
-): {nodes: Node[]; edges: Edge[]} {
-  const knownServices = new Set(services.map((service) => service.service))
-  const externalServices = getExternalServices(services, knownServices)
-  const selection = getServiceSelection(services, selectedId)
-  const graph = createServiceLayoutGraph(services, externalServices)
-  const nodes = [
-    ...createServiceNodes({
-      services,
-      graph,
-      selectedId,
-      connectedServices: selection.connectedServices,
-    }),
-    ...createExternalNodes({
-      externalServices,
-      graph,
-      selectedId,
-      connectedServices: selection.connectedServices,
-    }),
-  ]
-  const edges = createServiceEdges({
-    services,
-    selectedId,
-    connectedEdges: selection.connectedEdges,
-  })
-
-  return {nodes, edges}
-}
-
-function getExternalServices(services: ApmServiceMapEntry[], knownServices: Set<string>): Set<string> {
-  const external = new Set<string>()
-  for (const service of services) {
-    for (const target of service.callsTo) {
-      if (!knownServices.has(target)) external.add(target)
-    }
-  }
-  return external
-}
-
-function getServiceSelection(
-  services: ApmServiceMapEntry[],
-  selectedId: string | null,
-): ServiceGraphSelection {
-  const connectedServices = new Set<string>()
-  const connectedEdges = new Set<string>()
-  if (selectedId) {
-    connectedServices.add(selectedId)
-    addSelectedServiceConnections({
-      services,
-      selectedId,
-      connectedServices,
-      connectedEdges,
-    })
-  }
-  return {connectedServices, connectedEdges}
-}
-
-function addSelectedServiceConnections({
-  services,
-  selectedId,
-  connectedServices,
-  connectedEdges,
-}: Readonly<{
-  services: ApmServiceMapEntry[]
-  selectedId: string
-  connectedServices: Set<string>
-  connectedEdges: Set<string>
-}>) {
-  for (const service of services) {
-    for (const target of service.callsTo) {
-      if (service.service === selectedId || target === selectedId) {
-        connectedServices.add(service.service)
-        connectedServices.add(target)
-        connectedEdges.add(getServiceEdgeId(service.service, target))
-      }
-    }
-  }
-}
-
-function isSelectionInVisibleGraph(
-  services: ApmServiceMapEntry[],
-  selectedId: string,
-): boolean {
-  return services.some(
-    (service) => service.service === selectedId || service.callsTo.includes(selectedId),
-  )
-}
-
-function createServiceLayoutGraph(
-  services: ApmServiceMapEntry[],
-  externalServices: Set<string>,
-): Dagre.graphlib.Graph {
-  const graph = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}))
-  graph.setGraph({rankdir: 'LR', nodesep: 50, ranksep: 160, marginx: 40, marginy: 40})
-
-  for (const service of services) graph.setNode(service.service, {width: NODE_W, height: NODE_H})
-  for (const name of externalServices) graph.setNode(name, {width: EXT_W, height: EXT_H})
-  for (const service of services) {
-    for (const target of service.callsTo) graph.setEdge(service.service, target)
-  }
-
-  Dagre.layout(graph)
-  return graph
-}
-
-function createServiceNodes({
-  services,
-  graph,
-  selectedId,
-  connectedServices,
-}: ServiceNodeBuildOptions): Node[] {
-  return services.map((service) => {
-    const position = graph.node(service.service)
-    return {
-      id: service.service,
-      type: 'service',
-      position: {x: position.x - NODE_W / 2, y: position.y - NODE_H / 2},
-      data: {
-        label: service.service,
-        spanCount: service.spanCount,
-        errorCount: service.errorCount,
-        avgDurationNs: service.avgDurationNs,
-        serviceType: inferServiceType(service.service),
-        isExternal: false,
-        dimmed: isServiceDimmed(service.service, selectedId, connectedServices),
-        selected: selectedId === service.service,
-      } satisfies ServiceNodeData,
-    }
-  })
-}
-
-function createExternalNodes({
-  externalServices,
-  graph,
-  selectedId,
-  connectedServices,
-}: ExternalNodeBuildOptions): Node[] {
-  const nodes: Node[] = []
-  for (const name of externalServices) {
-    const position = graph.node(name)
-    nodes.push({
-      id: name,
-      type: 'service',
-      position: {x: position.x - EXT_W / 2, y: position.y - EXT_H / 2},
-      data: {
-        label: name,
-        spanCount: 0,
-        errorCount: 0,
-        avgDurationNs: 0,
-        serviceType: inferServiceType(name),
-        isExternal: true,
-        dimmed: isServiceDimmed(name, selectedId, connectedServices),
-        selected: selectedId === name,
-      } satisfies ServiceNodeData,
-    })
-  }
-  return nodes
-}
-
-function createServiceEdges({
-  services,
-  selectedId,
-  connectedEdges,
-}: ServiceEdgeBuildOptions): Edge[] {
-  const edges: Edge[] = []
-  for (const service of services) {
-    for (const target of service.callsTo) {
-      const id = getServiceEdgeId(service.service, target)
-      const isDimmed = isServiceEdgeDimmed(id, selectedId, connectedEdges)
-      edges.push({
-        id,
-        source: service.service,
-        target,
-        type: 'smoothstep',
-        animated: !isDimmed && selectedId !== null,
-        style: {
-          stroke: isDimmed
-            ? 'hsl(var(--muted-foreground) / 0.2)'
-            : 'hsl(var(--muted-foreground) / 0.6)',
-          strokeWidth: isDimmed ? 1 : 2,
-        },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: isDimmed
-            ? 'hsl(var(--muted-foreground) / 0.2)'
-            : 'hsl(var(--muted-foreground) / 0.6)',
-          width: 14,
-          height: 14,
-        },
-      })
-    }
-  }
-
-  return edges
-}
-
-function getServiceEdgeId(source: string, target: string): string {
-  return `${source}->${target}`
-}
-
-function isServiceDimmed(
-  serviceId: string,
-  selectedId: string | null,
-  connectedServices: Set<string>,
-): boolean {
-  return selectedId !== null && !connectedServices.has(serviceId)
-}
-
-function isServiceEdgeDimmed(
-  edgeId: string,
-  selectedId: string | null,
-  connectedEdges: Set<string>,
-): boolean {
-  return selectedId !== null && !connectedEdges.has(edgeId)
+function serviceTint(type: ServiceType): string {
+  return `hsl(var(${SERVICE_CHART_VAR[type]}) / 0.15)`
 }
 
 // --- Custom node ---
@@ -354,14 +103,20 @@ const handleStyle: CSSProperties = {
 const ServiceNode = memo(function ServiceNode({data}: Readonly<NodeProps<Node<ServiceNodeData>>>) {
   const accent = serviceColor(data.serviceType)
   const Icon = SERVICE_ICONS[data.serviceType]
-  const hasErrors = data.errorCount > 0
-  const metrics = data.isExternal ? undefined : (
+  const borderClassName = data.isInferred ? 'border-border' : TONE_BORDER_CLASS[data.healthTone]
+
+  const metrics = data.isInferred ? (
     <>
-      <span>{data.spanCount.toLocaleString()} spans</span>
-      <span>{formatDuration(data.avgDurationNs)}</span>
-      {hasErrors && (
-        <span className="font-semibold text-destructive">
-          {data.errorCount} err
+      <span>{formatRatePerMin(data.spanCount, timeRangeSecondsForNode(data))} in</span>
+      <span>{formatDurationNs(data.avgDurationNs)}</span>
+    </>
+  ) : (
+    <>
+      <span>{formatRatePerMin(data.spanCount, timeRangeSecondsForNode(data))}</span>
+      <span>{formatDurationNs(data.avgDurationNs)}</span>
+      {data.errorRate > 0 && (
+        <span className={data.healthTone === 'danger' ? 'font-semibold text-danger-fg' : 'text-warning-fg'}>
+          {formatPercent(data.errorRate)} err
         </span>
       )}
     </>
@@ -372,16 +127,19 @@ const ServiceNode = memo(function ServiceNode({data}: Readonly<NodeProps<Node<Se
       <Handle type="target" position={Position.Left} style={handleStyle} />
       <MapNodeCard
         title={data.label}
-        subtitle={data.isExternal ? 'External dependency' : undefined}
+        subtitle={data.isInferred ? 'Inferred dependency' : undefined}
         icon={<Icon className="h-4 w-4" />}
         iconContainerStyle={{backgroundColor: serviceTint(data.serviceType), color: accent}}
-        borderColor={getServiceBorderColor({color: accent, hasErrors, selected: data.selected})}
-        minWidth={data.isExternal ? 140 : 180}
+        borderClassName={borderClassName}
+        minWidth={data.isInferred ? 148 : 188}
         selected={data.selected}
         dimmed={data.dimmed}
-        dashed={data.isExternal}
-        statusIndicator={hasErrors ? (
-          <span className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-destructive" />
+        dashed={data.isInferred}
+        statusIndicator={data.healthTone === 'danger' ? (
+          <span
+            className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full"
+            style={{backgroundColor: TONE_COLOR.danger}}
+          />
         ) : null}
         metrics={metrics}
       />
@@ -394,133 +152,272 @@ const nodeTypes = {service: ServiceNode}
 
 // --- Main component ---
 
+const EMPTY_FACET_FILTERS: FacetFilter[] = []
+
 type ServiceMapProps = Readonly<{
   className?: string
   searchQuery?: string
+  timeRange?: ApmTimeRange
+  env?: string
+  source?: string
+  facetFilters?: FacetFilter[]
 }>
 
-export function ServiceMap({className, searchQuery = ''}: ServiceMapProps = {}) {
+export function ServiceMap({
+  className,
+  searchQuery = '',
+  timeRange = DEFAULT_TIME_RANGE,
+  env,
+  source,
+  facetFilters = EMPTY_FACET_FILTERS,
+}: ServiceMapProps = {}) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const {data, isError, isLoading} = useQuery({
-    queryKey: ['apmServiceMap'],
-    queryFn: () => api.getApmServiceMap(),
+    queryKey: ['apmServiceMap', timeRange, env ?? '', source ?? ''],
+    queryFn: () => api.getApmServiceMap({timeRange, env, source}),
     enabled: api.isAuthenticated(),
     refetchInterval: 30000,
   })
 
-  const services = data?.services ?? []
-  const normalizedSearch = searchQuery.trim().toLowerCase()
-  const visibleServices = useMemo(() => {
-    if (!normalizedSearch) return services
-    return services.filter((service) => {
-      const calls = service.callsTo.join(' ').toLowerCase()
-      return service.service.toLowerCase().includes(normalizedSearch) || calls.includes(normalizedSearch)
-    })
-  }, [normalizedSearch, services])
+  const services = useMemo(() => data?.services ?? [], [data])
+  const edges = useMemo<ApmServiceEdge[]>(() => data?.edges ?? [], [data])
+  const windowSeconds = timeRangeSeconds(timeRange)
 
-  const effectiveSelectedId = useMemo(() => {
-    if (selectedId === null) return null
-    return isSelectionInVisibleGraph(visibleServices, selectedId) ? selectedId : null
-  }, [selectedId, visibleServices])
+  const graph = useMemo(
+    () => buildServiceMapGraph({services, edges, windowSeconds, search: searchQuery, selectedId, facetFilters}),
+    [services, edges, windowSeconds, searchQuery, selectedId, facetFilters],
+  )
 
-  const {nodes, edges} = useMemo(
-    () => buildGraph(visibleServices, effectiveSelectedId),
-    [visibleServices, effectiveSelectedId],
+  const flowNodes = useMemo(() => {
+    const positions = layoutPositions(graph.nodes, graph.edges)
+    return toFlowNodes(graph.nodes, positions).map((node) => ({
+      ...node,
+      data: {...node.data, windowSeconds},
+    }))
+  }, [graph.nodes, graph.edges, windowSeconds])
+
+  const flowEdges = useMemo(() => toFlowEdges(graph.edges), [graph.edges])
+
+  const selectedNode = useMemo(
+    () => graph.nodes.find((node) => node.id === selectedId) ?? null,
+    [graph.nodes, selectedId],
   )
 
   const onNodeClick = useCallback((_event: ReactMouseEvent, node: Node) => {
     setSelectedId((previousId) => (previousId === node.id ? null : node.id))
-  }, [setSelectedId])
+  }, [])
 
-  const onPaneClick = useCallback(() => setSelectedId(null), [setSelectedId])
+  const onPaneClick = useCallback(() => setSelectedId(null), [])
 
-  const selected = effectiveSelectedId
-    ? visibleServices.find((service) => service.service === effectiveSelectedId)
-    : null
-  const isFilteredEmpty = services.length > 0 && visibleServices.length === 0
+  const isFilteredEmpty = services.length > 0 && graph.visibleServiceCount === 0
 
   return (
-    <MapCanvas
-      nodes={nodes}
-      edges={edges}
-      nodeTypes={nodeTypes}
-      onNodeClick={onNodeClick}
-      onPaneClick={onPaneClick}
-      isLoading={isLoading}
-      isEmpty={!isError && visibleServices.length === 0}
-      emptyTitle={isFilteredEmpty ? 'No services match your search' : 'No services found'}
-      emptyDescription={isFilteredEmpty
-        ? 'Adjust search to show more service nodes.'
-        : 'Service map populates automatically as trace telemetry is ingested.'}
-      fallback={isError ? (
-        <div className="max-w-sm text-center">
-          <p className="text-sm font-medium text-muted-foreground">Map data unavailable</p>
-          <p className="mt-1 text-xs text-muted-foreground/75">
-            Refresh the page or try again after the telemetry API responds.
-          </p>
-        </div>
-      ) : undefined}
-      className={className ?? 'service-map h-[calc(100vh-260px)] min-h-[420px]'}
-      fitSignature={`services-${visibleServices.map((service) => service.service).join('|')}`}
-    >
-      <MapLegend
-        items={[
-          ...SERVICE_LEGEND_ITEMS,
-          {
-            label: 'External',
-            color: 'hsl(var(--muted-foreground) / 0.4)',
-            dashed: true,
-          },
-        ]}
-      />
+    <div className={cn('relative flex min-h-0', className ?? 'service-map h-[calc(100vh-260px)] min-h-[420px]')}>
+      <MapCanvas
+        nodes={flowNodes}
+        edges={flowEdges}
+        nodeTypes={nodeTypes}
+        onNodeClick={onNodeClick}
+        onPaneClick={onPaneClick}
+        isLoading={isLoading}
+        isEmpty={!isError && graph.nodes.length === 0}
+        emptyTitle={isFilteredEmpty ? 'No services match your filters' : 'No services found'}
+        emptyDescription={isFilteredEmpty
+          ? 'Adjust search or facets to show more service nodes.'
+          : 'Service map populates automatically as trace telemetry is ingested.'}
+        fallback={isError ? (
+          <div className="max-w-sm text-center">
+            <p className="text-sm font-medium text-muted-foreground">Map data unavailable</p>
+            <p className="mt-1 text-xs text-muted-foreground/75">
+              Refresh the page or try again after the telemetry API responds.
+            </p>
+          </div>
+        ) : undefined}
+        className="min-w-0 flex-1 rounded-none border-0"
+        fitSignature={`services-${timeRange}-${graph.nodes.map((node) => node.id).join('|')}`}
+      >
+        <MapLegend
+          items={[
+            {label: 'Healthy', color: TONE_COLOR.success},
+            {label: 'Elevated', color: TONE_COLOR.warning},
+            {label: 'Errors', color: TONE_COLOR.danger},
+            {label: 'Inferred', color: 'hsl(var(--muted-foreground) / 0.4)', dashed: true},
+          ]}
+          trailing={
+            <span className="flex items-center gap-1.5 border-l border-border/60 pl-3 font-mono">
+              <span>{formatCount(graph.visibleServiceCount)} services</span>
+              {graph.inferredCount > 0 && (
+                <span className="text-muted-foreground/70">· {formatCount(graph.inferredCount)} inferred</span>
+              )}
+            </span>
+          }
+        />
+      </MapCanvas>
 
-      {selected && (
-        <MapDetailPanel title={selected.service} onClose={() => setSelectedId(null)}>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Spans</span>
-            <span className="font-mono text-xs">{selected.spanCount.toLocaleString()}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Avg Duration</span>
-            <span className="font-mono text-xs">{formatDuration(selected.avgDurationNs)}</span>
-          </div>
-          {selected.errorCount > 0 && (
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Errors</span>
-              <Badge variant="destructive" className="h-5 text-[10px]">
-                {selected.errorCount}
-              </Badge>
-            </div>
-          )}
-          {selected.callsTo.length > 0 && (
-            <div className="border-t pt-1">
-              <span className="text-[11px] text-muted-foreground">Downstream</span>
-              <div className="mt-1 flex flex-wrap gap-1">
-                {selected.callsTo.map((target) => (
-                  <Badge key={target} variant="secondary" className="h-5 text-[10px]">
-                    {target}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
-        </MapDetailPanel>
+      {selectedNode && (
+        <ServiceDetailPanel
+          node={selectedNode}
+          upstream={graph.neighbors?.upstream ?? []}
+          downstream={graph.neighbors?.downstream ?? []}
+          windowSeconds={windowSeconds}
+          timeRange={timeRange}
+          env={env}
+          source={source}
+          onClose={() => setSelectedId(null)}
+        />
       )}
-    </MapCanvas>
+    </div>
   )
 }
 
-function getServiceBorderColor({
-  color,
-  hasErrors,
-  selected,
-}: {
-  color: string
-  hasErrors: boolean
-  selected: boolean
-}): string {
-  if (hasErrors && !selected) return 'hsl(var(--destructive))'
-  if (selected) return 'hsl(var(--primary))'
-  return color
+type ServiceDetailPanelProps = Readonly<{
+  node: ServiceMapNodeModel
+  upstream: ServiceMapEdgeModel[]
+  downstream: ServiceMapEdgeModel[]
+  windowSeconds: number
+  timeRange: ApmTimeRange
+  env?: string
+  source?: string
+  onClose: () => void
+}>
+
+function ServiceDetailPanel({
+  node,
+  upstream,
+  downstream,
+  windowSeconds,
+  timeRange,
+  env,
+  source,
+  onClose,
+}: ServiceDetailPanelProps) {
+  const {data: latency, isLoading: latencyLoading} = useQuery({
+    queryKey: ['apmServiceLatency', node.id, timeRange, env ?? '', source ?? ''],
+    queryFn: () => api.getApmServiceLatency(node.id, {timeRange, env, source}),
+    enabled: api.isAuthenticated() && !node.isInferred,
+  })
+
+  return (
+    <MapDetailDock
+      title={node.label}
+      subtitle={node.isInferred ? `inferred · ${node.serviceType}` : `service · ${node.serviceType}`}
+      onClose={onClose}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-muted-foreground">{node.isInferred ? 'Type' : 'Health'}</span>
+        <Badge variant={node.isInferred ? 'neutral' : healthBadgeVariant(node.healthTone)} className="h-5 text-[10px] capitalize">
+          {node.isInferred ? 'Inferred dependency' : node.healthTone}
+        </Badge>
+      </div>
+      <DetailRow label="Throughput" value={formatRatePerMin(node.spanCount, windowSeconds)} />
+      <DetailRow label="Error rate" value={formatPercent(node.errorRate)} />
+      <DetailRow label="Avg latency" value={formatDurationNs(node.avgDurationNs)} />
+      {!node.isInferred && (
+        <div className="grid grid-cols-3 gap-1.5 border-t pt-2">
+          <Percentile label="p50" value={latency?.p50DurationNs} loading={latencyLoading} />
+          <Percentile label="p90" value={latency?.p90DurationNs} loading={latencyLoading} />
+          <Percentile label="p99" value={latency?.p99DurationNs} loading={latencyLoading} />
+        </div>
+      )}
+
+      <NeighborList title="Upstream" emptyLabel="No callers" edges={upstream} endpoint="source" />
+      <NeighborList title="Downstream" emptyLabel="No dependencies" edges={downstream} endpoint="target" />
+
+      {!node.isInferred && (
+        <div className="grid grid-cols-3 gap-1.5 border-t pt-2">
+          <Button asChild variant="outline" size="sm" className={PIVOT_BUTTON_CLASS}>
+            <Link to="/performance/traces">
+              <ListTree className="h-3.5 w-3.5" />
+              Traces
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className={PIVOT_BUTTON_CLASS}>
+            <Link to="/logs" search={{q: `service:${node.id}`}}>
+              <FileText className="h-3.5 w-3.5" />
+              Logs
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className={PIVOT_BUTTON_CLASS}>
+            <Link to="/profiles/service/$service" params={{service: node.id}}>
+              <Flame className="h-3.5 w-3.5" />
+              Profiles
+            </Link>
+          </Button>
+        </div>
+      )}
+    </MapDetailDock>
+  )
+}
+
+function DetailRow({label, value}: Readonly<{label: string; value: string}>) {
+  return (
+    <div className="flex justify-between gap-3">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="truncate font-mono text-xs">{value}</span>
+    </div>
+  )
+}
+
+function Percentile({
+  label,
+  value,
+  loading,
+}: Readonly<{label: string; value?: number; loading: boolean}>) {
+  const displayValue = percentileDisplayValue(value, loading)
+
+  return (
+    <div className="rounded-md border bg-card/40 px-1.5 py-1 text-center">
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="font-mono text-[11px]">{displayValue}</div>
+    </div>
+  )
+}
+
+function percentileDisplayValue(value: number | undefined, loading: boolean): string {
+  if (loading) return '…'
+  if (value == null) return '—'
+  return formatDurationNs(value)
+}
+
+function NeighborList({
+  title,
+  emptyLabel,
+  edges,
+  endpoint,
+}: Readonly<{
+  title: string
+  emptyLabel: string
+  edges: ServiceMapEdgeModel[]
+  endpoint: 'source' | 'target'
+}>) {
+  return (
+    <div className="border-t pt-1.5">
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-[11px] font-medium text-muted-foreground">{title}</span>
+        <span className="text-[10px] text-muted-foreground/70">{edges.length}</span>
+      </div>
+      {edges.length === 0 ? (
+        <p className="text-[11px] text-muted-foreground/60">{emptyLabel}</p>
+      ) : (
+        <div className="space-y-1">
+          {edges.map((edge) => (
+            <div key={edge.id} className="flex items-center justify-between gap-2 text-[11px]">
+              <span className="truncate font-medium">{endpoint === 'source' ? edge.source : edge.target}</span>
+              <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                {formatCount(edge.callCount)} · {formatDurationNs(edge.avgDurationNs)}
+                {edge.errorRate > 0 && (
+                  <span className="ml-1 text-danger-fg">{formatPercent(edge.errorRate)}</span>
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function healthBadgeVariant(tone: HealthTone): 'success' | 'warning' | 'danger' | 'neutral' {
+  return tone
 }
