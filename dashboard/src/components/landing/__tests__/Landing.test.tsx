@@ -13,6 +13,19 @@ vi.mock('@tanstack/react-router', () => ({
 import {Landing} from '../Landing'
 
 const serviceMapLabel = 'Live service map: Datadog, Sentry, and OTLP telemetry flowing into one platform'
+const originalMatchMedia = Object.getOwnPropertyDescriptor(globalThis.window, 'matchMedia')
+const originalPauseAnimations = Object.getOwnPropertyDescriptor(
+  globalThis.SVGSVGElement.prototype,
+  'pauseAnimations',
+)
+
+function restoreProperty(target: object, property: PropertyKey, descriptor: PropertyDescriptor | undefined) {
+  if (descriptor) {
+    Object.defineProperty(target, property, descriptor)
+  } else {
+    Reflect.deleteProperty(target, property)
+  }
+}
 
 function stubReducedMotion(matches: boolean) {
   Object.defineProperty(globalThis.window, 'matchMedia', {
@@ -32,6 +45,8 @@ describe('Landing', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+    restoreProperty(globalThis.window, 'matchMedia', originalMatchMedia)
+    restoreProperty(globalThis.SVGSVGElement.prototype, 'pauseAnimations', originalPauseAnimations)
   })
 
   it('renders the hero service map with deterministic source and service wiring', () => {
