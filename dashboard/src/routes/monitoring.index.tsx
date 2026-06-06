@@ -48,7 +48,6 @@ import {
   Copy,
   Cpu,
   HardDrive,
-  HelpCircle,
   LayoutGrid,
   List,
   Loader2,
@@ -713,7 +712,7 @@ function AddHostDialog({
   )
 }
 
-function AddHostButton({onClick}: {onClick: () => void}) {
+function AddHostButton({onClick}: Readonly<{onClick: () => void}>) {
   return (
     <Button className="gap-2" onClick={onClick}>
       <Plus className="h-4 w-4" />
@@ -722,14 +721,7 @@ function AddHostButton({onClick}: {onClick: () => void}) {
   )
 }
 
-export function HostsHeaderActions() {
-  const [addDialogOpen, setAddDialogOpen] = useState(false)
-  const {data: ddHostsData} = useQuery({
-    queryKey: ['hosts'],
-    queryFn: () => api.getHosts(),
-    enabled: api.isAuthenticated(),
-  })
-  const hosts = ddHostsData?.hosts ?? []
+function HostsHeaderActions({hosts, onAddHost}: Readonly<{hosts: DdHostResponse[]; onAddHost: () => void}>) {
   const {data: billingUsage} = useQuery({
     queryKey: ['billingUsage'],
     queryFn: () => api.getBillingUsage(),
@@ -741,44 +733,27 @@ export function HostsHeaderActions() {
   const isAtLimit = !isSelfHosted && hosts.length >= hostLimit
 
   return (
-    <>
-      <AddHostDialog isOpen={addDialogOpen} setIsOpen={setAddDialogOpen} />
-      <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2">
+      {isAtLimit ? (
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <a href="/docs/datadog-agent/agent-setup" target="_blank" rel="noreferrer"
-                className="inline-flex items-center justify-center p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-                aria-label="View docs">
-                <HelpCircle className="h-4 w-4" />
-              </a>
+              <Link to="/settings" search={{tab: 'billing'}}>
+                <Button variant="default" size="sm" className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Upgrade to Add More
+                </Button>
+              </Link>
             </TooltipTrigger>
             <TooltipContent>
-              <p>View docs</p>
+              <p>You&apos;ve reached the limit for your {currentPlan} plan</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
-        {isAtLimit ? (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Link to="/settings" search={{tab: 'billing'}}>
-                  <Button variant="default" size="sm" className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    Upgrade to Add More
-                  </Button>
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>You&apos;ve reached the limit for your {currentPlan} plan</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        ) : (
-          <AddHostButton onClick={() => setAddDialogOpen(true)} />
-        )}
-      </div>
-    </>
+      ) : (
+        <AddHostButton onClick={onAddHost} />
+      )}
+    </div>
   )
 }
 
@@ -1089,6 +1064,11 @@ function MonitoringHostsPage() {
                 <span className="font-semibold tabular-nums">{formatBytes(totalMemoryKb)}</span>
                 <span className="text-muted-foreground text-xs">memory</span>
               </div>
+            </div>
+          )}
+          {!isLoadingHosts && hosts.length > 0 && (
+            <div className="sm:ml-auto">
+              <HostsHeaderActions hosts={hosts} onAddHost={() => setAddDialogOpen(true)} />
             </div>
           )}
         </div>
