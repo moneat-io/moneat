@@ -126,7 +126,7 @@ export default function MonitorListItem({monitor}: MonitorListItemProps) {
                   {monitor.url || monitor.hostname}
                 </a>
                 <span className="text-xs">•</span>
-                <span className="text-xs" title={formatDateTime(new Date(monitor.lastCheckAt || 0), timezone)}>
+                <span className="text-xs" title={formatDateTime(monitor.lastCheckAt || 0, timezone)}>
                   Checked {monitor.lastCheckAt ? formatRelativeTime(monitor.lastCheckAt) : 'never'}
                 </span>
               </div>
@@ -163,7 +163,7 @@ export default function MonitorListItem({monitor}: MonitorListItemProps) {
           <div className="flex items-center justify-between pt-1.5 border-t mt-1.5">
             <div className="text-xs text-muted-foreground">
               {heartbeats.length > 0 ? (
-                <span>Last heartbeat: {formatTime(new Date(heartbeats[heartbeats.length - 1].timestamp), timezone)}</span>
+                <span>Last heartbeat: {formatTime(heartbeats[heartbeats.length - 1].timestamp, timezone)}</span>
               ) : (
                 <span>No heartbeat data</span>
               )}

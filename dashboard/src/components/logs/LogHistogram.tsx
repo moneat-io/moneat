@@ -18,7 +18,7 @@ import {useMemo} from 'react'
 import {Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis} from 'recharts'
 import type {LogAggregateBucket} from '@/lib/api'
 import {useTimezone} from '@/hooks/useTimezone'
-import {formatDateTime, formatMonthDay, formatTimeHM} from '@/lib/date-format'
+import {formatDateTime, formatMonthDay, formatTimeHM, parseDate} from '@/lib/date-format'
 import {logIntervalToMs} from '@/components/logs/logInterval'
 
 interface LogHistogramProps {
@@ -74,7 +74,7 @@ function colorForGroup(key: string): string {
 
 function toTimestampMs(value: string | undefined): number | undefined {
   if (!value) return undefined
-  const timestamp = new Date(value).getTime()
+  const timestamp = parseDate(value).getTime()
   return Number.isNaN(timestamp) ? undefined : timestamp
 }
 
@@ -102,14 +102,14 @@ export function LogHistogram({
     }
     return formatMonthDay(date, timezone)
   }
-  const formatTooltipTime = (ts: number): string => formatDateTime(new Date(ts), timezone)
+  const formatTooltipTime = (ts: number): string => formatDateTime(ts, timezone)
   const {chartData, groupKeys, totalRangeMs, domainMin, domainMax, estimatedBucketCount} = useMemo(() => {
     const keys = new Set<string>()
     const data: HistogramPoint[] = buckets
       .map((b) => {
         const point: HistogramPoint = {
           timestamp: b.timestamp,
-          timestampMs: new Date(b.timestamp).getTime(),
+          timestampMs: parseDate(b.timestamp).getTime(),
           total: b.count,
         }
         if (grouped && Object.keys(b.groups).length > 0) {

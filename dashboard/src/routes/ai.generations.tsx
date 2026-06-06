@@ -245,7 +245,7 @@ function GenerationsPage() {
                         onClick={() => setSelectedGenId(gen.generationId)}
                       >
                         <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                          {formatDateTime(new Date(gen.timestamp), timezone)}
+                          {formatDateTime(gen.timestamp, timezone)}
                         </TableCell>
                         <TableCell className="font-medium text-sm max-w-48 truncate">
                           {gen.name || '-'}

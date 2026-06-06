@@ -1167,7 +1167,7 @@ function IncidentCard({incident}: {incident: StatusPageIncident}) {
                 </Badge>
                 <span className="text-xs text-muted-foreground flex items-center gap-1">
                   <Clock className="h-3 w-3" />
-                  {formatDateTime(new Date(incident.createdAt), timezone)}
+                  {formatDateTime(incident.createdAt, timezone)}
                 </span>
               </div>
             </div>
@@ -1183,7 +1183,7 @@ function IncidentCard({incident}: {incident: StatusPageIncident}) {
                 <p className="text-sm text-foreground/90">{update.message}</p>
                 <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                   <Clock className="h-2.5 w-2.5" />
-                  {formatDateTime(new Date(update.createdAt), timezone)}
+                  {formatDateTime(update.createdAt, timezone)}
                 </p>
               </div>
             ))}

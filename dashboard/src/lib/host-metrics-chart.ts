@@ -56,7 +56,7 @@ export function formatHostMetricTooltipLabel(value: string | number | undefined,
 
   const timestamp = Number(value)
   if (Number.isNaN(timestamp)) return String(value)
-  return formatDateTime(new Date(timestamp), timezone)
+  return formatDateTime(timestamp, timezone)
 }
 
 export function compactHostMetricChartData<T extends HostMetricChartDatum>(

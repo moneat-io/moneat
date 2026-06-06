@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 import {useState, useMemo} from 'react'
 import {cn, formatRelativeTime} from '@/lib/utils'
+import {parseDate} from '@/lib/date-format'
 
 function formatBytes(kb: number): string {
   if (kb < 1024) return `${kb} KB`
@@ -87,7 +88,7 @@ export function HostList() {
         case 'memory':
           return ((a.memoryTotalKb || 0) - (b.memoryTotalKb || 0)) * dir
         case 'lastSeen':
-          return (new Date(a.lastSeenAt).getTime() - new Date(b.lastSeenAt).getTime()) * dir
+          return (parseDate(a.lastSeenAt).getTime() - parseDate(b.lastSeenAt).getTime()) * dir
         default:
           return 0
       }

@@ -45,12 +45,12 @@ import {
   Boxes,
 } from 'lucide-react'
 import {useState, useMemo} from 'react'
-import {cn} from '@/lib/utils'
-import {formatRelativeTime} from '@/lib/utils'
+import {cn, formatRelativeTime} from '@/lib/utils'
+import {parseDate} from '@/lib/date-format'
 
 function parseTimestamp(ts: string | undefined): number {
   if (!ts) return 0
-  const parsed = Date.parse(ts)
+  const parsed = parseDate(ts).getTime()
   return isNaN(parsed) ? 0 : parsed
 }
 

@@ -51,12 +51,13 @@ import {
 import {useEffect, useMemo, useState} from 'react'
 import {useToast} from '@/hooks/useToast'
 import {getNow} from '@/lib/demo'
+import {parseDate} from '@/lib/date-format'
 // Level → Badge variant and left-border indicator come from the shared severity
 // helper (@/lib/severity) so every surface uses the same status language.
 
 // Get freshness color based on how recently the last event occurred
 function getLastSeenColor(lastSeen: string): string {
-  const diff = getNow() - new Date(lastSeen).getTime()
+  const diff = getNow() - parseDate(lastSeen).getTime()
   const hours = diff / (1000 * 60 * 60)
   if (hours < 1) return 'text-danger-fg'
   if (hours < 24) return 'text-warning-fg'
@@ -65,7 +66,7 @@ function getLastSeenColor(lastSeen: string): string {
 
 // Check if an issue is new (first seen within last 24 hours)
 function isNewIssue(firstSeen: string): boolean {
-  const diff = getNow() - new Date(firstSeen).getTime()
+  const diff = getNow() - parseDate(firstSeen).getTime()
   return diff < 24 * 60 * 60 * 1000
 }
 

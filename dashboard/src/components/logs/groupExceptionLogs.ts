@@ -15,6 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import type {LogEntry} from '@/lib/api'
+import {parseDate} from '@/lib/date-format'
 import {stripAnsi} from '@/lib/ansi'
 
 /**
@@ -74,8 +75,8 @@ function isExceptionContinuation(logs: LogEntry[], index: number): boolean {
 function sameContext(a: LogEntry, b: LogEntry): boolean {
   if ((a.service || '') !== (b.service || '')) return false
   if ((a.host || '') !== (b.host || '')) return false
-  const ta = new Date(a.timestamp).getTime()
-  const tb = new Date(b.timestamp).getTime()
+  const ta = parseDate(a.timestamp).getTime()
+  const tb = parseDate(b.timestamp).getTime()
   return Math.abs(ta - tb) <= MAX_GROUP_MS
 }
 

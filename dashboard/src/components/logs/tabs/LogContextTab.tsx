@@ -19,6 +19,7 @@ import {api} from '@/lib/api'
 import type {LogEntry} from '@/lib/api'
 import {LogTable} from '@/components/logs/LogTable'
 import {Loader2} from 'lucide-react'
+import {parseDate} from '@/lib/date-format'
 
 const CONTEXT_WINDOW_MINUTES = 5
 
@@ -28,7 +29,7 @@ interface LogContextTabProps {
 }
 
 export function LogContextTab({log, active}: LogContextTabProps) {
-  const logTime = new Date(log.timestamp).getTime()
+  const logTime = parseDate(log.timestamp).getTime()
   const from = new Date(logTime - CONTEXT_WINDOW_MINUTES * 60_000).toISOString()
   const to = new Date(logTime + CONTEXT_WINDOW_MINUTES * 60_000).toISOString()
 

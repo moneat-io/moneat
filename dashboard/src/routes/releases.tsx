@@ -35,6 +35,7 @@ import {
   serviceScopeKey,
 } from '@/lib/service-facet-scope'
 import type {FacetFilter} from '@/lib/filters/types'
+import {parseDate} from '@/lib/date-format'
 
 export const Route = createFileRoute('/releases')({
   beforeLoad: async ({ location }) => {
@@ -140,7 +141,7 @@ function ReleasesPage() {
 
     const mostActive = [...releaseList].sort((a, b) => b.eventCount - a.eventCount)[0]
     const latest = [...releaseList].sort(
-      (a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime()
+      (a, b) => parseDate(b.lastSeen).getTime() - parseDate(a.lastSeen).getTime()
     )[0]
 
     return {
@@ -166,13 +167,13 @@ function ReleasesPage() {
         return bRate - aRate
       }
 
-      return new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime()
+      return parseDate(b.lastSeen).getTime() - parseDate(a.lastSeen).getTime()
     })
   }, [releaseList, searchQuery, sortBy])
 
   const formatDate = (isoString: string) => {
     if (!isoString) return 'N/A'
-    const date = new Date(isoString)
+    const date = parseDate(isoString)
     if (isNaN(date.getTime())) return 'Invalid Date'
     return date.toLocaleDateString('en-US', {
       month: 'short',
