@@ -30,6 +30,7 @@ import {
     BarChart3,
     Bell,
     BookOpen,
+    Boxes,
     Brain,
     HelpCircle,
     ChevronLeft,
@@ -219,6 +220,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
     // Core Observability
     { key: 'overview', icon: Home, label: 'Overview', href: APP_OVERVIEW_HREF, requiresProject: false, group: 'core' },
     { key: 'issues', icon: AlertCircle, label: 'Issues', href: '/issues', requiresProject: false, group: 'core' },
+    { key: 'services', icon: Boxes, label: 'Services', href: '/services', requiresProject: false, group: 'core' },
     { key: 'performance', icon: Timer, label: 'Traces', href: '/performance/traces', requiresProject: false, group: 'core' },
     { key: 'logs', icon: ScrollText, label: 'Logs', href: '/logs', requiresProject: false, group: 'core' },
     ...datadogCoreNavItems,

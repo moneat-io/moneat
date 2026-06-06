@@ -17,6 +17,7 @@
 package com.moneat.plugins
 
 import com.moneat.ai.aiChatRoutes
+import com.moneat.apm.routes.apmServiceDashboardRoutes
 import com.moneat.auth.routes.authRoutes
 import com.moneat.auth.routes.authTokenRoutes
 import com.moneat.billing.routes.stripeWebhookRoutes
@@ -212,6 +213,9 @@ fun Application.configureRouting() {
 
         // Dashboard API endpoints
         apiRoutes()
+
+        // APM service dashboard endpoints are source-neutral and must not depend on vendor modules.
+        apmServiceDashboardRoutes()
 
         // OpenFeature-compatible feature flag management and OFREP runtime endpoints
         featureFlagRoutes()

@@ -21,6 +21,7 @@ import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SignozAlternativeRouteImport } from './routes/signoz-alternative'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SessionReplayRouteImport } from './routes/session-replay'
+import { Route as ServicesRouteImport } from './routes/services'
 import { Route as SentryAlternativeRouteImport } from './routes/sentry-alternative'
 import { Route as SecuritySbomRouteImport } from './routes/security-sbom'
 import { Route as SecurityRouteImport } from './routes/security'
@@ -70,6 +71,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as UptimeIndexRouteImport } from './routes/uptime.index'
 import { Route as SyntheticsIndexRouteImport } from './routes/synthetics.index'
 import { Route as StatusPagesIndexRouteImport } from './routes/status-pages.index'
+import { Route as ServicesIndexRouteImport } from './routes/services.index'
 import { Route as SecurityIndexRouteImport } from './routes/security.index'
 import { Route as ProfilesIndexRouteImport } from './routes/profiles.index'
 import { Route as PerformanceIndexRouteImport } from './routes/performance.index'
@@ -88,6 +90,7 @@ import { Route as WorkflowsConnectionsRouteImport } from './routes/workflows.con
 import { Route as UptimeMonitorIdRouteImport } from './routes/uptime.$monitorId'
 import { Route as SyntheticsTestIdRouteImport } from './routes/synthetics.$testId'
 import { Route as StatusPagesPageIdRouteImport } from './routes/status-pages.$pageId'
+import { Route as ServicesServiceRouteImport } from './routes/services.$service'
 import { Route as SecurityVulnerabilitiesRouteImport } from './routes/security.vulnerabilities'
 import { Route as SecuritySignalsRouteImport } from './routes/security.signals'
 import { Route as SecurityEventsRouteImport } from './routes/security.events'
@@ -154,6 +157,7 @@ import { Route as AuthSsoCallbackRouteImport } from './routes/auth.sso.callback'
 import { Route as AuthOauthCallbackRouteImport } from './routes/auth.oauth.callback'
 import { Route as AiTracesTraceIdRouteImport } from './routes/ai.traces.$traceId'
 import { Route as AdminOrganizationsOrgIdRouteImport } from './routes/admin.organizations.$orgId'
+import { Route as ServicesServiceResourcesResourceRouteImport } from './routes/services.$service.resources.$resource'
 import { Route as ProjectsProjectIdSpansSpanIdRouteImport } from './routes/projects.$projectId.spans.$spanId'
 
 const WorkflowsRoute = WorkflowsRouteImport.update({
@@ -214,6 +218,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const SessionReplayRoute = SessionReplayRouteImport.update({
   id: '/session-replay',
   path: '/session-replay',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ServicesRoute = ServicesRouteImport.update({
+  id: '/services',
+  path: '/services',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SentryAlternativeRoute = SentryAlternativeRouteImport.update({
@@ -462,6 +471,11 @@ const StatusPagesIndexRoute = StatusPagesIndexRouteImport.update({
   path: '/status-pages/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ServicesIndexRoute = ServicesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ServicesRoute,
+} as any)
 const SecurityIndexRoute = SecurityIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -551,6 +565,11 @@ const StatusPagesPageIdRoute = StatusPagesPageIdRouteImport.update({
   id: '/status-pages/$pageId',
   path: '/status-pages/$pageId',
   getParentRoute: () => rootRouteImport,
+} as any)
+const ServicesServiceRoute = ServicesServiceRouteImport.update({
+  id: '/$service',
+  path: '/$service',
+  getParentRoute: () => ServicesRoute,
 } as any)
 const SecurityVulnerabilitiesRoute = SecurityVulnerabilitiesRouteImport.update({
   id: '/vulnerabilities',
@@ -893,6 +912,12 @@ const AdminOrganizationsOrgIdRoute = AdminOrganizationsOrgIdRouteImport.update({
   path: '/$orgId',
   getParentRoute: () => AdminOrganizationsRoute,
 } as any)
+const ServicesServiceResourcesResourceRoute =
+  ServicesServiceResourcesResourceRouteImport.update({
+    id: '/resources/$resource',
+    path: '/resources/$resource',
+    getParentRoute: () => ServicesServiceRoute,
+  } as any)
 const ProjectsProjectIdSpansSpanIdRoute =
   ProjectsProjectIdSpansSpanIdRouteImport.update({
     id: '/spans/$spanId',
@@ -947,6 +972,7 @@ export interface FileRoutesByFullPath {
   '/security': typeof SecurityRouteWithChildren
   '/security-sbom': typeof SecuritySbomRoute
   '/sentry-alternative': typeof SentryAlternativeRoute
+  '/services': typeof ServicesRouteWithChildren
   '/session-replay': typeof SessionReplayRoute
   '/settings': typeof SettingsRoute
   '/signoz-alternative': typeof SignozAlternativeRoute
@@ -1009,6 +1035,7 @@ export interface FileRoutesByFullPath {
   '/security/events': typeof SecurityEventsRoute
   '/security/signals': typeof SecuritySignalsRoute
   '/security/vulnerabilities': typeof SecurityVulnerabilitiesRoute
+  '/services/$service': typeof ServicesServiceRouteWithChildren
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/synthetics/$testId': typeof SyntheticsTestIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
@@ -1027,6 +1054,7 @@ export interface FileRoutesByFullPath {
   '/performance/': typeof PerformanceIndexRoute
   '/profiles/': typeof ProfilesIndexRoute
   '/security/': typeof SecurityIndexRoute
+  '/services/': typeof ServicesIndexRoute
   '/status-pages/': typeof StatusPagesIndexRoute
   '/synthetics/': typeof SyntheticsIndexRoute
   '/uptime/': typeof UptimeIndexRoute
@@ -1047,6 +1075,7 @@ export interface FileRoutesByFullPath {
   '/monitoring/kubernetes/': typeof MonitoringKubernetesIndexRoute
   '/performance/traces/': typeof PerformanceTracesIndexRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
+  '/services/$service/resources/$resource': typeof ServicesServiceResourcesResourceRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -1142,6 +1171,7 @@ export interface FileRoutesByTo {
   '/security/events': typeof SecurityEventsRoute
   '/security/signals': typeof SecuritySignalsRoute
   '/security/vulnerabilities': typeof SecurityVulnerabilitiesRoute
+  '/services/$service': typeof ServicesServiceRouteWithChildren
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/synthetics/$testId': typeof SyntheticsTestIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
@@ -1160,6 +1190,7 @@ export interface FileRoutesByTo {
   '/performance': typeof PerformanceIndexRoute
   '/profiles': typeof ProfilesIndexRoute
   '/security': typeof SecurityIndexRoute
+  '/services': typeof ServicesIndexRoute
   '/status-pages': typeof StatusPagesIndexRoute
   '/synthetics': typeof SyntheticsIndexRoute
   '/uptime': typeof UptimeIndexRoute
@@ -1180,6 +1211,7 @@ export interface FileRoutesByTo {
   '/monitoring/kubernetes': typeof MonitoringKubernetesIndexRoute
   '/performance/traces': typeof PerformanceTracesIndexRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
+  '/services/$service/resources/$resource': typeof ServicesServiceResourcesResourceRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -1229,6 +1261,7 @@ export interface FileRoutesById {
   '/security': typeof SecurityRouteWithChildren
   '/security-sbom': typeof SecuritySbomRoute
   '/sentry-alternative': typeof SentryAlternativeRoute
+  '/services': typeof ServicesRouteWithChildren
   '/session-replay': typeof SessionReplayRoute
   '/settings': typeof SettingsRoute
   '/signoz-alternative': typeof SignozAlternativeRoute
@@ -1291,6 +1324,7 @@ export interface FileRoutesById {
   '/security/events': typeof SecurityEventsRoute
   '/security/signals': typeof SecuritySignalsRoute
   '/security/vulnerabilities': typeof SecurityVulnerabilitiesRoute
+  '/services/$service': typeof ServicesServiceRouteWithChildren
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/synthetics/$testId': typeof SyntheticsTestIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
@@ -1309,6 +1343,7 @@ export interface FileRoutesById {
   '/performance/': typeof PerformanceIndexRoute
   '/profiles/': typeof ProfilesIndexRoute
   '/security/': typeof SecurityIndexRoute
+  '/services/': typeof ServicesIndexRoute
   '/status-pages/': typeof StatusPagesIndexRoute
   '/synthetics/': typeof SyntheticsIndexRoute
   '/uptime/': typeof UptimeIndexRoute
@@ -1329,6 +1364,7 @@ export interface FileRoutesById {
   '/monitoring/kubernetes/': typeof MonitoringKubernetesIndexRoute
   '/performance/traces/': typeof PerformanceTracesIndexRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
+  '/services/$service/resources/$resource': typeof ServicesServiceResourcesResourceRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -1379,6 +1415,7 @@ export interface FileRouteTypes {
     | '/security'
     | '/security-sbom'
     | '/sentry-alternative'
+    | '/services'
     | '/session-replay'
     | '/settings'
     | '/signoz-alternative'
@@ -1441,6 +1478,7 @@ export interface FileRouteTypes {
     | '/security/events'
     | '/security/signals'
     | '/security/vulnerabilities'
+    | '/services/$service'
     | '/status-pages/$pageId'
     | '/synthetics/$testId'
     | '/uptime/$monitorId'
@@ -1459,6 +1497,7 @@ export interface FileRouteTypes {
     | '/performance/'
     | '/profiles/'
     | '/security/'
+    | '/services/'
     | '/status-pages/'
     | '/synthetics/'
     | '/uptime/'
@@ -1479,6 +1518,7 @@ export interface FileRouteTypes {
     | '/monitoring/kubernetes/'
     | '/performance/traces/'
     | '/projects/$projectId/spans/$spanId'
+    | '/services/$service/resources/$resource'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -1574,6 +1614,7 @@ export interface FileRouteTypes {
     | '/security/events'
     | '/security/signals'
     | '/security/vulnerabilities'
+    | '/services/$service'
     | '/status-pages/$pageId'
     | '/synthetics/$testId'
     | '/uptime/$monitorId'
@@ -1592,6 +1633,7 @@ export interface FileRouteTypes {
     | '/performance'
     | '/profiles'
     | '/security'
+    | '/services'
     | '/status-pages'
     | '/synthetics'
     | '/uptime'
@@ -1612,6 +1654,7 @@ export interface FileRouteTypes {
     | '/monitoring/kubernetes'
     | '/performance/traces'
     | '/projects/$projectId/spans/$spanId'
+    | '/services/$service/resources/$resource'
   id:
     | '__root__'
     | '/'
@@ -1660,6 +1703,7 @@ export interface FileRouteTypes {
     | '/security'
     | '/security-sbom'
     | '/sentry-alternative'
+    | '/services'
     | '/session-replay'
     | '/settings'
     | '/signoz-alternative'
@@ -1722,6 +1766,7 @@ export interface FileRouteTypes {
     | '/security/events'
     | '/security/signals'
     | '/security/vulnerabilities'
+    | '/services/$service'
     | '/status-pages/$pageId'
     | '/synthetics/$testId'
     | '/uptime/$monitorId'
@@ -1740,6 +1785,7 @@ export interface FileRouteTypes {
     | '/performance/'
     | '/profiles/'
     | '/security/'
+    | '/services/'
     | '/status-pages/'
     | '/synthetics/'
     | '/uptime/'
@@ -1760,6 +1806,7 @@ export interface FileRouteTypes {
     | '/monitoring/kubernetes/'
     | '/performance/traces/'
     | '/projects/$projectId/spans/$spanId'
+    | '/services/$service/resources/$resource'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1809,6 +1856,7 @@ export interface RootRouteChildren {
   SecurityRoute: typeof SecurityRouteWithChildren
   SecuritySbomRoute: typeof SecuritySbomRoute
   SentryAlternativeRoute: typeof SentryAlternativeRoute
+  ServicesRoute: typeof ServicesRouteWithChildren
   SessionReplayRoute: typeof SessionReplayRoute
   SettingsRoute: typeof SettingsRoute
   SignozAlternativeRoute: typeof SignozAlternativeRoute
@@ -1920,6 +1968,13 @@ declare module '@tanstack/react-router' {
       path: '/session-replay'
       fullPath: '/session-replay'
       preLoaderRoute: typeof SessionReplayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/services': {
+      id: '/services'
+      path: '/services'
+      fullPath: '/services'
+      preLoaderRoute: typeof ServicesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sentry-alternative': {
@@ -2265,6 +2320,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StatusPagesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/services/': {
+      id: '/services/'
+      path: '/'
+      fullPath: '/services/'
+      preLoaderRoute: typeof ServicesIndexRouteImport
+      parentRoute: typeof ServicesRoute
+    }
     '/security/': {
       id: '/security/'
       path: '/'
@@ -2390,6 +2452,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/status-pages/$pageId'
       preLoaderRoute: typeof StatusPagesPageIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/services/$service': {
+      id: '/services/$service'
+      path: '/$service'
+      fullPath: '/services/$service'
+      preLoaderRoute: typeof ServicesServiceRouteImport
+      parentRoute: typeof ServicesRoute
     }
     '/security/vulnerabilities': {
       id: '/security/vulnerabilities'
@@ -2853,6 +2922,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminOrganizationsOrgIdRouteImport
       parentRoute: typeof AdminOrganizationsRoute
     }
+    '/services/$service/resources/$resource': {
+      id: '/services/$service/resources/$resource'
+      path: '/resources/$resource'
+      fullPath: '/services/$service/resources/$resource'
+      preLoaderRoute: typeof ServicesServiceResourcesResourceRouteImport
+      parentRoute: typeof ServicesServiceRoute
+    }
     '/projects/$projectId/spans/$spanId': {
       id: '/projects/$projectId/spans/$spanId'
       path: '/spans/$spanId'
@@ -3224,6 +3300,32 @@ const SecurityRouteWithChildren = SecurityRoute._addFileChildren(
   SecurityRouteChildren,
 )
 
+interface ServicesServiceRouteChildren {
+  ServicesServiceResourcesResourceRoute: typeof ServicesServiceResourcesResourceRoute
+}
+
+const ServicesServiceRouteChildren: ServicesServiceRouteChildren = {
+  ServicesServiceResourcesResourceRoute: ServicesServiceResourcesResourceRoute,
+}
+
+const ServicesServiceRouteWithChildren = ServicesServiceRoute._addFileChildren(
+  ServicesServiceRouteChildren,
+)
+
+interface ServicesRouteChildren {
+  ServicesServiceRoute: typeof ServicesServiceRouteWithChildren
+  ServicesIndexRoute: typeof ServicesIndexRoute
+}
+
+const ServicesRouteChildren: ServicesRouteChildren = {
+  ServicesServiceRoute: ServicesServiceRouteWithChildren,
+  ServicesIndexRoute: ServicesIndexRoute,
+}
+
+const ServicesRouteWithChildren = ServicesRoute._addFileChildren(
+  ServicesRouteChildren,
+)
+
 interface SyntheticsRouteChildren {
   SyntheticsTestIdRoute: typeof SyntheticsTestIdRoute
   SyntheticsIndexRoute: typeof SyntheticsIndexRoute
@@ -3299,6 +3401,7 @@ const rootRouteChildren: RootRouteChildren = {
   SecurityRoute: SecurityRouteWithChildren,
   SecuritySbomRoute: SecuritySbomRoute,
   SentryAlternativeRoute: SentryAlternativeRoute,
+  ServicesRoute: ServicesRouteWithChildren,
   SessionReplayRoute: SessionReplayRoute,
   SettingsRoute: SettingsRoute,
   SignozAlternativeRoute: SignozAlternativeRoute,
