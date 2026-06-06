@@ -35,7 +35,35 @@ import type {
   RawContainerStats,
   ContainerMetricsHistory,
   CreateDdApiKeyResponse,
+  InfrastructureMapSavedViewsResponse,
+  InfrastructureResourceKind,
+  InfrastructureGroupBy,
+  InfrastructureFillBy,
+  InfrastructureSizeBy,
+  SaveInfrastructureMapViewRequest,
+  SavedInfrastructureMapView,
 } from '../types'
+
+interface RawInfrastructureMapSavedView {
+  id: number | string
+  name: string
+  resourceKind?: InfrastructureResourceKind
+  resource_kind?: InfrastructureResourceKind
+  groupBy?: InfrastructureGroupBy
+  group_by?: InfrastructureGroupBy
+  fillBy?: InfrastructureFillBy
+  fill_by?: InfrastructureFillBy
+  sizeBy?: InfrastructureSizeBy
+  size_by?: InfrastructureSizeBy
+  searchQuery?: string
+  search_query?: string
+  schemaVersion?: number
+  schema_version?: number
+  createdAt?: string
+  created_at?: string
+  updatedAt?: string
+  updated_at?: string
+}
 
 function mapHostAlert(row: Record<string, unknown>): HostAlert {
   const rawScope = ((row.scope as string | undefined) ?? '').toLowerCase()
@@ -63,6 +91,34 @@ function mapSilencePeriod(row: Record<string, unknown>): SilencePeriod {
     endsAt: (row.ends_at ?? row.endsAt) as number,
     createdBy: (row.created_by ?? row.createdBy) as number,
     createdAt: (row.created_at ?? row.createdAt) as number,
+  }
+}
+
+function mapInfrastructureMapSavedView(
+  row: RawInfrastructureMapSavedView
+): SavedInfrastructureMapView {
+  return {
+    id: String(row.id),
+    name: row.name,
+    resourceKind: row.resourceKind ?? row.resource_kind ?? 'hosts',
+    groupBy: row.groupBy ?? row.group_by ?? 'status',
+    fillBy: row.fillBy ?? row.fill_by ?? 'health',
+    sizeBy: row.sizeBy ?? row.size_by ?? 'uniform',
+    searchQuery: row.searchQuery ?? row.search_query ?? '',
+    schemaVersion: row.schemaVersion ?? row.schema_version ?? 1,
+    createdAt: row.createdAt ?? row.created_at ?? '',
+    updatedAt: row.updatedAt ?? row.updated_at ?? '',
+  }
+}
+
+function savedViewRequestPayload(view: SaveInfrastructureMapViewRequest) {
+  return {
+    name: view.name,
+    resource_kind: view.resourceKind,
+    group_by: view.groupBy,
+    fill_by: view.fillBy,
+    size_by: view.sizeBy,
+    search_query: view.searchQuery,
   }
 }
 
@@ -164,6 +220,32 @@ export function monitoringMethods(core: ApiClientCore) {
         urlWithQuery(`${base}/infra/containers`, qs)
       )
     },
+
+    // Infrastructure map saved views
+    getInfrastructureMapSavedViews: async (): Promise<InfrastructureMapSavedViewsResponse> => {
+      const response = await core.request<{views?: RawInfrastructureMapSavedView[]}>(
+        `${base}/infra/map/saved-views`
+      )
+      return {
+        views: (response.views ?? []).map(mapInfrastructureMapSavedView),
+      }
+    },
+
+    saveInfrastructureMapView: async (
+      view: SaveInfrastructureMapViewRequest
+    ): Promise<SavedInfrastructureMapView> => {
+      const response = await core.request<RawInfrastructureMapSavedView>(
+        `${base}/infra/map/saved-views`,
+        {
+          method: 'POST',
+          body: JSON.stringify(savedViewRequestPayload(view)),
+        }
+      )
+      return mapInfrastructureMapSavedView(response)
+    },
+
+    deleteInfrastructureMapSavedView: (viewId: string) =>
+      core.request<void>(`${base}/infra/map/saved-views/${viewId}`, {method: 'DELETE'}),
 
     // Connections
     getConnections: (

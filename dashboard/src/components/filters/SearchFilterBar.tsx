@@ -266,7 +266,7 @@ export function SearchFilterBar({
   }
 
   return (
-    <div className={cn('flex items-stretch gap-1.5', className)}>
+    <div className={cn('flex w-full items-stretch gap-1.5', className)}>
       <div className="relative flex-1 min-w-0">
         <div className="flex min-h-[30px] flex-wrap items-center gap-1 rounded-md border bg-card px-2 py-0.5 ring-offset-background transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
           <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -342,7 +342,7 @@ export function SearchFilterBar({
             onFocus={() => setShowSuggestions(true)}
             onKeyDown={handleKeyDown}
             placeholder={hasActiveFilters ? 'Add...' : placeholder ?? 'Search...'}
-            className="min-w-[80px] sm:min-w-[200px] flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+            className="h-7 min-w-[120px] flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground sm:min-w-[200px]"
           />
 
           {hasActiveFilters && (

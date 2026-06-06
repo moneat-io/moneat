@@ -59,15 +59,15 @@ export function ExplorerShell({
   return (
     <div className={cn('flex h-full flex-col', className)}>
       {/* Header bar */}
-      <div className="flex items-center gap-2 border-b px-2 py-1.5 sm:px-3">
+      <div className="flex flex-wrap items-center gap-2 border-b px-2 py-1.5 sm:flex-nowrap sm:px-3">
         {(icon || title) && (
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="order-1 flex shrink-0 items-center gap-2">
             {icon}
             {title && <h2 className="hidden text-xs font-semibold leading-tight sm:block">{title}</h2>}
           </div>
         )}
-        <div className="min-w-0 flex-1">{searchBar}</div>
-        {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+        <div className="order-3 min-w-0 basis-full sm:order-2 sm:flex-1 sm:basis-auto">{searchBar}</div>
+        {actions && <div className="order-2 ml-auto flex shrink-0 items-center gap-2 sm:order-3 sm:ml-0">{actions}</div>}
       </div>
 
       {/* Body: rail + content */}

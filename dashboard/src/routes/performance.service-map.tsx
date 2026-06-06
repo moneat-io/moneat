@@ -10,6 +10,6 @@ import {createFileRoute, redirect} from '@tanstack/react-router'
 
 export const Route = createFileRoute('/performance/service-map')({
   beforeLoad: () => {
-    throw redirect({to: '/monitoring/service-map'})
+    throw redirect({to: '/monitoring/map', search: {scope: 'services'}})
   },
 })

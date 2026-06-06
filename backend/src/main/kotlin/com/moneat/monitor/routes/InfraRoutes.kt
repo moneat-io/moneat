@@ -17,15 +17,24 @@
 package com.moneat.monitor.routes
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.monitor.models.InfrastructureMapSavedViewsResponse
+import com.moneat.monitor.models.SaveInfrastructureMapViewRequest
+import com.moneat.monitor.services.InfrastructureMapSavedViewService
+import com.moneat.monitor.services.InvalidInfrastructureMapSavedViewException
 import com.moneat.shared.models.Memberships
+import com.moneat.utils.ErrorResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
+import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
+import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
+import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -44,6 +53,30 @@ private val json = Json { ignoreUnknownKeys = true }
 private const val DEFAULT_LIMIT = 100
 private const val MAX_LIMIT = 500
 
+private data class SavedViewScope(
+    val userId: Int,
+    val organizationId: Int
+)
+
+private data class ClickHouseFilter(
+    val parameterName: String,
+    val columnName: String
+)
+
+private data class ClickHouseListRouteConfig(
+    val path: String,
+    val responseKey: String,
+    val tableName: String,
+    val orderColumn: String,
+    val filters: List<ClickHouseFilter> = emptyList()
+)
+
+private sealed class OrganizationScopeResult {
+    data class Resolved(val organizationId: Int) : OrganizationScopeResult()
+    object NoAccess : OrganizationScopeResult()
+    object MissingContext : OrganizationScopeResult()
+}
+
 private fun getOrgIdsForUser(userId: Int): List<Int> {
     return transaction {
         Memberships
@@ -57,9 +90,47 @@ private fun orgIdsToChCondition(orgIds: List<Int>): String {
     return orgIds.joinToString(",") { "toUInt64($it)" }
 }
 
+private suspend fun ApplicationCall.resolveSavedViewScope(): SavedViewScope? {
+    val principal = principal<JWTPrincipal>()
+    val userId = principal!!.payload.getClaim("userId").asInt()
+    val organizationIdClaim = principal.payload.getClaim("orgId").asInt()
+
+    return when (val scope = resolveOrganizationId(userId, organizationIdClaim)) {
+        is OrganizationScopeResult.Resolved -> SavedViewScope(userId, scope.organizationId)
+        OrganizationScopeResult.NoAccess -> {
+            respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
+            null
+        }
+        OrganizationScopeResult.MissingContext -> {
+            respond(HttpStatusCode.BadRequest, ErrorResponse("Organization context required"))
+            null
+        }
+    }
+}
+
+private fun resolveOrganizationId(userId: Int, organizationIdClaim: Int?): OrganizationScopeResult {
+    val organizationIds = getOrgIdsForUser(userId)
+    if (organizationIds.isEmpty()) return OrganizationScopeResult.NoAccess
+    if (organizationIdClaim != null) {
+        return if (organizationIdClaim in organizationIds) {
+            OrganizationScopeResult.Resolved(organizationIdClaim)
+        } else {
+            OrganizationScopeResult.NoAccess
+        }
+    }
+    if (organizationIds.size == 1) return OrganizationScopeResult.Resolved(organizationIds.first())
+    return OrganizationScopeResult.MissingContext
+}
+
 private fun parseLimit(limitParam: String?): Int {
     val limit = limitParam?.toIntOrNull() ?: DEFAULT_LIMIT
     return limit.coerceIn(1, MAX_LIMIT)
+}
+
+private fun ApplicationCall.currentUserOrganizationIds(): List<Int> {
+    val principal = principal<JWTPrincipal>()
+    val userId = principal!!.payload.getClaim("userId").asInt()
+    return getOrgIdsForUser(userId)
 }
 
 /**
@@ -103,422 +174,181 @@ private fun parseJsonEachRow(body: String): List<JsonObject> {
         }
 }
 
-@Suppress("LongMethod", "CyclomaticComplexMethod")
-fun Route.infraRoutes() {
+fun Route.infraRoutes(
+    infrastructureMapSavedViewService: InfrastructureMapSavedViewService = InfrastructureMapSavedViewService(),
+) {
     route("/v1") {
         authenticate("auth-jwt") {
-            // --- Infrastructure Events ---
-
-            get("/infra/events") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respond(HttpStatusCode.OK, mapOf("events" to emptyList<Any>()))
-                    return@get
-                }
-
-                val limit = parseLimit(call.parameters["limit"])
-                val host = call.parameters["host"]
-                val alertType = call.parameters["alert_type"]
-
-                val conditions = mutableListOf(
-                    "organization_id IN (${orgIdsToChCondition(orgIds)})"
-                )
-                safeFilterValue(host)?.let { conditions.add("host = '$it'") }
-                safeFilterValue(alertType)?.let { conditions.add("alert_type = '$it'") }
-
-                val query = """
-                    SELECT * FROM infra_events
-                    WHERE ${conditions.joinToString(" AND ")}
-                    ORDER BY timestamp DESC
-                    LIMIT $limit
-                    FORMAT JSONEachRow
-                """.trimIndent()
-
-                val result = executeChQuery(query) ?: run {
-                    call.respond(HttpStatusCode.OK, mapOf("events" to emptyList<Any>()))
-                    return@get
-                }
-                call.respond(HttpStatusCode.OK, mapOf("events" to result))
-            }
-
-            // --- Service Checks ---
-
-            get("/infra/service-checks") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respond(HttpStatusCode.OK, mapOf("serviceChecks" to emptyList<Any>()))
-                    return@get
-                }
-
-                val limit = parseLimit(call.parameters["limit"])
-                val query = """
-                    SELECT * FROM service_checks
-                    WHERE organization_id IN (${orgIdsToChCondition(orgIds)})
-                    ORDER BY timestamp DESC
-                    LIMIT $limit
-                    FORMAT JSONEachRow
-                """.trimIndent()
-
-                val result = executeChQuery(query) ?: run {
-                    call.respond(
-                        HttpStatusCode.OK,
-                        mapOf("serviceChecks" to emptyList<Any>())
-                    )
-                    return@get
-                }
-                call.respond(HttpStatusCode.OK, mapOf("serviceChecks" to result))
-            }
-
-            // --- Processes ---
-
-            get("/infra/processes") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respond(HttpStatusCode.OK, mapOf("processes" to emptyList<Any>()))
-                    return@get
-                }
-
-                val limit = parseLimit(call.parameters["limit"])
-                val host = call.parameters["host"]
-                val conditions = mutableListOf(
-                    "organization_id IN (${orgIdsToChCondition(orgIds)})"
-                )
-                safeFilterValue(host)?.let { conditions.add("host = '$it'") }
-
-                val query = """
-                    SELECT * FROM processes
-                    WHERE ${conditions.joinToString(" AND ")}
-                    ORDER BY timestamp DESC
-                    LIMIT $limit
-                    FORMAT JSONEachRow
-                """.trimIndent()
-
-                val result = executeChQuery(query) ?: run {
-                    call.respond(HttpStatusCode.OK, mapOf("processes" to emptyList<Any>()))
-                    return@get
-                }
-                call.respond(HttpStatusCode.OK, mapOf("processes" to result))
-            }
-
-            // --- Containers ---
-
-            get("/infra/containers") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respond(HttpStatusCode.OK, mapOf("containers" to emptyList<Any>()))
-                    return@get
-                }
-
-                val limit = parseLimit(call.parameters["limit"])
-                val host = call.parameters["host"]
-                val conditions = mutableListOf(
-                    "organization_id IN (${orgIdsToChCondition(orgIds)})"
-                )
-                safeFilterValue(host)?.let { conditions.add("host = '$it'") }
-
-                val query = """
-                    SELECT * FROM containers
-                    WHERE ${conditions.joinToString(" AND ")}
-                    ORDER BY timestamp DESC
-                    LIMIT $limit
-                    FORMAT JSONEachRow
-                """.trimIndent()
-
-                val result = executeChQuery(query) ?: run {
-                    call.respond(HttpStatusCode.OK, mapOf("containers" to emptyList<Any>()))
-                    return@get
-                }
-                call.respond(HttpStatusCode.OK, mapOf("containers" to result))
-            }
-
-            // --- Network Connections ---
-
-            get("/infra/connections") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respond(HttpStatusCode.OK, mapOf("connections" to emptyList<Any>()))
-                    return@get
-                }
-
-                val limit = parseLimit(call.parameters["limit"])
-                val query = """
-                    SELECT * FROM network_connections
-                    WHERE organization_id IN (${orgIdsToChCondition(orgIds)})
-                    ORDER BY timestamp DESC
-                    LIMIT $limit
-                    FORMAT JSONEachRow
-                """.trimIndent()
-
-                val result = executeChQuery(query) ?: run {
-                    call.respond(
-                        HttpStatusCode.OK,
-                        mapOf("connections" to emptyList<Any>())
-                    )
-                    return@get
-                }
-                call.respond(HttpStatusCode.OK, mapOf("connections" to result))
-            }
-
-            // --- Kubernetes Resources ---
-
-            get("/infra/k8s-resources") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respond(HttpStatusCode.OK, mapOf("resources" to emptyList<Any>()))
-                    return@get
-                }
-
-                val limit = parseLimit(call.parameters["limit"])
-                val resourceType = call.parameters["resource_type"]
-
-                val conditions = mutableListOf(
-                    "organization_id IN (${orgIdsToChCondition(orgIds)})"
-                )
-                safeFilterValue(resourceType)?.let { conditions.add("resource_type = '$it'") }
-
-                val query = """
-                    SELECT * FROM k8s_resources
-                    WHERE ${conditions.joinToString(" AND ")}
-                    ORDER BY collected_at DESC
-                    LIMIT $limit
-                    FORMAT JSONEachRow
-                """.trimIndent()
-
-                val result = executeChQuery(query) ?: run {
-                    call.respond(HttpStatusCode.OK, mapOf("resources" to emptyList<Any>()))
-                    return@get
-                }
-                call.respond(HttpStatusCode.OK, mapOf("resources" to result))
-            }
-
-            // --- Database Monitoring ---
-
-            get("/infra/dbm/queries") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respond(HttpStatusCode.OK, mapOf("queries" to emptyList<Any>()))
-                    return@get
-                }
-
-                val limit = parseLimit(call.parameters["limit"])
-                val query = """
-                    SELECT * FROM dbm_queries
-                    WHERE organization_id IN (${orgIdsToChCondition(orgIds)})
-                    ORDER BY timestamp DESC
-                    LIMIT $limit
-                    FORMAT JSONEachRow
-                """.trimIndent()
-
-                val result = executeChQuery(query) ?: run {
-                    call.respond(HttpStatusCode.OK, mapOf("queries" to emptyList<Any>()))
-                    return@get
-                }
-                call.respond(HttpStatusCode.OK, mapOf("queries" to result))
-            }
-
-            // --- Dynamic Instrumentation (Debugger) ---
-
-            get("/infra/debugger/logs") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respond(HttpStatusCode.OK, mapOf("logs" to emptyList<Any>()))
-                    return@get
-                }
-
-                val limit = parseLimit(call.parameters["limit"])
-                val query = """
-                    SELECT * FROM debugger_logs
-                    WHERE organization_id IN (${orgIdsToChCondition(orgIds)})
-                    ORDER BY timestamp DESC
-                    LIMIT $limit
-                    FORMAT JSONEachRow
-                """.trimIndent()
-
-                val result = executeChQuery(query) ?: run {
-                    call.respond(HttpStatusCode.OK, mapOf("logs" to emptyList<Any>()))
-                    return@get
-                }
-                call.respond(HttpStatusCode.OK, mapOf("logs" to result))
-            }
-
-            get("/infra/debugger/diagnostics") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respond(
-                        HttpStatusCode.OK,
-                        mapOf("diagnostics" to emptyList<Any>())
-                    )
-                    return@get
-                }
-
-                val limit = parseLimit(call.parameters["limit"])
-                val query = """
-                    SELECT * FROM debugger_diagnostics
-                    WHERE organization_id IN (${orgIdsToChCondition(orgIds)})
-                    ORDER BY timestamp DESC
-                    LIMIT $limit
-                    FORMAT JSONEachRow
-                """.trimIndent()
-
-                val result = executeChQuery(query) ?: run {
-                    call.respond(
-                        HttpStatusCode.OK,
-                        mapOf("diagnostics" to emptyList<Any>())
-                    )
-                    return@get
-                }
-                call.respond(HttpStatusCode.OK, mapOf("diagnostics" to result))
-            }
-
-            // --- SBOM ---
-
-            get("/infra/sbom") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respond(HttpStatusCode.OK, mapOf("packages" to emptyList<Any>()))
-                    return@get
-                }
-
-                val limit = parseLimit(call.parameters["limit"])
-                val query = """
-                    SELECT * FROM sbom_packages
-                    WHERE organization_id IN (${orgIdsToChCondition(orgIds)})
-                    ORDER BY collected_at DESC
-                    LIMIT $limit
-                    FORMAT JSONEachRow
-                """.trimIndent()
-
-                val result = executeChQuery(query) ?: run {
-                    call.respond(HttpStatusCode.OK, mapOf("packages" to emptyList<Any>()))
-                    return@get
-                }
-                call.respond(HttpStatusCode.OK, mapOf("packages" to result))
-            }
-
-            // --- Network Devices ---
-
-            get("/network-devices") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respond(HttpStatusCode.OK, mapOf("devices" to emptyList<Any>()))
-                    return@get
-                }
-
-                val limit = parseLimit(call.parameters["limit"])
-                val query = """
-                    SELECT * FROM ndm_devices
-                    WHERE organization_id IN (${orgIdsToChCondition(orgIds)})
-                    ORDER BY collected_at DESC
-                    LIMIT $limit
-                    FORMAT JSONEachRow
-                """.trimIndent()
-
-                val result = executeChQuery(query) ?: run {
-                    call.respond(HttpStatusCode.OK, mapOf("devices" to emptyList<Any>()))
-                    return@get
-                }
-                call.respond(HttpStatusCode.OK, mapOf("devices" to result))
-            }
-
-            get("/network-devices/flows") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respond(HttpStatusCode.OK, mapOf("flows" to emptyList<Any>()))
-                    return@get
-                }
-
-                val limit = parseLimit(call.parameters["limit"])
-                val query = """
-                    SELECT * FROM ndm_flows
-                    WHERE organization_id IN (${orgIdsToChCondition(orgIds)})
-                    ORDER BY sampled_at DESC
-                    LIMIT $limit
-                    FORMAT JSONEachRow
-                """.trimIndent()
-
-                val result = executeChQuery(query) ?: run {
-                    call.respond(HttpStatusCode.OK, mapOf("flows" to emptyList<Any>()))
-                    return@get
-                }
-                call.respond(HttpStatusCode.OK, mapOf("flows" to result))
-            }
-
-            get("/network-devices/traps") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respond(HttpStatusCode.OK, mapOf("traps" to emptyList<Any>()))
-                    return@get
-                }
-
-                val limit = parseLimit(call.parameters["limit"])
-                val query = """
-                    SELECT * FROM ndm_traps
-                    WHERE organization_id IN (${orgIdsToChCondition(orgIds)})
-                    ORDER BY received_at DESC
-                    LIMIT $limit
-                    FORMAT JSONEachRow
-                """.trimIndent()
-
-                val result = executeChQuery(query) ?: run {
-                    call.respond(HttpStatusCode.OK, mapOf("traps" to emptyList<Any>()))
-                    return@get
-                }
-                call.respond(HttpStatusCode.OK, mapOf("traps" to result))
-            }
-
-            get("/network-devices/paths") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respond(HttpStatusCode.OK, mapOf("paths" to emptyList<Any>()))
-                    return@get
-                }
-
-                val limit = parseLimit(call.parameters["limit"])
-                val query = """
-                    SELECT * FROM network_paths
-                    WHERE organization_id IN (${orgIdsToChCondition(orgIds)})
-                    ORDER BY collected_at DESC
-                    LIMIT $limit
-                    FORMAT JSONEachRow
-                """.trimIndent()
-
-                val result = executeChQuery(query) ?: run {
-                    call.respond(HttpStatusCode.OK, mapOf("paths" to emptyList<Any>()))
-                    return@get
-                }
-                call.respond(HttpStatusCode.OK, mapOf("paths" to result))
-            }
+            registerInfrastructureMapSavedViewRoutes(infrastructureMapSavedViewService)
+            registerClickHouseListRoutes()
         }
     }
 }
+
+private fun Route.registerInfrastructureMapSavedViewRoutes(
+    infrastructureMapSavedViewService: InfrastructureMapSavedViewService
+) {
+    get("/infra/map/saved-views") {
+        call.listSavedViews(infrastructureMapSavedViewService)
+    }
+
+    post("/infra/map/saved-views") {
+        call.saveSavedView(infrastructureMapSavedViewService)
+    }
+
+    delete("/infra/map/saved-views/{id}") {
+        call.deleteSavedView(infrastructureMapSavedViewService)
+    }
+}
+
+private suspend fun ApplicationCall.listSavedViews(
+    infrastructureMapSavedViewService: InfrastructureMapSavedViewService
+) {
+    val scope = resolveSavedViewScope() ?: return
+    val views = infrastructureMapSavedViewService.listViews(
+        organizationId = scope.organizationId,
+        userId = scope.userId
+    )
+    respond(HttpStatusCode.OK, InfrastructureMapSavedViewsResponse(views))
+}
+
+private suspend fun ApplicationCall.saveSavedView(
+    infrastructureMapSavedViewService: InfrastructureMapSavedViewService
+) {
+    val scope = resolveSavedViewScope() ?: return
+    val request = receive<SaveInfrastructureMapViewRequest>()
+    val result = try {
+        infrastructureMapSavedViewService.saveView(
+            organizationId = scope.organizationId,
+            userId = scope.userId,
+            request = request
+        )
+    } catch (error: InvalidInfrastructureMapSavedViewException) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse(error.message ?: "Invalid saved view"))
+        return
+    }
+
+    val statusCode = if (result.created) HttpStatusCode.Created else HttpStatusCode.OK
+    respond(statusCode, result.view)
+}
+
+private suspend fun ApplicationCall.deleteSavedView(
+    infrastructureMapSavedViewService: InfrastructureMapSavedViewService
+) {
+    val scope = resolveSavedViewScope() ?: return
+    val viewId = parameters["id"]?.toIntOrNull()
+    if (viewId == null) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid saved view ID"))
+        return
+    }
+
+    val deleted = infrastructureMapSavedViewService.deleteView(
+        organizationId = scope.organizationId,
+        userId = scope.userId,
+        viewId = viewId
+    )
+    if (!deleted) {
+        respond(HttpStatusCode.NotFound, ErrorResponse("Saved view not found"))
+        return
+    }
+    respond(HttpStatusCode.NoContent)
+}
+
+private fun Route.registerClickHouseListRoutes() {
+    clickHouseListRoutes.forEach { config ->
+        registerClickHouseListRoute(config)
+    }
+}
+
+private fun Route.registerClickHouseListRoute(config: ClickHouseListRouteConfig) {
+    get(config.path) {
+        call.respondClickHouseList(config)
+    }
+}
+
+private suspend fun ApplicationCall.respondClickHouseList(config: ClickHouseListRouteConfig) {
+    val orgIds = currentUserOrganizationIds()
+    val payload = if (orgIds.isEmpty()) {
+        emptyList()
+    } else {
+        val query = buildClickHouseListQuery(config, orgIds, this)
+        executeChQuery(query) ?: emptyList()
+    }
+    respond(HttpStatusCode.OK, mapOf(config.responseKey to payload))
+}
+
+private fun buildClickHouseListQuery(
+    config: ClickHouseListRouteConfig,
+    orgIds: List<Int>,
+    call: ApplicationCall
+): String {
+    val limit = parseLimit(call.parameters["limit"])
+    val conditions = mutableListOf("organization_id IN (${orgIdsToChCondition(orgIds)})")
+    config.filters.forEach { filter ->
+        safeFilterValue(call.parameters[filter.parameterName])?.let { value ->
+            conditions.add("${filter.columnName} = '$value'")
+        }
+    }
+    return """
+        SELECT * FROM ${config.tableName}
+        WHERE ${conditions.joinToString(" AND ")}
+        ORDER BY ${config.orderColumn} DESC
+        LIMIT $limit
+        FORMAT JSONEachRow
+    """.trimIndent()
+}
+
+private fun clickHouseRoute(
+    path: String,
+    responseKey: String,
+    tableName: String,
+    orderColumn: String,
+    vararg filters: ClickHouseFilter
+): ClickHouseListRouteConfig =
+    ClickHouseListRouteConfig(
+        path = path,
+        responseKey = responseKey,
+        tableName = tableName,
+        orderColumn = orderColumn,
+        filters = filters.toList()
+    )
+
+private fun timestampRoute(
+    path: String,
+    responseKey: String,
+    tableName: String,
+    vararg filters: ClickHouseFilter
+): ClickHouseListRouteConfig =
+    clickHouseRoute(path, responseKey, tableName, "timestamp", *filters)
+
+private fun collectedRoute(
+    path: String,
+    responseKey: String,
+    tableName: String,
+    vararg filters: ClickHouseFilter
+): ClickHouseListRouteConfig =
+    clickHouseRoute(path, responseKey, tableName, "collected_at", *filters)
+
+private val hostFilter = ClickHouseFilter(parameterName = "host", columnName = "host")
+private val alertTypeFilter = ClickHouseFilter(parameterName = "alert_type", columnName = "alert_type")
+private val resourceTypeFilter = ClickHouseFilter(parameterName = "resource_type", columnName = "resource_type")
+
+private val clickHouseListRoutes = listOf(
+    timestampRoute("/infra/events", "events", "infra_events", hostFilter, alertTypeFilter),
+    timestampRoute("/infra/service-checks", "serviceChecks", "service_checks"),
+    timestampRoute("/infra/processes", "processes", "processes", hostFilter),
+    timestampRoute("/infra/containers", "containers", "containers", hostFilter),
+    timestampRoute("/infra/connections", "connections", "network_connections"),
+    collectedRoute("/infra/k8s-resources", "resources", "k8s_resources", resourceTypeFilter),
+    timestampRoute("/infra/dbm/queries", "queries", "dbm_queries"),
+    timestampRoute("/infra/debugger/logs", "logs", "debugger_logs"),
+    timestampRoute("/infra/debugger/diagnostics", "diagnostics", "debugger_diagnostics"),
+    collectedRoute("/infra/sbom", "packages", "sbom_packages"),
+    collectedRoute("/network-devices", "devices", "ndm_devices"),
+    clickHouseRoute("/network-devices/flows", "flows", "ndm_flows", "sampled_at"),
+    clickHouseRoute("/network-devices/traps", "traps", "ndm_traps", "received_at"),
+    collectedRoute("/network-devices/paths", "paths", "network_paths")
+)
 
 private suspend fun executeChQuery(query: String): List<JsonObject>? {
     return runCatching {

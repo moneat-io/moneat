@@ -7,29 +7,14 @@
 // (at your option) any later version.
 
 import {createFileRoute, redirect} from '@tanstack/react-router'
-import {Network} from 'lucide-react'
 import {api} from '@/lib/api'
-import {ServiceMap} from '@/components/apm/ServiceMap'
-import {PageHeader} from '@/components/ui/page-header'
 
 export const Route = createFileRoute('/monitoring/service-map')({
   beforeLoad: () => {
     if (!api.isAuthenticated()) {
       throw redirect({to: '/login'})
     }
+    throw redirect({to: '/monitoring/map', search: {scope: 'services'}})
   },
-  component: MonitoringServiceMapPage,
+  component: () => null,
 })
-
-function MonitoringServiceMapPage() {
-  return (
-    <div className="container mx-auto px-4 py-4 space-y-4">
-      <PageHeader
-        icon={Network}
-        title="Service map"
-        description="Service dependency graph from trace telemetry"
-      />
-      <ServiceMap />
-    </div>
-  )
-}

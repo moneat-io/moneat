@@ -198,6 +198,170 @@ describe('Monitoring API module', () => {
     })
   })
 
+  // ──── Infrastructure Map Saved Views ────
+
+  describe('getInfrastructureMapSavedViews', () => {
+    it('maps saved map views from backend response', async () => {
+      server.use(
+        http.get(`${API_BASE}/v1/infra/map/saved-views`, () =>
+          HttpResponse.json({
+            views: [
+              {
+                id: 7,
+                name: 'Production hosts',
+                resource_kind: 'hosts',
+                group_by: 'tag:env',
+                fill_by: 'health',
+                size_by: 'memory',
+                search_query: 'prod',
+                schema_version: 1,
+                created_at: '2026-06-04T16:00:00Z',
+                updated_at: '2026-06-04T16:05:00Z',
+              },
+            ],
+          })
+        )
+      )
+
+      const result = await api.getInfrastructureMapSavedViews()
+
+      expect(result.views).toEqual([
+        {
+          id: '7',
+          name: 'Production hosts',
+          resourceKind: 'hosts',
+          groupBy: 'tag:env',
+          fillBy: 'health',
+          sizeBy: 'memory',
+          searchQuery: 'prod',
+          schemaVersion: 1,
+          createdAt: '2026-06-04T16:00:00Z',
+          updatedAt: '2026-06-04T16:05:00Z',
+        },
+      ])
+    })
+
+    it('maps camelCase saved map views and default state fallbacks', async () => {
+      server.use(
+        http.get(`${API_BASE}/v1/infra/map/saved-views`, () =>
+          HttpResponse.json({
+            views: [
+              {
+                id: 'camel-view',
+                name: 'Container images',
+                resourceKind: 'containers',
+                groupBy: 'image',
+                fillBy: 'lastSeen',
+                sizeBy: 'network',
+                searchQuery: 'redis',
+                schemaVersion: 2,
+                createdAt: '2026-06-04T16:15:00Z',
+                updatedAt: '2026-06-04T16:20:00Z',
+              },
+              {
+                id: 8,
+                name: 'Defaults',
+              },
+            ],
+          })
+        )
+      )
+
+      const result = await api.getInfrastructureMapSavedViews()
+
+      expect(result.views).toEqual([
+        {
+          id: 'camel-view',
+          name: 'Container images',
+          resourceKind: 'containers',
+          groupBy: 'image',
+          fillBy: 'lastSeen',
+          sizeBy: 'network',
+          searchQuery: 'redis',
+          schemaVersion: 2,
+          createdAt: '2026-06-04T16:15:00Z',
+          updatedAt: '2026-06-04T16:20:00Z',
+        },
+        {
+          id: '8',
+          name: 'Defaults',
+          resourceKind: 'hosts',
+          groupBy: 'status',
+          fillBy: 'health',
+          sizeBy: 'uniform',
+          searchQuery: '',
+          schemaVersion: 1,
+          createdAt: '',
+          updatedAt: '',
+        },
+      ])
+    })
+
+    it('returns an empty saved map view list when response omits views', async () => {
+      server.use(
+        http.get(`${API_BASE}/v1/infra/map/saved-views`, () => HttpResponse.json({}))
+      )
+
+      await expect(api.getInfrastructureMapSavedViews()).resolves.toEqual({views: []})
+    })
+  })
+
+  describe('saveInfrastructureMapView', () => {
+    it('posts map view state to backend and maps response', async () => {
+      server.use(
+        http.post(`${API_BASE}/v1/infra/map/saved-views`, async ({ request }) => {
+          const body = (await request.json()) as Record<string, unknown>
+          expect(body).toEqual({
+            name: 'Container load',
+            resource_kind: 'containers',
+            group_by: 'host',
+            fill_by: 'cpu',
+            size_by: 'cpu',
+            search_query: 'api',
+          })
+          return HttpResponse.json({
+            id: 9,
+            name: 'Container load',
+            resource_kind: 'containers',
+            group_by: 'host',
+            fill_by: 'cpu',
+            size_by: 'cpu',
+            search_query: 'api',
+            schema_version: 1,
+            created_at: '2026-06-04T16:00:00Z',
+            updated_at: '2026-06-04T16:10:00Z',
+          })
+        })
+      )
+
+      const result = await api.saveInfrastructureMapView({
+        name: 'Container load',
+        resourceKind: 'containers',
+        groupBy: 'host',
+        fillBy: 'cpu',
+        sizeBy: 'cpu',
+        searchQuery: 'api',
+      })
+
+      expect(result).toMatchObject({
+        id: '9',
+        name: 'Container load',
+        resourceKind: 'containers',
+      })
+    })
+  })
+
+  describe('deleteInfrastructureMapSavedView', () => {
+    it('deletes a saved map view', async () => {
+      server.use(
+        http.delete(`${API_BASE}/v1/infra/map/saved-views/9`, () =>
+          new HttpResponse(null, { status: 204 })
+        )
+      )
+      await expect(api.deleteInfrastructureMapSavedView('9')).resolves.toBeUndefined()
+    })
+  })
+
   // ──── Connections ────
 
   describe('getConnections', () => {

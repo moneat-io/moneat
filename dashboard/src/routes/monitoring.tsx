@@ -30,6 +30,7 @@ import {
     Router,
     Ship,
     Terminal,
+    Map as MapIcon,
 } from 'lucide-react'
 import {cn} from '@/lib/utils'
 import {Button} from '@/components/ui/button'
@@ -49,6 +50,7 @@ export const Route = createFileRoute('/monitoring')({
 
 const TAB_DOCS_URLS: Record<string, string> = {
   hosts: '/docs/datadog-agent/agent-setup',
+  map: '/docs/infrastructure-monitoring',
   containers: '/docs/datadog-agent/agent-setup',
   'service-map': '/docs/performance-monitoring#service-map',
   processes: '/docs/datadog-agent/',
@@ -63,8 +65,8 @@ const TAB_DOCS_URLS: Record<string, string> = {
 
 const allTabs = [
   {id: 'hosts', label: 'Hosts', href: '/monitoring', icon: HardDrive},
+  {id: 'map', label: 'Map', href: '/monitoring/map', icon: MapIcon},
   {id: 'containers', label: 'Containers', href: '/monitoring/containers', icon: Box},
-  {id: 'service-map', label: 'Service Map', href: '/monitoring/service-map', icon: Network},
   {id: 'processes', label: 'Processes', href: '/monitoring/processes', icon: Terminal, requiresDatadog: true},
   {id: 'network', label: 'Network', href: '/monitoring/network', icon: Network, requiresDatadog: true},
   {id: 'events', label: 'Events', href: '/monitoring/events', icon: CalendarClock, requiresDatadog: true},
@@ -76,7 +78,7 @@ const allTabs = [
 ]
 
 const KNOWN_TAB_PATHS = [
-  'hosts', 'containers', 'processes', 'network', 'events',
+  'hosts', 'map', 'containers', 'processes', 'network', 'events',
   'kubernetes', 'databases', 'debugger', 'network-devices', 'service-map', 'sbom',
 ]
 
