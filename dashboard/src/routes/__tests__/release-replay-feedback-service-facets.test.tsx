@@ -3,24 +3,33 @@ import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {fireEvent, screen, waitFor} from '@testing-library/react'
 import {clearAuthStorage, renderRoute} from '@/test/utils'
 
-const {mockApi, mockRouteParams} = vi.hoisted(() => ({
-  mockApi: {
-    isAuthenticated: vi.fn(),
-    checkAuth: vi.fn(),
-    getCurrentUser: vi.fn(),
-    updateUserTimezone: vi.fn(),
-    getProjects: vi.fn(),
-    getOrganizationReleases: vi.fn(),
-    getOrganizationReleaseStats: vi.fn(),
-    getOrganizationReplays: vi.fn(),
-    getBillingUsage: vi.fn(),
-    getOrganizationFeedback: vi.fn(),
-    updateFeedback: vi.fn(),
-  },
-  mockRouteParams: {
-    current: {version: '1.0.0'},
-  },
-}))
+const {mockApi, mockRouteParams} = vi.hoisted(() => {
+  type MockRouteParams = {
+    feedbackId?: string
+    version?: string
+  }
+
+  return {
+    mockApi: {
+      isAuthenticated: vi.fn(),
+      checkAuth: vi.fn(),
+      getCurrentUser: vi.fn(),
+      updateUserTimezone: vi.fn(),
+      getProjects: vi.fn(),
+      getOrganizationReleases: vi.fn(),
+      getOrganizationReleaseStats: vi.fn(),
+      getOrganizationReplays: vi.fn(),
+      getBillingUsage: vi.fn(),
+      getOrganizationFeedback: vi.fn(),
+      getFeedbackDetail: vi.fn(),
+      getIssueLinkForEvent: vi.fn(),
+      updateFeedback: vi.fn(),
+    },
+    mockRouteParams: {
+      current: {version: '1.0.0'} as MockRouteParams,
+    },
+  }
+})
 
 vi.mock('@/lib/api', () => ({
   api: mockApi,
@@ -58,6 +67,7 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 import {Route as FeedbackRoute} from '../feedback'
+import {Route as FeedbackDetailRoute} from '../feedback.$feedbackId'
 import {Route as ReleaseDetailRoute} from '../releases.$version'
 import {Route as ReleasesRoute} from '../releases'
 import {Route as ReplaysRoute} from '../replays'
@@ -186,6 +196,12 @@ const feedback = {
   platform: 'javascript',
   associatedEventId: null,
   replayId: 'replay-1',
+  sourceType: 'otlp',
+  sourceName: 'OpenTelemetry',
+  sourceEventName: 'moneat.user_feedback',
+  traceId: '00000000000000000000000000000001',
+  spanId: '0000000000000001',
+  resourceAttributes: {'service.name': 'api'},
 }
 
 const resolvedFeedback = {
@@ -217,6 +233,8 @@ describe('release, replay, and feedback service facets', () => {
     mockApi.getOrganizationReplays.mockResolvedValue([replay])
     mockApi.getBillingUsage.mockResolvedValue({retentionDays: 30})
     mockApi.getOrganizationFeedback.mockResolvedValue([feedback])
+    mockApi.getFeedbackDetail.mockResolvedValue({...feedback, sdkName: 'otel-js', sdkVersion: '1.0.0', tags: {}})
+    mockApi.getIssueLinkForEvent.mockResolvedValue(null)
     mockApi.updateFeedback.mockResolvedValue(feedback)
   })
 
@@ -373,6 +391,7 @@ describe('release, replay, and feedback service facets', () => {
     renderRoute(FeedbackRoute)
 
     expect(await screen.findByText('Checkout is confusing')).toBeInTheDocument()
+    expect((await screen.findAllByText('OpenTelemetry')).length).toBeGreaterThan(0)
     expect(mockApi.getOrganizationFeedback).toHaveBeenCalledWith({page: 1, limit: 500})
     expect(mockApi.getOrganizationFeedback).toHaveBeenCalledWith({
       page: 1,
@@ -456,6 +475,18 @@ describe('release, replay, and feedback service facets', () => {
     fireEvent.click(screen.getAllByTitle('Exclude this value')[0])
 
     expect(await screen.findByText('No services match filters')).toBeInTheDocument()
+  })
+
+  it('renders feedback detail source metadata', async () => {
+    mockRouteParams.current = {feedbackId: 'feedback-1'}
+
+    renderRoute(FeedbackDetailRoute)
+
+    expect(await screen.findByText('Telemetry Source')).toBeInTheDocument()
+    expect(screen.getByText('OpenTelemetry')).toBeInTheDocument()
+    expect(screen.getByText('moneat.user_feedback')).toBeInTheDocument()
+    expect(screen.getByText('00000000000000000000000000000001')).toBeInTheDocument()
+    expect(screen.getByText('0000000000000001')).toBeInTheDocument()
   })
 
   it('does not query scoped release data when there are no services', async () => {

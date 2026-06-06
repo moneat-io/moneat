@@ -112,6 +112,7 @@ export interface OtlpObservedService {
   seenLogs: boolean
   seenTraces: boolean
   seenMetrics: boolean
+  seenFeedback: boolean
   lastEnvironment?: string | null
   firstSeenAt: string
   lastSeenAt: string

@@ -690,7 +690,10 @@ class EventService(
             userIpAddress = userIpAddress,
             sdkName = feedback.sdk?.name ?: "",
             sdkVersion = feedback.sdk?.version ?: "",
-            tags = feedback.tags
+            tags = feedback.tags,
+            sourceType = "sentry",
+            sourceName = "Sentry-compatible SDK",
+            sourceEventName = if (itemType == "event") "feedback" else itemType
         )
 
         suspendRunCatching {

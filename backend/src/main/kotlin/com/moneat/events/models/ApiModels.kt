@@ -541,7 +541,13 @@ data class FeedbackListItem(
     val platform: String,
     val user: UserInfo?,
     val associatedEventId: String?,
-    val replayId: String?
+    val replayId: String?,
+    val sourceType: String = "sentry",
+    val sourceName: String = "Sentry-compatible SDK",
+    val sourceEventName: String = "feedback",
+    val traceId: String = "",
+    val spanId: String = "",
+    val resourceAttributes: Map<String, String> = emptyMap()
 )
 
 @Serializable
@@ -561,7 +567,13 @@ data class FeedbackDetailResponse(
     val replayId: String?,
     val tags: Map<String, String>,
     val sdkName: String,
-    val sdkVersion: String
+    val sdkVersion: String,
+    val sourceType: String = "sentry",
+    val sourceName: String = "Sentry-compatible SDK",
+    val sourceEventName: String = "feedback",
+    val traceId: String = "",
+    val spanId: String = "",
+    val resourceAttributes: Map<String, String> = emptyMap()
 )
 
 @Serializable
