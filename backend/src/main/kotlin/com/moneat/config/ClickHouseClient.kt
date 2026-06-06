@@ -35,7 +35,6 @@ import mu.KotlinLogging
 import java.util.Locale
 
 private val CLICKHOUSE_ERROR_CODE = Regex("""^Code:\s*(\d+)""")
-private val CLICKHOUSE_PARAMETER_NAME = Regex("^[A-Za-z][A-Za-z0-9_]*$")
 private val logger = KotlinLogging.logger {}
 
 class ClickHouseQueryException(
@@ -152,7 +151,7 @@ object ClickHouseClient {
                     parameter("timeout_before_checking_execution_speed", "0")
                 }
                 queryParameters.forEach { (name, value) ->
-                    require(CLICKHOUSE_PARAMETER_NAME.matches(name)) { "Invalid ClickHouse parameter name: $name" }
+                    require(isClickHouseParameterName(name)) { "Invalid ClickHouse parameter name: $name" }
                     parameter("param_$name", value)
                 }
                 defaultFormat?.let { format -> parameter("default_format", format) }
@@ -183,6 +182,11 @@ object ClickHouseClient {
 
     private fun elapsedSeconds(startedAt: Long): Double =
         (System.nanoTime() - startedAt) / NANOS_PER_SECOND
+
+    private fun isClickHouseParameterName(name: String): Boolean {
+        val first = name.firstOrNull() ?: return false
+        return first.isAsciiLetter() && name.drop(1).all { char -> char.isAsciiLetterOrDigitOrUnderscore() }
+    }
 
     private fun isReadQuery(query: String): Boolean {
         val normalized = query.trimStart().uppercase(Locale.ROOT)
@@ -294,6 +298,12 @@ object ClickHouseClient {
         migrationClient = null
     }
 }
+
+private fun Char.isAsciiLetter(): Boolean =
+    this in 'A'..'Z' || this in 'a'..'z'
+
+private fun Char.isAsciiLetterOrDigitOrUnderscore(): Boolean =
+    isAsciiLetter() || this in '0'..'9' || this == '_'
 
 private fun clickHouseErrorCode(body: String): String =
     CLICKHOUSE_ERROR_CODE.find(body.trimStart())?.groupValues?.get(1) ?: "unknown"

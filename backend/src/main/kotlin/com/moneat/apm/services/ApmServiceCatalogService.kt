@@ -97,6 +97,7 @@ private const val LATENCY_AXIS_P99_UPPER_NUMERATOR = 13
 private const val LATENCY_AXIS_P99_UPPER_DENOMINATOR = 10
 private const val FALLBACK_P90_NUMERATOR = 9
 private const val FALLBACK_P90_DENOMINATOR = 10
+private const val MIN_HTTP_METHOD_LENGTH = 2
 private const val SYNTHETIC_METHOD_MAX_LENGTH = 8
 private const val ENV_CHART_BUCKET_COUNT = 10
 private const val ENV_CHART_START = 1
@@ -1578,10 +1579,22 @@ private fun rawResourceValue(resource: ApmResourceRow): String =
     }
 
 fun resourceSlug(method: String, name: String): String =
-    "$method-$name"
-        .lowercase()
-        .replace(Regex("[^a-z0-9]+"), "-")
-        .trim('-')
+    slugify("$method-$name")
+
+private fun slugify(value: String): String {
+    val builder = StringBuilder()
+    var lastWasSeparator = false
+    value.lowercase().forEach { char ->
+        if (char.isAsciiLetterOrDigit()) {
+            builder.append(char)
+            lastWasSeparator = false
+        } else if (!lastWasSeparator && builder.isNotEmpty()) {
+            builder.append('-')
+            lastWasSeparator = true
+        }
+    }
+    return builder.toString().trim('-')
+}
 
 private fun envPills(envs: List<String>): List<ApmEnvPill> {
     val values = envs.filter { env -> env.isNotBlank() }.ifEmpty { listOf("default") }
@@ -1631,8 +1644,11 @@ private fun resourceKind(method: String): String =
 
 private fun methodFromResource(resource: String): String =
     resource.substringBefore(' ', missingDelimiterValue = "")
-        .takeIf { method -> method.matches(Regex("[A-Z]{2,8}")) }
+        .takeIf { method -> method.isHttpMethodToken() }
         ?: ""
+
+private fun String.isHttpMethodToken(): Boolean =
+    length in MIN_HTTP_METHOD_LENGTH..SYNTHETIC_METHOD_MAX_LENGTH && all { char -> char in 'A'..'Z' }
 
 private fun status(errorRate: Double, p95Ms: Long): String =
     when {
@@ -1760,7 +1776,7 @@ private fun podMemoryRows(containers: List<ContainerAggregate>): List<ApmGaugeRo
 }
 
 private fun initials(name: String): String =
-    name.split(Regex("\\s+"))
+    name.splitToSequence(' ', '\t', '\n', '\r', '\u000C')
         .mapNotNull { part -> part.firstOrNull()?.uppercaseChar()?.toString() }
         .take(2)
         .joinToString("")
@@ -1803,10 +1819,15 @@ private fun nanosToMillis(value: Long): Long =
 
 private fun formatMs(ms: Long): String =
     if (ms >= MILLISECONDS_PER_SECOND) {
-        "%.2fs".format(ms.toDouble() / MILLISECONDS_PER_SECOND.toDouble()).replace(Regex("\\.?0+s$"), "s")
+        "%.2f".format(ms.toDouble() / MILLISECONDS_PER_SECOND.toDouble())
+            .trimEnd('0')
+            .trimEnd('.') + "s"
     } else {
         "${ms}ms"
     }
+
+private fun Char.isAsciiLetterOrDigit(): Boolean =
+    this in 'a'..'z' || this in '0'..'9'
 
 private fun formatCompact(value: Double): String =
     if (value >= COMPACT_UNIT_THRESHOLD) {
