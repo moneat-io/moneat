@@ -123,6 +123,7 @@ private const val INFRA_CPU_WARN_PCT = 70
 private const val INFRA_CPU_ALERT_PCT = 85
 private const val MEMORY_WARN_RATIO = 0.8
 private const val DELTA_FLAT_THRESHOLD = 0.05
+private const val FILTERS_PLACEHOLDER = "__APM_CLICKHOUSE_FILTERS__"
 
 data class ApmServiceQuery(
     val env: String? = null,
@@ -432,7 +433,8 @@ object ApmServiceCatalogService {
         } else {
             "LIMIT $EXACT_SERVICE_LIMIT"
         }
-        val sql = """
+        val sql = filteredQuery(
+            """
             SELECT
                 service as name,
                 count() as span_count,
@@ -480,12 +482,14 @@ object ApmServiceCatalogService {
                     ''
                 ) as language
             FROM `$clickhouseDb`.apm_spans
-            WHERE ${filters.joinToString(" AND ")}
+            WHERE __APM_CLICKHOUSE_FILTERS__
             GROUP BY service
             ORDER BY error_count DESC, p95_ns DESC, span_count DESC
             $limitClause
             FORMAT JSONEachRow
-        """.trimIndent()
+            """,
+            filters,
+        )
         return ClickHouseQuerySpec(sql, filterSet.params.asMap())
     }
 
@@ -501,18 +505,21 @@ object ApmServiceCatalogService {
         val serviceList = services.joinToString(", ") { service -> filterSet.params.string(service) }
         filters.add("service IN ($serviceList)")
         val bucketSeconds = (query.timeRange.seconds() / DEFAULT_SERIES_POINT_COUNT).coerceAtLeast(1)
-        val sql = """
+        val sql = filteredQuery(
+            """
             SELECT
                 service,
                 toStartOfInterval(start, INTERVAL $bucketSeconds SECOND) as bucket_start,
                 count() as span_count
             FROM `$clickhouseDb`.apm_spans
-            WHERE ${filters.joinToString(" AND ")}
+            WHERE __APM_CLICKHOUSE_FILTERS__
             GROUP BY service, bucket_start
             ORDER BY service ASC, bucket_start ASC
             LIMIT ${services.size * DEFAULT_SERIES_POINT_COUNT}
             FORMAT JSONEachRow
-        """.trimIndent()
+            """,
+            filters,
+        )
         return jsonRows(sql, parentSpan, filterSet.params.asMap())
             .groupBy { row -> row.stringValue("service") }
             .mapValues { (_, rows) ->
@@ -576,7 +583,8 @@ object ApmServiceCatalogService {
         query: ApmServiceQuery,
     ): ClickHouseQuerySpec {
         val filterSet = spanFilters(organizationId, query, serviceName, null)
-        val sql = """
+        val sql = filteredQuery(
+            """
             SELECT
                 resource,
                 argMax(name, start) as name,
@@ -587,13 +595,15 @@ object ApmServiceCatalogService {
                 toUInt64(quantile(0.95)(duration)) as p95_ns,
                 toUInt64(quantile(0.99)(duration)) as p99_ns
             FROM `$clickhouseDb`.apm_spans
-            WHERE ${filterSet.filters.joinToString(" AND ")}
+            WHERE __APM_CLICKHOUSE_FILTERS__
               AND resource != ''
             GROUP BY resource
             ORDER BY error_count DESC, p95_ns DESC, span_count DESC
             LIMIT 50
             FORMAT JSONEachRow
-        """.trimIndent()
+            """,
+            filterSet.filters,
+        )
         return ClickHouseQuerySpec(sql, filterSet.params.asMap())
     }
 
@@ -605,7 +615,8 @@ object ApmServiceCatalogService {
         parentSpan: ISpan?,
     ): List<ApmLatencyPoint> {
         val filterSet = spanFilters(organizationId, query, serviceName, resource)
-        val sql = """
+        val sql = filteredQuery(
+            """
             SELECT
                 toStartOfHour(start) as bucket_start,
                 formatDateTime(bucket_start, '%H:%i') as t,
@@ -614,12 +625,14 @@ object ApmServiceCatalogService {
                 toUInt64(quantile(0.95)(duration)) as p95_ns,
                 toUInt64(quantile(0.99)(duration)) as p99_ns
             FROM `$clickhouseDb`.apm_spans
-            WHERE ${filterSet.filters.joinToString(" AND ")}
+            WHERE __APM_CLICKHOUSE_FILTERS__
             GROUP BY bucket_start
             ORDER BY bucket_start ASC
             LIMIT 48
             FORMAT JSONEachRow
-        """.trimIndent()
+            """,
+            filterSet.filters,
+        )
         return jsonRows(sql, parentSpan, filterSet.params.asMap()).map { row ->
             ApmLatencyPoint(
                 t = row.stringValue("t"),
@@ -639,19 +652,22 @@ object ApmServiceCatalogService {
         parentSpan: ISpan?,
     ): List<ApmThroughputPoint> {
         val filterSet = spanFilters(organizationId, query, serviceName, resource)
-        val sql = """
+        val sql = filteredQuery(
+            """
             SELECT
                 toStartOfHour(start) as bucket_start,
                 formatDateTime(bucket_start, '%H:%i') as t,
                 count() / $SECONDS_PER_HOUR as rps,
                 sum(error) / $SECONDS_PER_HOUR as errors
             FROM `$clickhouseDb`.apm_spans
-            WHERE ${filterSet.filters.joinToString(" AND ")}
+            WHERE __APM_CLICKHOUSE_FILTERS__
             GROUP BY bucket_start
             ORDER BY bucket_start ASC
             LIMIT 48
             FORMAT JSONEachRow
-        """.trimIndent()
+            """,
+            filterSet.filters,
+        )
         return jsonRows(sql, parentSpan, filterSet.params.asMap()).map { row ->
             ApmThroughputPoint(
                 t = row.stringValue("t"),
@@ -687,7 +703,8 @@ object ApmServiceCatalogService {
     ): PreviousWindowAggregate? {
         val filterSet = previousSpanFilters(organizationId, query, serviceName, resource)
         val apdexTargetNs = APDEX_TARGET_MS * NANOSECONDS_PER_MILLISECOND
-        val sql = """
+        val sql = filteredQuery(
+            """
             SELECT
                 count() as previous_span_count,
                 sum(error) as previous_error_count,
@@ -699,9 +716,11 @@ object ApmServiceCatalogService {
                     AND duration <= ${apdexTargetNs * APDEX_TOLERATING_MULTIPLIER}
                 ) as previous_apdex_tolerating
             FROM `$clickhouseDb`.apm_spans
-            WHERE ${filterSet.filters.joinToString(" AND ")}
+            WHERE __APM_CLICKHOUSE_FILTERS__
             FORMAT JSONEachRow
-        """.trimIndent()
+            """,
+            filterSet.filters,
+        )
         return jsonRows(sql, parentSpan, filterSet.params.asMap()).firstOrNull()?.let { row ->
             PreviousWindowAggregate(
                 spanCount = row.longValue("previous_span_count"),
@@ -739,7 +758,8 @@ object ApmServiceCatalogService {
         val filterSet = spanFilters(organizationId, query, serviceName, null)
         val filters = filterSet.filters
         filters.add("version != ''")
-        val sql = """
+        val sql = filteredQuery(
+            """
             SELECT
                 version,
                 formatDateTime(min(start), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as first_seen,
@@ -762,12 +782,14 @@ object ApmServiceCatalogService {
                     ''
                 ) as deployer
             FROM `$clickhouseDb`.apm_spans
-            WHERE ${filters.joinToString(" AND ")}
+            WHERE __APM_CLICKHOUSE_FILTERS__
             GROUP BY version
             ORDER BY max(start) DESC
             LIMIT $DEPLOYMENT_ROW_LIMIT
             FORMAT JSONEachRow
-        """.trimIndent()
+            """,
+            filters,
+        )
         return jsonRows(sql, parentSpan, filterSet.params.asMap()).map { row ->
             DeploymentAggregate(
                 version = row.stringValue("version"),
@@ -837,16 +859,19 @@ object ApmServiceCatalogService {
         val bucketSizeNs = (
             (maxDurationMs.coerceAtLeast(1) * NANOSECONDS_PER_MILLISECOND) / LATENCY_DISTRIBUTION_BAR_COUNT
             ).coerceAtLeast(1)
-        val sql = """
+        val sql = filteredQuery(
+            """
             SELECT
                 least(intDiv(duration, $bucketSizeNs), ${LATENCY_DISTRIBUTION_BAR_COUNT - 1}) as bucket_idx,
                 count() as span_count
             FROM `$clickhouseDb`.apm_spans
-            WHERE ${filterSet.filters.joinToString(" AND ")}
+            WHERE __APM_CLICKHOUSE_FILTERS__
             GROUP BY bucket_idx
             ORDER BY bucket_idx ASC
             FORMAT JSONEachRow
-        """.trimIndent()
+            """,
+            filterSet.filters,
+        )
         val counts = jsonRows(sql, parentSpan, filterSet.params.asMap()).associate { row ->
             row.longValue("bucket_idx").toInt() to row.longValue("span_count")
         }
@@ -881,19 +906,22 @@ object ApmServiceCatalogService {
         )
         query.env?.let { env -> filters.add("env = ${params.string(env)}") }
         query.source?.let { source -> filters.add("source = ${params.string(source)}") }
-        val sql = """
+        val sql = filteredQuery(
+            """
             SELECT
                 $peerColumn as peer_service,
                 sum(call_count) as call_count,
                 sum(error_count) as error_count,
                 if(sum(duration_count) = 0, 0, sum(duration_sum) / sum(duration_count)) as avg_duration_ns
             FROM `$clickhouseDb`.apm_service_edges_hourly
-            WHERE ${filters.joinToString(" AND ")}
+            WHERE __APM_CLICKHOUSE_FILTERS__
             GROUP BY peer_service
             ORDER BY call_count DESC
             LIMIT 10
             FORMAT JSONEachRow
-        """.trimIndent()
+            """,
+            filters,
+        )
         return jsonRows(sql, parentSpan, params.asMap()).map { row ->
             val errorRate = ratio(row.longValue("error_count"), row.longValue("call_count"))
             ApmDependencyRow(
@@ -916,7 +944,8 @@ object ApmServiceCatalogService {
         parentSpan: ISpan?,
     ): List<ApmTraceRow> {
         val filterSet = spanFilters(organizationId, query, serviceName, resource)
-        val sql = """
+        val sql = filteredQuery(
+            """
             SELECT
                 if(trace_id_hex != '', trace_id_hex, toString(trace_id)) as trace_id_out,
                 argMax(resource, duration) as resource,
@@ -926,12 +955,14 @@ object ApmServiceCatalogService {
                 count() as span_count,
                 formatDateTime(max(start), '%H:%i:%S') as time
             FROM `$clickhouseDb`.apm_spans
-            WHERE ${filterSet.filters.joinToString(" AND ")}
+            WHERE __APM_CLICKHOUSE_FILTERS__
             GROUP BY trace_id_out
             ORDER BY duration_ms DESC
             LIMIT 20
             FORMAT JSONEachRow
-        """.trimIndent()
+            """,
+            filterSet.filters,
+        )
         return jsonRows(sql, parentSpan, filterSet.params.asMap()).map { row ->
             ApmTraceRow(
                 time = row.stringValue("time"),
@@ -956,7 +987,8 @@ object ApmServiceCatalogService {
         val filterSet = spanFilters(organizationId, query, serviceName, resource)
         val filters = filterSet.filters
         filters.add("error = 1")
-        val sql = """
+        val sql = filteredQuery(
+            """
             SELECT
                 resource,
                 error_type,
@@ -1001,13 +1033,15 @@ object ApmServiceCatalogService {
                         0
                     ) as unhandled_flag
                 FROM `$clickhouseDb`.apm_spans
-                WHERE ${filters.joinToString(" AND ")}
+                WHERE __APM_CLICKHOUSE_FILTERS__
             )
             GROUP BY resource, error_type, error_message
             ORDER BY error_count DESC, last_seen DESC
             LIMIT 20
             FORMAT JSONEachRow
-        """.trimIndent()
+            """,
+            filters,
+        )
         return jsonRows(sql, parentSpan, filterSet.params.asMap()).map { row ->
             val errorType = row.stringValue("error_type").ifBlank { "Trace error" }
             val message = row.stringValue("error_message").ifBlank { "Trace contains errored spans" }
@@ -1145,6 +1179,9 @@ object ApmServiceCatalogService {
 
     private fun parseRowOrNull(line: String): JsonObject? =
         runCatching { json.parseToJsonElement(line) }.getOrNull() as? JsonObject
+
+    private fun filteredQuery(template: String, filters: List<String>): String =
+        template.trimIndent().replace(FILTERS_PLACEHOLDER, filters.joinToString(" AND "))
 }
 
 private fun ServiceAggregate.toCatalogRow(
