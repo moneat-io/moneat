@@ -255,12 +255,12 @@ function ResourceHeader({
   service,
   timeRange,
   onTimeRangeChange,
-}: {
+}: Readonly<{
   detail: ResourceDetail
   service: string
   timeRange: ApmTimeRange
   onTimeRangeChange: (value: ApmTimeRange) => void
-}) {
+}>) {
   return (
     <header className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">

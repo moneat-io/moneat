@@ -51,6 +51,7 @@ import {
   apmRangeLabel,
   formatMs,
   statusTone,
+  type Severity,
 } from '@/lib/apm-view'
 import {cn} from '@/lib/utils'
 
@@ -70,7 +71,7 @@ function ServiceDetailPage() {
   return <ServiceDetailContent service={service} />
 }
 
-function ServiceDetailContent({service}: {service: string}) {
+function ServiceDetailContent({service}: Readonly<{service: string}>) {
   const [timeRange, setTimeRange] = useState<ApmTimeRange>('1h')
   const detailQuery = useQuery({
     queryKey: ['apm-service-detail', service, timeRange],
@@ -221,15 +222,21 @@ function ServiceDetailContent({service}: {service: string}) {
   )
 }
 
+function timePctSeverity(timePct: number): Severity {
+  if (timePct >= 30) return 'bad'
+  if (timePct >= 18) return 'warn'
+  return 'good'
+}
+
 function ServiceHeader({
   detail,
   timeRange,
   onTimeRangeChange,
-}: {
+}: Readonly<{
   detail: ServiceDetail
   timeRange: ApmTimeRange
   onTimeRangeChange: (value: ApmTimeRange) => void
-}) {
+}>) {
   return (
     <header className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
@@ -272,7 +279,7 @@ function isNotFoundError(error: unknown): boolean {
   return (error as {status?: unknown}).status === 404
 }
 
-function ServiceTab({value, label, count}: {value: string; label: string; count?: number}) {
+function ServiceTab({value, label, count}: Readonly<{value: string; label: string; count?: number}>) {
   return (
     <TabsTrigger
       value={value}
@@ -288,7 +295,7 @@ function ServiceTab({value, label, count}: {value: string; label: string; count?
   )
 }
 
-function ResourcesTab({detail}: {detail: ServiceDetail}) {
+function ResourcesTab({detail}: Readonly<{detail: ServiceDetail}>) {
   return (
     <div className="overflow-hidden rounded-lg border">
       <Table>
@@ -327,7 +334,7 @@ function ResourcesTab({detail}: {detail: ServiceDetail}) {
               <TableCell>
                 <MeterBar
                   pct={resource.timePct}
-                  level={resource.timePct >= 30 ? 'bad' : resource.timePct >= 18 ? 'warn' : 'good'}
+                  level={timePctSeverity(resource.timePct)}
                   value={`${resource.timePct}%`}
                 />
               </TableCell>
@@ -342,7 +349,7 @@ function ResourcesTab({detail}: {detail: ServiceDetail}) {
   )
 }
 
-function DependenciesTab({detail}: {detail: ServiceDetail}) {
+function DependenciesTab({detail}: Readonly<{detail: ServiceDetail}>) {
   return (
     <div className="space-y-4">
       <div className="grid gap-4 lg:grid-cols-2">
@@ -366,7 +373,7 @@ function DependenciesTab({detail}: {detail: ServiceDetail}) {
   )
 }
 
-function DepRow({dep}: {dep: DependencyRow}) {
+function DepRow({dep}: Readonly<{dep: DependencyRow}>) {
   return (
     <div className="grid grid-cols-[16px_1fr_auto] items-center gap-2.5 px-3 py-2">
       <StatusDot tone={dep.tone} />
@@ -395,7 +402,7 @@ function DepRow({dep}: {dep: DependencyRow}) {
   )
 }
 
-function DeploymentsTab({detail}: {detail: ServiceDetail}) {
+function DeploymentsTab({detail}: Readonly<{detail: ServiceDetail}>) {
   if (detail.deployments.length === 0) {
     return (
       <p className="rounded-lg border border-dashed py-10 text-center text-sm text-muted-foreground">
@@ -467,7 +474,7 @@ function DeploymentsTab({detail}: {detail: ServiceDetail}) {
   )
 }
 
-function InfrastructureTab({detail}: {detail: ServiceDetail}) {
+function InfrastructureTab({detail}: Readonly<{detail: ServiceDetail}>) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <SectionCard title="Memory by pod">
@@ -510,7 +517,7 @@ function InfrastructureTab({detail}: {detail: ServiceDetail}) {
   )
 }
 
-function TracesTab({detail, rangeLabel}: {detail: ServiceDetail; rangeLabel: string}) {
+function TracesTab({detail, rangeLabel}: Readonly<{detail: ServiceDetail; rangeLabel: string}>) {
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
@@ -565,7 +572,7 @@ function TracesTab({detail, rangeLabel}: {detail: ServiceDetail; rangeLabel: str
   )
 }
 
-function InitialsAvatar({initials}: {initials: string}) {
+function InitialsAvatar({initials}: Readonly<{initials: string}>) {
   return (
     <span className="inline-grid h-[22px] w-[22px] place-items-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground">
       {initials}

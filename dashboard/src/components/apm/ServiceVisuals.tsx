@@ -70,11 +70,11 @@ export function ApmTimeRangeSelect({
   value,
   onChange,
   className,
-}: {
+}: Readonly<{
   value: ApmTimeRange
   onChange: (value: ApmTimeRange) => void
   className?: string
-}) {
+}>) {
   return (
     <Select value={value} onValueChange={(next) => onChange(next as ApmTimeRange)}>
       <SelectTrigger className={cn('h-[30px] w-[148px] gap-2 text-xs', className)} aria-label="Time range">
@@ -97,7 +97,7 @@ export function ApmTimeRangeSelect({
 // ---------------------------------------------------------------------------
 
 /** Neutral uppercase glyph chip — keeps status the only color in a row. */
-export function TypeChip({type, className}: {type: ServiceType; className?: string}) {
+export function TypeChip({type, className}: Readonly<{type: ServiceType; className?: string}>) {
   return (
     <span
       className={cn(
@@ -111,7 +111,7 @@ export function TypeChip({type, className}: {type: ServiceType; className?: stri
   )
 }
 
-export function ServiceStatusBadge({status}: {status: ServiceStatus}) {
+export function ServiceStatusBadge({status}: Readonly<{status: ServiceStatus}>) {
   return (
     <Badge variant={statusBadgeVariant(status)} size="sm" className="capitalize">
       {statusLabel(status)}
@@ -124,7 +124,7 @@ const CHART_PILL_BG: Record<number, string> = {
   6: 'bg-chart-6', 7: 'bg-chart-7', 8: 'bg-chart-8', 9: 'bg-chart-9', 10: 'bg-chart-10',
 }
 
-export function EnvPills({pills}: {pills: readonly EnvPill[]}) {
+export function EnvPills({pills}: Readonly<{pills: readonly EnvPill[]}>) {
   return (
     <span className="flex flex-wrap gap-1">
       {pills.map((pill) => (
@@ -142,7 +142,7 @@ export function EnvPills({pills}: {pills: readonly EnvPill[]}) {
   )
 }
 
-export function MetaChip({children}: {children: ReactNode}) {
+export function MetaChip({children}: Readonly<{children: ReactNode}>) {
   return (
     <span className="inline-flex items-center gap-1 rounded border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
       {children}
@@ -151,7 +151,7 @@ export function MetaChip({children}: {children: ReactNode}) {
 }
 
 /** Soft info callout used under dependency / span-breakdown panels. */
-export function InfoCallout({children}: {children: ReactNode}) {
+export function InfoCallout({children}: Readonly<{children: ReactNode}>) {
   return (
     <div className="flex items-start gap-2 rounded-lg border border-info-border bg-info-bg/50 px-3 py-2.5 text-sm">
       <Info className="mt-0.5 h-4 w-4 shrink-0 text-info-fg" />
@@ -176,12 +176,12 @@ export function MeterBar({
   level,
   value,
   className,
-}: {
+}: Readonly<{
   pct: number
   level: Severity
   value: string
   className?: string
-}) {
+}>) {
   return (
     <div className={cn('flex items-center justify-end gap-2', className)}>
       <span className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
@@ -195,7 +195,7 @@ export function MeterBar({
   )
 }
 
-export function ApdexHeat({value, tone}: {value: string; tone: StatusTone}) {
+export function ApdexHeat({value, tone}: Readonly<{value: string; tone: StatusTone}>) {
   return (
     <span className={cn('inline-block rounded px-2 py-0.5 font-mono text-xs tabular-nums', apdexHeatClass(tone))}>
       {value}
@@ -204,7 +204,7 @@ export function ApdexHeat({value, tone}: {value: string; tone: StatusTone}) {
 }
 
 /** Horizontal label / track / value gauge rows (p95 by resource, pod memory…). */
-export function BarGauge({rows}: {rows: readonly GaugeRow[]}) {
+export function BarGauge({rows}: Readonly<{rows: readonly GaugeRow[]}>) {
   return (
     <div className="flex flex-col gap-2">
       {rows.map((row) => (
@@ -230,7 +230,7 @@ export function BarGauge({rows}: {rows: readonly GaugeRow[]}) {
 // Sparkline
 // ---------------------------------------------------------------------------
 
-export function Sparkline({values, className}: {values: readonly number[]; className?: string}) {
+export function Sparkline({values, className}: Readonly<{values: readonly number[]; className?: string}>) {
   const width = 88
   const height = 22
   const points = values
@@ -266,7 +266,7 @@ const TONE_TEXT: Record<StatusTone, string> = {
   accent: 'text-primary',
 }
 
-export function ApmKpiRow({kpis}: {kpis: readonly KpiSpec[]}) {
+export function ApmKpiRow({kpis}: Readonly<{kpis: readonly KpiSpec[]}>) {
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {kpis.map((kpi) => (
@@ -307,12 +307,12 @@ export function LatencyPercentilesChart({
   thresholdMs,
   thresholdLabel,
   deployAt,
-}: {
+}: Readonly<{
   series: readonly LatencyPoint[]
   thresholdMs: number
   thresholdLabel: string
   deployAt: string
-}) {
+}>) {
   const maxY = Math.max(...series.map((point) => point.p99))
   const top = Math.ceil((maxY * 1.05) / 10) * 10
   return (
@@ -365,7 +365,7 @@ const LEGEND_ROWS: ReadonlyArray<{key: keyof Omit<LatencyPoint, 't'>; color: str
   {key: 'p50', color: 'hsl(var(--chart-4))'},
 ]
 
-export function LatencyLegendTable({series}: {series: readonly LatencyPoint[]}) {
+export function LatencyLegendTable({series}: Readonly<{series: readonly LatencyPoint[]}>) {
   return (
     <table className="mt-3 w-full border-collapse font-mono text-xs tabular-nums">
       <thead>
@@ -379,7 +379,7 @@ export function LatencyLegendTable({series}: {series: readonly LatencyPoint[]}) 
       <tbody>
         {LEGEND_ROWS.map((row) => {
           const values = series.map((point) => point[row.key])
-          const last = values[values.length - 1] ?? 0
+          const last = values.at(-1) ?? 0
           return (
             <tr key={row.key}>
               <td className="border-b py-1 pl-0 pr-2 text-left font-sans">
@@ -401,11 +401,11 @@ export function ThroughputChart({
   points,
   deployAt,
   withErrors = false,
-}: {
+}: Readonly<{
   points: readonly ThroughputPoint[]
   deployAt: string
   withErrors?: boolean
-}) {
+}>) {
   return (
     <div className="h-[200px] w-full">
       <ResponsiveContainer width="100%" height="100%" minWidth={0}>
@@ -455,12 +455,12 @@ export function ThroughputChart({
 // Bar histograms (errors/min, latency distribution)
 // ---------------------------------------------------------------------------
 
-export function ErrorBars({bars}: {bars: readonly ErrorBar[]}) {
+export function ErrorBars({bars}: Readonly<{bars: readonly ErrorBar[]}>) {
   return (
     <div className="flex h-[120px] items-end gap-1">
-      {bars.map((bar, index) => (
+      {bars.map((bar) => (
         <span
-          key={index}
+          key={`${bar.level}-${bar.h}`}
           className={cn(
             'min-h-[4px] flex-1 rounded-t-sm',
             bar.level === 'bad' ? 'bg-danger-solid' : 'bg-warning-solid',
@@ -482,11 +482,11 @@ export function LatencyDistribution({
   bars,
   markers,
   axis,
-}: {
+}: Readonly<{
   bars: readonly DistBar[]
   markers: readonly DistMarker[]
   axis: readonly string[]
-}) {
+}>) {
   return (
     <div className="relative">
       <div className="pointer-events-none absolute inset-x-0 bottom-[18px] top-0">
@@ -511,9 +511,9 @@ export function LatencyDistribution({
         ))}
       </div>
       <div className="flex h-[130px] items-end gap-1">
-        {bars.map((bar, index) => (
+        {bars.map((bar) => (
           <span
-            key={index}
+            key={`${bar.band}-${bar.h}`}
             className={cn('min-h-[4px] flex-1 rounded-t-sm', DIST_BAND_BG[bar.band])}
             style={{height: `${bar.h}%`}}
           />
@@ -541,12 +541,12 @@ const WATERFALL_BG: Record<WaterfallTone, string> = {
   error: 'bg-danger-solid',
 }
 
-export function Waterfall({rows}: {rows: readonly WaterfallRow[]}) {
+export function Waterfall({rows}: Readonly<{rows: readonly WaterfallRow[]}>) {
   return (
     <div className="overflow-hidden rounded-lg border text-xs">
-      {rows.map((row, index) => (
+      {rows.map((row) => (
         <div
-          key={index}
+          key={`${row.op}-${row.desc}-${row.left}-${row.width}-${row.label}`}
           className={cn(
             'grid grid-cols-[180px_minmax(0,1fr)] items-center border-b last:border-b-0 sm:grid-cols-[260px_minmax(0,1fr)]',
             row.selected ? 'bg-muted' : 'hover:bg-muted/50',
@@ -583,15 +583,15 @@ export function Waterfall({rows}: {rows: readonly WaterfallRow[]}) {
 // Error list (service Errors tab + resource errors panel)
 // ---------------------------------------------------------------------------
 
-export function ErrorList({errors, showUsers = false}: {errors: readonly ErrorRow[]; showUsers?: boolean}) {
+export function ErrorList({errors, showUsers = false}: Readonly<{errors: readonly ErrorRow[]; showUsers?: boolean}>) {
   if (errors.length === 0) {
     return <p className="px-1 py-6 text-center text-sm text-muted-foreground">No active errors on this surface.</p>
   }
   return (
     <div className="divide-y">
-      {errors.map((error, index) => (
+      {errors.map((error) => (
         <div
-          key={index}
+          key={`${error.severity}-${error.title}-${error.sub}-${error.events}`}
           className={cn(
             'flex items-center gap-3 border-l-[3px] px-3 py-3 transition-colors hover:bg-muted/50',
             errorSeverityBorder(error.severity),
@@ -639,11 +639,11 @@ export function ErrorList({errors, showUsers = false}: {errors: readonly ErrorRo
 // HTTP method chip + status badge (resource tables, traces)
 // ---------------------------------------------------------------------------
 
-export function MethodChip({method, className}: {method: string; className?: string}) {
+export function MethodChip({method, className}: Readonly<{method: string; className?: string}>) {
   return <span className={cn('font-mono text-xs font-semibold text-foreground', className)}>{method}</span>
 }
 
-export function HttpStatusBadge({status}: {status: number}) {
+export function HttpStatusBadge({status}: Readonly<{status: number}>) {
   const ok = status < 400
   return (
     <Badge variant={ok ? 'success' : 'danger'} size="sm">

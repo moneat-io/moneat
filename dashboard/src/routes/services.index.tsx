@@ -249,7 +249,11 @@ function ServicesCatalogPage() {
   )
 }
 
-function SegmentButton({active, onClick, children}: {active: boolean; onClick: () => void; children: ReactNode}) {
+function SegmentButton({
+  active,
+  onClick,
+  children,
+}: Readonly<{active: boolean; onClick: () => void; children: ReactNode}>) {
   return (
     <button
       type="button"
@@ -270,13 +274,13 @@ function SortableHead({
   sort,
   onSort,
   align = 'left',
-}: {
+}: Readonly<{
   label: string
   sortKey: SortKey
   sort: SortState
   onSort: (key: SortKey) => void
   align?: 'left' | 'right'
-}) {
+}>) {
   const active = sort.key === sortKey
   return (
     <TableHead className={cn(align === 'right' && 'text-right')}>

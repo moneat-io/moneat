@@ -147,26 +147,24 @@ export function serviceTypeLabel(type: ServiceType): string {
   return TYPE_LABEL[type] ?? type
 }
 
+const STATUS_BADGE_VARIANT: Record<ServiceStatus, BadgeProps['variant']> = {
+  alerting: 'danger',
+  degraded: 'warning',
+  healthy: 'success',
+}
+
+const STATUS_TONE: Record<ServiceStatus, StatusTone> = {
+  alerting: 'danger',
+  degraded: 'warning',
+  healthy: 'success',
+}
+
 export function statusBadgeVariant(status: ServiceStatus): BadgeProps['variant'] {
-  switch (status) {
-    case 'alerting':
-      return 'danger'
-    case 'degraded':
-      return 'warning'
-    default:
-      return 'success'
-  }
+  return STATUS_BADGE_VARIANT[status]
 }
 
 export function statusTone(status: ServiceStatus): StatusTone {
-  switch (status) {
-    case 'alerting':
-      return 'danger'
-    case 'degraded':
-      return 'warning'
-    default:
-      return 'success'
-  }
+  return STATUS_TONE[status]
 }
 
 export function statusLabel(status: ServiceStatus): string {
