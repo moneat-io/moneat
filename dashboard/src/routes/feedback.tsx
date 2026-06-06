@@ -342,11 +342,27 @@ function FeedbackListItem({
   const avatarColor = getAvatarColor(feedback.name, feedback.contactEmail)
   const sourceLabel = feedbackSourceLabel(feedback.sourceType, feedback.sourceName)
   const replayId = feedback.replayId
+  const handleOpenFeedbackKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) {
+      return
+    }
+
+    if (event.key !== 'Enter' && event.key !== ' ') {
+      return
+    }
+
+    event.preventDefault()
+    onOpenFeedback(feedback.feedbackId)
+  }
 
   return (
     <div
       key={feedback.feedbackId}
+      role="button"
+      tabIndex={0}
+      aria-label={`Open feedback from ${displayName}`}
       onClick={() => onOpenFeedback(feedback.feedbackId)}
+      onKeyDown={handleOpenFeedbackKeyDown}
       className={`cursor-pointer rounded-lg border border-border/60 bg-card hover:bg-accent/50 hover:border-primary/20 transition-all border-l-[3px] ${config.border}`}
     >
       <div className="flex items-start gap-2 p-2">
@@ -423,7 +439,8 @@ function FeedbackListItem({
               </Badge>
             )}
             {replayId && (
-              <span
+              <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation()
                   onOpenReplay(replayId)
@@ -432,7 +449,7 @@ function FeedbackListItem({
               >
                 <Video className="h-2.5 w-2.5" />
                 Replay
-              </span>
+              </button>
             )}
           </div>
         </div>
