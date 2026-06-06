@@ -138,6 +138,23 @@ class ClickHouseClientTest {
     }
 
     @Test
+    fun `executeWithFormat sends default format without rewriting query body`() = runBlocking {
+        val requestQueries = mutableListOf<String?>()
+        val requestBodies = mutableListOf<String>()
+        withClickHouseMockServer({ exchange ->
+            requestQueries.add(exchange.requestURI.rawQuery)
+            requestBodies.add(exchange.requestBody.readBytes().toString(StandardCharsets.UTF_8))
+            exchange.respond(200, "1\n", "text/plain")
+        }) {
+            assertEquals("1\n", ClickHouseClient.executeWithFormat("SELECT 1", "JSONEachRow"))
+        }
+
+        val params = parseQueryParams(requestQueries.single())
+        assertEquals("JSONEachRow", params["default_format"])
+        assertEquals("SELECT 1", requestBodies.single())
+    }
+
+    @Test
     fun `executeWithFormat rejects unsupported format before request`() = runBlocking {
         withClickHouseMockServer({ exchange ->
             exchange.respond(200, "1\n", "text/plain")

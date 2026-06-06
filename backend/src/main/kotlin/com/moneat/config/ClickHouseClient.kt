@@ -118,6 +118,7 @@ object ClickHouseClient {
         query: String,
         span: ISpan? = null,
         queryParameters: Map<String, String> = emptyMap(),
+        defaultFormat: String? = null,
     ): HttpResponse {
         val client = checkNotNull(httpClient) { NOT_INITIALIZED_MESSAGE }
         return if (span != null && Sentry.isEnabled()) {
@@ -126,10 +127,10 @@ object ClickHouseClient {
                 childSpan?.setData("db.name", database)
                 childSpan?.setData("db.statement", query.take(QUERY_LOG_MAX_LEN)) // Truncate long queries
 
-                executePost(client, query, "execute", queryParameters)
+                executePost(client, query, "execute", queryParameters, defaultFormat)
             }
         } else {
-            executePost(client, query, "execute", queryParameters)
+            executePost(client, query, "execute", queryParameters, defaultFormat)
         }
     }
 
@@ -139,6 +140,7 @@ object ClickHouseClient {
         query: String,
         operation: String,
         queryParameters: Map<String, String> = emptyMap(),
+        defaultFormat: String? = null,
     ): HttpResponse {
         val startedAt = System.nanoTime()
         try {
@@ -153,6 +155,7 @@ object ClickHouseClient {
                     require(CLICKHOUSE_PARAMETER_NAME.matches(name)) { "Invalid ClickHouse parameter name: $name" }
                     parameter("param_$name", value)
                 }
+                defaultFormat?.let { format -> parameter("default_format", format) }
                 header("X-ClickHouse-User", user)
                 header("X-ClickHouse-Key", password)
                 contentType(ContentType.Text.Plain)
@@ -198,8 +201,7 @@ object ClickHouseClient {
         span: ISpan? = null,
         queryParameters: Map<String, String> = emptyMap(),
     ): String {
-        val queryWithFormat = queryWithValidatedFormat(query, format)
-        val response = execute(queryWithFormat, span, queryParameters)
+        val response = execute(query, span, queryParameters, defaultFormat = defaultFormatParameter(query, format))
         val body = response.bodyAsText()
         val isError = response.isClickHouseError(body)
         if (isError) {
@@ -222,17 +224,17 @@ object ClickHouseClient {
     ): String =
         executeWithFormat(query, format, null, queryParameters)
 
-    private fun queryWithValidatedFormat(query: String, format: String): String {
+    private fun defaultFormatParameter(query: String, format: String): String? {
         if (query.trimEnd().uppercase(Locale.ROOT).contains("FORMAT") || format.isBlank()) {
-            return query
+            return null
         }
-        return query + clickHouseFormatClause(format)
+        return clickHouseFormatValue(format)
     }
 
-    private fun clickHouseFormatClause(format: String): String =
+    private fun clickHouseFormatValue(format: String): String =
         when (format) {
-            CLICKHOUSE_FORMAT_JSON_EACH_ROW -> " FORMAT JSONEachRow"
-            CLICKHOUSE_FORMAT_TAB_SEPARATED -> " FORMAT TabSeparated"
+            CLICKHOUSE_FORMAT_JSON_EACH_ROW -> CLICKHOUSE_FORMAT_JSON_EACH_ROW
+            CLICKHOUSE_FORMAT_TAB_SEPARATED -> CLICKHOUSE_FORMAT_TAB_SEPARATED
             else -> throw IllegalArgumentException("Unsupported ClickHouse format: $format")
         }
 
