@@ -342,28 +342,11 @@ function FeedbackListItem({
   const avatarColor = getAvatarColor(feedback.name, feedback.contactEmail)
   const sourceLabel = feedbackSourceLabel(feedback.sourceType, feedback.sourceName)
   const replayId = feedback.replayId
-  const handleOpenFeedbackKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.target !== event.currentTarget) {
-      return
-    }
-
-    if (event.key !== 'Enter' && event.key !== ' ') {
-      return
-    }
-
-    event.preventDefault()
-    onOpenFeedback(feedback.feedbackId)
-  }
 
   return (
     <div
       key={feedback.feedbackId}
-      role="button"
-      tabIndex={0}
-      aria-label={`Open feedback from ${displayName}`}
-      onClick={() => onOpenFeedback(feedback.feedbackId)}
-      onKeyDown={handleOpenFeedbackKeyDown}
-      className={`cursor-pointer rounded-lg border border-border/60 bg-card hover:bg-accent/50 hover:border-primary/20 transition-all border-l-[3px] ${config.border}`}
+      className={`rounded-lg border border-border/60 bg-card hover:bg-accent/50 hover:border-primary/20 transition-all border-l-[3px] ${config.border}`}
     >
       <div className="flex items-start gap-2 p-2">
         <div className="flex items-center pt-0.5">
@@ -382,25 +365,32 @@ function FeedbackListItem({
         </Avatar>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 mb-0.5">
-            <span className="font-semibold text-xs truncate">{displayName}</span>
-            {feedback.contactEmail && feedback.name && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Mail className="h-3 w-3 text-muted-foreground/60 shrink-0" />
-                </TooltipTrigger>
-                <TooltipContent>{feedback.contactEmail}</TooltipContent>
-              </Tooltip>
-            )}
-            <span className="text-[11px] text-muted-foreground ml-auto shrink-0 flex items-center gap-0.5">
-              <Clock className="h-2.5 w-2.5" />
-              {formatRelativeTime(feedback.timestamp)}
-            </span>
-          </div>
+          <button
+            type="button"
+            aria-label={`Open feedback from ${displayName}`}
+            onClick={() => onOpenFeedback(feedback.feedbackId)}
+            className="block w-full cursor-pointer text-left"
+          >
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className="font-semibold text-xs truncate">{displayName}</span>
+              {feedback.contactEmail && feedback.name && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Mail className="h-3 w-3 text-muted-foreground/60 shrink-0" />
+                  </TooltipTrigger>
+                  <TooltipContent>{feedback.contactEmail}</TooltipContent>
+                </Tooltip>
+              )}
+              <span className="text-[11px] text-muted-foreground ml-auto shrink-0 flex items-center gap-0.5">
+                <Clock className="h-2.5 w-2.5" />
+                {formatRelativeTime(feedback.timestamp)}
+              </span>
+            </div>
 
-          <p className="text-xs text-foreground/80 line-clamp-2 mb-1.5">
-            {feedback.message || '(No message)'}
-          </p>
+            <p className="text-xs text-foreground/80 line-clamp-2 mb-1.5">
+              {feedback.message || '(No message)'}
+            </p>
+          </button>
 
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge variant={config.badge} size="sm" className="font-medium">
