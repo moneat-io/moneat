@@ -17,7 +17,7 @@
 import {Link} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {Box, HardDrive, Layers3, LayoutGrid, Network, Save, Search, Trash2} from 'lucide-react'
-import {useCallback, useMemo, useState, type ComponentType} from 'react'
+import {useMemo, useState, type ComponentType, type ReactNode} from 'react'
 import {api} from '@/lib/api'
 import type {DdHostResponse} from '@/lib/api/types/hosts'
 import type {DdContainerResponse} from '@/lib/api/types/infrastructure'
@@ -46,6 +46,7 @@ import {
   type InfrastructureFillBy,
   type InfrastructureGroupBy,
   type InfrastructureMapNode,
+  type InfrastructureMapSummary,
   type InfrastructureMapTone,
   type InfrastructureMapViewState,
   type InfrastructureResourceKind,
@@ -212,16 +213,56 @@ type HostDetailDockProps = Readonly<{
   onClose: () => void
 }>
 
+type ServiceMapControlsProps = Readonly<{
+  timeRange: ApmTimeRange
+  env?: string
+  source?: string
+  envOptions: ApmFacetItem[]
+  sourceOptions: ApmFacetItem[]
+  onTimeRangeChange: (timeRange: ApmTimeRange) => void
+  onEnvChange: (env?: string) => void
+  onSourceChange: (source?: string) => void
+}>
+
+type InfrastructureMapControlsProps = Readonly<{
+  viewState: InfrastructureMapViewState
+  groupOptions: Array<Option<InfrastructureGroupBy>>
+  fillOptions: Array<Option<InfrastructureFillBy>>
+  sizeOptions: Array<Option<InfrastructureSizeBy>>
+  onScopeChange: (resourceKind: InfrastructureResourceKind) => void
+  onViewStateChange: (nextViewState: Partial<InfrastructureMapViewState>) => void
+}>
+
+type MonitoringMapBodyProps = Readonly<{
+  isServicesScope: boolean
+  serviceSearchQuery: string
+  serviceTimeRange: ApmTimeRange
+  serviceEnv?: string
+  serviceSource?: string
+  serviceFacetFilters: FacetFilter[]
+  hostmapView: ReturnType<typeof toHostmapView>
+  selectedNode: InfrastructureMapNode | null
+  selectedNodeId: string | null
+  activeViewState: InfrastructureMapViewState
+  summary: InfrastructureMapSummary
+  unhealthyResources: number
+  fillLabel: string
+  containerLimitNotice: string | null
+  isLoading: boolean
+  isError: boolean
+  hasNoResources: boolean
+  hasNoVisibleResources: boolean
+  onSelectNode: (id: string) => void
+  onCloseNode: () => void
+}>
+
 export function MonitoringMap({initialScope = 'services', onScopeChange}: MonitoringMapProps) {
   const queryClient = useQueryClient()
   const {toast} = useToast()
+  const isAuthenticated = api.isAuthenticated()
   const [mapScope, setMapScope] = useState<MonitoringMapScope>(initialScope)
-  const [infraKind, setInfraKind] = useState<InfrastructureResourceKind>(
-    initialScope === 'containers' ? 'containers' : 'hosts',
-  )
-  const [viewState, setViewState] = useState<InfrastructureMapViewState>(
-    initialScope === 'containers' ? DEFAULT_CONTAINER_VIEW : DEFAULT_HOST_VIEW,
-  )
+  const [infraKind, setInfraKind] = useState<InfrastructureResourceKind>(() => getInitialInfrastructureKind(initialScope))
+  const [viewState, setViewState] = useState<InfrastructureMapViewState>(() => getInitialViewState(initialScope))
   const [serviceSearchQuery, setServiceSearchQuery] = useState('')
   const [serviceTimeRange, setServiceTimeRange] = useState<ApmTimeRange>(DEFAULT_SERVICE_TIME_RANGE)
   const [serviceEnv, setServiceEnv] = useState<string | undefined>(undefined)
@@ -240,7 +281,7 @@ export function MonitoringMap({initialScope = 'services', onScopeChange}: Monito
   if (initialScope !== syncedScope) {
     setSyncedScope(initialScope)
     setMapScope(initialScope)
-    if (initialScope !== 'services') setInfraKind(initialScope)
+    if (isInfrastructureScope(initialScope)) setInfraKind(initialScope)
   }
 
   const activeViewState = useMemo(() => {
@@ -251,27 +292,27 @@ export function MonitoringMap({initialScope = 'services', onScopeChange}: Monito
   const hostsQuery = useQuery({
     queryKey: ['hosts'],
     queryFn: () => api.getHosts(),
-    enabled: api.isAuthenticated() && !isServicesScope,
+    enabled: shouldFetchHosts(isAuthenticated, isServicesScope),
     refetchInterval: HOST_REFRESH_MS,
   })
 
   const containersQuery = useQuery({
     queryKey: ['containers', 'map'],
     queryFn: () => api.getContainers({limit: CONTAINER_LIMIT}),
-    enabled: api.isAuthenticated() && activeViewState.resourceKind === 'containers' && !isServicesScope,
+    enabled: shouldFetchContainers(isAuthenticated, isServicesScope, activeViewState.resourceKind),
     refetchInterval: CONTAINER_REFRESH_MS,
   })
 
   const savedViewsQuery = useQuery({
     queryKey: INFRASTRUCTURE_MAP_SAVED_VIEWS_QUERY_KEY,
     queryFn: () => api.getInfrastructureMapSavedViews(),
-    enabled: api.isAuthenticated() && !isServicesScope,
+    enabled: shouldFetchSavedViews(isAuthenticated, isServicesScope),
   })
 
   const serviceFacetsQuery = useQuery({
     queryKey: ['apmServiceMapFacets', serviceTimeRange],
     queryFn: () => api.getApmOverview({timeRange: serviceTimeRange}),
-    enabled: api.isAuthenticated() && isServicesScope,
+    enabled: shouldFetchServiceData(isAuthenticated, isServicesScope),
     staleTime: 60_000,
   })
 
@@ -280,7 +321,7 @@ export function MonitoringMap({initialScope = 'services', onScopeChange}: Monito
   const serviceMapDataQuery = useQuery({
     queryKey: ['apmServiceMap', serviceTimeRange, serviceEnv ?? '', serviceSource ?? ''],
     queryFn: () => api.getApmServiceMap({timeRange: serviceTimeRange, env: serviceEnv, source: serviceSource}),
-    enabled: api.isAuthenticated() && isServicesScope,
+    enabled: shouldFetchServiceData(isAuthenticated, isServicesScope),
     refetchInterval: SERVICE_MAP_REFRESH_MS,
   })
 
@@ -374,22 +415,25 @@ export function MonitoringMap({initialScope = 'services', onScopeChange}: Monito
   const fillOptions = getFillOptions(activeViewState.resourceKind)
   const sizeOptions = getSizeOptions(activeViewState.resourceKind)
   const fillLabel = fillOptions.find((option) => option.value === activeViewState.fillBy)?.label ?? 'Utilization'
-  const isLoading = !isServicesScope && (
-    hostsQuery.isLoading || (activeViewState.resourceKind === 'containers' && containersQuery.isLoading)
-  )
-  const isError = !isServicesScope && (
-    hostsQuery.isError || (activeViewState.resourceKind === 'containers' && containersQuery.isError)
-  )
+  const isLoading = isInfrastructureLoading({
+    isServicesScope,
+    resourceKind: activeViewState.resourceKind,
+    isHostsLoading: hostsQuery.isLoading,
+    isContainersLoading: containersQuery.isLoading,
+  })
+  const isError = isInfrastructureError({
+    isServicesScope,
+    resourceKind: activeViewState.resourceKind,
+    isHostsError: hostsQuery.isError,
+    isContainersError: containersQuery.isError,
+  })
   const unhealthyResources = mapResult.summary.visibleResources - mapResult.summary.healthyResources
   const containerTotalCount = containersQuery.data?.totalCount ?? containers.length
-  const containerLimitNotice =
-    activeViewState.resourceKind === 'containers' && containerTotalCount > CONTAINER_LIMIT
-      ? `Showing first ${CONTAINER_LIMIT} of ${containerTotalCount}`
-      : null
+  const containerLimitNotice = getContainerLimitNotice(activeViewState.resourceKind, containerTotalCount)
   // "No data at all" vs "filtered/searched to nothing" — judged against the
   // unfiltered resource set so facets/search show the right empty message.
   const hasNoResources = resources.length === 0
-  const hasNoVisibleResources = resources.length > 0 && mapResult.summary.visibleResources === 0
+  const hasNoVisibleResources = hasFilteredOutAllResources(resources.length, mapResult.summary.visibleResources)
 
   function updateViewState(nextViewState: Partial<InfrastructureMapViewState>) {
     setViewState(normalizeViewState({...activeViewState, ...nextViewState}))
@@ -438,97 +482,78 @@ export function MonitoringMap({initialScope = 'services', onScopeChange}: Monito
     deleteSavedViewMutation.mutate(selectedSavedViewId)
   }
 
-  const handleSelectNode = useCallback((id: string) => {
+  function handleSelectNode(id: string) {
     setSelectedNodeId((currentId) => (currentId === id ? null : id))
-  }, [])
+  }
 
-  const handleServiceRailChange = useCallback((next: FacetFilter[]) => {
+  function handleServiceRailChange(next: FacetFilter[]) {
     const envFilter = next.find((filter) => filter.key === ENV_FACET_KEY)
     setServiceEnv(envFilter?.value)
     setServiceFacetFilters(next.filter((filter) => filter.key !== ENV_FACET_KEY))
     setSelectedNodeId(null)
-  }, [])
+  }
 
-  const handleInfraRailChange = useCallback((next: FacetFilter[]) => {
+  function handleInfraRailChange(next: FacetFilter[]) {
     setInfraFacetFilters(next)
     setSelectedNodeId(null)
-  }, [])
+  }
 
-  const serviceControls = (
-    <>
-      <MapControlSelect label="Range" value={serviceTimeRange} options={RANGE_OPTIONS} onChange={setServiceTimeRange} />
-      <MapControlSelect
-        label="env"
-        value={serviceEnv ?? ALL_ENVS}
-        options={toScopeOptions(serviceEnvOptions, 'All envs', ALL_ENVS)}
-        onChange={(value) => setServiceEnv(value === ALL_ENVS ? undefined : value)}
-      />
-      {serviceSourceOptions.length > 0 && (
-        <MapControlSelect
-          label="source"
-          value={serviceSource ?? ALL_SOURCES}
-          options={toScopeOptions(serviceSourceOptions, 'All sources', ALL_SOURCES)}
-          onChange={(value) => setServiceSource(value === ALL_SOURCES ? undefined : value)}
-        />
-      )}
-    </>
-  )
-
-  const infraControls = (
-    <>
-      <MapControlSelect
-        label="Kind"
-        value={activeViewState.resourceKind}
-        options={KIND_OPTIONS}
-        onChange={(kind) => applyScope(kind)}
-      />
-      <MapControlSelect
-        label="Group"
-        value={activeViewState.groupBy}
-        options={groupOptions}
-        onChange={(groupBy) => updateViewState({groupBy})}
-      />
-      <MapControlSelect
-        label="Color"
-        value={activeViewState.fillBy}
-        options={fillOptions}
-        onChange={(fillBy) => updateViewState({fillBy})}
-      />
-      <MapControlSelect
-        label="Size"
-        value={activeViewState.sizeBy}
-        options={sizeOptions}
-        onChange={(sizeBy) => updateViewState({sizeBy})}
-      />
-    </>
-  )
+  function handleSearchChange(query: string) {
+    if (isServicesScope) {
+      setServiceSearchQuery(query)
+      return
+    }
+    updateViewState({searchQuery: query})
+  }
 
   return (
     <div className="h-[calc(100vh-var(--header-height,0px)-41px)] min-h-[520px]">
       <MapExplorerShell
-        title={isServicesScope ? 'Service Map' : 'Infrastructure'}
-        icon={(
-          <span className="grid h-6 w-6 place-items-center rounded-md bg-primary/10 text-primary">
-            {isServicesScope ? <Network className="h-3.5 w-3.5" /> : <Layers3 className="h-3.5 w-3.5" />}
-          </span>
-        )}
+        title={getMapTitle(isServicesScope)}
+        icon={<MapScopeIcon isServicesScope={isServicesScope} />}
         modeSwitch={(
           <MapModeSwitch
             ariaLabel="Map mode"
-            value={isServicesScope ? 'services' : 'infrastructure'}
+            value={getMapMode(isServicesScope)}
             options={MODE_OPTIONS}
-            onChange={(mode) => applyScope(mode === 'services' ? 'services' : infraKind)}
+            onChange={(mode) => applyScope(getScopeForMode(mode, infraKind))}
           />
         )}
         search={(
           <MapSearchInput
-            value={isServicesScope ? serviceSearchQuery : activeViewState.searchQuery}
-            onChange={(query) => (isServicesScope ? setServiceSearchQuery(query) : updateViewState({searchQuery: query}))}
-            placeholder={isServicesScope ? 'Search services and dependencies...' : 'Search hosts, images, tags...'}
+            value={getSearchValue(isServicesScope, serviceSearchQuery, activeViewState.searchQuery)}
+            onChange={handleSearchChange}
+            placeholder={getSearchPlaceholder(isServicesScope)}
           />
         )}
-        controls={isServicesScope ? serviceControls : infraControls}
-        actions={isServicesScope ? undefined : (
+        controls={(
+          <MonitoringMapControls
+            isServicesScope={isServicesScope}
+            serviceControls={(
+              <ServiceMapControls
+                timeRange={serviceTimeRange}
+                env={serviceEnv}
+                source={serviceSource}
+                envOptions={serviceEnvOptions}
+                sourceOptions={serviceSourceOptions}
+                onTimeRangeChange={setServiceTimeRange}
+                onEnvChange={setServiceEnv}
+                onSourceChange={setServiceSource}
+              />
+            )}
+            infrastructureControls={(
+              <InfrastructureMapControls
+                viewState={activeViewState}
+                groupOptions={groupOptions}
+                fillOptions={fillOptions}
+                sizeOptions={sizeOptions}
+                onScopeChange={applyScope}
+                onViewStateChange={updateViewState}
+              />
+            )}
+          />
+        )}
+        actions={getInfrastructureActions(isServicesScope, (
           <SavedViewsPopover
             savedViews={savedViews}
             selectedSavedViewId={selectedSavedViewId}
@@ -541,67 +566,243 @@ export function MonitoringMap({initialScope = 'services', onScopeChange}: Monito
             onSaveCurrentView={saveCurrentView}
             onDeleteSelectedView={deleteSelectedView}
           />
-        )}
+        ))}
         rail={(
-          <MapFacetRail
-            sections={isServicesScope ? serviceRailSections : infraRailSections}
-            facetFilters={isServicesScope ? serviceRailFilters : infraFacetFilters}
-            onFacetFiltersChange={isServicesScope ? handleServiceRailChange : handleInfraRailChange}
+          <MonitoringMapRail
+            isServicesScope={isServicesScope}
+            serviceRailSections={serviceRailSections}
+            serviceRailFilters={serviceRailFilters}
+            infraRailSections={infraRailSections}
+            infraFacetFilters={infraFacetFilters}
+            onServiceRailChange={handleServiceRailChange}
+            onInfraRailChange={handleInfraRailChange}
           />
         )}
       >
-        {isServicesScope ? (
-          <ServiceMap
-            className="service-map h-full rounded-none border-0"
-            searchQuery={serviceSearchQuery}
-            timeRange={serviceTimeRange}
-            env={serviceEnv}
-            source={serviceSource}
-            facetFilters={serviceFacetFilters}
-          />
-        ) : (
-          <div className="flex h-full min-h-0 flex-col">
-            <HostmapToolbar
-              resourceNoun={activeViewState.resourceKind}
-              totalResources={mapResult.summary.visibleResources}
-              healthyResources={mapResult.summary.healthyResources}
-              unhealthyResources={unhealthyResources}
-              fillLabel={fillLabel}
-              limitNotice={containerLimitNotice}
-            />
-            <div className="relative flex min-h-0 flex-1">
-              <Hostmap
-                view={hostmapView}
-                selectedId={selectedNodeId}
-                onSelectNode={handleSelectNode}
-                isLoading={isLoading}
-                isEmpty={hasNoResources || hasNoVisibleResources}
-                emptyIcon={getInfraEmptyIcon(hasNoVisibleResources, activeViewState.resourceKind)}
-                emptyTitle={getInfraEmptyTitle(hasNoVisibleResources, activeViewState.resourceKind)}
-                emptyDescription={hasNoVisibleResources
-                  ? 'Adjust search or facets.'
-                  : 'Connect infrastructure telemetry to populate this map.'}
-                fallback={isError ? (
-                  <div className="max-w-sm text-center">
-                    <p className="text-sm font-medium text-muted-foreground">Map data unavailable</p>
-                    <p className="mt-1 text-xs text-muted-foreground/75">
-                      Refresh the page or try again after the telemetry API responds.
-                    </p>
-                  </div>
-                ) : undefined}
-              />
-              {selectedNode && (
-                <HostDetailDock
-                  node={selectedNode}
-                  resourceKind={activeViewState.resourceKind}
-                  onClose={() => setSelectedNodeId(null)}
-                />
-              )}
-            </div>
-          </div>
-        )}
+        <MonitoringMapBody
+          isServicesScope={isServicesScope}
+          serviceSearchQuery={serviceSearchQuery}
+          serviceTimeRange={serviceTimeRange}
+          serviceEnv={serviceEnv}
+          serviceSource={serviceSource}
+          serviceFacetFilters={serviceFacetFilters}
+          hostmapView={hostmapView}
+          selectedNode={selectedNode}
+          selectedNodeId={selectedNodeId}
+          activeViewState={activeViewState}
+          summary={mapResult.summary}
+          unhealthyResources={unhealthyResources}
+          fillLabel={fillLabel}
+          containerLimitNotice={containerLimitNotice}
+          isLoading={isLoading}
+          isError={isError}
+          hasNoResources={hasNoResources}
+          hasNoVisibleResources={hasNoVisibleResources}
+          onSelectNode={handleSelectNode}
+          onCloseNode={() => setSelectedNodeId(null)}
+        />
       </MapExplorerShell>
     </div>
+  )
+}
+
+type MonitoringMapControlsProps = Readonly<{
+  isServicesScope: boolean
+  serviceControls: ReactNode
+  infrastructureControls: ReactNode
+}>
+
+function MonitoringMapControls({
+  isServicesScope,
+  serviceControls,
+  infrastructureControls,
+}: MonitoringMapControlsProps) {
+  return <>{isServicesScope ? serviceControls : infrastructureControls}</>
+}
+
+function ServiceMapControls({
+  timeRange,
+  env,
+  source,
+  envOptions,
+  sourceOptions,
+  onTimeRangeChange,
+  onEnvChange,
+  onSourceChange,
+}: ServiceMapControlsProps) {
+  return (
+    <>
+      <MapControlSelect label="Range" value={timeRange} options={RANGE_OPTIONS} onChange={onTimeRangeChange} />
+      <MapControlSelect
+        label="env"
+        value={env ?? ALL_ENVS}
+        options={toScopeOptions(envOptions, 'All envs', ALL_ENVS)}
+        onChange={(value) => onEnvChange(value === ALL_ENVS ? undefined : value)}
+      />
+      {sourceOptions.length > 0 && (
+        <MapControlSelect
+          label="source"
+          value={source ?? ALL_SOURCES}
+          options={toScopeOptions(sourceOptions, 'All sources', ALL_SOURCES)}
+          onChange={(value) => onSourceChange(value === ALL_SOURCES ? undefined : value)}
+        />
+      )}
+    </>
+  )
+}
+
+function InfrastructureMapControls({
+  viewState,
+  groupOptions,
+  fillOptions,
+  sizeOptions,
+  onScopeChange,
+  onViewStateChange,
+}: InfrastructureMapControlsProps) {
+  return (
+    <>
+      <MapControlSelect label="Kind" value={viewState.resourceKind} options={KIND_OPTIONS} onChange={onScopeChange} />
+      <MapControlSelect
+        label="Group"
+        value={viewState.groupBy}
+        options={groupOptions}
+        onChange={(groupBy) => onViewStateChange({groupBy})}
+      />
+      <MapControlSelect
+        label="Color"
+        value={viewState.fillBy}
+        options={fillOptions}
+        onChange={(fillBy) => onViewStateChange({fillBy})}
+      />
+      <MapControlSelect
+        label="Size"
+        value={viewState.sizeBy}
+        options={sizeOptions}
+        onChange={(sizeBy) => onViewStateChange({sizeBy})}
+      />
+    </>
+  )
+}
+
+type MonitoringMapRailProps = Readonly<{
+  isServicesScope: boolean
+  serviceRailSections: FacetRailSection[]
+  serviceRailFilters: FacetFilter[]
+  infraRailSections: FacetRailSection[]
+  infraFacetFilters: FacetFilter[]
+  onServiceRailChange: (filters: FacetFilter[]) => void
+  onInfraRailChange: (filters: FacetFilter[]) => void
+}>
+
+function MonitoringMapRail({
+  isServicesScope,
+  serviceRailSections,
+  serviceRailFilters,
+  infraRailSections,
+  infraFacetFilters,
+  onServiceRailChange,
+  onInfraRailChange,
+}: MonitoringMapRailProps) {
+  if (isServicesScope) {
+    return (
+      <MapFacetRail
+        sections={serviceRailSections}
+        facetFilters={serviceRailFilters}
+        onFacetFiltersChange={onServiceRailChange}
+      />
+    )
+  }
+
+  return (
+    <MapFacetRail
+      sections={infraRailSections}
+      facetFilters={infraFacetFilters}
+      onFacetFiltersChange={onInfraRailChange}
+    />
+  )
+}
+
+function MonitoringMapBody({
+  isServicesScope,
+  serviceSearchQuery,
+  serviceTimeRange,
+  serviceEnv,
+  serviceSource,
+  serviceFacetFilters,
+  hostmapView,
+  selectedNode,
+  selectedNodeId,
+  activeViewState,
+  summary,
+  unhealthyResources,
+  fillLabel,
+  containerLimitNotice,
+  isLoading,
+  isError,
+  hasNoResources,
+  hasNoVisibleResources,
+  onSelectNode,
+  onCloseNode,
+}: MonitoringMapBodyProps) {
+  if (isServicesScope) {
+    return (
+      <ServiceMap
+        className="service-map h-full rounded-none border-0"
+        searchQuery={serviceSearchQuery}
+        timeRange={serviceTimeRange}
+        env={serviceEnv}
+        source={serviceSource}
+        facetFilters={serviceFacetFilters}
+      />
+    )
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <HostmapToolbar
+        resourceNoun={activeViewState.resourceKind}
+        totalResources={summary.visibleResources}
+        healthyResources={summary.healthyResources}
+        unhealthyResources={unhealthyResources}
+        fillLabel={fillLabel}
+        limitNotice={containerLimitNotice}
+      />
+      <div className="relative flex min-h-0 flex-1">
+        <Hostmap
+          view={hostmapView}
+          selectedId={selectedNodeId}
+          onSelectNode={onSelectNode}
+          isLoading={isLoading}
+          isEmpty={isHostmapEmpty(hasNoResources, hasNoVisibleResources)}
+          emptyIcon={getInfraEmptyIcon(hasNoVisibleResources, activeViewState.resourceKind)}
+          emptyTitle={getInfraEmptyTitle(hasNoVisibleResources, activeViewState.resourceKind)}
+          emptyDescription={getInfraEmptyDescription(hasNoVisibleResources)}
+          fallback={getInfrastructureFallback(isError)}
+        />
+        {selectedNode && (
+          <HostDetailDock node={selectedNode} resourceKind={activeViewState.resourceKind} onClose={onCloseNode} />
+        )}
+      </div>
+    </div>
+  )
+}
+
+function MapDataUnavailable() {
+  return (
+    <div className="max-w-sm text-center">
+      <p className="text-sm font-medium text-muted-foreground">Map data unavailable</p>
+      <p className="mt-1 text-xs text-muted-foreground/75">
+        Refresh the page or try again after the telemetry API responds.
+      </p>
+    </div>
+  )
+}
+
+function MapScopeIcon({isServicesScope}: Readonly<{isServicesScope: boolean}>) {
+  return (
+    <span className="grid h-6 w-6 place-items-center rounded-md bg-primary/10 text-primary">
+      {isServicesScope ? <Network className="h-3.5 w-3.5" /> : <Layers3 className="h-3.5 w-3.5" />}
+    </span>
   )
 }
 
@@ -696,7 +897,7 @@ function SavedViewsPopover({
 }
 
 function HostDetailDock({node, resourceKind, onClose}: HostDetailDockProps) {
-  const isHost = resourceKind === 'hosts' && node.hostId != null
+  const isHost = resourceKind === 'hosts' && node.hostId !== undefined
 
   // Live system gauges + top processes are host-only (containers carry their own
   // metrics in node.details, and getProcesses/getHostMetrics are host-scoped).
@@ -718,7 +919,7 @@ function HostDetailDock({node, resourceKind, onClose}: HostDetailDockProps) {
   const tagEntries = Object.entries(node.tags)
 
   const points = metricsQuery.data?.data_points ?? []
-  const latest = points.length > 0 ? points[points.length - 1] : undefined
+  const latest = points.at(-1)
   const netBytes = latest ? (latest.net_recv_bytes ?? 0) + (latest.net_sent_bytes ?? 0) : undefined
 
   return (
@@ -737,8 +938,8 @@ function HostDetailDock({node, resourceKind, onClose}: HostDetailDockProps) {
           <BarGauge label="Disk" percent={latest?.disk_percent} value={formatPercentValue(latest?.disk_percent)} />
           <BarGauge
             label="Net"
-            percent={netBytes != null ? Math.min(100, (netBytes / NET_FULL_SCALE_BYTES) * 100) : undefined}
-            value={netBytes != null ? formatBytesShort(netBytes) : '—'}
+            percent={getNetPercent(netBytes)}
+            value={formatOptionalBytesShort(netBytes)}
           />
         </div>
       ) : (
@@ -786,7 +987,7 @@ function HostDetailDock({node, resourceKind, onClose}: HostDetailDockProps) {
         </div>
       )}
 
-      {node.hostId != null && (
+      {node.hostId !== undefined && (
         <Button asChild size="sm" className="mt-1 h-8 w-full justify-center">
           <Link to="/monitoring/hosts/$hostId" params={{hostId: String(node.hostId)}}>
             Open host
@@ -817,7 +1018,18 @@ function gaugeColor(percent: number): string {
 }
 
 function formatPercentValue(value?: number): string {
-  return value != null ? `${Math.round(value)}%` : '—'
+  if (value === undefined) return '—'
+  return `${Math.round(value)}%`
+}
+
+function getNetPercent(bytes?: number): number | undefined {
+  if (bytes === undefined) return undefined
+  return Math.min(100, (bytes / NET_FULL_SCALE_BYTES) * 100)
+}
+
+function formatOptionalBytesShort(bytes?: number): string {
+  if (bytes === undefined) return '—'
+  return formatBytesShort(bytes)
 }
 
 function formatBytesShort(bytes: number): string {
@@ -829,6 +1041,131 @@ function formatBytesShort(bytes: number): string {
 
 function getGroupOptions(resourceKind: InfrastructureResourceKind): Array<Option<InfrastructureGroupBy>> {
   return resourceKind === 'containers' ? CONTAINER_GROUP_OPTIONS : HOST_GROUP_OPTIONS
+}
+
+function getInitialInfrastructureKind(scope: MonitoringMapScope): InfrastructureResourceKind {
+  if (scope === 'containers') return 'containers'
+  return 'hosts'
+}
+
+function getInitialViewState(scope: MonitoringMapScope): InfrastructureMapViewState {
+  if (scope === 'containers') return DEFAULT_CONTAINER_VIEW
+  return DEFAULT_HOST_VIEW
+}
+
+function isInfrastructureScope(scope: MonitoringMapScope): scope is InfrastructureResourceKind {
+  return scope === 'hosts' || scope === 'containers'
+}
+
+function shouldFetchHosts(isAuthenticated: boolean, isServicesScope: boolean): boolean {
+  return isAuthenticated && isServicesScope === false
+}
+
+function shouldFetchContainers(
+  isAuthenticated: boolean,
+  isServicesScope: boolean,
+  resourceKind: InfrastructureResourceKind,
+): boolean {
+  return isAuthenticated && isServicesScope === false && resourceKind === 'containers'
+}
+
+function shouldFetchSavedViews(isAuthenticated: boolean, isServicesScope: boolean): boolean {
+  return isAuthenticated && isServicesScope === false
+}
+
+function shouldFetchServiceData(isAuthenticated: boolean, isServicesScope: boolean): boolean {
+  return isAuthenticated && isServicesScope
+}
+
+type InfrastructureLoadingOptions = Readonly<{
+  isServicesScope: boolean
+  resourceKind: InfrastructureResourceKind
+  isHostsLoading: boolean
+  isContainersLoading: boolean
+}>
+
+function isInfrastructureLoading({
+  isServicesScope,
+  resourceKind,
+  isHostsLoading,
+  isContainersLoading,
+}: InfrastructureLoadingOptions): boolean {
+  if (isServicesScope) return false
+  if (resourceKind === 'containers') return isHostsLoading || isContainersLoading
+  return isHostsLoading
+}
+
+type InfrastructureErrorOptions = Readonly<{
+  isServicesScope: boolean
+  resourceKind: InfrastructureResourceKind
+  isHostsError: boolean
+  isContainersError: boolean
+}>
+
+function isInfrastructureError({
+  isServicesScope,
+  resourceKind,
+  isHostsError,
+  isContainersError,
+}: InfrastructureErrorOptions): boolean {
+  if (isServicesScope) return false
+  if (resourceKind === 'containers') return isHostsError || isContainersError
+  return isHostsError
+}
+
+function getContainerLimitNotice(resourceKind: InfrastructureResourceKind, totalCount: number): string | null {
+  if (resourceKind === 'containers' && totalCount > CONTAINER_LIMIT) {
+    return `Showing first ${CONTAINER_LIMIT} of ${totalCount}`
+  }
+  return null
+}
+
+function hasFilteredOutAllResources(totalResources: number, visibleResources: number): boolean {
+  return totalResources > 0 && visibleResources === 0
+}
+
+function getMapTitle(isServicesScope: boolean): string {
+  if (isServicesScope) return 'Service Map'
+  return 'Infrastructure'
+}
+
+function getMapMode(isServicesScope: boolean): MonitoringMapMode {
+  if (isServicesScope) return 'services'
+  return 'infrastructure'
+}
+
+function getScopeForMode(mode: MonitoringMapMode, infraKind: InfrastructureResourceKind): MonitoringMapScope {
+  if (mode === 'services') return 'services'
+  return infraKind
+}
+
+function getSearchValue(isServicesScope: boolean, serviceSearchQuery: string, infrastructureSearchQuery: string): string {
+  if (isServicesScope) return serviceSearchQuery
+  return infrastructureSearchQuery
+}
+
+function getSearchPlaceholder(isServicesScope: boolean): string {
+  if (isServicesScope) return 'Search services and dependencies...'
+  return 'Search hosts, images, tags...'
+}
+
+function getInfrastructureActions(isServicesScope: boolean, actions: ReactNode): ReactNode | undefined {
+  if (isServicesScope) return undefined
+  return actions
+}
+
+function isHostmapEmpty(hasNoResources: boolean, hasNoVisibleResources: boolean): boolean {
+  return hasNoResources || hasNoVisibleResources
+}
+
+function getInfraEmptyDescription(hasNoVisibleResources: boolean): string {
+  if (hasNoVisibleResources) return 'Adjust search or facets.'
+  return 'Connect infrastructure telemetry to populate this map.'
+}
+
+function getInfrastructureFallback(isError: boolean): ReactNode | undefined {
+  if (isError) return <MapDataUnavailable />
+  return undefined
 }
 
 function getFillOptions(resourceKind: InfrastructureResourceKind): Array<Option<InfrastructureFillBy>> {

@@ -85,7 +85,7 @@ describe('MapFacetRail', () => {
       />,
     )
 
-    expect(screen.getByRole('checkbox', {name: 'up'})).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('checkbox', {name: 'up'})).toBeChecked()
     await user.click(screen.getByRole('checkbox', {name: 'up'}))
 
     expect(onChange).toHaveBeenCalledWith([])

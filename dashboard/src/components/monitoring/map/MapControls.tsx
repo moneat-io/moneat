@@ -20,18 +20,18 @@ import {Search} from 'lucide-react'
 import {cn} from '@/lib/utils'
 import {Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 
-export interface SegmentedOption<TValue extends string> {
+export type SegmentedOption<TValue extends string> = Readonly<{
   value: TValue
   label: string
   icon: ComponentType<{className?: string}>
-}
+}>
 
-export interface MapModeSwitchProps<TValue extends string> {
+export type MapModeSwitchProps<TValue extends string> = Readonly<{
   value: TValue
   options: ReadonlyArray<SegmentedOption<TValue>>
   onChange: (value: TValue) => void
   ariaLabel: string
-}
+}>
 
 /**
  * The mockup's `.seg` segmented control: a pill group that sits immediately
@@ -71,17 +71,17 @@ export function MapModeSwitch<TValue extends string>({
   )
 }
 
-export interface MapControlOption<TValue extends string> {
+export type MapControlOption<TValue extends string> = Readonly<{
   value: TValue
   label: string
-}
+}>
 
-export interface MapControlSelectProps<TValue extends string> {
+export type MapControlSelectProps<TValue extends string> = Readonly<{
   label: string
   value: TValue
   options: ReadonlyArray<MapControlOption<TValue>>
   onChange: (value: TValue) => void
-}
+}>
 
 /**
  * The mockup's `.ctl`: a compact inline dropdown reading `<label> <value> ⌄`,
@@ -116,11 +116,11 @@ export function MapControlSelect<TValue extends string>({
   )
 }
 
-export interface MapSearchInputProps {
+export type MapSearchInputProps = Readonly<{
   value: string
   onChange: (value: string) => void
   placeholder: string
-}
+}>
 
 /**
  * The mockup's `.search`: a single compact, inset search field that fills the

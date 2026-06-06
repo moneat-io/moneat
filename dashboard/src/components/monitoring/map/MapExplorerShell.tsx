@@ -18,7 +18,7 @@ import type {ReactNode} from 'react'
 
 import {cn} from '@/lib/utils'
 
-export interface MapExplorerShellProps {
+export type MapExplorerShellProps = Readonly<{
   icon?: ReactNode
   title: string
   /** Segmented mode switch, rendered immediately left of the search box. */
@@ -33,7 +33,7 @@ export interface MapExplorerShellProps {
   rail?: ReactNode
   children: ReactNode
   className?: string
-}
+}>
 
 /**
  * The monitoring-map explorer chrome, rebuilt to the mockup: one dense header

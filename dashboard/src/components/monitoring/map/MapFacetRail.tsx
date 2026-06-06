@@ -31,12 +31,12 @@ function formatFacetCount(n: number): string {
   return String(n)
 }
 
-export interface MapFacetRailProps {
+export type MapFacetRailProps = Readonly<{
   sections: readonly FacetRailSection[]
   facetFilters: FacetFilter[]
   onFacetFiltersChange: (filters: FacetFilter[]) => void
   className?: string
-}
+}>
 
 /**
  * The map's filter rail, rebuilt to the monitoring-map mockup: a dense column of
@@ -82,11 +82,11 @@ export function MapFacetRail({sections, facetFilters, onFacetFiltersChange, clas
   )
 }
 
-interface MapRailSectionProps {
+type MapRailSectionProps = Readonly<{
   section: FacetRailSection
   facetFilters: FacetFilter[]
   onFacetFiltersChange: (filters: FacetFilter[]) => void
-}
+}>
 
 function MapRailSection({section, facetFilters, onFacetFiltersChange}: MapRailSectionProps) {
   const {key, label, color, singleSelect, options} = section
@@ -128,20 +128,23 @@ function MapRailSection({section, facetFilters, onFacetFiltersChange}: MapRailSe
             const on = isOn(item.value)
             const display = item.label ?? item.value
             return (
-              <button
+              <label
                 key={item.value}
-                type="button"
-                role="checkbox"
-                aria-checked={on}
-                aria-label={display}
-                onClick={() => toggle(item.value)}
                 title={display}
                 className={cn(
-                  'flex w-full items-center gap-2 rounded-sm px-1.5 py-1 text-left text-xs transition-colors hover:bg-accent/50',
+                  'flex w-full cursor-pointer items-center gap-2 rounded-sm px-1.5 py-1 text-left text-xs transition-colors hover:bg-accent/50 focus-within:ring-1 focus-within:ring-ring',
                   on && 'bg-primary/10',
                 )}
               >
+                <input
+                  type="checkbox"
+                  checked={on}
+                  onChange={() => toggle(item.value)}
+                  aria-label={display}
+                  className="sr-only"
+                />
                 <span
+                  aria-hidden
                   className={cn(
                     'grid h-3.5 w-3.5 shrink-0 place-items-center rounded-[3px] border',
                     on ? 'border-primary bg-primary text-primary-foreground' : 'border-border',
@@ -155,7 +158,7 @@ function MapRailSection({section, facetFilters, onFacetFiltersChange}: MapRailSe
                     {formatFacetCount(item.count)}
                   </span>
                 )}
-              </button>
+              </label>
             )
           })}
 

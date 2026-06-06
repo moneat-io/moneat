@@ -21,14 +21,14 @@ import {AlertTriangle} from 'lucide-react'
 const HEAT_GRADIENT =
   'linear-gradient(90deg, hsl(var(--success-solid)), hsl(var(--warning-solid)), hsl(var(--danger-solid)))'
 
-export interface HostmapToolbarProps {
+export type HostmapToolbarProps = Readonly<{
   resourceNoun: string
   totalResources: number
   healthyResources: number
   unhealthyResources: number
   fillLabel: string
   limitNotice?: string | null
-}
+}>
 
 /**
  * The thin strip above the hostmap (mockup `.toolbar`): a mono count summary on
@@ -74,7 +74,7 @@ export function HostmapToolbar({
         <span className="text-muted-foreground/70">high</span>
         <span className="ml-2 inline-flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-sm bg-muted-foreground/40" aria-hidden />
-          no data
+          <span>no data</span>
         </span>
       </span>
     </div>
