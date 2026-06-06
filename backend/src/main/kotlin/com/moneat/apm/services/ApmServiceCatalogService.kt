@@ -1620,9 +1620,9 @@ private fun sourceLabel(source: String): String =
 private fun inferServiceType(serviceName: String, spanType: String): String {
     val combined = "$serviceName $spanType".lowercase()
     return when {
-        listOf("postgres", "mysql", "mongo", "db", "sql").any { token -> token in combined } -> "db"
-        listOf("redis", "cache", "memcached").any { token -> token in combined } -> "cache"
-        listOf("worker", "queue", "consumer", "job").any { token -> token in combined } -> "worker"
+        listOf("postgres", "mysql", "mongo", "db", "sql").any { marker -> marker in combined } -> "db"
+        listOf("redis", "cache", "memcached").any { marker -> marker in combined } -> "cache"
+        listOf("worker", "queue", "consumer", "job").any { marker -> marker in combined } -> "worker"
         else -> "web"
     }
 }
@@ -1734,7 +1734,7 @@ private fun ratioLabelToDouble(label: String): Double =
 
 private fun errorSeverity(errorType: String, message: String, statusCode: Int): String {
     val combined = "$errorType $message".lowercase()
-    val hasFatalText = listOf("fatal", "panic", "crash").any { token -> token in combined }
+    val hasFatalText = listOf("fatal", "panic", "crash").any { marker -> marker in combined }
     return when {
         statusCode >= HTTP_SERVER_ERROR_STATUS || hasFatalText -> "fatal"
         statusCode in 400 until HTTP_SERVER_ERROR_STATUS || "warn" in combined -> "warn"

@@ -91,12 +91,12 @@ class ApmServiceRoutesTest {
             routing { apmServiceDashboardRoutes() }
         }
 
-        val token = RouteTestSupport.createToken(userId = 1, orgId = 42)
+        val credential = RouteTestSupport.createToken(userId = 1, orgId = 42)
         val response = client.get(
             "/v1/services?timeRange=6h&env=%20production%20&source=otel&search=%20checkout%20" +
                 "&limit=999&offset=-3"
         ) {
-            withAuth(token)
+            withAuth(credential)
         }
 
         assertEquals(HttpStatusCode.OK, response.status)
@@ -112,15 +112,15 @@ class ApmServiceRoutesTest {
     }
 
     @Test
-    fun `GET v1 services rejects token without organization`() = testApplication {
+    fun `GET v1 services rejects credential without organization`() = testApplication {
         application {
             with(RouteTestSupport) { installJwtAuth() }
             routing { apmServiceDashboardRoutes() }
         }
 
-        val token = RouteTestSupport.createToken(userId = 1)
+        val credential = RouteTestSupport.createToken(userId = 1)
         val response = client.get("/v1/services") {
-            withAuth(token)
+            withAuth(credential)
         }
 
         assertEquals(HttpStatusCode.Unauthorized, response.status)
@@ -134,12 +134,12 @@ class ApmServiceRoutesTest {
             routing { apmServiceDashboardRoutes() }
         }
 
-        val token = RouteTestSupport.createToken(userId = 1, orgId = 42)
+        val credential = RouteTestSupport.createToken(userId = 1, orgId = 42)
         val badRange = client.get("/v1/services?timeRange=bad") {
-            withAuth(token)
+            withAuth(credential)
         }
         val badFilter = client.get("/v1/services?env=${"e".repeat(201)}") {
-            withAuth(token)
+            withAuth(credential)
         }
 
         assertEquals(HttpStatusCode.BadRequest, badRange.status)
@@ -155,9 +155,9 @@ class ApmServiceRoutesTest {
             routing { apmServiceDashboardRoutes() }
         }
 
-        val token = RouteTestSupport.createToken(userId = 1, orgId = 42)
+        val credential = RouteTestSupport.createToken(userId = 1, orgId = 42)
         val response = client.get("/v1/services/${"s".repeat(201)}") {
-            withAuth(token)
+            withAuth(credential)
         }
 
         assertEquals(HttpStatusCode.BadRequest, response.status)
@@ -173,9 +173,9 @@ class ApmServiceRoutesTest {
             routing { apmServiceDashboardRoutes() }
         }
 
-        val token = RouteTestSupport.createToken(userId = 1, orgId = 42)
+        val credential = RouteTestSupport.createToken(userId = 1, orgId = 42)
         val response = client.get("/v1/services/checkout-api?range=24h") {
-            withAuth(token)
+            withAuth(credential)
         }
 
         assertEquals(HttpStatusCode.NotFound, response.status)
@@ -195,12 +195,12 @@ class ApmServiceRoutesTest {
             routing { apmServiceDashboardRoutes() }
         }
 
-        val token = RouteTestSupport.createToken(userId = 1, orgId = 42)
+        val credential = RouteTestSupport.createToken(userId = 1, orgId = 42)
         val blankResource = client.get("/v1/services/checkout-api/resources/%20") {
-            withAuth(token)
+            withAuth(credential)
         }
         val missingResource = client.get("/v1/services/checkout-api/resources/GET%20%2Fcheckout") {
-            withAuth(token)
+            withAuth(credential)
         }
 
         assertEquals(HttpStatusCode.BadRequest, blankResource.status)
@@ -222,15 +222,15 @@ class ApmServiceRoutesTest {
             routing { apmServiceDashboardRoutes() }
         }
 
-        val token = RouteTestSupport.createToken(userId = 1, orgId = 42)
+        val credential = RouteTestSupport.createToken(userId = 1, orgId = 42)
         val ok = client.get("/v1/services/map?range=1h&env=prod&source=otel") {
-            withAuth(token)
+            withAuth(credential)
         }
         val badRange = client.get("/v1/services/map?range=bad") {
-            withAuth(token)
+            withAuth(credential)
         }
         val badFilter = client.get("/v1/services/map?source=${"s".repeat(201)}") {
-            withAuth(token)
+            withAuth(credential)
         }
 
         assertEquals(HttpStatusCode.OK, ok.status)
@@ -259,12 +259,12 @@ class ApmServiceRoutesTest {
             routing { apmServiceDashboardRoutes() }
         }
 
-        val token = RouteTestSupport.createToken(userId = 1, orgId = 42)
+        val credential = RouteTestSupport.createToken(userId = 1, orgId = 42)
         val ok = client.get("/v1/services/checkout-api/latency?timeRange=90d&env=prod&source=otel") {
-            withAuth(token)
+            withAuth(credential)
         }
         val badService = client.get("/v1/services/%20/latency") {
-            withAuth(token)
+            withAuth(credential)
         }
 
         assertEquals(HttpStatusCode.OK, ok.status)
