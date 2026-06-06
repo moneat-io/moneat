@@ -40,6 +40,8 @@ import com.moneat.datadog.models.DdApmServiceFacet
 import com.moneat.datadog.models.DdApmServiceHealthItem
 import com.moneat.datadog.models.DdResourceStatsItem
 import com.moneat.datadog.models.DdResourceStatsResponse
+import com.moneat.datadog.models.DdServiceEdge
+import com.moneat.datadog.models.DdServiceLatencyResponse
 import com.moneat.datadog.models.DdServiceMapEntry
 import com.moneat.datadog.models.DdServiceMapResponse
 import com.moneat.datadog.models.DdSpan
@@ -92,6 +94,8 @@ private const val APM_ERROR_GROUPS_TABLE = "apm_error_groups_hourly"
 private const val APM_RESOURCE_STATS_TABLE = "apm_resource_stats_hourly"
 private const val APM_SERVICE_STATS_TABLE = "apm_service_stats_hourly"
 private const val APM_SERVICE_EDGES_TABLE = "apm_service_edges_hourly"
+private const val SERVICE_MAP_SERVICE_LIMIT = 100
+private const val SERVICE_MAP_EDGE_LIMIT = 500
 private const val MAX_META_VALUE_LENGTH = 5000
 private const val DEFAULT_QUERY_LIMIT = 50
 private const val MAX_QUERY_LIMIT = 200
@@ -973,86 +977,142 @@ object TraceIngestionService {
 
     suspend fun getServiceMap(
         organizationId: Int,
+        timeRange: DdApmQueryTimeRange = defaultApmQueryTimeRange,
+        env: String? = null,
+        source: String? = null,
         parentSpan: ISpan? = null,
     ): DdServiceMapResponse {
-        val query = """
+        val orgClause = ClickHouseQueryUtils.orgIdClause(organizationId.toLong())
+        val windowClause = timeRange.bucketStartClause()
+        val filterClause = serviceMapFilterClause(env, source)
+
+        val statsQuery = """
             SELECT
                 service,
                 sum(span_count) as span_count,
                 sum(error_count) as error_count,
                 if(sum(duration_count) = 0, 0, sum(duration_sum) / sum(duration_count)) as avg_duration_ns
             FROM `$clickhouseDb`.$APM_SERVICE_STATS_TABLE
-            WHERE ${ClickHouseQueryUtils.orgIdClause(organizationId.toLong())}
-              AND bucket_start >= toStartOfHour(now() - INTERVAL 1 HOUR)
+            WHERE $orgClause
+              AND $windowClause$filterClause
             GROUP BY service
             ORDER BY span_count DESC
-            LIMIT 100
+            LIMIT $SERVICE_MAP_SERVICE_LIMIT
             FORMAT JSONEachRow
         """.trimIndent()
+        val services = parseServiceMapStats(executeDashboardQuery(statsQuery, "", parentSpan))
 
-        val result = executeDashboardQuery(query, "", parentSpan)
-        val services = if (result.isBlank()) {
-            emptyList()
-        } else {
-            result.trim().lines()
-                .filter { it.isNotBlank() }
-                .mapNotNull { line ->
-                    val obj = parseRowOrNull(line) ?: return@mapNotNull null
-                    DdServiceMapEntry(
-                        service = obj["service"]!!
-                            .jsonPrimitive.content,
-                        spanCount = obj["span_count"]!!
-                            .jsonPrimitive.long,
-                        errorCount = obj["error_count"]!!
-                            .jsonPrimitive.long,
-                        avgDurationNs = obj["avg_duration_ns"]!!
-                            .jsonPrimitive.double,
-                        callsTo = emptyList(),
-                    )
-                }
-        }
-
-        // Build service relationships from parent-child spans
-        val callsQuery = """
+        // Edges carry their own throughput, error, and latency aggregates so the
+        // map can weight and color each dependency, not just draw an arrow.
+        val edgesQuery = """
             SELECT
                 from_service,
-                to_service
+                to_service,
+                sum(call_count) as call_count,
+                sum(error_count) as error_count,
+                if(sum(duration_count) = 0, 0, sum(duration_sum) / sum(duration_count)) as avg_duration_ns
             FROM `$clickhouseDb`.$APM_SERVICE_EDGES_TABLE
-            WHERE ${ClickHouseQueryUtils.orgIdClause(organizationId.toLong())}
-              AND bucket_start >= toStartOfHour(now() - INTERVAL 1 HOUR)
+            WHERE $orgClause
+              AND $windowClause$filterClause
             GROUP BY from_service, to_service
-            HAVING sum(call_count) > 0
-            ORDER BY sum(call_count) DESC
+            -- `call_count` is the SELECT alias (sum(call_count)); reference it directly
+            -- so we don't nest aggregates (sum(sum(...)) -> ILLEGAL_AGGREGATION).
+            HAVING call_count > 0
+            ORDER BY call_count DESC
+            LIMIT $SERVICE_MAP_EDGE_LIMIT
             FORMAT JSONEachRow
         """.trimIndent()
+        val edges = parseServiceMapEdges(executeDashboardQuery(edgesQuery, "", parentSpan))
 
-        val callsResult = executeDashboardQuery(
-            callsQuery,
-            "",
-            parentSpan,
-        )
         val callsMap = mutableMapOf<String, MutableSet<String>>()
-        if (callsResult.isNotBlank()) {
-            callsResult.trim().lines()
-                .filter { it.isNotBlank() }
-                .forEach { line ->
-                    val obj = parseRowOrNull(line) ?: return@forEach
-                    val from = obj["from_service"]!!
-                        .jsonPrimitive.content
-                    val to = obj["to_service"]!!
-                        .jsonPrimitive.content
-                    callsMap.getOrPut(from) { mutableSetOf() }.add(to)
-                }
+        edges.forEach { edge ->
+            callsMap.getOrPut(edge.fromService) { mutableSetOf() }.add(edge.toService)
+        }
+        val enriched = services.map { service ->
+            service.copy(callsTo = callsMap[service.service]?.toList() ?: emptyList())
         }
 
-        val enriched = services.map { svc ->
-            svc.copy(
-                callsTo = callsMap[svc.service]?.toList()
-                    ?: emptyList()
-            )
-        }
+        return DdServiceMapResponse(services = enriched, edges = edges)
+    }
 
-        return DdServiceMapResponse(services = enriched)
+    /**
+     * On-demand trace latency percentiles for a single focused service. This uses
+     * the same finalized/live trace-summary read path as the APM overview so the
+     * detail dock's latency matches the rest of the APM experience.
+     */
+    suspend fun getServiceLatencyPercentiles(
+        organizationId: Int,
+        service: String,
+        timeRange: DdApmQueryTimeRange = defaultApmQueryTimeRange,
+        env: String? = null,
+        source: String? = null,
+        parentSpan: ISpan? = null,
+    ): DdServiceLatencyResponse {
+        val subquery = traceSummarySubquery(
+            organizationId = organizationId,
+            query = DdTraceListQuery(
+                service = service,
+                env = env,
+                source = source,
+                timeRange = timeRange,
+            ),
+        )
+        val query = """
+            SELECT
+                if(count() > 0, toUInt64(quantile(0.50)(duration_ns)), 0) as p50_duration_ns,
+                if(count() > 0, toUInt64(quantile(0.90)(duration_ns)), 0) as p90_duration_ns,
+                if(count() > 0, toUInt64(quantile(0.99)(duration_ns)), 0) as p99_duration_ns,
+                count() as sample_count
+            FROM ($subquery)
+            FORMAT JSONEachRow
+        """.trimIndent()
+        val obj = firstJsonRow(query, parentSpan)
+        return DdServiceLatencyResponse(
+            service = service,
+            p50DurationNs = obj?.longValue("p50_duration_ns") ?: 0,
+            p90DurationNs = obj?.longValue("p90_duration_ns") ?: 0,
+            p99DurationNs = obj?.longValue("p99_duration_ns") ?: 0,
+            sampleCount = obj?.longValue("sample_count") ?: 0,
+        )
+    }
+
+    private fun parseServiceMapStats(result: String): List<DdServiceMapEntry> {
+        if (result.isBlank()) return emptyList()
+        return result.trim().lines()
+            .filter { it.isNotBlank() }
+            .mapNotNull { line ->
+                val obj = parseRowOrNull(line) ?: return@mapNotNull null
+                DdServiceMapEntry(
+                    service = obj["service"]!!.jsonPrimitive.content,
+                    spanCount = obj["span_count"]!!.jsonPrimitive.long,
+                    errorCount = obj["error_count"]!!.jsonPrimitive.long,
+                    avgDurationNs = obj["avg_duration_ns"]!!.jsonPrimitive.double,
+                    callsTo = emptyList(),
+                )
+            }
+    }
+
+    private fun parseServiceMapEdges(result: String): List<DdServiceEdge> {
+        if (result.isBlank()) return emptyList()
+        return result.trim().lines()
+            .filter { it.isNotBlank() }
+            .mapNotNull { line ->
+                val obj = parseRowOrNull(line) ?: return@mapNotNull null
+                DdServiceEdge(
+                    fromService = obj["from_service"]!!.jsonPrimitive.content,
+                    toService = obj["to_service"]!!.jsonPrimitive.content,
+                    callCount = obj["call_count"]!!.jsonPrimitive.long,
+                    errorCount = obj["error_count"]!!.jsonPrimitive.long,
+                    avgDurationNs = obj["avg_duration_ns"]!!.jsonPrimitive.double,
+                )
+            }
+    }
+
+    private fun serviceMapFilterClause(env: String?, source: String?): String {
+        val clauses = mutableListOf<String>()
+        if (!env.isNullOrBlank()) clauses.add("env = '${escapeSql(env)}'")
+        if (!source.isNullOrBlank()) clauses.add("source = '${escapeSql(source)}'")
+        return if (clauses.isEmpty()) "" else " AND " + clauses.joinToString(" AND ")
     }
 
     suspend fun getApmErrors(

@@ -29,6 +29,7 @@ import com.moneat.datadog.models.DatadogProcessPayload
 import com.moneat.datadog.models.DdApiKeys
 import com.moneat.datadog.models.DdApmErrorsResponse
 import com.moneat.datadog.models.DdResourceStatsResponse
+import com.moneat.datadog.models.DdServiceLatencyResponse
 import com.moneat.datadog.models.DdServiceMapResponse
 import com.moneat.datadog.models.DdStatsPayload
 import com.moneat.datadog.models.DdTraceListResponse
@@ -2302,7 +2303,7 @@ class DatadogRoutesExtendedTest {
     fun `GET v1 services map returns 200`() = testApplication {
         val (userId, orgId) = seedUserAndOrg()
         coEvery {
-            TraceIngestionService.getServiceMap(orgId)
+            TraceIngestionService.getServiceMap(any(), any(), any(), any(), any())
         } returns DdServiceMapResponse(emptyList())
         application {
             installAuth()
@@ -2312,6 +2313,87 @@ class DatadogRoutesExtendedTest {
             withAuth(jwtToken(userId, orgId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
+    }
+
+    @Test
+    fun `GET v1 services map forwards scope filters`() = testApplication {
+        val (userId, orgId) = seedUserAndOrg()
+        coEvery {
+            TraceIngestionService.getServiceMap(orgId, any(), "prod", "otel", any())
+        } returns DdServiceMapResponse(emptyList())
+        application {
+            installAuth()
+            routing { traceDashboardRoutes() }
+        }
+        val response = client.get("/v1/services/map?timeRange=6h&env=prod&source=otel") {
+            withAuth(jwtToken(userId, orgId))
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        coVerify(exactly = 1) {
+            TraceIngestionService.getServiceMap(orgId, any(), "prod", "otel", any())
+        }
+    }
+
+    @Test
+    fun `GET v1 services map rejects oversized scope filter`() = testApplication {
+        val (userId, orgId) = seedUserAndOrg()
+        application {
+            installAuth()
+            routing { traceDashboardRoutes() }
+        }
+        val response = client.get("/v1/services/map?env=${"p".repeat(201)}") {
+            withAuth(jwtToken(userId, orgId))
+        }
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
+    fun `GET v1 services service latency returns percentiles`() = testApplication {
+        val (userId, orgId) = seedUserAndOrg()
+        coEvery {
+            TraceIngestionService.getServiceLatencyPercentiles(orgId, "checkout", any(), "prod", "otel", any())
+        } returns DdServiceLatencyResponse(
+            service = "checkout",
+            p50DurationNs = 1_000L,
+            p90DurationNs = 5_000L,
+            p99DurationNs = 9_000L,
+            sampleCount = 42L,
+        )
+        application {
+            installAuth()
+            routing { traceDashboardRoutes() }
+        }
+        val response = client.get("/v1/services/checkout/latency?timeRange=24h&env=prod&source=otel") {
+            withAuth(jwtToken(userId, orgId))
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("\"sampleCount\":42"))
+    }
+
+    @Test
+    fun `GET v1 services service latency rejects oversized service`() = testApplication {
+        val (userId, orgId) = seedUserAndOrg()
+        application {
+            installAuth()
+            routing { traceDashboardRoutes() }
+        }
+        val response = client.get("/v1/services/${"s".repeat(201)}/latency") {
+            withAuth(jwtToken(userId, orgId))
+        }
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
+    fun `GET v1 services service latency rejects oversized scope filter`() = testApplication {
+        val (userId, orgId) = seedUserAndOrg()
+        application {
+            installAuth()
+            routing { traceDashboardRoutes() }
+        }
+        val response = client.get("/v1/services/checkout/latency?source=${"s".repeat(201)}") {
+            withAuth(jwtToken(userId, orgId))
+        }
+        assertEquals(HttpStatusCode.BadRequest, response.status)
     }
 
     @Test

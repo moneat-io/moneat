@@ -143,8 +143,25 @@ export interface ApmServiceMapEntry {
   callsTo: string[]
 }
 
+export interface ApmServiceEdge {
+  fromService: string
+  toService: string
+  callCount: number
+  errorCount: number
+  avgDurationNs: number
+}
+
 export interface ApmServiceMapResponse {
   services: ApmServiceMapEntry[]
+  edges?: ApmServiceEdge[]
+}
+
+export interface ApmServiceLatency {
+  service: string
+  p50DurationNs: number
+  p90DurationNs: number
+  p99DurationNs: number
+  sampleCount: number
 }
 
 export interface ApmErrorGroup {

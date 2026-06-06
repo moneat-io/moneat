@@ -276,16 +276,42 @@ describe('APM API', () => {
   // ──── getApmServiceMap ────
 
   it('fetches APM service map', async () => {
-    const mockMap = { nodes: [], edges: [] }
+    const mockMap = { services: [], edges: [] }
 
     server.use(
-      http.get(`${API_BASE}/v1/services/map`, () => {
+      http.get(`${API_BASE}/v1/services/map`, ({ request }) => {
+        const url = new URL(request.url)
+        expect(url.searchParams.get('timeRange')).toBe('6h')
+        expect(url.searchParams.get('env')).toBe('prod')
+        expect(url.searchParams.get('source')).toBe('otlp')
         return HttpResponse.json(mockMap)
       })
     )
 
-    const result = await api.getApmServiceMap()
+    const result = await api.getApmServiceMap({ timeRange: '6h', env: 'prod', source: 'otlp' })
     expect(result).toEqual(mockMap)
+  })
+
+  it('fetches APM service latency', async () => {
+    const mockLatency = {
+      service: 'checkout',
+      p50DurationNs: 1_000,
+      p90DurationNs: 5_000,
+      p99DurationNs: 9_000,
+      sampleCount: 42,
+    }
+
+    server.use(
+      http.get(`${API_BASE}/v1/services/checkout/latency`, ({ request }) => {
+        const url = new URL(request.url)
+        expect(url.searchParams.get('timeRange')).toBe('24h')
+        expect(url.searchParams.get('env')).toBe('prod')
+        return HttpResponse.json(mockLatency)
+      })
+    )
+
+    const result = await api.getApmServiceLatency('checkout', { timeRange: '24h', env: 'prod' })
+    expect(result).toEqual(mockLatency)
   })
 
   // ──── getApmErrors ────

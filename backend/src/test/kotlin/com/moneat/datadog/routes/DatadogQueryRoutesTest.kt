@@ -86,7 +86,7 @@ class DatadogQueryRoutesTest {
         coEvery { TraceIngestionService.getApmOverview(any(), any<DdTraceListQuery>(), any()) } returns
             emptyApmOverview()
         coEvery { TraceIngestionService.getTraceDetail(any(), any(), any()) } returns null
-        coEvery { TraceIngestionService.getServiceMap(any(), any()) } returns
+        coEvery { TraceIngestionService.getServiceMap(any(), any(), any(), any(), any()) } returns
             DdServiceMapResponse(emptyList())
         coEvery { TraceIngestionService.getApmErrors(any(), any(), any(), any(), any(), any()) } returns
             DdApmErrorsResponse(emptyList(), 0L)
