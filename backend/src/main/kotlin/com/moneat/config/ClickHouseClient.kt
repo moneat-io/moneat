@@ -36,6 +36,7 @@ import java.util.Locale
 
 private val CLICKHOUSE_ERROR_CODE = Regex("""^Code:\s*(\d+)""")
 private val logger = KotlinLogging.logger {}
+private const val CLICKHOUSE_FORMAT_KEYWORD = "FORMAT"
 
 class ClickHouseQueryException(
     val isTimeout: Boolean,
@@ -229,10 +230,65 @@ object ClickHouseClient {
         executeWithFormat(query, format, null, queryParameters)
 
     private fun defaultFormatParameter(query: String, format: String): String? {
-        if (query.trimEnd().uppercase(Locale.ROOT).contains("FORMAT") || format.isBlank()) {
+        if (format.isBlank() || containsFormatClause(query)) {
             return null
         }
         return clickHouseFormatValue(format)
+    }
+
+    private fun containsFormatClause(query: String): Boolean {
+        var index = 0
+        while (index <= query.length - CLICKHOUSE_FORMAT_KEYWORD.length) {
+            index = when (query[index]) {
+                '\'', '"', '`' -> skipQuotedSqlSegment(query, index, query[index])
+                else -> {
+                    if (isFormatKeywordAt(query, index)) {
+                        return true
+                    }
+                    index + 1
+                }
+            }
+        }
+        return false
+    }
+
+    private fun isFormatKeywordAt(query: String, index: Int): Boolean {
+        val keywordEnd = index + CLICKHOUSE_FORMAT_KEYWORD.length
+        return query.regionMatches(
+            thisOffset = index,
+            other = CLICKHOUSE_FORMAT_KEYWORD,
+            otherOffset = 0,
+            length = CLICKHOUSE_FORMAT_KEYWORD.length,
+            ignoreCase = true,
+        ) && isSqlKeywordBoundary(query, index - 1) && isSqlKeywordBoundary(query, keywordEnd)
+    }
+
+    private fun isSqlKeywordBoundary(query: String, index: Int): Boolean {
+        if (index !in query.indices) {
+            return true
+        }
+        val char = query[index]
+        return !char.isLetterOrDigit() && char != '_'
+    }
+
+    private fun skipQuotedSqlSegment(query: String, startIndex: Int, quote: Char): Int {
+        var index = startIndex + 1
+        while (index < query.length) {
+            val char = query[index]
+            if (char == '\\') {
+                index += 2
+                continue
+            }
+            if (char == quote) {
+                if (index + 1 < query.length && query[index + 1] == quote) {
+                    index += 2
+                    continue
+                }
+                return index + 1
+            }
+            index++
+        }
+        return query.length
     }
 
     private fun clickHouseFormatValue(format: String): String =
