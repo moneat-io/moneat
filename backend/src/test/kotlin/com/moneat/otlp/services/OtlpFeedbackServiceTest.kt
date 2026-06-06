@@ -230,7 +230,7 @@ class OtlpFeedbackServiceTest {
 
         val result = service.insertFeedback(organizationId = 7, rows = listOf(mapped, unmapped))
 
-        assertEquals(OtlpFeedbackIngestResult(accepted = 1, unmapped = 0), result)
+        assertEquals(OtlpFeedbackIngestResult(accepted = 1, unmapped = 1), result)
         assertEquals(42L, capturedFeedback.captured.projectId)
         assertEquals(7, capturedFeedback.captured.organizationId)
         assertEquals("otlp", capturedFeedback.captured.sourceType)

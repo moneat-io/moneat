@@ -75,10 +75,11 @@ curl https://api.moneat.io/v1/feedback/otlp \
 ```
 
 The endpoint also accepts OTLP protobuf with `Content-Type: application/x-protobuf`. Moneat stores records
-whose `eventName` or `event.name` is `moneat.user_feedback`.
+whose `eventName` is `moneat.user_feedback`; when `eventName` is absent, it falls back to the `event.name`
+attribute.
 
-Datadog-specific feedback parsing is not part of this release. Datadog browser custom actions can be mapped
-to feedback in a later integration.
+This release does not include a Datadog feedback parser. A later integration can map Datadog browser custom
+actions to the same feedback model.
 
 ## Viewing Feedback
 

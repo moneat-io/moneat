@@ -506,22 +506,7 @@ function FeedbackFooter({
   )
 }
 
-function FeedbackMainContent({
-  stats,
-  allFeedbackCount,
-  statusFilter,
-  filteredFeedback,
-  selectedFeedback,
-  resolvingSelected,
-  searchQuery,
-  onStatusFilterChange,
-  onToggleAll,
-  onToggleFeedback,
-  onResolveSelected,
-  onSearchQueryChange,
-  onOpenFeedback,
-  onOpenReplay,
-}: {
+interface FeedbackMainContentProps {
   readonly stats: FeedbackStats
   readonly allFeedbackCount: number
   readonly statusFilter: string
@@ -536,7 +521,26 @@ function FeedbackMainContent({
   readonly onSearchQueryChange: (query: string) => void
   readonly onOpenFeedback: (feedbackId: string) => void
   readonly onOpenReplay: (replayId: string) => void
-}) {
+}
+
+function FeedbackMainContent(props: FeedbackMainContentProps) {
+  const {
+    stats,
+    allFeedbackCount,
+    statusFilter,
+    filteredFeedback,
+    selectedFeedback,
+    resolvingSelected,
+    searchQuery,
+    onStatusFilterChange,
+    onToggleAll,
+    onToggleFeedback,
+    onResolveSelected,
+    onSearchQueryChange,
+    onOpenFeedback,
+    onOpenReplay,
+  } = props
+
   return (
     <>
       <FeedbackStatsGrid

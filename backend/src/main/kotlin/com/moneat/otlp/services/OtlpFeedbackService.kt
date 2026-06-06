@@ -150,12 +150,17 @@ class OtlpFeedbackService(
         rows: List<OtlpFeedbackInsert>,
     ): OtlpFeedbackIngestResult {
         var accepted = 0
+        var unmapped = 0
         for (row in rows) {
-            val projectId = row.projectId ?: continue
+            val projectId = row.projectId
+            if (projectId == null) {
+                unmapped++
+                continue
+            }
             val inserted = eventRepository.insertFeedback(row.toInsertData(organizationId, projectId))
             if (inserted) accepted++
         }
-        return OtlpFeedbackIngestResult(accepted = accepted, unmapped = 0)
+        return OtlpFeedbackIngestResult(accepted = accepted, unmapped = unmapped)
     }
 
     private fun appendJsonResourceLog(
