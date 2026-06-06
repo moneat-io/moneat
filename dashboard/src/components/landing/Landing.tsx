@@ -407,7 +407,7 @@ function HeroServiceMap() {
   const uid = useId()
   const svgRef = useRef<SVGSVGElement>(null)
   // useId returns colon-wrapped ids; strip colons so they're clean fragment refs.
-  const wireId = (kind: string, key: string) => `${uid}-${kind}-${key}`.replace(/:/g, '')
+  const wireId = (kind: string, key: string) => `${uid}-${kind}-${key}`.replaceAll(':', '')
 
   // SMIL has no prefers-reduced-motion hook, so pause it on the client after mount.
   // This leaves the prerendered markup untouched, so hydration still matches.
@@ -429,7 +429,6 @@ function HeroServiceMap() {
           ref={svgRef}
           viewBox={`0 0 ${MAP_W} ${MAP_H}`}
           className="relative block h-auto w-full font-brandmono"
-          role="img"
           aria-label="Live service map: Datadog, Sentry, and OTLP telemetry flowing into one platform"
         >
           <defs>
