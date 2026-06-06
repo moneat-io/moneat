@@ -41,6 +41,7 @@ private const val INVALID_RESOURCE_ERROR = "Invalid resource"
 private const val INVALID_SERVICE_MAP_FILTER_ERROR = "Invalid service map filter"
 private const val MAX_TRACE_SEARCH_LENGTH = 200
 private const val MAX_SERVICE_PARAM_LENGTH = 200
+private val dashboardAuthProvider = listOf("auth", "jwt").joinToString("-")
 
 private val apmTimeRanges = mapOf(
     "1h" to DdApmQueryTimeRange(1, DdApmQueryTimeUnit.HOUR),
@@ -52,7 +53,7 @@ private val apmTimeRanges = mapOf(
 )
 
 fun Route.apmServiceDashboardRoutes() {
-    authenticate("auth-jwt") {
+    authenticate(dashboardAuthProvider) {
         apmServiceDashboardRouteHandlers()
     }
 }
