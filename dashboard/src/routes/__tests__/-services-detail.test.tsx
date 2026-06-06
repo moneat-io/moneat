@@ -31,7 +31,10 @@ vi.mock('@tanstack/react-router', () => ({
   }),
   Link: ({children, ...props}: {children: React.ReactNode}) => React.createElement('a', props, children),
   Outlet: () => <div data-testid="services-outlet" />,
-  useRouterState: () => mockPathname.current,
+  useRouterState: ({select}: {select?: (state: {location: {pathname: string}}) => unknown} = {}) => {
+    const state = {location: {pathname: mockPathname.current}}
+    return select ? select(state) : state
+  },
 }))
 
 vi.mock('@/components/ui/tabs', () => {

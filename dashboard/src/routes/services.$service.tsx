@@ -31,6 +31,7 @@ import {
   type ApmServiceDetail as ServiceDetail,
   type ApmTimeRange,
 } from '@/lib/api'
+import {isNotFoundError} from '@/lib/api/errors'
 import {
   ApmKpiRow,
   ApmTimeRangeSelect,
@@ -272,11 +273,6 @@ function ServiceHeader({
       </div>
     </header>
   )
-}
-
-function isNotFoundError(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null || !('status' in error)) return false
-  return (error as {status?: unknown}).status === 404
 }
 
 function ServiceTab({value, label, count}: Readonly<{value: string; label: string; count?: number}>) {

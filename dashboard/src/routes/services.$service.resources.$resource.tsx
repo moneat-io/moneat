@@ -20,6 +20,7 @@ import {useState} from 'react'
 import {ExternalLink} from 'lucide-react'
 
 import {api, type ApmResourceDetail as ResourceDetail, type ApmTimeRange} from '@/lib/api'
+import {isNotFoundError} from '@/lib/api/errors'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {SectionCard} from '@/components/ui/section-card'
@@ -292,9 +293,4 @@ function ResourceHeader({
       </div>
     </header>
   )
-}
-
-function isNotFoundError(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null || !('status' in error)) return false
-  return (error as {status?: unknown}).status === 404
 }

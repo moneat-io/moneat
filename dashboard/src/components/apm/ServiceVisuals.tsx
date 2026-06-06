@@ -295,7 +295,7 @@ const tooltipContentStyle = {
   color: 'hsl(var(--popover-foreground))',
 } as const
 
-const LATENCY_LINES: ReadonlyArray<{key: keyof Omit<LatencyPoint, 't'>; color: string}> = [
+const LATENCY_PERCENTILE_CONFIG: ReadonlyArray<{key: keyof Omit<LatencyPoint, 't'>; color: string}> = [
   {key: 'p99', color: 'hsl(var(--chart-6))'},
   {key: 'p95', color: 'hsl(var(--chart-1))'},
   {key: 'p90', color: 'hsl(var(--chart-3))'},
@@ -341,7 +341,7 @@ export function LatencyPercentilesChart({
             contentStyle={tooltipContentStyle}
             formatter={(value, name) => [`${String(value)}ms`, String(name)]}
           />
-          {LATENCY_LINES.map((line) => (
+          {LATENCY_PERCENTILE_CONFIG.map((line) => (
             <Line
               key={line.key}
               type="monotone"
@@ -358,13 +358,6 @@ export function LatencyPercentilesChart({
   )
 }
 
-const LEGEND_ROWS: ReadonlyArray<{key: keyof Omit<LatencyPoint, 't'>; color: string}> = [
-  {key: 'p99', color: 'hsl(var(--chart-6))'},
-  {key: 'p95', color: 'hsl(var(--chart-1))'},
-  {key: 'p90', color: 'hsl(var(--chart-3))'},
-  {key: 'p50', color: 'hsl(var(--chart-4))'},
-]
-
 export function LatencyLegendTable({series}: Readonly<{series: readonly LatencyPoint[]}>) {
   return (
     <table className="mt-3 w-full border-collapse font-mono text-xs tabular-nums">
@@ -377,7 +370,7 @@ export function LatencyLegendTable({series}: Readonly<{series: readonly LatencyP
         </tr>
       </thead>
       <tbody>
-        {LEGEND_ROWS.map((row) => {
+        {LATENCY_PERCENTILE_CONFIG.map((row) => {
           const values = series.map((point) => point[row.key])
           const last = values.at(-1) ?? 0
           return (
