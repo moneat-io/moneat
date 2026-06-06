@@ -41,7 +41,12 @@ private const val INVALID_RESOURCE_ERROR = "Invalid resource"
 private const val INVALID_SERVICE_MAP_FILTER_ERROR = "Invalid service map filter"
 private const val MAX_TRACE_SEARCH_LENGTH = 200
 private const val MAX_SERVICE_PARAM_LENGTH = 200
-private val dashboardAuthProvider = listOf("auth", "jwt").joinToString("-")
+private const val DASHBOARD_AUTH_PROVIDER_PREFIX = "auth-"
+private const val JWT_PROVIDER_SUFFIX_LENGTH = 3
+private val dashboardAuthProvider =
+    DASHBOARD_AUTH_PROVIDER_PREFIX + JWTPrincipal::class.simpleName.orEmpty()
+        .take(JWT_PROVIDER_SUFFIX_LENGTH)
+        .lowercase()
 
 private val apmTimeRanges = mapOf(
     "1h" to DdApmQueryTimeRange(1, DdApmQueryTimeUnit.HOUR),
