@@ -102,6 +102,29 @@ describe('utils', () => {
       expect(formatRelativeTime(clickhouseFormat)).toBe('5m ago')
     })
 
+    it('handles ClickHouse DateTime64 format in strict mobile date parsers', () => {
+      global.Date = class extends originalDate {
+        constructor(value?: string | number | Date) {
+          if (value === undefined) {
+            super('2024-02-11T12:00:00Z')
+          } else if (typeof value === 'string' && value.includes(' UTC')) {
+            super(Number.NaN)
+          } else {
+            super(value)
+          }
+        }
+        static now() {
+          return new originalDate('2024-02-11T12:00:00Z').getTime()
+        }
+      } as unknown as DateConstructor
+
+      expect(formatRelativeTime('2024-02-11 11:55:00.000')).toBe('5m ago')
+    })
+
+    it('returns "unknown" for invalid date strings', () => {
+      expect(formatRelativeTime('not a date')).toBe('unknown')
+    })
+
     it('handles Unix timestamp (number)', () => {
       const timestamp = new Date('2024-02-11T11:55:00Z').getTime()
       expect(formatRelativeTime(timestamp)).toBe('5m ago')
