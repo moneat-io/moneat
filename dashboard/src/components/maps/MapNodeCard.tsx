@@ -47,9 +47,9 @@ export function MapNodeCard({
   return (
     <div
       className={cn(
-        'rounded-lg border-2 bg-card text-card-foreground',
-        'transition-all duration-200 cursor-pointer',
-        selected && 'ring-2 ring-primary scale-[1.02]',
+        'rounded-lg border bg-card text-card-foreground',
+        'transition-colors duration-200 cursor-pointer',
+        selected && 'ring-1 ring-primary',
         dimmed && 'opacity-25',
         dashed && 'border-dashed',
         borderClassName,
