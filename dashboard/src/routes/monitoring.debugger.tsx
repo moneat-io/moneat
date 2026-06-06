@@ -12,10 +12,9 @@ import {api} from '@/lib/api'
 import CreateProbeDialog from '@/components/debugger/CreateProbeDialog'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
-import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
 import {EmptyState} from '@/components/ui/empty-state'
 import {SectionCard} from '@/components/ui/section-card'
-import {Activity, Bug, HelpCircle, Loader2, Plus} from 'lucide-react'
+import {Activity, Bug, Loader2, Plus} from 'lucide-react'
 import {useState} from 'react'
 
 export const Route = createFileRoute('/monitoring/debugger')({
@@ -65,7 +64,7 @@ function formatStatusLabel(status: string): string {
   }
 }
 
-export function DebuggerHeaderActions() {
+function DebuggerHeaderActions() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   return (
     <>
@@ -73,26 +72,10 @@ export function DebuggerHeaderActions() {
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
       />
-      <div className="flex items-center gap-2">
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <a href="/docs/datadog-agent/debugger" target="_blank" rel="noreferrer"
-                className="inline-flex items-center justify-center p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-                aria-label="View docs">
-                <HelpCircle className="h-4 w-4" />
-              </a>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>View docs</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-        <Button onClick={() => setCreateDialogOpen(true)}>
-          <Plus className="h-4 w-4 mr-1.5" />
-          Create Probe
-        </Button>
-      </div>
+      <Button size="sm" onClick={() => setCreateDialogOpen(true)}>
+        <Plus className="h-4 w-4 mr-1.5" />
+        Create Probe
+      </Button>
     </>
   )
 }
@@ -136,6 +119,9 @@ function DebuggerDashboard() {
           <Bug className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="font-semibold tabular-nums">{logs.length}</span>
           <span className="text-muted-foreground text-xs">log entries</span>
+        </div>
+        <div className="ml-auto">
+          <DebuggerHeaderActions />
         </div>
       </div>
 
