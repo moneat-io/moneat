@@ -138,6 +138,17 @@ class ClickHouseClientTest {
     }
 
     @Test
+    fun `executeWithFormat rejects unsupported format before request`() = runBlocking {
+        withClickHouseMockServer({ exchange ->
+            exchange.respond(200, "1\n", "text/plain")
+        }) {
+            assertFailsWith<IllegalArgumentException> {
+                ClickHouseClient.executeWithFormat("SELECT 1", "CSV")
+            }
+        }
+    }
+
+    @Test
     fun `executeLongRunning completes for a successful response`() = runBlocking {
         val requestQueries = mutableListOf<String?>()
         withClickHouseMockServer({ exchange ->

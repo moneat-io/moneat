@@ -61,6 +61,8 @@ object ClickHouseClient {
     private const val CLICKHOUSE_TIMEOUT_ERROR_NAME = "TIMEOUT_EXCEEDED"
     private const val CLICKHOUSE_TIMEOUT_MESSAGE = "timeout exceeded"
     private const val NOT_INITIALIZED_MESSAGE = "ClickHouseClient is not initialized. Call init() first."
+    private const val CLICKHOUSE_FORMAT_JSON_EACH_ROW = "JSONEachRow"
+    private const val CLICKHOUSE_FORMAT_TAB_SEPARATED = "TabSeparated"
 
     @Volatile
     private var httpClient: HttpClient? = null
@@ -196,11 +198,7 @@ object ClickHouseClient {
         span: ISpan? = null,
         queryParameters: Map<String, String> = emptyMap(),
     ): String {
-        val queryWithFormat = if (query.trimEnd().uppercase(Locale.ROOT).contains("FORMAT")) {
-            query
-        } else {
-            "$query FORMAT $format"
-        }
+        val queryWithFormat = queryWithValidatedFormat(query, format)
         val response = execute(queryWithFormat, span, queryParameters)
         val body = response.bodyAsText()
         val isError = response.isClickHouseError(body)
@@ -223,6 +221,20 @@ object ClickHouseClient {
         queryParameters: Map<String, String>,
     ): String =
         executeWithFormat(query, format, null, queryParameters)
+
+    private fun queryWithValidatedFormat(query: String, format: String): String {
+        if (query.trimEnd().uppercase(Locale.ROOT).contains("FORMAT") || format.isBlank()) {
+            return query
+        }
+        return query + clickHouseFormatClause(format)
+    }
+
+    private fun clickHouseFormatClause(format: String): String =
+        when (format) {
+            CLICKHOUSE_FORMAT_JSON_EACH_ROW -> " FORMAT JSONEachRow"
+            CLICKHOUSE_FORMAT_TAB_SEPARATED -> " FORMAT TabSeparated"
+            else -> throw IllegalArgumentException("Unsupported ClickHouse format: $format")
+        }
 
     private fun isClickHouseTimeout(body: String, errorCode: String): Boolean {
         return errorCode == CLICKHOUSE_TIMEOUT_ERROR_CODE ||
