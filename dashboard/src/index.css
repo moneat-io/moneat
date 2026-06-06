@@ -61,6 +61,9 @@
     --chart-8: 358 75% 59%;
     --chart-9: 189 95% 43%;
     --chart-10: 201 96% 32%;
+    /* Dense viz canvas: dark in both themes so topology maps read as a field. */
+    --viz-surface: 222 30% 9%;
+    --viz-grid: 220 14% 100%;
     --radius: 0.5rem;
   }
   .dark {
@@ -111,6 +114,8 @@
     --chart-8: 358 75% 59%;
     --chart-9: 189 95% 43%;
     --chart-10: 201 96% 32%;
+    --viz-surface: 222 33% 7%;
+    --viz-grid: 220 14% 100%;
   }
 
   .theme-midnight {

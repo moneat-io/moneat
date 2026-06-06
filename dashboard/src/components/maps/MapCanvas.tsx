@@ -6,13 +6,14 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-import {ReactFlow, Controls, Background, BackgroundVariant, type Edge, type Node} from '@xyflow/react'
+import {ReactFlow, Controls, Background, BackgroundVariant, useReactFlow, type Edge, type Node} from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import {Loader2} from 'lucide-react'
-import type {ComponentProps, ComponentType, ReactNode} from 'react'
+import {useEffect, type ComponentProps, type ComponentType, type ReactNode} from 'react'
 import {cn} from '@/lib/utils'
 
 type ReactFlowProps = ComponentProps<typeof ReactFlow>
+const DEFAULT_FIT_VIEW_OPTIONS: ReactFlowProps['fitViewOptions'] = {padding: 0.25}
 
 type MapCanvasProps = Readonly<{
   nodes: Node[]
@@ -40,6 +41,25 @@ type MapCanvasFrameProps = Readonly<{
   className?: string
 }>
 
+function FitOnChange({
+  signature,
+  fitViewOptions,
+}: Readonly<{
+  signature?: string
+  fitViewOptions: ReactFlowProps['fitViewOptions']
+}>) {
+  const {fitView} = useReactFlow()
+
+  useEffect(() => {
+    const frame = globalThis.requestAnimationFrame(() => {
+      void fitView(fitViewOptions)
+    })
+    return () => globalThis.cancelAnimationFrame(frame)
+  }, [signature, fitView, fitViewOptions])
+
+  return null
+}
+
 export function MapCanvas({
   nodes,
   edges = [],
@@ -56,7 +76,7 @@ export function MapCanvas({
   children,
   className,
   fitSignature,
-  fitViewOptions = {padding: 0.25},
+  fitViewOptions = DEFAULT_FIT_VIEW_OPTIONS,
   minZoom = 0.2,
   maxZoom = 2,
 }: MapCanvasProps) {
@@ -102,7 +122,6 @@ export function MapCanvas({
   return (
     <MapCanvasFrame className={className}>
       <ReactFlow
-        key={fitSignature}
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
@@ -117,11 +136,12 @@ export function MapCanvas({
         maxZoom={maxZoom}
         proOptions={{hideAttribution: true}}
       >
+        <FitOnChange signature={fitSignature} fitViewOptions={fitViewOptions} />
         <Background
           variant={BackgroundVariant.Dots}
           gap={24}
           size={1}
-          className="!bg-background"
+          color="hsl(var(--viz-grid) / 0.1)"
         />
         <Controls showInteractive={false} />
       </ReactFlow>
@@ -132,7 +152,7 @@ export function MapCanvas({
 
 function MapCanvasFrame({children, className}: MapCanvasFrameProps) {
   return (
-    <div className={cn('map-canvas relative rounded-lg border bg-card/50 overflow-hidden', className)}>
+    <div className={cn('map-canvas relative rounded-lg border bg-[hsl(var(--viz-surface))] overflow-hidden', className)}>
       {children}
     </div>
   )
