@@ -50,7 +50,7 @@ export interface EventIssueLink {
   projectResourceId: string
 }
 
-export type FeedbackSourceType = 'sentry' | 'otlp' | 'datadog' | 'custom' | (string & {})
+export type FeedbackSourceType = string
 
 export interface Feedback {
   feedbackId: string

@@ -41,21 +41,34 @@ private val json = Json { ignoreUnknownKeys = true }
 private const val FEEDBACK_EVENT_NAME = "moneat.user_feedback"
 private const val OTLP_SOURCE_TYPE = "otlp"
 private const val OTLP_SOURCE_NAME = "OpenTelemetry"
+private const val EVENT_NAME_ATTRIBUTE = "event.name"
+private const val FEEDBACK_ID_ATTRIBUTE = "moneat.feedback.id"
+private const val FEEDBACK_MESSAGE_ATTRIBUTE = "moneat.feedback.message"
+private const val FEEDBACK_CONTACT_EMAIL_ATTRIBUTE = "moneat.feedback.contact_email"
+private const val FEEDBACK_NAME_ATTRIBUTE = "moneat.feedback.name"
+private const val FEEDBACK_URL_ATTRIBUTE = "moneat.feedback.url"
+private const val FEEDBACK_ASSOCIATED_EVENT_ID_ATTRIBUTE = "moneat.feedback.associated_event_id"
+private const val FEEDBACK_REPLAY_ID_ATTRIBUTE = "moneat.feedback.replay_id"
+private const val USER_ID_ATTRIBUTE = "user.id"
+private const val USER_EMAIL_ATTRIBUTE = "user.email"
+private const val USER_NAME_ATTRIBUTE = "user.name"
+private const val USER_USERNAME_ATTRIBUTE = "user.username"
+private const val URL_FULL_ATTRIBUTE = "url.full"
 
 private val canonicalRecordAttributes = setOf(
-    "event.name",
-    "moneat.feedback.id",
-    "moneat.feedback.message",
-    "moneat.feedback.contact_email",
-    "moneat.feedback.name",
-    "moneat.feedback.url",
-    "moneat.feedback.associated_event_id",
-    "moneat.feedback.replay_id",
-    "user.id",
-    "user.email",
-    "user.name",
-    "user.username",
-    "url.full",
+    EVENT_NAME_ATTRIBUTE,
+    FEEDBACK_ID_ATTRIBUTE,
+    FEEDBACK_MESSAGE_ATTRIBUTE,
+    FEEDBACK_CONTACT_EMAIL_ATTRIBUTE,
+    FEEDBACK_NAME_ATTRIBUTE,
+    FEEDBACK_URL_ATTRIBUTE,
+    FEEDBACK_ASSOCIATED_EVENT_ID_ATTRIBUTE,
+    FEEDBACK_REPLAY_ID_ATTRIBUTE,
+    USER_ID_ATTRIBUTE,
+    USER_EMAIL_ATTRIBUTE,
+    USER_NAME_ATTRIBUTE,
+    USER_USERNAME_ATTRIBUTE,
+    URL_FULL_ATTRIBUTE,
 )
 
 data class OtlpFeedbackInsert(
@@ -168,7 +181,7 @@ class OtlpFeedbackService(
     ): OtlpFeedbackInsert? {
         val attributes = OtlpParsingUtils.attributesToMap(record["attributes"])
         val eventName = record["eventName"]?.jsonPrimitive?.contentOrNull
-            ?: attributes["event.name"]
+            ?: attributes[EVENT_NAME_ATTRIBUTE]
             ?: return null
         if (eventName != FEEDBACK_EVENT_NAME) return null
 
@@ -184,7 +197,7 @@ class OtlpFeedbackService(
             resourceCtx = resourceCtx,
             eventName = eventName,
             timestampMs = timestampMs,
-            message = bodyText.ifBlank { attributes["moneat.feedback.message"].orEmpty() },
+            message = bodyText.ifBlank { attributes[FEEDBACK_MESSAGE_ATTRIBUTE].orEmpty() },
             traceId = record["traceId"]?.jsonPrimitive?.contentOrNull.orEmpty(),
             spanId = record["spanId"]?.jsonPrimitive?.contentOrNull.orEmpty(),
         )
@@ -195,7 +208,7 @@ class OtlpFeedbackService(
         resourceCtx: ResourceContext,
     ): OtlpFeedbackInsert? {
         val attributes = OtlpProtobufParser.attributesToMap(record.attributesList)
-        val eventName = record.eventName.ifBlank { attributes["event.name"].orEmpty() }
+        val eventName = record.eventName.ifBlank { attributes[EVENT_NAME_ATTRIBUTE].orEmpty() }
         if (eventName != FEEDBACK_EVENT_NAME) return null
 
         val timestampMs =
@@ -213,7 +226,7 @@ class OtlpFeedbackService(
             resourceCtx = resourceCtx,
             eventName = eventName,
             timestampMs = timestampMs,
-            message = bodyText.ifBlank { attributes["moneat.feedback.message"].orEmpty() },
+            message = bodyText.ifBlank { attributes[FEEDBACK_MESSAGE_ATTRIBUTE].orEmpty() },
             traceId = OtlpProtobufParser.bytesToHex(record.traceId),
             spanId = OtlpProtobufParser.bytesToHex(record.spanId),
         )
@@ -229,20 +242,20 @@ class OtlpFeedbackService(
         spanId: String,
     ): OtlpFeedbackInsert =
         OtlpFeedbackInsert(
-            feedbackId = normalizeFeedbackId(attributes["moneat.feedback.id"]),
+            feedbackId = normalizeFeedbackId(attributes[FEEDBACK_ID_ATTRIBUTE]),
             timestampMs = timestampMs,
             message = message,
-            contactEmail = attributes["moneat.feedback.contact_email"] ?: attributes["user.email"].orEmpty(),
-            name = attributes["moneat.feedback.name"] ?: attributes["user.name"].orEmpty(),
-            url = attributes["url.full"] ?: attributes["moneat.feedback.url"].orEmpty(),
-            associatedEventId = attributes["moneat.feedback.associated_event_id"].orEmpty(),
-            replayId = attributes["moneat.feedback.replay_id"].orEmpty(),
+            contactEmail = attributes[FEEDBACK_CONTACT_EMAIL_ATTRIBUTE] ?: attributes[USER_EMAIL_ATTRIBUTE].orEmpty(),
+            name = attributes[FEEDBACK_NAME_ATTRIBUTE] ?: attributes[USER_NAME_ATTRIBUTE].orEmpty(),
+            url = attributes[URL_FULL_ATTRIBUTE] ?: attributes[FEEDBACK_URL_ATTRIBUTE].orEmpty(),
+            associatedEventId = attributes[FEEDBACK_ASSOCIATED_EVENT_ID_ATTRIBUTE].orEmpty(),
+            replayId = attributes[FEEDBACK_REPLAY_ID_ATTRIBUTE].orEmpty(),
             environment = resourceCtx.environment,
             release = resourceCtx.serviceVersion,
             platform = resourceCtx.attributes["telemetry.sdk.language"] ?: resourceCtx.attributes["os.type"].orEmpty(),
-            userId = attributes["user.id"].orEmpty(),
-            userEmail = attributes["user.email"] ?: attributes["moneat.feedback.contact_email"].orEmpty(),
-            userUsername = attributes["user.username"].orEmpty(),
+            userId = attributes[USER_ID_ATTRIBUTE].orEmpty(),
+            userEmail = attributes[USER_EMAIL_ATTRIBUTE] ?: attributes[FEEDBACK_CONTACT_EMAIL_ATTRIBUTE].orEmpty(),
+            userUsername = attributes[USER_USERNAME_ATTRIBUTE].orEmpty(),
             traceId = traceId,
             spanId = spanId,
             sourceType = OTLP_SOURCE_TYPE,

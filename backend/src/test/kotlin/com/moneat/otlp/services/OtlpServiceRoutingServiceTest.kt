@@ -165,6 +165,30 @@ class OtlpServiceRoutingServiceTest {
     }
 
     @Test
+    fun `resolveProjectIds marks feedback on an existing observed service`() {
+        val serviceDescriptor = OtlpServiceDescriptor(
+            serviceNamespace = "checkout",
+            serviceName = "checkout-api",
+            environment = "production"
+        )
+
+        service.resolveProjectIds(
+            organizationId = orgOne.id,
+            services = listOf(serviceDescriptor),
+            signalType = OtlpSignalType.TRACES
+        )
+        service.resolveProjectIds(
+            organizationId = orgOne.id,
+            services = listOf(serviceDescriptor),
+            signalType = OtlpSignalType.FEEDBACK
+        )
+
+        val observed = service.listObservedServices(orgOne.id).single()
+        assertTrue(observed.seenTraces)
+        assertTrue(observed.seenFeedback)
+    }
+
+    @Test
     fun `upsertMapping only accepts a valid service and project in the organization`() {
         val unknownServiceMapping = service.upsertMapping(
             organizationId = orgOne.id,
