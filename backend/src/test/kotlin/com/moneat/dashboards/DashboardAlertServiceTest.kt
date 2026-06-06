@@ -89,6 +89,7 @@ class DashboardAlertServiceTest {
     companion object {
         private var db: Database? = null
         private const val ORG_ID = 1L
+        private const val OTHER_ORG_ID = 2L
         private const val CREATED_BY = 100L
         private const val DEFAULT_PROJECT_ID = 1L
         private const val RECOVERY_RETENTION_DAYS = 90
@@ -229,12 +230,13 @@ class DashboardAlertServiceTest {
 
     private fun seedDashboard(
         title: String = "Test Dashboard",
-        projectId: Long? = DEFAULT_PROJECT_ID
+        projectId: Long? = DEFAULT_PROJECT_ID,
+        orgId: Long = ORG_ID
     ): Long =
         transaction {
             val now = Clock.System.now()
             Dashboards.insert {
-                it[orgId] = ORG_ID
+                it[Dashboards.orgId] = orgId
                 it[Dashboards.projectId] = projectId
                 it[Dashboards.title] = title
                 it[createdBy] = CREATED_BY
@@ -496,6 +498,23 @@ class DashboardAlertServiceTest {
                 request = buildCreateRequest(widgetId),
             )
         }
+    }
+
+    @Test
+    fun `createAlert fails when dashboard belongs to another org`() {
+        val dashboardId = seedDashboard(orgId = OTHER_ORG_ID)
+        val widgetId = seedWidget(dashboardId)
+
+        val error = assertFailsWith<IllegalArgumentException> {
+            service.createAlert(
+                dashboardId = dashboardId,
+                orgId = ORG_ID,
+                createdBy = CREATED_BY,
+                request = buildCreateRequest(widgetId),
+            )
+        }
+
+        assertEquals("Widget not found in this dashboard", error.message)
     }
 
     // ──── listAlerts tests ────

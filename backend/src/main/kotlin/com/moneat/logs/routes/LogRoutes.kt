@@ -25,12 +25,16 @@ import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.QuotaExceededResponse
 import com.moneat.datadog.decompression.DecompressionService
+import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.events.services.EventService
+import com.moneat.enterprise.FeatureRegistry
+import com.moneat.logs.LogPermissions
 import com.moneat.logs.models.CreateLogIndexRequest
 import com.moneat.logs.models.LogQueryRequest
 import com.moneat.logs.models.LogTailFilters
 import com.moneat.logs.models.UpdateLogIndexRequest
 import com.moneat.logs.services.LogIndexService
+import com.moneat.logs.services.LogManagementService
 import com.moneat.logs.services.LogService
 import com.moneat.otlp.OtlpAuth
 import com.moneat.otlp.models.CreateOtlpApiKeyRequest
@@ -39,6 +43,8 @@ import com.moneat.otlp.services.OtlpApiKeyService
 import com.moneat.otlp.services.OtlpServiceDescriptor
 import com.moneat.otlp.services.OtlpServiceRoutingService
 import com.moneat.otlp.services.OtlpSignalType
+import com.moneat.org.services.OrgMembershipService
+import com.moneat.org.services.OrgRole
 import com.moneat.plugins.getDemoEpochMs
 import com.moneat.plugins.isDemoUser
 import com.moneat.shared.services.ProjectIdResolver
@@ -83,15 +89,25 @@ fun Route.logRoutes(
     otlpApiKeyService: OtlpApiKeyService = GlobalContext.get().get(),
     logIndexService: LogIndexService = GlobalContext.get().get(),
     otlpServiceRoutingService: OtlpServiceRoutingService = GlobalContext.get().get(),
+    logManagementService: LogManagementService = GlobalContext.get().get(),
+    membershipService: OrgMembershipService = GlobalContext.get().get(),
+    dashboardAlertService: DashboardAlertService = GlobalContext.get().get(),
 ) {
     route("/v1") {
         authenticate("auth-jwt") {
             registerOtlpApiKeyRoutes(otlpApiKeyService)
             registerOtlpServiceRoutingRoutes(otlpServiceRoutingService)
-            registerLogIndexRoutes(logIndexService)
+            registerLogIndexRoutes(logIndexService, membershipService)
             registerLogQueryRoutes(logService)
+            registerLogManagementRoutes(
+                logManagementService = logManagementService,
+                logIndexService = logIndexService,
+                logService = logService,
+                membershipService = membershipService,
+                dashboardAlertService = dashboardAlertService
+            )
         }
-        registerLogTailRoute(logService)
+        registerLogTailRoute(logService, membershipService)
     }
 }
 
@@ -190,12 +206,23 @@ private suspend fun ApplicationCall.deleteOtlpServiceMapping(
     respond(HttpStatusCode.NoContent)
 }
 
-private fun Route.registerLogIndexRoutes(logIndexService: LogIndexService) {
+private fun Route.registerLogIndexRoutes(
+    logIndexService: LogIndexService,
+    membershipService: OrgMembershipService
+) {
     get("/logs/indexes") { call.listLogIndexes(logIndexService) }
-    post("/logs/indexes") { call.createLogIndex(logIndexService) }
-    put("/logs/indexes/{id}") { call.updateLogIndex(logIndexService) }
-    delete("/logs/indexes/{id}") { call.deleteLogIndex(logIndexService) }
-    post("/logs/indexes/test") { call.testLogIndex(logIndexService) }
+    post("/logs/indexes") {
+        if (call.ensureLogIndexAccess(membershipService)) call.createLogIndex(logIndexService)
+    }
+    put("/logs/indexes/{id}") {
+        if (call.ensureLogIndexAccess(membershipService)) call.updateLogIndex(logIndexService)
+    }
+    delete("/logs/indexes/{id}") {
+        if (call.ensureLogIndexAccess(membershipService)) call.deleteLogIndex(logIndexService)
+    }
+    post("/logs/indexes/test") {
+        if (call.ensureLogIndexAccess(membershipService)) call.testLogIndex(logIndexService)
+    }
 }
 
 private suspend fun ApplicationCall.listLogIndexes(logIndexService: LogIndexService) {
@@ -388,14 +415,25 @@ private suspend fun ApplicationCall.exportLogs(logService: LogService) {
     respondText(csv, ContentType.Text.CSV)
 }
 
-private fun Route.registerLogTailRoute(logService: LogService) {
-    get("/logs/tail") { call.tailLogs(logService) }
+private fun Route.registerLogTailRoute(
+    logService: LogService,
+    membershipService: OrgMembershipService
+) {
+    get("/logs/tail") { call.tailLogs(logService, membershipService) }
 }
 
-private suspend fun ApplicationCall.tailLogs(logService: LogService) {
-    val orgId = resolveTailOrganizationId()
-    if (orgId == null) {
+private suspend fun ApplicationCall.tailLogs(
+    logService: LogService,
+    membershipService: OrgMembershipService
+) {
+    val identity = resolveTailIdentity()
+    if (identity == null) {
         respond(HttpStatusCode.Unauthorized, ErrorResponse("Unauthorized"))
+        return
+    }
+    val (userId, orgId) = identity
+    if (!hasLogAccess(membershipService, orgId.toInt(), userId, LogPermissions.LIVE_TAIL)) {
+        respond(HttpStatusCode.Forbidden, ErrorResponse("Insufficient permissions"))
         return
     }
 
@@ -404,7 +442,14 @@ private suspend fun ApplicationCall.tailLogs(logService: LogService) {
             query = request.queryParameters["q"] ?: request.queryParameters["query"],
             levels = parseLevelQueryParams(this).map { it.lowercase() }.toSet(),
             service = request.queryParameters["service"],
-            environment = request.queryParameters["environment"]
+            environment = request.queryParameters["environment"],
+            containerName = request.queryParameters["containerName"] ?: request.queryParameters["container_name"],
+            tags = parseTagQueryParams(this),
+            excludeService = request.queryParameters["excludeService"],
+            excludeEnvironment = request.queryParameters["excludeEnvironment"],
+            excludeContainerName = request.queryParameters["excludeContainerName"]
+                ?: request.queryParameters["exclude_container_name"],
+            excludeTags = parseExcludeTagQueryParams(this)
         )
     val redisUrl = application.environment.config.property("redis.url").getString()
     val channel = logService.liveChannel(orgId)
@@ -520,10 +565,41 @@ private fun ApplicationCall.requiredUserId(): Int =
 private fun ApplicationCall.requiredOrganizationId(): Int =
     principal<JWTPrincipal>()!!.payload.getClaim("orgId").asInt()
 
-private fun ApplicationCall.resolveTailOrganizationId(): Long? {
+private suspend fun ApplicationCall.ensureLogIndexAccess(membershipService: OrgMembershipService): Boolean {
+    val allowed = hasLogAccess(
+        membershipService = membershipService,
+        organizationId = requiredOrganizationId(),
+        userId = requiredUserId(),
+        permission = LogPermissions.MANAGE
+    )
+    if (!allowed) {
+        respond(HttpStatusCode.Forbidden, ErrorResponse("Insufficient permissions"))
+    }
+    return allowed
+}
+
+private suspend fun hasLogAccess(
+    membershipService: OrgMembershipService,
+    organizationId: Int,
+    userId: Int,
+    permission: String
+): Boolean {
+    val granular = FeatureRegistry.getPermissionBridge()?.hasPermission(organizationId, userId, permission)
+    return granular ?: suspendRunCatching {
+        membershipService.requireRole(organizationId, userId, OrgRole.ADMIN)
+        true
+    }.getOrElse { false }
+}
+
+private fun ApplicationCall.resolveTailIdentity(): Pair<Int, Long>? {
     val principal = principal<JWTPrincipal>()
-    return principal?.payload?.getClaim("orgId")?.asInt()?.toLong()
-        ?: authenticateTailRequest(this)?.second
+    val principalUserId = principal?.payload?.getClaim("userId")?.asInt()
+    val principalOrgId = principal?.payload?.getClaim("orgId")?.asInt()?.toLong()
+    return if (principalUserId != null && principalOrgId != null) {
+        principalUserId to principalOrgId
+    } else {
+        authenticateTailRequest(this)
+    }
 }
 
 private fun parseLevelQueryParams(call: ApplicationCall): List<String> {

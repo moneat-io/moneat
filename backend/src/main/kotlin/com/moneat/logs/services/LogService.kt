@@ -281,25 +281,75 @@ class LogService(private val logRepository: LogRepository) {
     fun matchesTailFilters(
         log: LogEntryResponse,
         filters: LogTailFilters
+    ): Boolean =
+        matchesIncludedTailFilters(log, filters) &&
+            matchesExcludedTailFilters(log, filters) &&
+            matchesTailTagFilters(log, filters) &&
+            matchesTailQueryFilter(log, filters)
+
+    private fun matchesIncludedTailFilters(
+        log: LogEntryResponse,
+        filters: LogTailFilters
     ): Boolean {
         if (filters.levels.isNotEmpty() && log.level.lowercase() !in filters.levels) {
             return false
         }
-        if (!filters.service.isNullOrBlank() && !log.service.equals(filters.service, ignoreCase = true)) {
+        if (!matchesOptionalIgnoreCase(log.service, filters.service)) {
             return false
         }
-        if (!filters.environment.isNullOrBlank() && !log.environment.equals(filters.environment, ignoreCase = true)) {
+        if (!matchesOptionalIgnoreCase(log.environment, filters.environment)) {
             return false
         }
-        if (!filters.query.isNullOrBlank()) {
-            val query = filters.query.lowercase()
-            val haystack = "${log.message}\n${log.body}".lowercase()
-            if (!haystack.contains(query)) {
-                return false
-            }
+        if (!matchesOptionalIgnoreCase(log.containerName, filters.containerName)) {
+            return false
         }
         return true
     }
+
+    private fun matchesExcludedTailFilters(
+        log: LogEntryResponse,
+        filters: LogTailFilters
+    ): Boolean {
+        if (matchesExcludedIgnoreCase(log.service, filters.excludeService)) {
+            return false
+        }
+        if (matchesExcludedIgnoreCase(log.environment, filters.excludeEnvironment)) {
+            return false
+        }
+        if (matchesExcludedIgnoreCase(log.containerName, filters.excludeContainerName)) {
+            return false
+        }
+        return true
+    }
+
+    private fun matchesTailTagFilters(
+        log: LogEntryResponse,
+        filters: LogTailFilters
+    ): Boolean {
+        if (filters.tags.any { (key, value) -> log.tags[key] != value }) {
+            return false
+        }
+        if (filters.excludeTags.any { (key, value) -> log.tags[key] == value }) {
+            return false
+        }
+        return true
+    }
+
+    private fun matchesTailQueryFilter(
+        log: LogEntryResponse,
+        filters: LogTailFilters
+    ): Boolean {
+        if (filters.query.isNullOrBlank()) return true
+        val query = filters.query.lowercase()
+        val haystack = "${log.message}\n${log.body}".lowercase()
+        return haystack.contains(query)
+    }
+
+    private fun matchesOptionalIgnoreCase(actual: String, expected: String?): Boolean =
+        expected.isNullOrBlank() || actual.lowercase() == expected.lowercase()
+
+    private fun matchesExcludedIgnoreCase(actual: String, excluded: String?): Boolean =
+        !excluded.isNullOrBlank() && actual.lowercase() == excluded.lowercase()
 
     suspend fun queryLogs(
         organizationId: Long,
