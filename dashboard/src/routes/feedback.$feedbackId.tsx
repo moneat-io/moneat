@@ -28,6 +28,7 @@ import {StatusDot, type StatusTone} from '@/components/ui/status-dot'
 import {Avatar, AvatarFallback} from '@/components/ui/avatar'
 import {Separator} from '@/components/ui/separator'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,} from '@/components/ui/tooltip'
+import {feedbackSourceLabel} from '@/lib/telemetry-sources'
 import {
   AlertCircle,
   Archive,
@@ -194,9 +195,20 @@ function FeedbackDetailPage() {
   const initials = getInitials(feedback.name, feedback.contactEmail)
   const avatarColor = getAvatarColor(feedback.name, feedback.contactEmail)
   const hasSubmitter = feedback.name || feedback.contactEmail || feedback.url
-  const hasMetadata = feedback.environment || feedback.release || feedback.platform || feedback.sdkName || feedback.sdkVersion
+  const hasSourceMetadata =
+    feedback.sourceType || feedback.sourceName || feedback.sourceEventName || feedback.traceId || feedback.spanId
+  const hasMetadata =
+    feedback.environment ||
+    feedback.release ||
+    feedback.platform ||
+    feedback.sdkName ||
+    feedback.sdkVersion ||
+    hasSourceMetadata
   const hasTags = Object.keys(feedback.tags ?? {}).length > 0
+  const resourceAttributes = feedback.resourceAttributes ?? {}
+  const hasResourceAttributes = Object.keys(resourceAttributes).length > 0
   const hasRelated = feedback.associatedEventId || feedback.replayId
+  const sourceLabel = feedbackSourceLabel(feedback.sourceType, feedback.sourceName)
 
   return (
     <TooltipProvider>
@@ -398,11 +410,11 @@ function FeedbackDetailPage() {
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground">Environment</p>
-                          <p className="text-sm font-medium">
+                          <div className="mt-0.5">
                             <Badge variant={environmentBadgeVariant(feedback.environment)} className="font-medium">
                               {feedback.environment}
                             </Badge>
-                          </p>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -444,6 +456,68 @@ function FeedbackDetailPage() {
                         </div>
                       </div>
                     )}
+                    {(feedback.sourceType || feedback.sourceName) && (
+                      <div className="flex items-center gap-3">
+                        <div className="rounded-md bg-muted p-2">
+                          <Code className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Telemetry Source</p>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                            <Badge variant="outline" className="font-medium">
+                              {sourceLabel}
+                            </Badge>
+                            {feedback.sourceType && (
+                              <span className="font-mono text-xs text-muted-foreground">
+                                {feedback.sourceType}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {feedback.sourceEventName && (
+                      <div className="flex items-center gap-3 group">
+                        <div className="rounded-md bg-muted p-2">
+                          <Code className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs text-muted-foreground">Source Event</p>
+                          <p className="text-sm font-medium font-mono truncate">{feedback.sourceEventName}</p>
+                        </div>
+                        <div className="opacity-0 group-hover:opacity-100 transition shrink-0">
+                          <CopyButton text={feedback.sourceEventName} />
+                        </div>
+                      </div>
+                    )}
+                    {feedback.traceId && (
+                      <div className="flex items-center gap-3 group">
+                        <div className="rounded-md bg-muted p-2">
+                          <Code className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs text-muted-foreground">Trace ID</p>
+                          <p className="text-sm font-medium font-mono truncate">{feedback.traceId}</p>
+                        </div>
+                        <div className="opacity-0 group-hover:opacity-100 transition shrink-0">
+                          <CopyButton text={feedback.traceId} />
+                        </div>
+                      </div>
+                    )}
+                    {feedback.spanId && (
+                      <div className="flex items-center gap-3 group">
+                        <div className="rounded-md bg-muted p-2">
+                          <Code className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs text-muted-foreground">Span ID</p>
+                          <p className="text-sm font-medium font-mono truncate">{feedback.spanId}</p>
+                        </div>
+                        <div className="opacity-0 group-hover:opacity-100 transition shrink-0">
+                          <CopyButton text={feedback.spanId} />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="text-center py-4 text-muted-foreground">
@@ -462,6 +536,30 @@ function FeedbackDetailPage() {
                     <div
                       key={k}
                       className="inline-flex items-center rounded-lg border border-border/60 bg-muted/50 px-3 py-1.5 text-sm"
+                    >
+                      <span className="text-muted-foreground font-medium">{k}</span>
+                      <span className="mx-1.5 text-muted-foreground/40">=</span>
+                      <span className="font-mono text-xs">{v}</span>
+                    </div>
+                  ))}
+                </div>
+            </SectionCard>
+          )}
+
+          {hasResourceAttributes && (
+            <SectionCard
+              title="Resource Attributes"
+              icon={Server}
+              count={Object.keys(resourceAttributes).length}
+              className="mt-6"
+            >
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(resourceAttributes).map(([k, v]) => (
+                    <div
+                      key={k}
+                      className={
+                        'inline-flex items-center rounded-lg border border-border/60 bg-muted/50 px-3 py-1.5 text-sm'
+                      }
                     >
                       <span className="text-muted-foreground font-medium">{k}</span>
                       <span className="mx-1.5 text-muted-foreground/40">=</span>

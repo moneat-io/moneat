@@ -17,9 +17,15 @@
 package com.moneat.otlp
 
 import com.moneat.billing.services.BillingQuotaService
+import com.moneat.billing.models.BillingUsageResponse
+import com.moneat.billing.services.QuotaReservationResult
 import com.moneat.otlp.routes.otlpMetricsRoutes
+import com.moneat.otlp.routes.otlpFeedbackRoutes
 import com.moneat.otlp.routes.otlpTraceRoutes
 import com.moneat.otlp.services.OtlpApiKeyService
+import com.moneat.otlp.services.OtlpFeedbackIngestResult
+import com.moneat.otlp.services.OtlpFeedbackInsert
+import com.moneat.otlp.services.OtlpFeedbackService
 import com.moneat.otlp.services.OtlpMetricInsert
 import com.moneat.otlp.services.OtlpMetricsService
 import com.moneat.otlp.services.OtlpServiceDescriptor
@@ -43,6 +49,7 @@ import io.ktor.server.application.install
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -63,6 +70,7 @@ class OtlpIngestRoutesTest {
     private val otlpApiKeyService = mockk<OtlpApiKeyService>()
     private val traceService = mockk<OtlpTraceService>(relaxed = true)
     private val metricsService = mockk<OtlpMetricsService>(relaxed = true)
+    private val feedbackService = mockk<OtlpFeedbackService>(relaxed = true)
     private val quotaService = mockk<BillingQuotaService>(relaxed = true)
     private val routingService = mockk<OtlpServiceRoutingService>(relaxed = true)
 
@@ -83,6 +91,7 @@ class OtlpIngestRoutesTest {
             routing {
                 otlpTraceRoutes(traceService, quotaService, otlpApiKeyService, routingService)
                 otlpMetricsRoutes(metricsService, quotaService, otlpApiKeyService, routingService)
+                otlpFeedbackRoutes(feedbackService, quotaService, otlpApiKeyService, routingService)
             }
         }
     }
@@ -402,6 +411,134 @@ class OtlpIngestRoutesTest {
         assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
 
+    // ──── Feedback Routes ────
+
+    @Test
+    fun `POST feedback otlp returns 401 without bearer token`() = testApplication {
+        installRoutes()()
+        val response = client.post("/v1/feedback/otlp") {
+            contentType(ContentType.Application.Json)
+            setBody("{}")
+        }
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
+    }
+
+    @Test
+    fun `POST feedback otlp returns 415 for unsupported content type`() = testApplication {
+        every { otlpApiKeyService.validateKey(VALID_KEY) } returns ORG_ID
+        installRoutes()()
+        val response = client.post("/v1/feedback/otlp") {
+            header(HttpHeaders.Authorization, "Bearer $VALID_KEY")
+            header(HttpHeaders.ContentType, "text/plain")
+            setBody("feedback")
+        }
+        assertEquals(HttpStatusCode.UnsupportedMediaType, response.status)
+    }
+
+    @Test
+    fun `POST feedback otlp routes feedback by service mapping before insert`() = testApplication {
+        val checkoutIdentity = OtlpServiceIdentity("checkout", "api")
+        val storedFeedback = slot<List<OtlpFeedbackInsert>>()
+        every { otlpApiKeyService.validateKey(VALID_KEY) } returns ORG_ID
+        every { feedbackService.parseOtlpFeedbackJson(any()) } returns listOf(
+            feedback(serviceNamespace = "checkout", service = "api", environment = "production"),
+            feedback(serviceNamespace = "", service = "", environment = "")
+        )
+        every {
+            routingService.resolveProjectIds(
+                ORG_ID,
+                any<List<OtlpServiceDescriptor>>(),
+                OtlpSignalType.FEEDBACK
+            )
+        } returns mapOf(checkoutIdentity to 44L)
+        every { routingService.normalizeIdentity("checkout", "api") } returns checkoutIdentity
+        every { routingService.normalizeIdentity("", "") } returns null
+        coEvery { feedbackService.insertFeedback(ORG_ID, capture(storedFeedback)) } returns
+            OtlpFeedbackIngestResult(accepted = 1, unmapped = 0)
+        installRoutes()()
+
+        val response = client.post("/v1/feedback/otlp") {
+            header(HttpHeaders.Authorization, "Bearer $VALID_KEY")
+            contentType(ContentType.Application.Json)
+            setBody("""{"resourceLogs":[{}]}""")
+        }
+
+        assertEquals(HttpStatusCode.Accepted, response.status)
+        assertTrue(response.bodyAsText().contains(""""accepted":1"""))
+        assertTrue(response.bodyAsText().contains(""""unmapped":1"""))
+        assertEquals(44L, storedFeedback.captured.single().projectId)
+        verify {
+            routingService.resolveProjectIds(
+                ORG_ID,
+                match<List<OtlpServiceDescriptor>> {
+                    it.first().serviceNamespace == "checkout" &&
+                        it.first().serviceName == "api" &&
+                        it.first().environment == "production"
+                },
+                OtlpSignalType.FEEDBACK
+            )
+        }
+    }
+
+    @Test
+    fun `POST feedback otlp reserves feedback quota for mapped records`() = testApplication {
+        every { otlpApiKeyService.validateKey(VALID_KEY) } returns ORG_ID
+        every { feedbackService.parseOtlpFeedbackJson(any()) } returns listOf(
+            feedback(serviceNamespace = "checkout", service = "api", environment = "production")
+        )
+        every {
+            routingService.resolveProjectIds(
+                ORG_ID,
+                any<List<OtlpServiceDescriptor>>(),
+                OtlpSignalType.FEEDBACK
+            )
+        } returns mapOf(OtlpServiceIdentity("checkout", "api") to 44L)
+        every { routingService.normalizeIdentity("checkout", "api") } returns OtlpServiceIdentity("checkout", "api")
+        every { quotaService.isEnforcementEnabled() } returns true
+        every { quotaService.reserveUnits(ORG_ID, 1, "feedback", any()) } returns
+            QuotaReservationResult(allowed = true, usage = billingUsage())
+        coEvery { feedbackService.insertFeedback(ORG_ID, any()) } returns
+            OtlpFeedbackIngestResult(accepted = 1, unmapped = 0)
+        installRoutes()()
+
+        val response = client.post("/v1/feedback/otlp") {
+            header(HttpHeaders.Authorization, "Bearer $VALID_KEY")
+            contentType(ContentType.Application.Json)
+            setBody("""{"resourceLogs":[{}]}""")
+        }
+
+        assertEquals(HttpStatusCode.Accepted, response.status)
+        verify { quotaService.reserveUnits(ORG_ID, 1, "feedback", any()) }
+    }
+
+    @Test
+    fun `POST feedback otlp returns 429 when feedback quota is exceeded`() = testApplication {
+        every { otlpApiKeyService.validateKey(VALID_KEY) } returns ORG_ID
+        every { feedbackService.parseOtlpFeedbackJson(any()) } returns listOf(
+            feedback(serviceNamespace = "checkout", service = "api", environment = "production")
+        )
+        every {
+            routingService.resolveProjectIds(
+                ORG_ID,
+                any<List<OtlpServiceDescriptor>>(),
+                OtlpSignalType.FEEDBACK
+            )
+        } returns mapOf(OtlpServiceIdentity("checkout", "api") to 44L)
+        every { routingService.normalizeIdentity("checkout", "api") } returns OtlpServiceIdentity("checkout", "api")
+        every { quotaService.isEnforcementEnabled() } returns true
+        every { quotaService.reserveUnits(ORG_ID, 1, "feedback", any()) } returns
+            QuotaReservationResult(allowed = false, reason = "feedback limit reached", usage = billingUsage())
+        installRoutes()()
+
+        val response = client.post("/v1/feedback/otlp") {
+            header(HttpHeaders.Authorization, "Bearer $VALID_KEY")
+            contentType(ContentType.Application.Json)
+            setBody("""{"resourceLogs":[{}]}""")
+        }
+
+        assertEquals(HttpStatusCode.TooManyRequests, response.status)
+    }
+
     private fun traceSpan(
         serviceNamespace: String,
         service: String,
@@ -460,5 +597,69 @@ class OtlpIngestRoutesTest {
             service = service,
             env = env,
             host = "api-host"
+        )
+
+    private fun feedback(
+        serviceNamespace: String,
+        service: String,
+        environment: String,
+    ): OtlpFeedbackInsert =
+        OtlpFeedbackInsert(
+            feedbackId = "4f01ede1-5802-4ff1-81b7-f2fe9add31e5",
+            projectId = null,
+            timestampMs = 1_700_000_000_000L,
+            message = "Checkout is confusing",
+            contactEmail = "user@example.com",
+            name = "User Example",
+            url = "https://app.example.com/checkout",
+            associatedEventId = "",
+            replayId = "",
+            environment = environment,
+            release = "1.0.0",
+            platform = "javascript",
+            userId = "user-1",
+            userEmail = "user@example.com",
+            userUsername = "user",
+            traceId = "00000000000000000000000000000001",
+            spanId = "0000000000000001",
+            sourceType = "otlp",
+            sourceName = "OpenTelemetry",
+            sourceEventName = "moneat.user_feedback",
+            serviceNamespace = serviceNamespace,
+            service = service,
+            tags = emptyMap(),
+            resourceAttributes = emptyMap()
+        )
+
+    private fun billingUsage(): BillingUsageResponse =
+        BillingUsageResponse(
+            organizationId = ORG_ID,
+            periodStart = "2026-06-01T00:00:00Z",
+            periodEnd = "2026-07-01T00:00:00Z",
+            retentionDays = 30,
+            logRetentionDays = 30,
+            replayRetentionDays = 30,
+            llmRetentionDays = 30,
+            apmTraceRetentionDays = 30,
+            usedUnits = 1,
+            usedErrors = 0,
+            errorLimit = 1_000,
+            usedTransactions = 0,
+            transactionLimit = 1_000,
+            usedReplays = 0,
+            replayLimit = 1_000,
+            usedFeedback = 1,
+            feedbackLimit = 1_000,
+            usedBytes = 100,
+            bytesLimit = 1_000_000,
+            baseLimitUnits = 1_000,
+            paygLimitUnits = 0,
+            totalLimitUnits = 1_000,
+            paygBudgetCents = 0,
+            paygUsedUnits = 0,
+            paygUsedCentsEstimate = 0,
+            plan = "free",
+            status = "active",
+            withinQuota = true
         )
 }

@@ -50,6 +50,7 @@ data class OtlpObservedServiceResponse(
     @SerialName("seen_logs") val seenLogs: Boolean,
     @SerialName("seen_traces") val seenTraces: Boolean,
     @SerialName("seen_metrics") val seenMetrics: Boolean,
+    @SerialName("seen_feedback") val seenFeedback: Boolean = false,
     @SerialName("last_environment") val lastEnvironment: String? = null,
     @SerialName("first_seen_at") val firstSeenAt: String,
     @SerialName("last_seen_at") val lastSeenAt: String,

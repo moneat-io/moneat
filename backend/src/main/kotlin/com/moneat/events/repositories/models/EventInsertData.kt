@@ -123,7 +123,13 @@ data class FeedbackInsertData(
     val sdkName: String,
     val sdkVersion: String,
     val tags: Map<String, String>?,
-    val organizationId: Int
+    val organizationId: Int,
+    val sourceType: String = "sentry",
+    val sourceName: String = "Sentry-compatible SDK",
+    val sourceEventName: String = "feedback",
+    val traceId: String = "",
+    val spanId: String = "",
+    val resourceAttributes: Map<String, String>? = null
 )
 
 data class ReplayEventInsertData(

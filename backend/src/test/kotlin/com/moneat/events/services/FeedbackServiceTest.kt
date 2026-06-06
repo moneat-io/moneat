@@ -78,6 +78,17 @@ class FeedbackServiceTest {
             put("platform", "android")
             put("sdk_name", "sentry.java.android")
             put("sdk_version", "7.14.0")
+            put("source_type", "sentry")
+            put("source_name", "Sentry-compatible SDK")
+            put("source_event_name", "feedback")
+            put("trace_id", "")
+            put("span_id", "")
+            put(
+                "resource_attributes",
+                buildJsonObject {
+                    put("service.name", "checkout-api")
+                }
+            )
         }
         coEvery { queryHelper.executeJsonEachRowQuery(any(), any()) } returns listOf(row)
 
@@ -85,6 +96,12 @@ class FeedbackServiceTest {
         assertEquals(FEEDBACK_UUID, detail?.feedbackId)
         assertEquals("2026-05-29T17:39:22.000Z", detail?.timestamp)
         assertEquals("unresolved", detail?.status)
+        assertEquals("sentry", detail?.sourceType)
+        assertEquals("Sentry-compatible SDK", detail?.sourceName)
+        assertEquals("feedback", detail?.sourceEventName)
+        assertEquals("", detail?.traceId)
+        assertEquals("", detail?.spanId)
+        assertEquals(mapOf("service.name" to "checkout-api"), detail?.resourceAttributes)
     }
 
     @Test

@@ -37,6 +37,7 @@ function signalBadges(service: OtlpObservedService) {
     service.seenLogs ? 'logs' : null,
     service.seenTraces ? 'traces' : null,
     service.seenMetrics ? 'metrics' : null,
+    service.seenFeedback ? 'feedback' : null,
   ].filter((signal): signal is string => signal != null)
 }
 

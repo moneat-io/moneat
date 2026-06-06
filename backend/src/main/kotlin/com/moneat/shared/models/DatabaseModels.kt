@@ -267,6 +267,7 @@ object OtelObservedServices : Table("otel_observed_services") {
     val seen_logs = bool("seen_logs").default(false)
     val seen_traces = bool("seen_traces").default(false)
     val seen_metrics = bool("seen_metrics").default(false)
+    val seen_feedback = bool("seen_feedback").default(false)
     val last_environment = varchar("last_environment", OTEL_SERVICE_FIELD_MAX_LENGTH).nullable()
     init {
         uniqueIndex(organization_id, service_namespace, service_name)

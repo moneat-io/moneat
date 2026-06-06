@@ -51,6 +51,7 @@ import {
   serviceRailSections,
   serviceScopeKey,
 } from '@/lib/service-facet-scope'
+import {feedbackSourceLabel} from '@/lib/telemetry-sources'
 import type {FacetFilter} from '@/lib/filters/types'
 
 export const Route = createFileRoute('/feedback')({
@@ -405,6 +406,7 @@ function FeedbackPage() {
                     const displayName = f.name || f.contactEmail || 'Anonymous'
                     const initials = getInitials(f.name, f.contactEmail)
                     const avatarColor = getAvatarColor(f.name, f.contactEmail)
+                    const sourceLabel = feedbackSourceLabel(f.sourceType, f.sourceName)
 
                     return (
                       <div
@@ -465,6 +467,9 @@ function FeedbackPage() {
                                   {f.environment}
                                 </Badge>
                               )}
+                              <Badge variant="outline" size="sm" className="font-normal text-muted-foreground">
+                                {sourceLabel}
+                              </Badge>
                               {f.platform && (
                                 <Badge variant="outline" size="sm" className="font-normal gap-0.5">
                                   <Monitor className="h-2.5 w-2.5" />
