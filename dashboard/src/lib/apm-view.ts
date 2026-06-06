@@ -130,10 +130,21 @@ export function formatRps(rps: number): string {
 
 export function formatMs(ms: number): string {
   if (ms >= 1000) {
-    const seconds = (ms / 1000).toFixed(2).replace(/\.?0+$/, '')
+    const seconds = trimFixedFraction((ms / 1000).toFixed(2))
     return `${seconds}s`
   }
   return `${ms}ms`
+}
+
+function trimFixedFraction(value: string): string {
+  let end = value.length
+  while (end > 0 && value[end - 1] === '0') {
+    end -= 1
+  }
+  if (end > 0 && value[end - 1] === '.') {
+    end -= 1
+  }
+  return value.slice(0, end)
 }
 
 const TYPE_LABEL: Record<ServiceType, string> = {
