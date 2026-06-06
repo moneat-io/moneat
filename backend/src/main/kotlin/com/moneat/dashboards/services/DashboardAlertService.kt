@@ -142,9 +142,15 @@ class DashboardAlertService(
         val alertPriority = normalizeAlertPriority(request.alertPriority ?: request.legacyIncidentSeverity)
 
         return transaction {
-            DashboardWidgets.selectAll().where {
-                (DashboardWidgets.id eq request.widgetId) and (DashboardWidgets.dashboardId eq dashboardId)
-            }.firstOrNull() ?: throw IllegalArgumentException("Widget not found in this dashboard")
+            DashboardWidgets.innerJoin(Dashboards)
+                .selectAll()
+                .where {
+                    (DashboardWidgets.id eq request.widgetId) and
+                        (DashboardWidgets.dashboardId eq dashboardId) and
+                        (Dashboards.id eq dashboardId) and
+                        (Dashboards.orgId eq orgId)
+                }
+                .firstOrNull() ?: throw IllegalArgumentException("Widget not found in this dashboard")
 
             val id = DashboardWidgetAlerts.insert {
                 it[DashboardWidgetAlerts.widgetId] = request.widgetId

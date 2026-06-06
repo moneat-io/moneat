@@ -31,6 +31,7 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DashboardQueryEngineTest {
@@ -421,6 +422,26 @@ class DashboardQueryEngineTest {
         )
         val clauses = engine.buildWhereClauses(dsl, 123, "timestamp", null, 90)
         assertTrue(clauses.any { it.contains("level = 'error'") })
+    }
+
+    @Test
+    fun `buildWhereClauses applies log raw query through explorer parser`() {
+        val dsl = QueryDsl(
+            dataSource = "logs",
+            rawQuery = "level:error service:api timeout"
+        )
+
+        val clauses = engine.buildWhereClauses(dsl, 123, "timestamp", null, 90, orgId = 456)
+        val rawClause = clauses.single { it.contains("toString(level) = 'error'") }
+
+        assertContains(rawClause, "service = 'api'")
+        assertContains(rawClause, "hasTokenCaseInsensitive(message, 'timeout')")
+    }
+
+    @Test
+    fun `buildLogRawQueryClause ignores non log and blank raw queries`() {
+        assertNull(engine.buildLogRawQueryClause(QueryDsl(dataSource = "events", rawQuery = "level:error")))
+        assertNull(engine.buildLogRawQueryClause(QueryDsl(dataSource = "logs", rawQuery = " ")))
     }
 
     // ──── buildQuery (integration / full SQL) ────

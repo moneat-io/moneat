@@ -27,24 +27,26 @@ import com.moneat.dashboards.models.FilterOp
 import com.moneat.dashboards.models.GroupByType
 import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.TimeRangeDef
+import com.moneat.logs.services.LogQueryParser
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils
+import com.moneat.utils.TimeConstants.MILLIS_PER_DAY
+import com.moneat.utils.TimeConstants.MILLIS_PER_HOUR
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
 import mu.KotlinLogging
 import kotlin.collections.filter
-import com.moneat.utils.suspendRunCatching
-import com.moneat.utils.TimeConstants.MILLIS_PER_DAY
-import com.moneat.utils.TimeConstants.MILLIS_PER_HOUR
-import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 private val logger = KotlinLogging.logger {}
 
 class DashboardQueryEngine {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val json = Json { ignoreUnknownKeys = true }
+    private val logQueryParser = LogQueryParser()
 
     private val allowedTables = setOf(
         "events",
@@ -91,6 +93,7 @@ class DashboardQueryEngine {
         private const val EPOCH_MS_TO_SECONDS_DIVISOR = 1000.0
         private const val DATETIME64_MILLIS_PRECISION = 3
         private const val QUERY_PREVIEW_LENGTH = 80
+        private const val LOGS_TABLE_NAME = "logs"
 
         fun resolveTimeInterval(from: String, to: String): String {
             val rangeMs = parseRelativeTime(to) - parseRelativeTime(from)
@@ -286,8 +289,19 @@ class DashboardQueryEngine {
         for (filter in dsl.filters) {
             clauses.add(buildFilterClause(filter))
         }
+        buildLogRawQueryClause(dsl)?.let { clauses.add(it) }
 
         return clauses
+    }
+
+    internal fun buildLogRawQueryClause(dsl: QueryDsl): String? {
+        val rawQuery = dsl.rawQuery?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        if (!dsl.isLogsDataSource()) return null
+        val root = logQueryParser.parse(rawQuery).rootNode ?: return null
+        val condition = logQueryParser.toClickHouseSql(root) { value -> ClickHouseSqlUtils.escapeSql(value) }
+        return condition
+            .takeIf { it.isNotBlank() && it != "1=1" }
+            ?.let { "($it)" }
     }
 
     internal fun buildScopeClause(dsl: QueryDsl, projectId: Long, orgId: Long?): String {
@@ -392,7 +406,7 @@ class DashboardQueryEngine {
         retentionDays: Int = 90,
         orgId: Long? = null
     ): List<Map<String, JsonElement>> {
-        if (dsl.rawQuery != null) {
+        if (dsl.rawQuery != null && !dsl.isLogsDataSource()) {
             logger.warn { "Skipping raw query execution for security - use query DSL" }
             return emptyList()
         }
@@ -442,6 +456,9 @@ class DashboardQueryEngine {
 
     fun parseCustomDataSourceId(dataSource: String): Long? =
         if (dataSource.startsWith("custom:")) dataSource.removePrefix("custom:").toLongOrNull() else null
+
+    private fun QueryDsl.isLogsDataSource(): Boolean =
+        DataSource.fromString(dataSource)?.tableName == LOGS_TABLE_NAME
 
     private fun getBuiltInDataSources(): List<DataSourceInfo> = listOf(
         DataSourceInfo(
