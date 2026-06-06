@@ -1026,47 +1026,6 @@ object ApmServiceCatalogService {
         }
     }
 
-    private suspend fun errorRowsFromRollup(
-        organizationId: Int,
-        serviceName: String,
-        resource: String?,
-        query: ApmServiceQuery,
-        parentSpan: ISpan?,
-    ): List<ApmErrorRow> {
-        val params = ClickHouseQueryParameters()
-        val filters = mutableListOf(
-            ClickHouseQueryUtils.orgIdClause(organizationId.toLong()),
-            query.timeRange.bucketStartClause(),
-            "service = ${params.string(serviceName)}",
-        )
-        resource?.let { resourceName -> filters.add("resource = ${params.string(resourceName)}") }
-        val sql = """
-            SELECT
-                resource,
-                error_message,
-                error_type,
-                sumMerge(error_count_state) as error_count,
-                toString(maxMerge(last_seen_state)) as last_seen
-            FROM `$clickhouseDb`.apm_error_groups_hourly
-            WHERE ${filters.joinToString(" AND ")}
-            GROUP BY resource, error_message, error_type
-            ORDER BY error_count DESC, last_seen DESC
-            LIMIT 20
-            FORMAT JSONEachRow
-        """.trimIndent()
-        return jsonRows(sql, parentSpan, params.asMap()).map { row ->
-            val errorType = row.stringValue("error_type").ifBlank { "Trace error" }
-            val message = row.stringValue("error_message").ifBlank { "Trace contains errored spans" }
-            ApmErrorRow(
-                severity = "error",
-                title = "$errorType: $message",
-                sub = row.stringValue("resource"),
-                chips = listOf(row.stringValue("last_seen")).filter { chip -> chip.isNotBlank() },
-                events = row.longValue("error_count").toString(),
-            )
-        }
-    }
-
     private suspend fun exemplarSpans(
         organizationId: Int,
         traceId: String,

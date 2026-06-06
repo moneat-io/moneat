@@ -283,6 +283,113 @@ class ApmServiceCatalogServiceTest {
     }
 
     @Test
+    fun `getResourceDetail assembles dependency waterfall distribution and errors`() = runBlocking {
+        mockkObject(ClickHouseClient)
+        val queries = java.util.Collections.synchronizedList(mutableListOf<String>())
+        try {
+            every { ClickHouseClient.getDatabase() } returns "moneat"
+            coEvery { ClickHouseClient.executeWithFormat(any(), any(), any<Map<String, String>>()) } answers {
+                val query = firstArg<String>()
+                queries += query
+                when {
+                    "span_id_out" in query ->
+                        listOf(
+                            "{" +
+                                "\"span_id_out\":\"root\",\"parent_id_out\":\"0\",\"name\":\"POST\"," +
+                                "\"service\":\"checkout-api\",\"resource\":\"POST /checkout/pay\",\"type\":\"web\"," +
+                                "\"start_ns\":1000000000,\"duration_ms\":1400,\"error\":1,\"status_code\":500}",
+                            "{" +
+                                "\"span_id_out\":\"db\",\"parent_id_out\":\"root\",\"name\":\"SELECT\"," +
+                                "\"service\":\"payments-db\",\"resource\":\"SELECT payments\",\"type\":\"db\"," +
+                                "\"start_ns\":1200000000,\"duration_ms\":700,\"error\":0,\"status_code\":200}",
+                        ).joinToString("\n")
+                    "error_type" in query && "user_count" in query ->
+                        "{" +
+                            "\"resource\":\"POST /checkout/pay\",\"error_type\":\"PaymentTimeout\"," +
+                            "\"error_message\":\"processor timed out\",\"error_count\":9,\"user_count\":2," +
+                            "\"status_code\":504,\"unhandled\":1,\"version\":\"v3.1.2\"," +
+                            "\"first_seen\":\"2026-06-06T03:00:00.000Z\"," +
+                            "\"last_seen\":\"2026-06-06T03:21:00.000Z\"}"
+                    "least(intDiv" in query ->
+                        """
+                        {"bucket_idx":0,"span_count":1}
+                        {"bucket_idx":8,"span_count":5}
+                        {"bucket_idx":19,"span_count":10}
+                        """.trimIndent()
+                    "FROM `moneat`.apm_service_edges_hourly" in query ->
+                        "{" +
+                            "\"peer_service\":\"payments-db\",\"call_count\":40,\"error_count\":4," +
+                            "\"avg_latency_ms\":180,\"p95_latency_ms\":700}"
+                    "GROUP BY trace_id_out" in query ->
+                        "{" +
+                            "\"trace_id_out\":\"trace-resource-1\",\"resource\":\"POST /checkout/pay\"," +
+                            "\"name\":\"POST\",\"http_status\":500,\"duration_ms\":1400," +
+                            "\"span_count\":8,\"time\":\"03:01:00\"}"
+                    "previous_span_count" in query ->
+                        "{" +
+                            "\"previous_span_count\":20,\"previous_error_count\":1," +
+                            "\"previous_p95_ns\":300000000,\"previous_p99_ns\":900000000," +
+                            "\"previous_apdex_satisfied\":18,\"previous_apdex_tolerating\":1}"
+                    "GROUP BY version" in query ->
+                        "{" +
+                            "\"version\":\"v3.1.2\",\"first_seen\":\"2026-06-06T03:00:00.000Z\"," +
+                            "\"last_seen\":\"2026-06-06T03:20:00.000Z\",\"deploy_t\":\"03:00\"," +
+                            "\"span_count\":40,\"error_count\":4,\"p95_ns\":700000000}"
+                    "GROUP BY bucket_start" in query && "count() /" in query ->
+                        "{\"t\":\"03:00\",\"rps\":11.5,\"errors\":0.7}"
+                    "GROUP BY bucket_start" in query ->
+                        "{\"t\":\"03:00\",\"p50\":110,\"p90\":620,\"p95\":700,\"p99\":1200}"
+                    "argMax(name, start)" in query ->
+                        "{" +
+                            "\"resource\":\"POST /checkout/pay\",\"name\":\"POST /checkout/pay\",\"type\":\"web\"," +
+                            "\"span_count\":40,\"error_count\":4,\"p50_ns\":110000000," +
+                            "\"p95_ns\":700000000,\"p99_ns\":1200000000}"
+                    "GROUP BY service" in query ->
+                        "{" +
+                            "\"name\":\"checkout-api\",\"span_count\":80,\"error_count\":8," +
+                            "\"p50_ns\":90000000,\"p95_ns\":700000000,\"p99_ns\":1200000000," +
+                            "\"apdex_satisfied\":64,\"apdex_tolerating\":8," +
+                            "\"envs\":[\"production\"],\"sources\":[\"otlp\"],\"version\":\"v3.1.2\"," +
+                            "\"last_seen\":\"2026-06-06T03:20:00.000Z\",\"type\":\"web\"}"
+                    else -> ""
+                }
+            }
+
+            val detail = ApmServiceCatalogService.getResourceDetail(
+                organizationId = 12,
+                serviceName = "checkout-api",
+                resourceSlug = "post-checkout-pay",
+                query = ApmServiceQuery(timeRange = defaultApmQueryTimeRange),
+            )
+
+            requireNotNull(detail)
+            assertEquals("checkout-api", detail.serviceName)
+            assertEquals("POST", detail.method)
+            assertEquals("/checkout/pay", detail.path)
+            assertEquals("payments-db", detail.topDependency)
+            assertEquals("03:00", detail.deployAt)
+            assertEquals(700, detail.latency.single().p95)
+            assertEquals(11.5, detail.throughput.single().rps)
+            assertEquals("payments-db contributes to the slow path for POST /checkout/pay.", detail.whereInsight)
+            assertEquals("PaymentTimeout: processor timed out", detail.errors.single().title)
+            assertEquals("9", detail.errors.single().events)
+            assertEquals("2", detail.errors.single().users)
+            assertTrue(detail.errors.single().unhandled)
+            assertTrue(queries.any { query -> "uniqExactIf(user_key" in query })
+            assertEquals("trace-resource-1", detail.exemplar.traceId)
+            assertEquals(500, detail.exemplar.httpStatus)
+            assertTrue(detail.exemplar.rows.any { row -> row.tone == "db" && row.indent != null })
+            assertTrue(detail.exemplar.rows.first().selected)
+            assertTrue(detail.whereTimeSpent.any { row -> row.label == "SELECT payments" })
+            assertTrue(detail.distribution.any { bar -> bar.band == "bad" && bar.h == 100 })
+            assertTrue(!detail.slowTraces.single().bucket.isNullOrBlank())
+            assertTrue(detail.kpis.any { kpi -> kpi.delta != null })
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
     fun `getServiceDetail uses parameterized exact service lookup without catalog paging`() = runBlocking {
         mockkObject(ClickHouseClient)
         val calls = java.util.Collections.synchronizedList(mutableListOf<Pair<String, Map<String, String>>>())
