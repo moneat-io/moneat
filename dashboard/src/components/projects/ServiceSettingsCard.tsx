@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useEffect, useMemo, useState} from 'react'
+import {useEffect, useMemo, useRef, useState} from 'react'
 import {Link, useNavigate, useRouter} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {
@@ -46,6 +46,8 @@ import {cn} from '@/lib/utils'
 import type {TelemetrySourceId} from '@/lib/telemetry-sources'
 
 type PlatformFilter = 'all' | 'mobile' | 'frontend' | 'backend' | 'desktop-gaming'
+
+const COPIED_STATE_RESET_MS = 2000
 
 const platformFilterTabs: Array<{id: PlatformFilter; label: string; icon: React.ElementType}> = [
   {id: 'all', label: 'All', icon: Layers},
@@ -92,6 +94,8 @@ export function ServiceSettingsCard({serviceId, sourceIds, onDeleted}: ServiceSe
   const [copiedSlug, setCopiedSlug] = useState(false)
   const [copiedConfig, setCopiedConfig] = useState(false)
   const [orgSlug, setOrgSlug] = useState<string | null>(null)
+  const copiedSlugResetId = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null)
+  const copiedConfigResetId = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null)
 
   const hasSentry = sourceIds.includes('sentry-sdk')
   const hasOtel = sourceIds.includes('opentelemetry')
@@ -112,6 +116,17 @@ export function ServiceSettingsCard({serviceId, sourceIds, onDeleted}: ServiceSe
       cancelled = true
     }
   }, [hasSentry])
+
+  useEffect(() => {
+    return () => {
+      if (copiedSlugResetId.current !== null) {
+        globalThis.clearTimeout(copiedSlugResetId.current)
+      }
+      if (copiedConfigResetId.current !== null) {
+        globalThis.clearTimeout(copiedConfigResetId.current)
+      }
+    }
+  }, [])
 
   const filteredPlatforms = useMemo(() => {
     return platforms.filter((platform: PlatformType) => {
@@ -210,14 +225,26 @@ export function ServiceSettingsCard({serviceId, sourceIds, onDeleted}: ServiceSe
   const copySlug = () => {
     navigator.clipboard.writeText(project.slug)
     setCopiedSlug(true)
-    setTimeout(() => setCopiedSlug(false), 2000)
+    if (copiedSlugResetId.current !== null) {
+      globalThis.clearTimeout(copiedSlugResetId.current)
+    }
+    copiedSlugResetId.current = globalThis.setTimeout(() => {
+      setCopiedSlug(false)
+      copiedSlugResetId.current = null
+    }, COPIED_STATE_RESET_MS)
   }
 
   const copyConfig = () => {
     if (sentryCliConfig) {
       navigator.clipboard.writeText(sentryCliConfig)
       setCopiedConfig(true)
-      setTimeout(() => setCopiedConfig(false), 2000)
+      if (copiedConfigResetId.current !== null) {
+        globalThis.clearTimeout(copiedConfigResetId.current)
+      }
+      copiedConfigResetId.current = globalThis.setTimeout(() => {
+        setCopiedConfig(false)
+        copiedConfigResetId.current = null
+      }, COPIED_STATE_RESET_MS)
     }
   }
 
