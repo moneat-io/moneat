@@ -113,7 +113,7 @@ class DatadogModule : EnterpriseModule {
             rateLimit(RateLimitName("api")) {
                 securityQueryRoutes()
             }
-            traceDashboardRoutes()
+            traceDashboardRoutes(includeServiceDashboardRoutes = false)
             profileDashboardRoutes()
             datadogEventQueryRoutes()
             datadogHostQueryRoutes()

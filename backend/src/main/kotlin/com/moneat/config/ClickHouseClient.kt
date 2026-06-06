@@ -36,6 +36,7 @@ import java.util.Locale
 
 private val CLICKHOUSE_ERROR_CODE = Regex("""^Code:\s*(\d+)""")
 private val logger = KotlinLogging.logger {}
+private const val CLICKHOUSE_FORMAT_KEYWORD = "FORMAT"
 
 class ClickHouseQueryException(
     val isTimeout: Boolean,
@@ -60,6 +61,8 @@ object ClickHouseClient {
     private const val CLICKHOUSE_TIMEOUT_ERROR_NAME = "TIMEOUT_EXCEEDED"
     private const val CLICKHOUSE_TIMEOUT_MESSAGE = "timeout exceeded"
     private const val NOT_INITIALIZED_MESSAGE = "ClickHouseClient is not initialized. Call init() first."
+    private const val CLICKHOUSE_FORMAT_JSON_EACH_ROW = "JSONEachRow"
+    private const val CLICKHOUSE_FORMAT_TAB_SEPARATED = "TabSeparated"
 
     @Volatile
     private var httpClient: HttpClient? = null
@@ -113,7 +116,9 @@ object ClickHouseClient {
 
     suspend fun execute(
         query: String,
-        span: ISpan? = null
+        span: ISpan? = null,
+        queryParameters: Map<String, String> = emptyMap(),
+        defaultFormat: String? = null,
     ): HttpResponse {
         val client = checkNotNull(httpClient) { NOT_INITIALIZED_MESSAGE }
         return if (span != null && Sentry.isEnabled()) {
@@ -122,10 +127,10 @@ object ClickHouseClient {
                 childSpan?.setData("db.name", database)
                 childSpan?.setData("db.statement", query.take(QUERY_LOG_MAX_LEN)) // Truncate long queries
 
-                executePost(client, query, "execute")
+                executePost(client, query, "execute", queryParameters, defaultFormat)
             }
         } else {
-            executePost(client, query, "execute")
+            executePost(client, query, "execute", queryParameters, defaultFormat)
         }
     }
 
@@ -133,7 +138,9 @@ object ClickHouseClient {
     private suspend fun executePost(
         client: HttpClient,
         query: String,
-        operation: String
+        operation: String,
+        queryParameters: Map<String, String> = emptyMap(),
+        defaultFormat: String? = null,
     ): HttpResponse {
         val startedAt = System.nanoTime()
         try {
@@ -144,6 +151,11 @@ object ClickHouseClient {
                     parameter("timeout_overflow_mode", "throw")
                     parameter("timeout_before_checking_execution_speed", "0")
                 }
+                queryParameters.forEach { (name, value) ->
+                    require(isClickHouseParameterName(name)) { "Invalid ClickHouse parameter name: $name" }
+                    parameter("param_$name", value)
+                }
+                defaultFormat?.let { format -> parameter("default_format", format) }
                 header("X-ClickHouse-User", user)
                 header("X-ClickHouse-Key", password)
                 contentType(ContentType.Text.Plain)
@@ -172,6 +184,11 @@ object ClickHouseClient {
     private fun elapsedSeconds(startedAt: Long): Double =
         (System.nanoTime() - startedAt) / NANOS_PER_SECOND
 
+    private fun isClickHouseParameterName(name: String): Boolean {
+        val first = name.firstOrNull() ?: return false
+        return first.isAsciiLetter() && name.drop(1).all { char -> char.isAsciiLetterOrDigitOrUnderscore() }
+    }
+
     private fun isReadQuery(query: String): Boolean {
         val normalized = query.trimStart().uppercase(Locale.ROOT)
         return normalized.startsWith("SELECT") ||
@@ -186,14 +203,10 @@ object ClickHouseClient {
     suspend fun executeWithFormat(
         query: String,
         format: String,
-        span: ISpan? = null
+        span: ISpan? = null,
+        queryParameters: Map<String, String> = emptyMap(),
     ): String {
-        val queryWithFormat = if (query.trimEnd().uppercase(Locale.ROOT).contains("FORMAT")) {
-            query
-        } else {
-            "$query FORMAT $format"
-        }
-        val response = execute(queryWithFormat, span)
+        val response = execute(query, span, queryParameters, defaultFormat = defaultFormatParameter(query, format))
         val body = response.bodyAsText()
         val isError = response.isClickHouseError(body)
         if (isError) {
@@ -208,6 +221,82 @@ object ClickHouseClient {
         }
         return body
     }
+
+    suspend fun executeWithFormat(
+        query: String,
+        format: String,
+        queryParameters: Map<String, String>,
+    ): String =
+        executeWithFormat(query, format, null, queryParameters)
+
+    private fun defaultFormatParameter(query: String, format: String): String? {
+        if (format.isBlank() || containsFormatClause(query)) {
+            return null
+        }
+        return clickHouseFormatValue(format)
+    }
+
+    private fun containsFormatClause(query: String): Boolean {
+        var index = 0
+        while (index <= query.length - CLICKHOUSE_FORMAT_KEYWORD.length) {
+            index = when (query[index]) {
+                '\'', '"', '`' -> skipQuotedSqlSegment(query, index, query[index])
+                else -> {
+                    if (isFormatKeywordAt(query, index)) {
+                        return true
+                    }
+                    index + 1
+                }
+            }
+        }
+        return false
+    }
+
+    private fun isFormatKeywordAt(query: String, index: Int): Boolean {
+        val keywordEnd = index + CLICKHOUSE_FORMAT_KEYWORD.length
+        return query.regionMatches(
+            thisOffset = index,
+            other = CLICKHOUSE_FORMAT_KEYWORD,
+            otherOffset = 0,
+            length = CLICKHOUSE_FORMAT_KEYWORD.length,
+            ignoreCase = true,
+        ) && isSqlKeywordBoundary(query, index - 1) && isSqlKeywordBoundary(query, keywordEnd)
+    }
+
+    private fun isSqlKeywordBoundary(query: String, index: Int): Boolean {
+        if (index !in query.indices) {
+            return true
+        }
+        val char = query[index]
+        return !char.isLetterOrDigit() && char != '_'
+    }
+
+    private fun skipQuotedSqlSegment(query: String, startIndex: Int, quote: Char): Int {
+        var index = startIndex + 1
+        while (index < query.length) {
+            val char = query[index]
+            if (char == '\\') {
+                index += 2
+                continue
+            }
+            if (char == quote) {
+                if (index + 1 < query.length && query[index + 1] == quote) {
+                    index += 2
+                    continue
+                }
+                return index + 1
+            }
+            index++
+        }
+        return query.length
+    }
+
+    private fun clickHouseFormatValue(format: String): String =
+        when (format) {
+            CLICKHOUSE_FORMAT_JSON_EACH_ROW -> CLICKHOUSE_FORMAT_JSON_EACH_ROW
+            CLICKHOUSE_FORMAT_TAB_SEPARATED -> CLICKHOUSE_FORMAT_TAB_SEPARATED
+            else -> throw IllegalArgumentException("Unsupported ClickHouse format: $format")
+        }
 
     private fun isClickHouseTimeout(body: String, errorCode: String): Boolean {
         return errorCode == CLICKHOUSE_TIMEOUT_ERROR_CODE ||
@@ -265,6 +354,12 @@ object ClickHouseClient {
         migrationClient = null
     }
 }
+
+private fun Char.isAsciiLetter(): Boolean =
+    this in 'A'..'Z' || this in 'a'..'z'
+
+private fun Char.isAsciiLetterOrDigitOrUnderscore(): Boolean =
+    isAsciiLetter() || this in '0'..'9' || this == '_'
 
 private fun clickHouseErrorCode(body: String): String =
     CLICKHOUSE_ERROR_CODE.find(body.trimStart())?.groupValues?.get(1) ?: "unknown"

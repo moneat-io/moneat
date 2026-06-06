@@ -23,6 +23,7 @@ import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.runBlocking
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -135,6 +136,55 @@ class ClickHouseClientTest {
             assertEquals(true, ex.isTimeout)
             assertEquals("Query timed out", ex.message)
         }
+    }
+
+    @Test
+    fun `executeWithFormat sends default format without rewriting query body`() = runBlocking {
+        val requestQueries = mutableListOf<String?>()
+        val requestBodies = mutableListOf<String>()
+        withClickHouseMockServer({ exchange ->
+            requestQueries.add(exchange.requestURI.rawQuery)
+            requestBodies.add(exchange.requestBody.readBytes().toString(StandardCharsets.UTF_8))
+            exchange.respond(200, "1\n", "text/plain")
+        }) {
+            assertEquals("1\n", ClickHouseClient.executeWithFormat("SELECT 1", "JSONEachRow"))
+        }
+
+        val params = parseQueryParams(requestQueries.single())
+        assertEquals("JSONEachRow", params["default_format"])
+        assertEquals("SELECT 1", requestBodies.single())
+    }
+
+    @Test
+    fun `executeWithFormat sends default format when format appears outside a clause`() = runBlocking {
+        val requestQueries = mutableListOf<String?>()
+        val requestBodies = mutableListOf<String>()
+        val query = "SELECT 'FORMAT' AS label, formatDateTime(now(), '%F') AS rendered"
+        withClickHouseMockServer({ exchange ->
+            requestQueries.add(exchange.requestURI.rawQuery)
+            requestBodies.add(exchange.requestBody.readBytes().toString(StandardCharsets.UTF_8))
+            exchange.respond(200, "1\n", "text/plain")
+        }) {
+            assertEquals("1\n", ClickHouseClient.executeWithFormat(query, "JSONEachRow"))
+        }
+
+        val params = parseQueryParams(requestQueries.single())
+        assertEquals("JSONEachRow", params["default_format"])
+        assertEquals(query, requestBodies.single())
+    }
+
+    @Test
+    fun `executeWithFormat rejects unsupported format before request`() = runBlocking {
+        val requestCount = AtomicInteger(0)
+        withClickHouseMockServer({ exchange ->
+            requestCount.incrementAndGet()
+            exchange.respond(200, "1\n", "text/plain")
+        }) {
+            assertFailsWith<IllegalArgumentException> {
+                ClickHouseClient.executeWithFormat("SELECT 1", "CSV")
+            }
+        }
+        assertEquals(0, requestCount.get())
     }
 
     @Test
