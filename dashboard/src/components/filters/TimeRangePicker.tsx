@@ -93,12 +93,12 @@ export function TimeRangePicker({
       <Button
         variant="outline"
         size="default"
-        className="h-[30px] px-2 sm:px-3 gap-1.5 whitespace-nowrap font-normal text-xs"
+        className="h-[30px] gap-1.5 whitespace-nowrap px-2 font-normal text-xs @min-[420px]/filterbar:px-3"
         onClick={() => setOpen(!open)}
       >
         <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-        <span className="hidden sm:inline text-xs">{activeLabel}</span>
-        <ChevronDown className="hidden sm:inline h-3 w-3 text-muted-foreground" />
+        <span className="hidden text-xs @min-[420px]/filterbar:inline">{activeLabel}</span>
+        <ChevronDown className="hidden h-3 w-3 text-muted-foreground @min-[420px]/filterbar:inline" />
       </Button>
 
       {open && (

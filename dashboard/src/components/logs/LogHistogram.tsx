@@ -196,6 +196,7 @@ export function LogHistogram({
           />
           <Tooltip
             cursor={false}
+            wrapperStyle={{zIndex: 30}}
             labelFormatter={(ts) => formatTooltipTime(ts as number)}
             formatter={formatTooltipValue}
             contentStyle={{

@@ -43,6 +43,7 @@ import { analyticsMethods } from './modules/analytics'
 import { dashboardsMethods } from './modules/dashboards'
 import { syntheticsMethods } from './modules/synthetics'
 import { logIndexesMethods } from './modules/log-indexes'
+import { logManagementMethods } from './modules/log-management'
 import { workflowsMethods } from './modules/workflows'
 import { workflowConnectionsMethods } from './modules/connections'
 import { featureFlagsMethods } from './modules/feature-flags'
@@ -82,6 +83,7 @@ export const api = {
   ...dashboardsMethods(core),
   ...syntheticsMethods(core),
   ...logIndexesMethods(core),
+  ...logManagementMethods(core),
   ...workflowsMethods(core),
   ...workflowConnectionsMethods(core),
   ...featureFlagsMethods(core),

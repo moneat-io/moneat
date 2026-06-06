@@ -256,7 +256,8 @@ export function SearchFilterBar({
     onFacetFiltersChange(facetFilters.filter((_, i) => i !== index))
   }
 
-  const hasActiveFilters = Boolean(query) || facetFilters.length > 0 || hasExtraActiveFilters
+  const hasInlineTokens = Boolean(query) || facetFilters.length > 0
+  const hasActiveFilters = hasInlineTokens || hasExtraActiveFilters
 
   const clearAll = () => {
     onQueryChange('')
@@ -266,8 +267,8 @@ export function SearchFilterBar({
   }
 
   return (
-    <div className={cn('flex w-full items-stretch gap-1.5', className)}>
-      <div className="relative flex-1 min-w-0">
+    <div className={cn('@container/filterbar flex items-stretch gap-1.5', className)}>
+      <div className="relative min-w-[120px] flex-1">
         <div className="flex min-h-[30px] flex-wrap items-center gap-1 rounded-md border bg-card px-2 py-0.5 ring-offset-background transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
           <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
 
@@ -342,7 +343,12 @@ export function SearchFilterBar({
             onFocus={() => setShowSuggestions(true)}
             onKeyDown={handleKeyDown}
             placeholder={hasActiveFilters ? 'Add...' : placeholder ?? 'Search...'}
-            className="h-7 min-w-[120px] flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground sm:min-w-[200px]"
+            className={cn(
+              'flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground',
+              // Empty: shrink to the icon so a narrow bar keeps the placeholder inline.
+              // With chips: hold a min-width so the field wraps to its own row when tight.
+              hasInlineTokens ? 'min-w-[96px]' : 'min-w-0'
+            )}
           />
 
           {hasActiveFilters && (

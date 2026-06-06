@@ -59,7 +59,7 @@ export function FacetRail({
 
   return (
     <div className={cn('flex h-full flex-col overflow-hidden bg-card/50', className)}>
-      <div className="flex h-8 shrink-0 items-center gap-1.5 border-b px-2">
+      <div className="flex h-9 shrink-0 items-center gap-1.5 border-b px-2">
         <Icon className="h-3.5 w-3.5 text-muted-foreground" />
         <span className="text-xs font-semibold uppercase tracking-wider">{title}</span>
         {facetFilters.length > 0 && (
