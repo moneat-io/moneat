@@ -16,10 +16,28 @@
 
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
 import {fireEvent, render, screen, waitFor, within} from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import type {ComponentProps} from 'react'
-import {beforeEach, describe, expect, it, vi} from 'vitest'
+import {afterAll, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest'
 
 import {LogExplorer} from '@/components/logs/LogExplorer'
+
+const originalScrollIntoView = globalThis.HTMLElement.prototype.scrollIntoView
+const originalReleasePointerCapture = globalThis.HTMLElement.prototype.releasePointerCapture
+const originalHasPointerCapture = globalThis.HTMLElement.prototype.hasPointerCapture
+
+beforeAll(() => {
+  // The toolbar's "Export" actions live in a Radix dropdown; jsdom needs these.
+  globalThis.HTMLElement.prototype.scrollIntoView = vi.fn()
+  globalThis.HTMLElement.prototype.releasePointerCapture = vi.fn()
+  globalThis.HTMLElement.prototype.hasPointerCapture = vi.fn(() => false)
+})
+
+afterAll(() => {
+  globalThis.HTMLElement.prototype.scrollIntoView = originalScrollIntoView
+  globalThis.HTMLElement.prototype.releasePointerCapture = originalReleasePointerCapture
+  globalThis.HTMLElement.prototype.hasPointerCapture = originalHasPointerCapture
+})
 
 const {mockApi, mockNavigate} = vi.hoisted(() => ({
   mockApi: {
@@ -29,6 +47,19 @@ const {mockApi, mockNavigate} = vi.hoisted(() => ({
     getLogTagValues: vi.fn(),
     getLogTop: vi.fn(),
     getLogs: vi.fn(),
+    getLogMetricRules: vi.fn(),
+    getLogIndexes: vi.fn(),
+    getLogIndexUsage: vi.fn(),
+    getLogMonitors: vi.fn(),
+    createLogMetricRule: vi.fn(),
+    createLogMonitor: vi.fn(),
+    getDashboards: vi.fn(),
+    getProjects: vi.fn(),
+    createDashboard: vi.fn(),
+    getDashboard: vi.fn(),
+    updateDashboard: vi.fn(),
+    deleteDashboard: vi.fn(),
+    createLogTailStream: vi.fn(),
     getCurrentUser: vi.fn(),
     getSystemLogs: vi.fn(),
     isAuthenticated: vi.fn(() => false),
@@ -47,6 +78,28 @@ vi.mock('@/lib/api', () => ({
 
 vi.mock('@/lib/demo', () => ({
   getNowDate: () => new Date('2026-06-03T12:00:00.000Z'),
+}))
+
+// "Create metric" hands off to the real widget editor; stand in for it so we can
+// assert the seeded logs widget without rendering the heavy editor.
+vi.mock('@/components/dashboards/WidgetConfigPanel', () => ({
+  WidgetConfigPanel: ({
+    widget,
+    onSave,
+    onClose,
+  }: {
+    widget: {query_configs: {dataSource: string; filters: unknown; rawQuery?: string | null}[]}
+    onSave: (widget: unknown) => void
+    onClose: () => void
+  }) => (
+    <div role="dialog" aria-label="widget-editor">
+      <span data-testid="editor-datasource">{widget.query_configs[0].dataSource}</span>
+      <span data-testid="editor-rawquery">{widget.query_configs[0].rawQuery ?? ''}</span>
+      <span data-testid="editor-filters">{JSON.stringify(widget.query_configs[0].filters)}</span>
+      <button onClick={() => onSave(widget)}>Save Widget</button>
+      <button onClick={onClose}>Editor Cancel</button>
+    </div>
+  ),
 }))
 
 vi.mock('@/components/logs/LogDetail', () => ({
@@ -118,6 +171,22 @@ function sampleLog(overrides: Partial<{
   }
 }
 
+interface MockLogTailStream {
+  close: ReturnType<typeof vi.fn>
+  onerror: ((event: Event) => void) | null
+  onmessage: ((event: MessageEvent) => void) | null
+  onopen: ((event: Event) => void) | null
+}
+
+function createMockLogTailStream(): MockLogTailStream {
+  return {
+    close: vi.fn(),
+    onerror: null,
+    onmessage: null,
+    onopen: null,
+  }
+}
+
 describe('LogExplorer facets', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -160,7 +229,50 @@ describe('LogExplorer facets', () => {
       hasMore: false,
       totalCount: 0,
     })
+    mockApi.getLogMetricRules.mockResolvedValue({rules: []})
+    mockApi.getLogIndexes.mockResolvedValue({indexes: []})
+    mockApi.getLogIndexUsage.mockResolvedValue({usage: []})
+    mockApi.getLogMonitors.mockResolvedValue({monitors: []})
+    mockApi.createLogMetricRule.mockResolvedValue({
+      id: 1,
+      name: 'api_errors',
+      query: 'service:api',
+      levels: [],
+      group_by: 'service',
+      interval: '5m',
+      is_active: true,
+      created_at: '2026-06-03T00:00:00.000Z',
+      updated_at: '2026-06-03T00:00:00.000Z',
+    })
+    mockApi.createLogMonitor.mockResolvedValue({
+      id: 1,
+      name: 'api errors',
+      query: 'service:api',
+      levels: [],
+      group_by: null,
+      condition: '>',
+      threshold: 10,
+      warning_threshold: null,
+      window_minutes: 5,
+      is_active: true,
+      created_at: '2026-06-03T00:00:00.000Z',
+      updated_at: '2026-06-03T00:00:00.000Z',
+    })
     mockApi.downloadLogExport.mockResolvedValue(undefined)
+    mockApi.getProjects.mockResolvedValue([])
+    mockApi.getDashboards.mockResolvedValue([{id: 7, title: 'Default', widgets: []}])
+    mockApi.getDashboard.mockResolvedValue({id: 7, title: 'Default', widgets: []})
+    mockApi.createDashboard.mockResolvedValue({id: 99, title: 'Logs', widgets: []})
+    mockApi.updateDashboard.mockResolvedValue({})
+    mockApi.deleteDashboard.mockResolvedValue(undefined)
+    mockApi.createLogTailStream.mockImplementation(createMockLogTailStream)
+
+    if (!HTMLElement.prototype.hasPointerCapture) {
+      HTMLElement.prototype.hasPointerCapture = () => false
+    }
+    if (!HTMLElement.prototype.scrollIntoView) {
+      HTMLElement.prototype.scrollIntoView = () => {}
+    }
   })
 
   it('forwards selected service environment and level filters to log queries', async () => {
@@ -300,11 +412,13 @@ describe('LogExplorer facets', () => {
   })
 
   it('exports csv with the current org-scoped filters', async () => {
+    const user = userEvent.setup()
     renderLogExplorer()
 
     fireEvent.click(await screen.findByLabelText('api'))
     fireEvent.click(screen.getByLabelText('prod'))
-    fireEvent.click(screen.getByRole('button', {name: 'CSV'}))
+    await user.click(await screen.findByRole('button', {name: 'Export'}))
+    await user.click(await screen.findByRole('menuitem', {name: /Export to CSV/}))
 
     await waitFor(() => {
       expect(mockApi.downloadLogExport).toHaveBeenCalledWith(expect.objectContaining({
@@ -312,6 +426,71 @@ describe('LogExplorer facets', () => {
         environment: 'prod',
         from: '2026-05-27T12:00:00.000Z',
         to: undefined,
+      }))
+    })
+  })
+
+  it('seeds the metric widget with the current query from the toolbar', async () => {
+    const user = userEvent.setup()
+    renderLogExplorer({initialQuery: 'service:api'})
+
+    // The Export menu hosts "Create metric"; it opens the dashboard chooser,
+    // then hands a seeded logs widget to the widget editor.
+    await user.click(await screen.findByRole('button', {name: 'Export'}))
+    await user.click(await screen.findByRole('menuitem', {name: /Create metric/}))
+
+    const continueButton = await screen.findByRole('button', {name: 'Continue'})
+    await waitFor(() => expect(continueButton).toBeEnabled())
+    fireEvent.click(continueButton)
+
+    const editor = await screen.findByRole('dialog', {name: 'widget-editor'})
+    expect(within(editor).getByTestId('editor-datasource')).toHaveTextContent('logs')
+    expect(within(editor).getByTestId('editor-rawquery')).toHaveTextContent('service:api')
+  })
+
+  it('seeds the metric widget filters from an active facet when the search box is empty', async () => {
+    const user = userEvent.setup()
+    renderLogExplorer()
+
+    // Facet-only context: nothing typed in the search box, just a service facet.
+    fireEvent.click(await screen.findByLabelText('api'))
+    await waitFor(() => {
+      expect(mockApi.getLogs).toHaveBeenLastCalledWith(expect.objectContaining({service: 'api'}))
+    })
+
+    await user.click(await screen.findByRole('button', {name: 'Export'}))
+    await user.click(await screen.findByRole('menuitem', {name: /Create metric/}))
+
+    const continueButton = await screen.findByRole('button', {name: 'Continue'})
+    await waitFor(() => expect(continueButton).toBeEnabled())
+    fireEvent.click(continueButton)
+
+    // The facet becomes a structured widget filter, not raw query text.
+    const editor = await screen.findByRole('dialog', {name: 'widget-editor'})
+    expect(within(editor).getByTestId('editor-filters')).toHaveTextContent('"field":"service"')
+    expect(within(editor).getByTestId('editor-rawquery')).toBeEmptyDOMElement()
+  })
+
+  it('creates a monitor from the contextual query when facets are active', async () => {
+    const user = userEvent.setup()
+    renderLogExplorer()
+
+    fireEvent.click(await screen.findByLabelText('api'))
+    await waitFor(() => {
+      expect(mockApi.getLogs).toHaveBeenLastCalledWith(expect.objectContaining({service: 'api'}))
+    })
+
+    await user.click(await screen.findByRole('button', {name: 'Export'}))
+    await user.click(await screen.findByRole('menuitem', {name: /Create monitor/}))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByPlaceholderText('High error log volume'), {target: {value: 'api errors'}})
+    fireEvent.click(within(dialog).getByRole('button', {name: 'Create monitor'}))
+
+    await waitFor(() => {
+      expect(mockApi.createLogMonitor).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'api errors',
+        query: 'service:api',
+        levels: [],
       }))
     })
   })
@@ -441,5 +620,74 @@ describe('LogExplorer facets', () => {
     })
     expect(await screen.findByRole('button', {name: 'checkout'})).toBeTruthy()
     expect(screen.queryByRole('button', {name: 'payments'})).toBeNull()
+  })
+
+  it('streams live-tail logs, closes on pause, and reconnects when filters change', async () => {
+    const streams: MockLogTailStream[] = []
+    mockApi.createLogTailStream.mockImplementation(() => {
+      const stream = createMockLogTailStream()
+      streams.push(stream)
+      return stream
+    })
+
+    renderLogExplorer()
+
+    fireEvent.click(await screen.findByRole('button', {name: 'Live tail'}))
+    await waitFor(() => {
+      expect(mockApi.createLogTailStream).toHaveBeenCalledWith(expect.objectContaining({
+        query: undefined,
+        levels: undefined,
+      }))
+    })
+
+    streams[0].onopen?.({} as Event)
+    streams[0].onmessage?.({
+      data: JSON.stringify({
+        log_id: 'live-1',
+        timestamp: '2026-06-03T12:00:01.000Z',
+        level: 'error',
+        message: 'live payment failed',
+        service: 'api',
+        environment: 'prod',
+        trace_id: 'trace-live',
+      }),
+    } as MessageEvent)
+
+    expect(await screen.findByText('live payment failed')).toBeInTheDocument()
+
+    streams[0].onmessage?.({
+      data: JSON.stringify({
+        log_id: 'live-1',
+        timestamp: '2026-06-03T12:00:01.000Z',
+        level: 'error',
+        message: 'live payment failed',
+        service: 'api',
+        environment: 'prod',
+      }),
+    } as MessageEvent)
+    expect(screen.getAllByText('live payment failed')).toHaveLength(1)
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    streams[0].onmessage?.({data: 'not-json'} as MessageEvent)
+    expect(consoleError).toHaveBeenCalledWith('Live tail event parse failed:', expect.any(String))
+    consoleError.mockRestore()
+
+    const input = screen.getByPlaceholderText('Search...')
+    fireEvent.change(input, {target: {value: 'level:error'}})
+    fireEvent.keyDown(input, {key: 'Enter'})
+
+    await waitFor(() => {
+      expect(streams[0].close).toHaveBeenCalled()
+      expect(mockApi.createLogTailStream).toHaveBeenLastCalledWith(expect.objectContaining({
+        levels: ['error'],
+      }))
+    })
+
+    streams.at(-1)?.onerror?.({} as Event)
+    fireEvent.click(screen.getByRole('button', {name: 'Pause live'}))
+
+    await waitFor(() => {
+      expect(streams.at(-1)?.close).toHaveBeenCalled()
+    })
   })
 })

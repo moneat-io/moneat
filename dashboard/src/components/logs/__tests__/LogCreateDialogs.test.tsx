@@ -1,0 +1,198 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
+import {fireEvent, render, screen, waitFor, within} from '@testing-library/react'
+import type {ReactElement} from 'react'
+import {beforeEach, describe, expect, it, vi} from 'vitest'
+
+import type {DashboardWidget} from '@/lib/api'
+import {CreateLogMetricDialog, CreateLogMonitorDialog} from '@/components/logs/LogCreateDialogs'
+
+const {mockApi} = vi.hoisted(() => ({
+  mockApi: {
+    getDashboards: vi.fn(),
+    getProjects: vi.fn(),
+    createDashboard: vi.fn(),
+    getDashboard: vi.fn(),
+    updateDashboard: vi.fn(),
+    deleteDashboard: vi.fn(),
+    createLogMonitor: vi.fn(),
+  },
+}))
+
+vi.mock('@/lib/api', () => ({api: mockApi}))
+
+// Stand in for the heavy widget editor: we only need its onSave/onClose wiring
+// and to inspect the seeded widget it was handed.
+vi.mock('@/components/dashboards/WidgetConfigPanel', () => ({
+  WidgetConfigPanel: ({
+    widget,
+    dashboardId,
+    onSave,
+    onClose,
+  }: {
+    widget: DashboardWidget
+    dashboardId: number
+    projectId?: string | number
+    onSave: (widget: DashboardWidget) => void
+    onClose: () => void
+  }) => (
+    <div role="dialog" aria-label="widget-editor">
+      <span data-testid="editor-dashboard">{dashboardId}</span>
+      <span data-testid="editor-datasource">{widget.query_configs[0].dataSource}</span>
+      <span data-testid="editor-filters">{JSON.stringify(widget.query_configs[0].filters)}</span>
+      <button onClick={() => onSave(widget)}>Save Widget</button>
+      <button onClick={onClose}>Editor Cancel</button>
+    </div>
+  ),
+}))
+
+function renderWithClient(ui: ReactElement) {
+  const queryClient = new QueryClient({defaultOptions: {queries: {retry: false}}})
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
+}
+
+const metricSeed = {
+  query: '',
+  levels: ['error'],
+  facetFilters: [{key: 'service', value: 'api'}],
+  groupByField: 'service',
+  timeRange: {},
+}
+
+describe('CreateLogMetricDialog', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockApi.getProjects.mockResolvedValue([])
+    mockApi.getDashboards.mockResolvedValue([{id: 7, title: 'Payments', widgets: []}])
+    mockApi.getDashboard.mockResolvedValue({id: 7, title: 'Payments', widgets: []})
+    mockApi.createDashboard.mockResolvedValue({id: 99, title: 'My logs', widgets: []})
+    mockApi.updateDashboard.mockResolvedValue({})
+    mockApi.deleteDashboard.mockResolvedValue(undefined)
+    if (!HTMLElement.prototype.hasPointerCapture) {
+      HTMLElement.prototype.hasPointerCapture = () => false
+    }
+    if (!HTMLElement.prototype.scrollIntoView) {
+      HTMLElement.prototype.scrollIntoView = () => {}
+    }
+  })
+
+  it('adds a seeded logs widget to the preselected existing dashboard', async () => {
+    const onOpenChange = vi.fn()
+    renderWithClient(<CreateLogMetricDialog open onOpenChange={onOpenChange} {...metricSeed} />)
+
+    // Existing dashboards load → first is preselected → Continue enables.
+    const continueButton = await screen.findByRole('button', {name: 'Continue'})
+    await waitFor(() => expect(continueButton).toBeEnabled())
+    fireEvent.click(continueButton)
+
+    const editor = await screen.findByRole('dialog', {name: 'widget-editor'})
+    expect(within(editor).getByTestId('editor-dashboard')).toHaveTextContent('7')
+    expect(within(editor).getByTestId('editor-datasource')).toHaveTextContent('logs')
+    expect(within(editor).getByTestId('editor-filters')).toHaveTextContent('"field":"service"')
+
+    fireEvent.click(within(editor).getByRole('button', {name: 'Save Widget'}))
+
+    await waitFor(() => {
+      expect(mockApi.updateDashboard).toHaveBeenCalledWith(
+        7,
+        expect.objectContaining({
+          widgets: expect.arrayContaining([expect.objectContaining({widget_type: 'timeseries'})]),
+        })
+      )
+    })
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+    expect(mockApi.createDashboard).not.toHaveBeenCalled()
+  })
+
+  it('creates a new dashboard then saves the widget into it', async () => {
+    mockApi.getDashboards.mockResolvedValue([])
+    mockApi.getDashboard.mockResolvedValue({id: 99, title: 'My logs', widgets: []})
+    const onOpenChange = vi.fn()
+    renderWithClient(<CreateLogMetricDialog open onOpenChange={onOpenChange} {...metricSeed} />)
+
+    // No existing dashboards → defaults to "New dashboard" with a name field.
+    fireEvent.change(await screen.findByPlaceholderText('Log metrics'), {target: {value: 'My logs'}})
+    fireEvent.click(screen.getByRole('button', {name: 'Continue'}))
+
+    await waitFor(() =>
+      expect(mockApi.createDashboard).toHaveBeenCalledWith({title: 'My logs', widgets: []})
+    )
+
+    const editor = await screen.findByRole('dialog', {name: 'widget-editor'})
+    expect(within(editor).getByTestId('editor-dashboard')).toHaveTextContent('99')
+    fireEvent.click(within(editor).getByRole('button', {name: 'Save Widget'}))
+
+    await waitFor(() => expect(mockApi.updateDashboard).toHaveBeenCalledWith(99, expect.anything()))
+    expect(mockApi.deleteDashboard).not.toHaveBeenCalled()
+  })
+
+  it('discards a freshly created dashboard when the editor is cancelled', async () => {
+    mockApi.getDashboards.mockResolvedValue([])
+    const onOpenChange = vi.fn()
+    renderWithClient(<CreateLogMetricDialog open onOpenChange={onOpenChange} {...metricSeed} />)
+
+    fireEvent.change(await screen.findByPlaceholderText('Log metrics'), {target: {value: 'Scratch'}})
+    fireEvent.click(screen.getByRole('button', {name: 'Continue'}))
+
+    const editor = await screen.findByRole('dialog', {name: 'widget-editor'})
+    fireEvent.click(within(editor).getByRole('button', {name: 'Editor Cancel'}))
+
+    await waitFor(() => expect(mockApi.deleteDashboard).toHaveBeenCalledWith(99))
+    expect(mockApi.updateDashboard).not.toHaveBeenCalled()
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+})
+
+describe('CreateLogMonitorDialog', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockApi.createLogMonitor.mockResolvedValue({id: 1})
+  })
+
+  it('creates a log monitor from the seeded query with the chosen threshold', async () => {
+    const onOpenChange = vi.fn()
+    renderWithClient(
+      <CreateLogMonitorDialog open onOpenChange={onOpenChange} query="service:api" levels={[]} />
+    )
+
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByDisplayValue('service:api')).toBeInTheDocument()
+
+    const createButton = within(dialog).getByRole('button', {name: 'Create monitor'})
+    expect(createButton).toBeDisabled()
+
+    fireEvent.change(within(dialog).getByPlaceholderText('High error log volume'), {
+      target: {value: 'High errors'},
+    })
+    fireEvent.change(within(dialog).getByDisplayValue('10'), {target: {value: '25'}})
+    fireEvent.click(createButton)
+
+    await waitFor(() => {
+      expect(mockApi.createLogMonitor).toHaveBeenCalledWith({
+        name: 'High errors',
+        query: 'service:api',
+        levels: [],
+        group_by: null,
+        condition: '>',
+        threshold: 25,
+        window_minutes: 5,
+      })
+    })
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+  })
+})
