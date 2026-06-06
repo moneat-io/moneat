@@ -65,11 +65,16 @@ function ServiceDetailPage() {
   const pathname = useRouterState({select: (state) => state.location.pathname})
 
   // A resource child route renders in place of the service detail.
-  if (/^\/services\/[^/]+\/resources\//.test(pathname)) {
+  if (isServiceResourceRoute(pathname)) {
     return <Outlet />
   }
 
   return <ServiceDetailContent service={service} />
+}
+
+function isServiceResourceRoute(pathname: string): boolean {
+  const segments = pathname.split('/').filter(Boolean)
+  return segments.length >= 4 && segments[0] === 'services' && segments[2] === 'resources'
 }
 
 function ServiceDetailContent({service}: Readonly<{service: string}>) {
