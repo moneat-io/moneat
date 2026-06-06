@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute, Link, Outlet, redirect, useRouterState} from '@tanstack/react-router'
-import {useEffect, useRef, useState, type ComponentType, type MutableRefObject, type RefObject} from 'react'
+import {useEffect, useRef, useState, type ComponentType} from 'react'
 import {api} from '@/lib/api'
 import {useEnterpriseFeatures, hasEnterpriseModule} from '@/hooks/useEnterpriseFeatures'
 import {
@@ -50,14 +50,6 @@ type MonitoringTab = Readonly<{
 type MonitoringTabNavProps = Readonly<{
   tabs: readonly MonitoringTab[]
   currentPath: string
-}>
-
-type UseVisibleTabsResult = Readonly<{
-  navRef: RefObject<HTMLElement | null>
-  itemRefs: MutableRefObject<Array<HTMLSpanElement | null>>
-  moreRef: MutableRefObject<HTMLSpanElement | null>
-  visibleTabs: readonly MonitoringTab[]
-  overflowTabs: readonly MonitoringTab[]
 }>
 
 type VisibleTabCountOptions = Readonly<{
@@ -103,7 +95,7 @@ function createResizeObserver(onResize: () => void): ResizeObserver | null {
   return new globalThis.ResizeObserver(onResize)
 }
 
-function useVisibleMonitoringTabs(tabs: readonly MonitoringTab[]): UseVisibleTabsResult {
+function useVisibleMonitoringTabs(tabs: readonly MonitoringTab[]) {
   const navRef = useRef<HTMLElement>(null)
   const itemRefs = useRef<Array<HTMLSpanElement | null>>([])
   const moreRef = useRef<HTMLSpanElement | null>(null)
