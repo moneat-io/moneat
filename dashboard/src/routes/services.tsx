@@ -18,9 +18,9 @@ import {createFileRoute, Outlet, redirect} from '@tanstack/react-router'
 import {api} from '@/lib/api'
 
 export const Route = createFileRoute('/services')({
-  beforeLoad: async ({location}) => {
+  beforeLoad: async () => {
     if (!api.isAuthenticated()) {
-      throw redirect({to: '/login', search: {redirect: location.href}})
+      throw redirect({to: '/login', search: {redirect: '/services'}})
     }
   },
   component: ServicesLayout,
