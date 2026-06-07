@@ -415,6 +415,16 @@ class SyntheticsCheckExecutorTest {
     }
 
     @Test
+    fun `DNS test blocks internal hostname when not self-hosted`() = runBlocking {
+        withSelfHosted("false") {
+            val test = makeTestData(testType = "dns", url = "localhost")
+            val result = executor.executeTest(test)
+            assertEquals("failed", result.status)
+            assertTrue(result.errorMessage.contains("Blocked"), result.errorMessage)
+        }
+    }
+
+    @Test
     fun `TCP test fails when no port configured`() = runBlocking {
         val test = makeTestData(
             testType = "tcp",
@@ -437,6 +447,28 @@ class SyntheticsCheckExecutorTest {
         val result = executor.executeTest(test)
         assertEquals("failed", result.status)
         assertTrue(result.errorMessage.contains("TCP"))
+    }
+
+    @Test
+    fun `TCP test blocks internal hostname when not self-hosted`() = runBlocking {
+        withSelfHosted("false") {
+            val config = """{"hostname":"127.0.0.1","port":443}"""
+            val test = makeTestData(testType = "tcp", url = "127.0.0.1", config = config)
+            val result = executor.executeTest(test)
+            assertEquals("failed", result.status)
+            assertTrue(result.errorMessage.contains("Blocked"), result.errorMessage)
+        }
+    }
+
+    @Test
+    fun `UDP test blocks internal hostname when not self-hosted`() = runBlocking {
+        withSelfHosted("false") {
+            val config = """{"hostname":"127.0.0.1","port":53}"""
+            val test = makeTestData(testType = "udp", url = "127.0.0.1", config = config)
+            val result = executor.executeTest(test)
+            assertEquals("failed", result.status)
+            assertTrue(result.errorMessage.contains("Blocked"), result.errorMessage)
+        }
     }
 
     @Test
@@ -495,6 +527,17 @@ class SyntheticsCheckExecutorTest {
         val result = executor.executeTest(test)
         assertEquals("failed", result.status)
         assertEquals("No hostname configured", result.errorMessage)
+    }
+
+    @Test
+    fun `SSL test blocks internal hostname when not self-hosted`() = runBlocking {
+        withSelfHosted("false") {
+            val config = """{"hostname":"127.0.0.1","port":443}"""
+            val test = makeTestData(testType = "ssl", url = "127.0.0.1", config = config)
+            val result = executor.executeTest(test)
+            assertEquals("failed", result.status)
+            assertTrue(result.errorMessage.contains("Blocked"), result.errorMessage)
+        }
     }
 
     // ──── Multistep tests ────
@@ -599,5 +642,19 @@ class SyntheticsCheckExecutorTest {
         val test = makeTestData(url = "not-a-url")
         val result = executor.executeTest(test)
         assertEquals("failed", result.status)
+    }
+
+    private suspend fun <T> withSelfHosted(value: String, block: suspend () -> T): T {
+        val previous = System.getProperty("SELF_HOSTED")
+        System.setProperty("SELF_HOSTED", value)
+        return try {
+            block()
+        } finally {
+            if (previous == null) {
+                System.clearProperty("SELF_HOSTED")
+            } else {
+                System.setProperty("SELF_HOSTED", previous)
+            }
+        }
     }
 }

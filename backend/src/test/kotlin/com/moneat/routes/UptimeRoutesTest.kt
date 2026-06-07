@@ -539,6 +539,32 @@ class UptimeRoutesTest {
         }
 
     @Test
+    fun `create monitor returns 400 for tcp internal hostname`() =
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing { uptimeRoutes() }
+            }
+
+            val userId = seedUser()
+            seedOrgWithMembership(userId)
+            withSelfHosted("false") {
+                val response =
+                    client.post("/v1/uptime/monitors") {
+                        header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                        contentType(ContentType.Application.Json)
+                        setBody(
+                            """{"name":"my-monitor","type":"tcp","hostname":"127.0.0.1","port":443,""" +
+                                """"intervalSeconds":60,"timeoutSeconds":30}"""
+                        )
+                    }
+                assertEquals(HttpStatusCode.BadRequest, response.status)
+                assertTrue(response.bodyAsText().contains("Blocked"))
+            }
+        }
+
+    @Test
     fun `create monitor returns 400 for interval less than 10 seconds`() =
         testApplication {
             application {
@@ -642,5 +668,19 @@ class UptimeRoutesTest {
     @AfterTest
     fun teardownKoin() {
         stopTestKoin()
+    }
+
+    private suspend fun <T> withSelfHosted(value: String, block: suspend () -> T): T {
+        val previous = System.getProperty("SELF_HOSTED")
+        System.setProperty("SELF_HOSTED", value)
+        return try {
+            block()
+        } finally {
+            if (previous == null) {
+                System.clearProperty("SELF_HOSTED")
+            } else {
+                System.setProperty("SELF_HOSTED", previous)
+            }
+        }
     }
 }

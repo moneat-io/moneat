@@ -230,6 +230,7 @@ open class SyntheticsCheckExecutor {
             )
 
         val port = config?.port ?: SSL_DEFAULT_PORT
+        validateSyntheticHost(hostname)?.let { return it }
         val startTime = System.currentTimeMillis()
 
         return suspendRunCatching {
@@ -318,6 +319,7 @@ open class SyntheticsCheckExecutor {
                     InetAddress.getAllByName(hostname)
                 }
             }
+            validateSyntheticAddresses(addresses)?.let { return it }
             val dnsMs = System.currentTimeMillis() - dnsStart
             val durationMs = System.currentTimeMillis() - startTime
 
@@ -403,6 +405,7 @@ open class SyntheticsCheckExecutor {
             status = "failed", durationMs = 0,
             errorMessage = "No port configured"
         )
+        validateSyntheticHost(hostname)?.let { return it }
 
         val startTime = System.currentTimeMillis()
         return suspendRunCatching {
@@ -469,6 +472,7 @@ open class SyntheticsCheckExecutor {
             status = "failed", durationMs = 0,
             errorMessage = "No port configured"
         )
+        validateSyntheticHost(hostname)?.let { return it }
 
         val startTime = System.currentTimeMillis()
         return suspendRunCatching {
@@ -627,6 +631,30 @@ open class SyntheticsCheckExecutor {
         }
         return null
     }
+
+    private fun validateSyntheticHost(hostname: String): SyntheticCheckResult? =
+        try {
+            UrlValidator.validateExternalHost(hostname)
+            null
+        } catch (e: UrlValidator.SsrfException) {
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = 0,
+                errorMessage = "Blocked: ${e.message}"
+            )
+        }
+
+    private fun validateSyntheticAddresses(addresses: Array<InetAddress>): SyntheticCheckResult? =
+        try {
+            addresses.forEach { UrlValidator.validateAddress(it) }
+            null
+        } catch (e: UrlValidator.SsrfException) {
+            SyntheticCheckResult(
+                status = "failed",
+                durationMs = 0,
+                errorMessage = "Blocked: ${e.message}"
+            )
+        }
 
     private fun evaluateAssertion(
         assertion: SyntheticAssertion,

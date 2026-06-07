@@ -20,6 +20,7 @@ import com.jayway.jsonpath.JsonPath
 import com.moneat.uptime.models.CheckResult
 import com.moneat.uptime.models.UptimeMonitorData
 import com.moneat.utils.UrlValidator
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpTimeout
@@ -46,7 +47,6 @@ import java.time.temporal.ChronoUnit
 import javax.naming.NamingException
 import javax.naming.directory.InitialDirContext
 import javax.net.ssl.HttpsURLConnection
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -302,6 +302,7 @@ class UptimeCheckExecutor {
     private suspend fun checkTcp(monitor: UptimeMonitorData): CheckResult {
         val hostname = monitor.hostname ?: return CheckResult(0, -1, 0, "No hostname configured")
         val port = monitor.port ?: return CheckResult(0, -1, 0, "No port configured")
+        validateHostTarget(hostname)?.let { return it }
 
         val startTime = System.currentTimeMillis()
 
@@ -322,6 +323,7 @@ class UptimeCheckExecutor {
      */
     private suspend fun checkPing(monitor: UptimeMonitorData): CheckResult {
         val hostname = monitor.hostname ?: return CheckResult(0, -1, 0, "No hostname configured")
+        validateHostTarget(hostname)?.let { return it }
 
         val startTime = System.currentTimeMillis()
 
@@ -347,6 +349,10 @@ class UptimeCheckExecutor {
     private suspend fun checkDns(monitor: UptimeMonitorData): CheckResult {
         val hostname = monitor.hostname ?: return CheckResult(0, -1, 0, "No hostname configured")
         val recordType = monitor.dnsRecordType ?: "A"
+        validateHostTarget(hostname)?.let { return it }
+        monitor.dnsServer?.let { dnsServer ->
+            validateHostTarget(dnsServer)?.let { return it }
+        }
 
         val startTime = System.currentTimeMillis()
 
@@ -492,6 +498,7 @@ class UptimeCheckExecutor {
         val connectionString =
             monitor.dbConnectionString
                 ?: return CheckResult(0, -1, 0, "No connection string configured")
+        validateJdbcTarget(connectionString)?.let { return it }
 
         val startTime = System.currentTimeMillis()
 
@@ -526,6 +533,7 @@ class UptimeCheckExecutor {
     private suspend fun checkSsl(monitor: UptimeMonitorData): CheckResult {
         val hostname = monitor.hostname ?: return CheckResult(0, -1, 0, "No hostname configured")
         val port = monitor.port ?: DEFAULT_HTTPS_PORT
+        validateHostTarget(hostname)?.let { return it }
 
         val startTime = System.currentTimeMillis()
 
@@ -572,4 +580,20 @@ class UptimeCheckExecutor {
         this.forEach { (k, v) -> props[k] = v }
         return props
     }
+
+    private fun validateHostTarget(hostname: String): CheckResult? =
+        try {
+            UrlValidator.validateExternalHost(hostname)
+            null
+        } catch (e: UrlValidator.SsrfException) {
+            CheckResult(0, -1, 0, "Blocked: ${e.message}")
+        }
+
+    private fun validateJdbcTarget(connectionString: String): CheckResult? =
+        try {
+            UrlValidator.validateExternalJdbcUrl(connectionString)
+            null
+        } catch (e: UrlValidator.SsrfException) {
+            CheckResult(0, -1, 0, "Blocked: ${e.message}")
+        }
 }

@@ -31,6 +31,8 @@ import com.moneat.mcp.protocol.ResourceContent
 import com.moneat.mcp.protocol.ToolCallResult
 import com.moneat.mcp.protocol.ToolContent
 import com.moneat.mcp.services.McpApiKeyService
+import com.moneat.org.services.OrgMembershipService
+import com.moneat.org.services.OrgRole
 import com.moneat.shared.models.McpApiKeys
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
@@ -55,6 +57,10 @@ import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
+import io.mockk.Runs
+import io.mockk.every
+import io.mockk.just
+import io.mockk.mockk
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -76,6 +82,7 @@ class McpApiKeyRoutesTest {
     private lateinit var service: McpApiKeyService
     private lateinit var toolRegistry: McpToolRegistry
     private lateinit var resourceRegistry: McpResourceRegistry
+    private lateinit var membershipService: OrgMembershipService
     private lateinit var token: String
     private var organizationId = 0
     private var userId = 0
@@ -109,6 +116,8 @@ class McpApiKeyRoutesTest {
         resourceRegistry = McpResourceRegistry().also {
             it.register(RouteResource("moneat://org"))
         }
+        membershipService = mockk()
+        every { membershipService.requireRole(organizationId, userId, OrgRole.ADMIN) } just Runs
         token = signedRouteToken()
     }
 
@@ -217,6 +226,36 @@ class McpApiKeyRoutesTest {
     }
 
     @Test
+    fun `api key routes require admin role`() = testApplication {
+        every {
+            membershipService.requireRole(organizationId, userId, OrgRole.ADMIN)
+        } throws IllegalStateException("Insufficient permissions")
+        setupApp()
+
+        val listResponse = client.get("/v1/mcp/api-keys") {
+            authHeader()
+        }
+        assertEquals(HttpStatusCode.Forbidden, listResponse.status)
+
+        val createResponse = client.post("/v1/mcp/api-keys") {
+            jsonBody()
+            setBody("""{"name":"blocked","enabledTools":["search_logs"]}""")
+        }
+        assertEquals(HttpStatusCode.Forbidden, createResponse.status)
+
+        val updateResponse = client.put("/v1/mcp/api-keys/1") {
+            jsonBody()
+            setBody("""{"name":"blocked"}""")
+        }
+        assertEquals(HttpStatusCode.Forbidden, updateResponse.status)
+
+        val deleteResponse = client.delete("/v1/mcp/api-keys/1") {
+            authHeader()
+        }
+        assertEquals(HttpStatusCode.Forbidden, deleteResponse.status)
+    }
+
+    @Test
     fun `PUT api keys updates existing key and handles invalid ids`() = testApplication {
         setupApp()
         val created = service.createKey(organizationId, userId, "before", listOf("search_logs"), emptyList())
@@ -299,7 +338,7 @@ class McpApiKeyRoutesTest {
                 }
             }
             routing {
-                mcpApiKeyRoutes(toolRegistry, resourceRegistry, service)
+                mcpApiKeyRoutes(toolRegistry, resourceRegistry, service, membershipService)
             }
         }
     }

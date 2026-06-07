@@ -23,6 +23,8 @@ import com.moneat.mcp.protocol.McpResourceRegistry
 import com.moneat.mcp.protocol.McpToolRegistry
 import com.moneat.mcp.services.McpApiKeyService
 import com.moneat.mcp.services.McpToolCatalogService
+import com.moneat.org.services.OrgMembershipService
+import com.moneat.org.services.OrgRole
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
@@ -37,13 +39,16 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
+import org.koin.core.context.GlobalContext
 
 private const val INVALID_TOKEN_CLAIMS = "Invalid token claims"
+private const val FORBIDDEN_MESSAGE = "Insufficient permissions"
 
 fun Route.mcpApiKeyRoutes(
     toolRegistry: McpToolRegistry,
     resourceRegistry: McpResourceRegistry,
     mcpApiKeyService: McpApiKeyService = McpApiKeyService(),
+    membershipService: OrgMembershipService? = null,
 ) {
     authenticate("auth-jwt") {
         route("/v1/mcp") {
@@ -53,24 +58,37 @@ fun Route.mcpApiKeyRoutes(
 
             route("/api-keys") {
                 get {
-                    call.respondMcpApiKeys(mcpApiKeyService)
+                    call.respondMcpApiKeys(mcpApiKeyService, resolveMembershipService(membershipService))
                 }
 
                 post {
-                    call.createMcpApiKey(mcpApiKeyService, toolRegistry, resourceRegistry)
+                    call.createMcpApiKey(
+                        mcpApiKeyService,
+                        toolRegistry,
+                        resourceRegistry,
+                        resolveMembershipService(membershipService),
+                    )
                 }
 
                 put("/{id}") {
-                    call.updateMcpApiKey(mcpApiKeyService, toolRegistry, resourceRegistry)
+                    call.updateMcpApiKey(
+                        mcpApiKeyService,
+                        toolRegistry,
+                        resourceRegistry,
+                        resolveMembershipService(membershipService),
+                    )
                 }
 
                 delete("/{id}") {
-                    call.deleteMcpApiKey(mcpApiKeyService)
+                    call.deleteMcpApiKey(mcpApiKeyService, resolveMembershipService(membershipService))
                 }
             }
         }
     }
 }
+
+private fun resolveMembershipService(membershipService: OrgMembershipService?): OrgMembershipService =
+    membershipService ?: GlobalContext.get().get()
 
 private suspend fun ApplicationCall.respondToolCatalog(
     toolRegistry: McpToolRegistry,
@@ -82,12 +100,15 @@ private suspend fun ApplicationCall.respondToolCatalog(
     )
 }
 
-private suspend fun ApplicationCall.respondMcpApiKeys(mcpApiKeyService: McpApiKeyService) {
-    val orgId = requireMcpOrgId() ?: return
+private suspend fun ApplicationCall.respondMcpApiKeys(
+    mcpApiKeyService: McpApiKeyService,
+    membershipService: OrgMembershipService,
+) {
+    val claims = requireMcpAdminClaims(membershipService) ?: return
 
     respond(
         HttpStatusCode.OK,
-        McpApiKeysResponse(mcpApiKeyService.listKeys(orgId)),
+        McpApiKeysResponse(mcpApiKeyService.listKeys(claims.organizationId)),
     )
 }
 
@@ -95,8 +116,9 @@ private suspend fun ApplicationCall.createMcpApiKey(
     mcpApiKeyService: McpApiKeyService,
     toolRegistry: McpToolRegistry,
     resourceRegistry: McpResourceRegistry,
+    membershipService: OrgMembershipService,
 ) {
-    val claims = requireMcpClaims() ?: return
+    val claims = requireMcpAdminClaims(membershipService) ?: return
     val request = receive<CreateMcpApiKeyRequest>()
     val validationError = validateToolSelection(
         request.enabledTools,
@@ -128,8 +150,9 @@ private suspend fun ApplicationCall.updateMcpApiKey(
     mcpApiKeyService: McpApiKeyService,
     toolRegistry: McpToolRegistry,
     resourceRegistry: McpResourceRegistry,
+    membershipService: OrgMembershipService,
 ) {
-    val orgId = requireMcpOrgId() ?: return
+    val claims = requireMcpAdminClaims(membershipService) ?: return
     val keyId = callKeyId() ?: return
     val request = receive<UpdateMcpApiKeyRequest>()
     val validationError = validateToolSelection(
@@ -145,7 +168,7 @@ private suspend fun ApplicationCall.updateMcpApiKey(
 
     try {
         val updated = mcpApiKeyService.updateKey(
-            organizationId = orgId,
+            organizationId = claims.organizationId,
             keyId = keyId,
             name = request.name,
             enabledTools = request.enabledTools,
@@ -158,10 +181,13 @@ private suspend fun ApplicationCall.updateMcpApiKey(
     }
 }
 
-private suspend fun ApplicationCall.deleteMcpApiKey(mcpApiKeyService: McpApiKeyService) {
-    val orgId = requireMcpOrgId() ?: return
+private suspend fun ApplicationCall.deleteMcpApiKey(
+    mcpApiKeyService: McpApiKeyService,
+    membershipService: OrgMembershipService,
+) {
+    val claims = requireMcpAdminClaims(membershipService) ?: return
     val keyId = callKeyId() ?: return
-    val deleted = mcpApiKeyService.revokeKey(orgId, keyId)
+    val deleted = mcpApiKeyService.revokeKey(claims.organizationId, keyId)
     if (deleted) {
         respond(HttpStatusCode.NoContent)
     } else {
@@ -190,14 +216,6 @@ private data class McpClaims(
     val userId: Int,
 )
 
-private suspend fun ApplicationCall.requireMcpOrgId(): Int? {
-    val orgId = claimIntOrNull("orgId")
-    if (orgId == null) {
-        respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_CLAIMS))
-    }
-    return orgId
-}
-
 private suspend fun ApplicationCall.requireMcpClaims(): McpClaims? {
     val orgId = claimIntOrNull("orgId")
     val userId = claimIntOrNull("userId")
@@ -206,6 +224,21 @@ private suspend fun ApplicationCall.requireMcpClaims(): McpClaims? {
         return null
     }
     return McpClaims(organizationId = orgId, userId = userId)
+}
+
+private suspend fun ApplicationCall.requireMcpAdminClaims(
+    membershipService: OrgMembershipService,
+): McpClaims? {
+    val claims = requireMcpClaims() ?: return null
+    val allowed = runCatching {
+        membershipService.requireRole(claims.organizationId, claims.userId, OrgRole.ADMIN)
+        true
+    }.getOrElse { false }
+    if (!allowed) {
+        respond(HttpStatusCode.Forbidden, ErrorResponse(FORBIDDEN_MESSAGE))
+        return null
+    }
+    return claims
 }
 
 private fun ApplicationCall.claimIntOrNull(name: String): Int? =

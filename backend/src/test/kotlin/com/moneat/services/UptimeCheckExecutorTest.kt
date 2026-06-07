@@ -95,4 +95,70 @@ class UptimeCheckExecutorTest {
             assertEquals(0, result.status)
             assertTrue(result.message.contains("No connection string configured"))
         }
+
+    @Test
+    fun `executeCheck blocks tcp monitor for internal hostname`() =
+        runBlocking {
+            withSelfHosted("false") {
+                val result = executor.executeCheck(monitor(type = "tcp", hostname = "127.0.0.1", port = 443))
+                assertEquals(0, result.status)
+                assertTrue(result.message.contains("Blocked"), result.message)
+            }
+        }
+
+    @Test
+    fun `executeCheck blocks ping monitor for internal hostname`() =
+        runBlocking {
+            withSelfHosted("false") {
+                val result = executor.executeCheck(monitor(type = "ping", hostname = "localhost"))
+                assertEquals(0, result.status)
+                assertTrue(result.message.contains("Blocked"), result.message)
+            }
+        }
+
+    @Test
+    fun `executeCheck blocks dns monitor for internal hostname`() =
+        runBlocking {
+            withSelfHosted("false") {
+                val result = executor.executeCheck(monitor(type = "dns", hostname = "localhost"))
+                assertEquals(0, result.status)
+                assertTrue(result.message.contains("Blocked"), result.message)
+            }
+        }
+
+    @Test
+    fun `executeCheck blocks ssl monitor for internal hostname`() =
+        runBlocking {
+            withSelfHosted("false") {
+                val result = executor.executeCheck(monitor(type = "ssl", hostname = "127.0.0.1", port = 443))
+                assertEquals(0, result.status)
+                assertTrue(result.message.contains("Blocked"), result.message)
+            }
+        }
+
+    @Test
+    fun `executeCheck blocks database monitor for internal hostname`() =
+        runBlocking {
+            withSelfHosted("false") {
+                val result = executor.executeCheck(
+                    monitor(type = "database", dbConnectionString = "jdbc:postgresql://127.0.0.1:5432/postgres")
+                )
+                assertEquals(0, result.status)
+                assertTrue(result.message.contains("Blocked"), result.message)
+            }
+        }
+
+    private suspend fun <T> withSelfHosted(value: String, block: suspend () -> T): T {
+        val previous = System.getProperty("SELF_HOSTED")
+        System.setProperty("SELF_HOSTED", value)
+        return try {
+            block()
+        } finally {
+            if (previous == null) {
+                System.clearProperty("SELF_HOSTED")
+            } else {
+                System.setProperty("SELF_HOSTED", previous)
+            }
+        }
+    }
 }

@@ -21,8 +21,8 @@ import com.moneat.alerts.services.AlertEpisodeService
 import com.moneat.auth.routes.accountDeletionRoutes
 import com.moneat.billing.routes.billingRoutes
 import com.moneat.billing.routes.publicBillingRoutes
-import com.moneat.contact.routes.contactRoutes
 import com.moneat.billing.services.PricingTierService
+import com.moneat.contact.routes.contactRoutes
 import com.moneat.events.models.AddTargetRequest
 import com.moneat.events.models.AlertNotificationPreferencesResponse
 import com.moneat.events.models.CreateProjectRequest

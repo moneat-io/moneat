@@ -23,6 +23,8 @@ import com.moneat.uptime.models.CreateUptimeMonitorRequest
 import com.moneat.uptime.models.UpdateUptimeMonitorRequest
 import com.moneat.uptime.services.UptimeService
 import com.moneat.utils.ErrorResponse
+import com.moneat.utils.UrlValidator
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
@@ -37,7 +39,6 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
-import com.moneat.utils.suspendRunCatching
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
@@ -348,13 +349,19 @@ private fun validateMonitorRequest(request: CreateUptimeMonitorRequest): String?
     val typeError = validateMonitorType(request)
     if (typeError != null) return typeError
 
+    val targetError = validateMonitorTargets(request)
+    if (targetError != null) return targetError
+
     if (request.intervalSeconds < MIN_INTERVAL_SECONDS) return "Check interval must be at least 10 seconds"
     if (request.timeoutSeconds < 1) return "Timeout must be at least 1 second"
     return validateAlertPriority(request.alertPriority ?: request.legacyIncidentSeverity)
 }
 
-private fun validateMonitorRequest(request: UpdateUptimeMonitorRequest): String? =
-    validateAlertPriority(request.alertPriority ?: request.legacyIncidentSeverity)
+private fun validateMonitorRequest(request: UpdateUptimeMonitorRequest): String? {
+    val targetError = validateMonitorTargets(request)
+    if (targetError != null) return targetError
+    return validateAlertPriority(request.alertPriority ?: request.legacyIncidentSeverity)
+}
 
 private fun validateAlertPriority(priority: String?): String? {
     if (priority == null) return null
@@ -390,4 +397,59 @@ private fun validateTcpMonitor(request: CreateUptimeMonitorRequest): String? {
     if (request.hostname.isNullOrBlank()) return "Hostname is required for TCP monitors"
     if (request.port == null) return "Port is required for TCP monitors"
     return null
+}
+
+private fun validateMonitorTargets(request: CreateUptimeMonitorRequest): String? =
+    when (request.type.lowercase()) {
+        "http", "keyword", "json_query" -> validateExternalUrlTarget(request.url)
+        "tcp", "ping", "dns", "ssl" ->
+            validateExternalHostTarget(request.hostname) ?: validateExternalHostTarget(request.dnsServer)
+        "websocket" -> request.url?.let { validateExternalUrlTarget(webSocketHttpUrl(it)) }
+        "database" -> validateJdbcTarget(request.dbConnectionString)
+        "docker" -> validateDockerTarget(request.dockerHost)
+        else -> null
+    }
+
+private fun validateMonitorTargets(request: UpdateUptimeMonitorRequest): String? =
+    validateExternalUrlTarget(request.url)
+        ?: validateExternalHostTarget(request.hostname)
+        ?: validateExternalHostTarget(request.dnsServer)
+        ?: validateJdbcTarget(request.dbConnectionString)
+        ?: validateDockerTarget(request.dockerHost)
+
+private fun validateExternalUrlTarget(url: String?): String? =
+    validateTarget(url) { UrlValidator.validateExternalUrl(it) }
+
+private fun validateExternalHostTarget(hostname: String?): String? =
+    validateTarget(hostname) { UrlValidator.validateExternalHost(it) }
+
+private fun validateJdbcTarget(connectionString: String?): String? =
+    validateTarget(connectionString) { UrlValidator.validateExternalJdbcUrl(it) }
+
+private fun validateDockerTarget(dockerHost: String?): String? {
+    if (dockerHost == null || !dockerHost.startsWith("http", ignoreCase = true)) return null
+    return validateExternalUrlTarget(dockerHost)
+}
+
+private fun validateTarget(
+    value: String?,
+    validator: (String) -> Unit,
+): String? {
+    val target = value?.takeIf { it.isNotBlank() } ?: return null
+    return try {
+        validator(target)
+        null
+    } catch (e: UrlValidator.SsrfException) {
+        "Blocked: ${e.message}"
+    }
+}
+
+private fun webSocketHttpUrl(url: String): String {
+    val uri = java.net.URI(url)
+    val scheme = when (uri.scheme?.lowercase()) {
+        "ws" -> "http"
+        "wss" -> "https"
+        else -> uri.scheme
+    }
+    return java.net.URI(scheme, uri.userInfo, uri.host, uri.port, uri.path, uri.query, uri.fragment).toString()
 }

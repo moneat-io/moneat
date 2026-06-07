@@ -56,6 +56,32 @@ object UrlValidator {
     }
 
     /**
+     * Validates a non-URL hostname target such as TCP, DNS, ping, or TLS checks.
+     */
+    fun validateExternalHost(host: String): List<InetAddress> {
+        val normalizedHost = normalizeHostTarget(host)
+            ?: throw SsrfException("Target host is empty")
+
+        val addresses = try {
+            InetAddress.getAllByName(normalizedHost)
+        } catch (e: UnknownHostException) {
+            throw SsrfException("Cannot resolve host: $normalizedHost")
+        }
+
+        validateResolvedAddresses(normalizedHost, addresses)
+        return addresses.toList()
+    }
+
+    /**
+     * Validates JDBC URLs that include a network host. In-memory and local file JDBC URLs do not
+     * perform network egress and are left to the JDBC driver to validate.
+     */
+    fun validateExternalJdbcUrl(jdbcUrl: String) {
+        val host = extractJdbcHost(jdbcUrl) ?: return
+        validateExternalHost(host)
+    }
+
+    /**
      * Validates that a URL does not target blocked addresses and
      * returns the validated [InetAddress] list so callers can pin
      * connections to those addresses, avoiding DNS-rebinding.
@@ -81,17 +107,23 @@ object UrlValidator {
             throw SsrfException("Cannot resolve host: $host")
         }
 
-        val allowInternal = EnvConfig.SelfHost.enabled
+        validateResolvedAddresses(host, addresses)
+        return addresses.toList()
+    }
 
+    private fun validateResolvedAddresses(
+        host: String,
+        addresses: Array<InetAddress>
+    ) {
+        val allowInternal = EnvConfig.SelfHost.enabled
         for (addr in addresses) {
             val normalized = unwrapMappedIPv4(addr)
             if (isBlockedAddress(normalized, allowInternal)) {
                 throw SsrfException(
-                    "URL resolves to a blocked address: $host"
+                    "Target resolves to a blocked address: $host"
                 )
             }
         }
-        return addresses.toList()
     }
 
     /**
@@ -164,5 +196,38 @@ object UrlValidator {
         val firstByte = addr.address[0].toInt() and BYTE_MASK_UNSIGNED
         // fc00::/7 means first byte is 0xFC or 0xFD
         return firstByte == IPV6_ULA_FC_PREFIX || firstByte == IPV6_ULA_FD_PREFIX
+    }
+
+    private fun normalizeHostTarget(host: String): String? {
+        val trimmed = host.trim()
+        if (trimmed.isBlank()) return null
+        return authorityHost(trimmed)
+    }
+
+    private fun extractJdbcHost(jdbcUrl: String): String? {
+        val withoutJdbc = jdbcUrl.trim().removePrefix("jdbc:")
+        val authorityStart = withoutJdbc.indexOf("://")
+        if (authorityStart < 0) return null
+
+        val authority = withoutJdbc
+            .substring(authorityStart + "://".length)
+            .substringBefore("/")
+            .substringBefore("?")
+            .substringBefore(";")
+        return authorityHost(authority)
+    }
+
+    private fun authorityHost(authority: String): String? {
+        val withoutUserInfo = authority.substringAfterLast("@")
+        if (withoutUserInfo.isBlank()) return null
+        if (withoutUserInfo.startsWith("[")) {
+            return withoutUserInfo.substringAfter("[").substringBefore("]").takeIf { it.isNotBlank() }
+        }
+
+        val colonCount = withoutUserInfo.count { it == ':' }
+        if (colonCount == 1) {
+            return withoutUserInfo.substringBefore(":").takeIf { it.isNotBlank() }
+        }
+        return withoutUserInfo.takeIf { it.isNotBlank() }
     }
 }
