@@ -7,7 +7,14 @@ package com.moneat.enterprise.ai.services
 import com.moneat.enterprise.ai.models.AggregatedContext
 import com.moneat.enterprise.ai.models.AiContextSnapshots
 import com.moneat.enterprise.ai.models.ContextSummary
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.and

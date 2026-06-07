@@ -42,7 +42,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.slf4j.LoggerFactory
-import java.util.*
+import java.util.UUID
 import kotlin.time.Clock
 import com.moneat.utils.suspendRunCatching
 

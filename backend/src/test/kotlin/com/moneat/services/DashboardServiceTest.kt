@@ -35,7 +35,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import java.util.*
+import java.util.Collections
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals

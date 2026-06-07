@@ -16,8 +16,9 @@
 
 package com.moneat.config
 
-import io.ktor.events.*
-import io.ktor.server.application.*
+import com.moneat.utils.suspendRunCatching
+import io.ktor.server.application.Application
+import io.ktor.server.application.log
 import io.lettuce.core.RedisClient
 import io.lettuce.core.RedisURI
 import io.lettuce.core.api.StatefulRedisConnection
@@ -27,7 +28,6 @@ import io.lettuce.core.api.sync.RedisCommands
 import io.lettuce.core.resource.ClientResources
 import io.netty.resolver.DefaultAddressResolverGroup
 import java.time.Duration
-import com.moneat.utils.suspendRunCatching
 
 const val BRPOP_TIMEOUT_SECONDS = 5L
 

@@ -35,7 +35,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import java.security.MessageDigest
 import java.security.SecureRandom
-import java.util.*
+import java.util.Base64
 import kotlin.time.Clock
 import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 

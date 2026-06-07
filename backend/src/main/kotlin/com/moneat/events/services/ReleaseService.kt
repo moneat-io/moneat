@@ -45,7 +45,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import com.moneat.utils.suspendRunCatching
-import java.util.*
+import java.util.UUID
 
 class ReleaseService {
     private val dateFormatter = DateTimeFormatter.ISO_INSTANT

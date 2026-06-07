@@ -7,8 +7,10 @@ comments:
     licenseTemplateFile: 'license-header.txt'
     licenseTemplateIsRegex: false
 
-# Disable rules that have widespread pre-existing violations.
-# Mirror core's disabled rules for consistency.
+# Active rules fail new violations; existing debt is isolated in the baseline.
+# Follow-up cleanup targets the 22 EE baseline IDs: LongParameterList (14) and
+# CyclomaticComplexMethod (8). WildcardImport and EmptyCatchBlock have no EE baseline entries.
+# Mirror core's rule posture for consistency.
 style:
   MagicNumber:
     active: true
@@ -20,7 +22,7 @@ style:
     ignoreEnums: true
     ignoreRanges: true
   WildcardImport:
-    active: false
+    active: true
   ReturnCount:
     active: false
   ThrowsCount:
@@ -45,13 +47,13 @@ style:
 
 complexity:
   LongParameterList:
-    active: false
+    active: true
   LongMethod:
     active: false
   TooManyFunctions:
     active: false
   CyclomaticComplexMethod:
-    active: false
+    active: true
   # Mirror core backend: LargeClass enabled (issue #296); threshold raised during incremental splits.
   LargeClass:
     active: true
@@ -100,7 +102,7 @@ performance:
 
 empty-blocks:
   EmptyCatchBlock:
-    active: false
+    active: true
 
 potential-bugs:
   ImplicitDefaultLocale:

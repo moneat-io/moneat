@@ -19,15 +19,18 @@ package com.moneat.plugins
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.config.EnvConfig
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
-import io.ktor.server.application.*
-import io.ktor.server.auth.*
-import io.ktor.server.auth.jwt.*
+import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationCall
+import io.ktor.server.application.ApplicationCallPipeline
+import io.ktor.server.application.call
+import io.ktor.server.auth.principal
+import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.request.path
-import io.ktor.server.response.*
+import io.ktor.server.response.respond
 import mu.KotlinLogging
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val demoUserId = EnvConfig.Demo.USER_ID

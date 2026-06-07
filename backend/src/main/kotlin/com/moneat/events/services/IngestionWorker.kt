@@ -39,7 +39,7 @@ import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
 import java.io.IOException
 import java.nio.ByteBuffer
-import java.util.*
+import java.util.Base64
 
 private val logger = KotlinLogging.logger {}
 private const val ERROR_DELAY_MS = 1000L

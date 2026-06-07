@@ -22,7 +22,7 @@ import kotlinx.serialization.SerialName
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.java.javaUUID
 import org.jetbrains.exposed.v1.datetime.timestamp
-import java.util.*
+import java.util.UUID
 
 // Exposed Table Definition
 object UptimeMonitors : Table("uptime_monitors") {
