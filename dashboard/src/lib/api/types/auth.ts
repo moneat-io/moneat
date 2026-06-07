@@ -44,6 +44,7 @@ export interface AuthToken {
 }
 
 export interface SsoConfig {
+  organizationId?: number
   providerType: string
   isEnabled: boolean
   idpEntityId?: string

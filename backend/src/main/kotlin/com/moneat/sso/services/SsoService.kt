@@ -69,6 +69,7 @@ import java.security.GeneralSecurityException
 import java.security.SecureRandom
 import java.util.Base64
 import java.util.Date
+import java.util.Hashtable
 import java.util.concurrent.ConcurrentHashMap
 import javax.crypto.Cipher
 import javax.crypto.Mac
@@ -92,6 +93,12 @@ private const val OIDC_DISCOVERY_ERROR =
         "not just the Authentik domain."
 private const val SSO_DNS_RECORD_PREFIX = "_moneat-sso"
 private const val SSO_DNS_RECORD_VALUE_PREFIX = "moneat-sso="
+private const val JNDI_DNS_FACTORY_KEY = "java.naming.factory.initial"
+private const val JNDI_DNS_FACTORY_VALUE = "com.sun.jndi.dns.DnsContextFactory"
+private const val JNDI_DNS_TIMEOUT_KEY = "com.sun.jndi.dns.timeout.initial"
+private const val JNDI_DNS_TIMEOUT_MS = "2000"
+private const val JNDI_DNS_RETRIES_KEY = "com.sun.jndi.dns.timeout.retries"
+private const val JNDI_DNS_RETRIES = "1"
 private const val DOMAIN_VERIFICATION_TOKEN_BYTES = 32
 private const val MAX_DOMAIN_LENGTH = 253
 private const val MAX_DOMAIN_LABEL_LENGTH = 63
@@ -1071,13 +1078,20 @@ open class SsoService {
     private fun domainVerificationRecordName(domain: String): String =
         "$SSO_DNS_RECORD_PREFIX.$domain"
 
+    private fun dnsLookupEnvironment(): Hashtable<String, String> =
+        Hashtable<String, String>().apply {
+            put(JNDI_DNS_FACTORY_KEY, JNDI_DNS_FACTORY_VALUE)
+            put(JNDI_DNS_TIMEOUT_KEY, JNDI_DNS_TIMEOUT_MS)
+            put(JNDI_DNS_RETRIES_KEY, JNDI_DNS_RETRIES)
+        }
+
     open fun verifyDnsTxtRecord(
         domain: String,
         expectedToken: String,
     ): Boolean {
         return try {
             val expectedValue = "$SSO_DNS_RECORD_VALUE_PREFIX$expectedToken"
-            val attrs = InitialDirContext().getAttributes(
+            val attrs = InitialDirContext(dnsLookupEnvironment()).getAttributes(
                 "dns:/${domainVerificationRecordName(domain)}",
                 arrayOf("TXT"),
             )

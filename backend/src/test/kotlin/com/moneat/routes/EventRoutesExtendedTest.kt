@@ -72,6 +72,9 @@ import io.mockk.mockk
 import io.mockk.runs
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -1045,7 +1048,8 @@ class EventRoutesExtendedTest {
         assertEquals(HttpStatusCode.OK, response.status)
         val body = response.bodyAsText()
         assertTrue(body.contains("email"))
-        assertTrue(body.contains("\"orgId\":${seeded.orgId}"), "Response should include orgId: $body")
+        val userJson = Json.parseToJsonElement(body).jsonObject
+        assertEquals(seeded.orgId, userJson["orgId"]?.jsonPrimitive?.int, "Response should include orgId: $body")
     }
 
     @Test

@@ -28,16 +28,43 @@ import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/useToast'
 import { AlertCircle, Check, Loader2, Shield, ShieldCheck } from 'lucide-react'
 
-export function SsoTab({
+type SsoProviderType = 'saml' | 'oidc'
+
+const defaultSsoFormData = {
+  isEnabled: true,
+  idpEntityId: '',
+  idpSsoUrl: '',
+  idpCertificate: '',
+  oidcIssuerUrl: '',
+  oidcClientId: '',
+  oidcClientSecret: '',
+  emailDomain: '',
+  requireSso: false,
+}
+const certificatePlaceholder =
+  '-----BEGIN CERTIFICATE-----&#10;MIIDXTCCAkWgAwIBAgIJAJC1HiIAZAiIMA0GCSqGSI...' +
+  '&#10;-----END CERTIFICATE-----'
+const existingClientSecretPlaceholder = '••••••••••••••••'
+type SsoTabProps = Readonly<{
+  organizationId?: number
+  hasSamlModule?: boolean
+  canConfigure?: boolean
+}>
+
+export function SsoTab(props: SsoTabProps) {
+  return <SsoTabContent key={props.organizationId ?? 'no-organization'} {...props} />
+}
+
+function SsoTabContent({
   organizationId,
   hasSamlModule = false,
   canConfigure = true,
-}: Readonly<{ organizationId?: number; hasSamlModule?: boolean; canConfigure?: boolean }>) {
+}: SsoTabProps) {
   const hasOrganization = organizationId !== undefined
   const readOnly = !canConfigure || !hasOrganization
   const queryClient = useQueryClient()
   const { toast } = useToast()
-  const [providerType, setProviderType] = useState<'saml' | 'oidc'>('oidc')
+  const [providerType, setProviderType] = useState<SsoProviderType>('oidc')
 
   const requireOrganizationId = () => {
     if (organizationId === undefined) throw new Error('No organization found')
@@ -51,25 +78,15 @@ export function SsoTab({
     retry: false,
   })
 
-  const [formData, setFormData] = useState({
-    isEnabled: true,
-    // SAML fields
-    idpEntityId: '',
-    idpSsoUrl: '',
-    idpCertificate: '',
-    // OIDC fields
-    oidcIssuerUrl: '',
-    oidcClientId: '',
-    oidcClientSecret: '',
-    // Shared
-    emailDomain: '',
-    requireSso: false,
-  })
+  const [formData, setFormData] = useState(defaultSsoFormData)
 
   // Initialize form when ssoConfig loads - using ref to track initialization
   const initializedRef = useRef(false)
+
   useEffect(() => {
-    if (ssoConfig && !initializedRef.current) {
+    const configBelongsToOrganization =
+      ssoConfig?.organizationId === undefined || ssoConfig.organizationId === organizationId
+    if (ssoConfig && configBelongsToOrganization && !initializedRef.current) {
       initializedRef.current = true
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setProviderType(ssoConfig.providerType === 'saml' ? 'saml' : 'oidc')
@@ -85,7 +102,7 @@ export function SsoTab({
         requireSso: ssoConfig.requireSso || false,
       })
     }
-  }, [ssoConfig])
+  }, [organizationId, ssoConfig])
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -123,17 +140,7 @@ export function SsoTab({
         description: 'SSO has been disabled for your organization.',
       })
       // Reset form
-      setFormData({
-        isEnabled: true,
-        idpEntityId: '',
-        idpSsoUrl: '',
-        idpCertificate: '',
-        oidcIssuerUrl: '',
-        oidcClientId: '',
-        oidcClientSecret: '',
-        emailDomain: '',
-        requireSso: false,
-      })
+      setFormData(defaultSsoFormData)
     },
     onError: (error: Error) => {
       toast({
@@ -199,7 +206,7 @@ export function SsoTab({
                 <Label className="text-sm">Provider Type</Label>
                 <Select
                   value={providerType}
-                  onValueChange={(value: 'saml' | 'oidc') => setProviderType(value)}
+                  onValueChange={(value: SsoProviderType) => setProviderType(value)}
                   disabled={readOnly}
                 >
                   <SelectTrigger className="h-8">
@@ -253,7 +260,7 @@ export function SsoTab({
                       id="idpCertificate"
                       value={formData.idpCertificate}
                       onChange={(e) => setFormData({ ...formData, idpCertificate: e.target.value })}
-                      placeholder="-----BEGIN CERTIFICATE-----&#10;MIIDXTCCAkWgAwIBAgIJAJC1HiIAZAiIMA0GCSqGSI...&#10;-----END CERTIFICATE-----"
+                      placeholder={certificatePlaceholder}
                       rows={4}
                       className="font-mono text-xs min-h-0 py-2"
                       required={providerType === 'saml'}
@@ -313,7 +320,7 @@ export function SsoTab({
                       className="h-8"
                       value={formData.oidcClientSecret}
                       onChange={(e) => setFormData({ ...formData, oidcClientSecret: e.target.value })}
-                      placeholder={ssoConfig?.hasClientSecret ? '••••••••••••••••' : 'Enter client secret'}
+                      placeholder={ssoConfig?.hasClientSecret ? existingClientSecretPlaceholder : 'Enter client secret'}
                       required={providerType === 'oidc' && !ssoConfig?.hasClientSecret}
                       disabled={readOnly}
                     />
