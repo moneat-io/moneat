@@ -24,7 +24,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatRelativeTime(dateValue: string | number | undefined, timezone?: string): string {
-  if (!dateValue) return 'unknown'
+  if (dateValue === undefined || dateValue === '') return 'unknown'
 
   const date = parseDate(dateValue)
   if (!Number.isFinite(date.getTime())) return 'unknown'

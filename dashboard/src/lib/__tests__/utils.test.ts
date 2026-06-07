@@ -66,6 +66,10 @@ describe('utils', () => {
       expect(formatRelativeTime(undefined)).toBe('unknown')
     })
 
+    it('handles epoch zero as a valid timestamp', () => {
+      expect(formatRelativeTime(0, 'UTC')).toMatch(/Jan 1, 1970/)
+    })
+
     it('returns "just now" for < 60 seconds', () => {
       const thirtySecondsAgo = new Date('2024-02-11T11:59:30Z').getTime()
       expect(formatRelativeTime(thirtySecondsAgo)).toBe('just now')

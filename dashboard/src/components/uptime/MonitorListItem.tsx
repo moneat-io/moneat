@@ -63,6 +63,8 @@ export default function MonitorListItem({monitor}: MonitorListItemProps) {
     enabled: true,
   })
   const lastHeartbeat = heartbeats.at(-1)
+  const lastCheckAt = monitor.lastCheckAt
+  const hasLastCheckAt = lastCheckAt !== undefined && lastCheckAt !== null
 
   const deleteMutation = useMutation({
     mutationFn: (monitorId: string) => api.deleteUptimeMonitor(monitorId),
@@ -127,8 +129,11 @@ export default function MonitorListItem({monitor}: MonitorListItemProps) {
                   {monitor.url || monitor.hostname}
                 </a>
                 <span className="text-xs">•</span>
-                <span className="text-xs" title={formatDateTime(monitor.lastCheckAt || 0, timezone)}>
-                  Checked {monitor.lastCheckAt ? formatRelativeTime(monitor.lastCheckAt) : 'never'}
+                <span
+                  className="text-xs"
+                  title={hasLastCheckAt ? formatDateTime(lastCheckAt, timezone) : undefined}
+                >
+                  Checked {hasLastCheckAt ? formatRelativeTime(lastCheckAt) : 'never'}
                 </span>
               </div>
             </div>
