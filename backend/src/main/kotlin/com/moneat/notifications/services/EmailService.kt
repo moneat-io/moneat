@@ -90,6 +90,7 @@ class EmailService {
     private val config = ApplicationConfig("application.conf")
     private val fromEmail = config.property("email.from").getString()
     private val frontendUrl = config.property("email.frontendUrl").getString()
+    private val salesInbox = config.propertyOrNull("email.salesInbox")?.getString() ?: "support@moneat.io"
 
     private val smtpHost = config.propertyOrNull("email.smtp.host")?.getString()
     private val smtpPort = config.propertyOrNull("email.smtp.port")?.getString()?.toIntOrNull() ?: 587
@@ -225,6 +226,22 @@ class EmailService {
         textBody: String,
         emailType: String = "other"
     ) {
+        sendEmail(to, subject, htmlBody, textBody, emailType, replyTo = null)
+    }
+
+    /**
+     * Sends a multipart alternative (plain text + HTML) message when SMTP is configured;
+     * otherwise logs a preview and records a failed send for metrics. When [replyTo] is set
+     * the message carries a Reply-To header so recipients can respond to that address directly.
+     */
+    fun sendEmail(
+        to: String,
+        subject: String,
+        htmlBody: String,
+        textBody: String,
+        emailType: String,
+        replyTo: String?
+    ) {
         SentryUtils.breadcrumb(
             "email",
             "Sending email",
@@ -257,6 +274,9 @@ class EmailService {
                 MimeMessage(mailSession).apply {
                     setFrom(InternetAddress(fromEmail, "Moneat"))
                     setRecipients(Message.RecipientType.TO, InternetAddress.parse(to))
+                    if (!replyTo.isNullOrBlank()) {
+                        this.replyTo = InternetAddress.parse(replyTo)
+                    }
                     setSubject(subject)
 
                     val multipart = MimeMultipart("alternative")
@@ -1096,6 +1116,62 @@ class EmailService {
             else ->
                 """<p style="$BADGE_STYLE $BADGE_NEUTRAL">&rarr; 0%</p>"""
         }
+    }
+
+    /**
+     * Notifies the internal sales inbox of an Enterprise inquiry submitted from the public
+     * pricing page. The message Reply-To is the prospect's address so the team can respond directly.
+     */
+    fun sendEnterpriseSalesInquiry(
+        name: String,
+        email: String,
+        company: String,
+        message: String
+    ) {
+        val safeName = name.escapeHtml()
+        val safeEmail = email.escapeHtml()
+        val safeCompany = company.escapeHtml()
+        val safeMessage = message.escapeHtml()
+        val subject = "Enterprise sales inquiry: $company"
+        val htmlBody =
+            """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            </head>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="background-color: #f8f9fa; padding: 30px; border-radius: 8px;">
+                    <h1 style="color: #1a1a1a; margin-bottom: 20px;">New Enterprise sales inquiry</h1>
+                    <p><strong>Name:</strong> $safeName</p>
+                    <p><strong>Work email:</strong> <a href="mailto:$safeEmail">$safeEmail</a></p>
+                    <p><strong>Company:</strong> $safeCompany</p>
+                    <p style="margin-top: 20px;"><strong>Message:</strong></p>
+                    <p style="white-space: pre-wrap; background-color: #ffffff; border: 1px solid #e5e5e5; border-radius: 6px; padding: 16px;">$safeMessage</p>
+                    <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+                    <p style="color: #999; font-size: 12px;">Reply directly to this email to reach $safeName.</p>
+                </div>
+            </body>
+            </html>
+            """.trimIndent()
+
+        val textBody =
+            """
+            New Enterprise sales inquiry
+
+            Name: $name
+            Work email: $email
+            Company: $company
+
+            Message:
+            $message
+
+            ---
+            Reply directly to this email to reach the prospect.
+            """.trimIndent()
+
+        sendEmail(salesInbox, subject, htmlBody, textBody, "enterprise_sales_inquiry", replyTo = email)
     }
 
     fun sendAccountDeletionConfirmation(email: String) {

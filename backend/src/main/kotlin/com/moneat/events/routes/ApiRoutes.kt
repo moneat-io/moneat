@@ -22,6 +22,7 @@ import com.moneat.auth.routes.accountDeletionRoutes
 import com.moneat.auth.services.Quadruple
 import com.moneat.billing.routes.billingRoutes
 import com.moneat.billing.routes.publicBillingRoutes
+import com.moneat.contact.routes.contactRoutes
 import com.moneat.billing.services.PricingTierService
 import com.moneat.events.models.AddTargetRequest
 import com.moneat.events.models.AlertNotificationPreferencesResponse
@@ -119,6 +120,11 @@ fun Route.apiRoutes() {
     route("/v1") {
         // Public billing plans endpoint
         publicBillingRoutes()
+
+        // Public Enterprise sales-contact form (IP rate-limited; each request can send email)
+        rateLimit(RateLimitName("contact")) {
+            contactRoutes()
+        }
     }
 
     authenticate("auth-jwt") {

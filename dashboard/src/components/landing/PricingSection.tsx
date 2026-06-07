@@ -24,6 +24,19 @@ import {useToast} from '@/hooks/useToast'
 import {useState} from 'react'
 import {cn} from '@/lib/utils'
 import {GRADIENT_BG, GRADIENT_BAR, GRADIENT_TEXT, SectionHeading} from './Landing'
+import {SalesContactDialog} from './SalesContactDialog'
+
+// Tiers above this price are sold as a custom Enterprise plan, not self-serve.
+const SELF_SERVE_HIDDEN_TIERS = new Set(['BUSINESS'])
+
+const ENTERPRISE_FEATURES = [
+  'Volume pricing & committed-use discounts',
+  'SAML & OIDC single sign-on',
+  'Custom data retention',
+  'Dedicated support with an SLA',
+  'Onboarding & solution architecture',
+  'Invoicing & procurement support',
+]
 
 // ─── Loading / error / empty states ────────────────────────────────────────────
 
@@ -223,11 +236,61 @@ function TierCard({
   )
 }
 
+// ─── Enterprise contact card ──────────────────────────────────────────────────
+
+function EnterpriseCard({onContact}: {readonly onContact: () => void}) {
+  return (
+    <div className="relative flex flex-col rounded-lg border border-white/[0.08] bg-[#0c0e16] p-6">
+      {/* Header */}
+      <div className="flex items-baseline justify-between">
+        <h3 className="text-lg font-semibold text-white">Enterprise</h3>
+        <div className="text-right">
+          <span className="font-brandmono text-2xl font-bold text-white">Custom</span>
+        </div>
+      </div>
+
+      <p className="mt-3 min-h-10 text-sm leading-6 text-slate-400">
+        For organizations that need scale, compliance, and a dedicated partner.
+      </p>
+
+      {/* Features */}
+      <div className="mt-5 flex-1 space-y-4">
+        <div>
+          <p className="mb-2 font-brandmono text-[10px] uppercase tracking-[0.12em] text-slate-500">
+            Everything in Team, plus
+          </p>
+          <ul className="space-y-2">
+            {ENTERPRISE_FEATURES.map((feature) => (
+              <li key={feature} className="flex items-start gap-2">
+                <Check className="mt-0.5 size-3.5 shrink-0 text-emerald-400" />
+                <span className="text-sm leading-snug text-slate-300">{feature}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      {/* CTA */}
+      <div className="mt-6">
+        <Button
+          variant="outline"
+          size="lg"
+          className="w-full border-white/15 bg-white/[0.03] text-slate-100 hover:bg-white/[0.07] hover:text-white"
+          onClick={onContact}
+        >
+          Contact sales
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main section ───────────────────────────────────────────────────────────────
 
 export function PricingSection() {
   const {toast} = useToast()
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly')
+  const [salesDialogOpen, setSalesDialogOpen] = useState(false)
   const isAuthenticated = api.isAuthenticated()
 
   const {
@@ -262,15 +325,18 @@ export function PricingSection() {
     },
   })
 
-  const tiers: PricingCardModel[] = billingPlans?.plans.map((plan) => {
-    return buildPricingCardModel(
-      {
-        ...plan.tier,
-        trialDays: plan.trialDays ?? plan.tier.trialDays,
-      },
-      billingInterval,
-    )
-  }) ?? []
+  const tiers: PricingCardModel[] =
+    billingPlans?.plans
+      .filter((plan) => !SELF_SERVE_HIDDEN_TIERS.has(plan.tier.tierName))
+      .map((plan) => {
+        return buildPricingCardModel(
+          {
+            ...plan.tier,
+            trialDays: plan.trialDays ?? plan.tier.trialDays,
+          },
+          billingInterval,
+        )
+      }) ?? []
 
   const handlePaidTierClick = (tierName: string) => {
     if (!isAuthenticated) return
@@ -346,6 +412,7 @@ export function PricingSection() {
                   onPaidTierClick={handlePaidTierClick}
                 />
               ))}
+              <EnterpriseCard onContact={() => setSalesDialogOpen(true)} />
             </div>
           )
         })()}
@@ -359,6 +426,8 @@ export function PricingSection() {
           </p>
         </div>
       </div>
+
+      <SalesContactDialog open={salesDialogOpen} onOpenChange={setSalesDialogOpen} />
     </section>
   )
 }
