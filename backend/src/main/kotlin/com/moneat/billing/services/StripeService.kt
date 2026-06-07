@@ -71,7 +71,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
-import java.util.*
+import java.util.UUID
 import kotlin.time.Clock
 import kotlin.time.Instant
 import com.stripe.param.checkout.SessionCreateParams as CheckoutSessionCreateParams

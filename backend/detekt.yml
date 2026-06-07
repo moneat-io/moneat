@@ -22,7 +22,7 @@ style:
     ignoreEnums: true
     ignoreRanges: true
   WildcardImport:
-    active: false
+    active: true
   ReturnCount:
     active: false
   ThrowsCount:
@@ -55,9 +55,9 @@ complexity:
   LongMethod:
     active: false
   LongParameterList:
-    active: false
+    active: true
   CyclomaticComplexMethod:
-    active: false
+    active: true
   ComplexCondition:
     active: false
   # Enforced (issue #296): flag types over threshold so large classes are split intentionally.
@@ -118,7 +118,7 @@ performance:
 
 empty-blocks:
   EmptyCatchBlock:
-    active: false
+    active: true
 
 potential-bugs:
   ImplicitDefaultLocale:

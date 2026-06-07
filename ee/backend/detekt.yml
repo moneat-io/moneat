@@ -20,7 +20,7 @@ style:
     ignoreEnums: true
     ignoreRanges: true
   WildcardImport:
-    active: false
+    active: true
   ReturnCount:
     active: false
   ThrowsCount:
@@ -45,13 +45,13 @@ style:
 
 complexity:
   LongParameterList:
-    active: false
+    active: true
   LongMethod:
     active: false
   TooManyFunctions:
     active: false
   CyclomaticComplexMethod:
-    active: false
+    active: true
   # Mirror core backend: LargeClass enabled (issue #296); threshold raised during incremental splits.
   LargeClass:
     active: true
@@ -100,7 +100,7 @@ performance:
 
 empty-blocks:
   EmptyCatchBlock:
-    active: false
+    active: true
 
 potential-bugs:
   ImplicitDefaultLocale:
