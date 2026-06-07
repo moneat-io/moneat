@@ -20,6 +20,7 @@ import com.moneat.uptime.models.CheckResult
 import java.security.cert.X509Certificate
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import javax.net.ssl.SSLPeerUnverifiedException
 import javax.net.ssl.SSLSocket
 
 internal class SslCertificateEvaluator {
@@ -28,7 +29,11 @@ internal class SslCertificateEvaluator {
         responseTime: Int,
         warnDays: Long,
     ): CheckResult {
-        val cert = socket.session.peerCertificates.firstOrNull() as? X509Certificate
+        val cert = try {
+            socket.session.peerCertificates.firstOrNull() as? X509Certificate
+        } catch (_: SSLPeerUnverifiedException) {
+            null
+        }
             ?: return CheckResult(0, responseTime, 0, "No SSL certificate found")
         return evaluateCertificate(cert, responseTime, warnDays)
     }
@@ -40,12 +45,14 @@ internal class SslCertificateEvaluator {
     ): CheckResult {
         val expiryDate = cert.notAfter.toInstant()
         val now = Instant.now()
+        if (!expiryDate.isAfter(now)) {
+            val daysExpired = ChronoUnit.DAYS.between(expiryDate, now).coerceAtLeast(1)
+            return CheckResult(0, responseTime, 0, "SSL certificate expired $daysExpired days ago")
+        }
+
         val daysUntilExpiry = ChronoUnit.DAYS.between(now, expiryDate)
 
         return when {
-            daysUntilExpiry < 0 ->
-                CheckResult(0, responseTime, 0, "SSL certificate expired ${-daysUntilExpiry} days ago")
-
             daysUntilExpiry < warnDays ->
                 CheckResult(
                     0,
