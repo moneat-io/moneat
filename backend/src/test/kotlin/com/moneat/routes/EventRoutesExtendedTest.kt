@@ -153,7 +153,7 @@ class EventRoutesExtendedTest {
                 rateLimiter(limit = 1000, refillPeriod = 1.seconds)
             }
         }
-        routing { apiRoutes() }
+        routing { apiRoutes(includePublicContactRoutes = false) }
     }
 
     private fun token(userId: Int): String =

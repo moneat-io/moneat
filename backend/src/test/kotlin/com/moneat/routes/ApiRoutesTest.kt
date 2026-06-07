@@ -150,7 +150,7 @@ class ApiRoutesTest {
                             rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                         }
                     }
-                    routing { apiRoutes() }
+                    routing { apiRoutes(includePublicContactRoutes = false) }
                 }
 
                 val response =
@@ -200,7 +200,7 @@ class ApiRoutesTest {
                             rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                         }
                     }
-                    routing { apiRoutes() }
+                    routing { apiRoutes(includePublicContactRoutes = false) }
                 }
 
                 val response =
@@ -235,7 +235,7 @@ class ApiRoutesTest {
                         rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                     }
                 }
-                routing { apiRoutes() }
+                routing { apiRoutes(includePublicContactRoutes = false) }
             }
 
             val response =
@@ -269,7 +269,7 @@ class ApiRoutesTest {
                         rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                     }
                 }
-                routing { apiRoutes() }
+                routing { apiRoutes(includePublicContactRoutes = false) }
             }
 
             val response =

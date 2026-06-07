@@ -110,7 +110,7 @@ private data class ServiceReadContext(
 )
 
 @Suppress("kotlin:S3776")
-fun Route.apiRoutes() {
+fun Route.apiRoutes(includePublicContactRoutes: Boolean = true) {
     val koin = GlobalContext.get()
     val alertEpisodeService = koin.get<AlertEpisodeService>()
     val dashboardService = koin.get<DashboardService>()
@@ -121,9 +121,11 @@ fun Route.apiRoutes() {
         // Public billing plans endpoint
         publicBillingRoutes()
 
-        // Public Enterprise sales-contact form (IP rate-limited; each request can send email)
-        rateLimit(RateLimitName("contact")) {
-            contactRoutes()
+        if (includePublicContactRoutes) {
+            // Public Enterprise sales-contact form (IP rate-limited; each request can send email)
+            rateLimit(RateLimitName("contact")) {
+                contactRoutes()
+            }
         }
     }
 

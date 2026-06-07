@@ -3,13 +3,64 @@ import type {ReactNode} from 'react'
 
 type AdmonitionType = 'info' | 'tip' | 'warning' | 'caution' | 'note' | 'danger'
 
-const STYLES: Record<AdmonitionType, {icon: typeof Info; border: string; bg: string; text: string; iconColor: string}> = {
-  info: {icon: Info, border: 'border-sky-300', bg: 'bg-sky-50', text: 'text-sky-900', iconColor: 'text-sky-700'},
-  tip: {icon: Lightbulb, border: 'border-emerald-300', bg: 'bg-emerald-50', text: 'text-emerald-900', iconColor: 'text-emerald-700'},
-  warning: {icon: AlertTriangle, border: 'border-amber-300', bg: 'bg-amber-50', text: 'text-amber-900', iconColor: 'text-amber-700'},
-  caution: {icon: AlertCircle, border: 'border-red-300', bg: 'bg-red-50', text: 'text-red-900', iconColor: 'text-red-700'},
-  note: {icon: Info, border: 'border-slate-300', bg: 'bg-slate-50', text: 'text-slate-900', iconColor: 'text-slate-600'},
-  danger: {icon: AlertCircle, border: 'border-red-300', bg: 'bg-red-50', text: 'text-red-900', iconColor: 'text-red-700'},
+interface AdmonitionStyle {
+  icon: typeof Info
+  border: string
+  bg: string
+  text: string
+  body: string
+  iconColor: string
+}
+
+const STYLES: Record<AdmonitionType, AdmonitionStyle> = {
+  info: {
+    icon: Info,
+    border: 'border-sky-400/35',
+    bg: 'bg-sky-950/35',
+    text: 'text-sky-100',
+    body: 'text-slate-200',
+    iconColor: 'text-sky-300',
+  },
+  tip: {
+    icon: Lightbulb,
+    border: 'border-emerald-400/35',
+    bg: 'bg-emerald-950/30',
+    text: 'text-emerald-100',
+    body: 'text-slate-200',
+    iconColor: 'text-emerald-300',
+  },
+  warning: {
+    icon: AlertTriangle,
+    border: 'border-amber-400/35',
+    bg: 'bg-amber-950/30',
+    text: 'text-amber-100',
+    body: 'text-slate-200',
+    iconColor: 'text-amber-300',
+  },
+  caution: {
+    icon: AlertCircle,
+    border: 'border-red-400/35',
+    bg: 'bg-red-950/30',
+    text: 'text-red-100',
+    body: 'text-slate-200',
+    iconColor: 'text-red-300',
+  },
+  note: {
+    icon: Info,
+    border: 'border-slate-500/45',
+    bg: 'bg-slate-900/55',
+    text: 'text-slate-100',
+    body: 'text-slate-200',
+    iconColor: 'text-slate-300',
+  },
+  danger: {
+    icon: AlertCircle,
+    border: 'border-red-400/35',
+    bg: 'bg-red-950/30',
+    text: 'text-red-100',
+    body: 'text-slate-200',
+    iconColor: 'text-red-300',
+  },
 }
 
 const alertTypes: AdmonitionType[] = ['warning', 'caution', 'danger']
@@ -26,12 +77,12 @@ export default function Admonition({type = 'info', title, children}: AdmonitionP
   const role = alertTypes.includes(type) ? 'alert' : 'note'
 
   return (
-    <div role={role} className={`my-4 rounded-lg border-l-4 ${style.border} ${style.bg} p-4`}>
+    <div role={role} className={`my-6 rounded-md border ${style.border} ${style.bg} p-5`}>
       <div className={`mb-1 flex items-center gap-2 font-semibold ${style.text}`}>
         <Icon className={`size-4 ${style.iconColor}`} />
         {title ?? type.charAt(0).toUpperCase() + type.slice(1)}
       </div>
-      <div className="text-sm text-slate-700">{children}</div>
+      <div className={`text-sm leading-6 ${style.body} [&_p]:m-0 [&_p]:text-current`}>{children}</div>
     </div>
   )
 }

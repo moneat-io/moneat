@@ -102,7 +102,7 @@ class ApiRoutesExtendedTest {
                     rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                 }
             }
-            routing { apiRoutes() }
+            routing { apiRoutes(includePublicContactRoutes = false) }
         }
         val response = client.get("/v1/user")
         assertEquals(HttpStatusCode.Unauthorized, response.status)
@@ -118,7 +118,7 @@ class ApiRoutesExtendedTest {
                     rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                 }
             }
-            routing { apiRoutes() }
+            routing { apiRoutes(includePublicContactRoutes = false) }
         }
         val token = RouteTestSupport.createToken(userId = 1)
         val response = client.get("/v1/user") { withAuth(token) }
@@ -168,7 +168,7 @@ class ApiRoutesExtendedTest {
                     rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                 }
             }
-            routing { apiRoutes() }
+            routing { apiRoutes(includePublicContactRoutes = false) }
         }
 
         val token = RouteTestSupport.createToken(userId = userId, orgId = otherOrgId)
@@ -196,7 +196,7 @@ class ApiRoutesExtendedTest {
                     rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                 }
             }
-            routing { apiRoutes() }
+            routing { apiRoutes(includePublicContactRoutes = false) }
         }
 
         val token = RouteTestSupport.createToken(userId = userId)
@@ -236,7 +236,7 @@ class ApiRoutesExtendedTest {
                     rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                 }
             }
-            routing { apiRoutes() }
+            routing { apiRoutes(includePublicContactRoutes = false) }
         }
 
         val token = RouteTestSupport.createToken(userId = userId, orgId = orgId)
@@ -256,7 +256,7 @@ class ApiRoutesExtendedTest {
                     rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                 }
             }
-            routing { apiRoutes() }
+            routing { apiRoutes(includePublicContactRoutes = false) }
         }
         val unauth = client.put("/v1/user/phone-number") {
             contentType(ContentType.Application.Json)
@@ -275,7 +275,7 @@ class ApiRoutesExtendedTest {
                     rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                 }
             }
-            routing { apiRoutes() }
+            routing { apiRoutes(includePublicContactRoutes = false) }
         }
         val token = RouteTestSupport.createToken(userId = 1)
         val response =
@@ -299,7 +299,7 @@ class ApiRoutesExtendedTest {
                     rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                 }
             }
-            routing { apiRoutes() }
+            routing { apiRoutes(includePublicContactRoutes = false) }
         }
         val token = RouteTestSupport.createToken(userId = 1)
         val response = client.get("/v1/user/sidebar-preferences") { withAuth(token) }
@@ -316,7 +316,7 @@ class ApiRoutesExtendedTest {
                     rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                 }
             }
-            routing { apiRoutes() }
+            routing { apiRoutes(includePublicContactRoutes = false) }
         }
         val response =
             client.put("/v1/user/sidebar-preferences") {
@@ -336,7 +336,7 @@ class ApiRoutesExtendedTest {
                     rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                 }
             }
-            routing { apiRoutes() }
+            routing { apiRoutes(includePublicContactRoutes = false) }
         }
         assertEquals(HttpStatusCode.Unauthorized, client.get("/v1/projects").status)
     }
@@ -351,7 +351,7 @@ class ApiRoutesExtendedTest {
                     rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                 }
             }
-            routing { apiRoutes() }
+            routing { apiRoutes(includePublicContactRoutes = false) }
         }
         val token = RouteTestSupport.createToken(userId = 1)
         val response = client.get("/v1/projects") { withAuth(token) }
@@ -370,7 +370,7 @@ class ApiRoutesExtendedTest {
                     rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                 }
             }
-            routing { apiRoutes() }
+            routing { apiRoutes(includePublicContactRoutes = false) }
         }
         val token = RouteTestSupport.createToken(userId = 1)
         val response = client.get("/v1/projects/424242") { withAuth(token) }
@@ -387,7 +387,7 @@ class ApiRoutesExtendedTest {
                     rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                 }
             }
-            routing { apiRoutes() }
+            routing { apiRoutes(includePublicContactRoutes = false) }
         }
         val response =
             client.post("/v1/projects") {
@@ -407,7 +407,7 @@ class ApiRoutesExtendedTest {
                     rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                 }
             }
-            routing { apiRoutes() }
+            routing { apiRoutes(includePublicContactRoutes = false) }
         }
         val token = RouteTestSupport.createToken(userId = 42)
         val response = client.get("/v1/projects/7/issues") { withAuth(token) }
@@ -424,7 +424,7 @@ class ApiRoutesExtendedTest {
                     rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                 }
             }
-            routing { apiRoutes() }
+            routing { apiRoutes(includePublicContactRoutes = false) }
         }
         val token = RouteTestSupport.createToken(userId = 1)
         val response =
@@ -446,7 +446,7 @@ class ApiRoutesExtendedTest {
                     rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                 }
             }
-            routing { apiRoutes() }
+            routing { apiRoutes(includePublicContactRoutes = false) }
         }
         assertEquals(
             HttpStatusCode.Unauthorized,
@@ -464,7 +464,7 @@ class ApiRoutesExtendedTest {
                     rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                 }
             }
-            routing { apiRoutes() }
+            routing { apiRoutes(includePublicContactRoutes = false) }
         }
         val token = RouteTestSupport.createToken(userId = 3)
         val response = client.get("/v1/projects/9/transactions") { withAuth(token) }
@@ -481,7 +481,7 @@ class ApiRoutesExtendedTest {
                     rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                 }
             }
-            routing { apiRoutes() }
+            routing { apiRoutes(includePublicContactRoutes = false) }
         }
         val token = RouteTestSupport.createToken(userId = 1)
         val response = client.get("/v1/projects/2/stats") { withAuth(token) }
@@ -498,7 +498,7 @@ class ApiRoutesExtendedTest {
                     rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                 }
             }
-            routing { apiRoutes() }
+            routing { apiRoutes(includePublicContactRoutes = false) }
         }
         val token = RouteTestSupport.createToken(userId = 50)
         val response = client.get("/v1/projects/88/traces/trace-abc") { withAuth(token) }
@@ -515,7 +515,7 @@ class ApiRoutesExtendedTest {
                     rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                 }
             }
-            routing { apiRoutes() }
+            routing { apiRoutes(includePublicContactRoutes = false) }
         }
         assertEquals(
             HttpStatusCode.Unauthorized,
@@ -533,7 +533,7 @@ class ApiRoutesExtendedTest {
                     rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                 }
             }
-            routing { apiRoutes() }
+            routing { apiRoutes(includePublicContactRoutes = false) }
         }
         val token = RouteTestSupport.createToken(userId = 2)
         val response = client.get("/v1/projects/3/releases") { withAuth(token) }
@@ -550,7 +550,7 @@ class ApiRoutesExtendedTest {
                     rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                 }
             }
-            routing { apiRoutes() }
+            routing { apiRoutes(includePublicContactRoutes = false) }
         }
         val response =
             client.put("/v1/notification-preferences") {
@@ -570,7 +570,7 @@ class ApiRoutesExtendedTest {
                     rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                 }
             }
-            routing { apiRoutes() }
+            routing { apiRoutes(includePublicContactRoutes = false) }
         }
         assertEquals(HttpStatusCode.Unauthorized, client.get("/v1/notification-preferences").status)
     }
@@ -585,7 +585,7 @@ class ApiRoutesExtendedTest {
                     rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                 }
             }
-            routing { apiRoutes() }
+            routing { apiRoutes(includePublicContactRoutes = false) }
         }
         assertEquals(HttpStatusCode.Unauthorized, client.delete("/v1/user/phone-number").status)
     }
@@ -600,7 +600,7 @@ class ApiRoutesExtendedTest {
                     rateLimiter(limit = 1000, refillPeriod = 1.seconds)
                 }
             }
-            routing { apiRoutes() }
+            routing { apiRoutes(includePublicContactRoutes = false) }
         }
         assertEquals(HttpStatusCode.Unauthorized, client.get("/v1/sdk-versions").status)
     }
