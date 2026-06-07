@@ -58,7 +58,8 @@ data class UserResponse(
     val demoEpochMs: Long? = null,
     val sidebarHiddenItems: List<String> = emptyList(),
     val phoneNumber: String? = null,
-    val timezone: String? = null
+    val timezone: String? = null,
+    val orgId: Int? = null
 )
 
 @Serializable

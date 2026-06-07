@@ -18,11 +18,9 @@ import type { ApiClientCore } from '../client'
 import type { SalesInquiryRequest, SalesInquiryResponse } from '../types'
 
 export function contactMethods(core: ApiClientCore) {
-  const base = core.API_BASE
-
   return {
     createSalesInquiry: (body: SalesInquiryRequest) =>
-      core.request<SalesInquiryResponse>(`${base}/contact/sales`, {
+      core.request<SalesInquiryResponse>(`${core.API_BASE}/contact/sales`, {
         method: 'POST',
         body: JSON.stringify(body),
       }),

@@ -53,6 +53,8 @@ class ContactRoutesTest {
         }
     }
 
+    // ──── Sales inquiry ────
+
     @Test
     fun `valid inquiry returns ok and forwards to service`() = testApplication {
         val emailService = mockk<EmailService>()

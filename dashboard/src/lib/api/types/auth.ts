@@ -53,6 +53,9 @@ export interface SsoConfig {
   oidcClientId?: string
   oidcClientSecret?: string
   emailDomain?: string
+  emailDomainVerified?: boolean
+  emailDomainVerificationRecordName?: string
+  emailDomainVerificationToken?: string
   requireSso?: boolean
   spEntityId?: string
   hasClientSecret?: boolean

@@ -88,6 +88,14 @@ export function authMethods(core: ApiClientCore) {
         { method: 'PUT', body: JSON.stringify(config) }
       ),
 
+    verifySsoDomain: async (
+      organizationId: number
+    ): Promise<SsoConfig> =>
+      core.request<SsoConfig>(
+        `${base}/sso/config/domain/verify?organizationId=${organizationId}`,
+        { method: 'POST' }
+      ),
+
     deleteSsoConfig: async (
       organizationId: number
     ): Promise<void> =>

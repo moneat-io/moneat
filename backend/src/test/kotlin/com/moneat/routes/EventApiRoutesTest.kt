@@ -37,6 +37,7 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.RouteTestSupport
+import com.moneat.testsupport.RouteTestSupport.installApiRouteRateLimits
 import com.moneat.testsupport.RouteTestSupport.installJwtAuth
 import com.moneat.testsupport.RouteTestSupport.withAuth
 import com.moneat.testsupport.TestDatabaseHelper
@@ -50,9 +51,6 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.application.Application
-import io.ktor.server.application.install
-import io.ktor.server.plugins.ratelimit.RateLimit
-import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
@@ -70,7 +68,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.seconds
 
 class EventApiRoutesTest {
     companion object {
@@ -116,12 +113,7 @@ class EventApiRoutesTest {
 
     private fun Application.installTestApp() {
         installJwtAuth()
-        install(RateLimit) {
-            register(RateLimitName("api")) {
-                requestKey { "test-user" }
-                rateLimiter(limit = 1000, refillPeriod = 1.seconds)
-            }
-        }
+        installApiRouteRateLimits("test-user")
         routing { apiRoutes(includePublicContactRoutes = false) }
     }
 

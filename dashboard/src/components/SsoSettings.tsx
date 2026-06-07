@@ -26,24 +26,28 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/useToast'
-import { AlertCircle, Check, Loader2, Shield } from 'lucide-react'
+import { AlertCircle, Check, Loader2, Shield, ShieldCheck } from 'lucide-react'
 
 export function SsoTab({
+  organizationId,
   hasSamlModule = false,
   canConfigure = true,
-}: Readonly<{ hasSamlModule?: boolean; canConfigure?: boolean }>) {
-  const readOnly = !canConfigure
+}: Readonly<{ organizationId?: number; hasSamlModule?: boolean; canConfigure?: boolean }>) {
+  const hasOrganization = organizationId !== undefined
+  const readOnly = !canConfigure || !hasOrganization
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const [providerType, setProviderType] = useState<'saml' | 'oidc'>('oidc')
 
-  // Uses default organization ID; update when multi-org support is added
-  const orgId = 1
+  const requireOrganizationId = () => {
+    if (organizationId === undefined) throw new Error('No organization found')
+    return organizationId
+  }
 
   const { data: ssoConfig, isLoading: configLoading } = useQuery({
-    queryKey: ['ssoConfig', orgId],
-    queryFn: () => api.getSsoConfig(orgId),
-    enabled: !!orgId,
+    queryKey: ['ssoConfig', organizationId],
+    queryFn: () => api.getSsoConfig(requireOrganizationId()),
+    enabled: hasOrganization,
     retry: false,
   })
 
@@ -85,8 +89,8 @@ export function SsoTab({
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (!orgId) throw new Error('No organization found')
-      
+      const orgId = requireOrganizationId()
+
       return api.configureSso(orgId, {
         providerType,
         ...formData,
@@ -110,8 +114,7 @@ export function SsoTab({
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      if (!orgId) throw new Error('No organization found')
-      return api.deleteSsoConfig(orgId)
+      return api.deleteSsoConfig(requireOrganizationId())
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ssoConfig'] })
@@ -136,6 +139,26 @@ export function SsoTab({
       toast({
         title: 'Failed to delete SSO configuration',
         description: error.message || 'An error occurred. Please try again.',
+        variant: 'destructive',
+      })
+    },
+  })
+
+  const verifyDomainMutation = useMutation({
+    mutationFn: async () => {
+      return api.verifySsoDomain(requireOrganizationId())
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ssoConfig'] })
+      toast({
+        title: 'SSO domain verified',
+        description: 'Your SSO email domain is ready to use.',
+      })
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to verify SSO domain',
+        description: error.message || 'Add the TXT record and try again.',
         variant: 'destructive',
       })
     },
@@ -317,6 +340,58 @@ export function SsoTab({
                   Users with this email domain will be prompted to use SSO (e.g., "company.com")
                 </p>
               </div>
+
+              {ssoConfig?.emailDomain && (
+                <div className="rounded-lg border p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <Label className="text-sm font-medium">Domain Verification</Label>
+                      <div>
+                        <Badge variant={ssoConfig.emailDomainVerified ? 'default' : 'secondary'}>
+                          {ssoConfig.emailDomainVerified ? 'Verified' : 'Pending'}
+                        </Badge>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => verifyDomainMutation.mutate()}
+                      disabled={readOnly || verifyDomainMutation.isPending || ssoConfig.emailDomainVerified}
+                    >
+                      {verifyDomainMutation.isPending ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <ShieldCheck className="mr-2 h-4 w-4" />
+                      )}
+                      Verify
+                    </Button>
+                  </div>
+
+                  {!ssoConfig.emailDomainVerified &&
+                    ssoConfig.emailDomainVerificationRecordName &&
+                    ssoConfig.emailDomainVerificationToken && (
+                      <div className="mt-3 grid gap-2 md:grid-cols-2">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">TXT Name</Label>
+                          <Input
+                            readOnly
+                            className="h-8 font-mono text-xs"
+                            value={ssoConfig.emailDomainVerificationRecordName}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">TXT Value</Label>
+                          <Input
+                            readOnly
+                            className="h-8 font-mono text-xs"
+                            value={`moneat-sso=${ssoConfig.emailDomainVerificationToken}`}
+                          />
+                        </div>
+                      </div>
+                    )}
+                </div>
+              )}
 
               <div className="flex items-center justify-between rounded-lg border p-3">
                 <div className="space-y-0.5">
