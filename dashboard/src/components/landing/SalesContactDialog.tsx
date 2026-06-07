@@ -32,8 +32,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 
-const EMAIL_REGEX = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
-
 interface FormState {
   name: string
   email: string
@@ -46,12 +44,28 @@ type FieldErrors = Partial<Record<'name' | 'email' | 'company' | 'message', stri
 
 const EMPTY_FORM: FormState = {name: '', email: '', company: '', message: '', website: ''}
 
+function hasWhitespace(value: string): boolean {
+  for (const char of value) {
+    if (char.trim() === '') return true
+  }
+  return false
+}
+
+function isValidEmail(value: string): boolean {
+  if (hasWhitespace(value)) return false
+  const atIndex = value.indexOf('@')
+  if (atIndex <= 0 || atIndex !== value.lastIndexOf('@')) return false
+  const domain = value.slice(atIndex + 1)
+  const dotIndex = domain.lastIndexOf('.')
+  return dotIndex > 0 && dotIndex < domain.length - 1
+}
+
 function validate(form: FormState): FieldErrors {
   const errors: FieldErrors = {}
   if (!form.name.trim()) errors.name = 'Name is required'
   if (!form.email.trim()) {
     errors.email = 'Work email is required'
-  } else if (!EMAIL_REGEX.test(form.email.trim())) {
+  } else if (!isValidEmail(form.email.trim())) {
     errors.email = 'Enter a valid work email'
   }
   if (!form.company.trim()) errors.company = 'Company is required'
