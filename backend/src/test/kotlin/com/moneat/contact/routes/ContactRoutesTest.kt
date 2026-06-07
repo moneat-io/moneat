@@ -21,6 +21,7 @@ import com.moneat.contact.services.ContactService
 import com.moneat.notifications.services.EmailService
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
@@ -106,6 +107,21 @@ class ContactRoutesTest {
         }
 
         assertEquals(HttpStatusCode.BadRequest, response.status)
+        verify(exactly = 0) { emailService.sendEnterpriseSalesInquiry(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `malformed inquiry body returns bad request`() = testApplication {
+        val emailService = mockk<EmailService>(relaxed = true)
+        setupApp(ContactService(emailService))
+
+        val response = client.post("/v1/contact/sales") {
+            contentType(ContentType.Application.Json)
+            setBody("{")
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertEquals("""{"error":"Invalid request"}""", response.bodyAsText())
         verify(exactly = 0) { emailService.sendEnterpriseSalesInquiry(any(), any(), any(), any()) }
     }
 

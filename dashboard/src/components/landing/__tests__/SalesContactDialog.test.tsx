@@ -77,6 +77,15 @@ describe('SalesContactDialog', () => {
     expect(await screen.findByText(/valid.*email/i)).toBeInTheDocument()
   })
 
+  it('blocks submission when the email contains whitespace', async () => {
+    renderDialog()
+    fillValidForm()
+    fireEvent.change(screen.getByLabelText(/work email/i), {target: {value: 'ada @acme.com'}})
+    fireEvent.click(screen.getByRole('button', {name: /send message/i}))
+    expect(mockApi.createSalesInquiry).not.toHaveBeenCalled()
+    expect(await screen.findByText(/valid.*email/i)).toBeInTheDocument()
+  })
+
   it('submits the inquiry and shows a confirmation', async () => {
     mockApi.createSalesInquiry.mockResolvedValue({message: 'ok'})
     renderDialog()
@@ -94,6 +103,22 @@ describe('SalesContactDialog', () => {
       ),
     )
     expect(await screen.findByText(/in touch/i)).toBeInTheDocument()
+  })
+
+  it('submits the honeypot value when it is filled', async () => {
+    mockApi.createSalesInquiry.mockResolvedValue({message: 'ok'})
+    renderDialog()
+    fillValidForm()
+    fireEvent.change(screen.getByLabelText(/website/i), {target: {value: 'https://bot.example'}})
+    fireEvent.click(screen.getByRole('button', {name: /send message/i}))
+
+    await waitFor(() =>
+      expect(mockApi.createSalesInquiry).toHaveBeenCalledWith(
+        expect.objectContaining({
+          website: 'https://bot.example',
+        }),
+      ),
+    )
   })
 
   it('closes and resets after a successful submission', async () => {

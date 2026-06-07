@@ -186,4 +186,48 @@ class UrlValidatorTest {
         val addr = InetAddress.getByName("8.8.8.8")
         assertFalse(UrlValidator.isBlockedAddress(addr, false))
     }
+
+    @Test
+    fun `blank host target fails closed`() {
+        assertFailsWith<UrlValidator.SsrfException> {
+            UrlValidator.validateExternalHost("   ")
+        }
+    }
+
+    @Test
+    fun `host target accepts bracketed and port-qualified addresses`() {
+        assertEquals("93.184.216.34", UrlValidator.validateExternalHost("[93.184.216.34]:443").first().hostAddress)
+        assertEquals("93.184.216.34", UrlValidator.validateExternalHost("93.184.216.34:443").first().hostAddress)
+    }
+
+    @Test
+    fun `JDBC validation wrapper accepts public host`() {
+        UrlValidator.validateExternalJdbcUrl("jdbc:postgresql://93.184.216.34:5432/app")
+    }
+
+    @Test
+    fun `JDBC parser handles double slash oracle host`() {
+        val jdbcUrl = "jdbc:oracle:thin:@//93.184.216.34:1521/service"
+        assertEquals(jdbcUrl, UrlValidator.validatedExternalJdbcUrl(jdbcUrl))
+    }
+
+    @Test
+    fun `JDBC parser handles nested protocol host`() {
+        val jdbcUrl = "jdbc:custom:@tcp://93.184.216.34:5432/app"
+        assertEquals(jdbcUrl, UrlValidator.validatedExternalJdbcUrl(jdbcUrl))
+    }
+
+    @Test
+    fun `JDBC parser rejects empty bracketed host`() {
+        assertFailsWith<UrlValidator.SsrfException> {
+            UrlValidator.validatedExternalJdbcUrl("jdbc:postgresql://[]:5432/app")
+        }
+    }
+
+    @Test
+    fun `JDBC parser brackets unbracketed IPv6 host when pinning`() {
+        val pinned = UrlValidator.validatedExternalJdbcUrl("jdbc:postgresql://2606:4700:4700::1111/app")
+        assertTrue(pinned.startsWith("jdbc:postgresql://["))
+        assertTrue(pinned.contains("]/app"))
+    }
 }

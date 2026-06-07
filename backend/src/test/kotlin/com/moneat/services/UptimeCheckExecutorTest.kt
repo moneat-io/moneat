@@ -16,12 +16,25 @@
 
 package com.moneat.services
 
+import com.moneat.uptime.models.CheckResult
 import com.moneat.uptime.models.UptimeMonitorData
 import com.moneat.uptime.services.UptimeCheckExecutor
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
-import java.util.*
+import java.lang.reflect.InvocationTargetException
+import java.net.InetAddress
+import java.net.ServerSocket
+import java.security.cert.X509Certificate
+import java.time.Duration
+import java.util.Date
+import java.util.UUID
+import javax.net.ssl.SSLSession
+import javax.net.ssl.SSLSocket
+import kotlin.concurrent.thread
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 
@@ -159,6 +172,152 @@ class UptimeCheckExecutorTest {
                 assertTrue(result.message.contains("Blocked"), result.message)
             }
         }
+
+    @Test
+    fun `executeCheck blocks dns monitor with internal DNS server`() =
+        runBlocking {
+            withSelfHosted("false") {
+                val result = executor.executeCheck(
+                    monitor(type = "dns", hostname = "example.com").copy(dnsServer = "127.0.0.1")
+                )
+                assertEquals(0, result.status)
+                assertTrue(result.message.contains("Blocked"), result.message)
+            }
+        }
+
+    @Test
+    fun `ssl expiry result reports valid warning and expired certificates`() {
+        val valid = invokeSslExpiryResult(certificateExpiringInDays(90), warnDays = 30)
+        assertEquals(1, valid.status)
+        assertTrue(valid.message.contains("valid"), valid.message)
+
+        val warning = invokeSslExpiryResult(certificateExpiringInDays(3), warnDays = 30)
+        assertEquals(0, warning.status)
+        assertTrue(warning.message.contains("warning threshold"), warning.message)
+
+        val expired = invokeSslExpiryResult(certificateExpiringInDays(-2), warnDays = 30)
+        assertEquals(0, expired.status)
+        assertTrue(expired.message.contains("expired"), expired.message)
+    }
+
+    @Test
+    fun `ssl certificate result handles missing peer certificate`() {
+        val socket = mockk<SSLSocket>()
+        val session = mockk<SSLSession>()
+        every { socket.session } returns session
+        every { session.peerCertificates } returns emptyArray()
+
+        val result = invokeSslCertificateResult(socket, warnDays = 30)
+
+        assertEquals(0, result.status)
+        assertTrue(result.message.contains("No SSL certificate"), result.message)
+    }
+
+    @Test
+    fun `ssl certificate result evaluates peer certificate`() {
+        val socket = mockk<SSLSocket>()
+        val session = mockk<SSLSession>()
+        every { socket.session } returns session
+        every { session.peerCertificates } returns arrayOf(certificateExpiringInDays(90))
+
+        val result = invokeSslCertificateResult(socket, warnDays = 30)
+
+        assertEquals(1, result.status)
+        assertTrue(result.message.contains("valid"), result.message)
+    }
+
+    @Test
+    fun `connectSslSocket pins the vetted address`() {
+        ServerSocket(0).use { server ->
+            val accepted = thread(start = true) {
+                server.accept().use { socket ->
+                    socket.getInputStream().read()
+                }
+            }
+
+            val socket = invokeConnectSslSocket(
+                hostname = "localhost",
+                port = server.localPort,
+                address = InetAddress.getByName("127.0.0.1"),
+            )
+            socket.close()
+            accepted.join(1000)
+        }
+    }
+
+    @Test
+    fun `connectSslSocket closes raw socket when connect fails`() {
+        assertFailsWith<java.net.ConnectException> {
+            invokeConnectSslSocket(
+                hostname = "localhost",
+                port = 1,
+                address = InetAddress.getByName("127.0.0.1"),
+            )
+        }
+    }
+
+    private fun certificateExpiringInDays(days: Long): X509Certificate {
+        val cert = mockk<X509Certificate>()
+        every { cert.notAfter } returns Date.from(java.time.Instant.now().plus(Duration.ofDays(days)))
+        return cert
+    }
+
+    private fun invokeSslExpiryResult(
+        cert: X509Certificate,
+        warnDays: Long,
+    ): CheckResult =
+        invokePrivate(
+            "sslExpiryResult",
+            arrayOf(X509Certificate::class.java, Int::class.javaPrimitiveType!!, Long::class.javaPrimitiveType!!),
+            cert,
+            25,
+            warnDays,
+        ) as CheckResult
+
+    private fun invokeSslCertificateResult(
+        socket: SSLSocket,
+        warnDays: Long,
+    ): CheckResult =
+        invokePrivate(
+            "sslCertificateResult",
+            arrayOf(SSLSocket::class.java, Int::class.javaPrimitiveType!!, Long::class.javaPrimitiveType!!),
+            socket,
+            25,
+            warnDays,
+        ) as CheckResult
+
+    private fun invokeConnectSslSocket(
+        hostname: String,
+        port: Int,
+        address: InetAddress,
+    ): SSLSocket =
+        invokePrivate(
+            "connectSslSocket",
+            arrayOf(
+                String::class.java,
+                Int::class.javaPrimitiveType!!,
+                InetAddress::class.java,
+                Int::class.javaPrimitiveType!!,
+            ),
+            hostname,
+            port,
+            address,
+            1000,
+        ) as SSLSocket
+
+    private fun invokePrivate(
+        name: String,
+        parameterTypes: Array<Class<*>>,
+        vararg args: Any,
+    ): Any {
+        val method = UptimeCheckExecutor::class.java.getDeclaredMethod(name, *parameterTypes)
+        method.isAccessible = true
+        return try {
+            method.invoke(executor, *args)
+        } catch (e: InvocationTargetException) {
+            throw e.targetException
+        }
+    }
 
     private suspend fun <T> withSelfHosted(value: String, block: suspend () -> T): T {
         val previous = System.getProperty("SELF_HOSTED")

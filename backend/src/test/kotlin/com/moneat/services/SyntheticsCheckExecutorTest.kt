@@ -24,10 +24,13 @@ import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.respond
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import java.net.DatagramPacket
+import java.net.DatagramSocket
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import kotlin.concurrent.thread
 
 class SyntheticsCheckExecutorTest {
     private val executor = SyntheticsCheckExecutor()
@@ -537,6 +540,36 @@ class SyntheticsCheckExecutorTest {
             val result = executor.executeTest(test)
             assertEquals("failed", result.status)
             assertTrue(result.errorMessage.contains("Blocked"), result.errorMessage)
+        }
+    }
+
+    @Test
+    fun `SSL test reports connection failure for allowed host`() = runBlocking {
+        val config = """{"hostname":"127.0.0.1","port":1}"""
+        val test = makeTestData(testType = "ssl", url = "127.0.0.1", config = config)
+        val result = executor.executeTest(test)
+        assertEquals("failed", result.status)
+        assertTrue(result.errorMessage.contains("SSL check failed"), result.errorMessage)
+    }
+
+    @Test
+    fun `UDP test passes when datagram response is received`() = runBlocking {
+        DatagramSocket(0).use { udpServer ->
+            val responder = thread(start = true) {
+                val receiveBuffer = ByteArray(1)
+                val request = DatagramPacket(receiveBuffer, receiveBuffer.size)
+                udpServer.receive(request)
+                val response = DatagramPacket(byteArrayOf(1), 1, request.address, request.port)
+                udpServer.send(response)
+            }
+            val config = """{"hostname":"127.0.0.1","port":${udpServer.localPort}}"""
+            val test = makeTestData(testType = "udp", url = "127.0.0.1", config = config)
+
+            val result = executor.executeTest(test)
+
+            assertEquals("passed", result.status)
+            assertTrue(result.timings.containsKey("udp"))
+            responder.join(1000)
         }
     }
 
