@@ -20,14 +20,16 @@
  * Use useTimezone() to obtain the current user's timezone preference.
  */
 
-export function parseDate(date: Date | string | number): Date {
+export type DateInput = Date | string | number
+
+export function parseDate(date: DateInput): Date {
   if (date instanceof Date) return date
   if (typeof date === 'string') return new Date(normalizeDateString(date))
   return new Date(date)
 }
 
 /** Full date + time: "Jan 15, 2:34:56 PM" */
-export function formatDateTime(date: Date | string | number, timezone: string): string {
+export function formatDateTime(date: DateInput, timezone: string): string {
   const d = parseDate(date)
   if (isNaN(d.getTime())) return String(date)
   return new Intl.DateTimeFormat(undefined, {
@@ -41,7 +43,7 @@ export function formatDateTime(date: Date | string | number, timezone: string): 
 }
 
 /** Date only: "Jan 15, 2025" */
-export function formatDate(date: Date | string | number, timezone: string): string {
+export function formatDate(date: DateInput, timezone: string): string {
   const d = parseDate(date)
   if (isNaN(d.getTime())) return String(date)
   return new Intl.DateTimeFormat(undefined, {
@@ -53,7 +55,7 @@ export function formatDate(date: Date | string | number, timezone: string): stri
 }
 
 /** Month + day only: "Jan 15" */
-export function formatMonthDay(date: Date | string | number, timezone: string): string {
+export function formatMonthDay(date: DateInput, timezone: string): string {
   const d = parseDate(date)
   if (isNaN(d.getTime())) return String(date)
   return new Intl.DateTimeFormat(undefined, {
@@ -64,7 +66,7 @@ export function formatMonthDay(date: Date | string | number, timezone: string): 
 }
 
 /** Time only: "02:34:56" (24h) */
-export function formatTime(date: Date | string | number, timezone: string): string {
+export function formatTime(date: DateInput, timezone: string): string {
   const d = parseDate(date)
   if (isNaN(d.getTime())) return String(date)
   return new Intl.DateTimeFormat(undefined, {
@@ -77,7 +79,7 @@ export function formatTime(date: Date | string | number, timezone: string): stri
 }
 
 /** Hour + minute only: "02:34" (24h) */
-export function formatTimeHM(date: Date | string | number, timezone: string): string {
+export function formatTimeHM(date: DateInput, timezone: string): string {
   const d = parseDate(date)
   if (isNaN(d.getTime())) return String(date)
   return new Intl.DateTimeFormat(undefined, {
@@ -89,7 +91,7 @@ export function formatTimeHM(date: Date | string | number, timezone: string): st
 }
 
 /** Hour + minute, 12h format: "2:34 PM" */
-export function formatTimeHM12(date: Date | string | number, timezone: string): string {
+export function formatTimeHM12(date: DateInput, timezone: string): string {
   const d = parseDate(date)
   if (isNaN(d.getTime())) return String(date)
   return new Intl.DateTimeFormat(undefined, {
@@ -101,7 +103,7 @@ export function formatTimeHM12(date: Date | string | number, timezone: string): 
 }
 
 /** Full date + time with milliseconds: "Jan 15, 02:34:56.789" */
-export function formatDateTimeWithMs(date: Date | string | number, timezone: string): string {
+export function formatDateTimeWithMs(date: DateInput, timezone: string): string {
   const d = parseDate(date)
   if (isNaN(d.getTime())) return String(date)
   const base = new Intl.DateTimeFormat(undefined, {
@@ -117,7 +119,7 @@ export function formatDateTimeWithMs(date: Date | string | number, timezone: str
 }
 
 /** Time with milliseconds: "02:34:56.789" (24h) */
-export function formatTimeWithMs(date: Date | string | number, timezone: string): string {
+export function formatTimeWithMs(date: DateInput, timezone: string): string {
   const d = parseDate(date)
   if (isNaN(d.getTime())) return String(date)
   const base = new Intl.DateTimeFormat(undefined, {
@@ -132,7 +134,7 @@ export function formatTimeWithMs(date: Date | string | number, timezone: string)
 }
 
 /** Full datetime with weekday and timezone name: "Mon, Jan 15, 2025, 02:34:56 EST" */
-export function formatDateTimeFull(date: Date | string | number, timezone: string): string {
+export function formatDateTimeFull(date: DateInput, timezone: string): string {
   const d = parseDate(date)
   if (isNaN(d.getTime())) return String(date)
   return new Intl.DateTimeFormat(undefined, {

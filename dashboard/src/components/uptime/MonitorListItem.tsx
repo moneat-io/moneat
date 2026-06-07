@@ -62,6 +62,7 @@ export default function MonitorListItem({monitor}: MonitorListItemProps) {
     // Only fetch if monitor is active/up/down (not paused ideally, but user might want to see history)
     enabled: true,
   })
+  const lastHeartbeat = heartbeats.at(-1)
 
   const deleteMutation = useMutation({
     mutationFn: (monitorId: string) => api.deleteUptimeMonitor(monitorId),
@@ -162,8 +163,8 @@ export default function MonitorListItem({monitor}: MonitorListItemProps) {
           {/* Actions Row */}
           <div className="flex items-center justify-between pt-1.5 border-t mt-1.5">
             <div className="text-xs text-muted-foreground">
-              {heartbeats.length > 0 ? (
-                <span>Last heartbeat: {formatTime(heartbeats[heartbeats.length - 1].timestamp, timezone)}</span>
+              {lastHeartbeat ? (
+                <span>Last heartbeat: {formatTime(lastHeartbeat.timestamp, timezone)}</span>
               ) : (
                 <span>No heartbeat data</span>
               )}
