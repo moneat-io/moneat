@@ -24,10 +24,13 @@ import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.respond
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
+import java.net.DatagramPacket
+import java.net.DatagramSocket
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import kotlin.concurrent.thread
 
 class SyntheticsCheckExecutorTest {
     private val executor = SyntheticsCheckExecutor()
@@ -415,6 +418,16 @@ class SyntheticsCheckExecutorTest {
     }
 
     @Test
+    fun `DNS test blocks internal hostname when not self-hosted`() = runBlocking {
+        withSelfHosted("false") {
+            val test = makeTestData(testType = "dns", url = "localhost")
+            val result = executor.executeTest(test)
+            assertEquals("failed", result.status)
+            assertTrue(result.errorMessage.contains("Blocked"), result.errorMessage)
+        }
+    }
+
+    @Test
     fun `TCP test fails when no port configured`() = runBlocking {
         val test = makeTestData(
             testType = "tcp",
@@ -437,6 +450,28 @@ class SyntheticsCheckExecutorTest {
         val result = executor.executeTest(test)
         assertEquals("failed", result.status)
         assertTrue(result.errorMessage.contains("TCP"))
+    }
+
+    @Test
+    fun `TCP test blocks internal hostname when not self-hosted`() = runBlocking {
+        withSelfHosted("false") {
+            val config = """{"hostname":"127.0.0.1","port":443}"""
+            val test = makeTestData(testType = "tcp", url = "127.0.0.1", config = config)
+            val result = executor.executeTest(test)
+            assertEquals("failed", result.status)
+            assertTrue(result.errorMessage.contains("Blocked"), result.errorMessage)
+        }
+    }
+
+    @Test
+    fun `UDP test blocks internal hostname when not self-hosted`() = runBlocking {
+        withSelfHosted("false") {
+            val config = """{"hostname":"127.0.0.1","port":53}"""
+            val test = makeTestData(testType = "udp", url = "127.0.0.1", config = config)
+            val result = executor.executeTest(test)
+            assertEquals("failed", result.status)
+            assertTrue(result.errorMessage.contains("Blocked"), result.errorMessage)
+        }
     }
 
     @Test
@@ -495,6 +530,47 @@ class SyntheticsCheckExecutorTest {
         val result = executor.executeTest(test)
         assertEquals("failed", result.status)
         assertEquals("No hostname configured", result.errorMessage)
+    }
+
+    @Test
+    fun `SSL test blocks internal hostname when not self-hosted`() = runBlocking {
+        withSelfHosted("false") {
+            val config = """{"hostname":"127.0.0.1","port":443}"""
+            val test = makeTestData(testType = "ssl", url = "127.0.0.1", config = config)
+            val result = executor.executeTest(test)
+            assertEquals("failed", result.status)
+            assertTrue(result.errorMessage.contains("Blocked"), result.errorMessage)
+        }
+    }
+
+    @Test
+    fun `SSL test reports connection failure for allowed host`() = runBlocking {
+        val config = """{"hostname":"127.0.0.1","port":1}"""
+        val test = makeTestData(testType = "ssl", url = "127.0.0.1", config = config)
+        val result = executor.executeTest(test)
+        assertEquals("failed", result.status)
+        assertTrue(result.errorMessage.contains("SSL check failed"), result.errorMessage)
+    }
+
+    @Test
+    fun `UDP test passes when datagram response is received`() = runBlocking {
+        DatagramSocket(0).use { udpServer ->
+            val responder = thread(start = true) {
+                val receiveBuffer = ByteArray(1)
+                val request = DatagramPacket(receiveBuffer, receiveBuffer.size)
+                udpServer.receive(request)
+                val response = DatagramPacket(byteArrayOf(1), 1, request.address, request.port)
+                udpServer.send(response)
+            }
+            val config = """{"hostname":"127.0.0.1","port":${udpServer.localPort}}"""
+            val test = makeTestData(testType = "udp", url = "127.0.0.1", config = config)
+
+            val result = executor.executeTest(test)
+
+            assertEquals("passed", result.status)
+            assertTrue(result.timings.containsKey("udp"))
+            responder.join(1000)
+        }
     }
 
     // ──── Multistep tests ────
@@ -599,5 +675,19 @@ class SyntheticsCheckExecutorTest {
         val test = makeTestData(url = "not-a-url")
         val result = executor.executeTest(test)
         assertEquals("failed", result.status)
+    }
+
+    private suspend fun <T> withSelfHosted(value: String, block: suspend () -> T): T {
+        val previous = System.getProperty("SELF_HOSTED")
+        System.setProperty("SELF_HOSTED", value)
+        return try {
+            block()
+        } finally {
+            if (previous == null) {
+                System.clearProperty("SELF_HOSTED")
+            } else {
+                System.setProperty("SELF_HOSTED", previous)
+            }
+        }
     }
 }

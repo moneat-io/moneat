@@ -71,6 +71,10 @@ object SsoConfigurations : Table("sso_configurations") {
     val oidcClientId = varchar("oidc_client_id", 256).nullable()
     val oidcClientSecret = varchar("oidc_client_secret", 512).nullable()
     val emailDomain = varchar("email_domain", 256).nullable()
+    val emailDomainVerified = bool("email_domain_verified").default(false)
+    val emailDomainVerificationToken = varchar("email_domain_verification_token", 128).nullable()
+    val emailDomainVerifiedAt = timestamp("email_domain_verified_at").nullable()
+    val emailDomainVerifiedBy = integer("email_domain_verified_by").references(Users.id).nullable()
     val requireSso = bool("require_sso").default(false)
     val createdAt = timestamp("created_at").clientDefault { Clock.System.now() }
     val updatedAt = timestamp("updated_at").clientDefault { Clock.System.now() }

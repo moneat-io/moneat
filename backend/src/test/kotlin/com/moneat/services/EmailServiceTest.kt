@@ -23,6 +23,7 @@ import io.mockk.just
 import io.mockk.slot
 import io.mockk.spyk
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -360,6 +361,65 @@ class EmailServiceTest {
         service.sendBillingInsightsEmail("owner@example.com", billingInsightEmailData(rows = emptyList()))
 
         assertTrue(htmlSlot.captured.contains("No billable usage yet."))
+    }
+
+    // ──── Enterprise sales inquiry ────
+    @Test
+    fun `sendEnterpriseSalesInquiry does not throw when SMTP not configured`() {
+        val service = EmailService()
+        service.sendEnterpriseSalesInquiry(
+            name = "Ada Lovelace",
+            email = "ada@acme.com",
+            company = "Acme Corp",
+            message = "We need 5TB of ingestion and a dedicated SLA."
+        )
+    }
+
+    @Test
+    fun `sendEnterpriseSalesInquiry routes to sales inbox with prospect reply-to and renders details`() {
+        val service = spyk(EmailService())
+        val toSlot = slot<String>()
+        val htmlSlot = slot<String>()
+        val replyToList = mutableListOf<String?>()
+        every {
+            service.sendEmail(
+                capture(toSlot), any(), capture(htmlSlot), any(), any(), captureNullable(replyToList)
+            )
+        } just Runs
+
+        service.sendEnterpriseSalesInquiry(
+            name = "Ada Lovelace",
+            email = "ada@acme.com",
+            company = "Acme Corp",
+            message = "We need 5TB of ingestion and a dedicated SLA."
+        )
+
+        assertEquals("support@moneat.io", toSlot.captured)
+        assertEquals("ada@acme.com", replyToList.last())
+        assertTrue(htmlSlot.captured.contains("Ada Lovelace"))
+        assertTrue(htmlSlot.captured.contains("ada@acme.com"))
+        assertTrue(htmlSlot.captured.contains("Acme Corp"))
+        assertTrue(htmlSlot.captured.contains("We need 5TB of ingestion and a dedicated SLA."))
+    }
+
+    @Test
+    fun `sendEnterpriseSalesInquiry escapes HTML in user-supplied fields`() {
+        val service = spyk(EmailService())
+        val htmlSlot = slot<String>()
+        every {
+            service.sendEmail(any(), any(), capture(htmlSlot), any(), any(), any())
+        } just Runs
+
+        service.sendEnterpriseSalesInquiry(
+            name = "<script>alert(1)</script>",
+            email = "evil@acme.com",
+            company = "Acme & Co",
+            message = "drop <table>"
+        )
+
+        assertTrue(htmlSlot.captured.contains("&lt;script&gt;"))
+        assertTrue(htmlSlot.captured.contains("Acme &amp; Co"))
+        assertTrue(!htmlSlot.captured.contains("<script>alert(1)</script>"))
     }
 
     private fun billingInsightEmailData(

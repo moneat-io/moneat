@@ -1115,11 +1115,11 @@ const pricingTiers: Array<{
     highlight: false,
   },
   {
-    name: 'Business',
-    price: '$199',
-    cadence: '/mo',
-    blurb: 'Enterprises with custom requirements',
-    points: ['Custom retention', 'SLA guarantee', 'Everything in Team'],
+    name: 'Enterprise',
+    price: 'Custom',
+    cadence: '',
+    blurb: 'Scale, compliance, and a dedicated partner',
+    points: ['Volume discounts', 'Dedicated support & SLA', 'Everything in Team'],
     highlight: false,
   },
 ]

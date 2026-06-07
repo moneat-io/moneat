@@ -279,8 +279,34 @@ class UserRepositoryTest {
                 it[isEnabled] = true
                 it[requireSso] = true
                 it[emailDomain] = "company.com"
+                it[emailDomainVerified] = true
             }
         }
         assertTrue(repository.requiresSsoForEmail("sso@company.com"))
+    }
+
+    @Test
+    fun `requiresSsoForEmail returns false when matching domain is unverified`() {
+        val userId = createUser(email = "sso@unverified.com")
+        org.jetbrains.exposed.v1.jdbc.transactions.transaction {
+            val oid = Organizations.insert {
+                it[name] = "Unverified"
+                it[slug] = "unverified"
+            } get Organizations.id
+            Memberships.insert {
+                it[user_id] = userId
+                it[organization_id] = oid
+                it[role] = "member"
+            }
+            SsoConfigurations.insert {
+                it[organizationId] = oid
+                it[providerType] = "saml"
+                it[isEnabled] = true
+                it[requireSso] = true
+                it[emailDomain] = "unverified.com"
+                it[emailDomainVerified] = false
+            }
+        }
+        assertFalse(repository.requiresSsoForEmail("sso@unverified.com"))
     }
 }

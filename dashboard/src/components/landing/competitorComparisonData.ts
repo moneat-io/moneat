@@ -84,7 +84,7 @@ export interface CompetitorPageData {
 export const SOURCE_REVIEW_DATE = 'May 26, 2026'
 
 export const moneatPricingSummary =
-  'Moneat pricing starts at free, then $29 Pro, $79 Team, and $199 Business. ' +
+  'Moneat pricing starts at free, then $29 Pro and $79 Team, with custom Enterprise pricing for larger teams. ' +
   'Core telemetry is covered by tier ingestion, with paid overage at $0.40/GB. ' +
   'APM spans, custom metrics, infrastructure metric series-hours, and analytics pageviews have separate ' +
   'limits and overages: $0.30/1M spans, $0.50/100K custom metrics, $0.10/100K infra series-hours, ' +

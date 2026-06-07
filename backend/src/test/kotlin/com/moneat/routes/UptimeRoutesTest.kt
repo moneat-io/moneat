@@ -516,6 +516,30 @@ class UptimeRoutesTest {
         }
 
     @Test
+    fun `create monitor returns 400 for invalid websocket url`() =
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing { uptimeRoutes() }
+            }
+
+            val userId = seedUser()
+            seedOrgWithMembership(userId)
+            val response =
+                client.post("/v1/uptime/monitors") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    contentType(ContentType.Application.Json)
+                    setBody(
+                        """{"name":"my-monitor","type":"websocket","url":"not a valid url ::::",""" +
+                            """"intervalSeconds":60,"timeoutSeconds":30}"""
+                    )
+                }
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+            assertTrue(response.bodyAsText().contains("Invalid URL"))
+        }
+
+    @Test
     fun `create monitor returns 400 for tcp type without hostname`() =
         testApplication {
             application {
@@ -536,6 +560,52 @@ class UptimeRoutesTest {
                 }
             assertEquals(HttpStatusCode.BadRequest, response.status)
             assertTrue(response.bodyAsText().contains("Hostname is required"))
+        }
+
+    @Test
+    fun `create monitor returns 400 for tcp internal hostname`() =
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing { uptimeRoutes() }
+            }
+
+            val userId = seedUser()
+            seedOrgWithMembership(userId)
+            withSelfHosted("false") {
+                val response =
+                    client.post("/v1/uptime/monitors") {
+                        header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                        contentType(ContentType.Application.Json)
+                        setBody(
+                            """{"name":"my-monitor","type":"tcp","hostname":"127.0.0.1","port":443,""" +
+                                """"intervalSeconds":60,"timeoutSeconds":30}"""
+                        )
+                    }
+                assertEquals(HttpStatusCode.BadRequest, response.status)
+                assertTrue(response.bodyAsText().contains("Blocked"))
+            }
+        }
+
+    @Test
+    fun `update monitor accepts websocket url scheme before lookup`() =
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing { uptimeRoutes() }
+            }
+
+            val userId = seedUser()
+            seedOrgWithMembership(userId)
+            val response =
+                client.put("/v1/uptime/monitors/${UUID.randomUUID()}") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"url":"wss://93.184.216.34/socket"}""")
+                }
+            assertEquals(HttpStatusCode.NotFound, response.status)
         }
 
     @Test
@@ -642,5 +712,19 @@ class UptimeRoutesTest {
     @AfterTest
     fun teardownKoin() {
         stopTestKoin()
+    }
+
+    private suspend fun <T> withSelfHosted(value: String, block: suspend () -> T): T {
+        val previous = System.getProperty("SELF_HOSTED")
+        System.setProperty("SELF_HOSTED", value)
+        return try {
+            block()
+        } finally {
+            if (previous == null) {
+                System.clearProperty("SELF_HOSTED")
+            } else {
+                System.setProperty("SELF_HOSTED", previous)
+            }
+        }
     }
 }

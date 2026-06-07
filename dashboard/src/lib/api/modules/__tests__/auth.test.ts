@@ -172,6 +172,25 @@ describe('authMethods', () => {
     })
   })
 
+  describe('verifySsoDomain', () => {
+    it('verifies SSO domain for organization', async () => {
+      const config = {
+        emailDomain: 'corp.example',
+        emailDomainVerified: true,
+      }
+      server.use(
+        http.post(`${API_BASE}/v1/sso/config/domain/verify`, ({ request }) => {
+          const url = new URL(request.url)
+          expect(url.searchParams.get('organizationId')).toBe('42')
+          return HttpResponse.json(config)
+        })
+      )
+
+      const result = await api.verifySsoDomain(42)
+      expect(result).toEqual(config)
+    })
+  })
+
   describe('deleteSsoConfig', () => {
     it('deletes SSO configuration', async () => {
       server.use(

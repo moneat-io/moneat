@@ -77,6 +77,7 @@ import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.monitor.services.MonitorService
 import com.moneat.security.detection.DetectionScheduler
 import com.moneat.security.vulnerabilities.VulnerabilityAdvisorySyncJob
+import com.moneat.contact.services.ContactService
 import com.moneat.notifications.services.AlertNotificationPreferencesService
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
@@ -131,6 +132,7 @@ val sharedModule = module {
     single<OrganizationRepository> { OrganizationRepositoryImpl() }
 
     single { EmailService() }
+    single { ContactService(get()) }
     single { SlackService() }
     single { DiscordService() }
     single { AlertNotificationPreferencesService() }
