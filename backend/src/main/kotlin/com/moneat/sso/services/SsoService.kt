@@ -480,7 +480,7 @@ open class SsoService {
         val verificationToken = when {
             normalizedEmailDomain == null -> null
             domainChanged -> generateVerificationToken()
-            existing?.get(SsoConfigurations.emailDomainVerificationToken) == null -> generateVerificationToken()
+            existing == null -> generateVerificationToken()
             else -> existing[SsoConfigurations.emailDomainVerificationToken]
         }
 
@@ -1080,9 +1080,9 @@ open class SsoService {
 
     private fun dnsLookupEnvironment(): Hashtable<String, String> =
         Hashtable<String, String>().apply {
-            put(JNDI_DNS_FACTORY_KEY, JNDI_DNS_FACTORY_VALUE)
-            put(JNDI_DNS_TIMEOUT_KEY, JNDI_DNS_TIMEOUT_MS)
-            put(JNDI_DNS_RETRIES_KEY, JNDI_DNS_RETRIES)
+            this[JNDI_DNS_FACTORY_KEY] = JNDI_DNS_FACTORY_VALUE
+            this[JNDI_DNS_TIMEOUT_KEY] = JNDI_DNS_TIMEOUT_MS
+            this[JNDI_DNS_RETRIES_KEY] = JNDI_DNS_RETRIES
         }
 
     open fun verifyDnsTxtRecord(
