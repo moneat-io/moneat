@@ -25,6 +25,7 @@ import { SectionCard } from '@/components/ui/section-card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Brain, Clock, Coins, Hash, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import {parseDate} from '@/lib/date-format'
 
 export const Route = createFileRoute('/ai/traces/$traceId')({
   component: TraceDetailPage,
@@ -58,6 +59,10 @@ function typeColor(type: string): string {
 
 type GenerationNode = LlmGenerationDetail & { children: GenerationNode[] }
 
+function generationTimestampMs(generation: LlmGenerationDetail): number {
+  return parseDate(generation.timestamp).getTime()
+}
+
 function buildTree(generations: LlmGenerationDetail[]): GenerationNode[] {
   const nodes = generations.map((gen) => ({ ...gen, children: [] as GenerationNode[] }))
   const spanIndex = new Map<string, GenerationNode[]>()
@@ -74,7 +79,7 @@ function buildTree(generations: LlmGenerationDetail[]): GenerationNode[] {
   }
 
   for (const bucket of spanIndex.values()) {
-    bucket.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+    bucket.sort((a, b) => generationTimestampMs(a) - generationTimestampMs(b))
   }
 
   for (const node of nodes) {
@@ -87,7 +92,7 @@ function buildTree(generations: LlmGenerationDetail[]): GenerationNode[] {
   }
 
   const sortNodes = (items: GenerationNode[]) => {
-    items.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+    items.sort((a, b) => generationTimestampMs(a) - generationTimestampMs(b))
     for (const item of items) sortNodes(item.children)
   }
   sortNodes(roots)
@@ -97,13 +102,13 @@ function buildTree(generations: LlmGenerationDetail[]): GenerationNode[] {
 function findParentBySpanId(candidates: GenerationNode[] | undefined, child: GenerationNode): GenerationNode | undefined {
   if (!candidates || candidates.length === 0) return undefined
 
-  const childTs = new Date(child.timestamp).getTime()
+  const childTs = generationTimestampMs(child)
   let fallback: GenerationNode | undefined
 
   for (const candidate of candidates) {
     if (candidate.generationId === child.generationId) continue
     fallback = candidate
-    if (new Date(candidate.timestamp).getTime() > childTs) {
+    if (generationTimestampMs(candidate) > childTs) {
       break
     }
   }
@@ -135,8 +140,8 @@ function TraceDetailPage() {
   const tree = buildTree(trace.generations)
 
   // Calculate waterfall timings
-  const minTs = Math.min(...trace.generations.map(g => new Date(g.timestamp).getTime() - g.durationMs))
-  const maxTs = Math.max(...trace.generations.map(g => new Date(g.timestamp).getTime()))
+  const minTs = Math.min(...trace.generations.map(g => generationTimestampMs(g) - g.durationMs))
+  const maxTs = Math.max(...trace.generations.map(g => generationTimestampMs(g)))
   const totalSpan = maxTs - minTs || 1
 
   return (
@@ -217,7 +222,7 @@ function renderNodes(
   setSelectedGen: (gen: LlmGenerationDetail) => void
 ): React.ReactNode[] {
   return nodes.flatMap(node => {
-    const startMs = new Date(node.timestamp).getTime() - node.durationMs
+    const startMs = generationTimestampMs(node) - node.durationMs
     const leftPct = ((startMs - minTs) / totalSpan) * 100
     const widthPct = Math.max((node.durationMs / totalSpan) * 100, 0.5)
     const isSelected = selectedGen?.generationId === node.generationId

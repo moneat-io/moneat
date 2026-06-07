@@ -372,14 +372,14 @@ function IssueDetailPage() {
             value={formatRelativeTime(issue.firstSeen)}
             icon={Clock3}
             tone="neutral"
-            subtitle={formatDateTime(new Date(issue.firstSeen), timezone)}
+            subtitle={formatDateTime(issue.firstSeen, timezone)}
           />
           <StatCard
             label="Last seen"
             value={formatRelativeTime(issue.lastSeen)}
             icon={Clock3}
             tone="neutral"
-            subtitle={formatDateTime(new Date(issue.lastSeen), timezone)}
+            subtitle={formatDateTime(issue.lastSeen, timezone)}
           />
         </div>
 
@@ -460,7 +460,7 @@ function IssueDetailPage() {
                     </div>
                     <div className="flex justify-between gap-2">
                       <span className="text-muted-foreground flex-shrink-0">Timestamp</span>
-                      <span className="text-xs">{formatDateTime(new Date(latestEvent.timestamp), timezone)}</span>
+                      <span className="text-xs">{formatDateTime(latestEvent.timestamp, timezone)}</span>
                     </div>
                     {latestEvent.environment && (
                       <div className="flex justify-between gap-2">
@@ -1150,7 +1150,7 @@ function BreadcrumbsViewer({ breadcrumbs }: { breadcrumbs: string }) {
                   {getBreadcrumbIcon(category, crumb.data)}
                 </div>
                 <span className="text-muted-foreground font-mono text-xs">
-                  {timestamp ? formatTime(new Date(timestamp), timezone) : '--:--:--'}
+                  {timestamp ? formatTime(timestamp, timezone) : '--:--:--'}
                 </span>
                 <Badge className={`text-[10px] leading-tight px-1.5 py-0 border-0 ${colors.badge}`}>
                   {category}

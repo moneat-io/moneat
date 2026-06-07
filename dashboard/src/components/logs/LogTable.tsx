@@ -23,7 +23,7 @@ import {stripAnsi} from '@/lib/ansi'
 import {groupExceptionLogs, type LogGroup} from '@/components/logs/groupExceptionLogs'
 import {getNow} from '@/lib/demo'
 import {useTimezone} from '@/hooks/useTimezone'
-import {formatDateTimeWithMs, formatTimeWithMs} from '@/lib/date-format'
+import {formatDateTimeWithMs, formatTimeWithMs, parseDate} from '@/lib/date-format'
 
 interface LogTableProps {
   logs: LogEntry[]
@@ -40,20 +40,20 @@ interface LogTableProps {
 const STACK_TRACE_TAG_KEYS = ['exception.stacktrace', 'exception.stack_trace']
 
 function formatTimestamp(value: string, timezone: string): string {
-  const date = new Date(value)
+  const date = parseDate(value)
   if (Number.isNaN(date.getTime())) return value
   return formatDateTimeWithMs(date, timezone)
 }
 
 function formatMobileTimestamp(value: string, timezone: string): string {
-  const date = new Date(value)
+  const date = parseDate(value)
   if (Number.isNaN(date.getTime())) return value
   return formatTimeWithMs(date, timezone)
 }
 
 function formatRelativeTime(value: string): string {
   const now = getNow()
-  const date = new Date(value)
+  const date = parseDate(value)
   if (Number.isNaN(date.getTime())) return value
   const diffMs = now - date.getTime()
   if (diffMs < 0) return 'just now'

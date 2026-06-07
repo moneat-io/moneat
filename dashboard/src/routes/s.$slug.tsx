@@ -27,7 +27,13 @@ import {
     Loader2,
 } from 'lucide-react'
 import {Helmet} from 'react-helmet-async'
-import {browserTimezone, formatDateTime as formatDateTimeFn, formatMonthDay, formatTimeHM12} from '@/lib/date-format'
+import {
+  browserTimezone,
+  formatDateTime as formatDateTimeFn,
+  formatMonthDay,
+  formatTimeHM12,
+  parseDate,
+} from '@/lib/date-format'
 import {StatusBanner, StatusPageMonitorRow} from '@/components/StatusPagePreview'
 
 export const Route = createFileRoute('/s/$slug')({
@@ -219,7 +225,7 @@ function IncidentCard({
   isDarkMode: boolean
 }) {
   const sortedUpdates = [...incident.updates].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    (a, b) => parseDate(b.createdAt).getTime() - parseDate(a.createdAt).getTime()
   )
 
   return (
@@ -238,7 +244,7 @@ function IncidentCard({
             </div>
           </div>
           <span className={`text-[11px] flex-shrink-0 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-            {formatMonthDay(new Date(incident.createdAt), browserTimezone())}
+            {formatMonthDay(incident.createdAt, browserTimezone())}
           </span>
         </div>
       </div>
@@ -255,7 +261,7 @@ function IncidentCard({
                 )}
                 <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{update.message}</p>
                 <p className={`text-[11px] mt-1 ${isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>
-                  {formatDateTimeFn(new Date(update.createdAt), browserTimezone())}
+                  {formatDateTimeFn(update.createdAt, browserTimezone())}
                 </p>
               </div>
             ))}

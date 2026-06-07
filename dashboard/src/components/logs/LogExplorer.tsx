@@ -63,6 +63,7 @@ import {type FacetFilter, type FacetRailSection, type FacetSchema} from '@/lib/f
 import {TIME_PRESETS} from '@/lib/filters/time'
 import {logLevelBadgeClass} from '@/lib/severity'
 import {cn} from '@/lib/utils'
+import {parseDate} from '@/lib/date-format'
 import {
   Activity,
   Bell,
@@ -1420,7 +1421,7 @@ export function LogExplorer({
   
   // View in context: clear filters and show ±5 minute window around selected log
   const handleViewInContext = useCallback((log: LogEntry) => {
-    const logTime = new Date(log.timestamp)
+    const logTime = parseDate(log.timestamp)
     if (Number.isNaN(logTime.getTime())) return
     
     // Calculate ±5 minutes

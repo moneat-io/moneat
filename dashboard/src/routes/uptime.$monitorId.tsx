@@ -123,7 +123,7 @@ function UptimeDetailPage() {
   const chartData = heartbeats
     .filter((h) => h.responseTimeMs >= 0)
     .map((h) => ({
-      timestamp: formatTimeHM(new Date(h.timestamp), timezone),
+      timestamp: formatTimeHM(h.timestamp, timezone),
       responseTime: h.responseTimeMs,
     }))
     .reverse()

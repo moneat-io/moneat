@@ -18,6 +18,7 @@ import {createFileRoute, Link, redirect, useNavigate} from '@tanstack/react-rout
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api, type DdHostResponse} from '@/lib/api'
 import {cn, formatRelativeTime} from '@/lib/utils'
+import {parseDate} from '@/lib/date-format'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
@@ -977,7 +978,7 @@ function MonitoringHostsPage() {
         case 'memory':
           return ((a.memoryTotalKb || 0) - (b.memoryTotalKb || 0)) * dir
         case 'lastSeen':
-          return (new Date(a.lastSeenAt).getTime() - new Date(b.lastSeenAt).getTime()) * dir
+          return (parseDate(a.lastSeenAt).getTime() - parseDate(b.lastSeenAt).getTime()) * dir
         default:
           return 0
       }

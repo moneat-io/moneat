@@ -86,7 +86,7 @@ function AdminTelemetryPage() {
               </div>
               <div>
                 <p className="text-sm font-medium">
-                  {lastSeenAt ? formatDateTime(new Date(lastSeenAt), timezone) : '—'}
+                  {lastSeenAt ? formatDateTime(lastSeenAt, timezone) : '—'}
                 </p>
                 <p className="text-sm text-muted-foreground">Last pulse received</p>
               </div>
@@ -185,7 +185,7 @@ function AdminTelemetryPage() {
                       {formatNumber(d.issueCount)}
                     </TableCell>
                     <TableCell className="text-xs text-right text-muted-foreground whitespace-nowrap">
-                      {formatDateTime(new Date(d.receivedAt), timezone)}
+                      {formatDateTime(d.receivedAt, timezone)}
                     </TableCell>
                   </TableRow>
                 ))}
