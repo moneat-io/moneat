@@ -137,6 +137,15 @@ To avoid Sonar/ESLint code smells in `dashboard/`:
 
 ## Key Conventions
 
+### Testing Guidelines
+
+- ❌ **Do not call production private methods from new or touched tests** — avoid reflection helpers like
+  `getDeclaredMethod`, `declaredFunctions`, `isAccessible = true`, or equivalent access hacks for behavior coverage.
+- ✅ **Test observable behavior through public APIs, routes, or service methods** whenever practical.
+- ✅ **Extract complex private logic into a small collaborator** with an explicit `internal` or public API when direct
+  unit coverage is warranted.
+- ✅ **Test-local private helper methods are fine** — the rule is about reaching into production internals.
+
 ### Warnings and lint fixes (suppress rarely)
 
 **CRITICAL:** When asked to fix a compiler warning, linter finding, or static analysis issue (Detekt, ESLint, Sonar, Kotlin compiler, etc.):
