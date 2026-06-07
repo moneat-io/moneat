@@ -40,10 +40,7 @@ import java.io.IOException
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
-import java.security.cert.X509Certificate
 import java.sql.DriverManager
-import java.time.Instant
-import java.time.temporal.ChronoUnit
 import javax.naming.NamingException
 import javax.naming.directory.InitialDirContext
 import javax.net.ssl.SSLSocket
@@ -84,6 +81,8 @@ class UptimeCheckExecutor {
                 requestTimeout = 60_000
             }
         }
+
+    private val sslCertificateEvaluator = SslCertificateEvaluator()
 
     /**
      * Execute a check for the given monitor.
@@ -560,7 +559,7 @@ class UptimeCheckExecutor {
                 socket.soTimeout = timeoutMillis
                 socket.startHandshake()
                 val responseTime = (System.currentTimeMillis() - startTime).toInt()
-                sslCertificateResult(socket, responseTime, monitor.sslExpiryWarnDays.toLong())
+                sslCertificateEvaluator.evaluateSocket(socket, responseTime, monitor.sslExpiryWarnDays.toLong())
             }
         } catch (e: IOException) {
             val responseTime = (System.currentTimeMillis() - startTime).toInt()
@@ -586,42 +585,6 @@ class UptimeCheckExecutor {
         } catch (e: RuntimeException) {
             rawSocket.close()
             throw e
-        }
-    }
-
-    private fun sslCertificateResult(
-        socket: SSLSocket,
-        responseTime: Int,
-        warnDays: Long,
-    ): CheckResult {
-        val cert = socket.session.peerCertificates.firstOrNull() as? X509Certificate
-            ?: return CheckResult(0, responseTime, 0, "No SSL certificate found")
-        return sslExpiryResult(cert, responseTime, warnDays)
-    }
-
-    private fun sslExpiryResult(
-        cert: X509Certificate,
-        responseTime: Int,
-        warnDays: Long,
-    ): CheckResult {
-        val expiryDate = cert.notAfter.toInstant()
-        val now = Instant.now()
-        val daysUntilExpiry = ChronoUnit.DAYS.between(now, expiryDate)
-
-        return when {
-            daysUntilExpiry < 0 ->
-                CheckResult(0, responseTime, 0, "SSL certificate expired ${-daysUntilExpiry} days ago")
-
-            daysUntilExpiry < warnDays ->
-                CheckResult(
-                    0,
-                    responseTime,
-                    0,
-                    "SSL certificate expires in $daysUntilExpiry days (warning threshold: $warnDays)"
-                )
-
-            else ->
-                CheckResult(1, responseTime, 0, "SSL certificate valid (expires in $daysUntilExpiry days)")
         }
     }
 
