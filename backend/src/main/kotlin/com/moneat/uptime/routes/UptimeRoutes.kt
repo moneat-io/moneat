@@ -404,14 +404,14 @@ private fun validateMonitorTargets(request: CreateUptimeMonitorRequest): String?
         "http", "keyword", "json_query" -> validateExternalUrlTarget(request.url)
         "tcp", "ping", "dns", "ssl" ->
             validateExternalHostTarget(request.hostname) ?: validateExternalHostTarget(request.dnsServer)
-        "websocket" -> request.url?.let { validateExternalUrlTarget(webSocketHttpUrl(it)) }
+        "websocket" -> validateWebSocketTarget(request.url)
         "database" -> validateJdbcTarget(request.dbConnectionString)
         "docker" -> validateDockerTarget(request.dockerHost)
         else -> null
     }
 
 private fun validateMonitorTargets(request: UpdateUptimeMonitorRequest): String? =
-    validateExternalUrlTarget(request.url)
+    validateWebSocketTarget(request.url)
         ?: validateExternalHostTarget(request.hostname)
         ?: validateExternalHostTarget(request.dnsServer)
         ?: validateJdbcTarget(request.dbConnectionString)
@@ -429,6 +429,18 @@ private fun validateJdbcTarget(connectionString: String?): String? =
 private fun validateDockerTarget(dockerHost: String?): String? {
     if (dockerHost == null || !dockerHost.startsWith("http", ignoreCase = true)) return null
     return validateExternalUrlTarget(dockerHost)
+}
+
+private fun validateWebSocketTarget(url: String?): String? {
+    val target = url?.takeIf { it.isNotBlank() } ?: return null
+    val normalized = try {
+        webSocketHttpUrl(target)
+    } catch (_: java.net.URISyntaxException) {
+        return "Invalid URL: $target"
+    } catch (_: IllegalArgumentException) {
+        return "Invalid URL: $target"
+    }
+    return validateExternalUrlTarget(normalized)
 }
 
 private fun validateTarget(

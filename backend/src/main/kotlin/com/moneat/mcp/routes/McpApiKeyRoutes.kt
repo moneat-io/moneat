@@ -230,10 +230,13 @@ private suspend fun ApplicationCall.requireMcpAdminClaims(
     membershipService: OrgMembershipService,
 ): McpClaims? {
     val claims = requireMcpClaims() ?: return null
-    val allowed = runCatching {
-        membershipService.requireRole(claims.organizationId, claims.userId, OrgRole.ADMIN)
-        true
-    }.getOrElse { false }
+    val allowed =
+        try {
+            membershipService.requireRole(claims.organizationId, claims.userId, OrgRole.ADMIN)
+            true
+        } catch (_: IllegalStateException) {
+            false
+        }
     if (!allowed) {
         respond(HttpStatusCode.Forbidden, ErrorResponse(FORBIDDEN_MESSAGE))
         return null

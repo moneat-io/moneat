@@ -516,6 +516,30 @@ class UptimeRoutesTest {
         }
 
     @Test
+    fun `create monitor returns 400 for invalid websocket url`() =
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing { uptimeRoutes() }
+            }
+
+            val userId = seedUser()
+            seedOrgWithMembership(userId)
+            val response =
+                client.post("/v1/uptime/monitors") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    contentType(ContentType.Application.Json)
+                    setBody(
+                        """{"name":"my-monitor","type":"websocket","url":"not a valid url ::::",""" +
+                            """"intervalSeconds":60,"timeoutSeconds":30}"""
+                    )
+                }
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+            assertTrue(response.bodyAsText().contains("Invalid URL"))
+        }
+
+    @Test
     fun `create monitor returns 400 for tcp type without hostname`() =
         testApplication {
             application {
@@ -562,6 +586,26 @@ class UptimeRoutesTest {
                 assertEquals(HttpStatusCode.BadRequest, response.status)
                 assertTrue(response.bodyAsText().contains("Blocked"))
             }
+        }
+
+    @Test
+    fun `update monitor accepts websocket url scheme before lookup`() =
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing { uptimeRoutes() }
+            }
+
+            val userId = seedUser()
+            seedOrgWithMembership(userId)
+            val response =
+                client.put("/v1/uptime/monitors/${UUID.randomUUID()}") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"url":"wss://93.184.216.34/socket"}""")
+                }
+            assertEquals(HttpStatusCode.NotFound, response.status)
         }
 
     @Test

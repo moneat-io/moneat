@@ -37,8 +37,30 @@ object UrlValidator {
     private const val BYTE_MASK_UNSIGNED = 0xFF
     private const val IPV6_ULA_FC_PREFIX = 0xFC
     private const val IPV6_ULA_FD_PREFIX = 0xFD
+    private const val JDBC_PREFIX = "jdbc:"
+    private val LOCAL_JDBC_PREFIXES =
+        listOf(
+            "jdbc:h2:mem:",
+            "jdbc:h2:file:",
+            "jdbc:sqlite:",
+            "jdbc:hsqldb:mem:",
+            "jdbc:derby:memory:",
+        )
+    private val JDBC_AUTHORITY_DELIMITERS = charArrayOf('/', '?', ';')
 
     class SsrfException(message: String) : IllegalArgumentException(message)
+
+    private data class TextRange(
+        val startIndex: Int,
+        val endIndex: Int,
+    )
+
+    private data class JdbcHostTarget(
+        val host: String,
+        val startIndex: Int,
+        val endIndex: Int,
+        val isBracketed: Boolean,
+    )
 
     /**
      * Validates that a URL does not target blocked network addresses.
@@ -77,8 +99,25 @@ object UrlValidator {
      * perform network egress and are left to the JDBC driver to validate.
      */
     fun validateExternalJdbcUrl(jdbcUrl: String) {
-        val host = extractJdbcHost(jdbcUrl) ?: return
-        validateExternalHost(host)
+        validatedExternalJdbcUrl(jdbcUrl)
+    }
+
+    /**
+     * Validates a JDBC URL and returns a connection string pinned to a vetted address when the URL
+     * targets a network host. Local in-memory/file JDBC URLs are returned unchanged.
+     */
+    fun validatedExternalJdbcUrl(jdbcUrl: String): String {
+        val target = extractJdbcHostTarget(jdbcUrl)
+        if (target == null) {
+            if (isLocalJdbcUrl(jdbcUrl)) return jdbcUrl
+            throw SsrfException("JDBC URL has no verifiable network host")
+        }
+
+        val addresses = validateExternalHost(target.host)
+        val address = addresses.firstOrNull()
+            ?: throw SsrfException("Cannot resolve host: ${target.host}")
+        val replacement = jdbcAddressLiteral(address, target.isBracketed)
+        return jdbcUrl.replaceRange(target.startIndex, target.endIndex, replacement)
     }
 
     /**
@@ -204,17 +243,94 @@ object UrlValidator {
         return authorityHost(trimmed)
     }
 
-    private fun extractJdbcHost(jdbcUrl: String): String? {
-        val withoutJdbc = jdbcUrl.trim().removePrefix("jdbc:")
-        val authorityStart = withoutJdbc.indexOf("://")
-        if (authorityStart < 0) return null
+    private fun extractJdbcHostTarget(jdbcUrl: String): JdbcHostTarget? {
+        val original = jdbcUrl.trim()
+        if (!original.startsWith(JDBC_PREFIX, ignoreCase = true)) return null
 
-        val authority = withoutJdbc
-            .substring(authorityStart + "://".length)
-            .substringBefore("/")
-            .substringBefore("?")
-            .substringBefore(";")
-        return authorityHost(authority)
+        val prefixOffset = JDBC_PREFIX.length
+        val withoutJdbc = original.drop(prefixOffset)
+        val authorityStart = withoutJdbc.indexOf("://")
+        if (authorityStart >= 0) {
+            val hostRangeStart = prefixOffset + authorityStart + "://".length
+            return jdbcHostTarget(original, hostRangeStart)
+        }
+
+        val atIndex = original.lastIndexOf("@")
+        if (atIndex < prefixOffset) return null
+
+        var hostRangeStart = atIndex + 1
+        if (original.startsWith("//", hostRangeStart)) {
+            hostRangeStart += "//".length
+        }
+        val protocolSeparator = original.indexOf("://", hostRangeStart)
+        val firstDelimiter = jdbcAuthorityEnd(original, hostRangeStart)
+        if (protocolSeparator >= 0 && protocolSeparator < firstDelimiter) {
+            hostRangeStart = protocolSeparator + "://".length
+        }
+        return jdbcHostTarget(original, hostRangeStart, splitBareHostAtFirstColon = true)
+    }
+
+    private fun jdbcHostTarget(
+        jdbcUrl: String,
+        authorityStart: Int,
+        splitBareHostAtFirstColon: Boolean = false,
+    ): JdbcHostTarget? {
+        val authorityEnd = jdbcAuthorityEnd(jdbcUrl, authorityStart)
+        val authority = jdbcUrl.substring(authorityStart, authorityEnd)
+        val hostRange = authorityHostRange(authority, splitBareHostAtFirstColon) ?: return null
+        return JdbcHostTarget(
+            host = authority.substring(hostRange.startIndex, hostRange.endIndex),
+            startIndex = authorityStart + hostRange.startIndex,
+            endIndex = authorityStart + hostRange.endIndex,
+            isBracketed = hostRange.startIndex > 0 && authority[hostRange.startIndex - 1] == '[',
+        )
+    }
+
+    private fun jdbcAuthorityEnd(
+        jdbcUrl: String,
+        startIndex: Int,
+    ): Int {
+        val delimiterIndex = jdbcUrl.indexOfAny(JDBC_AUTHORITY_DELIMITERS, startIndex = startIndex)
+        return if (delimiterIndex >= 0) delimiterIndex else jdbcUrl.length
+    }
+
+    private fun authorityHostRange(
+        authority: String,
+        splitBareHostAtFirstColon: Boolean,
+    ): TextRange? {
+        val hostStart = authority.lastIndexOf("@").takeIf { it >= 0 }?.plus(1) ?: 0
+        val withoutUserInfo = authority.substring(hostStart)
+        if (withoutUserInfo.isBlank()) return null
+        if (withoutUserInfo.startsWith("[")) {
+            val endBracket = authority.indexOf("]", hostStart + 1)
+            if (endBracket <= hostStart + 1) return null
+            return TextRange(hostStart + 1, endBracket)
+        }
+
+        val colonCount = withoutUserInfo.count { it == ':' }
+        val hostEnd =
+            if (colonCount == 1 || (splitBareHostAtFirstColon && colonCount > 1)) {
+                authority.indexOf(":", hostStart)
+            } else {
+                authority.length
+            }
+        if (hostEnd <= hostStart) return null
+        return TextRange(hostStart, hostEnd)
+    }
+
+    private fun jdbcAddressLiteral(
+        address: InetAddress,
+        targetWasBracketed: Boolean,
+    ): String =
+        if (address is Inet6Address && !targetWasBracketed) {
+            "[${address.hostAddress}]"
+        } else {
+            address.hostAddress
+        }
+
+    private fun isLocalJdbcUrl(jdbcUrl: String): Boolean {
+        val normalized = jdbcUrl.trim().lowercase()
+        return LOCAL_JDBC_PREFIXES.any { prefix -> normalized.startsWith(prefix) }
     }
 
     private fun authorityHost(authority: String): String? {

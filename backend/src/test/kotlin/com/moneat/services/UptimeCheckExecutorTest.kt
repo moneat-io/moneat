@@ -148,6 +148,18 @@ class UptimeCheckExecutorTest {
             }
         }
 
+    @Test
+    fun `executeCheck blocks oracle thin database monitor for internal hostname`() =
+        runBlocking {
+            withSelfHosted("false") {
+                val result = executor.executeCheck(
+                    monitor(type = "database", dbConnectionString = "jdbc:oracle:thin:@127.0.0.1:1521:orcl")
+                )
+                assertEquals(0, result.status)
+                assertTrue(result.message.contains("Blocked"), result.message)
+            }
+        }
+
     private suspend fun <T> withSelfHosted(value: String, block: suspend () -> T): T {
         val previous = System.getProperty("SELF_HOSTED")
         System.setProperty("SELF_HOSTED", value)

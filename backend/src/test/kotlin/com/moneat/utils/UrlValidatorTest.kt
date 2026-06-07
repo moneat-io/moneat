@@ -150,6 +150,32 @@ class UrlValidatorTest {
     }
 
     @Test
+    fun `JDBC URL without verifiable host fails closed`() {
+        assertFailsWith<UrlValidator.SsrfException> {
+            UrlValidator.validateExternalJdbcUrl("jdbc:oracle:thin:@(DESCRIPTION=(ADDRESS=(HOST=example.com)))")
+        }
+    }
+
+    @Test
+    fun `Oracle thin JDBC host is validated`() = withSelfHosted(null) {
+        assertFailsWith<UrlValidator.SsrfException> {
+            UrlValidator.validateExternalJdbcUrl("jdbc:oracle:thin:@127.0.0.1:1521:orcl")
+        }
+    }
+
+    @Test
+    fun `public JDBC host returns pinned connection string`() {
+        val jdbcUrl = "jdbc:oracle:thin:@93.184.216.34:1521:orcl"
+        assertEquals(jdbcUrl, UrlValidator.validatedExternalJdbcUrl(jdbcUrl))
+    }
+
+    @Test
+    fun `local JDBC URLs remain allowed`() {
+        val jdbcUrl = "jdbc:h2:mem:test_db"
+        assertEquals(jdbcUrl, UrlValidator.validatedExternalJdbcUrl(jdbcUrl))
+    }
+
+    @Test
     fun `link-local address is always blocked`() {
         val addr = InetAddress.getByName("169.254.1.1")
         assertTrue(UrlValidator.isBlockedAddress(addr, true))

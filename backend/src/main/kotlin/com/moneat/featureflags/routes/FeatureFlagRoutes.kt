@@ -421,10 +421,13 @@ private suspend fun ApplicationCall.requireFeatureFlagAdmin(
         return null
     }
 
-    val allowed = runCatching {
-        membershipService.requireRole(orgId, userId, OrgRole.ADMIN)
-        true
-    }.getOrElse { false }
+    val allowed =
+        try {
+            membershipService.requireRole(orgId, userId, OrgRole.ADMIN)
+            true
+        } catch (_: IllegalStateException) {
+            false
+        }
     if (!allowed) {
         respond(HttpStatusCode.Forbidden, ErrorResponse(FORBIDDEN_MESSAGE))
         return null

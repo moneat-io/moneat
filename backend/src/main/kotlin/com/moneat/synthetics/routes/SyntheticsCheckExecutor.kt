@@ -56,6 +56,11 @@ private const val TCP_TIMEOUT_MS = 10000
 private const val UDP_TIMEOUT_MS = 5000
 private const val DAYS_PER_MS = 86_400_000L
 
+private data class SyntheticHostValidation(
+    val addresses: List<InetAddress> = emptyList(),
+    val failure: SyntheticCheckResult? = null,
+)
+
 data class SyntheticCheckResult(
     val status: String, // "passed" or "failed"
     val durationMs: Long,
@@ -230,67 +235,71 @@ open class SyntheticsCheckExecutor {
             )
 
         val port = config?.port ?: SSL_DEFAULT_PORT
-        validateSyntheticHost(hostname)?.let { return it }
+        val hostValidation = validateSyntheticHostAddresses(hostname)
+        hostValidation.failure?.let { return it }
+        val address = hostValidation.addresses.first()
         val startTime = System.currentTimeMillis()
 
         return suspendRunCatching {
             val factory = SSLSocketFactory.getDefault() as SSLSocketFactory
             val tlsStart = System.currentTimeMillis()
-            val socket = factory.createSocket(
-                hostname,
-                port
-            ) as SSLSocket
-            socket.use { sslSocket ->
-                sslSocket.startHandshake()
-                val tlsMs = System.currentTimeMillis() - tlsStart
-                val session = sslSocket.session
-                val cert = session.peerCertificates.firstOrNull()
-                    as? java.security.cert.X509Certificate
+            Socket().use { rawSocket ->
+                rawSocket.connect(InetSocketAddress(address, port), TCP_TIMEOUT_MS)
+                rawSocket.soTimeout = TCP_TIMEOUT_MS
+                val socket = factory.createSocket(rawSocket, hostname, port, true) as SSLSocket
+                socket.use { sslSocket ->
+                    sslSocket.soTimeout = TCP_TIMEOUT_MS
+                    sslSocket.startHandshake()
+                    val tlsMs = System.currentTimeMillis() - tlsStart
+                    val session = sslSocket.session
+                    val cert = session.peerCertificates.firstOrNull()
+                        as? java.security.cert.X509Certificate
 
-                val durationMs = System.currentTimeMillis() - startTime
-                val timings = mutableMapOf(
-                    "tls" to tlsMs.toDouble(),
-                    "total" to durationMs.toDouble()
-                )
-
-                if (cert == null) {
-                    return SyntheticCheckResult(
-                        status = "failed",
-                        durationMs = durationMs,
-                        errorMessage = "No certificate found",
-                        timings = timings
+                    val durationMs = System.currentTimeMillis() - startTime
+                    val timings = mutableMapOf(
+                        "tls" to tlsMs.toDouble(),
+                        "total" to durationMs.toDouble()
                     )
-                }
 
-                val expiryMs = cert.notAfter.time -
-                    System.currentTimeMillis()
-                val expiryDays = expiryMs / DAYS_PER_MS
+                    if (cert == null) {
+                        return SyntheticCheckResult(
+                            status = "failed",
+                            durationMs = durationMs,
+                            errorMessage = "No certificate found",
+                            timings = timings
+                        )
+                    }
 
-                val assertionList = parseAssertions(test.assertions)
-                val allPassed = assertionList.all { assertion ->
-                    evaluateSslAssertion(
-                        assertion,
-                        cert,
-                        expiryDays
-                    )
-                }
+                    val expiryMs = cert.notAfter.time -
+                        System.currentTimeMillis()
+                    val expiryDays = expiryMs / DAYS_PER_MS
 
-                timings["certificate_expiry_days"] =
-                    expiryDays.toDouble()
+                    val assertionList = parseAssertions(test.assertions)
+                    val allPassed = assertionList.all { assertion ->
+                        evaluateSslAssertion(
+                            assertion,
+                            cert,
+                            expiryDays
+                        )
+                    }
 
-                if (allPassed) {
-                    SyntheticCheckResult(
-                        status = "passed",
-                        durationMs = durationMs,
-                        timings = timings
-                    )
-                } else {
-                    SyntheticCheckResult(
-                        status = "failed",
-                        durationMs = durationMs,
-                        errorMessage = "SSL assertion failed",
-                        timings = timings
-                    )
+                    timings["certificate_expiry_days"] =
+                        expiryDays.toDouble()
+
+                    if (allPassed) {
+                        SyntheticCheckResult(
+                            status = "passed",
+                            durationMs = durationMs,
+                            timings = timings
+                        )
+                    } else {
+                        SyntheticCheckResult(
+                            status = "failed",
+                            durationMs = durationMs,
+                            errorMessage = "SSL assertion failed",
+                            timings = timings
+                        )
+                    }
                 }
             }
         }.getOrElse { e ->
@@ -405,14 +414,16 @@ open class SyntheticsCheckExecutor {
             status = "failed", durationMs = 0,
             errorMessage = "No port configured"
         )
-        validateSyntheticHost(hostname)?.let { return it }
+        val hostValidation = validateSyntheticHostAddresses(hostname)
+        hostValidation.failure?.let { return it }
+        val address = hostValidation.addresses.first()
 
         val startTime = System.currentTimeMillis()
         return suspendRunCatching {
             val socket = Socket()
             val connectStart = System.currentTimeMillis()
             socket.connect(
-                InetSocketAddress(hostname, port),
+                InetSocketAddress(address, port),
                 TCP_TIMEOUT_MS
             )
             val connectMs = System.currentTimeMillis() - connectStart
@@ -472,11 +483,12 @@ open class SyntheticsCheckExecutor {
             status = "failed", durationMs = 0,
             errorMessage = "No port configured"
         )
-        validateSyntheticHost(hostname)?.let { return it }
+        val hostValidation = validateSyntheticHostAddresses(hostname)
+        hostValidation.failure?.let { return it }
+        val address = hostValidation.addresses.first()
 
         val startTime = System.currentTimeMillis()
         return suspendRunCatching {
-            val address = InetAddress.getByName(hostname)
             val sendData = ByteArray(1) { 0 }
             val packet = DatagramPacket(
                 sendData,
@@ -632,15 +644,16 @@ open class SyntheticsCheckExecutor {
         return null
     }
 
-    private fun validateSyntheticHost(hostname: String): SyntheticCheckResult? =
+    private fun validateSyntheticHostAddresses(hostname: String): SyntheticHostValidation =
         try {
-            UrlValidator.validateExternalHost(hostname)
-            null
+            SyntheticHostValidation(addresses = UrlValidator.validateExternalHost(hostname))
         } catch (e: UrlValidator.SsrfException) {
-            SyntheticCheckResult(
-                status = "failed",
-                durationMs = 0,
-                errorMessage = "Blocked: ${e.message}"
+            SyntheticHostValidation(
+                failure = SyntheticCheckResult(
+                    status = "failed",
+                    durationMs = 0,
+                    errorMessage = "Blocked: ${e.message}"
+                )
             )
         }
 

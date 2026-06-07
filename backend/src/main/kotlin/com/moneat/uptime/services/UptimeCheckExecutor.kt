@@ -46,9 +46,20 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import javax.naming.NamingException
 import javax.naming.directory.InitialDirContext
-import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLSocket
+import javax.net.ssl.SSLSocketFactory
 
 private val logger = KotlinLogging.logger {}
+
+private data class HostTargetValidation(
+    val addresses: List<InetAddress> = emptyList(),
+    val failure: CheckResult? = null,
+)
+
+private data class JdbcTargetValidation(
+    val connectionString: String,
+    val failure: CheckResult? = null,
+)
 
 /**
  * Executor for uptime monitor checks.
@@ -302,13 +313,15 @@ class UptimeCheckExecutor {
     private suspend fun checkTcp(monitor: UptimeMonitorData): CheckResult {
         val hostname = monitor.hostname ?: return CheckResult(0, -1, 0, "No hostname configured")
         val port = monitor.port ?: return CheckResult(0, -1, 0, "No port configured")
-        validateHostTarget(hostname)?.let { return it }
+        val hostValidation = validateHostAddresses(hostname)
+        hostValidation.failure?.let { return it }
+        val address = hostValidation.addresses.first()
 
         val startTime = System.currentTimeMillis()
 
         return try {
             Socket().use { socket ->
-                socket.connect(InetSocketAddress(hostname, port), monitor.timeoutSeconds * MILLIS_PER_SECOND)
+                socket.connect(InetSocketAddress(address, port), monitor.timeoutSeconds * MILLIS_PER_SECOND)
                 val responseTime = (System.currentTimeMillis() - startTime).toInt()
                 CheckResult(1, responseTime, 0, "TCP connection successful")
             }
@@ -323,12 +336,13 @@ class UptimeCheckExecutor {
      */
     private suspend fun checkPing(monitor: UptimeMonitorData): CheckResult {
         val hostname = monitor.hostname ?: return CheckResult(0, -1, 0, "No hostname configured")
-        validateHostTarget(hostname)?.let { return it }
+        val hostValidation = validateHostAddresses(hostname)
+        hostValidation.failure?.let { return it }
+        val address = hostValidation.addresses.first()
 
         val startTime = System.currentTimeMillis()
 
         return try {
-            val address = InetAddress.getByName(hostname)
             val reachable = address.isReachable(monitor.timeoutSeconds * MILLIS_PER_SECOND)
             val responseTime = (System.currentTimeMillis() - startTime).toInt()
 
@@ -498,12 +512,13 @@ class UptimeCheckExecutor {
         val connectionString =
             monitor.dbConnectionString
                 ?: return CheckResult(0, -1, 0, "No connection string configured")
-        validateJdbcTarget(connectionString)?.let { return it }
+        val jdbcValidation = validateJdbcTarget(connectionString)
+        jdbcValidation.failure?.let { return it }
 
         val startTime = System.currentTimeMillis()
 
         return suspendRunCatching {
-            DriverManager.getConnection(connectionString).use { conn ->
+            DriverManager.getConnection(jdbcValidation.connectionString).use { conn ->
                 val responseTime = (System.currentTimeMillis() - startTime).toInt()
 
                 // Optionally run a read-only query (SELECT only to prevent destructive statements)
@@ -533,45 +548,80 @@ class UptimeCheckExecutor {
     private suspend fun checkSsl(monitor: UptimeMonitorData): CheckResult {
         val hostname = monitor.hostname ?: return CheckResult(0, -1, 0, "No hostname configured")
         val port = monitor.port ?: DEFAULT_HTTPS_PORT
-        validateHostTarget(hostname)?.let { return it }
+        val hostValidation = validateHostAddresses(hostname)
+        hostValidation.failure?.let { return it }
+        val address = hostValidation.addresses.first()
 
         val startTime = System.currentTimeMillis()
+        val timeoutMillis = monitor.timeoutSeconds * MILLIS_PER_SECOND
 
         return try {
-            val url = java.net.URI("https://$hostname:$port").toURL()
-            val conn = url.openConnection() as HttpsURLConnection
-            conn.connectTimeout = monitor.timeoutSeconds * MILLIS_PER_SECOND
-            conn.connect()
-
-            val responseTime = (System.currentTimeMillis() - startTime).toInt()
-
-            val certs = conn.serverCertificates
-            if (certs.isNotEmpty() && certs[0] is X509Certificate) {
-                val cert = certs[0] as X509Certificate
-                val expiryDate = cert.notAfter.toInstant()
-                val now = Instant.now()
-                val daysUntilExpiry = ChronoUnit.DAYS.between(now, expiryDate)
-
-                val warnDays = monitor.sslExpiryWarnDays.toLong()
-
-                if (daysUntilExpiry < 0) {
-                    CheckResult(0, responseTime, 0, "SSL certificate expired ${-daysUntilExpiry} days ago")
-                } else if (daysUntilExpiry < warnDays) {
-                    CheckResult(
-                        0,
-                        responseTime,
-                        0,
-                        "SSL certificate expires in $daysUntilExpiry days (warning threshold: $warnDays)"
-                    )
-                } else {
-                    CheckResult(1, responseTime, 0, "SSL certificate valid (expires in $daysUntilExpiry days)")
-                }
-            } else {
-                CheckResult(0, responseTime, 0, "No SSL certificate found")
+            connectSslSocket(hostname, port, address, timeoutMillis).use { socket ->
+                socket.soTimeout = timeoutMillis
+                socket.startHandshake()
+                val responseTime = (System.currentTimeMillis() - startTime).toInt()
+                sslCertificateResult(socket, responseTime, monitor.sslExpiryWarnDays.toLong())
             }
         } catch (e: IOException) {
             val responseTime = (System.currentTimeMillis() - startTime).toInt()
             CheckResult(0, responseTime, 0, "SSL check failed: ${e.message}")
+        }
+    }
+
+    private fun connectSslSocket(
+        hostname: String,
+        port: Int,
+        address: InetAddress,
+        timeoutMillis: Int,
+    ): SSLSocket {
+        val rawSocket = Socket()
+        return try {
+            rawSocket.connect(InetSocketAddress(address, port), timeoutMillis)
+            rawSocket.soTimeout = timeoutMillis
+            val factory = SSLSocketFactory.getDefault() as SSLSocketFactory
+            factory.createSocket(rawSocket, hostname, port, true) as SSLSocket
+        } catch (e: IOException) {
+            rawSocket.close()
+            throw e
+        } catch (e: RuntimeException) {
+            rawSocket.close()
+            throw e
+        }
+    }
+
+    private fun sslCertificateResult(
+        socket: SSLSocket,
+        responseTime: Int,
+        warnDays: Long,
+    ): CheckResult {
+        val cert = socket.session.peerCertificates.firstOrNull() as? X509Certificate
+            ?: return CheckResult(0, responseTime, 0, "No SSL certificate found")
+        return sslExpiryResult(cert, responseTime, warnDays)
+    }
+
+    private fun sslExpiryResult(
+        cert: X509Certificate,
+        responseTime: Int,
+        warnDays: Long,
+    ): CheckResult {
+        val expiryDate = cert.notAfter.toInstant()
+        val now = Instant.now()
+        val daysUntilExpiry = ChronoUnit.DAYS.between(now, expiryDate)
+
+        return when {
+            daysUntilExpiry < 0 ->
+                CheckResult(0, responseTime, 0, "SSL certificate expired ${-daysUntilExpiry} days ago")
+
+            daysUntilExpiry < warnDays ->
+                CheckResult(
+                    0,
+                    responseTime,
+                    0,
+                    "SSL certificate expires in $daysUntilExpiry days (warning threshold: $warnDays)"
+                )
+
+            else ->
+                CheckResult(1, responseTime, 0, "SSL certificate valid (expires in $daysUntilExpiry days)")
         }
     }
 
@@ -582,18 +632,22 @@ class UptimeCheckExecutor {
     }
 
     private fun validateHostTarget(hostname: String): CheckResult? =
+        validateHostAddresses(hostname).failure
+
+    private fun validateHostAddresses(hostname: String): HostTargetValidation =
         try {
-            UrlValidator.validateExternalHost(hostname)
-            null
+            HostTargetValidation(addresses = UrlValidator.validateExternalHost(hostname))
         } catch (e: UrlValidator.SsrfException) {
-            CheckResult(0, -1, 0, "Blocked: ${e.message}")
+            HostTargetValidation(failure = CheckResult(0, -1, 0, "Blocked: ${e.message}"))
         }
 
-    private fun validateJdbcTarget(connectionString: String): CheckResult? =
+    private fun validateJdbcTarget(connectionString: String): JdbcTargetValidation =
         try {
-            UrlValidator.validateExternalJdbcUrl(connectionString)
-            null
+            JdbcTargetValidation(UrlValidator.validatedExternalJdbcUrl(connectionString))
         } catch (e: UrlValidator.SsrfException) {
-            CheckResult(0, -1, 0, "Blocked: ${e.message}")
+            JdbcTargetValidation(
+                connectionString = connectionString,
+                failure = CheckResult(0, -1, 0, "Blocked: ${e.message}"),
+            )
         }
 }
