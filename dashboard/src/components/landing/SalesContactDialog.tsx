@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useState} from 'react'
+import {type ComponentProps, useState} from 'react'
 import {useMutation} from '@tanstack/react-query'
 import {CheckCircle2} from 'lucide-react'
 import {api} from '@/lib/api'
@@ -93,7 +93,7 @@ export function SalesContactDialog({
   const update = (field: keyof FormState) => (value: string) =>
     setForm((prev) => ({...prev, [field]: value}))
 
-  const handleSubmit = (event: React.SubmitEvent<HTMLFormElement>) => {
+  const handleSubmit: ComponentProps<'form'>['onSubmit'] = (event) => {
     event.preventDefault()
     const nextErrors = validate(form)
     setErrors(nextErrors)

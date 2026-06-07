@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { useState, useEffect, useRef } from 'react'
+import { type ComponentProps, useState, useEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -171,7 +171,7 @@ function SsoTabContent({
     },
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit: ComponentProps<'form'>['onSubmit'] = (e) => {
     e.preventDefault()
     if (readOnly) return
     saveMutation.mutate()
