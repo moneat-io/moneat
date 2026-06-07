@@ -497,7 +497,7 @@ open class SsoService {
                 encryptedSecret?.let { secret -> it[SsoConfigurations.oidcClientSecret] = secret }
                 it[SsoConfigurations.emailDomain] = normalizedEmailDomain
                 it[SsoConfigurations.emailDomainVerificationToken] = verificationToken
-                if (domainChanged || normalizedEmailDomain == null) {
+                if (domainChanged) {
                     it[SsoConfigurations.emailDomainVerified] = false
                     it[SsoConfigurations.emailDomainVerifiedAt] = null
                     it[SsoConfigurations.emailDomainVerifiedBy] = null
@@ -894,8 +894,8 @@ open class SsoService {
         return if (existingUser != null) {
             val uid = existingUser[Users.id]
             val invitationRole = pendingInvitationRole(normalizedEmail, organizationId)
-            if (!isOrganizationMember(uid, organizationId) && invitationRole == null) {
-                throw IllegalArgumentException("SSO account linking requires an existing membership or invitation")
+            require(isOrganizationMember(uid, organizationId) || invitationRole != null) {
+                "SSO account linking requires an existing membership or invitation"
             }
             UserSsoLinks.insert {
                 it[UserSsoLinks.userId] = uid
@@ -1095,9 +1095,9 @@ open class SsoService {
                 "dns:/${domainVerificationRecordName(domain)}",
                 arrayOf("TXT"),
             )
-            val txtRecords = attrs.get("TXT") ?: return false
+            val txtRecords = attrs["TXT"] ?: return false
             val records = (0 until txtRecords.size()).map { index ->
-                txtRecords.get(index).toString().trim('"')
+                txtRecords[index].toString().trim('"')
             }
             records.any { record -> record == expectedValue }
         } catch (e: NamingException) {
