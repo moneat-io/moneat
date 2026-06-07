@@ -644,7 +644,7 @@ class UptimeExtendedTest {
             monitor(MonitorParams(type = "database", dbConnectionString = "jdbc:invalid:nope"))
         )
         assertEquals(0, result.status)
-        assertTrue(result.message.contains("Database check failed"))
+        assertTrue(result.message.contains("Blocked"))
     }
 
     @Test
