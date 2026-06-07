@@ -93,7 +93,7 @@ export function SalesContactDialog({
   const update = (field: keyof FormState) => (value: string) =>
     setForm((prev) => ({...prev, [field]: value}))
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = (event: React.SubmitEvent<HTMLFormElement>) => {
     event.preventDefault()
     const nextErrors = validate(form)
     setErrors(nextErrors)
