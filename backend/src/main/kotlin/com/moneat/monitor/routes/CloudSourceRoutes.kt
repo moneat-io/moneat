@@ -20,7 +20,6 @@ import com.moneat.monitor.models.CloudSourceCreateRequest
 import com.moneat.monitor.services.CloudSourceConnectorUnavailableException
 import com.moneat.monitor.services.CloudSourceService
 import com.moneat.monitor.services.InvalidCloudSourceException
-import com.moneat.shared.models.Memberships
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
@@ -34,16 +33,9 @@ import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
-import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
 
-private sealed class CloudSourceScopeResult {
-    data class Resolved(val userId: Int, val organizationId: Int) : CloudSourceScopeResult()
-    object NoAccess : CloudSourceScopeResult()
-    object MissingContext : CloudSourceScopeResult()
-}
+private data class CloudSourceScope(val userId: Int, val organizationId: Int)
 
 fun Route.cloudSourceRoutes(
     cloudSourceService: CloudSourceService = GlobalContext.get().get(),
@@ -112,43 +104,15 @@ fun Route.cloudSourceRoutes(
     }
 }
 
-private suspend fun ApplicationCall.resolveCloudSourceScope(): CloudSourceScopeResult.Resolved? {
+private suspend fun ApplicationCall.resolveCloudSourceScope(): CloudSourceScope? {
     val principal = principal<JWTPrincipal>()
-    val userId = principal!!.payload.getClaim("userId").asInt()
-    val organizationIdClaim = principal.payload.getClaim("orgId").asInt()
-    return when (val scope = resolveCloudSourceOrganizationId(userId, organizationIdClaim)) {
-        is CloudSourceScopeResult.Resolved -> scope
-        CloudSourceScopeResult.NoAccess -> {
-            respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
-            null
-        }
-        CloudSourceScopeResult.MissingContext -> {
-            respond(HttpStatusCode.BadRequest, ErrorResponse("Organization context required"))
-            null
-        }
+    val userId = principal?.payload?.getClaim("userId")?.asInt()
+    val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+    if (userId == null || organizationId == null) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse("Organization context required"))
+        return null
     }
-}
-
-private fun resolveCloudSourceOrganizationId(
-    userId: Int,
-    organizationIdClaim: Int?,
-): CloudSourceScopeResult {
-    val organizationIds = transaction {
-        Memberships
-            .selectAll()
-            .where { Memberships.user_id eq userId }
-            .map { it[Memberships.organization_id] }
-    }
-    if (organizationIds.isEmpty()) return CloudSourceScopeResult.NoAccess
-    if (organizationIdClaim != null) {
-        return if (organizationIdClaim in organizationIds) {
-            CloudSourceScopeResult.Resolved(userId, organizationIdClaim)
-        } else {
-            CloudSourceScopeResult.NoAccess
-        }
-    }
-    if (organizationIds.size == 1) return CloudSourceScopeResult.Resolved(userId, organizationIds.first())
-    return CloudSourceScopeResult.MissingContext
+    return CloudSourceScope(userId, organizationId)
 }
 
 private suspend fun ApplicationCall.respondCloudSourceResult(block: () -> Any) {

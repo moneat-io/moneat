@@ -22,13 +22,9 @@ import com.moneat.monitor.models.CloudSourceResponse
 import com.moneat.monitor.models.CloudSourceSetupPreview
 import com.moneat.monitor.routes.cloudSourceRoutes
 import com.moneat.monitor.services.CloudSourceService
-import com.moneat.shared.models.Memberships
-import com.moneat.shared.models.Organizations
-import com.moneat.shared.models.Users
 import com.moneat.testsupport.RouteTestSupport
 import com.moneat.testsupport.RouteTestSupport.installJwtAuth
 import com.moneat.testsupport.RouteTestSupport.withAuth
-import com.moneat.testsupport.TestDatabaseHelper
 import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -41,11 +37,6 @@ import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
-import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -53,14 +44,9 @@ import kotlin.test.assertTrue
 class CloudSourceRoutesTest {
     private val cloudSourceService = mockk<CloudSourceService>()
 
-    @BeforeTest
-    fun setup() {
-        val db = Database.connect(
-            url = "jdbc:h2:mem:moneat_cloud_source_routes;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
-            driver = "org.h2.Driver"
-        )
-        TransactionManager.defaultDatabase = db
-        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships)
+    private companion object {
+        const val USER_ID = 41
+        const val ORGANIZATION_ID = 73
     }
 
     @Test
@@ -76,11 +62,22 @@ class CloudSourceRoutesTest {
     }
 
     @Test
+    fun `cloud sources require organization context`() = testApplication {
+        application {
+            installJwtAuth()
+            routing { cloudSourceRoutes(cloudSourceService) }
+        }
+
+        val token = RouteTestSupport.createToken(userId = USER_ID)
+        val response = client.get("/v1/cloud-sources") { withAuth(token) }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("Organization context required"))
+    }
+
+    @Test
     fun `setup preview returns provider snippet for current organization`() = testApplication {
-        val orgId = seedOrg()
-        val userId = seedUser()
-        seedMembership(userId, orgId)
-        every { cloudSourceService.setupPreview(orgId, "aws") } returns CloudSourceSetupPreview(
+        every { cloudSourceService.setupPreview(ORGANIZATION_ID, "aws") } returns CloudSourceSetupPreview(
             provider = "aws",
             externalId = "mnt-ext-test",
             principal = "arn:aws:iam::499432741914:root",
@@ -94,7 +91,7 @@ class CloudSourceRoutesTest {
             routing { cloudSourceRoutes(cloudSourceService) }
         }
 
-        val token = RouteTestSupport.createToken(userId = userId, orgId = orgId)
+        val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
         val response = client.get("/v1/cloud-sources/setup-preview?provider=aws") { withAuth(token) }
 
         assertEquals(HttpStatusCode.OK, response.status)
@@ -103,9 +100,6 @@ class CloudSourceRoutesTest {
 
     @Test
     fun `create source returns saved source`() = testApplication {
-        val orgId = seedOrg()
-        val userId = seedUser()
-        seedMembership(userId, orgId)
         val request = CloudSourceCreateRequest(
             provider = "aws",
             displayName = "Production AWS",
@@ -115,7 +109,7 @@ class CloudSourceRoutesTest {
             collectCost = true,
             collectLogs = false
         )
-        coEvery { cloudSourceService.createSource(orgId, userId, request) } returns CloudSourceResponse(
+        coEvery { cloudSourceService.createSource(ORGANIZATION_ID, USER_ID, request) } returns CloudSourceResponse(
             id = 1,
             provider = "aws",
             displayName = "Production AWS",
@@ -137,7 +131,7 @@ class CloudSourceRoutesTest {
             routing { cloudSourceRoutes(cloudSourceService) }
         }
 
-        val token = RouteTestSupport.createToken(userId = userId, orgId = orgId)
+        val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
         val response = client.post("/v1/cloud-sources") {
             withAuth(token)
             contentType(ContentType.Application.Json)
@@ -158,32 +152,5 @@ class CloudSourceRoutesTest {
 
         assertEquals(HttpStatusCode.Created, response.status)
         assertTrue(response.bodyAsText().contains("Production AWS"))
-    }
-
-    private fun seedUser(): Int =
-        transaction {
-            Users.insert {
-                it[email] = "cloud-route-${System.nanoTime()}@test.com"
-                it[password_hash] = "hash"
-                it[email_verified] = true
-            } get Users.id
-        }
-
-    private fun seedOrg(): Int =
-        transaction {
-            Organizations.insert {
-                it[name] = "Cloud Source Route Org"
-                it[slug] = "cloud-route-${System.nanoTime()}"
-            } get Organizations.id
-        }
-
-    private fun seedMembership(userId: Int, orgId: Int) {
-        transaction {
-            Memberships.insert {
-                it[user_id] = userId
-                it[organization_id] = orgId
-                it[role] = "owner"
-            }
-        }
     }
 }
