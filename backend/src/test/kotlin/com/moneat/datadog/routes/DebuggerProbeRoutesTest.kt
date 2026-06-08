@@ -121,6 +121,58 @@ class DebuggerProbeRoutesTest {
         verify { DebuggerProbeService.deleteProbe(probeId, listOf(42)) }
     }
 
+    @Test
+    fun `GET debugger probes rejects JWT without org`() = testApplication {
+        installRoutes()
+        val response =
+            client.get("/v1/infra/debugger/probes") {
+                withAuth(RouteTestSupport.createToken(userId = 7, orgId = null))
+            }
+
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
+        verify(exactly = 0) { DebuggerProbeService.listProbes(any()) }
+    }
+
+    @Test
+    fun `POST debugger probes rejects JWT without org`() = testApplication {
+        installRoutes()
+        val response =
+            client.post("/v1/infra/debugger/probes") {
+                withAuth(RouteTestSupport.createToken(userId = 7, orgId = null))
+                contentType(ContentType.Application.Json)
+                setBody(createProbeBody())
+            }
+
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
+        verify(exactly = 0) { DebuggerProbeService.createProbe(any(), any(), any()) }
+    }
+
+    @Test
+    fun `PUT debugger probe rejects JWT without org`() = testApplication {
+        installRoutes()
+        val response =
+            client.put("/v1/infra/debugger/probes/$probeId") {
+                withAuth(RouteTestSupport.createToken(userId = 7, orgId = null))
+                contentType(ContentType.Application.Json)
+                setBody("""{"active":false}""")
+            }
+
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
+        verify(exactly = 0) { DebuggerProbeService.updateProbe(any(), any(), any()) }
+    }
+
+    @Test
+    fun `DELETE debugger probe rejects JWT without org`() = testApplication {
+        installRoutes()
+        val response =
+            client.delete("/v1/infra/debugger/probes/$probeId") {
+                withAuth(RouteTestSupport.createToken(userId = 7, orgId = null))
+            }
+
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
+        verify(exactly = 0) { DebuggerProbeService.deleteProbe(any(), any()) }
+    }
+
     private fun io.ktor.server.testing.ApplicationTestBuilder.installRoutes() {
         application {
             installJwtAuth()

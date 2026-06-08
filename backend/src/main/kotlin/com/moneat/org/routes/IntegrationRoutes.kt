@@ -67,6 +67,7 @@ import com.moneat.utils.suspendRunCatching
 
 private val logger = LoggerFactory.getLogger("IntegrationRoutes")
 private const val NO_ORGANIZATION_FOUND = "No organization found"
+private const val UNAUTHORIZED_MESSAGE = "Unauthorized"
 
 @Serializable
 data class OrganizationIntegrationResponse(
@@ -229,9 +230,16 @@ private fun validateAndDecodeState(state: String): Pair<Int, Int>? {
 }
 
 private suspend fun ApplicationCall.integrationOrgIdOrRespond(): Int? {
-    val orgId = principal<JWTPrincipal>()?.currentOrgIdOrNull()
+    val principal = principal<JWTPrincipal>()
+    if (principal == null) {
+        respond(HttpStatusCode.Unauthorized, MessageResponse(UNAUTHORIZED_MESSAGE))
+        return null
+    }
+
+    val orgId = principal.currentOrgIdOrNull()
     if (orgId == null) {
         respond(HttpStatusCode.NotFound, MessageResponse(NO_ORGANIZATION_FOUND))
+        return null
     }
     return orgId
 }

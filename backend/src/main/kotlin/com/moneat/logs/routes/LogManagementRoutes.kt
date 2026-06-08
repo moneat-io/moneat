@@ -45,6 +45,7 @@ import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
+import io.ktor.server.routing.RoutingContext
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
@@ -60,6 +61,7 @@ private const val PIPELINE_NOT_FOUND_MESSAGE = "Pipeline not found"
 private const val SAVED_VIEW_NOT_FOUND_MESSAGE = "Saved view not found"
 private const val METRIC_RULE_NOT_FOUND_MESSAGE = "Metric rule not found"
 private const val LOG_MONITOR_NOT_FOUND_MESSAGE = "Log monitor not found"
+private const val INVALID_TOKEN_MESSAGE = "Invalid token"
 private const val DEFAULT_METRIC_ROLLUP_MINUTES = 5L
 private const val MAX_METRIC_ROLLUP_DAYS = 1L
 
@@ -85,11 +87,13 @@ private fun Route.registerLogIndexManagementRoutes(
         call.respondLogPermissions(membershipService)
     }
     get("/logs/indexes/usage") {
-        call.respond(HttpStatusCode.OK, mapOf("usage" to logIndexService.usageStats(call.logOrgId())))
+        val orgId = call.logOrgIdOrRespond() ?: return@get
+        call.respond(HttpStatusCode.OK, mapOf("usage" to logIndexService.usageStats(orgId)))
     }
     post("/logs/indexes/retention/run") {
         if (!call.ensureLogAccess(membershipService, LogPermissions.MANAGE)) return@post
-        val applied = logIndexService.enforceRetention(call.logOrgId())
+        val orgId = call.logOrgIdOrRespond() ?: return@post
+        val applied = logIndexService.enforceRetention(orgId)
         call.respond(HttpStatusCode.OK, mapOf("indexes_processed" to applied))
     }
 }
@@ -99,24 +103,28 @@ private fun Route.registerLogPipelineManagementRoutes(
     membershipService: OrgMembershipService
 ) {
     get("/logs/pipelines") {
-        call.respond(HttpStatusCode.OK, mapOf("pipelines" to logManagementService.listPipelines(call.logOrgId())))
+        val orgId = call.logOrgIdOrRespond() ?: return@get
+        call.respond(HttpStatusCode.OK, mapOf("pipelines" to logManagementService.listPipelines(orgId)))
     }
     post("/logs/pipelines") {
         if (!call.ensureLogAccess(membershipService, LogPermissions.MANAGE)) return@post
+        val orgId = call.logOrgIdOrRespond() ?: return@post
         call.respondCreatedOrBadRequest {
-            logManagementService.createPipeline(call.logOrgId(), call.logUserId(), call.receive())
+            logManagementService.createPipeline(orgId, call.logUserId(), call.receive())
         }
     }
     put("/logs/pipelines/{id}") {
         if (!call.ensureLogAccess(membershipService, LogPermissions.MANAGE)) return@put
+        val orgId = call.logOrgIdOrRespond() ?: return@put
         val id = call.logPathId("id") ?: return@put
-        val updated = logManagementService.updatePipeline(call.logOrgId(), id, call.receive<UpdateLogPipelineRequest>())
+        val updated = logManagementService.updatePipeline(orgId, id, call.receive<UpdateLogPipelineRequest>())
         call.respondNullable(updated, PIPELINE_NOT_FOUND_MESSAGE)
     }
     delete("/logs/pipelines/{id}") {
         if (!call.ensureLogAccess(membershipService, LogPermissions.MANAGE)) return@delete
+        val orgId = call.logOrgIdOrRespond() ?: return@delete
         val id = call.logPathId("id") ?: return@delete
-        call.respondDeleted(logManagementService.deletePipeline(call.logOrgId(), id), PIPELINE_NOT_FOUND_MESSAGE)
+        call.respondDeleted(logManagementService.deletePipeline(orgId, id), PIPELINE_NOT_FOUND_MESSAGE)
     }
     post("/logs/pipelines/preview") {
         if (!call.ensureLogAccess(membershipService, LogPermissions.MANAGE)) return@post
@@ -130,22 +138,25 @@ private fun Route.registerLogSavedViewManagementRoutes(
     membershipService: OrgMembershipService
 ) {
     get("/logs/saved-views") {
+        val orgId = call.logOrgIdOrRespond() ?: return@get
         call.respond(
             HttpStatusCode.OK,
-            mapOf("views" to logManagementService.listSavedViews(call.logOrgId(), call.logUserId()))
+            mapOf("views" to logManagementService.listSavedViews(orgId, call.logUserId()))
         )
     }
     post("/logs/saved-views") {
         if (!call.ensureLogAccess(membershipService, LogPermissions.MANAGE)) return@post
+        val orgId = call.logOrgIdOrRespond() ?: return@post
         call.respondCreatedOrBadRequest {
-            logManagementService.createSavedView(call.logOrgId(), call.logUserId(), call.receive())
+            logManagementService.createSavedView(orgId, call.logUserId(), call.receive())
         }
     }
     put("/logs/saved-views/{id}") {
         if (!call.ensureLogAccess(membershipService, LogPermissions.MANAGE)) return@put
+        val orgId = call.logOrgIdOrRespond() ?: return@put
         val id = call.logPathId("id") ?: return@put
         val updated = logManagementService.updateSavedView(
-            call.logOrgId(),
+            orgId,
             id,
             call.logUserId(),
             call.receive<UpdateLogSavedViewRequest>()
@@ -154,9 +165,10 @@ private fun Route.registerLogSavedViewManagementRoutes(
     }
     delete("/logs/saved-views/{id}") {
         if (!call.ensureLogAccess(membershipService, LogPermissions.MANAGE)) return@delete
+        val orgId = call.logOrgIdOrRespond() ?: return@delete
         val id = call.logPathId("id") ?: return@delete
         call.respondDeleted(
-            logManagementService.deleteSavedView(call.logOrgId(), id, call.logUserId()),
+            logManagementService.deleteSavedView(orgId, id, call.logUserId()),
             SAVED_VIEW_NOT_FOUND_MESSAGE
         )
     }
@@ -167,45 +179,81 @@ private fun Route.registerLogMetricManagementRoutes(
     logService: LogService,
     membershipService: OrgMembershipService
 ) {
-    get("/logs/metrics/rules") {
-        call.respond(HttpStatusCode.OK, mapOf("rules" to logManagementService.listMetricRules(call.logOrgId())))
-    }
-    post("/logs/metrics/rules") {
-        if (!call.ensureLogAccess(membershipService, LogPermissions.METRICS)) return@post
-        call.respondCreatedOrBadRequest {
-            logManagementService.createMetricRule(call.logOrgId(), call.logUserId(), call.receive())
-        }
-    }
-    put("/logs/metrics/rules/{id}") {
-        if (!call.ensureLogAccess(membershipService, LogPermissions.METRICS)) return@put
-        val id = call.logPathId("id") ?: return@put
-        val updated = logManagementService.updateMetricRule(
-            call.logOrgId(),
-            id,
-            call.receive<UpdateLogMetricRuleRequest>()
-        )
-        call.respondNullable(updated, METRIC_RULE_NOT_FOUND_MESSAGE)
-    }
-    delete("/logs/metrics/rules/{id}") {
-        if (!call.ensureLogAccess(membershipService, LogPermissions.METRICS)) return@delete
-        val id = call.logPathId("id") ?: return@delete
-        call.respondDeleted(logManagementService.deleteMetricRule(call.logOrgId(), id), METRIC_RULE_NOT_FOUND_MESSAGE)
-    }
-    post("/logs/metrics/preview") {
-        if (!call.ensureLogAccess(membershipService, LogPermissions.METRICS)) return@post
-        val request = call.receive<CreateLogMetricRuleRequest>()
-        val aggregate = logService.aggregateForMetricPreview(call.logOrgId().toLong(), request)
-        call.respond(HttpStatusCode.OK, aggregate)
-    }
+    get("/logs/metrics/rules") { handleListMetricRules(logManagementService) }
+    post("/logs/metrics/rules") { handleCreateMetricRule(logManagementService, membershipService) }
+    put("/logs/metrics/rules/{id}") { handleUpdateMetricRule(logManagementService, membershipService) }
+    delete("/logs/metrics/rules/{id}") { handleDeleteMetricRule(logManagementService, membershipService) }
+    post("/logs/metrics/preview") { handlePreviewMetricRule(logService, membershipService) }
     post("/logs/metrics/rules/{id}/rollup") {
-        if (!call.ensureLogAccess(membershipService, LogPermissions.METRICS)) return@post
-        val id = call.logPathId("id") ?: return@post
-        val rule = logManagementService.getMetricRule(call.logOrgId(), id)
-            ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse(METRIC_RULE_NOT_FOUND_MESSAGE))
-        val aggregate = logService.aggregateForMetricPreview(call.logOrgId().toLong(), rule.toCreateRequest())
-        val inserted = logManagementService.recordMetricPoints(call.logOrgId().toLong(), rule, aggregate)
-        call.respond(HttpStatusCode.OK, mapOf("points_inserted" to inserted))
+        handleRollupMetricRule(logManagementService, logService, membershipService)
     }
+}
+
+private suspend fun RoutingContext.handleListMetricRules(logManagementService: LogManagementService) {
+    val orgId = call.logOrgIdOrRespond() ?: return
+    call.respond(HttpStatusCode.OK, mapOf("rules" to logManagementService.listMetricRules(orgId)))
+}
+
+private suspend fun RoutingContext.handleCreateMetricRule(
+    logManagementService: LogManagementService,
+    membershipService: OrgMembershipService
+) {
+    if (!call.ensureLogAccess(membershipService, LogPermissions.METRICS)) return
+    val orgId = call.logOrgIdOrRespond() ?: return
+    call.respondCreatedOrBadRequest {
+        logManagementService.createMetricRule(orgId, call.logUserId(), call.receive())
+    }
+}
+
+private suspend fun RoutingContext.handleUpdateMetricRule(
+    logManagementService: LogManagementService,
+    membershipService: OrgMembershipService
+) {
+    if (!call.ensureLogAccess(membershipService, LogPermissions.METRICS)) return
+    val orgId = call.logOrgIdOrRespond() ?: return
+    val id = call.logPathId("id") ?: return
+    val updated = logManagementService.updateMetricRule(
+        orgId,
+        id,
+        call.receive<UpdateLogMetricRuleRequest>()
+    )
+    call.respondNullable(updated, METRIC_RULE_NOT_FOUND_MESSAGE)
+}
+
+private suspend fun RoutingContext.handleDeleteMetricRule(
+    logManagementService: LogManagementService,
+    membershipService: OrgMembershipService
+) {
+    if (!call.ensureLogAccess(membershipService, LogPermissions.METRICS)) return
+    val orgId = call.logOrgIdOrRespond() ?: return
+    val id = call.logPathId("id") ?: return
+    call.respondDeleted(logManagementService.deleteMetricRule(orgId, id), METRIC_RULE_NOT_FOUND_MESSAGE)
+}
+
+private suspend fun RoutingContext.handlePreviewMetricRule(
+    logService: LogService,
+    membershipService: OrgMembershipService
+) {
+    if (!call.ensureLogAccess(membershipService, LogPermissions.METRICS)) return
+    val orgId = call.logOrgIdOrRespond() ?: return
+    val request = call.receive<CreateLogMetricRuleRequest>()
+    val aggregate = logService.aggregateForMetricPreview(orgId.toLong(), request)
+    call.respond(HttpStatusCode.OK, aggregate)
+}
+
+private suspend fun RoutingContext.handleRollupMetricRule(
+    logManagementService: LogManagementService,
+    logService: LogService,
+    membershipService: OrgMembershipService
+) {
+    if (!call.ensureLogAccess(membershipService, LogPermissions.METRICS)) return
+    val orgId = call.logOrgIdOrRespond() ?: return
+    val id = call.logPathId("id") ?: return
+    val rule = logManagementService.getMetricRule(orgId, id)
+        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(METRIC_RULE_NOT_FOUND_MESSAGE))
+    val aggregate = logService.aggregateForMetricPreview(orgId.toLong(), rule.toCreateRequest())
+    val inserted = logManagementService.recordMetricPoints(orgId.toLong(), rule, aggregate)
+    call.respond(HttpStatusCode.OK, mapOf("points_inserted" to inserted))
 }
 
 private fun Route.registerLogMonitorManagementRoutes(
@@ -214,13 +262,15 @@ private fun Route.registerLogMonitorManagementRoutes(
     dashboardAlertService: DashboardAlertService
 ) {
     get("/logs/monitors") {
-        call.respond(HttpStatusCode.OK, mapOf("monitors" to logManagementService.listLogMonitors(call.logOrgId())))
+        val orgId = call.logOrgIdOrRespond() ?: return@get
+        call.respond(HttpStatusCode.OK, mapOf("monitors" to logManagementService.listLogMonitors(orgId)))
     }
     post("/logs/monitors") {
         if (!call.ensureLogAccess(membershipService, LogPermissions.MONITORS)) return@post
+        val orgId = call.logOrgIdOrRespond() ?: return@post
         call.respondCreatedOrBadRequest {
             logManagementService.createLogMonitor(
-                call.logOrgId(),
+                orgId,
                 call.logUserId(),
                 call.receive<CreateLogMonitorRequest>()
             )
@@ -228,10 +278,11 @@ private fun Route.registerLogMonitorManagementRoutes(
     }
     put("/logs/monitors/{id}") {
         if (!call.ensureLogAccess(membershipService, LogPermissions.MONITORS)) return@put
+        val orgId = call.logOrgIdOrRespond() ?: return@put
         val id = call.logPathId("id") ?: return@put
         call.respondNullableOrBadRequest(LOG_MONITOR_NOT_FOUND_MESSAGE) {
             logManagementService.updateLogMonitor(
-                call.logOrgId(),
+                orgId,
                 id,
                 call.receive<UpdateLogMonitorRequest>()
             )
@@ -239,8 +290,9 @@ private fun Route.registerLogMonitorManagementRoutes(
     }
     delete("/logs/monitors/{id}") {
         if (!call.ensureLogAccess(membershipService, LogPermissions.MONITORS)) return@delete
+        val orgId = call.logOrgIdOrRespond() ?: return@delete
         val id = call.logPathId("id") ?: return@delete
-        call.respondDeleted(logManagementService.deleteLogMonitor(call.logOrgId(), id), LOG_MONITOR_NOT_FOUND_MESSAGE)
+        call.respondDeleted(logManagementService.deleteLogMonitor(orgId, id), LOG_MONITOR_NOT_FOUND_MESSAGE)
     }
     post("/logs/monitors/from-query") {
         if (!call.ensureLogAccess(membershipService, LogPermissions.MONITORS)) return@post
@@ -251,13 +303,15 @@ private fun Route.registerLogMonitorManagementRoutes(
 }
 
 private suspend fun ApplicationCall.respondLogPermissions(membershipService: OrgMembershipService) {
+    val orgId = logOrgIdOrRespond() ?: return
+    val userId = logUserId()
     respond(
         HttpStatusCode.OK,
         mapOf(
-            "can_manage" to isLogAllowed(membershipService, LogPermissions.MANAGE),
-            "can_live_tail" to isLogAllowed(membershipService, LogPermissions.LIVE_TAIL),
-            "can_create_metrics" to isLogAllowed(membershipService, LogPermissions.METRICS),
-            "can_create_monitors" to isLogAllowed(membershipService, LogPermissions.MONITORS)
+            "can_manage" to isLogAllowed(membershipService, orgId, userId, LogPermissions.MANAGE),
+            "can_live_tail" to isLogAllowed(membershipService, orgId, userId, LogPermissions.LIVE_TAIL),
+            "can_create_metrics" to isLogAllowed(membershipService, orgId, userId, LogPermissions.METRICS),
+            "can_create_monitors" to isLogAllowed(membershipService, orgId, userId, LogPermissions.MONITORS)
         )
     )
 }
@@ -265,13 +319,14 @@ private suspend fun ApplicationCall.respondLogPermissions(membershipService: Org
 private suspend fun ApplicationCall.createLogMonitorDraft(
     request: LogMonitorDraftRequest,
     dashboardAlertService: DashboardAlertService
-): LogMonitorDraftResponse {
+): LogMonitorDraftResponse? {
     val dashboardId = request.dashboardId
     val widgetId = request.widgetId
     if (dashboardId != null && widgetId != null) {
+        val orgId = logOrgIdOrRespond() ?: return null
         val alert = dashboardAlertService.createAlert(
             dashboardId = dashboardId,
-            orgId = logOrgId().toLong(),
+            orgId = orgId.toLong(),
             createdBy = logUserId().toLong(),
             request = CreateDashboardAlertRequest(
                 widgetId = widgetId,
@@ -306,20 +361,24 @@ private suspend fun ApplicationCall.ensureLogAccess(
     membershipService: OrgMembershipService,
     permission: String
 ): Boolean {
-    val allowed = isLogAllowed(membershipService, permission)
+    val orgId = logOrgIdOrRespond() ?: return false
+    val userId = logUserId()
+    val allowed = isLogAllowed(membershipService, orgId, userId, permission)
     if (!allowed) {
         respond(HttpStatusCode.Forbidden, ErrorResponse(LOG_FORBIDDEN_MESSAGE))
     }
     return allowed
 }
 
-private suspend fun ApplicationCall.isLogAllowed(
+private suspend fun isLogAllowed(
     membershipService: OrgMembershipService,
+    orgId: Int,
+    userId: Int,
     permission: String
 ): Boolean {
-    val granular = FeatureRegistry.getPermissionBridge()?.hasPermission(logOrgId(), logUserId(), permission)
+    val granular = FeatureRegistry.getPermissionBridge()?.hasPermission(orgId, userId, permission)
     return granular ?: suspendRunCatching {
-        membershipService.requireRole(logOrgId(), logUserId(), OrgRole.ADMIN)
+        membershipService.requireRole(orgId, userId, OrgRole.ADMIN)
         true
     }.getOrElse { false }
 }
@@ -386,8 +445,13 @@ private suspend fun ApplicationCall.logPathId(name: String): Int? {
 private fun ApplicationCall.logUserId(): Int =
     principal<JWTPrincipal>()!!.payload.getClaim("userId").asInt()
 
-private fun ApplicationCall.logOrgId(): Int =
-    principal<JWTPrincipal>()!!.currentOrgIdOrNull()!!
+private suspend fun ApplicationCall.logOrgIdOrRespond(): Int? {
+    val orgId = principal<JWTPrincipal>()?.currentOrgIdOrNull()
+    if (orgId == null) {
+        respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
+    }
+    return orgId
+}
 
 private suspend fun LogService.aggregateForMetricPreview(
     organizationId: Long,

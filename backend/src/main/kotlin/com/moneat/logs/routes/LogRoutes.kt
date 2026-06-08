@@ -84,6 +84,7 @@ private val json = Json { ignoreUnknownKeys = true }
 
 private const val MILLIS_IN_24_HOURS = 24L * 60 * 60 * 1000
 private const val SSE_POLL_TIMEOUT_SECONDS = 15L
+private const val INVALID_TOKEN_MESSAGE = "Invalid token"
 
 fun Route.logRoutes(
     logService: LogService = GlobalContext.get().get(),
@@ -124,6 +125,7 @@ private fun Route.registerOtlpApiKeyRoutes(otlpApiKeyService: OtlpApiKeyService)
 }
 
 private suspend fun ApplicationCall.createOtlpApiKey(otlpApiKeyService: OtlpApiKeyService) {
+    val organizationId = requiredOrganizationIdOrRespond() ?: return
     val request = receive<CreateOtlpApiKeyRequest>()
     val name = request.name.trim()
     if (name.isBlank()) {
@@ -133,7 +135,7 @@ private suspend fun ApplicationCall.createOtlpApiKey(otlpApiKeyService: OtlpApiK
 
     val response =
         otlpApiKeyService.createKey(
-            organizationId = requiredOrganizationId(),
+            organizationId = organizationId,
             name = name,
             createdBy = requiredUserId()
         )
@@ -141,7 +143,8 @@ private suspend fun ApplicationCall.createOtlpApiKey(otlpApiKeyService: OtlpApiK
 }
 
 private suspend fun ApplicationCall.listOtlpApiKeys(otlpApiKeyService: OtlpApiKeyService) {
-    val keys = otlpApiKeyService.listKeys(requiredOrganizationId())
+    val organizationId = requiredOrganizationIdOrRespond() ?: return
+    val keys = otlpApiKeyService.listKeys(organizationId)
     respond(HttpStatusCode.OK, mapOf("keys" to keys))
 }
 
@@ -152,7 +155,8 @@ private suspend fun ApplicationCall.deleteOtlpApiKey(otlpApiKeyService: OtlpApiK
         return
     }
 
-    val deleted = otlpApiKeyService.deleteKey(organizationId = requiredOrganizationId(), keyId = id)
+    val organizationId = requiredOrganizationIdOrRespond() ?: return
+    val deleted = otlpApiKeyService.deleteKey(organizationId = organizationId, keyId = id)
     if (!deleted) {
         respond(HttpStatusCode.NotFound, ErrorResponse("Key not found"))
         return
@@ -169,7 +173,8 @@ private fun Route.registerOtlpServiceRoutingRoutes(otlpServiceRoutingService: Ot
 private suspend fun ApplicationCall.listOtlpObservedServices(
     otlpServiceRoutingService: OtlpServiceRoutingService
 ) {
-    val services = otlpServiceRoutingService.listObservedServices(requiredOrganizationId())
+    val organizationId = requiredOrganizationIdOrRespond() ?: return
+    val services = otlpServiceRoutingService.listObservedServices(organizationId)
     respond(HttpStatusCode.OK, mapOf("services" to services))
 }
 
@@ -177,7 +182,7 @@ private suspend fun ApplicationCall.upsertOtlpServiceMapping(
     otlpServiceRoutingService: OtlpServiceRoutingService
 ) {
     val response = otlpServiceRoutingService.upsertMapping(
-        requiredOrganizationId(),
+        requiredOrganizationIdOrRespond() ?: return,
         receive<CreateOtlpServiceMappingRequest>()
     )
     if (response == null) {
@@ -199,7 +204,8 @@ private suspend fun ApplicationCall.deleteOtlpServiceMapping(
         return
     }
 
-    val deleted = otlpServiceRoutingService.deleteMapping(requiredOrganizationId(), id)
+    val organizationId = requiredOrganizationIdOrRespond() ?: return
+    val deleted = otlpServiceRoutingService.deleteMapping(organizationId, id)
     if (!deleted) {
         respond(HttpStatusCode.NotFound, ErrorResponse("Mapping not found"))
         return
@@ -227,27 +233,30 @@ private fun Route.registerLogIndexRoutes(
 }
 
 private suspend fun ApplicationCall.listLogIndexes(logIndexService: LogIndexService) {
-    val indexes = logIndexService.list(requiredOrganizationId())
+    val organizationId = requiredOrganizationIdOrRespond() ?: return
+    val indexes = logIndexService.list(organizationId)
     respond(HttpStatusCode.OK, mapOf("indexes" to indexes))
 }
 
 private suspend fun ApplicationCall.createLogIndex(logIndexService: LogIndexService) {
+    val organizationId = requiredOrganizationIdOrRespond() ?: return
     val request = receive<CreateLogIndexRequest>()
     if (request.name.isBlank()) {
         respond(HttpStatusCode.BadRequest, ErrorResponse("Name is required"))
         return
     }
-    val index = logIndexService.create(requiredOrganizationId(), request)
+    val index = logIndexService.create(organizationId, request)
     respond(HttpStatusCode.Created, index)
 }
 
 private suspend fun ApplicationCall.updateLogIndex(logIndexService: LogIndexService) {
+    val organizationId = requiredOrganizationIdOrRespond() ?: return
     val id = parameters["id"]?.toIntOrNull()
     if (id == null) {
         respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid index ID"))
         return
     }
-    val updated = logIndexService.update(requiredOrganizationId(), id, receive<UpdateLogIndexRequest>())
+    val updated = logIndexService.update(organizationId, id, receive<UpdateLogIndexRequest>())
     if (updated == null) {
         respond(HttpStatusCode.NotFound, ErrorResponse("Index not found"))
         return
@@ -256,12 +265,13 @@ private suspend fun ApplicationCall.updateLogIndex(logIndexService: LogIndexServ
 }
 
 private suspend fun ApplicationCall.deleteLogIndex(logIndexService: LogIndexService) {
+    val organizationId = requiredOrganizationIdOrRespond() ?: return
     val id = parameters["id"]?.toIntOrNull()
     if (id == null) {
         respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid index ID"))
         return
     }
-    val deleted = logIndexService.delete(requiredOrganizationId(), id)
+    val deleted = logIndexService.delete(organizationId, id)
     if (!deleted) {
         respond(HttpStatusCode.NotFound, ErrorResponse("Index not found"))
         return
@@ -270,8 +280,9 @@ private suspend fun ApplicationCall.deleteLogIndex(logIndexService: LogIndexServ
 }
 
 private suspend fun ApplicationCall.testLogIndex(logIndexService: LogIndexService) {
+    val organizationId = requiredOrganizationIdOrRespond() ?: return
     val body = receive<Map<String, String>>()
-    val result = logIndexService.testFilter(requiredOrganizationId(), body["filter_query"] ?: "")
+    val result = logIndexService.testFilter(organizationId, body["filter_query"] ?: "")
     respond(HttpStatusCode.OK, result)
 }
 
@@ -285,7 +296,7 @@ private fun Route.registerLogQueryRoutes(logService: LogService) {
 }
 
 private suspend fun ApplicationCall.queryLogs(logService: LogService) {
-    val orgId = requiredOrganizationId().toLong()
+    val orgId = requiredOrganizationIdOrRespond()?.toLong() ?: return
     val range = demoAwareLogTimeRange()
     val logRequest =
         LogQueryRequest(
@@ -318,7 +329,7 @@ private suspend fun ApplicationCall.getLogTagValues(logService: LogService) {
 
     val result =
         logService.getTagValues(
-            organizationId = requiredOrganizationId().toLong(),
+            organizationId = requiredOrganizationIdOrRespond()?.toLong() ?: return,
             key = key,
             from = request.queryParameters["from"],
             to = request.queryParameters["to"],
@@ -328,10 +339,11 @@ private suspend fun ApplicationCall.getLogTagValues(logService: LogService) {
 }
 
 private suspend fun ApplicationCall.getLogFilters(logService: LogService) {
+    val organizationId = requiredOrganizationIdOrRespond()?.toLong() ?: return
     val range = demoAwareLogTimeRange()
     val result =
         logService.getFilterOptionsWithCounts(
-            organizationId = requiredOrganizationId().toLong(),
+            organizationId = organizationId,
             from = range.from,
             to = range.to
         )
@@ -339,7 +351,7 @@ private suspend fun ApplicationCall.getLogFilters(logService: LogService) {
 }
 
 private suspend fun ApplicationCall.aggregateLogs(logService: LogService) {
-    val orgId = requiredOrganizationId().toLong()
+    val orgId = requiredOrganizationIdOrRespond()?.toLong() ?: return
     val range = demoAwareLogTimeRange()
     val result =
         logService.aggregateLogs(
@@ -376,7 +388,7 @@ private suspend fun ApplicationCall.getTopLogValues(logService: LogService) {
     val range = demoAwareLogTimeRange()
     val result =
         logService.topValues(
-            organizationId = requiredOrganizationId().toLong(),
+            organizationId = requiredOrganizationIdOrRespond()?.toLong() ?: return,
             field = field,
             limit = request.queryParameters["limit"]?.toIntOrNull() ?: 10,
             from = range.from,
@@ -395,9 +407,10 @@ private suspend fun ApplicationCall.getTopLogValues(logService: LogService) {
 }
 
 private suspend fun ApplicationCall.exportLogs(logService: LogService) {
+    val organizationId = requiredOrganizationIdOrRespond()?.toLong() ?: return
     val csv =
         logService.exportCsv(
-            organizationId = requiredOrganizationId().toLong(),
+            organizationId = organizationId,
             from = request.queryParameters["from"],
             to = request.queryParameters["to"],
             query = request.queryParameters["q"] ?: request.queryParameters["query"],
@@ -563,13 +576,19 @@ private fun ApplicationCall.demoAwareLogTimeRange(): LogTimeRange {
 private fun ApplicationCall.requiredUserId(): Int =
     principal<JWTPrincipal>()!!.payload.getClaim("userId").asInt()
 
-private fun ApplicationCall.requiredOrganizationId(): Int =
-    principal<JWTPrincipal>()!!.currentOrgIdOrNull()!!
+private suspend fun ApplicationCall.requiredOrganizationIdOrRespond(): Int? {
+    val organizationId = principal<JWTPrincipal>()?.currentOrgIdOrNull()
+    if (organizationId == null) {
+        respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
+    }
+    return organizationId
+}
 
 private suspend fun ApplicationCall.ensureLogIndexAccess(membershipService: OrgMembershipService): Boolean {
+    val organizationId = requiredOrganizationIdOrRespond() ?: return false
     val allowed = hasLogAccess(
         membershipService = membershipService,
-        organizationId = requiredOrganizationId(),
+        organizationId = organizationId,
         userId = requiredUserId(),
         permission = LogPermissions.MANAGE
     )

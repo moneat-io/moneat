@@ -30,6 +30,8 @@ data class CurrentOrgContext(
     val orgRole: String?,
 )
 
+// Current-org claims are signed access-token scope minted after org membership validation.
+// Revocation is enforced centrally through token/session lifetime and refresh validation.
 fun JWTPrincipal.currentUserIdOrNull(): Int? =
     payload.getClaim("userId").asInt()
 

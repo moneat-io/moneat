@@ -117,6 +117,52 @@ class IntegrationRoutesTest {
     }
 
     @Test
+    fun `integration org helper returns unauthorized when principal is missing`() {
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                routing {
+                    route("/v1") {
+                        integrationRoutes()
+                    }
+                }
+            }
+
+            val response = client.get("/v1/integrations/slack/channels")
+
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+            assertTrue(response.bodyAsText().contains("Unauthorized"))
+        }
+    }
+
+    @Test
+    fun `integration org helper returns not found when JWT has no org`() {
+        val userId = seedUser("no-org-claim@test.com")
+
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    authenticate("auth-jwt") {
+                        route("/v1") {
+                            integrationRoutes()
+                        }
+                    }
+                }
+            }
+
+            val response =
+                client.get("/v1/integrations/slack/channels") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                }
+
+            assertEquals(HttpStatusCode.NotFound, response.status)
+            assertTrue(response.bodyAsText().contains("No organization found"))
+        }
+    }
+
+    @Test
     fun `integrations list returns configured integration records`() {
         val orgId = seedOrganization("Integration Org")
         val userId = seedUser("member@test.com")
