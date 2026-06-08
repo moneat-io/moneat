@@ -363,6 +363,36 @@ object AgentApiKeys : Table("agent_api_keys") {
     override val primaryKey = PrimaryKey(id)
 }
 
+object CloudSources : Table("cloud_sources") {
+    val id = integer("id").autoIncrement()
+    val organization_id = integer("organization_id").references(Organizations.id)
+    val provider = varchar("provider", 16)
+    val display_name = varchar("display_name", 120)
+    val account_id = varchar("account_id", 64).nullable()
+    val role_name = varchar("role_name", 128).nullable()
+    val project_id = varchar("project_id", 128).nullable()
+    val tenant_id = varchar("tenant_id", 128).nullable()
+    val subscription_id = varchar("subscription_id", 128).nullable()
+    val billing_export_table = varchar("billing_export_table", 512).nullable()
+    val external_id = varchar("external_id", 64)
+    val collect_metrics = bool("collect_metrics").default(true)
+    val collect_inventory = bool("collect_inventory").default(true)
+    val collect_cost = bool("collect_cost").default(false)
+    val collect_logs = bool("collect_logs").default(false)
+    val status = varchar("status", 32).default("pending")
+    val last_sync_at = timestamp("last_sync_at").nullable()
+    val last_error = text("last_error").nullable()
+    val created_by = integer("created_by").references(Users.id)
+    val created_at = timestamp("created_at")
+    val updated_at = timestamp("updated_at")
+
+    init {
+        index(false, organization_id, provider)
+    }
+
+    override val primaryKey = PrimaryKey(id)
+}
+
 object McpApiKeys : Table("mcp_api_keys") {
     val id = integer("id").autoIncrement()
     val organization_id = integer("organization_id")
