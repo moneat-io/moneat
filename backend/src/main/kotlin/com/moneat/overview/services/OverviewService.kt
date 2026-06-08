@@ -143,6 +143,8 @@ class OverviewService(
         val deploysDeferred = async { loadDeploys(organizationId) }
         val alertsDeferred = async { loadAlertItems(organizationId) }
         val incidentsDeferred = async { loadIncidentItems(organizationId) }
+        val alertCountDeferred = async { loadAlertCount(organizationId) }
+        val incidentCountDeferred = async { loadIncidentCount(organizationId) }
         val statusPageCountDeferred = async { loadStatusPageCount(organizationId) }
         val syntheticFailingDeferred = async { loadSyntheticFailing(organizationId, demoEpochMs) }
 
@@ -156,18 +158,19 @@ class OverviewService(
         val deploys = deploysDeferred.await()
         val alertItems = alertsDeferred.await()
         val incidents = incidentsDeferred.await()
+        val serviceRows = serviceRowsDeferred.await()
 
         val counts = overviewCounts(
-            incidents = incidents.size,
-            alerts = alertItems.size,
-            serviceRows = serviceRowsDeferred.await(),
+            incidents = incidentCountDeferred.await(),
+            alerts = alertCountDeferred.await(),
+            serviceRows = serviceRows,
             hosts = hosts,
         )
 
         OverviewResponse(
             systemStatus = systemStatus(counts),
             kpis = kpis(eventMetrics, traceMetrics, logMetrics, issueItems.size, monitors),
-            serviceHealth = serviceRowsDeferred.await(),
+            serviceHealth = serviceRows,
             telemetry = telemetry(eventMetrics, traceMetrics, logMetrics, deploys),
             triage = OverviewTriageData(
                 incidents = incidents,
@@ -396,7 +399,7 @@ class OverviewService(
             } + deploys.map { deploy ->
                 OverviewActivityItem("deploy", "${deploy.version} released to ${deploy.service}", deploy.ageLabel)
             } + issues.map { issue ->
-                OverviewActivityItem("incident", issue.title, issue.ageLabel)
+                OverviewActivityItem("issue", issue.title, issue.ageLabel)
             }
             ).take(MAX_ACTIVITY_ROWS)
 
@@ -459,6 +462,18 @@ class OverviewService(
                 }
         }
 
+    private fun loadIncidentCount(organizationId: Int): Int =
+        transaction {
+            AlertEpisodes
+                .selectAll()
+                .where {
+                    (AlertEpisodes.organizationId eq organizationId) and
+                        (AlertEpisodes.status eq "FIRING")
+                }
+                .count()
+                .toInt()
+        }
+
     private fun loadAlertItems(organizationId: Int): List<OverviewAlertItem> =
         transaction {
             HostAlerts
@@ -480,6 +495,19 @@ class OverviewService(
                         ageLabel = row[HostAlerts.last_triggered_at]?.let { ageLabel(it.toEpochMilliseconds()) } ?: "",
                     )
                 }
+        }
+
+    private fun loadAlertCount(organizationId: Int): Int =
+        transaction {
+            HostAlerts
+                .selectAll()
+                .where {
+                    (HostAlerts.organization_id eq organizationId) and
+                        (HostAlerts.enabled eq true) and
+                        HostAlerts.last_triggered_at.isNotNull()
+                }
+                .count()
+                .toInt()
         }
 
     private suspend fun loadLatestMetrics(

@@ -15,6 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {AlertTriangle, CheckCircle} from 'lucide-react'
+import {Link} from '@tanstack/react-router'
 import {cn} from '@/lib/utils'
 import {Button} from '@/components/ui/button'
 import {useSystemStatus} from '../overviewData'
@@ -65,7 +66,11 @@ export function SystemStatusWidget() {
         </div>
         {sev !== 'good' && (
           <div className="flex shrink-0 items-center gap-1.5">
-            <Button size="sm" className="h-6 px-2 text-[11px]">View incident</Button>
+            <Button asChild size="sm" className="h-6 px-2 text-[11px]">
+              <Link to="/on-call/incidents" aria-label="View active incidents">
+                View incident
+              </Link>
+            </Button>
           </div>
         )}
       </div>

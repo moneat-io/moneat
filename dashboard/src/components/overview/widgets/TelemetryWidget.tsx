@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useState} from 'react'
+import {useId, useState} from 'react'
 import {
   Area,
   AreaChart,
@@ -48,6 +48,7 @@ const X_LABELS = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', 'now']
 /** Tabbed telemetry chart (errors / latency / throughput / logs). */
 export function TelemetryWidget() {
   const telem = useTelemetry()
+  const gradientId = useId()
   const [activeKey, setActiveKey] = useState<TelemetrySeriesKey>('errors')
   const tab = TABS.find((t) => t.key === activeKey) ?? TABS[0]
 
@@ -105,7 +106,7 @@ export function TelemetryWidget() {
           ) : (
             <AreaChart data={data} margin={{top: 6, right: 6, left: 0, bottom: 0}}>
               <defs>
-                <linearGradient id="overviewTelemetryFill" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0" stopColor={tab.color} stopOpacity={0.3} />
                   <stop offset="1" stopColor={tab.color} stopOpacity={0} />
                 </linearGradient>
@@ -131,7 +132,7 @@ export function TelemetryWidget() {
                 dataKey="value"
                 stroke={tab.color}
                 strokeWidth={2}
-                fill="url(#overviewTelemetryFill)"
+                fill={`url(#${gradientId})`}
                 isAnimationActive={false}
               />
             </AreaChart>

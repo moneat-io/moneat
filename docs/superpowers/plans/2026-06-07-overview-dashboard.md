@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make the authenticated Overview a real, customizable `CustomDashboard` rendered by the existing dashboards engine, with 9 new native (non-query) widget types reproducing the mockup, backed by a mock data layer.
+**Goal:** Make the authenticated Overview a real, customizable `CustomDashboard` rendered by the existing dashboards engine, with 9 new native (non-query) widget types reproducing the mockup, backed by the overview API.
 
-**Architecture:** New native widget types are registered in the dashboards engine (`extendedWidgetTypes.ts`), dispatched by `ExtendedWidgets.tsx`, and rendered **chromeless** by `DashboardGrid` so each panel keeps its own header. A new `components/overview/` module provides the widget components, a typed mock-data layer, a seed layout, the page container (`OverviewDashboard`), a bespoke header, and an add-widget picker. `routes/index.tsx` renders `<OverviewDashboard/>` for the authenticated `?view=overview` landing.
+**Architecture:** New native widget types are registered in the dashboards engine (`extendedWidgetTypes.ts`), dispatched by `ExtendedWidgets.tsx`, and rendered **chromeless** by `DashboardGrid` so each panel keeps its own header. A new `components/overview/` module provides the widget components, a typed API data layer, a seed layout, the page container (`OverviewDashboard`), a bespoke header, and an add-widget picker. `routes/index.tsx` renders `<OverviewDashboard/>` for the authenticated `?view=overview` landing.
 
 **Tech Stack:** React + TypeScript, TanStack Router/Query, `react-grid-layout@2.2.2`, `recharts@3`, Vitest + React Testing Library, Tailwind + internal design-system primitives (`components/ui/*`) and tokens.
 
-**Canonical visual source:** `moneat-internal/mockups/moneat-overview.html` (read at `/Users/aelder/.codex/worktrees/5a26/moneat-internal/mockups/moneat-overview.html`). Each widget reproduces its panel's markup using `components/ui/*` primitives and CSS tokens (`var(--accent)`, `var(--danger-solid)`, `--scale-*`, `--row-h`, etc.) — never raw hex. Default density is compact.
+**Canonical visual source:** `moneat-internal/mockups/moneat-overview.html`. Each widget reproduces its panel's markup using `components/ui/*` primitives and CSS tokens (`var(--accent)`, `var(--danger-solid)`, `--scale-*`, `--row-h`, etc.) — never raw hex. Default density is compact.
 
 **Conventions:** Follow existing patterns in `components/dashboards/` and tests in `components/dashboards/__tests__/`. Every source file starts with the AGPL license header used throughout the repo. Commits use Conventional Commits; **no Claude attribution** in commit messages.
 
@@ -17,8 +17,8 @@
 ## File Structure
 
 **New — `dashboard/src/components/overview/`:**
-- `overviewWidgetTypes.ts` — `OVERVIEW_WIDGET_IDS`, registry `OVERVIEW_WIDGETS: Record<id, {label, description, icon, defaultSize:{w,h}, minH, component}>`, `isOverviewWidgetType(t)`.
-- `overviewMockData.ts` — typed fixtures + `useXxx()` hooks (one per widget). Single seam for future real API.
+- `overviewWidgetTypes.ts` — registry `OVERVIEW_WIDGETS: Record<id, {label, description, icon, defaultSize:{w,h}, minH, component}>`, `OVERVIEW_WIDGET_TYPES`, `isOverviewWidgetType(t)`.
+- `overviewData.ts` / `OverviewDataProvider.tsx` — typed overview API state and widget hooks.
 - `defaultOverviewLayout.ts` — `buildDefaultOverviewDashboard(): CustomDashboard` (seed widgets w/ grid coords).
 - `OverviewHeader.tsx` — bespoke page header matching the mockup.
 - `AddOverviewWidgetDialog.tsx` — picker over the 9 types.
@@ -113,13 +113,14 @@ export function extendedWidgetTestId(widgetType: string): string {
 
 ---
 
-## Task 2: Mock data layer
+## Task 2: API data layer
 
 **Files:**
-- Create: `dashboard/src/components/overview/overviewMockData.ts`
-- Test: `dashboard/src/components/overview/__tests__/overviewMockData.test.ts`
+- Create: `dashboard/src/components/overview/overviewData.ts`
+- Create: `dashboard/src/components/overview/OverviewDataProvider.tsx`
+- Test: `dashboard/src/components/overview/__tests__/overviewData.test.tsx`
 
-Defines exported types + fixtures + hooks. Types (shape mirrors the mockup; these become the future API contract):
+Defines exported types + hooks backed by the overview API contract:
 
 ```ts
 export type Health = 'good' | 'warn' | 'bad' | 'neutral'
@@ -149,32 +150,32 @@ export interface InfraData { gauges: {label: string; pct: number; tone: Health}[
 export interface UptimeMonitor { name: string; bars: ('up'|'warn'|'down')[]; uptimeLabel: string; down?: boolean }
 export interface UptimeData { monitors: UptimeMonitor[]; syntheticFailing?: string; statusPages: string }
 export interface DeployRow { version: string; service: string; status: 'good'|'bad'|'neutral'; label: string; ageLabel: string }
-export interface ActivityItem { kind: 'incident'|'flag'|'deploy'|'workflow'|'replay'|'feedback'; text: string; meta: string }
+export interface ActivityItem { kind: 'incident'|'issue'|'flag'|'deploy'|'workflow'|'replay'|'feedback'; text: string; meta: string }
 ```
 
-Fixtures mirror the mockup (checkout-api degraded, INC-204, 6 KPIs: Errors 48.3k +312%, p95 412ms +38%, Throughput 18.2k req/min −4.1%, Apdex 0.86 −0.08, Open issues 37, Uptime 99.95%). Hooks: `useSystemStatus()`, `useKpis()`, `useServiceHealth()`, `useTelemetry()`, `useTriage()`, `useInfraSummary()`, `useUptimeSummary()`, `useDeploys()`, `useActivity()`. For now each returns its fixture synchronously: `return OVERVIEW_FIXTURES.kpis` etc. (Later: swap body for `useQuery`/`api.*`.)
+Hooks: `useSystemStatus()`, `useKpis()`, `useServiceHealth()`, `useTelemetry()`, `useTriage()`, `useInfraSummary()`, `useUptimeSummary()`, `useDeploys()`, `useActivity()`. `OverviewDataProvider` owns the `useQuery` call and each widget reads the provider state.
 
 - [ ] **Step 1: Test (assert fixture shapes via hooks rendered through a host component or by calling the plain fixture getters).**
 
 ```ts
 import {describe, expect, it} from 'vitest'
-import {OVERVIEW_FIXTURES} from '../overviewMockData'
-describe('overview fixtures', () => {
-  it('has 6 KPIs and a degraded service', () => {
-    expect(OVERVIEW_FIXTURES.kpis).toHaveLength(6)
-    expect(OVERVIEW_FIXTURES.serviceHealth.some(s => s.status === 'bad')).toBe(true)
+import {overviewTestData} from './overviewTestData'
+describe('overview data', () => {
+  it('has KPI data and a degraded service', () => {
+    expect(overviewTestData.kpis.length).toBeGreaterThan(0)
+    expect(overviewTestData.serviceHealth.some(s => s.status === 'bad')).toBe(true)
   })
   it('telemetry series are equal length', () => {
-    const t = OVERVIEW_FIXTURES.telemetry
+    const t = overviewTestData.telemetry
     expect(t.errors.length).toBe(t.latency.length)
   })
 })
 ```
 
-- [ ] **Step 2: FAIL** (`npx vitest run src/components/overview/__tests__/overviewMockData.test.ts`).
-- [ ] **Step 3: Implement** the types, `OVERVIEW_FIXTURES`, and the hooks (hooks return fixtures).
+- [ ] **Step 2: FAIL** (`npx vitest run src/components/overview/__tests__/overviewData.test.tsx`).
+- [ ] **Step 3: Implement** the types, provider, and hooks.
 - [ ] **Step 4: PASS.**
-- [ ] **Step 5: Commit** — `git commit -m "feat(overview): add typed mock data layer"`
+- [ ] **Step 5: Commit** — `git commit -m "feat(overview): add typed overview data layer"`
 
 ---
 
@@ -196,7 +197,7 @@ import {render, screen} from '@testing-library/react'
 import {describe, expect, it} from 'vitest'
 import {ServiceHealthWidget} from '../widgets/ServiceHealthWidget'
 describe('ServiceHealthWidget', () => {
-  it('renders services from mock data', () => {
+  it('renders services from overview data', () => {
     render(<ServiceHealthWidget />)
     expect(screen.getByTestId('widget-service_health')).toBeInTheDocument()
     expect(screen.getByText('checkout-api')).toBeInTheDocument()
@@ -268,7 +269,7 @@ if (isOverviewWidgetType(widgetType)) {
   const def = overviewWidgetDef(widgetType)
   if (def) {
     const C = def.component
-    return <C displayConfig={widget.display_config} />
+    return <C displayConfig={displayConfig} />
   }
 }
 ```
@@ -394,7 +395,7 @@ Steps:
 
 ## Self-Review
 
-**Spec coverage:** shape (Task 13/14/18/19) ✓; 9 widget types (Tasks 3–11) ✓; integration extendedWidgetTypes/ExtendedWidgets/DashboardGrid (Tasks 1/13/14) ✓; mock data layer (Task 2) ✓; default layout + routing (Tasks 15/18/19) ✓; customize+localStorage (Tasks 16/17/18) ✓; tests + verification (every task + Task 20) ✓; out-of-scope (no query/back-end/author-in-config) respected ✓.
+**Spec coverage:** shape (Task 13/14/18/19) ✓; 9 widget types (Tasks 3–11) ✓; integration extendedWidgetTypes/ExtendedWidgets/DashboardGrid (Tasks 1/13/14) ✓; API data layer (Task 2) ✓; default layout + routing (Tasks 15/18/19) ✓; customize+localStorage (Tasks 16/17/18) ✓; tests + verification (every task + Task 20) ✓; out-of-scope (no author-in-config) respected ✓.
 
 **Placeholder scan:** widget JSX intentionally references the cited mockup panel as canonical markup (not a TODO) — each widget task names exact elements + test assertions. Integration/registry/data tasks contain complete code.
 

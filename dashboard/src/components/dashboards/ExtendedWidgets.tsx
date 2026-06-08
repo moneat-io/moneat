@@ -142,7 +142,7 @@ export const ExtendedWidgetRenderer = memo(function ExtendedWidgetRenderer({
     const def = overviewWidgetDef(widgetType)
     if (def) {
       const OverviewWidget = def.component
-      return <OverviewWidget displayConfig={widget.display_config} />
+      return <OverviewWidget displayConfig={displayConfig} />
     }
   }
   switch (widgetType) {

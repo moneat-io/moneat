@@ -110,7 +110,7 @@ export function OverviewDashboard() {
   const handleLayoutChange = useCallback(
     (updated: CreateWidgetRequest[]) => {
       const next: DashboardWidget[] = updated.map((req) => {
-        const reqId = (req as {id?: number}).id
+        const reqId = req.id
         const existing = reqId != null ? widgets.find((w) => w.id === reqId) : undefined
         return {
           id: reqId ?? existing?.id ?? nextNegativeId(widgets),

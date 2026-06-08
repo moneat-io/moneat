@@ -191,7 +191,6 @@ class MonitorService(
 
         private const val PERCENT_MULTIPLIER = 100
         private const val DATETIME64_MILLIS_PRECISION = 3
-        private const val MILLIS_PER_SECOND = 1_000L
     }
 
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
@@ -496,8 +495,8 @@ class MonitorService(
         }
 
     private fun formatEpochSeconds(epochMs: Long): String {
-        val seconds = epochMs / MILLIS_PER_SECOND
-        val millis = epochMs % MILLIS_PER_SECOND
+        val seconds = epochMs / MILLIS_PER_SECOND_LONG
+        val millis = epochMs % MILLIS_PER_SECOND_LONG
         return "$seconds.${millis.toString().padStart(DATETIME64_MILLIS_PRECISION, '0')}"
     }
 

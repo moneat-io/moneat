@@ -382,6 +382,8 @@ function WidgetCard({
             </div>
             <button
               type="button"
+              aria-label={`Delete ${widget.title ?? 'widget'}`}
+              title={`Delete ${widget.title ?? 'widget'}`}
               onClick={(e) => {
                 e.stopPropagation()
                 onWidgetDelete(widget.id)

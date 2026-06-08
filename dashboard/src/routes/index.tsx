@@ -34,14 +34,29 @@ function IndexPage() {
   const {data: features, isLoading: featuresLoading} = useEnterpriseFeatures()
 
   useEffect(() => {
+    let mounted = true
     async function checkAuth() {
-      if (!api.isAuthenticated()) {
-        await api.checkAuth()
+      try {
+        if (!api.isAuthenticated()) {
+          await api.checkAuth()
+        }
+        if (mounted) {
+          setIsAuthenticated(api.isAuthenticated())
+        }
+      } catch {
+        if (mounted) {
+          setIsAuthenticated(false)
+        }
+      } finally {
+        if (mounted) {
+          setIsChecking(false)
+        }
       }
-      setIsAuthenticated(api.isAuthenticated())
-      setIsChecking(false)
     }
-    checkAuth()
+    void checkAuth()
+    return () => {
+      mounted = false
+    }
   }, [])
 
   if (isChecking || (!isAuthenticated && featuresLoading)) {
