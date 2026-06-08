@@ -16,6 +16,7 @@
 
 package com.moneat.datadog.networkdevices
 
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.isClickHouseError
 import com.moneat.utils.ClickHouseQueryUtils
@@ -23,8 +24,6 @@ import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
@@ -56,7 +55,7 @@ fun Route.ndmQueryRoutes() {
     }
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleListDevices() {
-    val orgId = extractOrgId() ?: return
+    val orgId = call.requireCurrentOrg()?.orgId ?: return
     val limit = paramLimit()
     val offset = paramOffset()
     val db = ClickHouseClient.getDatabase()
@@ -98,7 +97,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListDevices() {
     )
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleDeviceDetail() {
-    val orgId = extractOrgId() ?: return
+    val orgId = call.requireCurrentOrg()?.orgId ?: return
     val deviceId = call.parameters["deviceId"] ?: return call.respond(
         HttpStatusCode.BadRequest, mapOf("error" to "Missing deviceId")
     )
@@ -137,7 +136,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeviceDetail() {
     }
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleListTraps() {
-    val orgId = extractOrgId() ?: return
+    val orgId = call.requireCurrentOrg()?.orgId ?: return
     val limit = paramLimit()
     val offset = paramOffset()
     val db = ClickHouseClient.getDatabase()
@@ -173,7 +172,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListTraps() {
     )
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleListFlows() {
-    val orgId = extractOrgId() ?: return
+    val orgId = call.requireCurrentOrg()?.orgId ?: return
     val limit = paramLimit()
     val offset = paramOffset()
     val db = ClickHouseClient.getDatabase()
@@ -215,7 +214,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListFlows() {
     )
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleListPaths() {
-    val orgId = extractOrgId() ?: return
+    val orgId = call.requireCurrentOrg()?.orgId ?: return
     val limit = paramLimit()
     val offset = paramOffset()
     val db = ClickHouseClient.getDatabase()
@@ -249,11 +248,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListPaths() {
             put("totalCount", totalCount)
         }
     )
-}
-
-private fun io.ktor.server.routing.RoutingContext.extractOrgId(): Int? {
-    val principal = call.principal<JWTPrincipal>()
-    return principal?.payload?.getClaim("orgId")?.asInt()
 }
 
 private fun io.ktor.server.routing.RoutingContext.paramLimit(): Int =

@@ -103,9 +103,14 @@ class MonitorRoutesMockTest {
         }
     }
 
-    private fun token(userId: Int): String =
+    private fun token(
+        userId: Int,
+        orgId: Int? = 1,
+    ): String =
         JWT.create().withIssuer("moneat").withAudience("moneat-users")
-            .withClaim("userId", userId).sign(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
+            .withClaim("userId", userId)
+            .apply { if (orgId != null) withClaim("orgId", orgId) }
+            .sign(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
 
     private fun seedUser(): Int =
         transaction {

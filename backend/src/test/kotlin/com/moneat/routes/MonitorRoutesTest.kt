@@ -88,12 +88,16 @@ class MonitorRoutesTest {
         }
     }
 
-    private fun token(userId: Int): String =
+    private fun token(
+        userId: Int,
+        orgId: Int? = 1,
+    ): String =
         JWT
             .create()
             .withIssuer("moneat")
             .withAudience("moneat-users")
             .withClaim("userId", userId)
+            .apply { if (orgId != null) withClaim("orgId", orgId) }
             .sign(Algorithm.HMAC256("test-secret"))
 
     private fun seedUser(): Int =
@@ -129,7 +133,7 @@ class MonitorRoutesTest {
     // ──── GET /systems ────
 
     @Test
-    fun `GET systems returns 403 when user has no org`() =
+    fun `GET systems returns 401 when token has no organization claim`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -140,9 +144,9 @@ class MonitorRoutesTest {
             val userId = seedUser()
             val response =
                 client.get("/v1/monitor/hosts") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
                 }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
@@ -189,7 +193,7 @@ class MonitorRoutesTest {
         }
 
     @Test
-    fun `GET systems id returns 403 when user has no org`() =
+    fun `GET systems id returns 401 when token has no organization claim`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -200,9 +204,9 @@ class MonitorRoutesTest {
             val userId = seedUser()
             val response =
                 client.get("/v1/monitor/hosts/${UUID.randomUUID()}") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
                 }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
@@ -246,7 +250,7 @@ class MonitorRoutesTest {
         }
 
     @Test
-    fun `DELETE systems id returns 403 when user has no org`() =
+    fun `DELETE systems id returns 401 when token has no organization claim`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -257,9 +261,9 @@ class MonitorRoutesTest {
             val userId = seedUser()
             val response =
                 client.delete("/v1/monitor/hosts/${UUID.randomUUID()}") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
                 }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     // ──── GET /systems/{id}/metrics ────
@@ -284,7 +288,7 @@ class MonitorRoutesTest {
         }
 
     @Test
-    fun `GET systems id metrics returns 403 when user has no org`() =
+    fun `GET systems id metrics returns 401 when token has no organization claim`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -295,9 +299,9 @@ class MonitorRoutesTest {
             val userId = seedUser()
             val response =
                 client.get("/v1/monitor/hosts/${UUID.randomUUID()}/metrics") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
                 }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     // ──── GET /systems/{id}/containers ────
@@ -324,7 +328,7 @@ class MonitorRoutesTest {
     // ──── GET /silence-periods ────
 
     @Test
-    fun `GET silence-periods returns 403 when user has no org`() =
+    fun `GET silence-periods returns 401 when token has no organization claim`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -335,15 +339,15 @@ class MonitorRoutesTest {
             val userId = seedUser()
             val response =
                 client.get("/v1/monitor/silence-periods") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
                 }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     // ──── POST /silence-periods ────
 
     @Test
-    fun `POST silence-periods returns 403 when user has no org`() =
+    fun `POST silence-periods returns 401 when token has no organization claim`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -354,9 +358,9 @@ class MonitorRoutesTest {
             val userId = seedUser()
             val response =
                 client.post("/v1/monitor/silence-periods") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
                 }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @AfterTest

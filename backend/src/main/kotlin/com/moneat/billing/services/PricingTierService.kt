@@ -25,7 +25,6 @@ import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.billing.models.TierMigrationRequest
 import com.moneat.billing.models.TierMigrationResponse
 import com.moneat.billing.models.UpdateStripePriceIdsRequest
-import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
 import kotlinx.datetime.TimeZone
@@ -82,17 +81,6 @@ class PricingTierService {
         val slaEnabled: Boolean,
         val customRetentionEnabled: Boolean
     )
-
-    fun getPrimaryOrganizationIdForUser(userId: Int): Int? {
-        return transaction {
-            Memberships
-                .selectAll()
-                .where { Memberships.user_id eq userId }
-                .orderBy(Memberships.id to SortOrder.ASC)
-                .firstOrNull()
-                ?.get(Memberships.organization_id)
-        }
-    }
 
     fun getCurrentPlans(): List<BillingPlanResponse> {
         return transaction {

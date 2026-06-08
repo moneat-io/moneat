@@ -16,6 +16,7 @@
 
 package com.moneat.datadog.security
 
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.isClickHouseError
 import com.moneat.utils.ClickHouseQueryUtils
@@ -23,8 +24,6 @@ import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
@@ -57,7 +56,7 @@ fun Route.securityQueryRoutes() {
     }
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleListEvents() {
-    val orgId = extractOrgId() ?: return
+    val orgId = call.requireCurrentOrg()?.orgId ?: return
     val limit = paramLimit()
     val offset = paramOffset()
     val db = ClickHouseClient.getDatabase()
@@ -112,7 +111,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListEvents() {
     )
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleEventDetail() {
-    val orgId = extractOrgId() ?: return
+    val orgId = call.requireCurrentOrg()?.orgId ?: return
     val eventId = call.parameters["eventId"] ?: return call.respond(
         HttpStatusCode.BadRequest, mapOf("error" to "Missing eventId")
     )
@@ -152,7 +151,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleEventDetail() {
     }
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleListFindings() {
-    val orgId = extractOrgId() ?: return
+    val orgId = call.requireCurrentOrg()?.orgId ?: return
     val limit = paramLimit()
     val offset = paramOffset()
     val db = ClickHouseClient.getDatabase()
@@ -201,7 +200,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListFindings() {
     )
 }
 private suspend fun io.ktor.server.routing.RoutingContext.handleComplianceSummary() {
-    val orgId = extractOrgId() ?: return
+    val orgId = call.requireCurrentOrg()?.orgId ?: return
     val db = ClickHouseClient.getDatabase()
     val where = ClickHouseQueryUtils.orgIdClause(orgId.toLong())
 
@@ -224,11 +223,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleComplianceSummar
             putJsonArray("summary") { rows.forEach { add(it) } }
         }
     )
-}
-
-private fun io.ktor.server.routing.RoutingContext.extractOrgId(): Int? {
-    val principal = call.principal<JWTPrincipal>()
-    return principal?.payload?.getClaim("orgId")?.asInt()
 }
 
 private fun io.ktor.server.routing.RoutingContext.paramLimit(): Int =

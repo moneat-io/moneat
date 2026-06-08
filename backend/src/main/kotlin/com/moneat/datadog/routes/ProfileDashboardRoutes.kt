@@ -16,6 +16,7 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.services.DatadogJfrFlamegraphService
 import com.moneat.datadog.services.DatadogPprofFlamegraphService
@@ -25,8 +26,6 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondText
@@ -52,13 +51,7 @@ fun Route.profileDashboardRoutes() {
         route("/v1/profiles") {
             // GET /v1/dd/profiles - list profiles
             get {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal?.payload
-                    ?.getClaim("orgId")?.asInt()
-                    ?: return@get call.respond(
-                        HttpStatusCode.Unauthorized,
-                        mapOf("error" to "Invalid token")
-                    )
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@get
                 val service = call.parameters["service"]
                 val profileType = call.parameters["type"]
                 val source = call.parameters["source"]
@@ -83,13 +76,7 @@ fun Route.profileDashboardRoutes() {
 
             // GET /v1/profiles/{profileId}/download - pprof
             get("/{profileId}/download") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal?.payload
-                    ?.getClaim("orgId")?.asInt()
-                    ?: return@get call.respond(
-                        HttpStatusCode.Unauthorized,
-                        mapOf("error" to "Invalid token")
-                    )
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@get
                 val profileId = call.parameters["profileId"]
                     ?: return@get call.respond(
                         HttpStatusCode.BadRequest,
@@ -145,13 +132,7 @@ fun Route.profileDashboardRoutes() {
 
             // GET /v1/profiles/{profileId}/flamegraph
             get("/{profileId}/flamegraph") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal?.payload
-                    ?.getClaim("orgId")?.asInt()
-                    ?: return@get call.respond(
-                        HttpStatusCode.Unauthorized,
-                        mapOf("error" to "Invalid token")
-                    )
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@get
                 val profileId = call.parameters["profileId"]
                     ?: return@get call.respond(
                         HttpStatusCode.BadRequest,

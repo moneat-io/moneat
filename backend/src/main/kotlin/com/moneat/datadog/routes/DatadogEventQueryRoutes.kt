@@ -16,14 +16,12 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.config.ClickHouseClient
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
@@ -46,13 +44,7 @@ fun Route.datadogEventQueryRoutes() {
     route("/v1/infra") {
         authenticate("auth-jwt") {
             get("/events") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal?.payload
-                    ?.getClaim("orgId")?.asInt()
-                    ?: return@get call.respond(
-                        HttpStatusCode.Unauthorized,
-                        mapOf("error" to "Missing org context")
-                    )
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@get
 
                 val limit = (
                     call.parameters["limit"]
@@ -150,13 +142,7 @@ fun Route.datadogEventQueryRoutes() {
             }
 
             get("/service-checks") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal?.payload
-                    ?.getClaim("orgId")?.asInt()
-                    ?: return@get call.respond(
-                        HttpStatusCode.Unauthorized,
-                        mapOf("error" to "Missing org context")
-                    )
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@get
 
                 val limit = (
                     call.parameters["limit"]

@@ -21,6 +21,8 @@ import java.io.IOException
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.moneat.auth.currentOrgContextOrNull
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.QuotaExceededResponse
 import com.moneat.datadog.decompression.DecompressionService
@@ -42,8 +44,6 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.request.header
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -80,9 +80,9 @@ fun Route.logRoutes(
     route("/v1") {
         authenticate("auth-jwt") {
             post("/logs/api-keys") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val orgId = principal.payload.getClaim("orgId").asInt()
+                val context = call.requireCurrentOrg() ?: return@post
+                val userId = context.userId
+                val orgId = context.orgId
 
                 val request = call.receive<CreateOtlpApiKeyRequest>()
                 val name = request.name.trim()
@@ -96,16 +96,14 @@ fun Route.logRoutes(
             }
 
             get("/logs/api-keys") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt()
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@get
 
                 val keys = otlpApiKeyService.listKeys(orgId)
                 call.respond(HttpStatusCode.OK, mapOf("keys" to keys))
             }
 
             delete("/logs/api-keys/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt()
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@delete
 
                 val id = call.parameters["id"]?.toIntOrNull()
                 if (id == null) {
@@ -124,8 +122,7 @@ fun Route.logRoutes(
             // --- Log Indexes CRUD ---
 
             get("/logs/indexes") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt()
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@get
                 val indexes = logIndexService.list(orgId)
                 call.respond(
                     HttpStatusCode.OK,
@@ -134,8 +131,7 @@ fun Route.logRoutes(
             }
 
             post("/logs/indexes") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt()
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@post
                 val request =
                     call.receive<CreateLogIndexRequest>()
                 if (request.name.isBlank()) {
@@ -150,8 +146,7 @@ fun Route.logRoutes(
             }
 
             put("/logs/indexes/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt()
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@put
                 val id = call.parameters["id"]?.toIntOrNull()
                 if (id == null) {
                     call.respond(
@@ -175,8 +170,7 @@ fun Route.logRoutes(
             }
 
             delete("/logs/indexes/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt()
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@delete
                 val id = call.parameters["id"]?.toIntOrNull()
                 if (id == null) {
                     call.respond(
@@ -198,8 +192,7 @@ fun Route.logRoutes(
             }
 
             post("/logs/indexes/test") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt()
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@post
                 val body = call.receive<Map<String, String>>()
                 val filterQuery = body["filter_query"] ?: ""
                 val result =
@@ -210,8 +203,7 @@ fun Route.logRoutes(
 
         authenticate("auth-jwt") {
             get("/logs") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt().toLong()
+                val orgId = call.requireCurrentOrg()?.orgId?.toLong() ?: return@get
                 val isDemo = call.isDemoUser()
                 val demoEpochMs = call.getDemoEpochMs()
 
@@ -253,8 +245,7 @@ fun Route.logRoutes(
             }
 
             get("/logs/tag-values") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt().toLong()
+                val orgId = call.requireCurrentOrg()?.orgId?.toLong() ?: return@get
 
                 val key = call.request.queryParameters["key"]
                 if (key.isNullOrBlank()) {
@@ -274,8 +265,7 @@ fun Route.logRoutes(
             }
 
             get("/logs/filters") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt().toLong()
+                val orgId = call.requireCurrentOrg()?.orgId?.toLong() ?: return@get
                 val isDemo = call.isDemoUser()
                 val demoEpochMs = call.getDemoEpochMs()
 
@@ -305,8 +295,7 @@ fun Route.logRoutes(
             }
 
             get("/logs/aggregate") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt().toLong()
+                val orgId = call.requireCurrentOrg()?.orgId?.toLong() ?: return@get
                 val isDemo = call.isDemoUser()
                 val demoEpochMs = call.getDemoEpochMs()
 
@@ -352,8 +341,7 @@ fun Route.logRoutes(
             }
 
             get("/logs/top") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt().toLong()
+                val orgId = call.requireCurrentOrg()?.orgId?.toLong() ?: return@get
                 val isDemo = call.isDemoUser()
                 val demoEpochMs = call.getDemoEpochMs()
 
@@ -400,8 +388,7 @@ fun Route.logRoutes(
             }
 
             get("/logs/export") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt().toLong()
+                val orgId = call.requireCurrentOrg()?.orgId?.toLong() ?: return@get
 
                 val csv =
                     logService.exportCsv(
@@ -426,10 +413,10 @@ fun Route.logRoutes(
         }
 
         get("/logs/tail") {
-            val principal = call.principal<JWTPrincipal>()
+            val context = call.currentOrgContextOrNull()
             val orgId =
-                if (principal != null) {
-                    principal.payload.getClaim("orgId").asInt().toLong()
+                if (context != null) {
+                    context.orgId.toLong()
                 } else {
                     val auth = authenticateTailRequest(call)
                     if (auth == null) {
@@ -587,9 +574,9 @@ private fun authenticateTailRequest(call: ApplicationCall): Pair<Int, Long>? {
                 .build()
 
         val decoded = verifier.verify(token)
-        val userId = decoded.getClaim("userId").asInt()
-        val orgId = decoded.getClaim("orgId").asInt().toLong()
-        Pair(userId, orgId)
+        decoded.currentOrgContextOrNull()?.let { context ->
+            Pair(context.userId, context.orgId.toLong())
+        }
     }.getOrElse { _ ->
         null
     }

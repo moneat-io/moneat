@@ -96,12 +96,16 @@ class UptimeRoutesTest {
         }
     }
 
-    private fun token(userId: Int): String =
+    private fun token(
+        userId: Int,
+        orgId: Int? = 1,
+    ): String =
         JWT
             .create()
             .withIssuer("moneat")
             .withAudience("moneat-users")
             .withClaim("userId", userId)
+            .apply { if (orgId != null) withClaim("orgId", orgId) }
             .sign(Algorithm.HMAC256("test-secret"))
 
     private fun seedUser(): Int =
@@ -211,10 +215,10 @@ class UptimeRoutesTest {
             assertEquals("down", status)
         }
 
-    // ──── Authenticated endpoints: no org membership → 403 ────
+    // ──── Authenticated endpoints: missing current org claim -> 401 ────
 
     @Test
-    fun `list monitors returns 403 when user has no organization`() =
+    fun `list monitors returns 401 when token has no organization claim`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -225,13 +229,13 @@ class UptimeRoutesTest {
             val userId = seedUser()
             val response =
                 client.get("/v1/uptime/monitors") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
                 }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
-    fun `create monitor returns 403 when user has no organization`() =
+    fun `create monitor returns 401 when token has no organization claim`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -242,18 +246,18 @@ class UptimeRoutesTest {
             val userId = seedUser()
             val response =
                 client.post("/v1/uptime/monitors") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
                     contentType(ContentType.Application.Json)
                     setBody(
                         """{"name":"test","type":"http","url":"https://example.com",""" +
                             """"intervalSeconds":60,"timeoutSeconds":30}"""
                     )
                 }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
-    fun `get monitor returns 403 when user has no organization`() =
+    fun `get monitor returns 401 when token has no organization claim`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -264,13 +268,13 @@ class UptimeRoutesTest {
             val userId = seedUser()
             val response =
                 client.get("/v1/uptime/monitors/${UUID.randomUUID()}") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
                 }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
-    fun `update monitor returns 403 when user has no organization`() =
+    fun `update monitor returns 401 when token has no organization claim`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -281,15 +285,15 @@ class UptimeRoutesTest {
             val userId = seedUser()
             val response =
                 client.put("/v1/uptime/monitors/${UUID.randomUUID()}") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
                     contentType(ContentType.Application.Json)
                     setBody("""{"name":"updated"}""")
                 }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
-    fun `delete monitor returns 403 when user has no organization`() =
+    fun `delete monitor returns 401 when token has no organization claim`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -300,13 +304,13 @@ class UptimeRoutesTest {
             val userId = seedUser()
             val response =
                 client.delete("/v1/uptime/monitors/${UUID.randomUUID()}") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
                 }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
-    fun `pause monitor returns 403 when user has no organization`() =
+    fun `pause monitor returns 401 when token has no organization claim`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -317,13 +321,13 @@ class UptimeRoutesTest {
             val userId = seedUser()
             val response =
                 client.post("/v1/uptime/monitors/${UUID.randomUUID()}/pause") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
                 }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
-    fun `resume monitor returns 403 when user has no organization`() =
+    fun `resume monitor returns 401 when token has no organization claim`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -334,13 +338,13 @@ class UptimeRoutesTest {
             val userId = seedUser()
             val response =
                 client.post("/v1/uptime/monitors/${UUID.randomUUID()}/resume") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
                 }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
-    fun `heartbeats returns 403 when user has no organization`() =
+    fun `heartbeats returns 401 when token has no organization claim`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -351,9 +355,9 @@ class UptimeRoutesTest {
             val userId = seedUser()
             val response =
                 client.get("/v1/uptime/monitors/${UUID.randomUUID()}/heartbeats") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
                 }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     // ──── Authenticated endpoints: invalid UUID → 400 ────

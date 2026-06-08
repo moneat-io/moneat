@@ -80,7 +80,7 @@ class IntegrationRoutesTest {
     }
 
     @Test
-    fun `integrations list returns 404 when user has no organization membership`() {
+    fun `integrations list returns 401 when token has no organization claim`() {
         val userId = seedUser("nomember@test.com")
 
         testApplication {
@@ -98,11 +98,10 @@ class IntegrationRoutesTest {
 
             val response =
                 client.get("/v1/integrations") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
                 }
 
-            assertEquals(HttpStatusCode.NotFound, response.status)
-            assertTrue(response.bodyAsText().contains("No organization found"))
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
     }
 
@@ -128,7 +127,7 @@ class IntegrationRoutesTest {
 
             val response =
                 client.get("/v1/integrations") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 }
 
             assertEquals(HttpStatusCode.OK, response.status)
@@ -139,7 +138,7 @@ class IntegrationRoutesTest {
     }
 
     @Test
-    fun `slack oauth start returns not found when user is not in an organization`() {
+    fun `slack oauth start returns 401 when token has no organization claim`() {
         val userId = seedUser("nomember@test.com")
 
         testApplication {
@@ -157,11 +156,10 @@ class IntegrationRoutesTest {
 
             val response =
                 client.get("/v1/integrations/slack/oauth/start") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
                 }
 
-            assertEquals(HttpStatusCode.NotFound, response.status)
-            assertTrue(response.bodyAsText().contains("No organization found"))
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
     }
 
@@ -287,13 +285,17 @@ class IntegrationRoutesTest {
         }
     }
 
-    private fun token(userId: Int): String {
+    private fun token(
+        userId: Int,
+        orgId: Int? = 1,
+    ): String {
         return JWT
             .create()
             .withIssuer("moneat")
             .withAudience("moneat-users")
             .withClaim("userId", userId)
             .withClaim("email", "user$userId@test.com")
+            .apply { if (orgId != null) withClaim("orgId", orgId) }
             .sign(Algorithm.HMAC256(jwtSecret))
     }
 

@@ -16,11 +16,10 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.datadog.services.TraceIngestionService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
@@ -34,13 +33,7 @@ fun Route.traceDashboardRoutes() {
         route("/v1/traces") {
             // GET /v1/traces/resources - aggregated resource stats (main APM view)
             get("/resources") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal?.payload
-                    ?.getClaim("orgId")?.asInt()
-                    ?: return@get call.respond(
-                        HttpStatusCode.Unauthorized,
-                        mapOf("error" to "Invalid token")
-                    )
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@get
                 val service = call.parameters["service"]
                 val limit = (
                     call.parameters["limit"]
@@ -61,13 +54,7 @@ fun Route.traceDashboardRoutes() {
 
             // GET /v1/traces - list individual traces
             get {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal?.payload
-                    ?.getClaim("orgId")?.asInt()
-                    ?: return@get call.respond(
-                        HttpStatusCode.Unauthorized,
-                        mapOf("error" to "Invalid token")
-                    )
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@get
                 val service = call.parameters["service"]
                 val env = call.parameters["env"]
                 val limit = (
@@ -90,13 +77,7 @@ fun Route.traceDashboardRoutes() {
 
             // GET /v1/dd/traces/{traceId} - get trace detail
             get("/{traceId}") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal?.payload
-                    ?.getClaim("orgId")?.asInt()
-                    ?: return@get call.respond(
-                        HttpStatusCode.Unauthorized,
-                        mapOf("error" to "Invalid token")
-                    )
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@get
                 val traceId = call.parameters["traceId"]
                     ?: return@get call.respond(
                         HttpStatusCode.BadRequest,
@@ -126,26 +107,14 @@ fun Route.traceDashboardRoutes() {
 
         // GET /v1/services/map - service dependency map
         get("/v1/services/map") {
-            val principal = call.principal<JWTPrincipal>()
-            val orgId = principal?.payload
-                ?.getClaim("orgId")?.asInt()
-                ?: return@get call.respond(
-                    HttpStatusCode.Unauthorized,
-                    mapOf("error" to "Invalid token")
-                )
+            val orgId = call.requireCurrentOrg()?.orgId ?: return@get
             val result = TraceIngestionService.getServiceMap(orgId)
             call.respond(result)
         }
 
         // GET /v1/apm-errors - list APM error groups
         get("/v1/apm-errors") {
-            val principal = call.principal<JWTPrincipal>()
-            val orgId = principal?.payload
-                ?.getClaim("orgId")?.asInt()
-                ?: return@get call.respond(
-                    HttpStatusCode.Unauthorized,
-                    mapOf("error" to "Invalid token")
-                )
+            val orgId = call.requireCurrentOrg()?.orgId ?: return@get
             val service = call.parameters["service"]
             val limit = (
                 call.parameters["limit"]

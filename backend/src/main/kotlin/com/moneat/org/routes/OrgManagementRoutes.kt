@@ -16,6 +16,7 @@
 
 package com.moneat.org.routes
 
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.events.models.AcceptInviteRequest
 import com.moneat.events.models.BulkInviteRequest
 import com.moneat.events.models.InviteMemberRequest
@@ -48,9 +49,9 @@ fun Route.orgManagementRoutes(
         authenticate("auth-jwt") {
             // Get all members and pending invitations
             get("/members") {
-                val principal = call.principal<JWTPrincipal>()!!
-                val userId = principal.payload.getClaim("userId").asInt()
-                val orgId = principal.payload.getClaim("orgId").asInt()
+                val context = call.requireCurrentOrg() ?: return@get
+                val userId = context.userId
+                val orgId = context.orgId
 
                 membershipService.requireRole(orgId, userId, OrgRole.MEMBER)
 
@@ -62,9 +63,9 @@ fun Route.orgManagementRoutes(
 
             // Update member role
             put("/members/{userId}/role") {
-                val principal = call.principal<JWTPrincipal>()!!
-                val requestingUserId = principal.payload.getClaim("userId").asInt()
-                val orgId = principal.payload.getClaim("orgId").asInt()
+                val context = call.requireCurrentOrg() ?: return@put
+                val requestingUserId = context.userId
+                val orgId = context.orgId
                 val targetUserId =
                     call.parameters["userId"]?.toIntOrNull()
                         ?: return@put call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid user ID"))
@@ -77,9 +78,9 @@ fun Route.orgManagementRoutes(
 
             // Remove member
             delete("/members/{userId}") {
-                val principal = call.principal<JWTPrincipal>()!!
-                val requestingUserId = principal.payload.getClaim("userId").asInt()
-                val orgId = principal.payload.getClaim("orgId").asInt()
+                val context = call.requireCurrentOrg() ?: return@delete
+                val requestingUserId = context.userId
+                val orgId = context.orgId
                 val targetUserId =
                     call.parameters["userId"]?.toIntOrNull()
                         ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid user ID"))
@@ -90,9 +91,9 @@ fun Route.orgManagementRoutes(
 
             // Invite single member
             post("/invitations") {
-                val principal = call.principal<JWTPrincipal>()!!
-                val userId = principal.payload.getClaim("userId").asInt()
-                val orgId = principal.payload.getClaim("orgId").asInt()
+                val context = call.requireCurrentOrg() ?: return@post
+                val userId = context.userId
+                val orgId = context.orgId
 
                 membershipService.requireRole(orgId, userId, OrgRole.ADMIN)
                 val request = call.receive<InviteMemberRequest>()
@@ -103,9 +104,9 @@ fun Route.orgManagementRoutes(
 
             // Bulk invite
             post("/invitations/bulk") {
-                val principal = call.principal<JWTPrincipal>()!!
-                val userId = principal.payload.getClaim("userId").asInt()
-                val orgId = principal.payload.getClaim("orgId").asInt()
+                val context = call.requireCurrentOrg() ?: return@post
+                val userId = context.userId
+                val orgId = context.orgId
 
                 val request = call.receive<BulkInviteRequest>()
 
@@ -115,9 +116,9 @@ fun Route.orgManagementRoutes(
 
             // Get pending invitations
             get("/invitations") {
-                val principal = call.principal<JWTPrincipal>()!!
-                val userId = principal.payload.getClaim("userId").asInt()
-                val orgId = principal.payload.getClaim("orgId").asInt()
+                val context = call.requireCurrentOrg() ?: return@get
+                val userId = context.userId
+                val orgId = context.orgId
 
                 membershipService.requireRole(orgId, userId, OrgRole.ADMIN)
 

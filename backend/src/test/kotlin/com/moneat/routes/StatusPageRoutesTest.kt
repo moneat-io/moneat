@@ -113,10 +113,14 @@ class StatusPageRoutesTest {
         }
     }
 
-    private fun token(userId: Int): String =
+    private fun token(
+        userId: Int,
+        orgId: Int? = 1,
+    ): String =
         JWT.create()
             .withIssuer("moneat").withAudience("moneat-users")
             .withClaim("userId", userId)
+            .apply { if (orgId != null) withClaim("orgId", orgId) }
             .sign(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
 
     private fun seedUser(): Int =
@@ -165,7 +169,7 @@ class StatusPageRoutesTest {
     // ──── LIST STATUS PAGES ────
 
     @Test
-    fun `list status pages returns 200 empty list when user has no org`() =
+    fun `list status pages returns 401 when token has no organization claim`() =
         testApplication {
             application {
                 installAuth()
@@ -173,9 +177,9 @@ class StatusPageRoutesTest {
             }
             val userId = seedUser()
             val response = client.get("/v1/status-pages") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
             }
-            assertEquals(HttpStatusCode.OK, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
@@ -211,7 +215,7 @@ class StatusPageRoutesTest {
     // ──── CREATE STATUS PAGE ────
 
     @Test
-    fun `create status page returns 403 when user has no org`() =
+    fun `create status page returns 401 when token has no organization claim`() =
         testApplication {
             application {
                 installAuth()
@@ -219,11 +223,11 @@ class StatusPageRoutesTest {
             }
             val userId = seedUser()
             val response = client.post("/v1/status-pages") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"Test","slug":"test-slug"}""")
             }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
@@ -278,7 +282,7 @@ class StatusPageRoutesTest {
         }
 
     @Test
-    fun `get status page returns 403 when user has no org`() =
+    fun `get status page returns 401 when token has no organization claim`() =
         testApplication {
             application {
                 installAuth()
@@ -286,9 +290,9 @@ class StatusPageRoutesTest {
             }
             val userId = seedUser()
             val response = client.get("/v1/status-pages/${UUID.randomUUID()}") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
             }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
@@ -340,7 +344,7 @@ class StatusPageRoutesTest {
         }
 
     @Test
-    fun `update status page returns 403 when user has no org`() =
+    fun `update status page returns 401 when token has no organization claim`() =
         testApplication {
             application {
                 installAuth()
@@ -348,11 +352,11 @@ class StatusPageRoutesTest {
             }
             val userId = seedUser()
             val response = client.put("/v1/status-pages/${UUID.randomUUID()}") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"Updated"}""")
             }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
@@ -406,7 +410,7 @@ class StatusPageRoutesTest {
         }
 
     @Test
-    fun `delete status page returns 403 when user has no org`() =
+    fun `delete status page returns 401 when token has no organization claim`() =
         testApplication {
             application {
                 installAuth()
@@ -414,9 +418,9 @@ class StatusPageRoutesTest {
             }
             val userId = seedUser()
             val response = client.delete("/v1/status-pages/${UUID.randomUUID()}") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
             }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
@@ -467,7 +471,7 @@ class StatusPageRoutesTest {
         }
 
     @Test
-    fun `add monitor to page returns 403 when user has no org`() =
+    fun `add monitor to page returns 401 when token has no organization claim`() =
         testApplication {
             application {
                 installAuth()
@@ -475,11 +479,11 @@ class StatusPageRoutesTest {
             }
             val userId = seedUser()
             val response = client.post("/v1/status-pages/${UUID.randomUUID()}/monitors") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"monitors":[]}""")
             }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
@@ -497,7 +501,7 @@ class StatusPageRoutesTest {
         }
 
     @Test
-    fun `remove monitor from page returns 403 when user has no org`() =
+    fun `remove monitor from page returns 401 when token has no organization claim`() =
         testApplication {
             application {
                 installAuth()
@@ -505,9 +509,9 @@ class StatusPageRoutesTest {
             }
             val userId = seedUser()
             val response = client.delete("/v1/status-pages/${UUID.randomUUID()}/monitors/${UUID.randomUUID()}") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
             }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     // ──── INCIDENTS ────
@@ -527,7 +531,7 @@ class StatusPageRoutesTest {
         }
 
     @Test
-    fun `get incidents returns 403 when user has no org`() =
+    fun `get incidents returns 401 when token has no organization claim`() =
         testApplication {
             application {
                 installAuth()
@@ -535,9 +539,9 @@ class StatusPageRoutesTest {
             }
             val userId = seedUser()
             val response = client.get("/v1/status-pages/${UUID.randomUUID()}/incidents") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
             }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     // ──── CREATE INCIDENT ────
@@ -577,7 +581,7 @@ class StatusPageRoutesTest {
         }
 
     @Test
-    fun `create incident returns 403 when user has no org`() =
+    fun `create incident returns 401 when token has no organization claim`() =
         testApplication {
             application {
                 installAuth()
@@ -585,11 +589,11 @@ class StatusPageRoutesTest {
             }
             val userId = seedUser()
             val response = client.post("/v1/status-pages/${UUID.randomUUID()}/incidents") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"title":"x","status":"investigating","message":"m"}""")
             }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     // ──── UPDATE INCIDENT ────
@@ -711,7 +715,7 @@ class StatusPageRoutesTest {
         }
 
     @Test
-    fun `add custom domain returns 403 when user has no org`() =
+    fun `add custom domain returns 401 when token has no organization claim`() =
         testApplication {
             application {
                 installAuth()
@@ -719,11 +723,11 @@ class StatusPageRoutesTest {
             }
             val userId = seedUser()
             val response = client.post("/v1/status-pages/${UUID.randomUUID()}/domains") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"domain":"status.example.com"}""")
             }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
@@ -753,7 +757,7 @@ class StatusPageRoutesTest {
         }
 
     @Test
-    fun `remove custom domain returns 403 when user has no org`() =
+    fun `remove custom domain returns 401 when token has no organization claim`() =
         testApplication {
             application {
                 installAuth()
@@ -761,9 +765,9 @@ class StatusPageRoutesTest {
             }
             val userId = seedUser()
             val response = client.delete("/v1/status-pages/${UUID.randomUUID()}/domains/1") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, null)}")
             }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     // ──── GET INCIDENTS HAPPY PATH ────

@@ -107,8 +107,11 @@ class SyntheticsRoutesExtendedTest {
         routing { syntheticsRoutes() }
     }
 
-    private fun token(userId: Int): String =
-        RouteTestSupport.createToken(userId)
+    private fun token(
+        userId: Int,
+        orgId: Int? = 1,
+    ): String =
+        RouteTestSupport.createToken(userId, orgId)
 
     private fun seedUser(): Int = transaction {
         Users.insert {
@@ -210,135 +213,135 @@ class SyntheticsRoutesExtendedTest {
             assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
-    // ──── No Org (403) ────
+    // ──── Missing current org claim ────
 
     @Test
-    fun `GET tests returns 403 when user has no org`() =
+    fun `GET tests returns 401 when token has no organization claim`() =
         testApplication {
             val userId = seedUser()
             application { installTestApp() }
             val r = client.get(SYNTHETICS_TESTS_PATH) {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
             }
-            assertEquals(HttpStatusCode.Forbidden, r.status)
+            assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
     @Test
-    fun `GET test by id returns 403 when user has no org`() =
+    fun `GET test by id returns 401 when token has no organization claim`() =
         testApplication {
             val userId = seedUser()
             application { installTestApp() }
             val r = client.get("/v1/synthetics/tests/$TEST_UUID") {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
             }
-            assertEquals(HttpStatusCode.Forbidden, r.status)
+            assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
     @Test
-    fun `POST tests returns 403 when user has no org`() =
+    fun `POST tests returns 401 when token has no organization claim`() =
         testApplication {
             val userId = seedUser()
             application { installTestApp() }
             val r = client.post(SYNTHETICS_TESTS_PATH) {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"test"}""")
             }
-            assertEquals(HttpStatusCode.Forbidden, r.status)
+            assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
     @Test
-    fun `PUT test returns 403 when user has no org`() =
+    fun `PUT test returns 401 when token has no organization claim`() =
         testApplication {
             val userId = seedUser()
             application { installTestApp() }
             val r = client.put("/v1/synthetics/tests/$TEST_UUID") {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"updated"}""")
             }
-            assertEquals(HttpStatusCode.Forbidden, r.status)
+            assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
     @Test
-    fun `DELETE test returns 403 when user has no org`() =
+    fun `DELETE test returns 401 when token has no organization claim`() =
         testApplication {
             val userId = seedUser()
             application { installTestApp() }
             val r = client.delete("/v1/synthetics/tests/$TEST_UUID") {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
             }
-            assertEquals(HttpStatusCode.Forbidden, r.status)
+            assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
     @Test
-    fun `POST run test returns 403 when user has no org`() =
+    fun `POST run test returns 401 when token has no organization claim`() =
         testApplication {
             val userId = seedUser()
             application { installTestApp() }
             val r = client.post("/v1/synthetics/tests/$TEST_UUID/run") {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
             }
-            assertEquals(HttpStatusCode.Forbidden, r.status)
+            assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
     @Test
-    fun `GET test summary returns 403 when user has no org`() =
+    fun `GET test summary returns 401 when token has no organization claim`() =
         testApplication {
             val userId = seedUser()
             application { installTestApp() }
             val r = client.get("/v1/synthetics/tests/$TEST_UUID/summary") {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
             }
-            assertEquals(HttpStatusCode.Forbidden, r.status)
+            assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
     @Test
-    fun `GET variables returns 403 when user has no org`() =
+    fun `GET variables returns 401 when token has no organization claim`() =
         testApplication {
             val userId = seedUser()
             application { installTestApp() }
             val r = client.get(SYNTHETICS_VARIABLES_PATH) {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
             }
-            assertEquals(HttpStatusCode.Forbidden, r.status)
+            assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
     @Test
-    fun `POST variables returns 403 when user has no org`() =
+    fun `POST variables returns 401 when token has no organization claim`() =
         testApplication {
             val userId = seedUser()
             application { installTestApp() }
             val r = client.post(SYNTHETICS_VARIABLES_PATH) {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
                 contentType(ContentType.Application.Json)
                 setBody(BODY_NAME_VAR_VALUE)
             }
-            assertEquals(HttpStatusCode.Forbidden, r.status)
+            assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
     @Test
-    fun `PUT variable returns 403 when user has no org`() =
+    fun `PUT variable returns 401 when token has no organization claim`() =
         testApplication {
             val userId = seedUser()
             application { installTestApp() }
             val r = client.put(SYNTHETICS_VARIABLES_1_PATH) {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
                 contentType(ContentType.Application.Json)
                 setBody(BODY_NAME_VAR_VALUE)
             }
-            assertEquals(HttpStatusCode.Forbidden, r.status)
+            assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
     @Test
-    fun `DELETE variable returns 403 when user has no org`() =
+    fun `DELETE variable returns 401 when token has no organization claim`() =
         testApplication {
             val userId = seedUser()
             application { installTestApp() }
             val r = client.delete(SYNTHETICS_VARIABLES_1_PATH) {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
             }
-            assertEquals(HttpStatusCode.Forbidden, r.status)
+            assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
     // ──── Invalid IDs (400) ────

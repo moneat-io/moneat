@@ -16,6 +16,7 @@
 
 package com.moneat.dashboards.routes
 
+import com.moneat.auth.currentOrgContextOrNull
 import com.moneat.dashboards.models.BatchQueryResult
 import com.moneat.dashboards.models.CreateCustomDataSourceRequest
 import com.moneat.dashboards.models.CreateDashboardAlertRequest
@@ -46,7 +47,6 @@ import com.moneat.dashboards.translation.DashboardTranslator
 import com.moneat.dashboards.translation.DataDogTranslator
 import com.moneat.dashboards.translation.GrafanaTranslator
 import com.moneat.plugins.getDemoEpochMs
-import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Projects
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.utils.ErrorResponse
@@ -87,15 +87,11 @@ private const val ERR_DATA_SOURCE_NOT_FOUND = "Data source not found"
 private const val ERR_UNKNOWN_SOURCE_TYPE = "Unknown source type"
 private const val ERR_INVALID_DATA_SOURCE_ID = "Invalid data source ID"
 
-private fun getOrgIdForUser(userId: Int): Long? {
-    return transaction {
-        Memberships.selectAll()
-            .where { Memberships.user_id eq userId }
-            .firstOrNull()
-            ?.get(Memberships.organization_id)
-            ?.toLong()
-    }
-}
+private fun currentOrgIdFromPrincipal(userId: Int, principal: JWTPrincipal): Long? =
+    principal.currentOrgContextOrNull()
+        ?.takeIf { it.userId == userId }
+        ?.orgId
+        ?.toLong()
 
 private data class DashboardScope(
     val projectId: Long?
@@ -149,7 +145,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListDashboards(
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
     val dashboards = dashboardService.listDashboards(orgId, projectId, userId)
@@ -161,7 +157,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCreateDashboard(
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val request = call.receive<CreateDashboardRequest>()
     val dashboard = dashboardService.createDashboard(orgId, userId.toLong(), request)
@@ -173,7 +169,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListFolders(
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val folders = dashboardService.listFolders(orgId)
     call.respond(folders)
@@ -184,7 +180,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCreateFolder(
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val request = call.receive<CreateFolderRequest>()
     val folder = dashboardService.createFolder(orgId, request)
@@ -196,7 +192,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateFolder(
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val folderId = call.parameters["folderId"]?.toLongOrNull()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid folder ID"))
@@ -211,7 +207,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteFolder(
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val folderId = call.parameters["folderId"]?.toLongOrNull()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid folder ID"))
@@ -227,7 +223,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetDashboard(
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
@@ -241,7 +237,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleToggleFavorite(
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
@@ -254,7 +250,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleMoveDashboardToF
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
@@ -271,7 +267,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateDashboard(
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
@@ -286,7 +282,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteDashboard(
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
@@ -305,7 +301,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDashboardQuery(
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
@@ -417,7 +413,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleBatchDashboardQu
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
@@ -497,7 +493,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleVariablesResolve
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
@@ -553,7 +549,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleImportDashboard(
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
 
     val request = call.receive<ImportDashboardRequest>()
@@ -614,7 +610,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleExportDashboard(
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
@@ -639,7 +635,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListAlerts(
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
@@ -651,7 +647,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCreateAlert(
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
@@ -669,7 +665,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateAlert(
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
@@ -690,7 +686,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteAlert(
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
@@ -709,7 +705,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetAvailableData
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
     if (orgId != null) {
         val customSources = dataSourceService.listDataSources(orgId)
         call.respond(queryEngine.getDataSources(customSources))
@@ -723,7 +719,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSearch(
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val query = call.request.queryParameters["q"]?.trim().orEmpty()
     val result = dashboardService.search(orgId, userId, query)
@@ -735,7 +731,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListCustomDataSo
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     call.respond(dataSourceService.listDataSources(orgId))
 }
@@ -745,7 +741,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCreateCustomData
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val request = call.receive<CreateCustomDataSourceRequest>()
     try {
@@ -773,7 +769,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetCustomDataSou
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DATA_SOURCE_ID))
@@ -788,7 +784,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateCustomData
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DATA_SOURCE_ID))
@@ -807,7 +803,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteCustomData
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
         ?: return call.respond(
@@ -828,7 +824,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetDataSourceSch
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DATA_SOURCE_ID))
@@ -856,7 +852,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCustomDataSource
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = getOrgIdForUser(userId)
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val id = call.parameters["id"]?.toLongOrNull()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DATA_SOURCE_ID))

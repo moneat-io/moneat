@@ -16,13 +16,12 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.datadog.models.CreateDdApiKeyRequest
 import com.moneat.datadog.services.DatadogService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.delete
@@ -36,46 +35,26 @@ fun Application.datadogRoutes() {
         authenticate("auth-jwt") {
             route("/v1/agent-api-keys") {
                 get {
-                    val principal = call.principal<JWTPrincipal>()
-                    val organizationId = principal?.payload
-                        ?.getClaim("orgId")?.asInt()
-                        ?: return@get call.respond(
-                            HttpStatusCode.Unauthorized,
-                            mapOf("error" to "Invalid token")
-                        )
+                    val organizationId = call.requireCurrentOrg()?.orgId ?: return@get
                     val keys = DatadogService.listApiKeys(organizationId)
                     call.respond(mapOf("keys" to keys))
                 }
 
                 post {
-                    val principal = call.principal<JWTPrincipal>()
-                    val organizationId = principal?.payload
-                        ?.getClaim("orgId")?.asInt()
-                        ?: return@post call.respond(
-                            HttpStatusCode.Unauthorized,
-                            mapOf("error" to "Invalid token")
-                        )
-                    val userId = principal.payload
-                        .getClaim("userId").asInt()
+                    val context = call.requireCurrentOrg() ?: return@post
                     val request = call.receive<CreateDdApiKeyRequest>()
 
                     val response = DatadogService.createApiKey(
-                        organizationId = organizationId,
+                        organizationId = context.orgId,
                         name = request.name,
-                        userId = userId,
+                        userId = context.userId,
                         projectId = request.projectId,
                     )
                     call.respond(HttpStatusCode.Created, response)
                 }
 
                 delete("/{id}") {
-                    val principal = call.principal<JWTPrincipal>()
-                    val organizationId = principal?.payload
-                        ?.getClaim("orgId")?.asInt()
-                        ?: return@delete call.respond(
-                            HttpStatusCode.Unauthorized,
-                            mapOf("error" to "Invalid token")
-                        )
+                    val organizationId = call.requireCurrentOrg()?.orgId ?: return@delete
                     val keyId = call.parameters["id"]?.toIntOrNull()
                         ?: return@delete call.respond(
                             HttpStatusCode.BadRequest,

@@ -4,14 +4,13 @@
 
 package com.moneat.enterprise.oncall.routes
 
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.enterprise.oncall.models.BusinessHoursWindow
 import com.moneat.enterprise.oncall.services.BusinessHoursService
 import com.moneat.enterprise.oncall.services.PriorityService
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -51,26 +50,14 @@ fun Route.priorityRoutes() {
     route("/v1/priorities") {
         authenticate("auth-jwt") {
             get {
-                val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
-
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                    return@get
-                }
+                val organizationId = call.requireCurrentOrg()?.orgId ?: return@get
 
                 val priorities = priorityService.getAllPriorities(organizationId)
                 call.respond(priorities)
             }
 
             put {
-                val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
-
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                    return@put
-                }
+                val organizationId = call.requireCurrentOrg()?.orgId ?: return@put
 
                 val request = call.receive<UpdatePriorityRequest>()
 
@@ -100,13 +87,7 @@ fun Route.priorityRoutes() {
     route("/v1/business-hours") {
         authenticate("auth-jwt") {
             get {
-                val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
-
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                    return@get
-                }
+                val organizationId = call.requireCurrentOrg()?.orgId ?: return@get
 
                 val config = businessHoursService.getBusinessHours(organizationId)
                 if (config != null) {
@@ -117,13 +98,7 @@ fun Route.priorityRoutes() {
             }
 
             put {
-                val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
-
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                    return@put
-                }
+                val organizationId = call.requireCurrentOrg()?.orgId ?: return@put
 
                 val request = call.receive<UpdateBusinessHoursRequest>()
 

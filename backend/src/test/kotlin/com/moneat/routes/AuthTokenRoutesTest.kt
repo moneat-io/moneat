@@ -94,12 +94,16 @@ class AuthTokenRoutesTest {
         }
     }
 
-    private fun token(userId: Int): String =
+    private fun token(
+        userId: Int,
+        orgId: Int = 1
+    ): String =
         JWT
             .create()
             .withIssuer("moneat")
             .withAudience("moneat-users")
             .withClaim("userId", userId)
+            .withClaim("orgId", orgId)
             .sign(Algorithm.HMAC256(jwtSecret))
 
     private fun seedUser(email: String = "user@test.com"): Int =
@@ -132,7 +136,7 @@ class AuthTokenRoutesTest {
     @Test
     fun `create token returns 201 with token value`() {
         val userId = seedUser()
-        seedOrgWithMembership(userId)
+        val orgId = seedOrgWithMembership(userId)
 
         testApplication {
             application {
@@ -143,7 +147,7 @@ class AuthTokenRoutesTest {
 
             val response =
                 client.post("/v1/auth-tokens") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                     contentType(ContentType.Application.Json)
                     setBody("""{"name":"ci-token","scopes":["project:read"]}""")
                 }
@@ -224,7 +228,7 @@ class AuthTokenRoutesTest {
     @Test
     fun `list tokens returns created tokens`() {
         val userId = seedUser()
-        seedOrgWithMembership(userId)
+        val orgId = seedOrgWithMembership(userId)
 
         testApplication {
             application {
@@ -234,14 +238,14 @@ class AuthTokenRoutesTest {
             }
 
             client.post("/v1/auth-tokens") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"my-ci-token","scopes":["project:read","project:write"]}""")
             }
 
             val response =
                 client.get("/v1/auth-tokens") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 }
 
             assertEquals(HttpStatusCode.OK, response.status)
@@ -293,7 +297,7 @@ class AuthTokenRoutesTest {
     @Test
     fun `delete token removes existing token`() {
         val userId = seedUser()
-        seedOrgWithMembership(userId)
+        val orgId = seedOrgWithMembership(userId)
 
         testApplication {
             application {
@@ -304,7 +308,7 @@ class AuthTokenRoutesTest {
 
             // Create a token
             client.post("/v1/auth-tokens") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"to-delete","scopes":["project:read"]}""")
             }
@@ -312,21 +316,21 @@ class AuthTokenRoutesTest {
             // Get its ID
             val listResponse =
                 client.get("/v1/auth-tokens") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 }
             val tokenId = Regex(""""id"\s*:\s*(\d+)""").find(listResponse.bodyAsText())!!.groupValues[1]
 
             // Delete it
             val deleteResponse =
                 client.delete("/v1/auth-tokens/$tokenId") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 }
             assertEquals(HttpStatusCode.NoContent, deleteResponse.status)
 
             // Verify gone
             val afterList =
                 client.get("/v1/auth-tokens") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 }
             assertTrue(!afterList.bodyAsText().contains("to-delete"))
         }
@@ -380,7 +384,7 @@ class AuthTokenRoutesTest {
     @Test
     fun `update token returns 400 for invalid scopes`() {
         val userId = seedUser()
-        seedOrgWithMembership(userId)
+        val orgId = seedOrgWithMembership(userId)
 
         testApplication {
             application {
@@ -390,20 +394,20 @@ class AuthTokenRoutesTest {
             }
 
             client.post("/v1/auth-tokens") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"original","scopes":["project:read"]}""")
             }
 
             val listBody =
                 client.get("/v1/auth-tokens") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 }.bodyAsText()
             val tokenId = Regex(""""id"\s*:\s*(\d+)""").find(listBody)!!.groupValues[1]
 
             val response =
                 client.put("/v1/auth-tokens/$tokenId") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                     contentType(ContentType.Application.Json)
                     setBody("""{"scopes":["bad:scope"]}""")
                 }
@@ -416,7 +420,7 @@ class AuthTokenRoutesTest {
     @Test
     fun `update token succeeds with valid name and scopes`() {
         val userId = seedUser()
-        seedOrgWithMembership(userId)
+        val orgId = seedOrgWithMembership(userId)
 
         testApplication {
             application {
@@ -426,20 +430,20 @@ class AuthTokenRoutesTest {
             }
 
             client.post("/v1/auth-tokens") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"original","scopes":["project:read"]}""")
             }
 
             val listBody =
                 client.get("/v1/auth-tokens") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 }.bodyAsText()
             val tokenId = Regex(""""id"\s*:\s*(\d+)""").find(listBody)!!.groupValues[1]
 
             val response =
                 client.put("/v1/auth-tokens/$tokenId") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                     contentType(ContentType.Application.Json)
                     setBody("""{"name":"updated-name","scopes":["project:read","project:write"]}""")
                 }

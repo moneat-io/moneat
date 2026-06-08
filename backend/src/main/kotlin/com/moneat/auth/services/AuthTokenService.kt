@@ -19,8 +19,8 @@ package com.moneat.auth.services
 import com.moneat.config.EnvConfig
 import com.moneat.events.models.AuthTokenResponse
 import com.moneat.shared.models.AuthTokens
-import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.plus
 import org.jetbrains.exposed.v1.core.SortOrder
@@ -35,9 +35,8 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import java.security.MessageDigest
 import java.security.SecureRandom
-import java.util.*
+import java.util.Base64
 import kotlin.time.Clock
-import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 class AuthTokenService {
     private val secureRandom = SecureRandom()
@@ -85,6 +84,7 @@ class AuthTokenService {
      */
     fun generateToken(
         userId: Int,
+        orgId: Int,
         name: String,
         scopes: List<String>,
         expiresInDays: Int? = null
@@ -99,15 +99,15 @@ class AuthTokenService {
             throw IllegalArgumentException("Token name cannot be blank")
         }
 
-        // Look up the user's org slug for the token payload
+        // Look up the scoped org slug for the token payload. The org ID must come from the signed JWT.
         val orgSlug =
             transaction {
-                (Memberships innerJoin Organizations)
+                Organizations
                     .selectAll()
-                    .where { Memberships.user_id eq userId }
+                    .where { Organizations.id eq orgId }
                     .firstOrNull()
                     ?.get(Organizations.slug)
-            } ?: "default"
+            } ?: throw IllegalArgumentException("Organization not found")
 
         // Generate secure random secret
         val tokenBytes = ByteArray(TOKEN_LENGTH)

@@ -16,6 +16,7 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.config.ClickHouseClient
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
@@ -27,8 +28,6 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.isSuccess
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -196,13 +195,7 @@ fun Route.datadogHostQueryRoutes() {
     route("/v1") {
         authenticate("auth-jwt") {
             get("/hosts") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal?.payload
-                    ?.getClaim("orgId")?.asInt()
-                    ?: return@get call.respond(
-                        HttpStatusCode.Unauthorized,
-                        mapOf("error" to "Missing org context")
-                    )
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@get
 
                 val hosts = DatadogHostService.listHosts(orgId)
                 call.respond(
@@ -216,13 +209,7 @@ fun Route.datadogHostQueryRoutes() {
             }
 
             get("/hosts/{hostId}") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal?.payload
-                    ?.getClaim("orgId")?.asInt()
-                    ?: return@get call.respond(
-                        HttpStatusCode.Unauthorized,
-                        mapOf("error" to "Missing org context")
-                    )
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@get
                 val hostId = call.parameters["hostId"]?.toIntOrNull()
                     ?: return@get call.respond(
                         HttpStatusCode.BadRequest,
@@ -238,13 +225,7 @@ fun Route.datadogHostQueryRoutes() {
             }
 
             delete("/hosts/{hostId}") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal?.payload
-                    ?.getClaim("orgId")?.asInt()
-                if (orgId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Missing org context"))
-                    return@delete
-                }
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@delete
                 val hostId = call.parameters["hostId"]?.toIntOrNull()
                 if (hostId == null) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid host id"))
@@ -260,13 +241,7 @@ fun Route.datadogHostQueryRoutes() {
             }
 
             get("/hosts/{hostId}/metrics") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal?.payload
-                    ?.getClaim("orgId")?.asInt()
-                    ?: return@get call.respond(
-                        HttpStatusCode.Unauthorized,
-                        mapOf("error" to "Missing org context")
-                    )
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@get
                 val hostId = call.parameters["hostId"]?.toIntOrNull()
                     ?: return@get call.respond(
                         HttpStatusCode.BadRequest,
@@ -357,13 +332,7 @@ fun Route.datadogHostQueryRoutes() {
             }
 
             get("/hosts/{hostId}/containers") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal?.payload
-                    ?.getClaim("orgId")?.asInt()
-                    ?: return@get call.respond(
-                        HttpStatusCode.Unauthorized,
-                        mapOf("error" to "Missing org context")
-                    )
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@get
                 val hostId = call.parameters["hostId"]?.toIntOrNull()
                     ?: return@get call.respond(
                         HttpStatusCode.BadRequest,

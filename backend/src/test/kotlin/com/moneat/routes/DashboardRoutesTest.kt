@@ -119,8 +119,11 @@ class DashboardRoutesTest {
         installJwtAuth()
     }
 
-    private fun token(userId: Int): String =
-        RouteTestSupport.createToken(userId)
+    private fun token(
+        userId: Int,
+        orgId: Int? = 1,
+    ): String =
+        RouteTestSupport.createToken(userId, orgId)
 
     private fun seedUser(): Int = transaction {
         Users.insert {
@@ -241,7 +244,7 @@ class DashboardRoutesTest {
             val userId = seedUser()
             application { installRoutes(this) }
             val r = client.get(DASHBOARDS_PATH) {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
             }
             assertEquals(HttpStatusCode.Forbidden, r.status)
         }

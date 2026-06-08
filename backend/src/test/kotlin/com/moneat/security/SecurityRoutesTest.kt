@@ -80,7 +80,10 @@ class SecurityRoutesTest {
         stopTestKoin()
     }
 
-    private fun token(userId: Int): String = RouteTestSupport.createToken(userId)
+    private fun token(
+        userId: Int,
+        orgId: Int? = 1,
+    ): String = RouteTestSupport.createToken(userId, orgId)
 
     private fun seedUser(): Int = transaction {
         Users.insert {
@@ -149,7 +152,7 @@ class SecurityRoutesTest {
     }
 
     @Test
-    fun `security events with jwt but no org membership returns empty payload`() =
+    fun `security events with jwt but no org claim returns 401`() =
         testApplication {
             val userId = seedUser()
             application {
@@ -157,14 +160,13 @@ class SecurityRoutesTest {
                 routing { securityRoutes() }
             }
             val response = client.get(EVENTS_PATH) {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
             }
-            assertEquals(HttpStatusCode.OK, response.status)
-            assertEquals("""{"events":[],"totalCount":0}""", response.bodyAsText())
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
-    fun `compliance with jwt but no org membership returns empty payload`() =
+    fun `compliance with jwt but no org claim returns 401`() =
         testApplication {
             val userId = seedUser()
             application {
@@ -172,23 +174,22 @@ class SecurityRoutesTest {
                 routing { securityRoutes() }
             }
             val response = client.get(COMPLIANCE_PATH) {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
             }
-            assertEquals(HttpStatusCode.OK, response.status)
-            assertEquals("""{"findings":[],"totalCount":0}""", response.bodyAsText())
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
     fun `security events with membership returns 200 when clickhouse succeeds`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             stubClickHouseForSecurityRoutes()
             application {
                 with(RouteTestSupport) { installJwtAuth() }
                 routing { securityRoutes() }
             }
             val response = client.get(EVENTS_PATH) {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("\"events\""))
@@ -198,14 +199,14 @@ class SecurityRoutesTest {
     @Test
     fun `compliance with membership returns 200 when clickhouse succeeds`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             stubClickHouseForSecurityRoutes()
             application {
                 with(RouteTestSupport) { installJwtAuth() }
                 routing { securityRoutes() }
             }
             val response = client.get(COMPLIANCE_PATH) {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("\"findings\""))
@@ -215,7 +216,7 @@ class SecurityRoutesTest {
     @Test
     fun `security events coerces limit parameter to max 500 in clickhouse query`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             every { ClickHouseClient.getDatabase() } returns "testdb"
             coEvery { ClickHouseClient.execute(any(), any()) } coAnswers {
                 val sql = args[0] as String
@@ -235,7 +236,7 @@ class SecurityRoutesTest {
                 routing { securityRoutes() }
             }
             val response = client.get("$EVENTS_PATH?limit=999") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
         }
@@ -243,7 +244,7 @@ class SecurityRoutesTest {
     @Test
     fun `security events omits invalid severity from clickhouse where clause`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             every { ClickHouseClient.getDatabase() } returns "testdb"
             coEvery { ClickHouseClient.execute(any(), any()) } coAnswers {
                 val sql = args[0] as String
@@ -263,7 +264,7 @@ class SecurityRoutesTest {
                 routing { securityRoutes() }
             }
             val response = client.get("$EVENTS_PATH?severity=bogus") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
         }
@@ -271,7 +272,7 @@ class SecurityRoutesTest {
     @Test
     fun `security events omits invalid host from clickhouse where clause`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             every { ClickHouseClient.getDatabase() } returns "testdb"
             coEvery { ClickHouseClient.execute(any(), any()) } coAnswers {
                 val sql = args[0] as String
@@ -291,7 +292,7 @@ class SecurityRoutesTest {
                 routing { securityRoutes() }
             }
             val response = client.get("$EVENTS_PATH?host=../../../") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
         }
@@ -299,7 +300,7 @@ class SecurityRoutesTest {
     @Test
     fun `compliance omits invalid framework from clickhouse where clause`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             every { ClickHouseClient.getDatabase() } returns "testdb"
             coEvery { ClickHouseClient.execute(any(), any()) } coAnswers {
                 val sql = args[0] as String
@@ -319,7 +320,7 @@ class SecurityRoutesTest {
                 routing { securityRoutes() }
             }
             val response = client.get("$COMPLIANCE_PATH?framework=../../../") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
         }

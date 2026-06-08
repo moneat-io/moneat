@@ -16,9 +16,7 @@
 
 package com.moneat.billing.routes
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.billing.models.BillingPlansListResponse
 import com.moneat.billing.models.CheckoutSessionRequest
 import com.moneat.billing.models.UpdateOnCallSeatsRequest
@@ -33,8 +31,6 @@ import com.moneat.utils.BooleanResponse
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -43,6 +39,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import kotlinx.datetime.LocalDate
+import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
@@ -53,6 +50,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import org.koin.core.context.GlobalContext
 import com.moneat.utils.suspendRunCatching
+import java.io.IOException
 
 private val logger = KotlinLogging.logger {}
 private const val FAILED_TO_CREATE_CHECKOUT_SESSION = "Failed to create checkout session"
@@ -61,8 +59,6 @@ private const val FAILED_TO_UPDATE_ON_CALL_SEATS = "Failed to update on-call sea
 private const val FAILED_TO_UPDATE_SEATS = "Failed to update seats"
 private const val PAYG_INCREMENT_CENTS = 500
 private const val MAX_ONCALL_SEATS = 200
-private const val AUTH_REQUIRED = "Authentication required"
-private const val NO_ORG_ACCESS = "No organization access"
 
 // Public billing endpoints (no auth required)
 fun Route.publicBillingRoutes(
@@ -93,17 +89,7 @@ fun Route.billingRoutes(
 
     route("/billing") {
         get("/usage") {
-            val principal =
-                call.principal<JWTPrincipal>() ?: run {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(AUTH_REQUIRED))
-                    return@get
-                }
-            val userId = principal.payload.getClaim("userId").asInt()
-            val orgId =
-                pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORG_ACCESS))
-                    return@get
-                }
+            val orgId = call.requireCurrentOrg()?.orgId ?: return@get
 
             val usage = quotaService.getUsageForOrganization(orgId)
 
@@ -148,32 +134,12 @@ fun Route.billingRoutes(
         }
 
         post("/checkout") {
-            val principal =
-                call.principal<JWTPrincipal>() ?: run {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(AUTH_REQUIRED))
-                    return@post
-                }
-            val userId = principal.payload.getClaim("userId").asInt()
-            val orgId =
-                pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORG_ACCESS))
-                    return@post
-                }
+            val orgId = call.requireCurrentOrg()?.orgId ?: return@post
             handleBillingCheckout(call, stripeService, orgId)
         }
 
         get("/invoices") {
-            val principal =
-                call.principal<JWTPrincipal>() ?: run {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(AUTH_REQUIRED))
-                    return@get
-                }
-            val userId = principal.payload.getClaim("userId").asInt()
-            val orgId =
-                pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORG_ACCESS))
-                    return@get
-                }
+            val orgId = call.requireCurrentOrg()?.orgId ?: return@get
 
             suspendRunCatching {
                 call.respond(stripeService.listInvoices(orgId))
@@ -183,17 +149,7 @@ fun Route.billingRoutes(
         }
 
         get("/payment-method") {
-            val principal =
-                call.principal<JWTPrincipal>() ?: run {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(AUTH_REQUIRED))
-                    return@get
-                }
-            val userId = principal.payload.getClaim("userId").asInt()
-            val orgId =
-                pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORG_ACCESS))
-                    return@get
-                }
+            val orgId = call.requireCurrentOrg()?.orgId ?: return@get
 
             suspendRunCatching {
                 call.respond(stripeService.getPaymentMethod(orgId))
@@ -203,17 +159,7 @@ fun Route.billingRoutes(
         }
 
         post("/setup-intent") {
-            val principal =
-                call.principal<JWTPrincipal>() ?: run {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(AUTH_REQUIRED))
-                    return@post
-                }
-            val userId = principal.payload.getClaim("userId").asInt()
-            val orgId =
-                pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORG_ACCESS))
-                    return@post
-                }
+            val orgId = call.requireCurrentOrg()?.orgId ?: return@post
 
             suspendRunCatching {
                 call.respond(stripeService.createSetupIntent(orgId))
@@ -223,17 +169,7 @@ fun Route.billingRoutes(
         }
 
         post("/setup-intent/confirm") {
-            val principal =
-                call.principal<JWTPrincipal>() ?: run {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(AUTH_REQUIRED))
-                    return@post
-                }
-            val userId = principal.payload.getClaim("userId").asInt()
-            val orgId =
-                pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORG_ACCESS))
-                    return@post
-                }
+            val orgId = call.requireCurrentOrg()?.orgId ?: return@post
 
             suspendRunCatching {
                 val request = call.receive<Map<String, String>>()
@@ -246,47 +182,17 @@ fun Route.billingRoutes(
         }
 
         post("/cancel") {
-            val principal =
-                call.principal<JWTPrincipal>() ?: run {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(AUTH_REQUIRED))
-                    return@post
-                }
-            val userId = principal.payload.getClaim("userId").asInt()
-            val orgId =
-                pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORG_ACCESS))
-                    return@post
-                }
+            val orgId = call.requireCurrentOrg()?.orgId ?: return@post
             handleBillingCancel(call, stripeService, orgId)
         }
 
         put("/payg-budget") {
-            val principal =
-                call.principal<JWTPrincipal>() ?: run {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(AUTH_REQUIRED))
-                    return@put
-                }
-            val userId = principal.payload.getClaim("userId").asInt()
-            val orgId =
-                pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORG_ACCESS))
-                    return@put
-                }
+            val orgId = call.requireCurrentOrg()?.orgId ?: return@put
             handleBillingPaygBudget(call, pricingTierService, orgId)
         }
 
         put("/oncall-seats") {
-            val principal =
-                call.principal<JWTPrincipal>() ?: run {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(AUTH_REQUIRED))
-                    return@put
-                }
-            val userId = principal.payload.getClaim("userId").asInt()
-            val orgId =
-                pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORG_ACCESS))
-                    return@put
-                }
+            val orgId = call.requireCurrentOrg()?.orgId ?: return@put
             handleBillingOnCallSeats(call, stripeService, orgId)
         }
     }

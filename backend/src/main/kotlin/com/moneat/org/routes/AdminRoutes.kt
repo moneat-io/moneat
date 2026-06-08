@@ -16,6 +16,7 @@
 
 package com.moneat.org.routes
 
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.auth.services.AuthService
 import com.moneat.billing.services.AdminBillingService
 import com.moneat.billing.services.PricingTierService
@@ -335,28 +336,9 @@ fun Route.adminRoutes() {
             }
 
             post("/incidents/trigger") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId =
-                    principal?.payload?.getClaim("userId")?.asInt() ?: run {
-                        call.respond(HttpStatusCode.Unauthorized, com.moneat.utils.ErrorResponse("Invalid token"))
-                        return@post
-                    }
-
-                // Get user's organization
-                val orgId =
-                    transaction {
-                        com.moneat.shared.models.Memberships
-                            .selectAll()
-                            .where { com.moneat.shared.models.Memberships.user_id eq userId }
-                            .firstOrNull()
-                            ?.get(com.moneat.shared.models.Memberships.organization_id)
-                    } ?: run {
-                        call.respond(
-                            HttpStatusCode.BadRequest,
-                            com.moneat.utils.ErrorResponse("User has no organization")
-                        )
-                        return@post
-                    }
+                val context = call.requireCurrentOrg() ?: return@post
+                val userId = context.userId
+                val orgId = context.orgId
 
                 suspendRunCatching {
                     val request = call.receive<TriggerIncidentRequest>()
@@ -398,12 +380,8 @@ fun Route.adminRoutes() {
             }
 
             post("/test-notification") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId =
-                    principal?.payload?.getClaim("userId")?.asInt() ?: run {
-                        call.respond(HttpStatusCode.Unauthorized, com.moneat.utils.ErrorResponse("Invalid token"))
-                        return@post
-                    }
+                val context = call.requireCurrentOrg() ?: return@post
+                val userId = context.userId
 
                 suspendRunCatching {
                     val request = call.receive<com.moneat.events.models.TestNotificationRequest>()
@@ -425,15 +403,7 @@ fun Route.adminRoutes() {
                             return@post
                         }
 
-                    // Get user's organization for Slack testing
-                    val orgId =
-                        transaction {
-                            com.moneat.shared.models.Memberships
-                                .selectAll()
-                                .where { com.moneat.shared.models.Memberships.user_id eq userId }
-                                .firstOrNull()
-                                ?.get(com.moneat.shared.models.Memberships.organization_id)
-                        }
+                    val orgId = context.orgId
 
                     val config = ApplicationConfig("application.conf")
                     val frontendUrl = config.property("email.frontendUrl").getString()
@@ -528,156 +498,148 @@ fun Route.adminRoutes() {
 
                     // Send Slack notification if requested
                     if (testSlack) {
-                        if (orgId == null) {
-                            errors.add("No organization found for Slack testing")
-                        } else {
-                            suspendRunCatching {
-                                when (request.type) {
-                                    "error_alert" -> {
-                                        slackSent =
-                                            slackService.sendErrorAlert(
-                                                organizationId = orgId,
-                                                projectName = "[TEST] Test Project",
-                                                issueTitle = "NullPointerException in UserService",
-                                                level = "error",
-                                                culprit = "com.example.UserService.getUser",
-                                                issueId = 12345L,
-                                                baseUrl = frontendUrl,
-                                                occurrenceCount = 42,
-                                                environment = "production",
-                                                timestamp =
-                                                java.time.Instant
-                                                    .now()
-                                                    .toString(),
-                                                stackTrace =
-                                                "  at UserService.getUser (UserService.kt:45)\n" +
-                                                    "  at UserController.handleRequest (UserController.kt:23)\n" +
-                                                    "  at Router.dispatch (Router.kt:89)"
-                                            )
-                                    }
-
-                                    "system_up", "host_up" -> {
-                                        slackSent =
-                                            slackService.sendHostUp(
-                                                organizationId = orgId,
-                                                hostName = "[TEST] Production API",
-                                                hostId = 1,
-                                                baseUrl = frontendUrl
-                                            )
-                                    }
-
-                                    "system_down", "host_down" -> {
-                                        slackSent =
-                                            slackService.sendHostDown(
-                                                organizationId = orgId,
-                                                hostName = "[TEST] Production API",
-                                                lastSeen = "2 minutes ago",
-                                                hostId = 1,
-                                                baseUrl = frontendUrl
-                                            )
-                                    }
-
-                                    "uptime_alert" -> {
-                                        slackSent =
-                                            slackService.sendUptimeAlert(
-                                                organizationId = orgId,
-                                                monitorName = "[TEST] API Health Check",
-                                                oldStatus = "up",
-                                                newStatus = "down",
-                                                message = "HTTP 500 - Internal Server Error",
-                                                monitorId = java.util.UUID.randomUUID(),
-                                                baseUrl = frontendUrl
-                                            )
-                                    }
-
-                                    else -> {
-                                        errors.add(
-                                            "Notification type '${request.type}' not supported for Slack channel"
+                        suspendRunCatching {
+                            when (request.type) {
+                                "error_alert" -> {
+                                    slackSent =
+                                        slackService.sendErrorAlert(
+                                            organizationId = orgId,
+                                            projectName = "[TEST] Test Project",
+                                            issueTitle = "NullPointerException in UserService",
+                                            level = "error",
+                                            culprit = "com.example.UserService.getUser",
+                                            issueId = 12345L,
+                                            baseUrl = frontendUrl,
+                                            occurrenceCount = 42,
+                                            environment = "production",
+                                            timestamp =
+                                            java.time.Instant
+                                                .now()
+                                                .toString(),
+                                            stackTrace =
+                                            "  at UserService.getUser (UserService.kt:45)\n" +
+                                                "  at UserController.handleRequest (UserController.kt:23)\n" +
+                                                "  at Router.dispatch (Router.kt:89)"
                                         )
-                                    }
                                 }
-                                if (!slackSent && errors.isEmpty()) {
+
+                                "system_up", "host_up" -> {
+                                    slackSent =
+                                        slackService.sendHostUp(
+                                            organizationId = orgId,
+                                            hostName = "[TEST] Production API",
+                                            hostId = 1,
+                                            baseUrl = frontendUrl
+                                        )
+                                }
+
+                                "system_down", "host_down" -> {
+                                    slackSent =
+                                        slackService.sendHostDown(
+                                            organizationId = orgId,
+                                            hostName = "[TEST] Production API",
+                                            lastSeen = "2 minutes ago",
+                                            hostId = 1,
+                                            baseUrl = frontendUrl
+                                        )
+                                }
+
+                                "uptime_alert" -> {
+                                    slackSent =
+                                        slackService.sendUptimeAlert(
+                                            organizationId = orgId,
+                                            monitorName = "[TEST] API Health Check",
+                                            oldStatus = "up",
+                                            newStatus = "down",
+                                            message = "HTTP 500 - Internal Server Error",
+                                            monitorId = java.util.UUID.randomUUID(),
+                                            baseUrl = frontendUrl
+                                        )
+                                }
+
+                                else -> {
                                     errors.add(
-                                        "Slack notification failed (no Slack integration configured or error occurred)"
+                                        "Notification type '${request.type}' not supported for Slack channel"
                                     )
                                 }
-                            }.getOrElse { e ->
-                                errors.add("Slack failed: ${e.message}")
                             }
+                            if (!slackSent && errors.isEmpty()) {
+                                errors.add(
+                                    "Slack notification failed (no Slack integration configured or error occurred)"
+                                )
+                            }
+                        }.getOrElse { e ->
+                            errors.add("Slack failed: ${e.message}")
                         }
                     }
 
                     // Send Discord notification if requested
                     if (testDiscord) {
-                        if (orgId == null) {
-                            errors.add("No organization found for Discord testing")
-                        } else {
-                            suspendRunCatching {
-                                when (request.type) {
-                                    "error_alert" -> {
-                                        discordSent =
-                                            discordService.sendErrorAlert(
-                                                organizationId = orgId,
-                                                projectName = "[TEST] Test Project",
-                                                issueTitle = "NullPointerException in UserService",
-                                                level = "error",
-                                                firstSeen = "Just now",
-                                                eventCount = 42,
-                                                userCount = 12,
-                                                issueUrl = "$frontendUrl/issues/12345"
-                                            )
-                                    }
-
-                                    "system_up", "host_up" -> {
-                                        discordSent =
-                                            discordService.sendHostUp(
-                                                organizationId = orgId,
-                                                hostName = "[TEST] Production API",
-                                                hostId = 1,
-                                                baseUrl = frontendUrl
-                                            )
-                                    }
-
-                                    "system_down", "host_down" -> {
-                                        discordSent =
-                                            discordService.sendHostDown(
-                                                organizationId = orgId,
-                                                hostName = "[TEST] Production API",
-                                                lastSeen = "2 minutes ago",
-                                                hostId = 1,
-                                                baseUrl = frontendUrl
-                                            )
-                                    }
-
-                                    "uptime_alert" -> {
-                                        discordSent =
-                                            discordService.sendUptimeAlert(
-                                                organizationId = orgId,
-                                                monitorUrl = "https://api.example.com/health",
-                                                isDown = true,
-                                                statusCode = 500,
-                                                responseTime = 1245,
-                                                errorMessage = "Internal Server Error",
-                                                monitorId = java.util.UUID.randomUUID(),
-                                                baseUrl = frontendUrl
-                                            )
-                                    }
-
-                                    else -> {
-                                        errors.add(
-                                            "Notification type '${request.type}' not supported for Discord channel"
+                        suspendRunCatching {
+                            when (request.type) {
+                                "error_alert" -> {
+                                    discordSent =
+                                        discordService.sendErrorAlert(
+                                            organizationId = orgId,
+                                            projectName = "[TEST] Test Project",
+                                            issueTitle = "NullPointerException in UserService",
+                                            level = "error",
+                                            firstSeen = "Just now",
+                                            eventCount = 42,
+                                            userCount = 12,
+                                            issueUrl = "$frontendUrl/issues/12345"
                                         )
-                                    }
                                 }
-                                if (!discordSent && errors.isEmpty()) {
+
+                                "system_up", "host_up" -> {
+                                    discordSent =
+                                        discordService.sendHostUp(
+                                            organizationId = orgId,
+                                            hostName = "[TEST] Production API",
+                                            hostId = 1,
+                                            baseUrl = frontendUrl
+                                        )
+                                }
+
+                                "system_down", "host_down" -> {
+                                    discordSent =
+                                        discordService.sendHostDown(
+                                            organizationId = orgId,
+                                            hostName = "[TEST] Production API",
+                                            lastSeen = "2 minutes ago",
+                                            hostId = 1,
+                                            baseUrl = frontendUrl
+                                        )
+                                }
+
+                                "uptime_alert" -> {
+                                    discordSent =
+                                        discordService.sendUptimeAlert(
+                                            organizationId = orgId,
+                                            monitorUrl = "https://api.example.com/health",
+                                            isDown = true,
+                                            statusCode = 500,
+                                            responseTime = 1245,
+                                            errorMessage = "Internal Server Error",
+                                            monitorId = java.util.UUID.randomUUID(),
+                                            baseUrl = frontendUrl
+                                        )
+                                }
+
+                                else -> {
                                     errors.add(
-                                        "Discord notification failed (no Discord integration configured or error " +
-                                            "occurred)"
+                                        "Notification type '${request.type}' not supported for Discord channel"
                                     )
                                 }
-                            }.getOrElse { e ->
-                                errors.add("Discord failed: ${e.message}")
                             }
+                            if (!discordSent && errors.isEmpty()) {
+                                errors.add(
+                                    "Discord notification failed (no Discord integration configured or error " +
+                                        "occurred)"
+                                )
+                            }
+                        }.getOrElse { e ->
+                            errors.add("Discord failed: ${e.message}")
                         }
                     }
 

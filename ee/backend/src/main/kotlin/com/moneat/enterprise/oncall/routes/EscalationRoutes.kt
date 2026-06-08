@@ -4,12 +4,11 @@
 
 package com.moneat.enterprise.oncall.routes
 
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.enterprise.oncall.services.EscalationPolicyService
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -56,26 +55,14 @@ fun Route.escalationRoutes() {
     route("/v1/escalation-policies") {
         authenticate("auth-jwt") {
             get {
-                val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
-
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                    return@get
-                }
+                val organizationId = call.requireCurrentOrg()?.orgId ?: return@get
 
                 val policies = policyService.listPolicies(organizationId)
                 call.respond(policies)
             }
 
             post {
-                val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
-
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                    return@post
-                }
+                val organizationId = call.requireCurrentOrg()?.orgId ?: return@post
 
                 val request = call.receive<CreatePolicyRequest>()
 
@@ -111,14 +98,8 @@ fun Route.escalationRoutes() {
             }
 
             get("/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val organizationId = call.requireCurrentOrg()?.orgId ?: return@get
                 val policyId = call.parameters["id"]?.toIntOrNull()
-
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                    return@get
-                }
 
                 if (policyId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid policy ID"))
@@ -134,14 +115,8 @@ fun Route.escalationRoutes() {
             }
 
             put("/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val organizationId = call.requireCurrentOrg()?.orgId ?: return@put
                 val policyId = call.parameters["id"]?.toIntOrNull()
-
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                    return@put
-                }
 
                 if (policyId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid policy ID"))
@@ -193,14 +168,8 @@ fun Route.escalationRoutes() {
             }
 
             delete("/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val organizationId = call.requireCurrentOrg()?.orgId ?: return@delete
                 val policyId = call.parameters["id"]?.toIntOrNull()
-
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                    return@delete
-                }
 
                 if (policyId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid policy ID"))

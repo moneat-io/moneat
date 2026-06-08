@@ -16,18 +16,16 @@
 
 package com.moneat.incident.routes
 
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.incident.models.IncidentEventLog
 import com.moneat.incident.models.IncidentProviderConfigs
 import com.moneat.incident.models.IncidentRoutingRules
 import com.moneat.incident.models.ProviderConfig
 import com.moneat.incident.services.IncidentProviderRegistry
-import com.moneat.shared.models.Memberships
 import com.moneat.utils.BooleanResponse
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.response.respond
@@ -72,17 +70,7 @@ fun Route.incidentProviderRoutes() {
         authenticate("auth-jwt") {
             // List provider configs for organization
             get {
-                val principal = call.principal<JWTPrincipal>()!!
-                val userId = principal.payload.getClaim("userId").asInt()
-
-                val organizationId =
-                    transaction {
-                        Memberships
-                            .selectAll()
-                            .where { Memberships.user_id eq userId }
-                            .firstOrNull()
-                            ?.get(Memberships.organization_id)
-                    } ?: return@get call.respond(HttpStatusCode.Forbidden)
+                val organizationId = call.requireCurrentOrg()?.orgId ?: return@get
 
                 val configs =
                     transaction {
@@ -125,20 +113,10 @@ fun Route.incidentProviderRoutes() {
 
             // Test connection
             post("/{id}/test") {
-                val principal = call.principal<JWTPrincipal>()!!
-                val userId = principal.payload.getClaim("userId").asInt()
+                val organizationId = call.requireCurrentOrg()?.orgId ?: return@post
                 val configId =
                     call.parameters["id"]?.toIntOrNull()
                         ?: return@post call.respond(HttpStatusCode.BadRequest)
-
-                val organizationId =
-                    transaction {
-                        Memberships
-                            .selectAll()
-                            .where { Memberships.user_id eq userId }
-                            .firstOrNull()
-                            ?.get(Memberships.organization_id)
-                    } ?: return@post call.respond(HttpStatusCode.Forbidden)
 
                 val config =
                     transaction {
@@ -185,20 +163,10 @@ fun Route.incidentProviderRoutes() {
 
             // Get routing rules
             get("/{id}/rules") {
-                val principal = call.principal<JWTPrincipal>()!!
-                val userId = principal.payload.getClaim("userId").asInt()
+                val organizationId = call.requireCurrentOrg()?.orgId ?: return@get
                 val configId =
                     call.parameters["id"]?.toIntOrNull()
                         ?: return@get call.respond(HttpStatusCode.BadRequest)
-
-                val organizationId =
-                    transaction {
-                        Memberships
-                            .selectAll()
-                            .where { Memberships.user_id eq userId }
-                            .firstOrNull()
-                            ?.get(Memberships.organization_id)
-                    } ?: return@get call.respond(HttpStatusCode.Forbidden)
 
                 val hasAccess =
                     transaction {
@@ -241,17 +209,7 @@ fun Route.incidentProviderRoutes() {
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleCreateProviderConfig() {
-    val principal = call.principal<JWTPrincipal>()!!
-    val userId = principal.payload.getClaim("userId").asInt()
-
-    val organizationId =
-        transaction {
-            Memberships
-                .selectAll()
-                .where { Memberships.user_id eq userId }
-                .firstOrNull()
-                ?.get(Memberships.organization_id)
-        } ?: return call.respond(HttpStatusCode.Forbidden)
+    val organizationId = call.requireCurrentOrg()?.orgId ?: return
 
     val request = call.receive<CreateProviderConfigRequest>()
 
@@ -296,20 +254,10 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCreateProviderCo
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateProviderConfig() {
-    val principal = call.principal<JWTPrincipal>()!!
-    val userId = principal.payload.getClaim("userId").asInt()
+    val organizationId = call.requireCurrentOrg()?.orgId ?: return
     val configId =
         call.parameters["id"]?.toIntOrNull()
             ?: return call.respond(HttpStatusCode.BadRequest)
-
-    val organizationId =
-        transaction {
-            Memberships
-                .selectAll()
-                .where { Memberships.user_id eq userId }
-                .firstOrNull()
-                ?.get(Memberships.organization_id)
-        } ?: return call.respond(HttpStatusCode.Forbidden)
 
     val request = call.receive<UpdateProviderConfigRequest>()
 
@@ -372,20 +320,10 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateProviderCo
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteProviderConfig() {
-    val principal = call.principal<JWTPrincipal>()!!
-    val userId = principal.payload.getClaim("userId").asInt()
+    val organizationId = call.requireCurrentOrg()?.orgId ?: return
     val configId =
         call.parameters["id"]?.toIntOrNull()
             ?: return call.respond(HttpStatusCode.BadRequest)
-
-    val organizationId =
-        transaction {
-            Memberships
-                .selectAll()
-                .where { Memberships.user_id eq userId }
-                .firstOrNull()
-                ?.get(Memberships.organization_id)
-        } ?: return call.respond(HttpStatusCode.Forbidden)
 
     val deleted =
         transaction {
@@ -402,20 +340,10 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteProviderCo
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleUpsertRoutingRules() {
-    val principal = call.principal<JWTPrincipal>()!!
-    val userId = principal.payload.getClaim("userId").asInt()
+    val organizationId = call.requireCurrentOrg()?.orgId ?: return
     val configId =
         call.parameters["id"]?.toIntOrNull()
             ?: return call.respond(HttpStatusCode.BadRequest)
-
-    val organizationId =
-        transaction {
-            Memberships
-                .selectAll()
-                .where { Memberships.user_id eq userId }
-                .firstOrNull()
-                ?.get(Memberships.organization_id)
-        } ?: return call.respond(HttpStatusCode.Forbidden)
 
     val hasAccess =
         transaction {
@@ -454,8 +382,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpsertRoutingRul
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleGetEventLog() {
-    val principal = call.principal<JWTPrincipal>()!!
-    val userId = principal.payload.getClaim("userId").asInt()
+    val organizationId = call.requireCurrentOrg()?.orgId ?: return
     val configId =
         call.parameters["id"]?.toIntOrNull()
             ?: return call.respond(HttpStatusCode.BadRequest)
@@ -463,15 +390,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetEventLog() {
     if (limit <= 0) {
         throw BadRequestException("limit must be a positive integer")
     }
-
-    val organizationId =
-        transaction {
-            Memberships
-                .selectAll()
-                .where { Memberships.user_id eq userId }
-                .firstOrNull()
-                ?.get(Memberships.organization_id)
-        } ?: return call.respond(HttpStatusCode.Forbidden)
 
     val hasAccess =
         transaction {

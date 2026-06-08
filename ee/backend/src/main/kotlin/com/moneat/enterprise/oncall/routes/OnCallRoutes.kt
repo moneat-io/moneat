@@ -4,6 +4,7 @@
 
 package com.moneat.enterprise.oncall.routes
 
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.enterprise.oncall.models.OnCallOverrides
 import com.moneat.enterprise.oncall.models.OnCallScheduleUsergroups
 import com.moneat.enterprise.oncall.services.OnCallScheduleService
@@ -14,8 +15,6 @@ import com.moneat.utils.ErrorResponse
 import com.moneat.utils.MessageResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -121,26 +120,14 @@ fun Route.onCallRoutes(
     route("/v1/on-call/schedules") {
         authenticate("auth-jwt") {
             get {
-                val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
-
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                    return@get
-                }
+                val organizationId = call.requireCurrentOrg()?.orgId ?: return@get
 
                 val schedules = scheduleService.listSchedules(organizationId)
                 call.respond(schedules)
             }
 
             post {
-                val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
-
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                    return@post
-                }
+                val organizationId = call.requireCurrentOrg()?.orgId ?: return@post
 
                 val request = call.receive<CreateScheduleRequest>()
 
@@ -166,14 +153,8 @@ fun Route.onCallRoutes(
             }
 
             get("/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val organizationId = call.requireCurrentOrg()?.orgId ?: return@get
                 val scheduleId = call.parameters["id"]?.toIntOrNull()
-
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                    return@get
-                }
 
                 if (scheduleId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid schedule ID"))
@@ -194,14 +175,8 @@ fun Route.onCallRoutes(
             }
 
             put("/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val organizationId = call.requireCurrentOrg()?.orgId ?: return@put
                 val scheduleId = call.parameters["id"]?.toIntOrNull()
-
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                    return@put
-                }
 
                 if (scheduleId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid schedule ID"))
@@ -242,14 +217,8 @@ fun Route.onCallRoutes(
             }
 
             delete("/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val organizationId = call.requireCurrentOrg()?.orgId ?: return@delete
                 val scheduleId = call.parameters["id"]?.toIntOrNull()
-
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                    return@delete
-                }
 
                 if (scheduleId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid schedule ID"))
@@ -270,14 +239,8 @@ fun Route.onCallRoutes(
             }
 
             get("/{id}/current") {
-                val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val organizationId = call.requireCurrentOrg()?.orgId ?: return@get
                 val scheduleId = call.parameters["id"]?.toIntOrNull()
-
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                    return@get
-                }
 
                 if (scheduleId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid schedule ID"))
@@ -298,16 +261,11 @@ fun Route.onCallRoutes(
             }
 
             get("/{id}/timeline") {
-                val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val organizationId = call.requireCurrentOrg()?.orgId ?: return@get
                 val scheduleId = call.parameters["id"]?.toIntOrNull()
                 val startParam = call.request.queryParameters["start"]
                 val endParam = call.request.queryParameters["end"]
 
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                    return@get
-                }
                 if (scheduleId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid schedule ID"))
                     return@get
@@ -339,23 +297,13 @@ fun Route.onCallRoutes(
             }
 
             post("/{id}/overrides") {
-                val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
-                val userId = principal?.payload?.getClaim("userId")?.asInt()
+                val context = call.requireCurrentOrg() ?: return@post
+                val organizationId = context.orgId
+                val userId = context.userId
                 val scheduleId = call.parameters["id"]?.toIntOrNull()
-
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                    return@post
-                }
 
                 if (scheduleId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid schedule ID"))
-                    return@post
-                }
-
-                if (userId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@post
                 }
 
@@ -401,14 +349,8 @@ fun Route.onCallRoutes(
     route("/v1/on-call/overrides") {
         authenticate("auth-jwt") {
             delete("/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val organizationId = call.requireCurrentOrg()?.orgId ?: return@delete
                 val overrideId = call.parameters["id"]?.toIntOrNull()
-
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                    return@delete
-                }
 
                 if (overrideId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid override ID"))
@@ -434,15 +376,10 @@ fun Route.onCallRoutes(
     route("/v1/on-call/schedules/{id}/slack-usergroup") {
         authenticate("auth-jwt") {
             put {
-                val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
-                val userId = principal?.payload?.getClaim("userId")?.asInt()
+                val context = call.requireCurrentOrg() ?: return@put
+                val organizationId = context.orgId
+                val userId = context.userId
                 val scheduleId = call.parameters["id"]?.toIntOrNull()
-
-                if (organizationId == null || userId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                    return@put
-                }
 
                 if (scheduleId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid schedule ID"))
@@ -502,14 +439,8 @@ fun Route.onCallRoutes(
             }
 
             delete {
-                val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val organizationId = call.requireCurrentOrg()?.orgId ?: return@delete
                 val scheduleId = call.parameters["id"]?.toIntOrNull()
-
-                if (organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                    return@delete
-                }
 
                 if (scheduleId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid schedule ID"))

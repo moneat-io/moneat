@@ -93,9 +93,9 @@ class AuthTokenServiceTest {
     @Test
     fun `generateToken creates token with valid scopes`() {
         val userId = seedUser()
-        seedOrgAndMembership(userId)
+        val orgId = seedOrgAndMembership(userId)
 
-        val result = service.generateToken(userId, "my-token", listOf("project:read"))
+        val result = service.generateToken(userId, orgId, "my-token", listOf("project:read"))
         assertNotNull(result.token)
         assertTrue(result.token!!.startsWith("sntrys_"))
         assertEquals("my-token", result.name)
@@ -106,7 +106,7 @@ class AuthTokenServiceTest {
     fun `generateToken rejects invalid scopes`() {
         val userId = seedUser()
         assertFailsWith<IllegalArgumentException> {
-            service.generateToken(userId, "my-token", listOf("invalid:scope"))
+            service.generateToken(userId, 1, "my-token", listOf("invalid:scope"))
         }
     }
 
@@ -114,7 +114,7 @@ class AuthTokenServiceTest {
     fun `generateToken rejects blank name`() {
         val userId = seedUser()
         assertFailsWith<IllegalArgumentException> {
-            service.generateToken(userId, "", listOf("project:read"))
+            service.generateToken(userId, 1, "", listOf("project:read"))
         }
     }
 
@@ -123,8 +123,8 @@ class AuthTokenServiceTest {
     @Test
     fun `validateToken returns user info for valid token`() {
         val userId = seedUser()
-        seedOrgAndMembership(userId)
-        val created = service.generateToken(userId, "test", listOf("project:read"))
+        val orgId = seedOrgAndMembership(userId)
+        val created = service.generateToken(userId, orgId, "test", listOf("project:read"))
 
         val result = service.validateToken(created.token!!)
         assertNotNull(result)
@@ -145,8 +145,8 @@ class AuthTokenServiceTest {
     @Test
     fun `validateToken updates last_used_at`() {
         val userId = seedUser()
-        seedOrgAndMembership(userId)
-        val created = service.generateToken(userId, "test", listOf("project:read"))
+        val orgId = seedOrgAndMembership(userId)
+        val created = service.generateToken(userId, orgId, "test", listOf("project:read"))
 
         service.validateToken(created.token!!)
 
@@ -165,9 +165,9 @@ class AuthTokenServiceTest {
     @Test
     fun `listUserTokens returns all user tokens`() {
         val userId = seedUser()
-        seedOrgAndMembership(userId)
-        service.generateToken(userId, "token-1", listOf("project:read"))
-        service.generateToken(userId, "token-2", listOf("org:read"))
+        val orgId = seedOrgAndMembership(userId)
+        service.generateToken(userId, orgId, "token-1", listOf("project:read"))
+        service.generateToken(userId, orgId, "token-2", listOf("org:read"))
 
         val tokens = service.listUserTokens(userId)
         assertEquals(2, tokens.size)
@@ -185,8 +185,8 @@ class AuthTokenServiceTest {
     @Test
     fun `revokeToken deletes the token`() {
         val userId = seedUser()
-        seedOrgAndMembership(userId)
-        val created = service.generateToken(userId, "to-revoke", listOf("project:read"))
+        val orgId = seedOrgAndMembership(userId)
+        val created = service.generateToken(userId, orgId, "to-revoke", listOf("project:read"))
 
         assertTrue(service.revokeToken(userId, created.id))
         assertTrue(service.listUserTokens(userId).isEmpty())
@@ -196,8 +196,8 @@ class AuthTokenServiceTest {
     fun `revokeToken returns false for wrong user`() {
         val userId = seedUser("user1@test.com")
         val otherUser = seedUser("user2@test.com")
-        seedOrgAndMembership(userId)
-        val created = service.generateToken(userId, "token", listOf("project:read"))
+        val orgId = seedOrgAndMembership(userId)
+        val created = service.generateToken(userId, orgId, "token", listOf("project:read"))
 
         assertFalse(service.revokeToken(otherUser, created.id))
     }
@@ -213,8 +213,8 @@ class AuthTokenServiceTest {
     @Test
     fun `updateToken updates name`() {
         val userId = seedUser()
-        seedOrgAndMembership(userId)
-        val created = service.generateToken(userId, "old-name", listOf("project:read"))
+        val orgId = seedOrgAndMembership(userId)
+        val created = service.generateToken(userId, orgId, "old-name", listOf("project:read"))
 
         assertTrue(service.updateToken(userId, created.id, "new-name", null))
         val tokens = service.listUserTokens(userId)
@@ -224,8 +224,8 @@ class AuthTokenServiceTest {
     @Test
     fun `updateToken updates scopes`() {
         val userId = seedUser()
-        seedOrgAndMembership(userId)
-        val created = service.generateToken(userId, "token", listOf("project:read"))
+        val orgId = seedOrgAndMembership(userId)
+        val created = service.generateToken(userId, orgId, "token", listOf("project:read"))
 
         assertTrue(service.updateToken(userId, created.id, null, listOf("project:read", "org:read")))
         val tokens = service.listUserTokens(userId)
@@ -235,8 +235,8 @@ class AuthTokenServiceTest {
     @Test
     fun `updateToken rejects invalid scopes`() {
         val userId = seedUser()
-        seedOrgAndMembership(userId)
-        val created = service.generateToken(userId, "token", listOf("project:read"))
+        val orgId = seedOrgAndMembership(userId)
+        val created = service.generateToken(userId, orgId, "token", listOf("project:read"))
 
         assertFailsWith<IllegalArgumentException> {
             service.updateToken(userId, created.id, null, listOf("bad:scope"))
@@ -247,8 +247,8 @@ class AuthTokenServiceTest {
     fun `updateToken returns false for wrong user`() {
         val userId = seedUser("user1@test.com")
         val otherUser = seedUser("user2@test.com")
-        seedOrgAndMembership(userId)
-        val created = service.generateToken(userId, "token", listOf("project:read"))
+        val orgId = seedOrgAndMembership(userId)
+        val created = service.generateToken(userId, orgId, "token", listOf("project:read"))
 
         assertFalse(service.updateToken(otherUser, created.id, "renamed", null))
     }

@@ -16,15 +16,13 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.models.CreateDebuggerProbeRequest
 import com.moneat.datadog.models.UpdateDebuggerProbeRequest
 import com.moneat.datadog.services.DebuggerProbeService
-import com.moneat.shared.models.Memberships
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -33,46 +31,23 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
-import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.UUID
 
 fun Route.debuggerProbeRoutes() {
     route("/v1/infra/debugger/probes") {
         authenticate("auth-jwt") {
             get {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal?.payload?.getClaim("userId")?.asInt()
-                if (userId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
-                    return@get
-                }
-
-                val organizationIds = getOrgIdsForUser(userId)
-                val probes = DebuggerProbeService.listProbes(organizationIds)
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@get
+                val probes = DebuggerProbeService.listProbes(listOf(orgId))
                 call.respond(HttpStatusCode.OK, mapOf("probes" to probes))
             }
 
             post {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal?.payload?.getClaim("userId")?.asInt()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
-
-                if (userId == null || organizationId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
-                    return@post
-                }
-
-                val organizationIds = getOrgIdsForUser(userId)
-                if (organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Access denied"))
-                    return@post
-                }
+                val context = call.requireCurrentOrg() ?: return@post
 
                 try {
                     val request = call.receive<CreateDebuggerProbeRequest>()
-                    val createdProbe = DebuggerProbeService.createProbe(organizationId, userId, request)
+                    val createdProbe = DebuggerProbeService.createProbe(context.orgId, context.userId, request)
                     call.respond(HttpStatusCode.Created, createdProbe)
                 } catch (e: IllegalArgumentException) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Invalid request")))
@@ -80,12 +55,7 @@ fun Route.debuggerProbeRoutes() {
             }
 
             put("/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal?.payload?.getClaim("userId")?.asInt()
-                if (userId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
-                    return@put
-                }
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@put
 
                 val probeId = call.parameters["id"]?.let { runCatching { UUID.fromString(it) }.getOrNull() }
                 if (probeId == null) {
@@ -93,10 +63,9 @@ fun Route.debuggerProbeRoutes() {
                     return@put
                 }
 
-                val organizationIds = getOrgIdsForUser(userId)
                 try {
                     val request = call.receive<UpdateDebuggerProbeRequest>()
-                    val updatedProbe = DebuggerProbeService.updateProbe(probeId, organizationIds, request)
+                    val updatedProbe = DebuggerProbeService.updateProbe(probeId, listOf(orgId), request)
                     if (updatedProbe == null) {
                         call.respond(HttpStatusCode.NotFound, mapOf("error" to "Probe not found"))
                         return@put
@@ -108,12 +77,7 @@ fun Route.debuggerProbeRoutes() {
             }
 
             delete("/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal?.payload?.getClaim("userId")?.asInt()
-                if (userId == null) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
-                    return@delete
-                }
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@delete
 
                 val probeId = call.parameters["id"]?.let { runCatching { UUID.fromString(it) }.getOrNull() }
                 if (probeId == null) {
@@ -121,8 +85,7 @@ fun Route.debuggerProbeRoutes() {
                     return@delete
                 }
 
-                val organizationIds = getOrgIdsForUser(userId)
-                val deleted = DebuggerProbeService.deleteProbe(probeId, organizationIds)
+                val deleted = DebuggerProbeService.deleteProbe(probeId, listOf(orgId))
                 if (!deleted) {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "Probe not found"))
                     return@delete
@@ -141,14 +104,5 @@ fun Route.debuggerProbeRoutes() {
             val probes = DebuggerProbeService.listAgentProbes(organizationId, service, environment)
             call.respond(HttpStatusCode.OK, mapOf("probes" to probes))
         }
-    }
-}
-
-private fun getOrgIdsForUser(userId: Int): List<Int> {
-    return transaction {
-        Memberships
-            .selectAll()
-            .where { Memberships.user_id eq userId }
-            .map { it[Memberships.organization_id] }
     }
 }

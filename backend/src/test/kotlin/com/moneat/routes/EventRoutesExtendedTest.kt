@@ -148,8 +148,11 @@ class EventRoutesExtendedTest {
         routing { apiRoutes() }
     }
 
-    private fun token(userId: Int): String =
-        RouteTestSupport.createToken(userId)
+    private fun token(
+        userId: Int,
+        orgId: Int = 1
+    ): String =
+        RouteTestSupport.createToken(userId, orgId)
 
     private fun demoToken(): String =
         JWT.create().withIssuer("moneat").withAudience("moneat-users")
@@ -158,7 +161,7 @@ class EventRoutesExtendedTest {
             .withClaim("isDemo", true)
             .sign(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
 
-    private fun seedUserWithProject(): Pair<Int, Long> {
+    private fun seedUserWithProject(): Triple<Int, Long, Int> {
         val orgId = transaction {
             Organizations.insert {
                 it[name] = "Ext Test Org"
@@ -186,21 +189,21 @@ class EventRoutesExtendedTest {
                 it[slug] = "ext-project-${System.nanoTime()}"
             } get Projects.id
         }
-        return Pair(userId, projectId)
+        return Triple(userId, projectId, orgId)
     }
 
     // ──── GET /v1/projects ────
 
     @Test
     fun `GET projects returns 200 with project list`() = testApplication {
-        val (userId, _) = seedUserWithProject()
+        val (userId, _, orgId) = seedUserWithProject()
         coEvery {
-            mockDashboardService.getProjects(userId, any())
+            mockDashboardService.getProjects(orgId, any())
         } returns listOf(sampleProject())
 
         application { installTestApp() }
         val response = client.get(V1_PROJECTS) {
-            withAuth(token(userId))
+            withAuth(token(userId, orgId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains(TEST_PROJECT_NAME))
@@ -217,14 +220,14 @@ class EventRoutesExtendedTest {
 
     @Test
     fun `POST projects returns 201 on success`() = testApplication {
-        val (userId, _) = seedUserWithProject()
+        val (userId, _, orgId) = seedUserWithProject()
         coEvery {
-            mockDashboardService.createProject(userId, any())
+            mockDashboardService.createProject(orgId, any())
         } returns sampleProject()
 
         application { installTestApp() }
         val response = client.post(V1_PROJECTS) {
-            withAuth(token(userId))
+            withAuth(token(userId, orgId))
             contentType(ContentType.Application.Json)
             setBody("""{"name":"New Project"}""")
         }
@@ -234,14 +237,14 @@ class EventRoutesExtendedTest {
 
     @Test
     fun `POST projects returns 403 when project limit reached`() = testApplication {
-        val (userId, _) = seedUserWithProject()
+        val (userId, _, orgId) = seedUserWithProject()
         coEvery {
-            mockDashboardService.createProject(userId, any())
+            mockDashboardService.createProject(orgId, any())
         } throws IllegalStateException("project_limit_reached")
 
         application { installTestApp() }
         val response = client.post(V1_PROJECTS) {
-            withAuth(token(userId))
+            withAuth(token(userId, orgId))
             contentType(ContentType.Application.Json)
             setBody("""{"name":"New Project"}""")
         }
@@ -251,14 +254,14 @@ class EventRoutesExtendedTest {
 
     @Test
     fun `POST projects returns 400 on other errors`() = testApplication {
-        val (userId, _) = seedUserWithProject()
+        val (userId, _, orgId) = seedUserWithProject()
         coEvery {
-            mockDashboardService.createProject(userId, any())
+            mockDashboardService.createProject(orgId, any())
         } throws IllegalStateException("Invalid project name")
 
         application { installTestApp() }
         val response = client.post(V1_PROJECTS) {
-            withAuth(token(userId))
+            withAuth(token(userId, orgId))
             contentType(ContentType.Application.Json)
             setBody("""{"name":""}""")
         }

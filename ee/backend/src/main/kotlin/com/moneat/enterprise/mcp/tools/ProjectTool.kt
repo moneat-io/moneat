@@ -27,7 +27,7 @@ class ListProjectsTool : McpTool {
         context: McpContext
     ): ToolCallResult {
         val projects = projectDashboardService.getProjects(
-            context.userId
+            context.organizationId
         )
         return jsonResult(projects)
     }
@@ -59,7 +59,7 @@ class CreateProjectTool : McpTool {
             ?: return errorResult("platform is required")
 
         val project = projectDashboardService.createProject(
-            userId = context.userId,
+            orgId = context.organizationId,
             request = CreateProjectRequest(
                 name = name,
                 framework = platform

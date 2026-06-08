@@ -16,6 +16,7 @@
 
 package com.moneat.org.routes
 
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.config.EnvConfig
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.SlackService
@@ -233,27 +234,9 @@ fun Route.integrationRoutes() {
         // List all integrations for the organization
         get {
             suspendRunCatching {
-                val principal = call.principal<JWTPrincipal>()
-                if (principal == null) {
-                    logger.error("No JWT principal found")
-                    return@get call.respond(HttpStatusCode.Unauthorized, MessageResponse("Unauthorized"))
-                }
-
-                val userId = principal.payload.getClaim("userId").asInt()
-                logger.info("Fetching integrations for user $userId")
-
-                val organizationId =
-                    transaction {
-                        Memberships
-                            .selectAll()
-                            .where { Memberships.user_id eq userId }
-                            .firstOrNull()
-                            ?.get(Memberships.organization_id)
-                    }
-
-                if (organizationId == null) {
-                    return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
-                }
+                val context = call.requireCurrentOrg() ?: return@get
+                val organizationId = context.orgId
+                logger.info("Fetching integrations for user ${context.userId}")
 
                 val integrations =
                     transaction {
@@ -284,21 +267,9 @@ fun Route.integrationRoutes() {
         // Start Slack OAuth flow
         get("/slack/oauth/start") {
             suspendRunCatching {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-
-                val organizationId =
-                    transaction {
-                        Memberships
-                            .selectAll()
-                            .where { Memberships.user_id eq userId }
-                            .firstOrNull()
-                            ?.get(Memberships.organization_id)
-                    }
-
-                if (organizationId == null) {
-                    return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
-                }
+                val context = call.requireCurrentOrg() ?: return@get
+                val userId = context.userId
+                val organizationId = context.orgId
 
                 val clientId = EnvConfig.get("SLACK_CLIENT_ID")
                 if (clientId == null) {
@@ -339,17 +310,7 @@ fun Route.integrationRoutes() {
 
         // List available Slack channels
         get("/slack/channels") {
-            val principal = call.principal<JWTPrincipal>()
-            val userId = principal!!.payload.getClaim("userId").asInt()
-
-            val organizationId =
-                transaction {
-                    Memberships
-                        .selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .firstOrNull()
-                        ?.get(Memberships.organization_id)
-                } ?: return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+            val organizationId = call.requireCurrentOrg()?.orgId ?: return@get
 
             val accessToken =
                 transaction {
@@ -368,17 +329,7 @@ fun Route.integrationRoutes() {
 
         // Update channel selection
         put("/slack/channel") {
-            val principal = call.principal<JWTPrincipal>()
-            val userId = principal!!.payload.getClaim("userId").asInt()
-
-            val organizationId =
-                transaction {
-                    Memberships
-                        .selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .firstOrNull()
-                        ?.get(Memberships.organization_id)
-                } ?: return@put call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+            val organizationId = call.requireCurrentOrg()?.orgId ?: return@put
 
             val request = call.receive<SlackChannelSelection>()
 
@@ -398,17 +349,7 @@ fun Route.integrationRoutes() {
 
         // List available Slack user groups
         get("/slack/usergroups") {
-            val principal = call.principal<JWTPrincipal>()
-            val userId = principal!!.payload.getClaim("userId").asInt()
-
-            val organizationId =
-                transaction {
-                    Memberships
-                        .selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .firstOrNull()
-                        ?.get(Memberships.organization_id)
-                } ?: return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+            val organizationId = call.requireCurrentOrg()?.orgId ?: return@get
 
             val accessToken =
                 transaction {
@@ -427,17 +368,7 @@ fun Route.integrationRoutes() {
 
         // Toggle enabled status
         put("/slack/toggle") {
-            val principal = call.principal<JWTPrincipal>()
-            val userId = principal!!.payload.getClaim("userId").asInt()
-
-            val organizationId =
-                transaction {
-                    Memberships
-                        .selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .firstOrNull()
-                        ?.get(Memberships.organization_id)
-                } ?: return@put call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+            val organizationId = call.requireCurrentOrg()?.orgId ?: return@put
 
             val currentEnabled =
                 transaction {
@@ -468,17 +399,7 @@ fun Route.integrationRoutes() {
 
         // Delete Slack integration
         delete("/slack") {
-            val principal = call.principal<JWTPrincipal>()
-            val userId = principal!!.payload.getClaim("userId").asInt()
-
-            val organizationId =
-                transaction {
-                    Memberships
-                        .selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .firstOrNull()
-                        ?.get(Memberships.organization_id)
-                } ?: return@delete call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+            val organizationId = call.requireCurrentOrg()?.orgId ?: return@delete
 
             val deleted =
                 transaction {
@@ -497,17 +418,7 @@ fun Route.integrationRoutes() {
 
         // Test Slack integration
         post("/slack/test") {
-            val principal = call.principal<JWTPrincipal>()
-            val userId = principal!!.payload.getClaim("userId").asInt()
-
-            val organizationId =
-                transaction {
-                    Memberships
-                        .selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .firstOrNull()
-                        ?.get(Memberships.organization_id)
-                } ?: return@post call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+            val organizationId = call.requireCurrentOrg()?.orgId ?: return@post
 
             val (success, message) = slackService.testConnection(organizationId)
 
@@ -520,21 +431,9 @@ fun Route.integrationRoutes() {
         // Discord OAuth Start
         get("/discord/oauth/start") {
             suspendRunCatching {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-
-                val organizationId =
-                    transaction {
-                        Memberships
-                            .selectAll()
-                            .where { Memberships.user_id eq userId }
-                            .firstOrNull()
-                            ?.get(Memberships.organization_id)
-                    }
-
-                if (organizationId == null) {
-                    return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
-                }
+                val context = call.requireCurrentOrg() ?: return@get
+                val userId = context.userId
+                val organizationId = context.orgId
 
                 val clientId =
                     EnvConfig.get("DISCORD_CLIENT_ID")
@@ -575,17 +474,7 @@ fun Route.integrationRoutes() {
 
         // Get Discord channels
         get("/discord/channels") {
-            val principal = call.principal<JWTPrincipal>()
-            val userId = principal!!.payload.getClaim("userId").asInt()
-
-            val organizationId =
-                transaction {
-                    Memberships
-                        .selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .firstOrNull()
-                        ?.get(Memberships.organization_id)
-                } ?: return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+            val organizationId = call.requireCurrentOrg()?.orgId ?: return@get
 
             val guildId =
                 transaction {
@@ -613,18 +502,8 @@ fun Route.integrationRoutes() {
 
         // Update Discord channel
         put("/discord/channel") {
-            val principal = call.principal<JWTPrincipal>()
-            val userId = principal!!.payload.getClaim("userId").asInt()
+            val organizationId = call.requireCurrentOrg()?.orgId ?: return@put
             val selection = call.receive<SlackChannelSelection>()
-
-            val organizationId =
-                transaction {
-                    Memberships
-                        .selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .firstOrNull()
-                        ?.get(Memberships.organization_id)
-                } ?: return@put call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
 
             val updated =
                 transaction {
@@ -648,17 +527,7 @@ fun Route.integrationRoutes() {
 
         // Toggle Discord integration
         put("/discord/toggle") {
-            val principal = call.principal<JWTPrincipal>()
-            val userId = principal!!.payload.getClaim("userId").asInt()
-
-            val organizationId =
-                transaction {
-                    Memberships
-                        .selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .firstOrNull()
-                        ?.get(Memberships.organization_id)
-                } ?: return@put call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+            val organizationId = call.requireCurrentOrg()?.orgId ?: return@put
 
             val updated =
                 transaction {
@@ -690,17 +559,7 @@ fun Route.integrationRoutes() {
 
         // Delete Discord integration
         delete("/discord") {
-            val principal = call.principal<JWTPrincipal>()
-            val userId = principal!!.payload.getClaim("userId").asInt()
-
-            val organizationId =
-                transaction {
-                    Memberships
-                        .selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .firstOrNull()
-                        ?.get(Memberships.organization_id)
-                } ?: return@delete call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+            val organizationId = call.requireCurrentOrg()?.orgId ?: return@delete
 
             val deleted =
                 transaction {
@@ -719,17 +578,7 @@ fun Route.integrationRoutes() {
 
         // Test Discord integration
         post("/discord/test") {
-            val principal = call.principal<JWTPrincipal>()
-            val userId = principal!!.payload.getClaim("userId").asInt()
-
-            val organizationId =
-                transaction {
-                    Memberships
-                        .selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .firstOrNull()
-                        ?.get(Memberships.organization_id)
-                } ?: return@post call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+            val organizationId = call.requireCurrentOrg()?.orgId ?: return@post
 
             val frontendUrl = EnvConfig.get("FRONTEND_URL") ?: "https://moneat.io"
             val (success, message) = discordService.testConnection(organizationId, frontendUrl)

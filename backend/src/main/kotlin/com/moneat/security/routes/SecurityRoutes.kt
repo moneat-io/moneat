@@ -16,13 +16,13 @@
 
 package com.moneat.security.routes
 
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.config.ClickHouseClient
-import com.moneat.shared.models.Memberships
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
@@ -35,11 +35,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import mu.KotlinLogging
-import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
-import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
 
 private val logger = KotlinLogging.logger {}
 
@@ -51,18 +46,7 @@ private const val MAX_IDENTIFIER_LENGTH = 255
 private const val MAX_NAME_LENGTH = 64
 private const val MAX_SHORT_NAME_LENGTH = 32
 
-private fun getOrgIdsForUser(userId: Int): List<Int> {
-    return transaction {
-        Memberships
-            .selectAll()
-            .where { Memberships.user_id eq userId }
-            .map { it[Memberships.organization_id] }
-    }
-}
-
-private fun orgIdsToChCondition(orgIds: List<Int>): String {
-    return orgIds.joinToString(",") { "toUInt64($it)" }
-}
+private fun orgIdToChValue(orgId: Int): String = "toUInt64($orgId)"
 
 private fun parseLimit(limitParam: String?): Int {
     val limit = limitParam?.toIntOrNull() ?: DEFAULT_LIMIT
@@ -126,16 +110,7 @@ fun Route.securityRoutes() {
             // --- Security Events ---
 
             get("/security/events") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respondText(
-                        """{"events":[],"totalCount":0}""",
-                        ContentType.Application.Json
-                    )
-                    return@get
-                }
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@get
 
                 val db = ClickHouseClient.getDatabase()
                 val limit = parseLimit(call.parameters["limit"])
@@ -143,7 +118,7 @@ fun Route.securityRoutes() {
                 val host = sanitizeIdentifier(call.parameters["host"])
 
                 val conditions = mutableListOf(
-                    "organization_id IN (${orgIdsToChCondition(orgIds)})"
+                    "organization_id = ${orgIdToChValue(orgId)}"
                 )
                 if (severity != null) conditions.add("severity = '$severity'")
                 if (host != null) conditions.add("host = '$host'")
@@ -187,16 +162,7 @@ fun Route.securityRoutes() {
             // --- Compliance Findings ---
 
             get("/security/compliance") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respondText(
-                        """{"findings":[],"totalCount":0}""",
-                        ContentType.Application.Json
-                    )
-                    return@get
-                }
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@get
 
                 val db = ClickHouseClient.getDatabase()
                 val limit = parseLimit(call.parameters["limit"])
@@ -204,7 +170,7 @@ fun Route.securityRoutes() {
                 val status = sanitizeStatus(call.parameters["status"])
 
                 val conditions = mutableListOf(
-                    "organization_id IN (${orgIdsToChCondition(orgIds)})"
+                    "organization_id = ${orgIdToChValue(orgId)}"
                 )
                 if (framework != null) conditions.add("framework = '$framework'")
                 if (status != null) conditions.add("status = '$status'")

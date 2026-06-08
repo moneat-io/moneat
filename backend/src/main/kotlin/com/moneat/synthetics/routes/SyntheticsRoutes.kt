@@ -16,15 +16,13 @@
 
 package com.moneat.synthetics.routes
 
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.config.ClickHouseClient
-import com.moneat.shared.models.Memberships
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
@@ -42,9 +40,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import mu.KotlinLogging
-import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
 import java.util.UUID
 import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
@@ -57,18 +52,7 @@ private val json = Json { ignoreUnknownKeys = true }
 private const val DEFAULT_LIMIT = 100
 private const val MAX_LIMIT = 500
 
-private fun getOrgIdsForUser(userId: Int): List<Int> {
-    return transaction {
-        Memberships
-            .selectAll()
-            .where { Memberships.user_id eq userId }
-            .map { it[Memberships.organization_id] }
-    }
-}
-
-private fun orgIdsToChCondition(orgIds: List<Int>): String {
-    return orgIds.joinToString(",") { "toUInt64($it)" }
-}
+private fun orgIdToChValue(orgId: Int): String = "toUInt64($orgId)"
 
 private fun parseLimit(limitParam: String?): Int {
     val limit = limitParam?.toIntOrNull() ?: DEFAULT_LIMIT
@@ -117,16 +101,7 @@ fun Route.syntheticsRoutes() {
             // --- Synthetic Test Results ---
 
             get("/synthetics/results") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respondText(
-                        """{"results":[],"totalCount":0}""",
-                        ContentType.Application.Json
-                    )
-                    return@get
-                }
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@get
 
                 val limit = parseLimit(call.parameters["limit"])
                 val testType = call.parameters["test_type"]
@@ -134,7 +109,7 @@ fun Route.syntheticsRoutes() {
                 val probeDc = call.parameters["probe_dc"]
 
                 val conditions = mutableListOf(
-                    "organization_id IN (${orgIdsToChCondition(orgIds)})"
+                    "organization_id = ${orgIdToChValue(orgId)}"
                 )
                 if (!testType.isNullOrBlank()) {
                     conditions.add(
@@ -192,33 +167,13 @@ fun Route.syntheticsRoutes() {
             // --- Synthetic Test Management ---
 
             get("/synthetics/tests") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload
-                    .getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respond(
-                        HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
-                    )
-                    return@get
-                }
-                val tests = syntheticsService.listTests(orgIds.first())
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@get
+                val tests = syntheticsService.listTests(orgId)
                 call.respond(HttpStatusCode.OK, tests)
             }
 
             get("/synthetics/tests/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload
-                    .getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respond(
-                        HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
-                    )
-                    return@get
-                }
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@get
                 val testId = try {
                     UUID.fromString(call.parameters["id"])
                 } catch (_: IllegalArgumentException) {
@@ -230,7 +185,7 @@ fun Route.syntheticsRoutes() {
                 }
                 val test = syntheticsService.getTest(
                     testId,
-                    orgIds.first()
+                    orgId
                 )
                 if (test == null) {
                     call.respond(
@@ -243,17 +198,7 @@ fun Route.syntheticsRoutes() {
             }
 
             get("/synthetics/tests/{id}/results") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload
-                    .getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respondText(
-                        """{"results":[],"totalCount":0}""",
-                        ContentType.Application.Json
-                    )
-                    return@get
-                }
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@get
                 val testId = try {
                     UUID.fromString(call.parameters["id"])
                         .toString()
@@ -267,8 +212,7 @@ fun Route.syntheticsRoutes() {
                 val limit = parseLimit(call.parameters["limit"])
 
                 val conditions = listOf(
-                    "organization_id IN " +
-                        "(${orgIdsToChCondition(orgIds)})",
+                    "organization_id = ${orgIdToChValue(orgId)}",
                     "test_id = '${escapeSql(testId)}'"
                 )
                 val query = """
@@ -309,17 +253,7 @@ fun Route.syntheticsRoutes() {
             }
 
             get("/synthetics/tests/{id}/summary") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload
-                    .getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respond(
-                        HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
-                    )
-                    return@get
-                }
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@get
                 val testId = try {
                     UUID.fromString(call.parameters["id"])
                         .toString()
@@ -332,7 +266,7 @@ fun Route.syntheticsRoutes() {
                 }
                 val summary = syntheticsService.getTestSummary(
                     testId,
-                    orgIds
+                    listOf(orgId)
                 )
                 if (summary == null) {
                     call.respond(
@@ -345,21 +279,11 @@ fun Route.syntheticsRoutes() {
             }
 
             post("/synthetics/tests") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload
-                    .getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respond(
-                        HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
-                    )
-                    return@post
-                }
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@post
                 val request = call.receive<CreateSyntheticTestRequest>()
                 val test = try {
                     syntheticsService.createTest(
-                        orgIds.first(),
+                        orgId,
                         request
                     )
                 } catch (e: IllegalStateException) {
@@ -373,17 +297,7 @@ fun Route.syntheticsRoutes() {
             }
 
             put("/synthetics/tests/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload
-                    .getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respond(
-                        HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
-                    )
-                    return@put
-                }
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@put
                 val testId = try {
                     UUID.fromString(call.parameters["id"])
                 } catch (_: IllegalArgumentException) {
@@ -396,7 +310,7 @@ fun Route.syntheticsRoutes() {
                 val request = call.receive<UpdateSyntheticTestRequest>()
                 val test = syntheticsService.updateTest(
                     testId,
-                    orgIds.first(),
+                    orgId,
                     request
                 )
                 if (test == null) {
@@ -410,17 +324,7 @@ fun Route.syntheticsRoutes() {
             }
 
             delete("/synthetics/tests/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload
-                    .getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respond(
-                        HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
-                    )
-                    return@delete
-                }
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@delete
                 val testId = try {
                     UUID.fromString(call.parameters["id"])
                 } catch (_: IllegalArgumentException) {
@@ -432,7 +336,7 @@ fun Route.syntheticsRoutes() {
                 }
                 val deleted = syntheticsService.deleteTest(
                     testId,
-                    orgIds.first()
+                    orgId
                 )
                 if (deleted) {
                     call.respond(HttpStatusCode.OK, mapOf("ok" to true))
@@ -445,17 +349,7 @@ fun Route.syntheticsRoutes() {
             }
 
             post("/synthetics/tests/{id}/run") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload
-                    .getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respond(
-                        HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
-                    )
-                    return@post
-                }
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@post
                 val testId = try {
                     UUID.fromString(call.parameters["id"])
                 } catch (_: IllegalArgumentException) {
@@ -467,7 +361,7 @@ fun Route.syntheticsRoutes() {
                 }
                 val started = syntheticsService.runTestNow(
                     testId,
-                    orgIds.first()
+                    orgId
                 )
                 if (!started) {
                     call.respond(
@@ -485,55 +379,25 @@ fun Route.syntheticsRoutes() {
             // --- Synthetic Variables ---
 
             get("/synthetics/variables") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload
-                    .getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respond(
-                        HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
-                    )
-                    return@get
-                }
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@get
                 val variables = syntheticsService.listVariables(
-                    orgIds.first()
+                    orgId
                 )
                 call.respond(HttpStatusCode.OK, variables)
             }
 
             post("/synthetics/variables") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload
-                    .getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respond(
-                        HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
-                    )
-                    return@post
-                }
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@post
                 val request = call.receive<SyntheticVariableRequest>()
                 val variable = syntheticsService.createVariable(
-                    orgIds.first(),
+                    orgId,
                     request
                 )
                 call.respond(HttpStatusCode.Created, variable)
             }
 
             put("/synthetics/variables/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload
-                    .getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respond(
-                        HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
-                    )
-                    return@put
-                }
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@put
                 val varId = call.parameters["id"]?.toIntOrNull()
                 if (varId == null) {
                     call.respond(
@@ -545,7 +409,7 @@ fun Route.syntheticsRoutes() {
                 val request = call.receive<SyntheticVariableRequest>()
                 val variable = syntheticsService.updateVariable(
                     varId,
-                    orgIds.first(),
+                    orgId,
                     request
                 )
                 if (variable == null) {
@@ -559,17 +423,7 @@ fun Route.syntheticsRoutes() {
             }
 
             delete("/synthetics/variables/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload
-                    .getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
-                if (orgIds.isEmpty()) {
-                    call.respond(
-                        HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
-                    )
-                    return@delete
-                }
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@delete
                 val varId = call.parameters["id"]?.toIntOrNull()
                 if (varId == null) {
                     call.respond(
@@ -580,7 +434,7 @@ fun Route.syntheticsRoutes() {
                 }
                 val deleted = syntheticsService.deleteVariable(
                     varId,
-                    orgIds.first()
+                    orgId
                 )
                 if (deleted) {
                     call.respond(HttpStatusCode.OK, mapOf("ok" to true))

@@ -82,7 +82,10 @@ class InfraRoutesTest {
         installJwtAuth()
     }
 
-    private fun token(userId: Int): String = RouteTestSupport.createToken(userId)
+    private fun token(
+        userId: Int,
+        orgId: Int? = 1,
+    ): String = RouteTestSupport.createToken(userId, orgId)
 
     private fun seedUser(): Int = transaction {
         Users.insert {
@@ -144,7 +147,7 @@ class InfraRoutesTest {
     // ──── No membership (empty org list) ────
 
     @Test
-    fun `GET infra events with no membership returns empty list`() =
+    fun `GET infra events returns 401 when token has no organization claim`() =
         testApplication {
             val userId = seedUser()
 
@@ -154,10 +157,9 @@ class InfraRoutesTest {
             }
 
             val response = client.get(INFRA_EVENTS_PATH) {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
             }
-            assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(response.bodyAsText().contains("\"events\":[]"))
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     // ──── GET /infra/events ────
@@ -220,7 +222,7 @@ class InfraRoutesTest {
         }
 
     @Test
-    fun `GET service-checks with no membership returns empty`() =
+    fun `GET service-checks returns 401 when token has no organization claim`() =
         testApplication {
             val userId = seedUser()
 
@@ -230,12 +232,9 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/service-checks") {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
             }
-            assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(
-                response.bodyAsText().contains("\"serviceChecks\":[]")
-            )
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     // ──── GET /infra/processes ────
@@ -259,7 +258,7 @@ class InfraRoutesTest {
         }
 
     @Test
-    fun `GET processes with no membership returns empty`() =
+    fun `GET processes returns 401 when token has no organization claim`() =
         testApplication {
             val userId = seedUser()
 
@@ -269,10 +268,9 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/processes") {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
             }
-            assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(response.bodyAsText().contains("\"processes\":[]"))
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     // ──── GET /infra/containers ────
@@ -298,7 +296,7 @@ class InfraRoutesTest {
         }
 
     @Test
-    fun `GET containers with no membership returns empty`() =
+    fun `GET containers returns 401 when token has no organization claim`() =
         testApplication {
             val userId = seedUser()
 
@@ -308,10 +306,9 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/containers") {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
             }
-            assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(response.bodyAsText().contains("\"containers\":[]"))
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     // ──── GET /infra/connections ────
@@ -337,7 +334,7 @@ class InfraRoutesTest {
         }
 
     @Test
-    fun `GET connections with no membership returns empty`() =
+    fun `GET connections returns 401 when token has no organization claim`() =
         testApplication {
             val userId = seedUser()
 
@@ -347,12 +344,9 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/connections") {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
             }
-            assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(
-                response.bodyAsText().contains("\"connections\":[]")
-            )
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     // ──── GET /infra/k8s-resources ────
@@ -378,7 +372,7 @@ class InfraRoutesTest {
         }
 
     @Test
-    fun `GET k8s-resources with no membership returns empty`() =
+    fun `GET k8s-resources returns 401 when token has no organization claim`() =
         testApplication {
             val userId = seedUser()
 
@@ -388,12 +382,9 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/k8s-resources") {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
             }
-            assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(
-                response.bodyAsText().contains("\"resources\":[]")
-            )
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     // ──── GET /infra/dbm/queries ────
@@ -419,7 +410,7 @@ class InfraRoutesTest {
         }
 
     @Test
-    fun `GET dbm queries with no membership returns empty`() =
+    fun `GET dbm queries returns 401 when token has no organization claim`() =
         testApplication {
             val userId = seedUser()
 
@@ -429,10 +420,9 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/dbm/queries") {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
             }
-            assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(response.bodyAsText().contains("\"queries\":[]"))
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     // ──── GET /infra/debugger/logs ────
@@ -458,7 +448,7 @@ class InfraRoutesTest {
         }
 
     @Test
-    fun `GET debugger logs with no membership returns empty`() =
+    fun `GET debugger logs returns 401 when token has no organization claim`() =
         testApplication {
             val userId = seedUser()
 
@@ -468,10 +458,9 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/debugger/logs") {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
             }
-            assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(response.bodyAsText().contains("\"logs\":[]"))
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     // ──── GET /infra/debugger/diagnostics ────
@@ -501,7 +490,7 @@ class InfraRoutesTest {
         }
 
     @Test
-    fun `GET debugger diagnostics with no membership returns empty`() =
+    fun `GET debugger diagnostics returns 401 when token has no organization claim`() =
         testApplication {
             val userId = seedUser()
 
@@ -514,13 +503,10 @@ class InfraRoutesTest {
                 client.get("/v1/infra/debugger/diagnostics") {
                     header(
                         HttpHeaders.Authorization,
-                        "Bearer ${token(userId)}"
+                        "Bearer ${token(userId, null)}"
                     )
                 }
-            assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(
-                response.bodyAsText().contains("\"diagnostics\":[]")
-            )
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     // ──── GET /infra/sbom ────
@@ -545,7 +531,7 @@ class InfraRoutesTest {
     }
 
     @Test
-    fun `GET sbom with no membership returns empty`() =
+    fun `GET sbom returns 401 when token has no organization claim`() =
         testApplication {
             val userId = seedUser()
 
@@ -555,12 +541,9 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/sbom") {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
             }
-            assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(
-                response.bodyAsText().contains("\"packages\":[]")
-            )
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     // ──── GET /network-devices ────
@@ -586,7 +569,7 @@ class InfraRoutesTest {
         }
 
     @Test
-    fun `GET network-devices with no membership returns empty`() =
+    fun `GET network-devices returns 401 when token has no organization claim`() =
         testApplication {
             val userId = seedUser()
 
@@ -596,10 +579,9 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/network-devices") {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
             }
-            assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(response.bodyAsText().contains("\"devices\":[]"))
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     // ──── GET /network-devices/flows ────
@@ -625,7 +607,7 @@ class InfraRoutesTest {
         }
 
     @Test
-    fun `GET network-devices flows with no membership returns empty`() =
+    fun `GET network-devices flows returns 401 when token has no organization claim`() =
         testApplication {
             val userId = seedUser()
 
@@ -635,10 +617,9 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/network-devices/flows") {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
             }
-            assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(response.bodyAsText().contains("\"flows\":[]"))
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     // ──── GET /network-devices/traps ────
@@ -664,7 +645,7 @@ class InfraRoutesTest {
         }
 
     @Test
-    fun `GET network-devices traps with no membership returns empty`() =
+    fun `GET network-devices traps returns 401 when token has no organization claim`() =
         testApplication {
             val userId = seedUser()
 
@@ -674,10 +655,9 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/network-devices/traps") {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
             }
-            assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(response.bodyAsText().contains("\"traps\":[]"))
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     // ──── GET /network-devices/paths ────
@@ -703,7 +683,7 @@ class InfraRoutesTest {
         }
 
     @Test
-    fun `GET network-devices paths with no membership returns empty`() =
+    fun `GET network-devices paths returns 401 when token has no organization claim`() =
         testApplication {
             val userId = seedUser()
 
@@ -713,9 +693,8 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/network-devices/paths") {
-                withAuth(token(userId))
+                withAuth(token(userId, null))
             }
-            assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(response.bodyAsText().contains("\"paths\":[]"))
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 }

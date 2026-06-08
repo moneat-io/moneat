@@ -62,12 +62,16 @@ class IncidentProviderRoutesTest {
             assertEquals(HttpStatusCode.BadRequest, response.status)
         }
 
-    private fun tokenForUser(userId: Int): String {
+    private fun tokenForUser(
+        userId: Int,
+        orgId: Int? = 1,
+    ): String {
         return JWT
             .create()
             .withIssuer("moneat")
             .withAudience("moneat-users")
             .withClaim("userId", userId)
+            .apply { if (orgId != null) withClaim("orgId", orgId) }
             .sign(Algorithm.HMAC256(jwtSecret))
     }
 }

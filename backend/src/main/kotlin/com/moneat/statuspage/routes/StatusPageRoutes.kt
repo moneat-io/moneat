@@ -16,13 +16,12 @@
 
 package com.moneat.statuspage.routes
 
-import com.moneat.shared.models.Memberships
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.statuspage.models.AddCustomDomainRequest
 import com.moneat.statuspage.models.AddMonitorsRequest
 import com.moneat.statuspage.models.CreateIncidentRequest
 import com.moneat.statuspage.models.CreateIncidentUpdateRequest
 import com.moneat.statuspage.models.CreateStatusPageRequest
-import com.moneat.statuspage.models.StatusPageResponse
 import com.moneat.statuspage.models.UpdateIncidentRequest
 import com.moneat.statuspage.models.UpdateStatusPageRequest
 import com.moneat.statuspage.services.StatusPageService
@@ -30,8 +29,6 @@ import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -42,9 +39,6 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import com.moneat.utils.suspendRunCatching
 import mu.KotlinLogging
-import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
 import java.util.UUID
 
@@ -78,18 +72,6 @@ private fun String.toUUIDOrNull(): UUID? {
 }
 
 /**
- * Helper to get organization IDs for a user.
- */
-private fun getOrganizationIdsForUser(userId: Int): List<Int> {
-    return transaction {
-        Memberships
-            .selectAll()
-            .where { Memberships.user_id eq userId }
-            .map { it[Memberships.organization_id] }
-    }
-}
-
-/**
  * Status page routes - both authenticated management and public endpoints.
  */
 fun Route.statusPageRoutes(
@@ -104,22 +86,7 @@ fun Route.statusPageRoutes(
              */
             get {
                 runStatusPageRoute(call, "Failed to list status pages", "Failed to list status pages") {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal?.payload?.getClaim("userId")?.asInt()
-
-                    if (userId == null) {
-                        call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                        return@runStatusPageRoute
-                    }
-
-                    val organizationIds = getOrganizationIdsForUser(userId)
-                    if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.OK, emptyList<StatusPageResponse>())
-                        return@runStatusPageRoute
-                    }
-
-                    // For simplicity, use the first organization
-                    val organizationId = organizationIds.first()
+                    val organizationId = call.requireCurrentOrg()?.orgId ?: return@runStatusPageRoute
                     val statusPages = statusPageService.listStatusPages(organizationId)
 
                     call.respond(HttpStatusCode.OK, statusPages)
@@ -131,21 +98,7 @@ fun Route.statusPageRoutes(
              */
             post {
                 suspendRunCatching {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal?.payload?.getClaim("userId")?.asInt()
-
-                    if (userId == null) {
-                        call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                        return@post
-                    }
-
-                    val organizationIds = getOrganizationIdsForUser(userId)
-                    if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
-                        return@post
-                    }
-
-                    val organizationId = organizationIds.first()
+                    val organizationId = call.requireCurrentOrg()?.orgId ?: return@post
                     val request = call.receive<CreateStatusPageRequest>()
 
                     val statusPage = statusPageService.createStatusPage(organizationId, request)
@@ -172,27 +125,14 @@ fun Route.statusPageRoutes(
              */
             get("/{pageId}") {
                 runStatusPageRoute(call, FAILED_TO_GET_STATUS_PAGE, FAILED_TO_GET_STATUS_PAGE) {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal?.payload?.getClaim("userId")?.asInt()
+                    val organizationId = call.requireCurrentOrg()?.orgId ?: return@runStatusPageRoute
                     val pageId = call.parameters["pageId"]?.toUUIDOrNull()
-
-                    if (userId == null) {
-                        call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                        return@runStatusPageRoute
-                    }
 
                     if (pageId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid page ID format"))
                         return@runStatusPageRoute
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
-                    if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
-                        return@runStatusPageRoute
-                    }
-
-                    val organizationId = organizationIds.first()
                     val statusPage = statusPageService.getStatusPage(pageId, organizationId)
 
                     if (statusPage == null) {
@@ -208,27 +148,14 @@ fun Route.statusPageRoutes(
              */
             put("/{pageId}") {
                 suspendRunCatching {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal?.payload?.getClaim("userId")?.asInt()
+                    val organizationId = call.requireCurrentOrg()?.orgId ?: return@put
                     val pageId = call.parameters["pageId"]?.toUUIDOrNull()
-
-                    if (userId == null) {
-                        call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                        return@put
-                    }
 
                     if (pageId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid page ID format"))
                         return@put
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
-                    if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
-                        return@put
-                    }
-
-                    val organizationId = organizationIds.first()
                     val request = call.receive<UpdateStatusPageRequest>()
 
                     val statusPage = statusPageService.updateStatusPage(pageId, organizationId, request)
@@ -260,27 +187,14 @@ fun Route.statusPageRoutes(
              */
             delete("/{pageId}") {
                 suspendRunCatching {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal?.payload?.getClaim("userId")?.asInt()
+                    val organizationId = call.requireCurrentOrg()?.orgId ?: return@delete
                     val pageId = call.parameters["pageId"]?.toUUIDOrNull()
-
-                    if (userId == null) {
-                        call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                        return@delete
-                    }
 
                     if (pageId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid page ID format"))
                         return@delete
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
-                    if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
-                        return@delete
-                    }
-
-                    val organizationId = organizationIds.first()
                     val deleted = statusPageService.deleteStatusPage(pageId, organizationId)
 
                     if (deleted) {
@@ -299,22 +213,14 @@ fun Route.statusPageRoutes(
              */
             post("/{pageId}/monitors") {
                 suspendRunCatching {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal?.payload?.getClaim("userId")?.asInt()
+                    val organizationId = call.requireCurrentOrg()?.orgId ?: return@post
                     val pageId = call.parameters["pageId"]?.toUUIDOrNull()
 
-                    if (userId == null || pageId == null) {
+                    if (pageId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid parameters"))
                         return@post
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
-                    if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
-                        return@post
-                    }
-
-                    val organizationId = organizationIds.first()
                     val request = call.receive<AddMonitorsRequest>()
 
                     val monitors = statusPageService.addMonitors(pageId, organizationId, request)
@@ -338,28 +244,15 @@ fun Route.statusPageRoutes(
              */
             delete("/{pageId}/monitors/{monitorId}") {
                 suspendRunCatching {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal?.payload?.getClaim("userId")?.asInt()
+                    val organizationId = call.requireCurrentOrg()?.orgId ?: return@delete
                     val pageId = call.parameters["pageId"]?.toUUIDOrNull()
                     val monitorId = call.parameters["monitorId"]?.toUUIDOrNull()
-
-                    if (userId == null) {
-                        call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                        return@delete
-                    }
 
                     if (pageId == null || monitorId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid UUID format in path parameters"))
                         return@delete
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
-                    if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
-                        return@delete
-                    }
-
-                    val organizationId = organizationIds.first()
                     val removed = statusPageService.removeMonitor(pageId, organizationId, monitorId)
 
                     if (removed) {
@@ -378,22 +271,14 @@ fun Route.statusPageRoutes(
              */
             get("/{pageId}/incidents") {
                 suspendRunCatching {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal?.payload?.getClaim("userId")?.asInt()
+                    val organizationId = call.requireCurrentOrg()?.orgId ?: return@get
                     val pageId = call.parameters["pageId"]?.toUUIDOrNull()
 
-                    if (userId == null || pageId == null) {
+                    if (pageId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid parameters"))
                         return@get
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
-                    if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
-                        return@get
-                    }
-
-                    val organizationId = organizationIds.first()
                     val incidents = statusPageService.listIncidents(pageId, organizationId)
 
                     call.respond(HttpStatusCode.OK, incidents)
@@ -416,22 +301,14 @@ fun Route.statusPageRoutes(
              */
             post("/{pageId}/incidents") {
                 suspendRunCatching {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal?.payload?.getClaim("userId")?.asInt()
+                    val organizationId = call.requireCurrentOrg()?.orgId ?: return@post
                     val pageId = call.parameters["pageId"]?.toUUIDOrNull()
 
-                    if (userId == null || pageId == null) {
+                    if (pageId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid parameters"))
                         return@post
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
-                    if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
-                        return@post
-                    }
-
-                    val organizationId = organizationIds.first()
                     val request = call.receive<CreateIncidentRequest>()
 
                     val incident = statusPageService.createIncident(pageId, organizationId, request)
@@ -455,28 +332,15 @@ fun Route.statusPageRoutes(
              */
             put("/{pageId}/incidents/{incidentId}") {
                 suspendRunCatching {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal?.payload?.getClaim("userId")?.asInt()
+                    val organizationId = call.requireCurrentOrg()?.orgId ?: return@put
                     val pageId = call.parameters["pageId"]?.toUUIDOrNull()
                     val incidentId = call.parameters["incidentId"]?.toUUIDOrNull()
-
-                    if (userId == null) {
-                        call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
-                        return@put
-                    }
 
                     if (pageId == null || incidentId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid UUID format in path parameters"))
                         return@put
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
-                    if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
-                        return@put
-                    }
-
-                    val organizationId = organizationIds.first()
                     val request = call.receive<UpdateIncidentRequest>()
 
                     val incident = statusPageService.updateIncident(pageId, organizationId, incidentId, request)
@@ -505,23 +369,15 @@ fun Route.statusPageRoutes(
              */
             post("/{pageId}/incidents/{incidentId}/updates") {
                 suspendRunCatching {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal?.payload?.getClaim("userId")?.asInt()
+                    val organizationId = call.requireCurrentOrg()?.orgId ?: return@post
                     val pageId = call.parameters["pageId"]?.toUUIDOrNull()
                     val incidentId = call.parameters["incidentId"]?.toUUIDOrNull()
 
-                    if (userId == null || pageId == null || incidentId == null) {
+                    if (pageId == null || incidentId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid parameters"))
                         return@post
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
-                    if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
-                        return@post
-                    }
-
-                    val organizationId = organizationIds.first()
                     val request = call.receive<CreateIncidentUpdateRequest>()
 
                     val incident = statusPageService.createIncidentUpdate(pageId, organizationId, incidentId, request)
@@ -553,22 +409,14 @@ fun Route.statusPageRoutes(
              */
             post("/{pageId}/domains") {
                 suspendRunCatching {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal?.payload?.getClaim("userId")?.asInt()
+                    val organizationId = call.requireCurrentOrg()?.orgId ?: return@post
                     val pageId = call.parameters["pageId"]?.toUUIDOrNull()
 
-                    if (userId == null || pageId == null) {
+                    if (pageId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid parameters"))
                         return@post
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
-                    if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
-                        return@post
-                    }
-
-                    val organizationId = organizationIds.first()
                     val request = call.receive<AddCustomDomainRequest>()
 
                     val domain = statusPageService.addCustomDomain(pageId, organizationId, request)
@@ -595,23 +443,15 @@ fun Route.statusPageRoutes(
              */
             post("/{pageId}/domains/{domainId}/verify") {
                 suspendRunCatching {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal?.payload?.getClaim("userId")?.asInt()
+                    val organizationId = call.requireCurrentOrg()?.orgId ?: return@post
                     val pageId = call.parameters["pageId"]?.toUUIDOrNull()
                     val domainId = call.parameters["domainId"]?.toIntOrNull()
 
-                    if (userId == null || pageId == null || domainId == null) {
+                    if (pageId == null || domainId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid parameters"))
                         return@post
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
-                    if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
-                        return@post
-                    }
-
-                    val organizationId = organizationIds.first()
                     val domain = statusPageService.verifyCustomDomain(pageId, organizationId, domainId)
 
                     if (domain == null) {
@@ -630,23 +470,15 @@ fun Route.statusPageRoutes(
              */
             delete("/{pageId}/domains/{domainId}") {
                 suspendRunCatching {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal?.payload?.getClaim("userId")?.asInt()
+                    val organizationId = call.requireCurrentOrg()?.orgId ?: return@delete
                     val pageId = call.parameters["pageId"]?.toUUIDOrNull()
                     val domainId = call.parameters["domainId"]?.toIntOrNull()
 
-                    if (userId == null || pageId == null || domainId == null) {
+                    if (pageId == null || domainId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid parameters"))
                         return@delete
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
-                    if (organizationIds.isEmpty()) {
-                        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
-                        return@delete
-                    }
-
-                    val organizationId = organizationIds.first()
                     val removed = statusPageService.removeCustomDomain(pageId, organizationId, domainId)
 
                     if (removed) {
