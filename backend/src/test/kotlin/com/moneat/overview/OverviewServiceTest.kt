@@ -38,14 +38,22 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.UUID
-import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
+import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 
 class OverviewServiceTest {
+    private var testDatabase: Database? = null
+    private var previousDefaultDatabase: Database? = null
+
+    @AfterTest
+    fun cleanupDatabase() {
+        closeOverviewDatabase()
+    }
 
     @Test
     fun `overview assembles relational data with empty analytics fallbacks`() = runBlocking {
@@ -203,10 +211,7 @@ class OverviewServiceTest {
     }
 
     private fun seedOverviewData(): Int {
-        Database.connect(
-            url = "jdbc:h2:mem:overview_service_${System.nanoTime()};DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
-            driver = "org.h2.Driver",
-        ).also { database -> TransactionManager.defaultDatabase = database }
+        connectOverviewDatabase("overview_service_${System.nanoTime()}")
 
         TestDatabaseHelper.resetSchema(
             Users,
@@ -291,10 +296,7 @@ class OverviewServiceTest {
     }
 
     private fun seedEmptyOrganization(): Int {
-        Database.connect(
-            url = "jdbc:h2:mem:overview_empty_${System.nanoTime()};DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
-            driver = "org.h2.Driver",
-        ).also { database -> TransactionManager.defaultDatabase = database }
+        connectOverviewDatabase("overview_empty_${System.nanoTime()}")
 
         TestDatabaseHelper.resetSchema(
             Users,
@@ -316,6 +318,24 @@ class OverviewServiceTest {
             }
         }
         return EMPTY_ORGANIZATION_ID
+    }
+
+    private fun connectOverviewDatabase(name: String) {
+        closeOverviewDatabase()
+        previousDefaultDatabase = TransactionManager.defaultDatabase
+        val database = Database.connect(
+            url = "jdbc:h2:mem:$name;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+            driver = "org.h2.Driver",
+        )
+        testDatabase = database
+        TransactionManager.defaultDatabase = database
+    }
+
+    private fun closeOverviewDatabase() {
+        testDatabase?.let { database -> TransactionManager.closeAndUnregister(database) }
+        testDatabase = null
+        TransactionManager.defaultDatabase = previousDefaultDatabase
+        previousDefaultDatabase = null
     }
 
     private fun seedMonitor(name: String, status: String) {
