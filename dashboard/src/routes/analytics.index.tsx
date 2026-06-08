@@ -65,6 +65,16 @@ function analyticsServiceParams(serviceNames: readonly string[]): Pick<Analytics
   return serviceNames.length > 0 ? {services: [...serviceNames]} : {}
 }
 
+function analyticsFiltersWithRow(
+  current: AnalyticsFilter[],
+  property: string,
+  item: AnalyticsBreakdownItem
+): AnalyticsFilter[] {
+  const hasFilter = current.some((filter) => filter.property === property && filter.value === item.name)
+  if (hasFilter) return current
+  return [...current, {property, operator: 'is', value: item.name}]
+}
+
 function findSetupService(services: readonly Project[], serviceNames: readonly string[]): Project | undefined {
   if (serviceNames.length === 0) return services[0]
   return services.find((service) => service.name === serviceNames[0]) ?? services[0]
@@ -276,11 +286,7 @@ function AnalyticsOverview() {
   const activeAnalyticsTab = analyticsTab
 
   const addFilterFromRow = (property: string) => (item: AnalyticsBreakdownItem) => {
-    setFilters(current =>
-      current.some(f => f.property === property && f.value === item.name)
-        ? current
-        : [...current, {property, operator: 'is', value: item.name}]
-    )
+    setFilters((current) => analyticsFiltersWithRow(current, property, item))
   }
 
   if (servicesLoading) {
@@ -314,7 +320,7 @@ function AnalyticsOverview() {
       tabs={
         <SegmentedTabs
           ariaLabel="Analytics view"
-          value={activeAnalyticsTab as AnalyticsView}
+          value={activeAnalyticsTab}
           onChange={setAnalyticsTab}
           options={ANALYTICS_VIEW_TABS}
         />

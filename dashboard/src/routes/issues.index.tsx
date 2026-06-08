@@ -803,7 +803,7 @@ function IssueExplorerToolbar({
         </div>
       )}
       <span className="ml-auto text-sm text-muted-foreground whitespace-nowrap hidden lg:inline">
-        {filteredIssueCount} result{filteredIssueCount !== 1 ? 's' : ''}
+        {filteredIssueCount} result{filteredIssueCount === 1 ? '' : 's'}
       </span>
     </>
   )
