@@ -108,7 +108,7 @@ class OverviewRoutesTest {
                 routing { overviewRoutes(service) }
             }
 
-            val token = RouteTestSupport.createToken(userId = 7)
+            val token = RouteTestSupport.createToken(userId = 7, orgId = null)
             val response = client.get("/v1/overview") { withAuth(token) }
 
             assertEquals(HttpStatusCode.Unauthorized, response.status)
