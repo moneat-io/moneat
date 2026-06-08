@@ -35,6 +35,10 @@ import type {
   RawContainerStats,
   ContainerMetricsHistory,
   CreateDdApiKeyResponse,
+  CloudSourceCreateRequest,
+  CloudSourceProvider,
+  CloudSourceResponse,
+  CloudSourceSetupPreview,
   InfrastructureMapSavedViewsResponse,
   InfrastructureResourceKind,
   InfrastructureGroupBy,
@@ -288,6 +292,31 @@ export function monitoringMethods(core: ApiClientCore) {
 
     deleteAgentApiKey: (id: number) =>
       core.request<void>(`${base}/agent-api-keys/${id}`, { method: 'DELETE' }),
+
+    // Cloud sources
+    getCloudSources: () =>
+      core.request<CloudSourceResponse[]>(`${base}/cloud-sources`),
+
+    getCloudSourceSetupPreview: (provider: CloudSourceProvider) => {
+      const query = new URLSearchParams({provider}).toString()
+      return core.request<CloudSourceSetupPreview>(
+        urlWithQuery(`${base}/cloud-sources/setup-preview`, query)
+      )
+    },
+
+    createCloudSource: (request: CloudSourceCreateRequest) =>
+      core.request<CloudSourceResponse>(`${base}/cloud-sources`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }),
+
+    syncCloudSource: (id: number) =>
+      core.request<CloudSourceResponse>(`${base}/cloud-sources/${id}/sync`, {
+        method: 'POST',
+      }),
+
+    deleteCloudSource: (id: number) =>
+      core.request<void>(`${base}/cloud-sources/${id}`, { method: 'DELETE' }),
 
     // Monitor hosts
     getMonitorHosts: () =>

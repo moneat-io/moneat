@@ -48,7 +48,7 @@ import {
     Rocket,
     ScrollText,
     Search,
-    Server,
+    Boxes,
     Settings,
     Shield,
     ShieldAlert,
@@ -223,7 +223,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
     { key: 'logs', icon: ScrollText, label: 'Logs', href: '/logs', requiresProject: false, group: 'core' },
     ...datadogCoreNavItems,
     // Infrastructure & Uptime
-    { key: 'monitoring', icon: Server, label: 'Monitoring', href: '/monitoring', requiresProject: false, group: 'infrastructure' },
+    { key: 'monitoring', icon: Boxes, label: 'Resources', href: '/monitoring', requiresProject: false, group: 'infrastructure' },
     { key: 'uptime', icon: Activity, label: 'Uptime', href: '/uptime', requiresProject: false, group: 'infrastructure' },
     {
       key: 'status-pages',

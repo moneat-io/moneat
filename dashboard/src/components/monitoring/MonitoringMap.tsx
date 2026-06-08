@@ -507,7 +507,7 @@ export function MonitoringMap({initialScope = 'services', onScopeChange}: Monito
   }
 
   return (
-    <div className="h-[calc(100vh-var(--header-height,0px)-41px)] min-h-[520px]">
+    <div className="h-[calc(100vh-var(--header-height,0px)-43px)] min-h-[520px]">
       <MapExplorerShell
         title={getMapTitle(isServicesScope)}
         icon={<MapScopeIcon isServicesScope={isServicesScope} />}

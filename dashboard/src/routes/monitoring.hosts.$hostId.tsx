@@ -352,7 +352,7 @@ function HostDetailPage() {
         <Server className="h-12 w-12 text-muted-foreground" />
         <div className="text-muted-foreground text-lg">Host not found</div>
         <Button variant="outline" asChild>
-          <Link to="/monitoring">Back to Hosts</Link>
+          <Link to="/monitoring/hosts">Back to Hosts</Link>
         </Button>
       </div>
     )
@@ -449,7 +449,7 @@ function HostDetailPage() {
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <Button variant="ghost" size="sm" asChild className="shrink-0 text-muted-foreground hover:text-foreground -ml-1">
-                <Link to="/monitoring">
+                <Link to="/monitoring/hosts">
                   <ArrowLeft className="h-4 w-4" />
                 </Link>
               </Button>
