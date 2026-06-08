@@ -78,6 +78,7 @@ type OnboardingStep = 'org' | 'service'
 
 const ONBOARDING_SHELL_CLASS_NAME = 'flex min-h-dvh justify-center overflow-y-auto bg-background px-4 py-8 sm:py-12'
 const ONBOARDING_CARD_CLASS_NAME = 'my-auto w-full'
+const SLUG_CHECK_DEBOUNCE_MS = 500
 
 function OnboardingPage() {
   const navigate = useNavigate()
@@ -99,35 +100,50 @@ function OnboardingPage() {
   // Service step state
   const [serviceError, setServiceError] = useState('')
 
-  // Auto-generate slug from org name
-  useEffect(() => {
-    if (!customSlug && organizationName) {
-      const generated = generateSlug(organizationName)
-      setSlug(generated)
-    }
-  }, [organizationName, customSlug])
-
   // Check slug availability with debouncing
   useEffect(() => {
     if (!slug) {
-      setSlugAvailable(null)
       return
     }
 
+    let isCurrent = true
     const timeoutId = setTimeout(async () => {
       setCheckingSlug(true)
       try {
         const result = await api.checkSlugAvailability(slug)
-        setSlugAvailable(result.available)
+        if (isCurrent) {
+          setSlugAvailable(result.available)
+        }
       } catch {
-        setSlugAvailable(null)
+        if (isCurrent) {
+          setSlugAvailable(null)
+        }
       } finally {
-        setCheckingSlug(false)
+        if (isCurrent) {
+          setCheckingSlug(false)
+        }
       }
-    }, 500)
+    }, SLUG_CHECK_DEBOUNCE_MS)
 
-    return () => clearTimeout(timeoutId)
+    return () => {
+      isCurrent = false
+      clearTimeout(timeoutId)
+    }
   }, [slug])
+
+  const updateSlug = (value: string, isCustom: boolean) => {
+    setSlug(value)
+    setCustomSlug(isCustom)
+    setSlugAvailable(null)
+    setCheckingSlug(false)
+  }
+
+  const handleOrganizationNameChange = (value: string) => {
+    setOrganizationName(value)
+    if (!customSlug) {
+      updateSlug(generateSlug(value), false)
+    }
+  }
 
   const handleSlugChange = (value: string) => {
     // Sanitize input: lowercase, replace non-alphanumeric with hyphens
@@ -136,8 +152,7 @@ function OnboardingPage() {
       .replace(/[^a-z0-9-]/g, '-')
       .replace(/^-+|-+$/g, '')
       .substring(0, 100)
-    setSlug(sanitized)
-    setCustomSlug(true)
+    updateSlug(sanitized, true)
   }
 
   const copySlug = () => {
@@ -299,7 +314,7 @@ function OnboardingPage() {
                 type="text"
                 placeholder="Acme Inc."
                 value={organizationName}
-                onChange={(e) => setOrganizationName(e.target.value)}
+                onChange={(e) => handleOrganizationNameChange(e.target.value)}
                 required
               />
             </div>

@@ -139,7 +139,6 @@ function IncidentDetailPage() {
   useEffect(() => {
     if (declareOpen && incident && lastInitializedRef.current !== incident.id) {
       lastInitializedRef.current = incident.id
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDeclareTitle(incident.title)
       setDeclareDesc(incident.description || '')
       setDeclareSeverity('SEV-2')
