@@ -20,6 +20,8 @@ import {type Layout, type LayoutItem, Responsive as ResponsiveGridLayout} from '
 import type {CreateWidgetRequest, DashboardWidget, TimeRangeDef} from '@/lib/api'
 import {api} from '@/lib/api'
 import {WidgetRenderer} from './WidgetRenderer'
+import {isOverviewWidgetType} from './extendedWidgetTypes'
+import {overviewWidgetDef} from '@/components/overview/overviewWidgetTypes'
 import {Bell, ChevronDown, ChevronRight, GripVertical, Trash2} from 'lucide-react'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
@@ -169,6 +171,8 @@ export function DashboardGrid({
       w.widget_type !== 'gauge' &&
       w.widget_type !== 'bargauge' &&
       w.widget_type !== 'text' &&
+      w.widget_type !== 'system_status' &&
+      w.widget_type !== 'kpi' &&
       w.grid_h <= 4
     ),
     [visibleWidgets]
@@ -192,7 +196,11 @@ export function DashboardGrid({
           isDraggable: isEditing,
           isResizable: isEditing && w.widget_type !== 'section',
           minW: w.widget_type === 'section' ? 12 : 2,
-          minH: w.widget_type === 'section' ? 1 : (['stat', 'gauge', 'bargauge'].includes(w.widget_type) ? 4 : 6),
+          minH: w.widget_type === 'section'
+            ? 1
+            : isOverviewWidgetType(w.widget_type)
+              ? (overviewWidgetDef(w.widget_type)?.minH ?? 4)
+              : (['stat', 'gauge', 'bargauge'].includes(w.widget_type) ? 4 : 6),
           maxH: w.widget_type === 'section' ? 1 : undefined,
         }
       })
@@ -362,6 +370,39 @@ function WidgetCard({
   onWidgetClick,
   onWidgetDelete,
 }: WidgetCardProps) {
+  // Overview widgets are full-bleed: they render their own panel chrome, so the
+  // grid card stays chromeless and only overlays drag/delete affordances in edit mode.
+  if (isOverviewWidgetType(widget.widget_type)) {
+    return (
+      <div className="relative h-full" style={{contain: 'style'}}>
+        {isEditing && (
+          <div className="absolute right-1 top-1 z-10 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+            <div className="drag-handle cursor-grab rounded border bg-background/90 p-1 shadow-sm active:cursor-grabbing">
+              <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+            </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onWidgetDelete(widget.id)
+              }}
+              className="rounded border bg-background/90 p-1 text-destructive shadow-sm hover:bg-destructive/10"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </div>
+        )}
+        <WidgetRenderer
+          widget={widget}
+          dashboardId={dashboardId}
+          projectId={projectId}
+          timeRange={timeRange}
+          autoRefresh={autoRefresh}
+          variables={variableValues}
+        />
+      </div>
+    )
+  }
   return (
     <div
       className={`h-full rounded-lg border bg-card overflow-visible flex flex-col ${
