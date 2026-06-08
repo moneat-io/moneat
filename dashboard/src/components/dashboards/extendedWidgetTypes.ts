@@ -14,6 +14,21 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+// Native overview widgets render from their own data hooks rather than a query.
+// They reuse the extended-widget rendering path (like text/section) so the
+// Overview can be a real dashboard rendered by the existing engine.
+export const OVERVIEW_WIDGET_TYPES = new Set([
+  'system_status',
+  'kpi',
+  'service_health',
+  'telemetry',
+  'triage',
+  'infra_summary',
+  'uptime_summary',
+  'deploys',
+  'activity',
+])
+
 export const EXTENDED_WIDGET_TYPES = new Set([
   'stream',
   'timeline',
@@ -29,14 +44,19 @@ export const EXTENDED_WIDGET_TYPES = new Set([
   'flame_graph',
   'cost_summary',
   'iframe',
+  ...OVERVIEW_WIDGET_TYPES,
 ])
 
 export function isExtendedWidgetType(widgetType: string): boolean {
   return EXTENDED_WIDGET_TYPES.has(widgetType)
 }
 
+export function isOverviewWidgetType(widgetType: string): boolean {
+  return OVERVIEW_WIDGET_TYPES.has(widgetType)
+}
+
 export function isQueryDrivenExtendedWidget(widgetType: string): boolean {
-  return widgetType !== 'iframe'
+  return widgetType !== 'iframe' && !OVERVIEW_WIDGET_TYPES.has(widgetType)
 }
 
 export function extendedWidgetTestId(widgetType: string): string {
