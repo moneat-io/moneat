@@ -47,4 +47,36 @@ class DashboardTemplateCatalogServiceTest {
         assertEquals(summary.title, detail.dashboard.title)
         assertTrue(detail.dashboard.widgets.isNotEmpty())
     }
+
+    @Test
+    fun `getTemplate returns null for missing id`() {
+        val service = DashboardTemplateCatalogService()
+
+        val detail = service.getTemplate("missing-template")
+
+        assertEquals(null, detail)
+    }
+
+    @Test
+    fun `listTemplates returns empty list when catalog resource is missing`() {
+        val service = DashboardTemplateCatalogService("dashboard-templates/missing-catalog.json")
+
+        val templates = service.listTemplates()
+
+        assertTrue(templates.isEmpty())
+    }
+
+    @Test
+    fun `dashboard request helpers return converted create requests`() {
+        val service = DashboardTemplateCatalogService()
+        val summary = service.listTemplates().first()
+
+        val request = service.getDashboardRequest(summary.id)
+        val requests = service.listDashboardRequests()
+
+        assertNotNull(request)
+        assertEquals(summary.title, request.title)
+        assertTrue(requests.size >= 100)
+        assertTrue(requests.any { it.title == summary.title })
+    }
 }

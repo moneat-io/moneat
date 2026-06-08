@@ -1261,6 +1261,80 @@ class GrafanaTranslatorTest {
     }
 
     @Test
+    fun `resolveDatasource maps vendor datasource names to Moneat markers`() {
+        val cases = mapOf(
+            "grafana-cloudwatch-datasource" to "__cloudwatch",
+            "elasticsearch" to "__elasticsearch",
+            "graphite" to "__graphite",
+            "influx" to "__influxdb",
+            "influxdb" to "__influxdb",
+            "loki" to "__loki",
+            "postgres" to "__postgresql",
+            "postgresql" to "__postgresql",
+            "redis" to "__redis",
+            "datasource" to null,
+            "grafana" to null,
+            "custom:42" to "custom:42",
+        )
+
+        cases.forEach { (grafanaName, expected) ->
+            assertEquals(expected, translator.resolveDatasource(JsonPrimitive(grafanaName), 0, emptyMap()))
+        }
+    }
+
+    @Test
+    fun `resolveDatasource preserves custom datasource object type`() {
+        val ds = buildJsonObject {
+            put("type", "custom:42")
+        }
+
+        val result = translator.resolveDatasource(ds, 0, emptyMap())
+
+        assertEquals("custom:42", result)
+    }
+
+    @Test
+    fun `import maps variable datasource object to Moneat marker`() {
+        val json = buildJsonObject {
+            put("title", "Variable Datasource")
+            put("panels", JsonArray(emptyList()))
+            put(
+                "templating",
+                buildJsonObject {
+                    put(
+                        "list",
+                        buildJsonArray {
+                            add(
+                                buildJsonObject {
+                                    put("name", "pod")
+                                    put("type", "query")
+                                    put("query", "label_values({namespace=\"default\"}, pod)")
+                                    put(
+                                        "datasource",
+                                        buildJsonObject {
+                                            put("type", "loki")
+                                        }
+                                    )
+                                    put(
+                                        "current",
+                                        buildJsonObject {
+                                            put("value", "api-0")
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+
+        val result = translator.import(json)
+
+        assertEquals("__loki", result.variables.single().datasource)
+    }
+
+    @Test
     fun `import resolves panel datasource from __inputs`() {
         val json = buildJsonObject {
             put("title", "Redis Dashboard")
