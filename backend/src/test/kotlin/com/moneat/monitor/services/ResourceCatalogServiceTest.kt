@@ -33,13 +33,27 @@ import kotlin.time.Instant
 class ResourceCatalogServiceTest {
     private val json = Json { ignoreUnknownKeys = true }
 
+    private companion object {
+        const val ORGANIZATION_ID = 7
+        const val OTHER_ORGANIZATION_ID = 8
+        const val HOST_ID = 42
+        const val HOSTNAME = "checkout-host-01"
+        const val SERVICE_NAME = "checkout-api"
+        const val CONTAINER_ID = "abc123"
+        const val CLOUD_RESOURCE_ID = "aws:i-123"
+        const val LAST_SEEN = "2026-06-07T12:00:00.000Z"
+        const val FIRST_SEEN = "2026-06-01T00:00:00.000Z"
+    }
+
+    // ──── Hosts ────
+
     @Test
     fun `maps monitored hosts into resource catalog shape`() = runBlocking {
         val monitorService = mockk<MonitorService>()
         val host = hostData(
-            id = 42,
-            organizationId = 7,
-            hostname = "checkout-host-01",
+            id = HOST_ID,
+            organizationId = ORGANIZATION_ID,
+            hostname = HOSTNAME,
             status = "online"
         )
         val metrics = LatestMetrics(
@@ -60,20 +74,22 @@ class ResourceCatalogServiceTest {
             batteryPercent = null
         )
 
-        every { monitorService.listHosts(7) } returns listOf(host)
-        coEvery { monitorService.getLatestMetricsForHosts(listOf(42), 7) } returns mapOf(42 to metrics)
+        every { monitorService.listHosts(ORGANIZATION_ID) } returns listOf(host)
+        coEvery {
+            monitorService.getLatestMetricsForHosts(listOf(HOST_ID), ORGANIZATION_ID)
+        } returns mapOf(HOST_ID to metrics)
 
         val service = ResourceCatalogService(
             monitorService = monitorService,
             queryClient = NoopResourceCatalogQueryClient
         )
 
-        val resources = service.listResources(listOf(7))
+        val resources = service.listResources(listOf(ORGANIZATION_ID))
 
         assertEquals(1, resources.size)
         val resource = resources.first()
-        assertEquals("host:42", resource.id)
-        assertEquals("checkout-host-01", resource.name)
+        assertEquals("host:7:42", resource.id)
+        assertEquals(HOSTNAME, resource.name)
         assertEquals("host", resource.kind)
         assertEquals("healthy", resource.health)
         assertEquals("prod", resource.environment)
@@ -84,23 +100,26 @@ class ResourceCatalogServiceTest {
         assertTrue(resource.metadata.any { it.label == "Agent" && it.value == "7.63.0" })
     }
 
+    // ──── APM and containers ────
+
     @Test
     fun `maps ClickHouse service and container rows into source neutral resources`() = runBlocking {
         val monitorService = mockk<MonitorService>()
-        every { monitorService.listHosts(7) } returns emptyList()
+        every { monitorService.listHosts(ORGANIZATION_ID) } returns emptyList()
 
         val queryClient = StubResourceCatalogQueryClient(
             serviceRows = listOf(
                 jsonObject(
                     """
                     {
-                      "service": "checkout-api",
+                      "organization_id": "$ORGANIZATION_ID",
+                      "service": "$SERVICE_NAME",
                       "env": "staging",
                       "span_count": 1200,
                       "error_count": 36,
                       "latency_ms": 245,
                       "error_rate_pct": 3.0,
-                      "last_seen": "2026-06-07T12:00:00.000Z"
+                      "last_seen": "$LAST_SEEN"
                     }
                     """
                 )
@@ -109,16 +128,17 @@ class ResourceCatalogServiceTest {
                 jsonObject(
                     """
                     {
-                      "id": "abc123",
-                      "host": "checkout-host-01",
-                      "name": "checkout-api",
+                      "organization_id": "$ORGANIZATION_ID",
+                      "id": "$CONTAINER_ID",
+                      "host": "$HOSTNAME",
+                      "name": "$SERVICE_NAME",
                       "image": "ghcr.io/moneat/checkout:v42",
                       "state": "running",
                       "cpu_percent": 12.4,
                       "mem_usage": 256000000,
                       "mem_limit": 512000000,
                       "tags": {"env": "staging", "team": "payments"},
-                      "last_seen": "2026-06-07T12:00:00.000Z"
+                      "last_seen": "$LAST_SEEN"
                     }
                     """
                 )
@@ -130,11 +150,11 @@ class ResourceCatalogServiceTest {
             queryClient = queryClient
         )
 
-        val resources = service.listResources(listOf(7))
+        val resources = service.listResources(listOf(ORGANIZATION_ID))
 
         assertEquals(listOf("service", "container"), resources.map { it.kind })
         val serviceResource = resources.first { it.kind == "service" }
-        assertEquals("service:checkout-api", serviceResource.id)
+        assertEquals("service:7:checkout-api", serviceResource.id)
         assertEquals("warn", serviceResource.health)
         assertEquals("staging", serviceResource.environment)
         assertEquals(245, serviceResource.telemetry.latencyMs)
@@ -142,25 +162,53 @@ class ResourceCatalogServiceTest {
         assertTrue(serviceResource.tags.contains("source:apm"))
 
         val containerResource = resources.first { it.kind == "container" }
-        assertEquals("container:abc123", containerResource.id)
-        assertEquals("checkout-api", containerResource.name)
+        assertEquals("container:7:abc123", containerResource.id)
+        assertEquals(SERVICE_NAME, containerResource.name)
         assertEquals("healthy", containerResource.health)
         assertEquals(12, containerResource.telemetry.cpuPct)
         assertEquals(50, containerResource.telemetry.memPct)
-        assertTrue(containerResource.relationships.any { it.relation == "Runs on" && it.name == "checkout-host-01" })
+        assertTrue(containerResource.relationships.any { it.relation == "Runs on" && it.name == HOSTNAME })
     }
+
+    @Test
+    fun `keeps same-named services from different organizations distinct`() = runBlocking {
+        val monitorService = mockk<MonitorService>()
+        every { monitorService.listHosts(ORGANIZATION_ID) } returns emptyList()
+        every { monitorService.listHosts(OTHER_ORGANIZATION_ID) } returns emptyList()
+
+        val queryClient = StubResourceCatalogQueryClient(
+            serviceRows = listOf(
+                serviceRow(ORGANIZATION_ID),
+                serviceRow(OTHER_ORGANIZATION_ID)
+            )
+        )
+        val service = ResourceCatalogService(
+            monitorService = monitorService,
+            queryClient = queryClient
+        )
+
+        val resources = service.listResources(listOf(ORGANIZATION_ID, OTHER_ORGANIZATION_ID))
+
+        assertEquals(
+            listOf("service:7:checkout-api", "service:8:checkout-api"),
+            resources.map { it.id }
+        )
+    }
+
+    // ──── Cloud resources ────
 
     @Test
     fun `maps ClickHouse cloud rows into catalog resources`() = runBlocking {
         val monitorService = mockk<MonitorService>()
-        every { monitorService.listHosts(7) } returns emptyList()
+        every { monitorService.listHosts(ORGANIZATION_ID) } returns emptyList()
 
         val queryClient = StubResourceCatalogQueryClient(
             cloudRows = listOf(
                 jsonObject(
                     """
                     {
-                      "id": "aws:i-123",
+                      "organization_id": "$ORGANIZATION_ID",
+                      "id": "$CLOUD_RESOURCE_ID",
                       "name": "checkout-node",
                       "resource_type": "ec2_instance",
                       "provider": "aws",
@@ -172,8 +220,8 @@ class ResourceCatalogServiceTest {
                       "cpu_percent": 18.4,
                       "monthly_usd": 42.5,
                       "cost_trend_pct": 3.2,
-                      "first_seen": "2026-06-01T00:00:00.000Z",
-                      "last_seen": "2026-06-07T12:00:00.000Z"
+                      "first_seen": "$FIRST_SEEN",
+                      "last_seen": "$LAST_SEEN"
                     }
                     """
                 )
@@ -185,9 +233,9 @@ class ResourceCatalogServiceTest {
             queryClient = queryClient
         )
 
-        val resource = service.listResources(listOf(7)).single()
+        val resource = service.listResources(listOf(ORGANIZATION_ID)).single()
 
-        assertEquals("aws:i-123", resource.id)
+        assertEquals("cloud:7:aws:i-123", resource.id)
         assertEquals("checkout-node", resource.name)
         assertEquals("cloud", resource.kind)
         assertEquals("aws", resource.cloud)
@@ -222,6 +270,22 @@ class ResourceCatalogServiceTest {
             memoryTotalKb = 16_000_000,
             firstSeenAt = Instant.parse("2026-06-01T00:00:00Z"),
             createdAt = Instant.parse("2026-06-01T00:00:00Z")
+        )
+
+    private fun serviceRow(organizationId: Int): JsonObject =
+        jsonObject(
+            """
+            {
+              "organization_id": "$organizationId",
+              "service": "$SERVICE_NAME",
+              "env": "prod",
+              "span_count": 10,
+              "error_count": 0,
+              "latency_ms": 20,
+              "error_rate_pct": 0.0,
+              "last_seen": "$LAST_SEEN"
+            }
+            """
         )
 
     private fun jsonObject(body: String): JsonObject =

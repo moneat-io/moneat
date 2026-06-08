@@ -21,13 +21,10 @@ import com.moneat.monitor.models.CatalogResourceTelemetry
 import com.moneat.monitor.models.CatalogVulnerabilityCounts
 import com.moneat.monitor.routes.resourceCatalogRoutes
 import com.moneat.monitor.services.ResourceCatalogService
-import com.moneat.shared.models.Memberships
-import com.moneat.shared.models.Organizations
-import com.moneat.shared.models.Users
+import com.moneat.plugins.installErrorHandling
 import com.moneat.testsupport.RouteTestSupport
 import com.moneat.testsupport.RouteTestSupport.installJwtAuth
 import com.moneat.testsupport.RouteTestSupport.withAuth
-import com.moneat.testsupport.TestDatabaseHelper
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
@@ -35,11 +32,6 @@ import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
 import io.mockk.mockk
-import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -47,20 +39,25 @@ import kotlin.test.assertTrue
 class ResourceCatalogRoutesTest {
     private val catalogService = mockk<ResourceCatalogService>()
 
-    @BeforeTest
-    fun setup() {
-        val db = Database.connect(
-            url = "jdbc:h2:mem:moneat_resource_catalog_routes;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
-            driver = "org.h2.Driver"
-        )
-        TransactionManager.defaultDatabase = db
-        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships)
+    private companion object {
+        const val USER_ID = 41
+        const val ORGANIZATION_ID = 73
+        const val RESOURCE_ID = "host:73:1"
+        const val RESOURCE_NAME = "web-01"
+        const val RESOURCE_KIND = "host"
+        const val FIRST_SEEN = "2026-06-01T00:00:00.000Z"
+        const val LAST_CHANGE = "2026-06-07T12:00:00.000Z"
+        const val REQUESTED_LIMIT = 500
+        const val LIMIT_ABOVE_MAX = 9999
     }
+
+    // ──── Authentication ────
 
     @Test
     fun `resources endpoint requires JWT`() = testApplication {
         application {
             installJwtAuth()
+            installErrorHandling()
             routing { resourceCatalogRoutes(catalogService) }
         }
 
@@ -70,15 +67,29 @@ class ResourceCatalogRoutesTest {
     }
 
     @Test
-    fun `resources endpoint returns catalog resources for user organizations`() = testApplication {
-        val orgId = seedOrg()
-        val userId = seedUser()
-        seedMembership(userId, orgId)
-        coEvery { catalogService.listResources(listOf(orgId)) } returns listOf(
+    fun `resources endpoint requires organization context`() = testApplication {
+        application {
+            installJwtAuth()
+            installErrorHandling()
+            routing { resourceCatalogRoutes(catalogService) }
+        }
+
+        val token = RouteTestSupport.createToken(userId = USER_ID)
+        val response = client.get("/v1/monitoring/resources") { withAuth(token) }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("Organization context required"))
+    }
+
+    // ──── Catalog resources ────
+
+    @Test
+    fun `resources endpoint returns catalog resources for current organization`() = testApplication {
+        coEvery { catalogService.listResources(listOf(ORGANIZATION_ID)) } returns listOf(
             CatalogResource(
-                id = "host:1",
-                name = "web-01",
-                kind = "host",
+                id = RESOURCE_ID,
+                name = RESOURCE_NAME,
+                kind = RESOURCE_KIND,
                 health = "healthy",
                 environment = "prod",
                 region = "unknown",
@@ -95,66 +106,58 @@ class ResourceCatalogRoutesTest {
                 relationships = emptyList(),
                 changes = emptyList(),
                 metadata = emptyList(),
-                firstSeen = "2026-06-01T00:00:00.000Z",
-                lastChange = "2026-06-07T12:00:00.000Z"
+                firstSeen = FIRST_SEEN,
+                lastChange = LAST_CHANGE
             )
         )
 
         application {
             installJwtAuth()
+            installErrorHandling()
             routing { resourceCatalogRoutes(catalogService) }
         }
 
-        val token = RouteTestSupport.createToken(userId = userId, orgId = orgId)
+        val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
         val response = client.get("/v1/monitoring/resources") { withAuth(token) }
         val body = response.bodyAsText()
 
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(body.contains(""""id":"host:1""""))
-        assertTrue(body.contains(""""kind":"host""""))
+        assertTrue(body.contains(""""id":"$RESOURCE_ID""""))
+        assertTrue(body.contains(""""kind":"$RESOURCE_KIND""""))
         assertTrue(body.contains(""""telemetry":{"cpuPct":10,"memPct":20"""))
     }
 
-    @Test
-    fun `resources endpoint returns empty list when user has no memberships`() = testApplication {
-        val userId = seedUser()
+    // ──── Limit parsing ────
 
+    @Test
+    fun `resources endpoint rejects malformed limit`() = testApplication {
         application {
             installJwtAuth()
+            installErrorHandling()
             routing { resourceCatalogRoutes(catalogService) }
         }
 
-        val token = RouteTestSupport.createToken(userId = userId)
-        val response = client.get("/v1/monitoring/resources") { withAuth(token) }
+        val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
+        val response = client.get("/v1/monitoring/resources?limit=abc") { withAuth(token) }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("limit must be an integer"))
+    }
+
+    @Test
+    fun `resources endpoint clamps excessive limit`() = testApplication {
+        coEvery { catalogService.listResources(listOf(ORGANIZATION_ID), REQUESTED_LIMIT) } returns emptyList()
+
+        application {
+            installJwtAuth()
+            installErrorHandling()
+            routing { resourceCatalogRoutes(catalogService) }
+        }
+
+        val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
+        val response = client.get("/v1/monitoring/resources?limit=$LIMIT_ABOVE_MAX") { withAuth(token) }
 
         assertEquals(HttpStatusCode.OK, response.status)
         assertEquals("[]", response.bodyAsText())
-    }
-
-    private fun seedUser(): Int =
-        transaction {
-            Users.insert {
-                it[email] = "resource-catalog-${System.nanoTime()}@test.com"
-                it[password_hash] = "hash"
-                it[email_verified] = true
-            } get Users.id
-        }
-
-    private fun seedOrg(): Int =
-        transaction {
-            Organizations.insert {
-                it[name] = "Resource Catalog Org"
-                it[slug] = "resource-catalog-${System.nanoTime()}"
-            } get Organizations.id
-        }
-
-    private fun seedMembership(userId: Int, orgId: Int) {
-        transaction {
-            Memberships.insert {
-                it[user_id] = userId
-                it[organization_id] = orgId
-                it[role] = "owner"
-            }
-        }
     }
 }

@@ -26,6 +26,7 @@ import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
+import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -43,17 +44,16 @@ fun Route.cloudSourceRoutes(
     route("/v1/cloud-sources") {
         authenticate("auth-jwt") {
             get {
-                val scope = call.resolveCloudSourceScope() ?: return@get
+                val scope = call.resolveCloudSourceScope()
                 val sources = cloudSourceService.listSources(scope.organizationId)
                 call.respond(HttpStatusCode.OK, sources)
             }
 
             get("/setup-preview") {
-                val scope = call.resolveCloudSourceScope() ?: return@get
+                val scope = call.resolveCloudSourceScope()
                 val provider = call.request.queryParameters["provider"]
                 if (provider.isNullOrBlank()) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("provider is required"))
-                    return@get
+                    throw BadRequestException("provider is required")
                 }
                 call.respondCloudSourceResult {
                     cloudSourceService.setupPreview(scope.organizationId, provider)
@@ -61,7 +61,7 @@ fun Route.cloudSourceRoutes(
             }
 
             post {
-                val scope = call.resolveCloudSourceScope() ?: return@post
+                val scope = call.resolveCloudSourceScope()
                 val request = call.receive<CloudSourceCreateRequest>()
                 val response = call.cloudSourceResultOrNull {
                     cloudSourceService.createSource(
@@ -74,12 +74,9 @@ fun Route.cloudSourceRoutes(
             }
 
             post("/{id}/sync") {
-                val scope = call.resolveCloudSourceScope() ?: return@post
+                val scope = call.resolveCloudSourceScope()
                 val sourceId = call.parameters["id"]?.toIntOrNull()
-                if (sourceId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid cloud source id"))
-                    return@post
-                }
+                    ?: throw BadRequestException("Invalid cloud source id")
                 val response = call.cloudSourceResultOrNull {
                     cloudSourceService.syncSource(scope.organizationId, sourceId)
                 } ?: return@post
@@ -87,12 +84,9 @@ fun Route.cloudSourceRoutes(
             }
 
             delete("/{id}") {
-                val scope = call.resolveCloudSourceScope() ?: return@delete
+                val scope = call.resolveCloudSourceScope()
                 val sourceId = call.parameters["id"]?.toIntOrNull()
-                if (sourceId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid cloud source id"))
-                    return@delete
-                }
+                    ?: throw BadRequestException("Invalid cloud source id")
                 val deleted = cloudSourceService.deleteSource(scope.organizationId, sourceId)
                 if (deleted) {
                     call.respond(HttpStatusCode.NoContent)
@@ -104,18 +98,17 @@ fun Route.cloudSourceRoutes(
     }
 }
 
-private suspend fun ApplicationCall.resolveCloudSourceScope(): CloudSourceScope? {
-    val principal = principal<JWTPrincipal>()
-    val userId = principal?.payload?.getClaim("userId")?.asInt()
-    val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
-    if (userId == null || organizationId == null) {
-        respond(HttpStatusCode.BadRequest, ErrorResponse("Organization context required"))
-        return null
-    }
+private fun ApplicationCall.resolveCloudSourceScope(): CloudSourceScope {
+    val payload = principal<JWTPrincipal>()?.payload
+        ?: throw BadRequestException("Organization context required")
+    val userId = payload.getClaim("userId")?.asInt()
+        ?: throw BadRequestException("Organization context required")
+    val organizationId = payload.getClaim("orgId")?.asInt()
+        ?: throw BadRequestException("Organization context required")
     return CloudSourceScope(userId, organizationId)
 }
 
-private suspend fun ApplicationCall.respondCloudSourceResult(block: () -> Any) {
+private suspend fun ApplicationCall.respondCloudSourceResult(block: suspend () -> Any) {
     val response = cloudSourceResultOrNull(block) ?: return
     respond(HttpStatusCode.OK, response)
 }
@@ -124,8 +117,7 @@ private suspend fun <T> ApplicationCall.cloudSourceResultOrNull(block: suspend (
     try {
         block()
     } catch (error: InvalidCloudSourceException) {
-        respond(HttpStatusCode.BadRequest, ErrorResponse(error.message ?: "Invalid cloud source"))
-        null
+        throw BadRequestException(error.message ?: "Invalid cloud source")
     } catch (error: CloudSourceConnectorUnavailableException) {
         respond(HttpStatusCode.ServiceUnavailable, ErrorResponse(error.message ?: "Cloud connector unavailable"))
         null

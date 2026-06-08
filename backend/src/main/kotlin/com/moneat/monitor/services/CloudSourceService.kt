@@ -53,6 +53,7 @@ private const val CLOUD_EXTERNAL_ID_PREFIX = "mnt-ext-"
 private const val CLOUD_EXTERNAL_ID_HASH_LENGTH = 24
 private const val HEX_BYTE_MASK = 0xff
 private const val CLICKHOUSE_ERROR_PREVIEW_LENGTH = 300
+private const val CLOUD_SOURCE_DISPLAY_NAME_MAX_LENGTH = 120
 
 data class CloudSourceIdentityConfig(
     val awsPrincipalArn: String? = null,
@@ -97,6 +98,7 @@ interface CloudSourceVerifier {
 
 interface CloudResourceWriter {
     suspend fun replaceResources(request: CloudResourceWriteRequest)
+    suspend fun deleteResources(organizationId: Int, sourceId: Int)
 }
 
 class ManagedIdentityCloudSourceVerifier(
@@ -162,6 +164,7 @@ class ManagedIdentityCloudSourceVerifier(
 
 class ClickHouseCloudResourceWriter : CloudResourceWriter {
     override suspend fun replaceResources(request: CloudResourceWriteRequest) {
+        deleteResources(request.organizationId, request.sourceId)
         if (request.resources.isEmpty()) return
 
         val db = ClickHouseClient.getDatabase()
@@ -199,6 +202,22 @@ class ClickHouseCloudResourceWriter : CloudResourceWriter {
         if (response.isClickHouseError(body)) {
             throw CloudSourceConnectorUnavailableException(
                 "Cloud resource catalog write failed: ${body.take(CLICKHOUSE_ERROR_PREVIEW_LENGTH)}"
+            )
+        }
+    }
+
+    override suspend fun deleteResources(organizationId: Int, sourceId: Int) {
+        val db = ClickHouseClient.getDatabase()
+        val sql = """
+            ALTER TABLE `$db`.cloud_resources_latest
+            DELETE WHERE organization_id = toUInt64($organizationId)
+              AND cloud_source_id = toUInt64($sourceId)
+        """.trimIndent()
+        val response = ClickHouseClient.execute(sql)
+        val body = response.bodyAsText()
+        if (response.isClickHouseError(body)) {
+            throw CloudSourceConnectorUnavailableException(
+                "Cloud resource catalog delete failed: ${body.take(CLICKHOUSE_ERROR_PREVIEW_LENGTH)}"
             )
         }
     }
@@ -296,12 +315,22 @@ class CloudSourceService(
         )
     }
 
-    fun deleteSource(organizationId: Int, sourceId: Int): Boolean =
-        transaction {
+    suspend fun deleteSource(organizationId: Int, sourceId: Int): Boolean {
+        val exists = transaction {
+            CloudSources
+                .selectAll()
+                .where { (CloudSources.id eq sourceId) and (CloudSources.organization_id eq organizationId) }
+                .firstOrNull() != null
+        }
+        if (!exists) return false
+
+        resourceWriter.deleteResources(organizationId, sourceId)
+        return transaction {
             CloudSources.deleteWhere {
                 (CloudSources.id eq sourceId) and (CloudSources.organization_id eq organizationId)
             } > 0
         }
+    }
 
     private suspend fun syncSourceInternal(
         organizationId: Int,
@@ -370,6 +399,11 @@ class CloudSourceService(
         val displayName = request.displayName.trim()
         if (displayName.isEmpty()) {
             throw InvalidCloudSourceException("Display name is required")
+        }
+        if (displayName.length > CLOUD_SOURCE_DISPLAY_NAME_MAX_LENGTH) {
+            throw InvalidCloudSourceException(
+                "Display name must be at most $CLOUD_SOURCE_DISPLAY_NAME_MAX_LENGTH characters"
+            )
         }
         validateProviderConfig(provider, request.config)
         return request.copy(provider = provider, displayName = displayName, collectLogs = false)

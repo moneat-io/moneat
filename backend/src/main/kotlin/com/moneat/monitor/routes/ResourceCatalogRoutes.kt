@@ -16,32 +16,20 @@
 
 package com.moneat.monitor.routes
 
-import com.moneat.monitor.models.CatalogResource
 import com.moneat.monitor.services.ResourceCatalogService
-import com.moneat.shared.models.Memberships
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
+import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.route
-import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
 
 private const val MAX_RESOURCE_CATALOG_LIMIT = 500
-
-private fun getResourceCatalogOrganizationIds(userId: Int): List<Int> =
-    transaction {
-        Memberships
-            .selectAll()
-            .where { Memberships.user_id eq userId }
-            .map { it[Memberships.organization_id] }
-            .distinct()
-    }
 
 fun Route.resourceCatalogRoutes(
     resourceCatalogService: ResourceCatalogService = GlobalContext.get().get(),
@@ -49,22 +37,14 @@ fun Route.resourceCatalogRoutes(
     route("/v1/monitoring") {
         authenticate("auth-jwt") {
             get("/resources") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val organizationIds = getResourceCatalogOrganizationIds(userId)
-
-                if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.OK, emptyList<CatalogResource>())
-                    return@get
-                }
-
-                val rawLimit = call.request.queryParameters["limit"]?.toIntOrNull()
-                val resources = if (rawLimit == null) {
-                    resourceCatalogService.listResources(organizationIds)
+                val organizationId = call.resolveResourceCatalogOrganizationId()
+                val limit = call.resolveResourceCatalogLimit()
+                val resources = if (limit == null) {
+                    resourceCatalogService.listResources(listOf(organizationId))
                 } else {
                     resourceCatalogService.listResources(
-                        organizationIds,
-                        rawLimit.coerceIn(1, MAX_RESOURCE_CATALOG_LIMIT)
+                        listOf(organizationId),
+                        limit
                     )
                 }
 
@@ -72,4 +52,17 @@ fun Route.resourceCatalogRoutes(
             }
         }
     }
+}
+
+private fun ApplicationCall.resolveResourceCatalogOrganizationId(): Int {
+    val principal = principal<JWTPrincipal>()
+    return principal?.payload?.getClaim("orgId")?.asInt()
+        ?: throw BadRequestException("Organization context required")
+}
+
+private fun ApplicationCall.resolveResourceCatalogLimit(): Int? {
+    val rawLimit = request.queryParameters["limit"] ?: return null
+    val parsedLimit = rawLimit.toIntOrNull()
+        ?: throw BadRequestException("limit must be an integer")
+    return parsedLimit.coerceIn(1, MAX_RESOURCE_CATALOG_LIMIT)
 }

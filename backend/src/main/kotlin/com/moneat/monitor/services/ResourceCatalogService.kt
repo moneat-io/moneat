@@ -50,6 +50,7 @@ private const val PERCENT_SCALE = 100.0
 private const val ZERO_PERCENT = 0
 private const val FULL_PERCENT = 100
 private const val BYTES_PER_KIB = 1024.0
+private const val NANOS_PER_MILLISECOND = 1_000_000
 private const val CATALOG_UNKNOWN_TIMESTAMP = "1970-01-01T00:00:00.000Z"
 
 interface ResourceCatalogQueryClient {
@@ -94,6 +95,7 @@ class ClickHouseResourceCatalogQueryClient : ResourceCatalogQueryClient {
         val orgClause = orgIdClause(organizationIds)
         return """
             SELECT
+                toString(organization_id) AS organization_id,
                 service,
                 env,
                 span_count,
@@ -103,17 +105,20 @@ class ClickHouseResourceCatalogQueryClient : ResourceCatalogQueryClient {
                 formatDateTime(last_bucket_start, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') AS last_seen
             FROM (
                 SELECT
+                    organization_id,
                     service,
                     argMax(env, bucket_start) AS env,
                     sum(span_count) AS span_count,
                     sum(error_count) AS error_count,
-                    round(if(sum(duration_count) = 0, 0, sum(duration_sum) / sum(duration_count) / 1000000)) AS latency_ms,
+                    round(
+                        if(sum(duration_count) = 0, 0, sum(duration_sum) / sum(duration_count) / $NANOS_PER_MILLISECOND)
+                    ) AS latency_ms,
                     max(bucket_start) AS last_bucket_start
                 FROM `$db`.apm_service_stats_hourly
                 WHERE organization_id IN ($orgClause)
                   AND bucket_start >= now() - INTERVAL $RECENT_WINDOW_HOURS HOUR
                   AND service != ''
-                GROUP BY service
+                GROUP BY organization_id, service
             )
             ORDER BY last_bucket_start DESC
             LIMIT $limit
@@ -126,7 +131,8 @@ class ClickHouseResourceCatalogQueryClient : ResourceCatalogQueryClient {
         val orgClause = orgIdClause(organizationIds)
         return """
             SELECT
-                toString(cityHash64(host, container_id)) AS id,
+                toString(organization_id) AS organization_id,
+                toString(cityHash64(organization_id, host, container_id)) AS id,
                 host,
                 container_id,
                 argMax(name, timestamp) AS name,
@@ -153,6 +159,7 @@ class ClickHouseResourceCatalogQueryClient : ResourceCatalogQueryClient {
         val orgClause = orgIdClause(organizationIds)
         return """
             SELECT
+                toString(organization_id) AS organization_id,
                 uid AS id,
                 argMax(namespace, collected_at) AS namespace,
                 argMax(name, collected_at) AS name,
@@ -177,6 +184,7 @@ class ClickHouseResourceCatalogQueryClient : ResourceCatalogQueryClient {
         val orgClause = orgIdClause(organizationIds)
         return """
             SELECT
+                toString(organization_id) AS organization_id,
                 device_id AS id,
                 argMax(hostname, collected_at) AS hostname,
                 argMax(ip_address, collected_at) AS ip_address,
@@ -203,6 +211,7 @@ class ClickHouseResourceCatalogQueryClient : ResourceCatalogQueryClient {
         val orgClause = orgIdClause(organizationIds)
         return """
             SELECT
+                toString(organization_id) AS organization_id,
                 resource_id AS id,
                 argMax(name, collected_at) AS name,
                 argMax(resource_type, collected_at) AS resource_type,
@@ -277,7 +286,7 @@ class ResourceCatalogService(
     private fun hostResource(host: HostData, metrics: LatestMetrics?): CatalogResource {
         val tags = listOf("source:host-agent")
         return CatalogResource(
-            id = "host:${host.id}",
+            id = stableId("host", "${host.organizationId}:${host.id}"),
             name = host.displayName ?: host.hostname,
             kind = "host",
             health = host.status.toCatalogHealth(),
@@ -309,7 +318,7 @@ class ResourceCatalogService(
         val errorRate = row.d("error_rate_pct") ?: 0.0
         val spanCount = row.i("span_count")
         return CatalogResource(
-            id = stableId("service", name),
+            id = organizationScopedId("service", row.s("organization_id"), name),
             name = name,
             kind = "service",
             health = serviceHealth(spanCount, errorRate),
@@ -350,7 +359,7 @@ class ResourceCatalogService(
         val memUsage = row.d("mem_usage") ?: 0.0
         val memPct = if (memLimit > 0) (memUsage / memLimit * PERCENT_SCALE).roundToInt() else 0
         return CatalogResource(
-            id = "container:$id",
+            id = organizationScopedId("container", row.s("organization_id"), id),
             name = row.s("name") ?: row.s("image") ?: id,
             kind = "container",
             health = row.s("state").containerHealth(),
@@ -387,7 +396,7 @@ class ResourceCatalogService(
         val id = row.s("id") ?: return null
         val tags = row.tags() + row.labels().map { "label:$it" } + "source:kubernetes"
         return CatalogResource(
-            id = stableId("pod", id),
+            id = organizationScopedId("pod", row.s("organization_id"), id),
             name = row.s("name") ?: id,
             kind = "pod",
             health = row.s("status").podHealth(),
@@ -419,7 +428,7 @@ class ResourceCatalogService(
         val id = row.s("id") ?: return null
         val tags = row.tags() + "source:network-device"
         return CatalogResource(
-            id = stableId("network", id),
+            id = organizationScopedId("network", row.s("organization_id"), id),
             name = row.s("hostname") ?: row.s("ip_address") ?: id,
             kind = "network-device",
             health = row.s("reachability")?.toCatalogHealth() ?: row.s("status").toCatalogHealth(),
@@ -454,7 +463,7 @@ class ResourceCatalogService(
         val cloud = row.s("provider").toCloudProvider()
         val tags = row.tags() + listOf("source:cloud", "cloud:$cloud")
         return CatalogResource(
-            id = id,
+            id = organizationScopedId("cloud", row.s("organization_id"), id),
             name = row.s("name") ?: id,
             kind = "cloud",
             health = row.s("health").toCatalogHealth(),
@@ -641,6 +650,9 @@ private fun stableId(prefix: String, value: String): String {
         .ifBlank { "unknown" }
     return "$prefix:$slug"
 }
+
+private fun organizationScopedId(prefix: String, organizationId: String?, value: String): String =
+    stableId(prefix, "${organizationId ?: "unknown-org"}:$value")
 
 private fun meta(label: String, value: String?): CatalogMetaItem? =
     value?.takeIf { it.isNotBlank() }?.let { CatalogMetaItem(label, it) }

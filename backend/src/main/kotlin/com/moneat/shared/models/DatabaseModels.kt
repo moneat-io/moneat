@@ -365,7 +365,8 @@ object AgentApiKeys : Table("agent_api_keys") {
 
 object CloudSources : Table("cloud_sources") {
     val id = integer("id").autoIncrement()
-    val organization_id = integer("organization_id").references(Organizations.id)
+    val organization_id = integer("organization_id")
+        .references(Organizations.id, onDelete = ReferenceOption.CASCADE)
     val provider = varchar("provider", 16)
     val display_name = varchar("display_name", 120)
     val account_id = varchar("account_id", 64).nullable()
