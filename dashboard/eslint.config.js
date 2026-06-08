@@ -3,7 +3,7 @@ import globals from 'globals'
 import tsPlugin from '@typescript-eslint/eslint-plugin'
 import tsParser from '@typescript-eslint/parser'
 import reactHooks from 'eslint-plugin-react-hooks'
-import reactRefresh from 'eslint-plugin-react-refresh'
+import {reactRefresh} from 'eslint-plugin-react-refresh'
 import checkFile from 'eslint-plugin-check-file'
 
 export default [
@@ -26,7 +26,7 @@ export default [
     plugins: {
       '@typescript-eslint': tsPlugin,
       'react-hooks': reactHooks,
-      'react-refresh': reactRefresh,
+      'react-refresh': reactRefresh.plugin,
     },
     rules: {
       ...tsPlugin.configs.recommended.rules,
@@ -39,6 +39,13 @@ export default [
       // TypeScript handles undefined variable checking; disabling avoids false positives
       // for React namespace, browser/Node types, and other TS-resolved globals.
       'no-undef': 'off',
+    },
+  },
+  {
+    files: ['src/routes/**/*.tsx'],
+    rules: {
+      // TanStack file-route modules intentionally export Route and colocate route components/helpers.
+      'react-refresh/only-export-components': 'off',
     },
   },
   // Enforce PascalCase for component .tsx files (excluding ui/ which follows shadcn convention)
