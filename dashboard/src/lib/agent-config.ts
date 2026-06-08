@@ -166,7 +166,8 @@ function telemetryEndpoint(): string {
 
 function resolveKey(apiKey?: string | null): string {
   const trimmed = apiKey?.trim()
-  return trimmed ? trimmed : PLACEHOLDER_AGENT_KEY
+  if (trimmed) return trimmed
+  return PLACEHOLDER_AGENT_KEY
 }
 
 // ─── datadog.yaml (capability-gated) ─────────────────────────────────────────

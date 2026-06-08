@@ -51,7 +51,7 @@ import {cn} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {EmptyState} from '@/components/ui/empty-state'
-import {StatusDot} from '@/components/ui/status-dot'
+import {StatusDot, type StatusTone} from '@/components/ui/status-dot'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {HealthBadge, KindIcon, Meter, Sparkline, TagChip, VulnBar} from './CatalogPrimitives'
 import {
@@ -107,7 +107,7 @@ function metricTileVisual({
 }: {
   readonly pct?: number
   readonly seed?: string
-  readonly tone: 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'accent'
+  readonly tone: StatusTone
 }) {
   if (pct !== undefined) {
     return (
@@ -122,7 +122,7 @@ function metricTileVisual({
   return null
 }
 
-function errorRateTone(rate: number): 'success' | 'warning' | 'danger' {
+function errorRateTone(rate: number): StatusTone {
   if (rate >= 2) return 'danger'
   if (rate >= 1) return 'warning'
   return 'success'
@@ -163,7 +163,7 @@ function MetricTile({
   readonly unit?: string
   readonly icon: ComponentType<{className?: string}>
   readonly pct?: number
-  readonly tone: 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'accent'
+  readonly tone: StatusTone
   readonly seed?: string
 }) {
   return (
@@ -256,7 +256,7 @@ function TelemetryChart({
   readonly label: string
   readonly suffix: string
   readonly current: number | string
-  readonly tone: 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'accent'
+  readonly tone: StatusTone
   readonly seed: string
 }) {
   return (
