@@ -52,8 +52,8 @@ export const OVERVIEW_WIDGETS: Record<string, OverviewWidgetDef> = {
     label: 'System status',
     description: 'Hero triage line with incident counts',
     icon: AlertTriangle,
-    defaultSize: {w: 12, h: 2},
-    minH: 2,
+    defaultSize: {w: 12, h: 1},
+    minH: 1,
     component: SystemStatusWidget,
   },
   kpi: {
