@@ -38,6 +38,9 @@ import type {
   DataSourceField,
   DataSourceInfo,
   CustomDataSourceQueryRequest,
+  DashboardTemplateSummary,
+  DashboardTemplateDetail,
+  InstantiateDashboardTemplateRequest,
 } from '../types'
 
 export function dashboardsMethods(core: ApiClientCore) {
@@ -177,7 +180,25 @@ export function dashboardsMethods(core: ApiClientCore) {
       core.request<DataSourceInfo[]>(`${base}/dashboards/datasources`),
 
     getDashboardTemplates: () =>
-      core.request<CreateDashboardRequest[]>(`${base}/dashboards/templates`),
+      core.request<DashboardTemplateSummary[]>(`${base}/dashboards/templates`),
+
+    getDashboardTemplate: (id: string) =>
+      core.request<DashboardTemplateDetail>(
+        `${base}/dashboards/templates/${encodeURIComponent(id)}`
+      ),
+
+    createDashboardFromTemplate: (
+      id: string,
+      data: InstantiateDashboardTemplateRequest = {}
+    ) =>
+      core.request<CustomDashboard>(
+        `${base}/dashboards/templates/${encodeURIComponent(id)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        }
+      ),
 
     listDashboardAlerts: (dashboardId: number) =>
       core.request<DashboardWidgetAlert[]>(
