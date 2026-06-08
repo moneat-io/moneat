@@ -47,14 +47,14 @@ export function DeploysWidget() {
     >
       <div>
         {rows.map((r, i) => (
-          <div key={i} className="flex items-center gap-2 border-b py-1.5 text-xs last:border-0">
+          <div key={i} className="flex items-center gap-1.5 border-b border-border/40 py-1 text-[11px] last:border-0">
             <StatusDot tone={toneDot[r.status]} size="sm" />
             <span className="font-mono font-medium text-foreground">{r.version}</span>
             <span className="min-w-0 flex-1 truncate text-muted-foreground">{r.service}</span>
-            <Badge variant={deployBadgeVariant(r.status)} className="px-1.5 py-0 text-[10px]">
+            <Badge variant={deployBadgeVariant(r.status)} className="px-1 py-0 text-[9px]">
               {r.label}
             </Badge>
-            <span className="font-mono text-[10px] text-muted-foreground/70">{r.ageLabel}</span>
+            <span className="font-mono text-[9px] text-muted-foreground/70">{r.ageLabel}</span>
           </div>
         ))}
       </div>

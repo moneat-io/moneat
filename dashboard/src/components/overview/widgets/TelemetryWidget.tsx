@@ -61,7 +61,7 @@ export function TelemetryWidget() {
       title="Telemetry"
       icon={LineChartIcon}
       actions={
-        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
           <span
             className="inline-block h-2 w-2 rounded-sm"
             style={{background: tab.color}}
@@ -71,14 +71,14 @@ export function TelemetryWidget() {
         </span>
       }
     >
-      <div className="mb-2 inline-flex rounded-md border bg-muted/40 p-0.5">
+      <div className="mb-1.5 inline-flex rounded-md border bg-muted/40 p-0.5">
         {TABS.map((t) => (
           <button
             key={t.key}
             type="button"
             onClick={() => setActiveKey(t.key)}
             className={cn(
-              'rounded-sm px-2.5 py-1 text-xs font-medium transition-colors',
+              'rounded-sm px-2 py-0.5 text-[11px] font-medium transition-colors',
               t.key === activeKey
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground',
@@ -89,7 +89,7 @@ export function TelemetryWidget() {
         ))}
       </div>
 
-      <div className="h-[150px] w-full">
+      <div className="h-[130px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           {activeKey === 'logs' ? (
             <BarChart data={data} margin={{top: 6, right: 6, left: 0, bottom: 0}}>
@@ -139,7 +139,7 @@ export function TelemetryWidget() {
         </ResponsiveContainer>
       </div>
 
-      <div className="mt-1 flex justify-between px-1 font-mono text-[10px] text-muted-foreground/70">
+      <div className="mt-0.5 flex justify-between px-1 font-mono text-[9px] text-muted-foreground/70">
         {X_LABELS.map((l) => (
           <span key={l}>{l}</span>
         ))}

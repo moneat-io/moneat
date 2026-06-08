@@ -22,9 +22,9 @@ import {useServiceHealth, type ServiceRow, type Tone} from '../overviewMockData'
 import {MiniBar, OverviewPanel, PanelLink, Sparkline} from '../OverviewPanel'
 import {toneDot, toneText} from '../overviewTone'
 
-const TH = 'px-3 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground'
+const TH = 'px-2.5 py-1 text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground'
 const THR = cn(TH, 'text-right')
-const TD = 'px-3 py-1.5 align-middle'
+const TD = 'px-2.5 py-1 align-middle'
 const TDR = cn(TD, 'text-right font-mono tabular-nums')
 
 function errorTone(pct: number): Tone {
@@ -48,51 +48,51 @@ function ServiceHealthRow({row}: {row: ServiceRow}) {
   return (
     <tr className="border-b last:border-0 hover:bg-muted/40">
       <td className={TD}>
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 items-center gap-1.5">
           <StatusDot tone={toneDot[row.status]} pulse={row.status === 'bad'} />
-          <span className="truncate font-medium text-foreground">{row.name}</span>
-          <span className="rounded-sm border px-1 font-mono text-[10px] text-muted-foreground">
+          <span className="truncate text-xs font-medium text-foreground">{row.name}</span>
+          <span className="rounded-sm border px-1 font-mono text-[9px] text-muted-foreground">
             {row.env}
           </span>
         </div>
       </td>
-      <td className={TDR}>{row.reqPerMin.toLocaleString()}</td>
+      <td className={cn(TDR, 'text-xs')}>{row.reqPerMin.toLocaleString()}</td>
       <td className={TD}>
-        <div className="flex items-center justify-end gap-2">
-          <MiniBar pct={row.errorPct * 12} tone={errTone} className="max-w-[64px] flex-1" />
-          <span className={cn('w-10 text-right font-mono text-xs tabular-nums', toneText[errTone])}>
+        <div className="flex items-center justify-end gap-1.5">
+          <MiniBar pct={row.errorPct * 12} tone={errTone} className="max-w-[56px] flex-1" />
+          <span className={cn('w-9 text-right font-mono text-[11px] tabular-nums', toneText[errTone])}>
             {row.errorPct}%
           </span>
         </div>
       </td>
-      <td className={cn(TDR, row.p95Ms != null && toneText[p95Tone(row.p95Ms)])}>
+      <td className={cn(TDR, 'text-[11px]', row.p95Ms != null && toneText[p95Tone(row.p95Ms)])}>
         {row.p95Ms != null ? `${row.p95Ms}ms` : <span className="text-muted-foreground">—</span>}
       </td>
-      <td className={cn(TDR, row.apdex != null && toneText[apdexTone(row.apdex)])}>
+      <td className={cn(TDR, 'text-[11px]', row.apdex != null && toneText[apdexTone(row.apdex)])}>
         {row.apdex != null ? (
           row.apdex
         ) : row.lag ? (
-          <Badge variant="warning" className="px-1.5 py-0 text-[10px]">
+          <Badge variant="warning" className="px-1 py-0 text-[9px]">
             {row.lag}
           </Badge>
         ) : (
           <span className="text-muted-foreground">—</span>
         )}
       </td>
-      <td className={cn(TD, 'w-[88px]')}>
-        <Sparkline data={row.trend} className={toneText[row.status]} height={22} />
+      <td className={cn(TD, 'w-[72px]')}>
+        <Sparkline data={row.trend} className={toneText[row.status]} height={18} />
       </td>
-      <td className={TDR}>{row.issues}</td>
+      <td className={cn(TDR, 'text-[11px]')}>{row.issues}</td>
       <td className={TD}>
-        <div className="flex items-center gap-1.5 whitespace-nowrap">
+        <div className="flex items-center gap-1 whitespace-nowrap">
           {row.deploy.tone === 'bad' ? (
-            <Badge variant="danger" className="px-1.5 py-0 text-[10px]">
+            <Badge variant="danger" className="px-1 py-0 text-[9px]">
               {row.deploy.version}
             </Badge>
           ) : (
-            <span className="font-mono text-[11px] text-muted-foreground">{row.deploy.version}</span>
+            <span className="font-mono text-[10px] text-muted-foreground">{row.deploy.version}</span>
           )}
-          <span className="font-mono text-[10px] text-muted-foreground/70">{row.deploy.ageLabel}</span>
+          <span className="font-mono text-[9px] text-muted-foreground/70">{row.deploy.ageLabel}</span>
         </div>
       </td>
     </tr>

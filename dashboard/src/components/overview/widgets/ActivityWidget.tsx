@@ -43,13 +43,13 @@ export function ActivityWidget() {
         {items.map((it, i) => {
           const {icon: Icon, cls} = KIND[it.kind]
           return (
-            <div key={i} className="flex gap-2 border-b py-1.5 last:border-0">
+            <div key={i} className="flex gap-1.5 border-b border-border/40 py-1 last:border-0">
               <span className={cn('grid h-5 w-5 shrink-0 place-items-center rounded', cls)}>
-                <Icon className="h-3 w-3" />
+                <Icon className="h-2.5 w-2.5" />
               </span>
               <div className="min-w-0 flex-1">
-                <div className="text-xs text-foreground">{it.text}</div>
-                <div className="mt-0.5 text-[10px] text-muted-foreground/70">{it.meta}</div>
+                <div className="text-[11px] text-foreground">{it.text}</div>
+                <div className="text-[9px] text-muted-foreground/70">{it.meta}</div>
               </div>
             </div>
           )

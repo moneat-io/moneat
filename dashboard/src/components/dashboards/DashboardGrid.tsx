@@ -231,7 +231,7 @@ export function DashboardGrid({
         const layoutItem = newLayout.find((l) => l.i === String(widget.id))
         // Reverse the scaling transform before persisting canonical coordinates
         return {
-          ...(widget.id > 0 ? {id: widget.id} : {}),
+          id: widget.id,
           title: widget.title,
           widget_type: widget.widget_type,
           grid_x: layoutItem?.x ?? widget.grid_x,

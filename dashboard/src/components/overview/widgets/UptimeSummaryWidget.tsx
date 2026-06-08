@@ -42,18 +42,18 @@ export function UptimeSummaryWidget() {
       count={d.upLabel}
       actions={<PanelLink>All</PanelLink>}
     >
-      <div className="space-y-1.5">
+      <div className="space-y-1">
         {d.monitors.map((m) => (
-          <div key={m.name} className="flex items-center gap-2">
-            <span className="w-24 shrink-0 truncate text-xs text-foreground">{m.name}</span>
-            <span className="flex flex-1 gap-0.5">
+          <div key={m.name} className="flex items-center gap-1.5">
+            <span className="w-20 shrink-0 truncate text-[11px] text-foreground">{m.name}</span>
+            <span className="flex flex-1 gap-px">
               {m.bars.map((b, i) => (
-                <span key={i} className={cn('h-3.5 flex-1 rounded-[1px]', barClass(b))} />
+                <span key={i} className={cn('h-3 flex-1 rounded-[1px]', barClass(b))} />
               ))}
             </span>
             <span
               className={cn(
-                'w-12 shrink-0 text-right font-mono text-[10px]',
+                'w-11 shrink-0 text-right font-mono text-[9px]',
                 m.down ? 'font-semibold text-danger-fg' : 'text-muted-foreground',
               )}
             >
@@ -62,14 +62,14 @@ export function UptimeSummaryWidget() {
           </div>
         ))}
       </div>
-      <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t pt-2.5 text-xs">
+      <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-border/40 pt-2 text-[11px]">
         {d.syntheticFailing && (
-          <Badge variant="danger" className="gap-1 px-1.5 py-0 text-[10px]">
-            <Zap className="h-3 w-3" />
+          <Badge variant="danger" className="gap-1 px-1 py-0 text-[9px]">
+            <Zap className="h-2.5 w-2.5" />
             Synthetic failing · {d.syntheticFailing}
           </Badge>
         )}
-        <span className="ml-auto inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[10px] text-muted-foreground">
+        <span className="ml-auto inline-flex items-center gap-1 rounded-sm border px-1 py-0.5 text-[9px] text-muted-foreground">
           {d.statusPages}
         </span>
       </div>

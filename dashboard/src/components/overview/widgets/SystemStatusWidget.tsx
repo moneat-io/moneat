@@ -27,24 +27,24 @@ export function SystemStatusWidget() {
   return (
     <div
       data-testid="widget-system_status"
-      className={cn('flex h-full overflow-hidden rounded-lg border bg-card', toneBorder[sev])}
+      className={cn('flex h-full overflow-hidden rounded-lg border border-border/60 bg-card', toneBorder[sev])}
     >
       <div className={cn('w-1 shrink-0', toneBgSolid[sev])} />
-      <div className="flex min-w-0 flex-1 items-center gap-4 px-4 py-2.5">
+      <div className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2">
         <div
           className={cn(
-            'grid h-9 w-9 shrink-0 place-items-center rounded-md border',
+            'grid h-7 w-7 shrink-0 place-items-center rounded-md border',
             toneSoftBg[sev],
             toneText[sev],
             toneBorder[sev],
           )}
         >
-          <AlertTriangle className="h-4 w-4" />
+          <AlertTriangle className="h-3.5 w-3.5" />
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[15px] font-semibold text-foreground">{s.state}</span>
-            <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="text-sm font-semibold text-foreground">{s.state}</span>
+            <span className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
               <span>
                 <b className="tabular-nums text-foreground">{s.counts.incidents}</b> active incident
               </span>
@@ -62,19 +62,19 @@ export function SystemStatusWidget() {
               </span>
             </span>
           </div>
-          <div className="flex min-w-0 items-center gap-2 text-sm">
-            <Sparkles className="h-3.5 w-3.5 shrink-0 text-primary" />
+          <div className="flex min-w-0 items-center gap-1.5 text-xs">
+            <Sparkles className="h-3 w-3 shrink-0 text-primary" />
             <span className="truncate text-foreground">
-              <em className="not-italic text-muted-foreground">AI summary — </em>
+              <em className="not-italic text-muted-foreground">AI — </em>
               {s.ai.summary}
             </span>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Button size="sm" variant="outline">
+        <div className="flex shrink-0 items-center gap-1.5">
+          <Button size="sm" variant="outline" className="h-7 text-xs">
             Ask AI
           </Button>
-          <Button size="sm">View incident</Button>
+          <Button size="sm" className="h-7 text-xs">View incident</Button>
         </div>
       </div>
     </div>

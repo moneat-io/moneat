@@ -32,7 +32,7 @@ interface OverviewPanelProps {
   children: ReactNode
 }
 
-/** Shared panel chrome for overview widgets: bordered card + header + body. */
+/** Shared panel chrome for overview widgets — mirrors SectionCard at compact density. */
 export function OverviewPanel({
   title,
   icon: Icon,
@@ -46,19 +46,23 @@ export function OverviewPanel({
   return (
     <div
       data-testid={testId}
-      className="flex h-full flex-col overflow-hidden rounded-lg border bg-card"
+      className="flex h-full flex-col overflow-hidden rounded-lg border border-border/60 bg-card"
     >
-      <div className="flex items-center gap-2 border-b px-3 py-2">
-        {Icon && <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
-        <span className="truncate text-sm font-semibold text-foreground">{title}</span>
+      <div className="flex items-center gap-2 border-b border-border/40 px-3 py-1.5">
+        {Icon && (
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted">
+            <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+          </span>
+        )}
+        <span className="truncate text-xs font-semibold text-foreground">{title}</span>
         {count != null && (
-          <span className="inline-flex items-center rounded-full bg-muted px-1.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
             {count}
           </span>
         )}
         {actions && <div className="ml-auto flex items-center gap-1.5">{actions}</div>}
       </div>
-      <div className={cn('min-h-0 flex-1 overflow-auto', flush ? '' : 'p-3', bodyClassName)}>
+      <div className={cn('min-h-0 flex-1 overflow-auto', flush ? '' : 'px-3 py-2', bodyClassName)}>
         {children}
       </div>
     </div>
@@ -71,7 +75,7 @@ export function PanelLink({children, className}: {children: ReactNode; className
     <button
       type="button"
       className={cn(
-        'inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline',
+        'inline-flex items-center gap-0.5 text-[11px] font-medium text-primary hover:underline',
         className,
       )}
     >

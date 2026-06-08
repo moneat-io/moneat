@@ -47,8 +47,8 @@ function TriageSection({
   children: ReactNode
 }) {
   return (
-    <div className="border-b px-3 py-2 last:border-0">
-      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+    <div className="border-b border-border/40 px-2.5 py-1.5 last:border-0">
+      <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
         <Icon className="h-3 w-3 text-muted-foreground" />
         {label}
         <span className="ml-auto font-medium text-muted-foreground/70">{count}</span>
@@ -72,15 +72,15 @@ function TriageRow({
   return (
     <div
       className={cn(
-        'flex items-center gap-2 rounded-sm border-l-[3px] px-1.5 py-1.5 hover:bg-muted/50',
+        'flex items-center gap-1.5 rounded-sm border-l-2 px-1.5 py-1 hover:bg-muted/50',
         borderForLevel(level),
       )}
     >
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm text-foreground">{title}</div>
-        <div className="mt-0.5 truncate text-[11px] text-muted-foreground">{detail}</div>
+        <div className="truncate text-xs text-foreground">{title}</div>
+        <div className="truncate text-[10px] text-muted-foreground">{detail}</div>
       </div>
-      <span className="shrink-0 font-mono text-[10px] text-muted-foreground/70">{ageLabel}</span>
+      <span className="shrink-0 font-mono text-[9px] text-muted-foreground/70">{ageLabel}</span>
     </div>
   )
 }
@@ -102,21 +102,21 @@ export function TriageWidget() {
         {t.incidents.map((inc) => (
           <div
             key={inc.id}
-            className="flex items-start gap-2 rounded-md border border-danger-border bg-danger-bg p-2"
+            className="flex items-start gap-1.5 rounded-md border border-danger-border bg-danger-bg px-2 py-1.5"
           >
-            <StatusDot tone="danger" pulse className="mt-1" />
+            <StatusDot tone="danger" pulse className="mt-0.5" />
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold text-foreground">{inc.title}</div>
-              <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                <Badge variant="dangerSolid" className="px-1.5 py-0 text-[10px]">
+              <div className="text-xs font-semibold text-foreground">{inc.title}</div>
+              <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                <Badge variant="dangerSolid" className="px-1 py-0 text-[9px]">
                   {inc.priority}
                 </Badge>
-                <Badge variant="danger" className="px-1.5 py-0 text-[10px]">
+                <Badge variant="danger" className="px-1 py-0 text-[9px]">
                   {inc.status}
                 </Badge>
-                <span className="font-mono text-[10px] text-muted-foreground/70">{inc.id}</span>
-                <span className="text-[11px] text-muted-foreground">{inc.owner}</span>
-                <span className="ml-auto font-mono text-[10px] text-muted-foreground/70">
+                <span className="font-mono text-[9px] text-muted-foreground/70">{inc.id}</span>
+                <span className="text-[10px] text-muted-foreground">{inc.owner}</span>
+                <span className="ml-auto font-mono text-[9px] text-muted-foreground/70">
                   {inc.ageLabel}
                 </span>
               </div>

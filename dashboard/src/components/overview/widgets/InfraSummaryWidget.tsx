@@ -31,16 +31,16 @@ export function InfraSummaryWidget() {
       count={d.upLabel}
       actions={<PanelLink>Map</PanelLink>}
     >
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         {d.gauges.map((g) => (
-          <div key={g.label} className="grid grid-cols-[42px_1fr_38px] items-center gap-2 text-xs">
+          <div key={g.label} className="grid grid-cols-[36px_1fr_32px] items-center gap-1.5 text-[11px]">
             <span className="text-muted-foreground">{g.label}</span>
-            <MiniBar pct={g.pct} tone={g.tone} className="h-2" />
+            <MiniBar pct={g.pct} tone={g.tone} className="h-1.5" />
             <span className="text-right font-mono tabular-nums text-foreground">{g.pct}%</span>
           </div>
         ))}
       </div>
-      <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t pt-2.5 text-xs text-muted-foreground">
+      <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-border/40 pt-2 text-[11px] text-muted-foreground">
         <span>
           <b className="font-mono tabular-nums text-foreground">{d.containers}</b> containers
         </span>
@@ -49,7 +49,7 @@ export function InfraSummaryWidget() {
           <b className="font-mono tabular-nums text-foreground">{d.pods}</b> pods
         </span>
         {d.offlineNode && (
-          <Badge variant="danger" className="ml-auto gap-1 px-1.5 py-0 text-[10px]">
+          <Badge variant="danger" className="ml-auto gap-1 px-1 py-0 text-[9px]">
             <StatusDot tone="danger" size="sm" />
             {d.offlineNode} offline
           </Badge>

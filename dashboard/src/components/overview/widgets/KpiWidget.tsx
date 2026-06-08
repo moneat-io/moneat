@@ -30,31 +30,31 @@ export function KpiWidget({displayConfig}: {displayConfig?: Record<string, strin
   return (
     <div
       data-testid="widget-kpi"
-      className="flex h-full flex-col justify-between gap-1 rounded-lg border bg-card p-3"
+      className="flex h-full flex-col justify-between gap-0.5 rounded-lg border border-border/60 bg-card p-2.5"
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        <span className="truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           {kpi.label}
         </span>
         <StatusDot tone={toneDot[kpi.status]} />
       </div>
-      <div className="flex items-baseline gap-1.5">
-        <span className="font-mono text-xl font-semibold leading-none tabular-nums text-foreground">
+      <div className="flex items-baseline gap-1">
+        <span className="font-mono text-lg font-semibold leading-none tabular-nums text-foreground">
           {kpi.value}
         </span>
-        {kpi.unit && <span className="text-xs text-muted-foreground">{kpi.unit}</span>}
+        {kpi.unit && <span className="text-[11px] text-muted-foreground">{kpi.unit}</span>}
         <span
           className={cn(
-            'ml-auto inline-flex items-center gap-0.5 text-[11px] font-semibold tabular-nums',
+            'ml-auto inline-flex items-center gap-0.5 text-[10px] font-semibold tabular-nums',
             toneText[delta.tone],
           )}
         >
-          {delta.direction === 'up' && <ArrowUp className="h-3 w-3" />}
-          {delta.direction === 'down' && <ArrowDown className="h-3 w-3" />}
+          {delta.direction === 'up' && <ArrowUp className="h-2.5 w-2.5" />}
+          {delta.direction === 'down' && <ArrowDown className="h-2.5 w-2.5" />}
           {delta.value}
         </span>
       </div>
-      <Sparkline data={kpi.spark} className={cn('mt-0.5', toneText[kpi.status])} height={26} />
+      <Sparkline data={kpi.spark} className={cn(toneText[kpi.status])} height={22} />
     </div>
   )
 }
