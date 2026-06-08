@@ -16,19 +16,20 @@
 
 import type {ArchiveReason, SignalSeverity, SignalStatus} from '@/lib/api'
 
-// Severity palette matches security.index.tsx so chips read consistently across the section.
+// Severity is a semantic ramp, mapped onto the shared status language so chips
+// read consistently across the section.
 export const severityColors: Record<string, string> = {
-  critical: 'bg-red-500/15 text-red-500 border-red-500/30',
-  high: 'bg-orange-500/15 text-orange-500 border-orange-500/30',
-  medium: 'bg-amber-500/15 text-amber-500 border-amber-500/30',
-  low: 'bg-blue-500/15 text-blue-500 border-blue-500/30',
-  info: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
+  critical: 'bg-danger-solid text-white border-transparent',
+  high: 'bg-danger-bg text-danger-fg border-danger-border',
+  medium: 'bg-warning-bg text-warning-fg border-warning-border',
+  low: 'bg-info-bg text-info-fg border-info-border',
+  info: 'bg-muted text-muted-foreground border-border',
 }
 
 export const statusColors: Record<string, string> = {
-  open: 'bg-blue-500/15 text-blue-500 border-blue-500/30',
-  under_review: 'bg-amber-500/15 text-amber-500 border-amber-500/30',
-  archived: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
+  open: 'bg-info-bg text-info-fg border-info-border',
+  under_review: 'bg-warning-bg text-warning-fg border-warning-border',
+  archived: 'bg-muted text-muted-foreground border-border',
 }
 
 export const SEVERITY_ORDER: SignalSeverity[] = ['critical', 'high', 'medium', 'low', 'info']

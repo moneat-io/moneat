@@ -18,19 +18,79 @@ package com.moneat.alerts.models
 
 import kotlinx.serialization.json.JsonElement
 
-enum class AlertSeverity {
-    CRITICAL, HIGH, MEDIUM, LOW;
+enum class AlertPriority(
+    val wire: String,
+    private val aliases: Set<String>
+) {
+    P0("P0", setOf("CRITICAL")),
+    P1("P1", setOf("HIGH")),
+    P2("P2", setOf("MEDIUM")),
+    P3("P3", setOf("LOW")),
+    P4("P4", emptySet()),
+    P5("P5", emptySet());
 
     companion object {
-        fun fromString(value: String?): AlertSeverity? =
-            value?.let {
-                try {
-                    valueOf(it.uppercase())
-                } catch (e: IllegalArgumentException) {
-                    null
-                }
+        fun fromString(value: String?): AlertPriority? {
+            val normalized = normalize(value) ?: return null
+            return entries.firstOrNull { priority ->
+                normalized == priority.wire ||
+                    normalized == priority.name ||
+                    normalized in priority.aliases
             }
+        }
+
+        fun wireValue(value: String?): String? = fromString(value)?.wire
+
+        private fun normalize(value: String?): String? =
+            value
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+                ?.uppercase()
+                ?.replace('_', '-')
     }
+
+    override fun toString(): String = wire
+}
+
+enum class IncidentSeverity(
+    val wire: String,
+    private val aliases: Set<String>
+) {
+    SEV0("SEV-0", setOf("SEV0")),
+    SEV1("SEV-1", setOf("SEV1")),
+    SEV2("SEV-2", setOf("SEV2")),
+    SEV3("SEV-3", setOf("SEV3")),
+    SEV4("SEV-4", setOf("SEV4"));
+
+    companion object {
+        private val compactSevPattern = Regex("^SEV([0-4])$")
+
+        fun fromString(value: String?): IncidentSeverity? {
+            val normalized = normalize(value) ?: return null
+            return entries.firstOrNull { severity ->
+                normalized == severity.wire ||
+                    normalized == severity.name ||
+                    normalized in severity.aliases
+            }
+        }
+
+        fun wireValue(value: String?): String? = fromString(value)?.wire
+
+        private fun normalize(value: String?): String? {
+            val normalized =
+                value
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.uppercase()
+                    ?.replace('_', '-')
+                    ?: return null
+            return compactSevPattern.replace(normalized) { matchResult ->
+                "SEV-${matchResult.groupValues[1]}"
+            }
+        }
+    }
+
+    override fun toString(): String = wire
 }
 
 enum class AlertStatus {
@@ -49,7 +109,7 @@ enum class AlertSource {
 data class AlertLifecycleEvent(
     val title: String,
     val description: String,
-    val severity: AlertSeverity,
+    val priority: AlertPriority,
     val status: AlertStatus,
     val source: AlertSource,
     val deduplicationKey: String,

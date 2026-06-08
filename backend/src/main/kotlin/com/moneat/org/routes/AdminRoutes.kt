@@ -25,7 +25,7 @@ import com.moneat.config.isClickHouseError
 import com.moneat.events.models.TriggerIncidentRequest
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertLifecycleEvent
-import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertStatus
 import com.moneat.incident.services.IncidentService
 import com.moneat.notifications.services.DiscordService
@@ -77,6 +77,7 @@ private val adminJson = Json { ignoreUnknownKeys = true }
 data class ReceivedPulse(
     val deploymentId: String,
     val receivedAt: String,
+    val version: String,
     val cpuCount: Int,
     val memTotalBytes: Long,
     val memUsedBytes: Long,
@@ -103,6 +104,7 @@ private suspend fun queryReceivedTelemetry(): ReceivedTelemetryStatus {
         SELECT
             deployment_id,
             toString(argMax(received_at, received_at)) AS last_seen,
+            argMax(version, received_at)          AS version,
             argMax(cpu_count, received_at)       AS cpu_count,
             argMax(mem_total_bytes, received_at) AS mem_total_bytes,
             argMax(mem_used_bytes, received_at)  AS mem_used_bytes,
@@ -138,6 +140,7 @@ private suspend fun queryReceivedTelemetry(): ReceivedTelemetryStatus {
                 ReceivedPulse(
                     deploymentId = obj["deployment_id"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null,
                     receivedAt = obj["last_seen"]?.jsonPrimitive?.contentOrNull ?: "",
+                    version = obj["version"]?.jsonPrimitive?.contentOrNull ?: "",
                     cpuCount = obj["cpu_count"]?.jsonPrimitive?.intOrNull ?: 0,
                     memTotalBytes = obj["mem_total_bytes"]?.jsonPrimitive?.longOrNull ?: 0,
                     memUsedBytes = obj["mem_used_bytes"]?.jsonPrimitive?.longOrNull ?: 0,
@@ -379,7 +382,16 @@ fun Route.adminRoutes() {
                     val config = ApplicationConfig("application.conf")
                     val frontendUrl = config.property("email.frontendUrl").getString()
 
-                    val severityEnum = AlertSeverity.fromString(request.severity) ?: AlertSeverity.MEDIUM
+                    val priority = AlertPriority.fromString(request.severity)
+                    if (priority == null) {
+                        logger.warn { "Invalid alert priority '${request.severity}' in admin manual trigger" }
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            com.moneat.utils.ErrorResponse("Invalid alert priority")
+                        )
+                        return@suspendRunCatching
+                    }
+
                     val sourceEnum =
                         suspendRunCatching {
                             AlertSource.valueOf(request.source)
@@ -393,7 +405,7 @@ fun Route.adminRoutes() {
                         AlertLifecycleEvent(
                             title = request.title,
                             description = request.description,
-                            severity = severityEnum,
+                            priority = priority,
                             status = AlertStatus.FIRING,
                             source = sourceEnum,
                             deduplicationKey = "manual-trigger-${java.util.UUID.randomUUID()}",

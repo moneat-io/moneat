@@ -338,7 +338,7 @@ export default function CreateSyntheticTestDialog({
               }}
               className="flex items-start p-4 border rounded-xl hover:bg-accent hover:border-primary/50 transition-all text-left group"
             >
-              <div className="p-2 rounded-lg mr-4 bg-violet-500/10 text-violet-500 group-hover:scale-110 transition-transform">
+              <div className="p-2 rounded-lg mr-4 bg-chart-7/10 text-chart-7 group-hover:scale-110 transition-transform">
                 <FlaskConical className="h-6 w-6" />
               </div>
               <div>
@@ -353,7 +353,7 @@ export default function CreateSyntheticTestDialog({
               }}
               className="flex items-start p-4 border rounded-xl hover:bg-accent hover:border-primary/50 transition-all text-left group"
             >
-              <div className="p-2 rounded-lg mr-4 bg-blue-500/10 text-blue-500 group-hover:scale-110 transition-transform">
+              <div className="p-2 rounded-lg mr-4 bg-chart-2/10 text-chart-2 group-hover:scale-110 transition-transform">
                 <GitMerge className="h-6 w-6" />
               </div>
               <div>
@@ -368,7 +368,7 @@ export default function CreateSyntheticTestDialog({
               }}
               className="flex items-start p-4 border rounded-xl hover:bg-accent hover:border-primary/50 transition-all text-left group"
             >
-              <div className="p-2 rounded-lg mr-4 bg-amber-500/10 text-amber-500 group-hover:scale-110 transition-transform">
+              <div className="p-2 rounded-lg mr-4 bg-chart-5/10 text-chart-5 group-hover:scale-110 transition-transform">
                 <Shield className="h-6 w-6" />
               </div>
               <div>
@@ -383,7 +383,7 @@ export default function CreateSyntheticTestDialog({
               }}
               className="flex items-start p-4 border rounded-xl hover:bg-accent hover:border-primary/50 transition-all text-left group"
             >
-              <div className="p-2 rounded-lg mr-4 bg-cyan-500/10 text-cyan-500 group-hover:scale-110 transition-transform">
+              <div className="p-2 rounded-lg mr-4 bg-chart-9/10 text-chart-9 group-hover:scale-110 transition-transform">
                 <Globe className="h-6 w-6" />
               </div>
               <div>
@@ -398,7 +398,7 @@ export default function CreateSyntheticTestDialog({
               }}
               className="flex items-start p-4 border rounded-xl hover:bg-accent hover:border-primary/50 transition-all text-left group"
             >
-              <div className="p-2 rounded-lg mr-4 bg-emerald-500/10 text-emerald-500 group-hover:scale-110 transition-transform">
+              <div className="p-2 rounded-lg mr-4 bg-chart-4/10 text-chart-4 group-hover:scale-110 transition-transform">
                 <Wifi className="h-6 w-6" />
               </div>
               <div>

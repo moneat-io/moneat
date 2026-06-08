@@ -18,10 +18,10 @@ function formatCohortWeek(value: string): string {
 }
 
 function retentionTone(rate: number): string {
-  if (rate >= 60) return 'bg-emerald-500/25 text-emerald-950 dark:text-emerald-100'
-  if (rate >= 40) return 'bg-cyan-500/20 text-cyan-950 dark:text-cyan-100'
-  if (rate >= 20) return 'bg-amber-500/20 text-amber-950 dark:text-amber-100'
-  if (rate > 0) return 'bg-rose-500/15 text-rose-950 dark:text-rose-100'
+  if (rate >= 60) return 'bg-success-bg text-success-fg'
+  if (rate >= 40) return 'bg-info-bg text-info-fg'
+  if (rate >= 20) return 'bg-warning-bg text-warning-fg'
+  if (rate > 0) return 'bg-danger-bg text-danger-fg'
   return 'bg-muted text-muted-foreground'
 }
 
@@ -38,7 +38,7 @@ export function AnalyticsRetentionTable({data, isLoading}: AnalyticsRetentionTab
       <Card>
         <CardHeader className="pb-1">
           <CardTitle className="text-xs font-medium flex items-center gap-1.5">
-            <CalendarDays className="h-3.5 w-3.5 text-cyan-500" />
+            <CalendarDays className="h-3.5 w-3.5 text-chart-9" />
             Retention Cohorts
           </CardTitle>
         </CardHeader>
@@ -54,7 +54,7 @@ export function AnalyticsRetentionTable({data, isLoading}: AnalyticsRetentionTab
       <Card>
         <CardHeader className="pb-1">
           <CardTitle className="text-xs font-medium flex items-center gap-1.5">
-            <CalendarDays className="h-3.5 w-3.5 text-cyan-500" />
+            <CalendarDays className="h-3.5 w-3.5 text-chart-9" />
             Retention Cohorts
           </CardTitle>
         </CardHeader>
@@ -69,7 +69,7 @@ export function AnalyticsRetentionTable({data, isLoading}: AnalyticsRetentionTab
     <Card>
       <CardHeader className="pb-1">
         <CardTitle className="text-xs font-medium flex items-center gap-1.5">
-          <CalendarDays className="h-3.5 w-3.5 text-cyan-500" />
+          <CalendarDays className="h-3.5 w-3.5 text-chart-9" />
           Retention Cohorts
         </CardTitle>
       </CardHeader>

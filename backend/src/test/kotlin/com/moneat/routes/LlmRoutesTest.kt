@@ -52,7 +52,7 @@ class LlmRoutesTest {
     }
 
     @Test
-    fun `overview endpoint returns 400 when projectId is missing`() =
+    fun `overview endpoint returns 404 when organization access is missing`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -82,8 +82,8 @@ class LlmRoutesTest {
                     header(HttpHeaders.Authorization, "Bearer ${tokenForUser(12)}")
                 }
 
-            assertEquals(HttpStatusCode.BadRequest, response.status)
-            assertTrue(response.bodyAsText().contains("projectId is required"))
+            assertEquals(HttpStatusCode.NotFound, response.status)
+            assertTrue(response.bodyAsText().contains("No organization access"))
         }
 
     private fun tokenForUser(userId: Int): String {

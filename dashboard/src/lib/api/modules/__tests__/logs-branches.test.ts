@@ -189,7 +189,7 @@ describe('Logs API – branch coverage', () => {
 
     it('creates EventSource with no params', () => {
       const es = api.createLogTailStream()
-      expect(es.url).toContain('/logs/tail?')
+      expect(es.url).toBe(`${API_BASE}/v1/logs/tail`)
       es.close()
     })
 

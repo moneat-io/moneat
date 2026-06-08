@@ -17,6 +17,7 @@
 package com.moneat.plugins
 
 import com.moneat.ai.aiChatRoutes
+import com.moneat.apm.routes.apmServiceDashboardRoutes
 import com.moneat.auth.routes.authRoutes
 import com.moneat.auth.routes.authTokenRoutes
 import com.moneat.billing.routes.stripeWebhookRoutes
@@ -42,6 +43,7 @@ import com.moneat.monitoring.OperationalMetrics
 import com.moneat.org.routes.adminRoutes
 import com.moneat.org.routes.orgManagementRoutes
 import com.moneat.otlp.routes.otlpMetricsRoutes
+import com.moneat.otlp.routes.otlpFeedbackRoutes
 import com.moneat.otlp.routes.otlpTraceRoutes
 import com.moneat.security.detection.detectionRuleRoutes
 import com.moneat.security.signals.signalRoutes
@@ -213,6 +215,9 @@ fun Application.configureRouting() {
         // Dashboard API endpoints
         apiRoutes()
 
+        // APM service dashboard endpoints are source-neutral and must not depend on vendor modules.
+        apmServiceDashboardRoutes()
+
         // OpenFeature-compatible feature flag management and OFREP runtime endpoints
         featureFlagRoutes()
 
@@ -247,6 +252,7 @@ fun Application.configureRouting() {
         rateLimit(RateLimitName("otlp-ingestion")) {
             otlpTraceRoutes()
             otlpMetricsRoutes()
+            otlpFeedbackRoutes()
         }
 
         // Uptime monitoring endpoints

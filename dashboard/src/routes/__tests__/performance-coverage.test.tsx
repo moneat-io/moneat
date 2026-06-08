@@ -98,6 +98,7 @@ const mockOverview = {
     services: [{value: 'checkout-service', count: 5642}],
     sources: [{value: 'otlp', count: 5000}],
     environments: [{value: 'production', count: 5000}],
+    operations: [{value: 'POST /checkout', count: 1234}],
   },
 }
 
@@ -189,7 +190,8 @@ describe('Performance routes', () => {
 
     expect(thrown).toMatchObject({
       __redirect: true,
-      to: '/monitoring/service-map',
+      to: '/monitoring/map',
+      search: {scope: 'services'},
     })
   })
 
@@ -206,6 +208,27 @@ describe('Performance routes', () => {
     expect((await screen.findAllByText('POST /checkout')).length).toBeGreaterThan(0)
     await waitFor(() => {
       expect(mockApi.getApmTraces).toHaveBeenCalledWith(expect.objectContaining({
+        limit: 25,
+        offset: 0,
+      }))
+    })
+  })
+
+  it('applies trace facet rail filters to dashboard queries', async () => {
+    const Component = (PerformanceTracesRoute as unknown as {component: React.ComponentType}).component
+    renderWithQueryClient(Component)
+
+    fireEvent.click(await screen.findByLabelText('checkout-service'))
+    fireEvent.click(await screen.findByLabelText('POST /checkout'))
+
+    await waitFor(() => {
+      expect(mockApi.getApmOverview).toHaveBeenCalledWith(expect.objectContaining({
+        services: ['checkout-service'],
+        operation: 'POST /checkout',
+      }))
+      expect(mockApi.getApmTraces).toHaveBeenCalledWith(expect.objectContaining({
+        services: ['checkout-service'],
+        operation: 'POST /checkout',
         limit: 25,
         offset: 0,
       }))
@@ -241,6 +264,9 @@ describe('Performance routes', () => {
         offset: 0,
       }))
     })
+
+    fireEvent.click(screen.getByRole('button', {name: /Refresh/i}))
+    await waitFor(() => expect(mockApi.getApmResourceStats).toHaveBeenCalledTimes(2))
 
     fireEvent.click(viewAllButton)
     await waitFor(() => expect(scrollIntoViewMock).toHaveBeenCalledTimes(2))

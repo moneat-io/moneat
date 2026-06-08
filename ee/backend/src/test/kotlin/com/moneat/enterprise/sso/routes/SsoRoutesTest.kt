@@ -39,8 +39,10 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.update
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.AfterEach
@@ -223,6 +225,15 @@ class SsoRoutesTest {
             }
         }
 
+    private fun markDomainVerified(orgId: Int) {
+        transaction {
+            SsoConfigurations.update({ SsoConfigurations.organizationId eq orgId }) {
+                it[SsoConfigurations.emailDomainVerified] = true
+                it[SsoConfigurations.emailDomainVerifiedAt] = Clock.System.now()
+            }
+        }
+    }
+
     @Test
     fun `post auth sso init returns OIDC redirect payload`() =
         withFrontendUrl {
@@ -238,8 +249,9 @@ class SsoRoutesTest {
                         oidcClientId = "route-client",
                         oidcClientSecret = "route-secret",
                         emailDomain = "routes.example",
-                    ),
+                        ),
                 )
+                markDomainVerified(orgId)
 
                 testApplication {
                     application {
@@ -335,6 +347,9 @@ class SsoRoutesTest {
                 assertEquals("oidc", cfg.providerType)
                 assertEquals("api-client", cfg.oidcClientId)
                 assertTrue(cfg.hasClientSecret)
+                assertEquals(false, cfg.emailDomainVerified)
+                assertEquals("_moneat-sso.api.example", cfg.emailDomainVerificationRecordName)
+                assertTrue(cfg.emailDomainVerificationToken?.isNotBlank() == true)
             }
         }
 
@@ -526,5 +541,8 @@ class SsoRoutesTest {
         val providerType: String,
         val oidcClientId: String? = null,
         val hasClientSecret: Boolean = false,
+        val emailDomainVerified: Boolean = false,
+        val emailDomainVerificationRecordName: String? = null,
+        val emailDomainVerificationToken: String? = null,
     )
 }

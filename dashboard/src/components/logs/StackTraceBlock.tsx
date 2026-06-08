@@ -61,9 +61,9 @@ export function StackTraceBlock({stacktrace, language}: StackTraceBlockProps) {
   const style = isDark ? oneDark : oneLight
 
   return (
-    <div className="group overflow-hidden rounded-lg border border-red-500/20 bg-card">
-      <div className="flex items-center justify-between border-b border-red-500/20 bg-red-500/5 px-4 py-2">
-        <span className="font-mono text-[11px] text-red-700 dark:text-red-400">Exception</span>
+    <div className="group overflow-hidden rounded-lg border border-danger-border bg-card">
+      <div className="flex items-center justify-between border-b border-danger-border bg-danger-bg/50 px-4 py-2">
+        <span className="font-mono text-[11px] text-danger-fg">Exception</span>
         <button
           type="button"
           onClick={handleCopy}
@@ -71,7 +71,7 @@ export function StackTraceBlock({stacktrace, language}: StackTraceBlockProps) {
         >
           {copied ? (
             <>
-              <Check className="h-3 w-3 text-emerald-500" />
+              <Check className="h-3 w-3 text-success-fg" />
               Copied
             </>
           ) : (

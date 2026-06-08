@@ -56,8 +56,7 @@ fun Table.jsonb(name: String): Column<Map<String, kotlinx.serialization.json.Jso
 
 object AlertPriorities : IntIdTable("alert_priorities") {
     val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
-    val severity = varchar("severity", 20)
-    val priorityLevel = varchar("priority_level", 10)
+    val priority = varchar("priority", 10)
     val isPageable = bool("is_pageable")
     val label = varchar("label", 100)
     val description = text("description").nullable()
@@ -69,8 +68,7 @@ object AlertPriorities : IntIdTable("alert_priorities") {
 data class AlertPriority(
     val id: Int,
     val organizationId: Int,
-    val severity: String,
-    val priorityLevel: String,
+    val priority: String,
     val isPageable: Boolean,
     val label: String,
     val description: String? = null,
@@ -258,7 +256,7 @@ data class OnCallIncident(
     val organizationId: Int,
     val title: String,
     val description: String? = null,
-    val priorityLevel: String,
+    val severity: String,
     val status: String,
     val declaredBy: Int,
     val declaredByName: String? = null,
@@ -267,7 +265,7 @@ data class OnCallIncident(
     val resolvedByName: String? = null,
     val resolvedAt: String? = null,
     val alertCount: Int = 0,
-    val alerts: List<Incident> = emptyList(),
+    val alerts: List<OnCallAlert> = emptyList(),
     val createdAt: String,
     val updatedAt: String,
 )
@@ -280,12 +278,12 @@ object OnCallIncidentTimeline : IntIdTable("on_call_incident_timeline") {
     val createdAt = timestamp("created_at")
 }
 
-// ===== Incidents =====
+// ===== On-Call Alerts =====
 
-object Incidents : IntIdTable("incidents") {
+object OnCallAlerts : IntIdTable("on_call_alerts") {
     val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
-    val incidentId =
-        integer("incident_id")
+    val declaredIncidentId =
+        integer("declared_incident_id")
             .references(OnCallIncidents.id, onDelete = ReferenceOption.SET_NULL)
             .nullable()
     val escalationPolicyId =
@@ -294,7 +292,7 @@ object Incidents : IntIdTable("incidents") {
         ).references(EscalationPolicies.id, onDelete = ReferenceOption.SET_NULL).nullable()
     val title = varchar("title", 500)
     val description = text("description").nullable()
-    val priorityLevel = varchar("priority_level", 10)
+    val priority = varchar("priority", 10)
     val status = varchar("status", 20)
     val alertSource = varchar("alert_source", 100).nullable()
     val deduplicationKey = varchar("deduplication_key", 255).nullable()
@@ -310,8 +308,8 @@ object Incidents : IntIdTable("incidents") {
     val updatedAt = timestamp("updated_at")
 }
 
-object IncidentTimeline : IntIdTable("incident_timeline") {
-    val incidentId = integer("incident_id").references(Incidents.id, onDelete = ReferenceOption.CASCADE)
+object OnCallAlertTimeline : IntIdTable("on_call_alert_timeline") {
+    val alertId = integer("alert_id").references(OnCallAlerts.id, onDelete = ReferenceOption.CASCADE)
     val eventType = varchar("event_type", 30)
     val actorUserId = integer("actor_user_id").references(Users.id, onDelete = ReferenceOption.SET_NULL).nullable()
     val details = jsonb("details")
@@ -319,14 +317,15 @@ object IncidentTimeline : IntIdTable("incident_timeline") {
 }
 
 @Serializable
-data class Incident(
+data class OnCallAlert(
     val id: Int,
     val organizationId: Int,
+    val declaredIncidentId: Int? = null,
     val escalationPolicyId: Int? = null,
     val escalationPolicyName: String? = null,
     val title: String,
     val description: String? = null,
-    val priorityLevel: String,
+    val priority: String,
     val status: String,
     val alertSource: String? = null,
     val deduplicationKey: String? = null,
@@ -348,14 +347,14 @@ data class Incident(
 
 object OnCallIncidentAlerts : Table("on_call_incident_alerts") {
     val incidentId = integer("incident_id").references(OnCallIncidents.id, onDelete = ReferenceOption.CASCADE)
-    val alertId = integer("alert_id").references(Incidents.id, onDelete = ReferenceOption.CASCADE)
+    val alertId = integer("alert_id").references(OnCallAlerts.id, onDelete = ReferenceOption.CASCADE)
     override val primaryKey = PrimaryKey(incidentId, alertId)
 }
 
 @Serializable
-data class IncidentTimelineEvent(
+data class OnCallTimelineEvent(
     val id: Int,
-    val incidentId: Int,
+    val targetId: Int,
     val eventType: String,
     val actorUserId: Int? = null,
     val actorName: String? = null,
@@ -408,7 +407,7 @@ data class SlackUserMapping(
 
 object TwilioNotificationsSent : IntIdTable("twilio_notifications_sent") {
     val userId = integer("user_id").references(Users.id, onDelete = ReferenceOption.CASCADE)
-    val incidentId = integer("incident_id").references(Incidents.id, onDelete = ReferenceOption.SET_NULL).nullable()
+    val alertId = integer("alert_id").references(OnCallAlerts.id, onDelete = ReferenceOption.SET_NULL).nullable()
     val channel = varchar("channel", 10) // 'sms' or 'call'
     val twilioSid = varchar("twilio_sid", 64).nullable()
     val status = varchar("status", 20)

@@ -344,6 +344,7 @@ class OtlpTraceService(
                 $parentIdHigh,
                 ${s.organizationId},
                 ${s.projectId ?: 0L},
+                ${s.projectId ?: 0L},
                 '${escapeSql(s.name)}',
                 '${escapeSql(s.service)}',
                 '${escapeSql(s.resource)}',
@@ -374,7 +375,7 @@ class OtlpTraceService(
         val insert = """
             INSERT INTO `$clickhouseDb`.apm_spans (
                 span_id, span_id_high, trace_id, trace_id_high, parent_id, parent_id_high,
-                organization_id, project_id,
+                organization_id, service_id, project_id,
                 name, service, resource, type,
                 start, duration, error,
                 meta, metrics, host, env, version,

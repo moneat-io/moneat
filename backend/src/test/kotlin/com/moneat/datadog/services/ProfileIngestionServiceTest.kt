@@ -290,6 +290,7 @@ class ProfileIngestionServiceTest {
                 organizationId = 42,
                 query = DdProfileListQuery(
                     service = "api",
+                    services = listOf("api", "worker"),
                     profileType = "cpu",
                     source = "datadog",
                     env = "prod",
@@ -305,9 +306,12 @@ class ProfileIngestionServiceTest {
             assertEquals(1, response.totalCount)
             assertEquals("profile-1", response.profiles.single().profileId)
             assertEquals("api", response.profiles.single().service)
-            assertTrue(queries.any { it.contains("service = 'api'") })
+            assertTrue(queries.any { it.contains("service IN ('api', 'worker')") })
             assertTrue(queries.any { it.contains("start_time >= fromUnixTimestamp64Milli(1000)") })
             assertTrue(queries.any { it.contains("LIMIT 5 OFFSET 2") })
+            val listQuery = queries.single { it.contains("ORDER BY start_time DESC") }
+            assertTrue(listQuery.contains("toString(start_time) as profile_start_time"))
+            assertTrue(!listQuery.contains("toString(start_time) as start_time"))
         } finally {
             unmockkObject(ClickHouseClient)
         }
@@ -390,6 +394,37 @@ class ProfileIngestionServiceTest {
     }
 
     @Test
+    fun `listProfiles maps profile timestamp aliases`() = runBlocking {
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "testdb"
+            coEvery { ClickHouseClient.executeWithFormat(any(), any()) } answers {
+                val sql = firstArg<String>()
+                if (sql.contains("SELECT count()")) {
+                    "1"
+                } else {
+                    compactJson(
+                        """{"profile_id":"profile-3","service":"api","profile_type":"cpu",""",
+                        """"profile_start_time":"2026-01-01 00:00:00",""",
+                        """"profile_end_time":"2026-01-01 00:00:01",""",
+                        """"duration_ns":42,"size_bytes":7,"tags":{}}""",
+                    )
+                }
+            }
+
+            val profile = ProfileIngestionService.listProfiles(
+                organizationId = 42,
+                query = DdProfileListQuery(),
+            ).profiles.single()
+
+            assertEquals("2026-01-01 00:00:00", profile.startTime)
+            assertEquals("2026-01-01 00:00:01", profile.endTime)
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
     fun `listServices maps rollups type counts and sparkline series`() = runBlocking {
         mockkObject(ClickHouseClient)
         try {
@@ -464,6 +499,10 @@ class ProfileIngestionServiceTest {
             assertEquals(0, service.series.single().ts)
             assertEquals(2, service.series.single().count)
             assertTrue(queries.any { it.contains("now() - INTERVAL") })
+            val sparkQuery = queries.single { it.contains("GROUP BY service, ts") }
+            assertTrue(sparkQuery.contains("toUnixTimestamp(toStartOfInterval"))
+            assertTrue(sparkQuery.contains("* 1000"))
+            assertTrue(!sparkQuery.contains("toUnixTimestamp64Milli("))
         } finally {
             unmockkObject(ClickHouseClient)
         }
@@ -485,6 +524,7 @@ class ProfileIngestionServiceTest {
                     organizationId = 42,
                     filters = ProfileQueryFilters(
                         service = "api",
+                        services = listOf("api", "worker"),
                         profileType = "cpu",
                         env = "prod",
                         host = "host-a",
@@ -497,8 +537,13 @@ class ProfileIngestionServiceTest {
             assertEquals(60, response.bucketSeconds)
             assertEquals(4, response.points.single().count)
             assertEquals(4096, response.points.single().sizeBytes)
-            assertTrue(queries.single().contains("profile_type = 'cpu'"))
-            assertTrue(queries.single().contains("host = 'host-a'"))
+            val sql = queries.single()
+            assertTrue(sql.contains("service IN ('api', 'worker')"))
+            assertTrue(sql.contains("profile_type = 'cpu'"))
+            assertTrue(sql.contains("host = 'host-a'"))
+            assertTrue(sql.contains("toUnixTimestamp(toStartOfInterval"))
+            assertTrue(sql.contains("* 1000"))
+            assertTrue(!sql.contains("toUnixTimestamp64Milli("))
         } finally {
             unmockkObject(ClickHouseClient)
         }

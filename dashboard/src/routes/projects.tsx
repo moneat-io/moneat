@@ -16,6 +16,7 @@
 
 import {createFileRoute, Navigate, Outlet, redirect, useMatches} from '@tanstack/react-router'
 import {api} from '@/lib/api'
+import {APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
 import {Code2, Globe, Terminal} from 'lucide-react'
 
 const platformAliases: Record<string, string> = {
@@ -458,7 +459,7 @@ export const platforms: PlatformType[] = [
   {
     id: 'other',
     name: 'Other Platform',
-    description: 'Generic project setup',
+    description: 'Generic source setup',
     icon: Code2,
     color: '#4b5563',
     category: 'backend',
@@ -477,13 +478,13 @@ export const Route = createFileRoute('/projects')({
 
 function ProjectsLayout() {
   const matches = useMatches()
-  // Check if we're showing a child route (project detail)
+  // Check if we're showing a child route (service detail)
   const showingChild = matches.some(match => match.id.includes('projectId'))
 
   if (showingChild) {
     return <Outlet />
   }
 
-  // /projects base path now redirects to dashboard - project list is in the sidebar
-  return <Navigate to="/" />
+  // /projects base path now redirects to the overview; service setup lives under child routes.
+  return <Navigate to="/" search={APP_OVERVIEW_SEARCH} />
 }

@@ -42,6 +42,7 @@ class TelemetryIngestRoutesTest {
 
     private fun samplePayload(deploymentId: String = "test-deploy-abc123") = PulsePayload(
         deploymentId = deploymentId,
+        version = "v1.2.3",
         cpuCount = 8,
         memTotalBytes = 8_589_934_592L,
         memUsedBytes = 2_147_483_648L,
@@ -74,6 +75,7 @@ class TelemetryIngestRoutesTest {
         assertEquals(1, captured.size)
         val pulse = captured.first()
         assertEquals("test-deploy-abc123", pulse.deploymentId)
+        assertEquals("v1.2.3", pulse.version)
         assertEquals(8, pulse.cpuCount)
         assertEquals(8_589_934_592L, pulse.memTotalBytes)
         assertEquals(2_147_483_648L, pulse.memUsedBytes)
@@ -167,6 +169,7 @@ class TelemetryIngestRoutesTest {
                 """
                 {
                   "deploymentId": "deploy-xyz",
+                  "version": "v2.0.0",
                   "cpuCount": 4,
                   "memTotalBytes": 4294967296,
                   "memUsedBytes": 1073741824,
@@ -187,5 +190,6 @@ class TelemetryIngestRoutesTest {
 
         assertEquals(HttpStatusCode.Accepted, response.status)
         assertEquals("deploy-xyz", captured.first().deploymentId)
+        assertEquals("v2.0.0", captured.first().version)
     }
 }

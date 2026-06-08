@@ -423,6 +423,11 @@ class McpToolValidationTest {
             ),
             case("create_uptime_name", CreateUptimeMonitorTool(), obj(), "name is required"),
             case("create_uptime_url", CreateUptimeMonitorTool(), obj("name" to "API"), "url is required"),
+            case("get_synthetic_id", GetSyntheticTestTool(), obj(), "synthetic_test_id is required"),
+            case("update_synthetic_id", UpdateSyntheticTestTool(), obj(), "synthetic_test_id is required"),
+            case("delete_synthetic_id", DeleteSyntheticTestTool(), obj(), "synthetic_test_id is required"),
+            case("run_synthetic_id", RunSyntheticTestTool(), obj(), "synthetic_test_id is required"),
+            case("synthetic_summary_id", GetSyntheticTestSummaryTool(), obj(), "synthetic_test_id is required"),
             case("list_transactions_project_id", ListTransactionsTool(), obj(), "project_id is required"),
             case("get_trace_lookup", GetTraceTool(), obj(), "event_id or trace_id is required"),
             case(
@@ -564,6 +569,19 @@ class McpToolValidationTest {
                 ),
                 "variants must be an array",
             ),
+            case("create_workflow_name", CreateWorkflowTool(), obj(), "name is required"),
+            case("update_workflow_id", UpdateWorkflowTool(), obj(), "workflow_id is required"),
+            case("delete_workflow_id", DeleteWorkflowTool(), obj(), "workflow_id is required"),
+            case("publish_workflow_id", PublishWorkflowTool(), obj(), "workflow_id is required"),
+            case("run_workflow_id", RunWorkflowTool(), obj(), "workflow_id is required"),
+            case(
+                "cancel_workflow_run_id",
+                CancelWorkflowRunTool(),
+                obj("workflow_id" to 1),
+                "run_id is required",
+            ),
+            case("list_workflow_runs_id", ListWorkflowRunsTool(), obj(), "workflow_id is required"),
+            case("get_workflow_blueprint_key", GetWorkflowBlueprintTool(), obj(), "key is required"),
         )
     }
 

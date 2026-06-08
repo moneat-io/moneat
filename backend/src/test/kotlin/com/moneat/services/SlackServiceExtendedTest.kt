@@ -81,7 +81,7 @@ class SlackServiceExtendedTest {
                 userId = userId,
                 incidentId = 1,
                 title = "Disk full",
-                priorityLevel = "P1",
+                priority = "P1",
             )
             assertTrue(true)
         }
@@ -111,7 +111,7 @@ class SlackServiceExtendedTest {
                 userId = userId,
                 incidentId = 2,
                 title = "Outage",
-                priorityLevel = "P2",
+                priority = "P2",
             )
             assertTrue(true)
         }

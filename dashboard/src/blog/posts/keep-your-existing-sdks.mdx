@@ -24,7 +24,7 @@ Sentry.init({
 });
 ```
 
-Your DSN is available in **Projects → [Your Project] → Settings**. All 90+ Sentry SDK platforms (JavaScript, Python, Java, Kotlin, Swift, Go, Ruby, etc.) work out of the box.
+Your DSN is available in **Sources / Ingestion → Service settings**. All 90+ Sentry SDK platforms (JavaScript, Python, Java, Kotlin, Swift, Go, Ruby, etc.) work out of the box.
 
 ## Datadog Agent
 
@@ -33,18 +33,20 @@ Already running the Datadog Agent? Update your `datadog.yaml` to redirect teleme
 ```yaml
 # /etc/datadog-agent/datadog.yaml
 container_lifecycle:
-  dd_url: https://api.moneat.io
+  dd_url: api.moneat.io
 container_image:
-  dd_url: https://api.moneat.io
+  dd_url: api.moneat.io
 database_monitoring:
   metrics:
-    dd_url: https://api.moneat.io
+    dd_url: api.moneat.io
   samples:
-    dd_url: https://api.moneat.io
+    dd_url: api.moneat.io
   activity:
-    dd_url: https://api.moneat.io
+    dd_url: api.moneat.io
 apm_config:
-  profiling_dd_url: https://ingest.moneat.io/profiling/v1/input
+  profiling_dd_url: https://api.moneat.io/api/v2/profile?api_key=<YOUR_KEY>
+  telemetry:
+    dd_url: https://api.moneat.io/dd/telemetry/proxy
 ```
 
 Then run the agent with your Moneat API key:

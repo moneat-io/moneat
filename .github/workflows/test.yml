@@ -29,8 +29,75 @@ env:
   COVERAGE_GATE_PHASE: ${{ github.event.inputs.coverage_gate_phase || 'hard' }}
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      backend: ${{ steps.classify.outputs.backend }}
+      frontend: ${{ steps.classify.outputs.frontend }}
+
+    steps:
+      - name: Classify test-relevant changes
+        id: classify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          backend=false
+          frontend=false
+
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            backend=true
+            frontend=true
+          elif ! gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
+            --jq '.[].filename' > changed-files.txt; then
+            echo "::warning::Unable to list PR files; running both unit suites."
+            backend=true
+            frontend=true
+          else
+            while IFS= read -r changed_file; do
+              case "$changed_file" in
+                .github/workflows/test.yml|.github/workflows/release.yml|.github/actions/*|sonar-project.properties)
+                  backend=true
+                  frontend=true
+                  ;;
+                .env.example|ESSENTIAL_ENV_VARS.md|docker-compose.yml|docker-compose.*.yml|scripts/*)
+                  backend=true
+                  frontend=true
+                  ;;
+                backend/*|ee/backend/*|clickhouse-config/*)
+                  backend=true
+                  ;;
+                dashboard/*|packages/analytics/*)
+                  frontend=true
+                  ;;
+              esac
+            done < changed-files.txt
+          fi
+
+          echo "backend=${backend}" >> "$GITHUB_OUTPUT"
+          echo "frontend=${frontend}" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Test change classification"
+            echo ""
+            echo "| Area | Run unit job |"
+            echo "|------|--------------|"
+            echo "| Backend | ${backend} |"
+            echo "| Frontend | ${frontend} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   # PR-Required: Backend unit and route tests
   backend-unit:
+    needs: changes
+    if: ${{ always() && (needs.changes.result != 'success' || needs.changes.outputs.backend == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -81,6 +148,8 @@ jobs:
           path: backend/build/reports/jacoco/test/
 
   backend-detekt:
+    needs: changes
+    if: ${{ always() && (needs.changes.result != 'success' || needs.changes.outputs.backend == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -114,13 +183,25 @@ jobs:
           name: backend-detekt-report
           path: backend/build/reports/detekt/
 
-  # SonarQube: reuse backend-unit artifacts (JaCoCo + detekt); compile only, then scan
+  # SonarQube: reuse backend and frontend artifacts, then scan Kotlin and dashboard sources
   sonarqube:
     name: SonarQube Analysis
-    if: github.event_name != 'schedule'
-    needs: [backend-unit, backend-detekt]
+    if: >-
+      ${{
+        always() &&
+        github.event_name != 'schedule' &&
+        (needs.backend-unit.result == 'success' || needs.backend-unit.result == 'skipped') &&
+        (needs.backend-detekt.result == 'success' || needs.backend-detekt.result == 'skipped') &&
+        (needs.frontend-unit.result == 'success' || needs.frontend-unit.result == 'skipped') &&
+        (
+          needs.backend-unit.result == 'success' ||
+          needs.backend-detekt.result == 'success' ||
+          needs.frontend-unit.result == 'success'
+        )
+      }}
+    needs: [backend-unit, backend-detekt, frontend-unit]
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     permissions:
       contents: read
       pull-requests: write
@@ -143,6 +224,13 @@ jobs:
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: dashboard/package-lock.json
+
       - name: Cache Gradle packages
         uses: actions/cache@v5
         with:
@@ -158,12 +246,25 @@ jobs:
         with:
           name: backend-coverage-report
           path: backend/build/reports/jacoco/test/
+        continue-on-error: true
 
       - name: Download detekt report
         uses: actions/download-artifact@v8
         with:
           name: backend-detekt-report
           path: backend/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download frontend coverage
+        uses: actions/download-artifact@v8
+        with:
+          name: frontend-test-results
+          path: dashboard/coverage/
+        continue-on-error: true
+
+      - name: Install dashboard dependencies
+        working-directory: dashboard
+        run: npm ci
 
       - name: Compile Kotlin (bytecode for Sonar)
         working-directory: backend
@@ -184,7 +285,6 @@ jobs:
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v6
         with:
-          projectBaseDir: backend
           args: >
             -Dsonar.projectVersion=${{ steps.sonar-version.outputs.version }}
         env:
@@ -196,7 +296,7 @@ jobs:
         uses: sonarsource/sonarqube-quality-gate-action@master
         with:
           pollingTimeoutSec: 600
-          scanMetadataReportFile: backend/.scannerwork/report-task.txt
+          scanMetadataReportFile: .scannerwork/report-task.txt
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonar.moneat.io
@@ -213,7 +313,7 @@ jobs:
           SONAR_HOST="https://sonar.moneat.io"
           PROJECT_KEY="moneat"
           PR_NUMBER="${{ github.event.pull_request.number }}"
-          REPORT_FILE="backend/.scannerwork/report-task.txt"
+          REPORT_FILE=".scannerwork/report-task.txt"
 
           if [[ ! -f "$REPORT_FILE" ]]; then
             echo "::warning::$REPORT_FILE not found — skipping PR comment"
@@ -340,6 +440,8 @@ jobs:
 
   # PR-Required: Frontend unit tests
   frontend-unit:
+    needs: changes
+    if: ${{ always() && (needs.changes.result != 'success' || needs.changes.outputs.frontend == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -513,7 +615,7 @@ jobs:
   # Coverage verification with staged gates
   coverage-check:
     runs-on: ubuntu-latest
-    needs: [backend-unit, frontend-unit]
+    needs: [changes, backend-unit, frontend-unit]
     if: always()
     permissions:
       contents: write
@@ -537,6 +639,9 @@ jobs:
 
       - name: Parse coverage reports
         id: parse_coverage
+        env:
+          BACKEND_REPORT_EXPECTED: ${{ needs.changes.result != 'success' || needs.changes.outputs.backend == 'true' }}
+          FRONTEND_REPORT_EXPECTED: ${{ needs.changes.result != 'success' || needs.changes.outputs.frontend == 'true' }}
         run: |
           python3 <<'PY'
           import json
@@ -550,6 +655,12 @@ jobs:
 
           def pct(covered: int, total: int) -> float:
               return round((covered / total) * 100, 1) if total > 0 else 0.0
+
+          def bool_output(value: bool) -> str:
+              return "true" if value else "false"
+
+          backend_report_expected = os.environ["BACKEND_REPORT_EXPECTED"] == "true"
+          frontend_report_expected = os.environ["FRONTEND_REPORT_EXPECTED"] == "true"
 
           backend_report = find_report("backend-coverage", "jacocoTestReport.xml")
           frontend_report = find_report("frontend-coverage", "coverage-summary.json")
@@ -587,11 +698,27 @@ jobs:
           backend_pct = pct(backend_covered, backend_total)
           frontend_pct = pct(frontend_covered, frontend_total)
 
-          # Keep global coverage behavior consistent with existing gate thresholds.
-          global_pct = round((backend_pct + frontend_pct) / 2, 1)
+          backend_has_report = backend_total > 0
+          frontend_has_report = frontend_total > 0
 
-          has_complete_reports = backend_total > 0 and frontend_total > 0
+          expected_percentages = []
+          if backend_report_expected and backend_has_report:
+              expected_percentages.append(backend_pct)
+          if frontend_report_expected and frontend_has_report:
+              expected_percentages.append(frontend_pct)
 
+          global_pct = round(sum(expected_percentages) / len(expected_percentages), 1) if expected_percentages else 0.0
+          has_expected_reports = (
+              (not backend_report_expected or backend_has_report)
+              and (not frontend_report_expected or frontend_has_report)
+          )
+          has_complete_reports = backend_has_report and frontend_has_report
+
+          print(
+              "Expected reports: "
+              f"backend={backend_report_expected} "
+              f"frontend={frontend_report_expected}"
+          )
           print(f"Backend report: {backend_report or 'missing'}")
           print(f"Frontend report: {frontend_report or 'missing'}")
           print(
@@ -599,14 +726,19 @@ jobs:
               f"backend={backend_pct:.1f}% "
               f"frontend={frontend_pct:.1f}% "
               f"global={global_pct:.1f}% "
-              f"(complete_reports={has_complete_reports})"
+              f"(expected_reports={has_expected_reports} complete_reports={has_complete_reports})"
           )
 
           with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
               output.write(f"backend_coverage={backend_pct:.1f}\n")
               output.write(f"frontend_coverage={frontend_pct:.1f}\n")
               output.write(f"global_coverage={global_pct:.1f}\n")
-              output.write(f"has_complete_reports={'true' if has_complete_reports else 'false'}\n")
+              output.write(f"backend_report_expected={bool_output(backend_report_expected)}\n")
+              output.write(f"frontend_report_expected={bool_output(frontend_report_expected)}\n")
+              output.write(f"backend_has_report={bool_output(backend_has_report)}\n")
+              output.write(f"frontend_has_report={bool_output(frontend_has_report)}\n")
+              output.write(f"has_expected_reports={bool_output(has_expected_reports)}\n")
+              output.write(f"has_complete_reports={bool_output(has_complete_reports)}\n")
           PY
 
       - name: Update coverage badge endpoint
@@ -653,16 +785,81 @@ jobs:
           BACKEND_COV: ${{ steps.parse_coverage.outputs.backend_coverage }}
           FRONTEND_COV: ${{ steps.parse_coverage.outputs.frontend_coverage }}
           GLOBAL_COV: ${{ steps.parse_coverage.outputs.global_coverage }}
+          BACKEND_EXPECTED: ${{ steps.parse_coverage.outputs.backend_report_expected }}
+          FRONTEND_EXPECTED: ${{ steps.parse_coverage.outputs.frontend_report_expected }}
+          BACKEND_HAS_REPORT: ${{ steps.parse_coverage.outputs.backend_has_report }}
+          FRONTEND_HAS_REPORT: ${{ steps.parse_coverage.outputs.frontend_has_report }}
+          HAS_EXPECTED_REPORTS: ${{ steps.parse_coverage.outputs.has_expected_reports }}
         run: |
+          set -euo pipefail
+
+          component_status() {
+            local expected="$1"
+            local has_report="$2"
+            local coverage="$3"
+            local target="$4"
+
+            if [ "$expected" != "true" ]; then
+              echo "Skipped"
+              return
+            fi
+            if [ "$has_report" != "true" ]; then
+              echo "Missing"
+              return
+            fi
+            if [ "$(echo "$coverage >= $target" | bc -l)" -eq 1 ]; then
+              echo "OK"
+            else
+              echo "Below target"
+            fi
+          }
+
+          component_coverage() {
+            local expected="$1"
+            local has_report="$2"
+            local coverage="$3"
+
+            if [ "$expected" != "true" ]; then
+              echo "skipped"
+            elif [ "$has_report" != "true" ]; then
+              echo "missing"
+            else
+              echo "${coverage}%"
+            fi
+          }
+
+          backend_status="$(component_status "$BACKEND_EXPECTED" "$BACKEND_HAS_REPORT" "$BACKEND_COV" "65")"
+          frontend_status="$(component_status "$FRONTEND_EXPECTED" "$FRONTEND_HAS_REPORT" "$FRONTEND_COV" "80")"
+          backend_display="$(component_coverage "$BACKEND_EXPECTED" "$BACKEND_HAS_REPORT" "$BACKEND_COV")"
+          frontend_display="$(component_coverage "$FRONTEND_EXPECTED" "$FRONTEND_HAS_REPORT" "$FRONTEND_COV")"
+
+          any_expected=false
+          if [ "$BACKEND_EXPECTED" = "true" ] || [ "$FRONTEND_EXPECTED" = "true" ]; then
+            any_expected=true
+          fi
+
+          global_display="skipped"
+          global_status="Skipped"
+          if [ "$any_expected" = "true" ]; then
+            global_display="${GLOBAL_COV}%"
+            if [ "$HAS_EXPECTED_REPORTS" != "true" ]; then
+              global_status="Missing expected report"
+            elif [ "$(echo "$GLOBAL_COV >= 60" | bc -l)" -eq 1 ]; then
+              global_status="OK"
+            else
+              global_status="Below target"
+            fi
+          fi
+
           echo "## 📊 Coverage Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Coverage Gate Phase:** \`$PHASE\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Component | Coverage | Target (Week 6) | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|----------|-----------------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Backend   | $BACKEND_COV% | 65% | $([ $(echo "$BACKEND_COV >= 65" | bc -l) -eq 1 ] && echo "✅" || echo "⚠️") |" >> $GITHUB_STEP_SUMMARY
-          echo "| Frontend  | $FRONTEND_COV% | 80% | $([ $(echo "$FRONTEND_COV >= 80" | bc -l) -eq 1 ] && echo "✅" || echo "⚠️") |" >> $GITHUB_STEP_SUMMARY
-          echo "| Global    | $GLOBAL_COV% | 60% | $([ $(echo "$GLOBAL_COV >= 60" | bc -l) -eq 1 ] && echo "✅" || echo "⚠️") |" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend   | $backend_display | 65% | $backend_status |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend  | $frontend_display | 80% | $frontend_status |" >> $GITHUB_STEP_SUMMARY
+          echo "| Global    | $global_display | 60% | $global_status |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           # Phase-specific messaging
@@ -670,17 +867,20 @@ jobs:
             echo "📌 **Week 3 - Reporting Only:** Coverage tracked but not enforced." >> $GITHUB_STEP_SUMMARY
           elif [ "$PHASE" = "soft" ]; then
             echo "⚠️ **Week 4 - Soft Gate:** Coverage warnings enabled (backend ≥55%, frontend ≥45%)." >> $GITHUB_STEP_SUMMARY
-            if [ $(echo "$BACKEND_COV < 55" | bc -l) -eq 1 ]; then
+            if [ "$BACKEND_EXPECTED" = "true" ] && [ "$BACKEND_HAS_REPORT" != "true" ]; then
+              echo "- Backend coverage report is missing" >> $GITHUB_STEP_SUMMARY
+            elif [ "$BACKEND_EXPECTED" = "true" ] && [ "$(echo "$BACKEND_COV < 55" | bc -l)" -eq 1 ]; then
               echo "- Backend coverage below 55% threshold" >> $GITHUB_STEP_SUMMARY
             fi
-            if [ $(echo "$FRONTEND_COV < 45" | bc -l) -eq 1 ]; then
+            if [ "$FRONTEND_EXPECTED" = "true" ] && [ "$FRONTEND_HAS_REPORT" != "true" ]; then
+              echo "- Frontend coverage report is missing" >> $GITHUB_STEP_SUMMARY
+            elif [ "$FRONTEND_EXPECTED" = "true" ] && [ "$(echo "$FRONTEND_COV < 45" | bc -l)" -eq 1 ]; then
               echo "- Frontend coverage below 45% threshold" >> $GITHUB_STEP_SUMMARY
             fi
           elif [ "$PHASE" = "hard" ]; then
             echo "🚨 **Hard Gate:** Coverage enforced (backend ≥65%, frontend ≥80%, global ≥60%)." >> $GITHUB_STEP_SUMMARY
-            if [ $(echo "$BACKEND_COV < 65" | bc -l) -eq 1 ] || [ $(echo "$FRONTEND_COV < 80" | bc -l) -eq 1 ] || [ $(echo "$GLOBAL_COV < 60" | bc -l) -eq 1 ]; then
-              echo "❌ **Coverage gate failed. Add more tests before merging.**" >> $GITHUB_STEP_SUMMARY
-              exit 1
+            if [ "$any_expected" != "true" ]; then
+              echo "No unit coverage reports were expected for this change set." >> $GITHUB_STEP_SUMMARY
             fi
           fi
 
@@ -690,19 +890,47 @@ jobs:
           BACKEND_COV: ${{ steps.parse_coverage.outputs.backend_coverage }}
           FRONTEND_COV: ${{ steps.parse_coverage.outputs.frontend_coverage }}
           GLOBAL_COV: ${{ steps.parse_coverage.outputs.global_coverage }}
+          BACKEND_EXPECTED: ${{ steps.parse_coverage.outputs.backend_report_expected }}
+          FRONTEND_EXPECTED: ${{ steps.parse_coverage.outputs.frontend_report_expected }}
+          BACKEND_HAS_REPORT: ${{ steps.parse_coverage.outputs.backend_has_report }}
+          FRONTEND_HAS_REPORT: ${{ steps.parse_coverage.outputs.frontend_has_report }}
+          HAS_EXPECTED_REPORTS: ${{ steps.parse_coverage.outputs.has_expected_reports }}
         run: |
+          set -euo pipefail
+
+          require_component_coverage() {
+            local name="$1"
+            local expected="$2"
+            local has_report="$3"
+            local coverage="$4"
+            local target="$5"
+
+            if [ "$expected" != "true" ]; then
+              echo "ℹ️ ${name} coverage gate skipped for this change set"
+              return
+            fi
+            if [ "$has_report" != "true" ]; then
+              echo "❌ ${name} coverage report is missing"
+              FAIL=1
+              return
+            fi
+            if [ "$(echo "$coverage < $target" | bc -l)" -eq 1 ]; then
+              echo "❌ ${name} coverage ${coverage}% is below ${target}% threshold"
+              FAIL=1
+            fi
+          }
+
           FAIL=0
-          if [ $(echo "$BACKEND_COV < 65" | bc -l) -eq 1 ]; then
-            echo "❌ Backend coverage $BACKEND_COV% is below 65% threshold"
-            FAIL=1
-          fi
-          if [ $(echo "$FRONTEND_COV < 80" | bc -l) -eq 1 ]; then
-            echo "❌ Frontend coverage $FRONTEND_COV% is below 80% threshold"
-            FAIL=1
-          fi
-          if [ $(echo "$GLOBAL_COV < 60" | bc -l) -eq 1 ]; then
-            echo "❌ Global coverage $GLOBAL_COV% is below 60% threshold"
-            FAIL=1
+          require_component_coverage "Backend" "$BACKEND_EXPECTED" "$BACKEND_HAS_REPORT" "$BACKEND_COV" "65"
+          require_component_coverage "Frontend" "$FRONTEND_EXPECTED" "$FRONTEND_HAS_REPORT" "$FRONTEND_COV" "80"
+
+          if [ "$BACKEND_EXPECTED" = "true" ] || [ "$FRONTEND_EXPECTED" = "true" ]; then
+            if [ "$HAS_EXPECTED_REPORTS" = "true" ] && [ "$(echo "$GLOBAL_COV < 60" | bc -l)" -eq 1 ]; then
+              echo "❌ Global coverage $GLOBAL_COV% is below 60% threshold"
+              FAIL=1
+            fi
+          else
+            echo "ℹ️ Global coverage gate skipped for this change set"
           fi
           
           if [ $FAIL -eq 1 ]; then

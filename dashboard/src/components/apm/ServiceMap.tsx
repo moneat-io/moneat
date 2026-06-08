@@ -6,48 +6,64 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-import {useMemo, useState, useCallback, memo} from 'react'
-import {useQuery} from '@tanstack/react-query'
 import {
-  ReactFlow,
-  Controls,
-  Background,
-  BackgroundVariant,
+  useMemo,
+  useState,
+  useCallback,
+  memo,
+  type ComponentType,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+} from 'react'
+import {useQuery} from '@tanstack/react-query'
+import {Link} from '@tanstack/react-router'
+import {
   Handle,
   Position,
-  MarkerType,
   type Node,
-  type Edge,
   type NodeProps,
 } from '@xyflow/react'
-import '@xyflow/react/dist/style.css'
-import Dagre from '@dagrejs/dagre'
-import {api, type ApmServiceMapEntry} from '@/lib/api'
+import {api, type ApmServiceEdge, type ApmTimeRange} from '@/lib/api'
+import type {FacetFilter} from '@/lib/filters/types'
 import {Badge} from '@/components/ui/badge'
-import {Loader2, Database, Globe, Server, Layers, X} from 'lucide-react'
+import {Button} from '@/components/ui/button'
+import {Database, Globe, Server, Layers, FileText, Flame, ListTree} from 'lucide-react'
+import {MapCanvas} from '@/components/maps/MapCanvas'
+import {MapDetailDock} from '@/components/maps/MapDetailDock'
+import {MapLegend} from '@/components/maps/MapLegend'
+import {MapNodeCard} from '@/components/maps/MapNodeCard'
+import {cn} from '@/lib/utils'
+import {
+  buildServiceMapGraph,
+  formatCount,
+  formatDurationNs,
+  formatPercent,
+  formatRatePerMin,
+  timeRangeSeconds,
+  type HealthTone,
+  type ServiceMapEdgeModel,
+  type ServiceMapNodeModel,
+  type ServiceType,
+} from './serviceMapModel'
+import {
+  layoutPositions,
+  timeRangeSecondsForNode,
+  toFlowEdges,
+  toFlowNodes,
+  DEFAULT_TIME_RANGE,
+  TONE_COLOR,
+  type ServiceNodeData,
+} from './serviceMapFlow'
 
-type ServiceType = 'database' | 'cache' | 'queue' | 'web' | 'service'
-
-type ServiceNodeData = {
-  label: string
-  spanCount: number
-  errorCount: number
-  avgDurationNs: number
-  serviceType: ServiceType
-  isExternal: boolean
-  dimmed: boolean
-  selected: boolean
+const SERVICE_CHART_VAR: Record<ServiceType, string> = {
+  database: '--chart-2',
+  cache: '--chart-8',
+  queue: '--chart-6',
+  web: '--chart-4',
+  service: '--chart-1',
 }
 
-const SERVICE_COLORS: Record<ServiceType, string> = {
-  database: '#7B61FF',
-  cache: '#FF6B6B',
-  queue: '#FFA94D',
-  web: '#51CF66',
-  service: '#339AF0',
-}
-
-const SERVICE_ICONS: Record<ServiceType, React.ComponentType<{className?: string}>> = {
+const SERVICE_ICONS: Record<ServiceType, ComponentType<{className?: string}>> = {
   database: Database,
   cache: Layers,
   queue: Layers,
@@ -55,200 +71,80 @@ const SERVICE_ICONS: Record<ServiceType, React.ComponentType<{className?: string
   service: Server,
 }
 
-function formatDuration(ns: number): string {
-  if (ns < 1_000_000) return `${(ns / 1000).toFixed(0)}µs`
-  if (ns < 1_000_000_000) return `${(ns / 1_000_000).toFixed(1)}ms`
-  return `${(ns / 1_000_000_000).toFixed(2)}s`
+// Node health borders use the soft status-border tokens (matching the sibling
+// infrastructure map), so healthy nodes stay calm and warning/error nodes draw
+// the eye. Selection is conveyed by the primary ring, not the border color.
+const TONE_BORDER_CLASS: Record<HealthTone, string> = {
+  success: 'border-success-border hover:border-success-fg',
+  warning: 'border-warning-border hover:border-warning-fg',
+  danger: 'border-danger-border hover:border-danger-fg',
+  neutral: 'border-border hover:border-foreground/30',
 }
 
-function inferServiceType(name: string): ServiceType {
-  const lower = name.toLowerCase()
-  if (/postgres|mysql|mongo|clickhouse|sqlite|mariadb|cockroach|\bdb\b/.test(lower)) return 'database'
-  if (/redis|cache|memcached|varnish/.test(lower)) return 'cache'
-  if (/kafka|rabbitmq|queue|sqs|sns|nats|pulsar/.test(lower)) return 'queue'
-  if (/web|api|gateway|nginx|envoy|proxy|frontend/.test(lower)) return 'web'
-  return 'service'
+const PIVOT_BUTTON_CLASS = 'h-auto flex-col gap-1 px-1 py-1.5 text-[10px]'
+
+function serviceColor(type: ServiceType): string {
+  return `hsl(var(${SERVICE_CHART_VAR[type]}))`
 }
 
-// --- Layout ---
-
-const NODE_W = 200
-const NODE_H = 80
-const EXT_W = 160
-const EXT_H = 56
-
-function buildGraph(
-  services: ApmServiceMapEntry[],
-  selectedId: string | null,
-): {nodes: Node[]; edges: Edge[]} {
-  const known = new Set(services.map((s) => s.service))
-  const external = new Set<string>()
-  for (const s of services)
-    for (const t of s.callsTo) if (!known.has(t)) external.add(t)
-
-  const connected = new Set<string>()
-  const connEdges = new Set<string>()
-  if (selectedId) {
-    connected.add(selectedId)
-    for (const s of services) {
-      for (const t of s.callsTo) {
-        if (s.service === selectedId || t === selectedId) {
-          connected.add(s.service)
-          connected.add(t)
-          connEdges.add(`${s.service}->${t}`)
-        }
-      }
-    }
-  }
-
-  const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}))
-  g.setGraph({rankdir: 'LR', nodesep: 50, ranksep: 160, marginx: 40, marginy: 40})
-
-  for (const s of services) g.setNode(s.service, {width: NODE_W, height: NODE_H})
-  for (const name of external) g.setNode(name, {width: EXT_W, height: EXT_H})
-  for (const s of services) for (const t of s.callsTo) g.setEdge(s.service, t)
-
-  Dagre.layout(g)
-
-  const dim = (id: string) => selectedId !== null && !connected.has(id)
-
-  const nodes: Node[] = services.map((s) => {
-    const pos = g.node(s.service)
-    return {
-      id: s.service,
-      type: 'service',
-      position: {x: pos.x - NODE_W / 2, y: pos.y - NODE_H / 2},
-      data: {
-        label: s.service,
-        spanCount: s.spanCount,
-        errorCount: s.errorCount,
-        avgDurationNs: s.avgDurationNs,
-        serviceType: inferServiceType(s.service),
-        isExternal: false,
-        dimmed: dim(s.service),
-        selected: selectedId === s.service,
-      } satisfies ServiceNodeData,
-    }
-  })
-
-  for (const name of external) {
-    const pos = g.node(name)
-    nodes.push({
-      id: name,
-      type: 'service',
-      position: {x: pos.x - EXT_W / 2, y: pos.y - EXT_H / 2},
-      data: {
-        label: name,
-        spanCount: 0,
-        errorCount: 0,
-        avgDurationNs: 0,
-        serviceType: inferServiceType(name),
-        isExternal: true,
-        dimmed: dim(name),
-        selected: selectedId === name,
-      } satisfies ServiceNodeData,
-    })
-  }
-
-  const edges: Edge[] = []
-  for (const s of services) {
-    for (const t of s.callsTo) {
-      const id = `${s.service}->${t}`
-      const isDimmed = selectedId !== null && !connEdges.has(id)
-      edges.push({
-        id,
-        source: s.service,
-        target: t,
-        type: 'smoothstep',
-        animated: !isDimmed && selectedId !== null,
-        style: {
-          stroke: isDimmed
-            ? 'hsl(var(--muted-foreground) / 0.2)'
-            : 'hsl(var(--muted-foreground) / 0.6)',
-          strokeWidth: isDimmed ? 1 : 2,
-        },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: isDimmed
-            ? 'hsl(var(--muted-foreground) / 0.2)'
-            : 'hsl(var(--muted-foreground) / 0.6)',
-          width: 14,
-          height: 14,
-        },
-      })
-    }
-  }
-
-  return {nodes, edges}
+function serviceTint(type: ServiceType): string {
+  return `hsl(var(${SERVICE_CHART_VAR[type]}) / 0.15)`
 }
 
 // --- Custom node ---
 
-const handleStyle: React.CSSProperties = {
+const handleStyle: CSSProperties = {
   width: 6,
   height: 6,
   border: 'none',
   background: 'hsl(var(--muted-foreground) / 0.4)',
 }
 
-const ServiceNode = memo(function ServiceNode({data}: NodeProps<Node<ServiceNodeData>>) {
-  const color = SERVICE_COLORS[data.serviceType]
+const ServiceNode = memo(function ServiceNode({data}: Readonly<NodeProps<Node<ServiceNodeData>>>) {
+  const accent = serviceColor(data.serviceType)
   const Icon = SERVICE_ICONS[data.serviceType]
-  const hasErrors = data.errorCount > 0
+  const borderClassName = data.isInferred ? 'border-border' : TONE_BORDER_CLASS[data.healthTone]
+
+  const metrics = data.isInferred ? (
+    <>
+      <span>{formatRatePerMin(data.spanCount, timeRangeSecondsForNode(data))} in</span>
+      <span>{formatDurationNs(data.avgDurationNs)}</span>
+    </>
+  ) : (
+    <>
+      <span>{formatRatePerMin(data.spanCount, timeRangeSecondsForNode(data))}</span>
+      <span>{formatDurationNs(data.avgDurationNs)}</span>
+      {data.errorRate > 0 && (
+        <span className={data.healthTone === 'danger' ? 'font-semibold text-danger-fg' : 'text-warning-fg'}>
+          {formatPercent(data.errorRate)} err
+        </span>
+      )}
+    </>
+  )
 
   return (
-    <div
-      className={[
-        'rounded-lg border-2 bg-card text-card-foreground',
-        'transition-all duration-200 cursor-pointer',
-        data.selected ? 'ring-2 ring-primary scale-[1.02]' : '',
-        data.dimmed ? 'opacity-25' : '',
-        data.isExternal ? 'border-dashed' : '',
-      ].join(' ')}
-      style={{
-        borderColor: hasErrors && !data.selected
-          ? 'hsl(var(--destructive))'
-          : data.selected
-            ? 'hsl(var(--primary))'
-            : color,
-        minWidth: data.isExternal ? 140 : 180,
-      }}
-    >
+    <>
       <Handle type="target" position={Position.Left} style={handleStyle} />
-
-      <div className="px-3 py-2.5">
-        <div className="flex items-center gap-2">
-          <div
-            className="shrink-0 w-7 h-7 rounded-md flex items-center justify-center"
-            style={{backgroundColor: `${color}22`, color}}
-          >
-            <Icon className="w-4 h-4" />
-          </div>
-          <span className="font-semibold text-sm truncate flex-1">{data.label}</span>
-          {hasErrors && (
-            <span className="shrink-0 w-2.5 h-2.5 rounded-full bg-destructive animate-pulse" />
-          )}
-        </div>
-
-        {!data.isExternal && (
-          <div className="flex items-center gap-3 mt-1.5 text-[11px] text-muted-foreground font-mono">
-            <span>{data.spanCount.toLocaleString()} spans</span>
-            <span>{formatDuration(data.avgDurationNs)}</span>
-            {hasErrors && (
-              <span className="text-destructive font-semibold">
-                {data.errorCount} err
-              </span>
-            )}
-          </div>
-        )}
-
-        {data.isExternal && (
-          <p className="text-[11px] text-muted-foreground mt-1">External dependency</p>
-        )}
-      </div>
-
+      <MapNodeCard
+        title={data.label}
+        subtitle={data.isInferred ? 'Inferred dependency' : undefined}
+        icon={<Icon className="h-4 w-4" />}
+        iconContainerStyle={{backgroundColor: serviceTint(data.serviceType), color: accent}}
+        borderClassName={borderClassName}
+        minWidth={data.isInferred ? 148 : 188}
+        selected={data.selected}
+        dimmed={data.dimmed}
+        dashed={data.isInferred}
+        statusIndicator={data.healthTone === 'danger' ? (
+          <span
+            className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full"
+            style={{backgroundColor: TONE_COLOR.danger}}
+          />
+        ) : null}
+        metrics={metrics}
+      />
       <Handle type="source" position={Position.Right} style={handleStyle} />
-    </div>
+    </>
   )
 })
 
@@ -256,135 +152,272 @@ const nodeTypes = {service: ServiceNode}
 
 // --- Main component ---
 
-export function ServiceMap() {
+const EMPTY_FACET_FILTERS: FacetFilter[] = []
+
+type ServiceMapProps = Readonly<{
+  className?: string
+  searchQuery?: string
+  timeRange?: ApmTimeRange
+  env?: string
+  source?: string
+  facetFilters?: FacetFilter[]
+}>
+
+export function ServiceMap({
+  className,
+  searchQuery = '',
+  timeRange = DEFAULT_TIME_RANGE,
+  env,
+  source,
+  facetFilters = EMPTY_FACET_FILTERS,
+}: ServiceMapProps = {}) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  const {data, isLoading} = useQuery({
-    queryKey: ['apmServiceMap'],
-    queryFn: () => api.getApmServiceMap(),
+  const {data, isError, isLoading} = useQuery({
+    queryKey: ['apmServiceMap', timeRange, env ?? '', source ?? ''],
+    queryFn: () => api.getApmServiceMap({timeRange, env, source}),
     enabled: api.isAuthenticated(),
     refetchInterval: 30000,
   })
 
-  const services = data?.services ?? []
+  const services = useMemo(() => data?.services ?? [], [data])
+  const edges = useMemo<ApmServiceEdge[]>(() => data?.edges ?? [], [data])
+  const windowSeconds = timeRangeSeconds(timeRange)
 
-  const {nodes, edges} = useMemo(
-    () => buildGraph(services, selectedId),
-    [services, selectedId],
+  const graph = useMemo(
+    () => buildServiceMapGraph({services, edges, windowSeconds, search: searchQuery, selectedId, facetFilters}),
+    [services, edges, windowSeconds, searchQuery, selectedId, facetFilters],
   )
 
-  const onNodeClick = useCallback((_e: React.MouseEvent, node: Node) => {
-    setSelectedId((prev) => (prev === node.id ? null : node.id))
+  const flowNodes = useMemo(() => {
+    const positions = layoutPositions(graph.nodes, graph.edges)
+    return toFlowNodes(graph.nodes, positions).map((node) => ({
+      ...node,
+      data: {...node.data, windowSeconds},
+    }))
+  }, [graph.nodes, graph.edges, windowSeconds])
+
+  const flowEdges = useMemo(() => toFlowEdges(graph.edges), [graph.edges])
+
+  const selectedNode = useMemo(
+    () => graph.nodes.find((node) => node.id === selectedId) ?? null,
+    [graph.nodes, selectedId],
+  )
+
+  const onNodeClick = useCallback((_event: ReactMouseEvent, node: Node) => {
+    setSelectedId((previousId) => (previousId === node.id ? null : node.id))
   }, [])
 
   const onPaneClick = useCallback(() => setSelectedId(null), [])
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    )
-  }
-
-  if (services.length === 0) {
-    return (
-      <div className="text-center py-12 text-muted-foreground">
-        <p className="font-medium">No services found</p>
-        <p className="text-sm mt-1">
-          Service map populates automatically as traces are ingested.
-        </p>
-      </div>
-    )
-  }
-
-  const selected = selectedId
-    ? services.find((s) => s.service === selectedId)
-    : null
+  const isFilteredEmpty = services.length > 0 && graph.visibleServiceCount === 0
 
   return (
-    <div className="service-map relative h-[calc(100vh-260px)] min-h-[420px] rounded-lg border bg-card/50 overflow-hidden">
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
+    <div className={cn('relative flex min-h-0', className ?? 'service-map h-[calc(100vh-260px)] min-h-[420px]')}>
+      <MapCanvas
+        nodes={flowNodes}
+        edges={flowEdges}
         nodeTypes={nodeTypes}
         onNodeClick={onNodeClick}
         onPaneClick={onPaneClick}
-        nodesDraggable={false}
-        nodesConnectable={false}
-        fitView
-        fitViewOptions={{padding: 0.25}}
-        minZoom={0.2}
-        maxZoom={2}
-        proOptions={{hideAttribution: true}}
+        isLoading={isLoading}
+        isEmpty={!isError && graph.nodes.length === 0}
+        emptyTitle={isFilteredEmpty ? 'No services match your filters' : 'No services found'}
+        emptyDescription={isFilteredEmpty
+          ? 'Adjust search or facets to show more service nodes.'
+          : 'Service map populates automatically as trace telemetry is ingested.'}
+        fallback={isError ? (
+          <div className="max-w-sm text-center">
+            <p className="text-sm font-medium text-muted-foreground">Map data unavailable</p>
+            <p className="mt-1 text-xs text-muted-foreground/75">
+              Refresh the page or try again after the telemetry API responds.
+            </p>
+          </div>
+        ) : undefined}
+        className="min-w-0 flex-1 rounded-none border-0"
+        fitSignature={`services-${timeRange}-${graph.nodes.map((node) => node.id).join('|')}`}
       >
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={24}
-          size={1}
-          className="!bg-background"
+        <MapLegend
+          items={[
+            {label: 'Healthy', color: TONE_COLOR.success},
+            {label: 'Elevated', color: TONE_COLOR.warning},
+            {label: 'Errors', color: TONE_COLOR.danger},
+            {label: 'Inferred', color: 'hsl(var(--muted-foreground) / 0.4)', dashed: true},
+          ]}
+          trailing={
+            <span className="flex items-center gap-1.5 border-l border-border/60 pl-3 font-mono">
+              <span>{formatCount(graph.visibleServiceCount)} services</span>
+              {graph.inferredCount > 0 && (
+                <span className="text-muted-foreground/70">· {formatCount(graph.inferredCount)} inferred</span>
+              )}
+            </span>
+          }
         />
-        <Controls showInteractive={false} />
-      </ReactFlow>
+      </MapCanvas>
 
-      {/* Legend */}
-      <div className="absolute bottom-3 left-3 flex items-center gap-3 bg-card/90 backdrop-blur-sm border rounded-md px-3 py-1.5 text-[11px] text-muted-foreground pointer-events-none">
-        {Object.entries(SERVICE_COLORS).map(([type, c]) => (
-          <span key={type} className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-sm inline-block" style={{backgroundColor: c}} />
-            <span className="capitalize">{type}</span>
-          </span>
-        ))}
-        <span className="flex items-center gap-1.5 ml-1">
-          <span className="w-4 border-t-2 border-dashed border-muted-foreground/40 inline-block" />
-          <span>External</span>
-        </span>
+      {selectedNode && (
+        <ServiceDetailPanel
+          node={selectedNode}
+          upstream={graph.neighbors?.upstream ?? []}
+          downstream={graph.neighbors?.downstream ?? []}
+          windowSeconds={windowSeconds}
+          timeRange={timeRange}
+          env={env}
+          source={source}
+          onClose={() => setSelectedId(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+type ServiceDetailPanelProps = Readonly<{
+  node: ServiceMapNodeModel
+  upstream: ServiceMapEdgeModel[]
+  downstream: ServiceMapEdgeModel[]
+  windowSeconds: number
+  timeRange: ApmTimeRange
+  env?: string
+  source?: string
+  onClose: () => void
+}>
+
+function ServiceDetailPanel({
+  node,
+  upstream,
+  downstream,
+  windowSeconds,
+  timeRange,
+  env,
+  source,
+  onClose,
+}: ServiceDetailPanelProps) {
+  const {data: latency, isLoading: latencyLoading} = useQuery({
+    queryKey: ['apmServiceLatency', node.id, timeRange, env ?? '', source ?? ''],
+    queryFn: () => api.getApmServiceLatency(node.id, {timeRange, env, source}),
+    enabled: api.isAuthenticated() && !node.isInferred,
+  })
+
+  return (
+    <MapDetailDock
+      title={node.label}
+      subtitle={node.isInferred ? `inferred · ${node.serviceType}` : `service · ${node.serviceType}`}
+      onClose={onClose}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-muted-foreground">{node.isInferred ? 'Type' : 'Health'}</span>
+        <Badge variant={node.isInferred ? 'neutral' : healthBadgeVariant(node.healthTone)} className="h-5 text-[10px] capitalize">
+          {node.isInferred ? 'Inferred dependency' : node.healthTone}
+        </Badge>
       </div>
+      <DetailRow label="Throughput" value={formatRatePerMin(node.spanCount, windowSeconds)} />
+      <DetailRow label="Error rate" value={formatPercent(node.errorRate)} />
+      <DetailRow label="Avg latency" value={formatDurationNs(node.avgDurationNs)} />
+      {!node.isInferred && (
+        <div className="grid grid-cols-3 gap-1.5 border-t pt-2">
+          <Percentile label="p50" value={latency?.p50DurationNs} loading={latencyLoading} />
+          <Percentile label="p90" value={latency?.p90DurationNs} loading={latencyLoading} />
+          <Percentile label="p99" value={latency?.p99DurationNs} loading={latencyLoading} />
+        </div>
+      )}
 
-      {/* Detail panel */}
-      {selected && (
-        <div className="absolute top-3 right-3 w-60 bg-card border rounded-lg overflow-hidden animate-in fade-in slide-in-from-right-2 duration-200">
-          <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30">
-            <h3 className="font-semibold text-sm truncate">{selected.service}</h3>
-            <button
-              onClick={() => setSelectedId(null)}
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          <div className="px-3 py-2.5 space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Spans</span>
-              <span className="font-mono text-xs">{selected.spanCount.toLocaleString()}</span>
+      <NeighborList title="Upstream" emptyLabel="No callers" edges={upstream} endpoint="source" />
+      <NeighborList title="Downstream" emptyLabel="No dependencies" edges={downstream} endpoint="target" />
+
+      {!node.isInferred && (
+        <div className="grid grid-cols-3 gap-1.5 border-t pt-2">
+          <Button asChild variant="outline" size="sm" className={PIVOT_BUTTON_CLASS}>
+            <Link to="/performance/traces">
+              <ListTree className="h-3.5 w-3.5" />
+              Traces
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className={PIVOT_BUTTON_CLASS}>
+            <Link to="/logs" search={{q: `service:${node.id}`}}>
+              <FileText className="h-3.5 w-3.5" />
+              Logs
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className={PIVOT_BUTTON_CLASS}>
+            <Link to="/profiles/service/$service" params={{service: node.id}}>
+              <Flame className="h-3.5 w-3.5" />
+              Profiles
+            </Link>
+          </Button>
+        </div>
+      )}
+    </MapDetailDock>
+  )
+}
+
+function DetailRow({label, value}: Readonly<{label: string; value: string}>) {
+  return (
+    <div className="flex justify-between gap-3">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="truncate font-mono text-xs">{value}</span>
+    </div>
+  )
+}
+
+function Percentile({
+  label,
+  value,
+  loading,
+}: Readonly<{label: string; value?: number; loading: boolean}>) {
+  const displayValue = percentileDisplayValue(value, loading)
+
+  return (
+    <div className="rounded-md border bg-card/40 px-1.5 py-1 text-center">
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="font-mono text-[11px]">{displayValue}</div>
+    </div>
+  )
+}
+
+function percentileDisplayValue(value: number | undefined, loading: boolean): string {
+  if (loading) return '…'
+  if (value == null) return '—'
+  return formatDurationNs(value)
+}
+
+function NeighborList({
+  title,
+  emptyLabel,
+  edges,
+  endpoint,
+}: Readonly<{
+  title: string
+  emptyLabel: string
+  edges: ServiceMapEdgeModel[]
+  endpoint: 'source' | 'target'
+}>) {
+  return (
+    <div className="border-t pt-1.5">
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-[11px] font-medium text-muted-foreground">{title}</span>
+        <span className="text-[10px] text-muted-foreground/70">{edges.length}</span>
+      </div>
+      {edges.length === 0 ? (
+        <p className="text-[11px] text-muted-foreground/60">{emptyLabel}</p>
+      ) : (
+        <div className="space-y-1">
+          {edges.map((edge) => (
+            <div key={edge.id} className="flex items-center justify-between gap-2 text-[11px]">
+              <span className="truncate font-medium">{endpoint === 'source' ? edge.source : edge.target}</span>
+              <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                {formatCount(edge.callCount)} · {formatDurationNs(edge.avgDurationNs)}
+                {edge.errorRate > 0 && (
+                  <span className="ml-1 text-danger-fg">{formatPercent(edge.errorRate)}</span>
+                )}
+              </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Avg Duration</span>
-              <span className="font-mono text-xs">{formatDuration(selected.avgDurationNs)}</span>
-            </div>
-            {selected.errorCount > 0 && (
-              <div className="flex justify-between items-center">
-                <span className="text-muted-foreground">Errors</span>
-                <Badge variant="destructive" className="text-[10px] h-5">
-                  {selected.errorCount}
-                </Badge>
-              </div>
-            )}
-            {selected.callsTo.length > 0 && (
-              <div className="pt-1 border-t">
-                <span className="text-[11px] text-muted-foreground">Downstream</span>
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {selected.callsTo.map((t) => (
-                    <Badge key={t} variant="secondary" className="text-[10px] h-5">
-                      {t}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          ))}
         </div>
       )}
     </div>
   )
+}
+
+function healthBadgeVariant(tone: HealthTone): 'success' | 'warning' | 'danger' | 'neutral' {
+  return tone
 }

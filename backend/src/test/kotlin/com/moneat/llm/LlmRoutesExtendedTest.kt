@@ -112,65 +112,65 @@ class LlmRoutesExtendedTest {
             assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
-    // ──── Missing projectId (400) ────
+    // ──── Missing organization access (404) ────
 
     @Test
-    fun `generations returns 400 when projectId is missing`() =
+    fun `generations returns 404 when organization access is missing`() =
         testApplication {
             setupApp()
-            val token = RouteTestSupport.createToken(userId = 1, orgId = 1)
+            val token = RouteTestSupport.createToken(userId = 1)
             val response = client.get("/v1/llm/generations") {
                 withAuth(token)
             }
-            assertEquals(HttpStatusCode.BadRequest, response.status)
-            assertTrue(response.bodyAsText().contains("projectId is required"))
+            assertEquals(HttpStatusCode.NotFound, response.status)
+            assertTrue(response.bodyAsText().contains("No organization access"))
         }
 
     @Test
-    fun `models returns 400 when projectId is missing`() =
+    fun `models returns 404 when organization access is missing`() =
         testApplication {
             setupApp()
-            val token = RouteTestSupport.createToken(userId = 1, orgId = 1)
+            val token = RouteTestSupport.createToken(userId = 1)
             val response = client.get("/v1/llm/models") {
                 withAuth(token)
             }
-            assertEquals(HttpStatusCode.BadRequest, response.status)
-            assertTrue(response.bodyAsText().contains("projectId is required"))
+            assertEquals(HttpStatusCode.NotFound, response.status)
+            assertTrue(response.bodyAsText().contains("No organization access"))
         }
 
     @Test
-    fun `costs returns 400 when projectId is missing`() =
+    fun `costs returns 404 when organization access is missing`() =
         testApplication {
             setupApp()
-            val token = RouteTestSupport.createToken(userId = 1, orgId = 1)
+            val token = RouteTestSupport.createToken(userId = 1)
             val response = client.get("/v1/llm/costs") {
                 withAuth(token)
             }
-            assertEquals(HttpStatusCode.BadRequest, response.status)
-            assertTrue(response.bodyAsText().contains("projectId is required"))
+            assertEquals(HttpStatusCode.NotFound, response.status)
+            assertTrue(response.bodyAsText().contains("No organization access"))
         }
 
     @Test
-    fun `generation detail returns 400 when projectId is missing`() =
+    fun `generation detail returns 404 when organization access is missing`() =
         testApplication {
             setupApp()
-            val token = RouteTestSupport.createToken(userId = 1, orgId = 1)
+            val token = RouteTestSupport.createToken(userId = 1)
             val response = client.get("/v1/llm/generations/abc-123") {
                 withAuth(token)
             }
-            assertEquals(HttpStatusCode.BadRequest, response.status)
-            assertTrue(response.bodyAsText().contains("projectId is required"))
+            assertEquals(HttpStatusCode.NotFound, response.status)
+            assertTrue(response.bodyAsText().contains("No organization access"))
         }
 
     @Test
-    fun `traces returns 400 when projectId is missing`() =
+    fun `traces returns 404 when organization access is missing`() =
         testApplication {
             setupApp()
-            val token = RouteTestSupport.createToken(userId = 1, orgId = 1)
+            val token = RouteTestSupport.createToken(userId = 1)
             val response = client.get("/v1/llm/traces/some-trace-id") {
                 withAuth(token)
             }
-            assertEquals(HttpStatusCode.BadRequest, response.status)
-            assertTrue(response.bodyAsText().contains("projectId is required"))
+            assertEquals(HttpStatusCode.NotFound, response.status)
+            assertTrue(response.bodyAsText().contains("No organization access"))
         }
 }

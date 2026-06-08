@@ -17,6 +17,10 @@
 package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.config.RedisConfig
+import com.moneat.datadog.models.DdContainerImagePayload
+import com.moneat.datadog.models.DdSbomPackage
+import com.moneat.datadog.models.DdSbomPayload
 import com.moneat.datadog.services.MiscIngestionService
 import com.moneat.datadog.services.QueuedContainerImageEntry
 import com.moneat.datadog.services.QueuedDataLineageEntry
@@ -26,10 +30,14 @@ import com.moneat.datadog.services.QueuedPipelineStatEntry
 import com.moneat.datadog.services.QueuedSbomEntry
 import com.moneat.datadog.services.QueuedSymbolDbEntry
 import com.moneat.datadog.services.QueuedSyntheticEntry
+import io.lettuce.core.api.sync.RedisCommands
 import io.mockk.coEvery
 import io.mockk.every
+import io.mockk.mockk
 import io.mockk.mockkObject
+import io.mockk.slot
 import io.mockk.unmockkObject
+import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlin.test.AfterTest
@@ -50,6 +58,10 @@ import kotlin.test.assertTrue
  *  - testType/status normalization in synthetics
  */
 class MiscIngestionServiceCoverageTest {
+
+    private companion object {
+        private const val MISC_QUEUE_KEY = "moneat:dd:misc:queue"
+    }
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -72,6 +84,172 @@ class MiscIngestionServiceCoverageTest {
             val response = io.mockk.mockk<io.ktor.client.statement.HttpResponse>()
             every { response.status } returns io.ktor.http.HttpStatusCode.OK
             response
+        }
+    }
+
+    // ===================== enqueue batches =====================
+
+    @Test
+    fun `enqueueContainerImages writes one Redis batch with parsed tags`() {
+        val redis = mockk<RedisCommands<String, String>>()
+        val queuedPayload = slot<String>()
+
+        mockkObject(RedisConfig)
+        try {
+            every { RedisConfig.sync() } returns redis
+            every { redis.lpush(MISC_QUEUE_KEY, capture(queuedPayload)) } returns 1L
+
+            val count = MiscIngestionService.enqueueContainerImages(
+                orgId = 42,
+                payloads = listOf(
+                    DdContainerImagePayload(
+                        imageName = "nginx",
+                        imageTag = "1.25",
+                        digest = "sha256:abc123",
+                        registry = "docker.io",
+                        sizeBytes = 50_000_000,
+                        os = "linux",
+                        architecture = "amd64",
+                        layers = 5,
+                        tags = listOf("env:prod", "standalone"),
+                    ),
+                    DdContainerImagePayload(
+                        imageName = "redis",
+                        imageTag = "7.2",
+                        digest = "sha256:def456",
+                        registry = "gcr.io",
+                        sizeBytes = 30_000_000,
+                        os = "linux",
+                        architecture = "arm64",
+                        layers = 3,
+                        tags = listOf("team:platform"),
+                    ),
+                ),
+            )
+
+            val batch = MiscIngestionService.decodeBatch(queuedPayload.captured)
+            assertEquals(2, count)
+            assertEquals(42, batch.organizationId)
+            assertEquals("container_images", batch.batchType)
+            assertEquals(listOf("nginx", "redis"), batch.containerImages.map { it.imageName })
+            assertEquals(listOf("amd64", "arm64"), batch.containerImages.map { it.architecture })
+            assertEquals("prod", batch.containerImages.first().tags["env"])
+            assertEquals("", batch.containerImages.first().tags["standalone"])
+            assertEquals(batch.containerImages.first().timestampMs, batch.containerImages.last().timestampMs)
+            verify(exactly = 1) { redis.lpush(MISC_QUEUE_KEY, any<String>()) }
+        } finally {
+            unmockkObject(RedisConfig)
+        }
+    }
+
+    @Test
+    fun `enqueueContainerImage delegates to a single-entry Redis batch`() {
+        val redis = mockk<RedisCommands<String, String>>()
+        val queuedPayload = slot<String>()
+
+        mockkObject(RedisConfig)
+        try {
+            every { RedisConfig.sync() } returns redis
+            every { redis.lpush(MISC_QUEUE_KEY, capture(queuedPayload)) } returns 1L
+
+            MiscIngestionService.enqueueContainerImage(
+                orgId = 7,
+                payload = DdContainerImagePayload(
+                    imageName = "api",
+                    imageTag = "latest",
+                    digest = "sha256:single",
+                    registry = "registry.example.com",
+                    tags = listOf("service:api"),
+                ),
+            )
+
+            val batch = MiscIngestionService.decodeBatch(queuedPayload.captured)
+            assertEquals(7, batch.organizationId)
+            assertEquals("container_images", batch.batchType)
+            assertEquals(1, batch.containerImages.size)
+            assertEquals("api", batch.containerImages.single().imageName)
+            assertEquals("api", batch.containerImages.single().tags["service"])
+            verify(exactly = 1) { redis.lpush(MISC_QUEUE_KEY, any<String>()) }
+        } finally {
+            unmockkObject(RedisConfig)
+        }
+    }
+
+    @Test
+    fun `enqueueContainerImages skips Redis when batch is empty`() {
+        mockkObject(RedisConfig)
+        try {
+            val count = MiscIngestionService.enqueueContainerImages(orgId = 42, payloads = emptyList())
+
+            assertEquals(0, count)
+            verify(exactly = 0) { RedisConfig.sync() }
+        } finally {
+            unmockkObject(RedisConfig)
+        }
+    }
+
+    @Test
+    fun `enqueueSbom writes package rows in one Redis batch`() {
+        val redis = mockk<RedisCommands<String, String>>()
+        val queuedPayload = slot<String>()
+
+        mockkObject(RedisConfig)
+        try {
+            every { RedisConfig.sync() } returns redis
+            every { redis.lpush(MISC_QUEUE_KEY, capture(queuedPayload)) } returns 1L
+
+            val count = MiscIngestionService.enqueueSbom(
+                orgId = 99,
+                payload = DdSbomPayload(
+                    host = "node-1",
+                    containerId = "container-1",
+                    imageName = "moneat/api:latest",
+                    packages = listOf(
+                        DdSbomPackage(
+                            name = "openssl",
+                            version = "3.0.0",
+                            type = "deb",
+                            cveIds = listOf("CVE-2024-0001"),
+                        ),
+                        DdSbomPackage(
+                            name = "log4j",
+                            version = "2.17.2",
+                            type = "maven",
+                            cveIds = emptyList(),
+                        ),
+                    ),
+                    tags = listOf("env:prod", "runtime:jvm"),
+                ),
+            )
+
+            val batch = MiscIngestionService.decodeBatch(queuedPayload.captured)
+            assertEquals(2, count)
+            assertEquals(99, batch.organizationId)
+            assertEquals("sbom_packages", batch.batchType)
+            assertEquals(listOf("openssl", "log4j"), batch.sbomPackages.map { it.packageName })
+            assertEquals("container-1", batch.sbomPackages.first().containerId)
+            assertEquals(listOf("CVE-2024-0001"), batch.sbomPackages.first().cveIds)
+            assertEquals("prod", batch.sbomPackages.first().tags["env"])
+            assertEquals(batch.sbomPackages.first().timestampMs, batch.sbomPackages.last().timestampMs)
+            verify(exactly = 1) { redis.lpush(MISC_QUEUE_KEY, any<String>()) }
+        } finally {
+            unmockkObject(RedisConfig)
+        }
+    }
+
+    @Test
+    fun `enqueueSbom skips Redis when package list is empty`() {
+        mockkObject(RedisConfig)
+        try {
+            val count = MiscIngestionService.enqueueSbom(
+                orgId = 99,
+                payload = DdSbomPayload(host = "node-1", packages = emptyList()),
+            )
+
+            assertEquals(0, count)
+            verify(exactly = 0) { RedisConfig.sync() }
+        } finally {
+            unmockkObject(RedisConfig)
         }
     }
 

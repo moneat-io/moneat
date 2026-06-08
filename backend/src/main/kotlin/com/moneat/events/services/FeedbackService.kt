@@ -60,10 +60,44 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
         limit: Int = 25,
         status: String? = null,
         demoEpochMs: Long? = null
+    ): List<FeedbackListItem> =
+        getFeedback(
+            scope = ServiceQueryScope.service(projectId),
+            retentionDays = queryHelper.getProjectRetentionDays(projectId),
+            page = page,
+            limit = limit,
+            status = status,
+            demoEpochMs = demoEpochMs
+        )
+
+    suspend fun getFeedbackForServices(
+        organizationId: Int,
+        serviceIds: List<Long>,
+        page: Int = 1,
+        limit: Int = 25,
+        status: String? = null,
+        demoEpochMs: Long? = null
+    ): List<FeedbackListItem> =
+        getFeedback(
+            scope = ServiceQueryScope.services(serviceIds),
+            retentionDays = queryHelper.getOrganizationRetentionDays(organizationId),
+            page = page,
+            limit = limit,
+            status = status,
+            demoEpochMs = demoEpochMs
+        )
+
+    private suspend fun getFeedback(
+        scope: ServiceQueryScope,
+        retentionDays: Int,
+        page: Int,
+        limit: Int,
+        status: String?,
+        demoEpochMs: Long?
     ): List<FeedbackListItem> {
+        if (scope.serviceIds.isEmpty()) return emptyList()
         val offset = (page - 1) * limit
-        val retentionDays = queryHelper.getProjectRetentionDays(projectId)
-        val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
+        val projectIdClause = scope.projectIdClause()
         val validStatuses = setOf("unresolved", "resolved", "archived")
         val statusFilter =
             if (status != null && status in validStatuses) {
@@ -89,7 +123,13 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
                 user_email,
                 user_username,
                 associated_event_id,
-                replay_id
+                replay_id,
+                source_type,
+                source_name,
+                source_event_name,
+                trace_id,
+                span_id,
+                resource_attributes
             FROM `$clickhouseDb`.user_feedback FINAL
             WHERE $projectIdClause
                 AND ${queryHelper.timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
@@ -115,7 +155,13 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
                 user = queryHelper.extractUserInfo(obj),
                 associatedEventId =
                 obj["associated_event_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-                replayId = obj["replay_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+                replayId = obj["replay_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                sourceType = obj["source_type"]?.jsonPrimitive?.content ?: "sentry",
+                sourceName = obj["source_name"]?.jsonPrimitive?.content ?: "Sentry-compatible SDK",
+                sourceEventName = obj["source_event_name"]?.jsonPrimitive?.content ?: "feedback",
+                traceId = obj["trace_id"]?.jsonPrimitive?.content ?: "",
+                spanId = obj["span_id"]?.jsonPrimitive?.content ?: "",
+                resourceAttributes = parseTagsMap(obj["resource_attributes"])
             )
         }
     }
@@ -147,7 +193,13 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
                 replay_id,
                 tags,
                 sdk_name,
-                sdk_version
+                sdk_version,
+                source_type,
+                source_name,
+                source_event_name,
+                trace_id,
+                span_id,
+                resource_attributes
             FROM `$clickhouseDb`.user_feedback FINAL
             WHERE toString(feedback_id) = '$normalizedFeedbackId'
                 AND $projectIdClause
@@ -174,7 +226,13 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
             replayId = obj["replay_id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
             tags = tagsMap,
             sdkName = obj["sdk_name"]?.jsonPrimitive?.content ?: "",
-            sdkVersion = obj["sdk_version"]?.jsonPrimitive?.content ?: ""
+            sdkVersion = obj["sdk_version"]?.jsonPrimitive?.content ?: "",
+            sourceType = obj["source_type"]?.jsonPrimitive?.content ?: "sentry",
+            sourceName = obj["source_name"]?.jsonPrimitive?.content ?: "Sentry-compatible SDK",
+            sourceEventName = obj["source_event_name"]?.jsonPrimitive?.content ?: "feedback",
+            traceId = obj["trace_id"]?.jsonPrimitive?.content ?: "",
+            spanId = obj["span_id"]?.jsonPrimitive?.content ?: "",
+            resourceAttributes = parseTagsMap(obj["resource_attributes"])
         )
     }
 

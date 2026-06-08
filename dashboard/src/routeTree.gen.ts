@@ -21,6 +21,7 @@ import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SignozAlternativeRouteImport } from './routes/signoz-alternative'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SessionReplayRouteImport } from './routes/session-replay'
+import { Route as ServicesRouteImport } from './routes/services'
 import { Route as SentryAlternativeRouteImport } from './routes/sentry-alternative'
 import { Route as SecuritySbomRouteImport } from './routes/security-sbom'
 import { Route as SecurityRouteImport } from './routes/security'
@@ -56,6 +57,7 @@ import { Route as DemoRouteImport } from './routes/demo'
 import { Route as DatadogAlternativeRouteImport } from './routes/datadog-alternative'
 import { Route as DashboardsRouteImport } from './routes/dashboards'
 import { Route as CustomDashboardsRouteImport } from './routes/custom-dashboards'
+import { Route as ConfigurationRouteImport } from './routes/configuration'
 import { Route as CompareRouteImport } from './routes/compare'
 import { Route as BlogRouteImport } from './routes/blog'
 import { Route as BetterStackAlternativeRouteImport } from './routes/better-stack-alternative'
@@ -69,6 +71,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as UptimeIndexRouteImport } from './routes/uptime.index'
 import { Route as SyntheticsIndexRouteImport } from './routes/synthetics.index'
 import { Route as StatusPagesIndexRouteImport } from './routes/status-pages.index'
+import { Route as ServicesIndexRouteImport } from './routes/services.index'
 import { Route as SecurityIndexRouteImport } from './routes/security.index'
 import { Route as ProfilesIndexRouteImport } from './routes/profiles.index'
 import { Route as PerformanceIndexRouteImport } from './routes/performance.index'
@@ -87,6 +90,7 @@ import { Route as WorkflowsConnectionsRouteImport } from './routes/workflows.con
 import { Route as UptimeMonitorIdRouteImport } from './routes/uptime.$monitorId'
 import { Route as SyntheticsTestIdRouteImport } from './routes/synthetics.$testId'
 import { Route as StatusPagesPageIdRouteImport } from './routes/status-pages.$pageId'
+import { Route as ServicesServiceRouteImport } from './routes/services.$service'
 import { Route as SecurityVulnerabilitiesRouteImport } from './routes/security.vulnerabilities'
 import { Route as SecuritySignalsRouteImport } from './routes/security.signals'
 import { Route as SecurityEventsRouteImport } from './routes/security.events'
@@ -103,12 +107,13 @@ import { Route as PerformanceTransactionIdRouteImport } from './routes/performan
 import { Route as OnCallSchedulesRouteImport } from './routes/on-call.schedules'
 import { Route as OnCallIncidentsRouteImport } from './routes/on-call.incidents'
 import { Route as OnCallEscalationPoliciesRouteImport } from './routes/on-call.escalation-policies'
-import { Route as OnCallDeclaredIncidentsRouteImport } from './routes/on-call.declared-incidents'
+import { Route as OnCallAlertsRouteImport } from './routes/on-call.alerts'
 import { Route as MonitoringServiceMapRouteImport } from './routes/monitoring.service-map'
 import { Route as MonitoringSbomRouteImport } from './routes/monitoring.sbom'
 import { Route as MonitoringProcessesRouteImport } from './routes/monitoring.processes'
 import { Route as MonitoringNetworkDevicesRouteImport } from './routes/monitoring.network-devices'
 import { Route as MonitoringNetworkRouteImport } from './routes/monitoring.network'
+import { Route as MonitoringMapRouteImport } from './routes/monitoring.map'
 import { Route as MonitoringKubernetesRouteImport } from './routes/monitoring.kubernetes'
 import { Route as MonitoringEventsRouteImport } from './routes/monitoring.events'
 import { Route as MonitoringDebuggerRouteImport } from './routes/monitoring.debugger'
@@ -142,7 +147,7 @@ import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects
 import { Route as ProfilesServiceServiceRouteImport } from './routes/profiles.service.$service'
 import { Route as PerformanceTracesTraceIdRouteImport } from './routes/performance.traces.$traceId'
 import { Route as OnCallIncidentsIncidentIdRouteImport } from './routes/on-call.incidents.$incidentId'
-import { Route as OnCallDeclaredIncidentsIncidentIdRouteImport } from './routes/on-call.declared-incidents.$incidentId'
+import { Route as OnCallAlertsAlertIdRouteImport } from './routes/on-call.alerts.$alertId'
 import { Route as MonitoringNetworkDevicesTrapsRouteImport } from './routes/monitoring.network-devices.traps'
 import { Route as MonitoringNetworkDevicesPathsRouteImport } from './routes/monitoring.network-devices.paths'
 import { Route as MonitoringNetworkDevicesFlowsRouteImport } from './routes/monitoring.network-devices.flows'
@@ -152,6 +157,7 @@ import { Route as AuthSsoCallbackRouteImport } from './routes/auth.sso.callback'
 import { Route as AuthOauthCallbackRouteImport } from './routes/auth.oauth.callback'
 import { Route as AiTracesTraceIdRouteImport } from './routes/ai.traces.$traceId'
 import { Route as AdminOrganizationsOrgIdRouteImport } from './routes/admin.organizations.$orgId'
+import { Route as ServicesServiceResourcesResourceRouteImport } from './routes/services.$service.resources.$resource'
 import { Route as ProjectsProjectIdSpansSpanIdRouteImport } from './routes/projects.$projectId.spans.$spanId'
 
 const WorkflowsRoute = WorkflowsRouteImport.update({
@@ -212,6 +218,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const SessionReplayRoute = SessionReplayRouteImport.update({
   id: '/session-replay',
   path: '/session-replay',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ServicesRoute = ServicesRouteImport.update({
+  id: '/services',
+  path: '/services',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SentryAlternativeRoute = SentryAlternativeRouteImport.update({
@@ -390,6 +401,11 @@ const CustomDashboardsRoute = CustomDashboardsRouteImport.update({
   path: '/custom-dashboards',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ConfigurationRoute = ConfigurationRouteImport.update({
+  id: '/configuration',
+  path: '/configuration',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CompareRoute = CompareRouteImport.update({
   id: '/compare',
   path: '/compare',
@@ -454,6 +470,11 @@ const StatusPagesIndexRoute = StatusPagesIndexRouteImport.update({
   id: '/status-pages/',
   path: '/status-pages/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const ServicesIndexRoute = ServicesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ServicesRoute,
 } as any)
 const SecurityIndexRoute = SecurityIndexRouteImport.update({
   id: '/',
@@ -545,6 +566,11 @@ const StatusPagesPageIdRoute = StatusPagesPageIdRouteImport.update({
   path: '/status-pages/$pageId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ServicesServiceRoute = ServicesServiceRouteImport.update({
+  id: '/$service',
+  path: '/$service',
+  getParentRoute: () => ServicesRoute,
+} as any)
 const SecurityVulnerabilitiesRoute = SecurityVulnerabilitiesRouteImport.update({
   id: '/vulnerabilities',
   path: '/vulnerabilities',
@@ -627,9 +653,9 @@ const OnCallEscalationPoliciesRoute =
     path: '/escalation-policies',
     getParentRoute: () => OnCallRoute,
   } as any)
-const OnCallDeclaredIncidentsRoute = OnCallDeclaredIncidentsRouteImport.update({
-  id: '/declared-incidents',
-  path: '/declared-incidents',
+const OnCallAlertsRoute = OnCallAlertsRouteImport.update({
+  id: '/alerts',
+  path: '/alerts',
   getParentRoute: () => OnCallRoute,
 } as any)
 const MonitoringServiceMapRoute = MonitoringServiceMapRouteImport.update({
@@ -656,6 +682,11 @@ const MonitoringNetworkDevicesRoute =
 const MonitoringNetworkRoute = MonitoringNetworkRouteImport.update({
   id: '/network',
   path: '/network',
+  getParentRoute: () => MonitoringRoute,
+} as any)
+const MonitoringMapRoute = MonitoringMapRouteImport.update({
+  id: '/map',
+  path: '/map',
   getParentRoute: () => MonitoringRoute,
 } as any)
 const MonitoringKubernetesRoute = MonitoringKubernetesRouteImport.update({
@@ -827,12 +858,11 @@ const OnCallIncidentsIncidentIdRoute =
     path: '/$incidentId',
     getParentRoute: () => OnCallIncidentsRoute,
   } as any)
-const OnCallDeclaredIncidentsIncidentIdRoute =
-  OnCallDeclaredIncidentsIncidentIdRouteImport.update({
-    id: '/$incidentId',
-    path: '/$incidentId',
-    getParentRoute: () => OnCallDeclaredIncidentsRoute,
-  } as any)
+const OnCallAlertsAlertIdRoute = OnCallAlertsAlertIdRouteImport.update({
+  id: '/$alertId',
+  path: '/$alertId',
+  getParentRoute: () => OnCallAlertsRoute,
+} as any)
 const MonitoringNetworkDevicesTrapsRoute =
   MonitoringNetworkDevicesTrapsRouteImport.update({
     id: '/traps',
@@ -882,6 +912,12 @@ const AdminOrganizationsOrgIdRoute = AdminOrganizationsOrgIdRouteImport.update({
   path: '/$orgId',
   getParentRoute: () => AdminOrganizationsRoute,
 } as any)
+const ServicesServiceResourcesResourceRoute =
+  ServicesServiceResourcesResourceRouteImport.update({
+    id: '/resources/$resource',
+    path: '/resources/$resource',
+    getParentRoute: () => ServicesServiceRoute,
+  } as any)
 const ProjectsProjectIdSpansSpanIdRoute =
   ProjectsProjectIdSpansSpanIdRouteImport.update({
     id: '/spans/$spanId',
@@ -900,6 +936,7 @@ export interface FileRoutesByFullPath {
   '/better-stack-alternative': typeof BetterStackAlternativeRoute
   '/blog': typeof BlogRouteWithChildren
   '/compare': typeof CompareRoute
+  '/configuration': typeof ConfigurationRoute
   '/custom-dashboards': typeof CustomDashboardsRoute
   '/dashboards': typeof DashboardsRouteWithChildren
   '/datadog-alternative': typeof DatadogAlternativeRoute
@@ -935,6 +972,7 @@ export interface FileRoutesByFullPath {
   '/security': typeof SecurityRouteWithChildren
   '/security-sbom': typeof SecuritySbomRoute
   '/sentry-alternative': typeof SentryAlternativeRoute
+  '/services': typeof ServicesRouteWithChildren
   '/session-replay': typeof SessionReplayRoute
   '/settings': typeof SettingsRoute
   '/signoz-alternative': typeof SignozAlternativeRoute
@@ -974,12 +1012,13 @@ export interface FileRoutesByFullPath {
   '/monitoring/debugger': typeof MonitoringDebuggerRoute
   '/monitoring/events': typeof MonitoringEventsRoute
   '/monitoring/kubernetes': typeof MonitoringKubernetesRouteWithChildren
+  '/monitoring/map': typeof MonitoringMapRoute
   '/monitoring/network': typeof MonitoringNetworkRoute
   '/monitoring/network-devices': typeof MonitoringNetworkDevicesRouteWithChildren
   '/monitoring/processes': typeof MonitoringProcessesRoute
   '/monitoring/sbom': typeof MonitoringSbomRoute
   '/monitoring/service-map': typeof MonitoringServiceMapRoute
-  '/on-call/declared-incidents': typeof OnCallDeclaredIncidentsRouteWithChildren
+  '/on-call/alerts': typeof OnCallAlertsRouteWithChildren
   '/on-call/escalation-policies': typeof OnCallEscalationPoliciesRoute
   '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
   '/on-call/schedules': typeof OnCallSchedulesRoute
@@ -996,6 +1035,7 @@ export interface FileRoutesByFullPath {
   '/security/events': typeof SecurityEventsRoute
   '/security/signals': typeof SecuritySignalsRoute
   '/security/vulnerabilities': typeof SecurityVulnerabilitiesRoute
+  '/services/$service': typeof ServicesServiceRouteWithChildren
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/synthetics/$testId': typeof SyntheticsTestIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
@@ -1014,6 +1054,7 @@ export interface FileRoutesByFullPath {
   '/performance/': typeof PerformanceIndexRoute
   '/profiles/': typeof ProfilesIndexRoute
   '/security/': typeof SecurityIndexRoute
+  '/services/': typeof ServicesIndexRoute
   '/status-pages/': typeof StatusPagesIndexRoute
   '/synthetics/': typeof SyntheticsIndexRoute
   '/uptime/': typeof UptimeIndexRoute
@@ -1026,7 +1067,7 @@ export interface FileRoutesByFullPath {
   '/monitoring/network-devices/flows': typeof MonitoringNetworkDevicesFlowsRoute
   '/monitoring/network-devices/paths': typeof MonitoringNetworkDevicesPathsRoute
   '/monitoring/network-devices/traps': typeof MonitoringNetworkDevicesTrapsRoute
-  '/on-call/declared-incidents/$incidentId': typeof OnCallDeclaredIncidentsIncidentIdRoute
+  '/on-call/alerts/$alertId': typeof OnCallAlertsAlertIdRoute
   '/on-call/incidents/$incidentId': typeof OnCallIncidentsIncidentIdRoute
   '/performance/traces/$traceId': typeof PerformanceTracesTraceIdRoute
   '/profiles/service/$service': typeof ProfilesServiceServiceRoute
@@ -1034,6 +1075,7 @@ export interface FileRoutesByFullPath {
   '/monitoring/kubernetes/': typeof MonitoringKubernetesIndexRoute
   '/performance/traces/': typeof PerformanceTracesIndexRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
+  '/services/$service/resources/$resource': typeof ServicesServiceResourcesResourceRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -1042,6 +1084,7 @@ export interface FileRoutesByTo {
   '/alerting': typeof AlertingRoute
   '/better-stack-alternative': typeof BetterStackAlternativeRoute
   '/compare': typeof CompareRoute
+  '/configuration': typeof ConfigurationRoute
   '/custom-dashboards': typeof CustomDashboardsRoute
   '/datadog-alternative': typeof DatadogAlternativeRoute
   '/demo': typeof DemoRoute
@@ -1106,12 +1149,13 @@ export interface FileRoutesByTo {
   '/monitoring/databases': typeof MonitoringDatabasesRoute
   '/monitoring/debugger': typeof MonitoringDebuggerRoute
   '/monitoring/events': typeof MonitoringEventsRoute
+  '/monitoring/map': typeof MonitoringMapRoute
   '/monitoring/network': typeof MonitoringNetworkRoute
   '/monitoring/network-devices': typeof MonitoringNetworkDevicesRouteWithChildren
   '/monitoring/processes': typeof MonitoringProcessesRoute
   '/monitoring/sbom': typeof MonitoringSbomRoute
   '/monitoring/service-map': typeof MonitoringServiceMapRoute
-  '/on-call/declared-incidents': typeof OnCallDeclaredIncidentsRouteWithChildren
+  '/on-call/alerts': typeof OnCallAlertsRouteWithChildren
   '/on-call/escalation-policies': typeof OnCallEscalationPoliciesRoute
   '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
   '/on-call/schedules': typeof OnCallSchedulesRoute
@@ -1127,6 +1171,7 @@ export interface FileRoutesByTo {
   '/security/events': typeof SecurityEventsRoute
   '/security/signals': typeof SecuritySignalsRoute
   '/security/vulnerabilities': typeof SecurityVulnerabilitiesRoute
+  '/services/$service': typeof ServicesServiceRouteWithChildren
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/synthetics/$testId': typeof SyntheticsTestIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
@@ -1145,6 +1190,7 @@ export interface FileRoutesByTo {
   '/performance': typeof PerformanceIndexRoute
   '/profiles': typeof ProfilesIndexRoute
   '/security': typeof SecurityIndexRoute
+  '/services': typeof ServicesIndexRoute
   '/status-pages': typeof StatusPagesIndexRoute
   '/synthetics': typeof SyntheticsIndexRoute
   '/uptime': typeof UptimeIndexRoute
@@ -1157,7 +1203,7 @@ export interface FileRoutesByTo {
   '/monitoring/network-devices/flows': typeof MonitoringNetworkDevicesFlowsRoute
   '/monitoring/network-devices/paths': typeof MonitoringNetworkDevicesPathsRoute
   '/monitoring/network-devices/traps': typeof MonitoringNetworkDevicesTrapsRoute
-  '/on-call/declared-incidents/$incidentId': typeof OnCallDeclaredIncidentsIncidentIdRoute
+  '/on-call/alerts/$alertId': typeof OnCallAlertsAlertIdRoute
   '/on-call/incidents/$incidentId': typeof OnCallIncidentsIncidentIdRoute
   '/performance/traces/$traceId': typeof PerformanceTracesTraceIdRoute
   '/profiles/service/$service': typeof ProfilesServiceServiceRoute
@@ -1165,6 +1211,7 @@ export interface FileRoutesByTo {
   '/monitoring/kubernetes': typeof MonitoringKubernetesIndexRoute
   '/performance/traces': typeof PerformanceTracesIndexRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
+  '/services/$service/resources/$resource': typeof ServicesServiceResourcesResourceRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -1178,6 +1225,7 @@ export interface FileRoutesById {
   '/better-stack-alternative': typeof BetterStackAlternativeRoute
   '/blog': typeof BlogRouteWithChildren
   '/compare': typeof CompareRoute
+  '/configuration': typeof ConfigurationRoute
   '/custom-dashboards': typeof CustomDashboardsRoute
   '/dashboards': typeof DashboardsRouteWithChildren
   '/datadog-alternative': typeof DatadogAlternativeRoute
@@ -1213,6 +1261,7 @@ export interface FileRoutesById {
   '/security': typeof SecurityRouteWithChildren
   '/security-sbom': typeof SecuritySbomRoute
   '/sentry-alternative': typeof SentryAlternativeRoute
+  '/services': typeof ServicesRouteWithChildren
   '/session-replay': typeof SessionReplayRoute
   '/settings': typeof SettingsRoute
   '/signoz-alternative': typeof SignozAlternativeRoute
@@ -1252,12 +1301,13 @@ export interface FileRoutesById {
   '/monitoring/debugger': typeof MonitoringDebuggerRoute
   '/monitoring/events': typeof MonitoringEventsRoute
   '/monitoring/kubernetes': typeof MonitoringKubernetesRouteWithChildren
+  '/monitoring/map': typeof MonitoringMapRoute
   '/monitoring/network': typeof MonitoringNetworkRoute
   '/monitoring/network-devices': typeof MonitoringNetworkDevicesRouteWithChildren
   '/monitoring/processes': typeof MonitoringProcessesRoute
   '/monitoring/sbom': typeof MonitoringSbomRoute
   '/monitoring/service-map': typeof MonitoringServiceMapRoute
-  '/on-call/declared-incidents': typeof OnCallDeclaredIncidentsRouteWithChildren
+  '/on-call/alerts': typeof OnCallAlertsRouteWithChildren
   '/on-call/escalation-policies': typeof OnCallEscalationPoliciesRoute
   '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
   '/on-call/schedules': typeof OnCallSchedulesRoute
@@ -1274,6 +1324,7 @@ export interface FileRoutesById {
   '/security/events': typeof SecurityEventsRoute
   '/security/signals': typeof SecuritySignalsRoute
   '/security/vulnerabilities': typeof SecurityVulnerabilitiesRoute
+  '/services/$service': typeof ServicesServiceRouteWithChildren
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
   '/synthetics/$testId': typeof SyntheticsTestIdRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
@@ -1292,6 +1343,7 @@ export interface FileRoutesById {
   '/performance/': typeof PerformanceIndexRoute
   '/profiles/': typeof ProfilesIndexRoute
   '/security/': typeof SecurityIndexRoute
+  '/services/': typeof ServicesIndexRoute
   '/status-pages/': typeof StatusPagesIndexRoute
   '/synthetics/': typeof SyntheticsIndexRoute
   '/uptime/': typeof UptimeIndexRoute
@@ -1304,7 +1356,7 @@ export interface FileRoutesById {
   '/monitoring/network-devices/flows': typeof MonitoringNetworkDevicesFlowsRoute
   '/monitoring/network-devices/paths': typeof MonitoringNetworkDevicesPathsRoute
   '/monitoring/network-devices/traps': typeof MonitoringNetworkDevicesTrapsRoute
-  '/on-call/declared-incidents/$incidentId': typeof OnCallDeclaredIncidentsIncidentIdRoute
+  '/on-call/alerts/$alertId': typeof OnCallAlertsAlertIdRoute
   '/on-call/incidents/$incidentId': typeof OnCallIncidentsIncidentIdRoute
   '/performance/traces/$traceId': typeof PerformanceTracesTraceIdRoute
   '/profiles/service/$service': typeof ProfilesServiceServiceRoute
@@ -1312,6 +1364,7 @@ export interface FileRoutesById {
   '/monitoring/kubernetes/': typeof MonitoringKubernetesIndexRoute
   '/performance/traces/': typeof PerformanceTracesIndexRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
+  '/services/$service/resources/$resource': typeof ServicesServiceResourcesResourceRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -1326,6 +1379,7 @@ export interface FileRouteTypes {
     | '/better-stack-alternative'
     | '/blog'
     | '/compare'
+    | '/configuration'
     | '/custom-dashboards'
     | '/dashboards'
     | '/datadog-alternative'
@@ -1361,6 +1415,7 @@ export interface FileRouteTypes {
     | '/security'
     | '/security-sbom'
     | '/sentry-alternative'
+    | '/services'
     | '/session-replay'
     | '/settings'
     | '/signoz-alternative'
@@ -1400,12 +1455,13 @@ export interface FileRouteTypes {
     | '/monitoring/debugger'
     | '/monitoring/events'
     | '/monitoring/kubernetes'
+    | '/monitoring/map'
     | '/monitoring/network'
     | '/monitoring/network-devices'
     | '/monitoring/processes'
     | '/monitoring/sbom'
     | '/monitoring/service-map'
-    | '/on-call/declared-incidents'
+    | '/on-call/alerts'
     | '/on-call/escalation-policies'
     | '/on-call/incidents'
     | '/on-call/schedules'
@@ -1422,6 +1478,7 @@ export interface FileRouteTypes {
     | '/security/events'
     | '/security/signals'
     | '/security/vulnerabilities'
+    | '/services/$service'
     | '/status-pages/$pageId'
     | '/synthetics/$testId'
     | '/uptime/$monitorId'
@@ -1440,6 +1497,7 @@ export interface FileRouteTypes {
     | '/performance/'
     | '/profiles/'
     | '/security/'
+    | '/services/'
     | '/status-pages/'
     | '/synthetics/'
     | '/uptime/'
@@ -1452,7 +1510,7 @@ export interface FileRouteTypes {
     | '/monitoring/network-devices/flows'
     | '/monitoring/network-devices/paths'
     | '/monitoring/network-devices/traps'
-    | '/on-call/declared-incidents/$incidentId'
+    | '/on-call/alerts/$alertId'
     | '/on-call/incidents/$incidentId'
     | '/performance/traces/$traceId'
     | '/profiles/service/$service'
@@ -1460,6 +1518,7 @@ export interface FileRouteTypes {
     | '/monitoring/kubernetes/'
     | '/performance/traces/'
     | '/projects/$projectId/spans/$spanId'
+    | '/services/$service/resources/$resource'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -1468,6 +1527,7 @@ export interface FileRouteTypes {
     | '/alerting'
     | '/better-stack-alternative'
     | '/compare'
+    | '/configuration'
     | '/custom-dashboards'
     | '/datadog-alternative'
     | '/demo'
@@ -1532,12 +1592,13 @@ export interface FileRouteTypes {
     | '/monitoring/databases'
     | '/monitoring/debugger'
     | '/monitoring/events'
+    | '/monitoring/map'
     | '/monitoring/network'
     | '/monitoring/network-devices'
     | '/monitoring/processes'
     | '/monitoring/sbom'
     | '/monitoring/service-map'
-    | '/on-call/declared-incidents'
+    | '/on-call/alerts'
     | '/on-call/escalation-policies'
     | '/on-call/incidents'
     | '/on-call/schedules'
@@ -1553,6 +1614,7 @@ export interface FileRouteTypes {
     | '/security/events'
     | '/security/signals'
     | '/security/vulnerabilities'
+    | '/services/$service'
     | '/status-pages/$pageId'
     | '/synthetics/$testId'
     | '/uptime/$monitorId'
@@ -1571,6 +1633,7 @@ export interface FileRouteTypes {
     | '/performance'
     | '/profiles'
     | '/security'
+    | '/services'
     | '/status-pages'
     | '/synthetics'
     | '/uptime'
@@ -1583,7 +1646,7 @@ export interface FileRouteTypes {
     | '/monitoring/network-devices/flows'
     | '/monitoring/network-devices/paths'
     | '/monitoring/network-devices/traps'
-    | '/on-call/declared-incidents/$incidentId'
+    | '/on-call/alerts/$alertId'
     | '/on-call/incidents/$incidentId'
     | '/performance/traces/$traceId'
     | '/profiles/service/$service'
@@ -1591,6 +1654,7 @@ export interface FileRouteTypes {
     | '/monitoring/kubernetes'
     | '/performance/traces'
     | '/projects/$projectId/spans/$spanId'
+    | '/services/$service/resources/$resource'
   id:
     | '__root__'
     | '/'
@@ -1603,6 +1667,7 @@ export interface FileRouteTypes {
     | '/better-stack-alternative'
     | '/blog'
     | '/compare'
+    | '/configuration'
     | '/custom-dashboards'
     | '/dashboards'
     | '/datadog-alternative'
@@ -1638,6 +1703,7 @@ export interface FileRouteTypes {
     | '/security'
     | '/security-sbom'
     | '/sentry-alternative'
+    | '/services'
     | '/session-replay'
     | '/settings'
     | '/signoz-alternative'
@@ -1677,12 +1743,13 @@ export interface FileRouteTypes {
     | '/monitoring/debugger'
     | '/monitoring/events'
     | '/monitoring/kubernetes'
+    | '/monitoring/map'
     | '/monitoring/network'
     | '/monitoring/network-devices'
     | '/monitoring/processes'
     | '/monitoring/sbom'
     | '/monitoring/service-map'
-    | '/on-call/declared-incidents'
+    | '/on-call/alerts'
     | '/on-call/escalation-policies'
     | '/on-call/incidents'
     | '/on-call/schedules'
@@ -1699,6 +1766,7 @@ export interface FileRouteTypes {
     | '/security/events'
     | '/security/signals'
     | '/security/vulnerabilities'
+    | '/services/$service'
     | '/status-pages/$pageId'
     | '/synthetics/$testId'
     | '/uptime/$monitorId'
@@ -1717,6 +1785,7 @@ export interface FileRouteTypes {
     | '/performance/'
     | '/profiles/'
     | '/security/'
+    | '/services/'
     | '/status-pages/'
     | '/synthetics/'
     | '/uptime/'
@@ -1729,7 +1798,7 @@ export interface FileRouteTypes {
     | '/monitoring/network-devices/flows'
     | '/monitoring/network-devices/paths'
     | '/monitoring/network-devices/traps'
-    | '/on-call/declared-incidents/$incidentId'
+    | '/on-call/alerts/$alertId'
     | '/on-call/incidents/$incidentId'
     | '/performance/traces/$traceId'
     | '/profiles/service/$service'
@@ -1737,6 +1806,7 @@ export interface FileRouteTypes {
     | '/monitoring/kubernetes/'
     | '/performance/traces/'
     | '/projects/$projectId/spans/$spanId'
+    | '/services/$service/resources/$resource'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1750,6 +1820,7 @@ export interface RootRouteChildren {
   BetterStackAlternativeRoute: typeof BetterStackAlternativeRoute
   BlogRoute: typeof BlogRouteWithChildren
   CompareRoute: typeof CompareRoute
+  ConfigurationRoute: typeof ConfigurationRoute
   CustomDashboardsRoute: typeof CustomDashboardsRoute
   DashboardsRoute: typeof DashboardsRouteWithChildren
   DatadogAlternativeRoute: typeof DatadogAlternativeRoute
@@ -1785,6 +1856,7 @@ export interface RootRouteChildren {
   SecurityRoute: typeof SecurityRouteWithChildren
   SecuritySbomRoute: typeof SecuritySbomRoute
   SentryAlternativeRoute: typeof SentryAlternativeRoute
+  ServicesRoute: typeof ServicesRouteWithChildren
   SessionReplayRoute: typeof SessionReplayRoute
   SettingsRoute: typeof SettingsRoute
   SignozAlternativeRoute: typeof SignozAlternativeRoute
@@ -1896,6 +1968,13 @@ declare module '@tanstack/react-router' {
       path: '/session-replay'
       fullPath: '/session-replay'
       preLoaderRoute: typeof SessionReplayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/services': {
+      id: '/services'
+      path: '/services'
+      fullPath: '/services'
+      preLoaderRoute: typeof ServicesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sentry-alternative': {
@@ -2143,6 +2222,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CustomDashboardsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/configuration': {
+      id: '/configuration'
+      path: '/configuration'
+      fullPath: '/configuration'
+      preLoaderRoute: typeof ConfigurationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/compare': {
       id: '/compare'
       path: '/compare'
@@ -2233,6 +2319,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/status-pages/'
       preLoaderRoute: typeof StatusPagesIndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/services/': {
+      id: '/services/'
+      path: '/'
+      fullPath: '/services/'
+      preLoaderRoute: typeof ServicesIndexRouteImport
+      parentRoute: typeof ServicesRoute
     }
     '/security/': {
       id: '/security/'
@@ -2360,6 +2453,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StatusPagesPageIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/services/$service': {
+      id: '/services/$service'
+      path: '/$service'
+      fullPath: '/services/$service'
+      preLoaderRoute: typeof ServicesServiceRouteImport
+      parentRoute: typeof ServicesRoute
+    }
     '/security/vulnerabilities': {
       id: '/security/vulnerabilities'
       path: '/vulnerabilities'
@@ -2472,11 +2572,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnCallEscalationPoliciesRouteImport
       parentRoute: typeof OnCallRoute
     }
-    '/on-call/declared-incidents': {
-      id: '/on-call/declared-incidents'
-      path: '/declared-incidents'
-      fullPath: '/on-call/declared-incidents'
-      preLoaderRoute: typeof OnCallDeclaredIncidentsRouteImport
+    '/on-call/alerts': {
+      id: '/on-call/alerts'
+      path: '/alerts'
+      fullPath: '/on-call/alerts'
+      preLoaderRoute: typeof OnCallAlertsRouteImport
       parentRoute: typeof OnCallRoute
     }
     '/monitoring/service-map': {
@@ -2512,6 +2612,13 @@ declare module '@tanstack/react-router' {
       path: '/network'
       fullPath: '/monitoring/network'
       preLoaderRoute: typeof MonitoringNetworkRouteImport
+      parentRoute: typeof MonitoringRoute
+    }
+    '/monitoring/map': {
+      id: '/monitoring/map'
+      path: '/map'
+      fullPath: '/monitoring/map'
+      preLoaderRoute: typeof MonitoringMapRouteImport
       parentRoute: typeof MonitoringRoute
     }
     '/monitoring/kubernetes': {
@@ -2745,12 +2852,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnCallIncidentsIncidentIdRouteImport
       parentRoute: typeof OnCallIncidentsRoute
     }
-    '/on-call/declared-incidents/$incidentId': {
-      id: '/on-call/declared-incidents/$incidentId'
-      path: '/$incidentId'
-      fullPath: '/on-call/declared-incidents/$incidentId'
-      preLoaderRoute: typeof OnCallDeclaredIncidentsIncidentIdRouteImport
-      parentRoute: typeof OnCallDeclaredIncidentsRoute
+    '/on-call/alerts/$alertId': {
+      id: '/on-call/alerts/$alertId'
+      path: '/$alertId'
+      fullPath: '/on-call/alerts/$alertId'
+      preLoaderRoute: typeof OnCallAlertsAlertIdRouteImport
+      parentRoute: typeof OnCallAlertsRoute
     }
     '/monitoring/network-devices/traps': {
       id: '/monitoring/network-devices/traps'
@@ -2814,6 +2921,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/organizations/$orgId'
       preLoaderRoute: typeof AdminOrganizationsOrgIdRouteImport
       parentRoute: typeof AdminOrganizationsRoute
+    }
+    '/services/$service/resources/$resource': {
+      id: '/services/$service/resources/$resource'
+      path: '/resources/$resource'
+      fullPath: '/services/$service/resources/$resource'
+      preLoaderRoute: typeof ServicesServiceResourcesResourceRouteImport
+      parentRoute: typeof ServicesServiceRoute
     }
     '/projects/$projectId/spans/$spanId': {
       id: '/projects/$projectId/spans/$spanId'
@@ -2996,6 +3110,7 @@ interface MonitoringRouteChildren {
   MonitoringDebuggerRoute: typeof MonitoringDebuggerRoute
   MonitoringEventsRoute: typeof MonitoringEventsRoute
   MonitoringKubernetesRoute: typeof MonitoringKubernetesRouteWithChildren
+  MonitoringMapRoute: typeof MonitoringMapRoute
   MonitoringNetworkRoute: typeof MonitoringNetworkRoute
   MonitoringNetworkDevicesRoute: typeof MonitoringNetworkDevicesRouteWithChildren
   MonitoringProcessesRoute: typeof MonitoringProcessesRoute
@@ -3011,6 +3126,7 @@ const MonitoringRouteChildren: MonitoringRouteChildren = {
   MonitoringDebuggerRoute: MonitoringDebuggerRoute,
   MonitoringEventsRoute: MonitoringEventsRoute,
   MonitoringKubernetesRoute: MonitoringKubernetesRouteWithChildren,
+  MonitoringMapRoute: MonitoringMapRoute,
   MonitoringNetworkRoute: MonitoringNetworkRoute,
   MonitoringNetworkDevicesRoute: MonitoringNetworkDevicesRouteWithChildren,
   MonitoringProcessesRoute: MonitoringProcessesRoute,
@@ -3024,20 +3140,17 @@ const MonitoringRouteWithChildren = MonitoringRoute._addFileChildren(
   MonitoringRouteChildren,
 )
 
-interface OnCallDeclaredIncidentsRouteChildren {
-  OnCallDeclaredIncidentsIncidentIdRoute: typeof OnCallDeclaredIncidentsIncidentIdRoute
+interface OnCallAlertsRouteChildren {
+  OnCallAlertsAlertIdRoute: typeof OnCallAlertsAlertIdRoute
 }
 
-const OnCallDeclaredIncidentsRouteChildren: OnCallDeclaredIncidentsRouteChildren =
-  {
-    OnCallDeclaredIncidentsIncidentIdRoute:
-      OnCallDeclaredIncidentsIncidentIdRoute,
-  }
+const OnCallAlertsRouteChildren: OnCallAlertsRouteChildren = {
+  OnCallAlertsAlertIdRoute: OnCallAlertsAlertIdRoute,
+}
 
-const OnCallDeclaredIncidentsRouteWithChildren =
-  OnCallDeclaredIncidentsRoute._addFileChildren(
-    OnCallDeclaredIncidentsRouteChildren,
-  )
+const OnCallAlertsRouteWithChildren = OnCallAlertsRoute._addFileChildren(
+  OnCallAlertsRouteChildren,
+)
 
 interface OnCallIncidentsRouteChildren {
   OnCallIncidentsIncidentIdRoute: typeof OnCallIncidentsIncidentIdRoute
@@ -3052,7 +3165,7 @@ const OnCallIncidentsRouteWithChildren = OnCallIncidentsRoute._addFileChildren(
 )
 
 interface OnCallRouteChildren {
-  OnCallDeclaredIncidentsRoute: typeof OnCallDeclaredIncidentsRouteWithChildren
+  OnCallAlertsRoute: typeof OnCallAlertsRouteWithChildren
   OnCallEscalationPoliciesRoute: typeof OnCallEscalationPoliciesRoute
   OnCallIncidentsRoute: typeof OnCallIncidentsRouteWithChildren
   OnCallSchedulesRoute: typeof OnCallSchedulesRoute
@@ -3060,7 +3173,7 @@ interface OnCallRouteChildren {
 }
 
 const OnCallRouteChildren: OnCallRouteChildren = {
-  OnCallDeclaredIncidentsRoute: OnCallDeclaredIncidentsRouteWithChildren,
+  OnCallAlertsRoute: OnCallAlertsRouteWithChildren,
   OnCallEscalationPoliciesRoute: OnCallEscalationPoliciesRoute,
   OnCallIncidentsRoute: OnCallIncidentsRouteWithChildren,
   OnCallSchedulesRoute: OnCallSchedulesRoute,
@@ -3187,6 +3300,32 @@ const SecurityRouteWithChildren = SecurityRoute._addFileChildren(
   SecurityRouteChildren,
 )
 
+interface ServicesServiceRouteChildren {
+  ServicesServiceResourcesResourceRoute: typeof ServicesServiceResourcesResourceRoute
+}
+
+const ServicesServiceRouteChildren: ServicesServiceRouteChildren = {
+  ServicesServiceResourcesResourceRoute: ServicesServiceResourcesResourceRoute,
+}
+
+const ServicesServiceRouteWithChildren = ServicesServiceRoute._addFileChildren(
+  ServicesServiceRouteChildren,
+)
+
+interface ServicesRouteChildren {
+  ServicesServiceRoute: typeof ServicesServiceRouteWithChildren
+  ServicesIndexRoute: typeof ServicesIndexRoute
+}
+
+const ServicesRouteChildren: ServicesRouteChildren = {
+  ServicesServiceRoute: ServicesServiceRouteWithChildren,
+  ServicesIndexRoute: ServicesIndexRoute,
+}
+
+const ServicesRouteWithChildren = ServicesRoute._addFileChildren(
+  ServicesRouteChildren,
+)
+
 interface SyntheticsRouteChildren {
   SyntheticsTestIdRoute: typeof SyntheticsTestIdRoute
   SyntheticsIndexRoute: typeof SyntheticsIndexRoute
@@ -3226,6 +3365,7 @@ const rootRouteChildren: RootRouteChildren = {
   BetterStackAlternativeRoute: BetterStackAlternativeRoute,
   BlogRoute: BlogRouteWithChildren,
   CompareRoute: CompareRoute,
+  ConfigurationRoute: ConfigurationRoute,
   CustomDashboardsRoute: CustomDashboardsRoute,
   DashboardsRoute: DashboardsRouteWithChildren,
   DatadogAlternativeRoute: DatadogAlternativeRoute,
@@ -3261,6 +3401,7 @@ const rootRouteChildren: RootRouteChildren = {
   SecurityRoute: SecurityRouteWithChildren,
   SecuritySbomRoute: SecuritySbomRoute,
   SentryAlternativeRoute: SentryAlternativeRoute,
+  ServicesRoute: ServicesRouteWithChildren,
   SessionReplayRoute: SessionReplayRoute,
   SettingsRoute: SettingsRoute,
   SignozAlternativeRoute: SignozAlternativeRoute,

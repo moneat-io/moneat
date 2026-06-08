@@ -49,12 +49,12 @@ private fun demoIssueInsertSql(envExpr: String, spec: DemoIssueInsertSpec): Stri
     with(spec) {
         """
         INSERT INTO events (
-            event_id, project_id, issue_id, timestamp, received_at, event_type,
+            event_id, service_id, project_id, issue_id, timestamp, received_at, event_type,
             platform, level, message, exception_type, exception_value,
             stack_trace, environment, release, user_id, user_email,
             device_model, os_name, os_version, fingerprint
         )
-        SELECT generateUUIDv4(), $project, '${escapeSql(issueId)}',
+        SELECT generateUUIDv4(), $project, $project, '${escapeSql(issueId)}',
             now() - INTERVAL (number % $hours) HOUR, now() - INTERVAL (number % $hours) HOUR,
             'error', '${escapeSql(platform)}', '${escapeSql(level)}',
             '${escapeSql(message)}', '${escapeSql(exType)}', '${escapeSql(exValue)}', '${escapeSql(stack)}',
@@ -72,7 +72,7 @@ internal suspend fun checkFreshDataCount(): Long {
         """
         SELECT count() as cnt
         FROM events
-        WHERE project_id IN ($P1, $P2, $P3)
+        WHERE service_id IN ($P1, $P2, $P3)
             AND timestamp >= now() - INTERVAL 7 DAY
         """.trimIndent()
     return suspendRunCatching {
@@ -88,11 +88,11 @@ internal suspend fun checkFreshDataCount(): Long {
 internal suspend fun purgeOldDemoData() {
     val tables =
         listOf(
-            "events" to "project_id",
-            "sessions" to "project_id",
-            "spans" to "project_id",
-            "replay_events" to "project_id",
-            "replay_segments" to "project_id"
+            "events" to "service_id",
+            "sessions" to "service_id",
+            "spans" to "service_id",
+            "replay_events" to "service_id",
+            "replay_segments" to "service_id"
         )
     for ((table, col) in tables) {
         val query = "ALTER TABLE $table DELETE WHERE $col IN ($P1, $P2, $P3)"
@@ -101,7 +101,7 @@ internal suspend fun purgeOldDemoData() {
     }
     // Also purge issues materialized from demo events
     suspendRunCatching {
-        ClickHouseClient.execute("ALTER TABLE issues DELETE WHERE project_id IN ($P1, $P2, $P3)")
+        ClickHouseClient.execute("ALTER TABLE issues DELETE WHERE service_id IN ($P1, $P2, $P3)")
     }.onFailure { logger.warn { "Purge issues failed (non-fatal): ${it.message}" } }
 }
 internal suspend fun reseedEvents() {
@@ -1739,12 +1739,13 @@ internal suspend fun reseedEvents() {
         // ── Transactions (all 3 projects) ────────────────────────────────────
         """
         INSERT INTO events (
-            event_id, project_id, issue_id, timestamp, received_at, event_type,
+            event_id, service_id, project_id, issue_id, timestamp, received_at, event_type,
             platform, level, transaction_name, transaction_op, duration_ms,
             environment, release, user_id, contexts
         )
         SELECT
             generateUUIDv4(),
+            CASE number % 3 WHEN 0 THEN $P1 WHEN 1 THEN $P2 ELSE $P3 END,
             CASE number % 3 WHEN 0 THEN $P1 WHEN 1 THEN $P2 ELSE $P3 END,
             '',
             now() - INTERVAL (number % 168) HOUR, now() - INTERVAL (number % 168) HOUR,
@@ -1781,9 +1782,13 @@ internal suspend fun reseedEvents() {
 internal suspend fun reseedSessions() {
     val sql =
         """
-        INSERT INTO sessions (session_id, project_id, started, duration_ms, status, errors, release, environment, user_id, received_at)
+        INSERT INTO sessions (
+            session_id, service_id, project_id, started, duration_ms, status, errors,
+            release, environment, user_id, received_at
+        )
         SELECT
             generateUUIDv4(),
+            CASE number % 3 WHEN 0 THEN $P1 WHEN 1 THEN $P2 ELSE $P3 END,
             CASE number % 3 WHEN 0 THEN $P1 WHEN 1 THEN $P2 ELSE $P3 END,
             now() - INTERVAL (number * 2) HOUR,
             1000 + (number * 123) % 300000,
@@ -1803,7 +1808,7 @@ internal suspend fun reseedReplays() {
     val replayEventsSql =
         """
         INSERT INTO replay_events (
-            replay_id, project_id, segment_id, timestamp, replay_start_timestamp,
+            replay_id, service_id, project_id, segment_id, timestamp, replay_start_timestamp,
             urls, error_ids, trace_ids, environment, release, platform,
             user_id, user_email, user_username, browser_name, browser_version,
             os_name, os_version, activity, tags
@@ -1813,6 +1818,7 @@ internal suspend fun reseedReplays() {
                 'aaaaaaaa-bbbb-cccc-dddd-',
                 lpad(toString(number), 12, '0')
             )),
+            CASE number % 3 WHEN 0 THEN $P1 WHEN 1 THEN $P2 ELSE $P3 END,
             CASE number % 3 WHEN 0 THEN $P1 WHEN 1 THEN $P2 ELSE $P3 END,
             0,
             now() - INTERVAL (number * 4) HOUR,
@@ -1841,13 +1847,14 @@ internal suspend fun reseedReplays() {
     val segmentsSql =
         """
         INSERT INTO replay_segments (
-            replay_id, project_id, segment_id, timestamp, recording_data
+            replay_id, service_id, project_id, segment_id, timestamp, recording_data
         )
         SELECT
             toUUID(concat(
                 'aaaaaaaa-bbbb-cccc-dddd-',
                 lpad(toString(number), 12, '0')
             )) as replay_id,
+            CASE number % 3 WHEN 0 THEN $P1 WHEN 1 THEN $P2 ELSE $P3 END as service_id,
             CASE number % 3 WHEN 0 THEN $P1 WHEN 1 THEN $P2 ELSE $P3 END as project_id,
             0 as segment_id,
             now() - INTERVAL (number * 4) HOUR as timestamp,

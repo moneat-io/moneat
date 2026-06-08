@@ -209,7 +209,7 @@ export function ApmSpanUsageBreakdown({
                       <div className="flex items-center justify-end gap-2">
                         <div className="h-1.5 w-16 rounded-full bg-secondary overflow-hidden">
                           <div
-                            className="h-full rounded-full bg-purple-500"
+                            className="h-full rounded-full bg-primary"
                             style={{width: `${share}%`}}
                           />
                         </div>

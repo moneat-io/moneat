@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useMemo, useState, type ComponentType, type ReactNode} from 'react'
+import {useMemo, useState, type ReactNode} from 'react'
 import {createFileRoute, redirect} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
@@ -41,6 +41,9 @@ import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/c
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {Textarea} from '@/components/ui/textarea'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
+import {PageHeader} from '@/components/ui/page-header'
+import {StatCard} from '@/components/ui/stat-card'
+import {EmptyState} from '@/components/ui/empty-state'
 import {useToast} from '@/hooks/useToast'
 import {cn} from '@/lib/utils'
 import {
@@ -485,69 +488,69 @@ val enabled = client.getBooleanValue("checkout.enabled", false, evaluationContex
   return (
     <TooltipProvider delayDuration={200}>
       <div className="flex min-h-full flex-col gap-3 p-3 md:p-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div className="min-w-0 space-y-2">
-            <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-normal">
-              <Flag className="h-5 w-5" />
-              Feature Flags
-            </h1>
-            <div className="flex flex-wrap gap-2">
-              <CompactMetric
-                icon={Flag}
-                label="Flags"
-                value={flags.length.toLocaleString()}
-                tooltip={tooltipText.flags}
-              />
-              <CompactMetric
-                icon={Check}
-                label="Evaluations"
-                value={(analytics?.evaluations ?? 0).toLocaleString()}
-                tooltip={tooltipText.evaluations}
-              />
-              <CompactMetric
-                icon={Shield}
-                label="Unique Keys"
-                value={(analytics?.uniqueTargetingKeys ?? 0).toLocaleString()}
-                tooltip={tooltipText.uniqueKeys}
-              />
-              <CompactMetric
-                icon={KeyRound}
-                label="SDK Keys"
-                value={(sdkKeysQuery.data?.keys.length ?? 0).toLocaleString()}
-                tooltip={tooltipText.sdkKeys}
-              />
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button asChild variant="outline" size="sm" className="h-9 gap-2">
-              <a href="/docs/feature-flags">
-                <BookOpen className="h-4 w-4" />
-                Docs
-              </a>
-            </Button>
-            <Select value={environment} onValueChange={setEnvironment}>
-              <SelectTrigger className="h-9 w-44">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {environments.map((env) => (
-                  <SelectItem key={env.key} value={env.key}>{env.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="Refresh feature flag data"
-              className="h-9 w-9"
-              onClick={() => {
-                queryClient.invalidateQueries({queryKey: ['feature-flags']})
-                queryClient.invalidateQueries({queryKey: ['feature-flag-analytics']})
-              }}
-            >
-              <RefreshCcw className="h-4 w-4" />
-            </Button>
-          </div>
+        <PageHeader
+          icon={Flag}
+          title="Feature Flags"
+          description="Manage flags, targeting, segments, and SDK keys per environment"
+          actions={
+            <>
+              <Button asChild variant="outline" size="sm" className="h-9 gap-2">
+                <a href="/docs/feature-flags">
+                  <BookOpen className="h-4 w-4" />
+                  Docs
+                </a>
+              </Button>
+              <Select value={environment} onValueChange={setEnvironment}>
+                <SelectTrigger className="h-9 w-44">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {environments.map((env) => (
+                    <SelectItem key={env.key} value={env.key}>{env.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label="Refresh feature flag data"
+                className="h-9 w-9"
+                onClick={() => {
+                  queryClient.invalidateQueries({queryKey: ['feature-flags']})
+                  queryClient.invalidateQueries({queryKey: ['feature-flag-analytics']})
+                }}
+              >
+                <RefreshCcw className="h-4 w-4" />
+              </Button>
+            </>
+          }
+        />
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatCard
+            icon={Flag}
+            tone="accent"
+            label="Flags"
+            value={flags.length.toLocaleString()}
+          />
+          <StatCard
+            icon={Check}
+            tone="info"
+            label="Evaluations"
+            value={(analytics?.evaluations ?? 0).toLocaleString()}
+          />
+          <StatCard
+            icon={Shield}
+            tone="accent"
+            label="Unique Keys"
+            value={(analytics?.uniqueTargetingKeys ?? 0).toLocaleString()}
+          />
+          <StatCard
+            icon={KeyRound}
+            tone="accent"
+            label="SDK Keys"
+            value={(sdkKeysQuery.data?.keys.length ?? 0).toLocaleString()}
+          />
         </div>
 
         <div className="grid gap-3 lg:grid-cols-[minmax(260px,320px)_1fr]">
@@ -782,42 +785,20 @@ val enabled = client.getBooleanValue("checkout.enabled", false, evaluationContex
               kotlinExample={kotlinExample}
             />
           ) : (
-            <Card>
-              <CardContent className="py-12 text-center text-sm text-muted-foreground">
-                {normalizedFlagSearch ? 'No feature flags match this search.' : 'No feature flags in this environment.'}
-              </CardContent>
-            </Card>
+            <EmptyState
+              icon={Flag}
+              title={normalizedFlagSearch ? 'No matching flags' : 'No feature flags yet'}
+              description={
+                normalizedFlagSearch
+                  ? 'No feature flags match this search in the selected environment.'
+                  : 'Create your first flag to start targeting and evaluating in this environment.'
+              }
+            />
           )}
         </div>
       </div>
       </div>
     </TooltipProvider>
-  )
-}
-
-function CompactMetric({
-  icon: Icon,
-  label,
-  value,
-  tooltip,
-}: {
-  icon: ComponentType<{className?: string}>
-  label: string
-  value: string
-  tooltip: string
-}) {
-  return (
-    <div
-      aria-label={`${label}: ${value}`}
-      className="flex h-8 items-center gap-2 rounded-md border bg-card px-2.5 text-left text-sm"
-    >
-      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-      <span className="flex items-center gap-1.5">
-        <span className="text-xs text-muted-foreground">{label}</span>
-        <HelpIcon content={tooltip} />
-      </span>
-      <span className="font-semibold tabular-nums">{value}</span>
-    </div>
   )
 }
 

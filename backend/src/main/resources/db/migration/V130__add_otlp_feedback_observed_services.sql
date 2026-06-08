@@ -1,0 +1,2 @@
+ALTER TABLE otel_observed_services
+    ADD COLUMN IF NOT EXISTS seen_feedback BOOLEAN NOT NULL DEFAULT FALSE;

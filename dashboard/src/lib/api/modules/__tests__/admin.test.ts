@@ -717,6 +717,7 @@ describe('adminMethods', () => {
           {
             deploymentId: 'dep-1',
             receivedAt: '2026-01-01T00:00:00Z',
+            version: 'v1.2.3',
             cpuCount: 4,
             memTotalBytes: 8000000000,
             memUsedBytes: 4000000000,

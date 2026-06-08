@@ -50,13 +50,13 @@ function BlogArticleBody({post}: {readonly post: Post}) {
       <header className="mb-10">
         <div className="flex flex-wrap gap-2 mb-4">
           {post.tags?.map((tag) => (
-            <span key={tag} className="inline-block rounded-md bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-800">
+            <span key={tag} className="inline-block rounded-md border border-white/10 bg-white/[0.04] px-2 py-0.5 font-brandmono text-xs text-indigo-300">
               {tag}
             </span>
           ))}
         </div>
-        <h1 className="mb-4 text-3xl font-semibold leading-tight text-slate-950 sm:text-4xl">{post.title}</h1>
-        <div className="flex items-center gap-3 text-sm text-slate-500">
+        <h1 className="mb-4 text-3xl font-semibold leading-tight text-white sm:text-4xl">{post.title}</h1>
+        <div className="flex items-center gap-3 font-brandmono text-sm text-slate-500">
           <span>{post.author}</span>
           <span>&middot;</span>
           <time dateTime={post.date}>{formatDate(post.date)}</time>
@@ -64,7 +64,7 @@ function BlogArticleBody({post}: {readonly post: Post}) {
           <span>{post.readingTime}</span>
         </div>
       </header>
-      <div className="prose prose-slate max-w-none prose-headings:text-slate-950 prose-p:text-slate-700 prose-li:text-slate-700 prose-strong:text-slate-950">
+      <div className="prose prose-invert max-w-none prose-headings:text-white prose-p:text-slate-300 prose-li:text-slate-300 prose-strong:text-white prose-a:text-indigo-300 hover:prose-a:text-indigo-200 prose-th:text-white prose-td:text-slate-300 prose-table:border-collapse prose-th:border prose-th:border-white/10 prose-th:bg-white/[0.04] prose-th:px-3 prose-th:py-2 prose-td:border prose-td:border-white/[0.06] prose-td:px-3 prose-td:py-2 prose-code:font-brandmono prose-code:text-slate-200 prose-pre:bg-[#07080e] prose-pre:border prose-pre:border-white/10">
         <Component />
       </div>
     </article>

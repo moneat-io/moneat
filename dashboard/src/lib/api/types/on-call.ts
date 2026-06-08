@@ -17,8 +17,7 @@
 export interface Priority {
   id: number
   organizationId: number
-  severity: string
-  priorityLevel: string
+  priority: string
   isPageable: boolean
   label: string
   description?: string
@@ -116,7 +115,7 @@ export interface Incident {
   escalationPolicyId: number
   title: string
   description?: string
-  priorityLevel: string
+  priority: string
   status: IncidentStatus
   alertSource: string
   deduplicationKey?: string
@@ -160,7 +159,7 @@ export interface OnCallIncident {
   organizationId: number
   title: string
   description?: string
-  priorityLevel: string
+  severity: string
   status: string
   declaredBy: number
   declaredByName?: string
@@ -169,7 +168,7 @@ export interface OnCallIncident {
   resolvedByName?: string
   resolvedAt?: string
   alertCount: number
-  alerts?: Array<{ id: number; title: string; status: string }>
+  alerts?: Array<{ id: number; title: string; status: string; priority?: string }>
   createdAt: string
   updatedAt: string
 }
@@ -242,8 +241,7 @@ export interface UpdateEscalationPolicyRequest {
 
 export interface UpdatePrioritiesRequest {
   priorities: {
-    severity: string
-    priorityLevel: string
+    priority: string
     isPageable: boolean
     label: string
     description?: string
@@ -268,7 +266,7 @@ export interface RegisterDeviceRequest {
 
 export interface IncidentListFilters {
   status?: IncidentStatus | IncidentStatus[]
-  priorityLevel?: string
+  priority?: string
   fromDate?: string
   toDate?: string
 }

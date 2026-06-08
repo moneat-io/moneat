@@ -16,6 +16,8 @@
 
 package com.moneat.workflows.services
 
+import com.moneat.enterprise.FeatureRegistry
+import com.moneat.enterprise.OnCallBridge
 import com.moneat.events.services.DashboardService
 import com.moneat.logs.models.LogAggregateResponse
 import com.moneat.logs.models.LogQueryResponse
@@ -32,8 +34,11 @@ import com.moneat.statuspage.models.IncidentResponse
 import com.moneat.statuspage.services.StatusPageService
 import com.moneat.testsupport.TestDatabaseHelper
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonPrimitive
@@ -129,6 +134,7 @@ class WorkflowTrustedActionExecutorTest {
     fun `supports recognizes trusted actions only`() {
         assertTrue(executor.supports(WorkflowTrustedActionExecutor.LOGS_SEARCH_STEP))
         assertTrue(executor.supports(WorkflowTrustedActionExecutor.ON_CALL_PAGE_STEP))
+        assertTrue(executor.supports(WorkflowTrustedActionExecutor.ON_CALL_DECLARE_INCIDENT_STEP))
         assertFalse(executor.supports("notification.slack"))
     }
 
@@ -340,6 +346,61 @@ class WorkflowTrustedActionExecutorTest {
                 mapOf("escalation_policy_id" to "1", "title" to "Page")
             )
         assertEquals(true, result["requires_enterprise"]?.jsonPrimitive?.content?.toBoolean())
+    }
+
+    @Test
+    fun `on-call incident declaration reports missing enterprise bridge`() {
+        val result =
+            run(
+                WorkflowTrustedActionExecutor.ON_CALL_DECLARE_INCIDENT_STEP,
+                mapOf("title" to "Checkout outage", "incident_severity" to "SEV-1")
+            )
+
+        assertEquals(true, result["requires_enterprise"]?.jsonPrimitive?.content?.toBoolean())
+    }
+
+    @Test
+    fun `on-call incident declaration sends explicit canonical severity`() {
+        val bridge = mockk<OnCallBridge>()
+        mockkObject(FeatureRegistry)
+        try {
+            every { FeatureRegistry.getOnCallBridge() } returns bridge
+            coEvery {
+                bridge.declareIncident(
+                    organizationId = orgId,
+                    userId = 99,
+                    alertId = null,
+                    title = "Checkout outage",
+                    description = "Investigating elevated checkout errors",
+                    severity = "SEV-1"
+                )
+            } returns 42
+
+            val result =
+                run(
+                    WorkflowTrustedActionExecutor.ON_CALL_DECLARE_INCIDENT_STEP,
+                    mapOf(
+                        "title" to "Checkout outage",
+                        "description" to "Investigating elevated checkout errors",
+                        "incident_severity" to "sev1"
+                    ),
+                    actorUserId = 99
+                )
+
+            assertEquals("42", result["incident_id"]?.jsonPrimitive?.content)
+            coVerify(exactly = 1) {
+                bridge.declareIncident(
+                    organizationId = orgId,
+                    userId = 99,
+                    alertId = null,
+                    title = "Checkout outage",
+                    description = "Investigating elevated checkout errors",
+                    severity = "SEV-1"
+                )
+            }
+        } finally {
+            unmockkObject(FeatureRegistry)
+        }
     }
 
     // ──── Helpers ────

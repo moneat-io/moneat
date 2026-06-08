@@ -20,11 +20,23 @@ import {cn} from '@/lib/utils'
 const SOURCE_CONFIG: Record<string, {label: string; className: string}> = {
   datadog: {
     label: 'Datadog',
-    className: 'text-violet-600 border-violet-600/30 dark:text-violet-400 dark:border-violet-400/30',
+    className: 'text-chart-6 border-chart-6/30',
+  },
+  'datadog-agent': {
+    label: 'Datadog Agent',
+    className: 'text-chart-6 border-chart-6/30',
   },
   otlp: {
     label: 'OTEL',
-    className: 'text-teal-600 border-teal-600/30 dark:text-teal-400 dark:border-teal-400/30',
+    className: 'text-chart-3 border-chart-3/30',
+  },
+  opentelemetry: {
+    label: 'OpenTelemetry',
+    className: 'text-chart-3 border-chart-3/30',
+  },
+  'sentry-sdk': {
+    label: 'Sentry SDK',
+    className: 'text-muted-foreground border-border/50',
   },
   sdk: {
     label: 'SDK',
@@ -32,13 +44,14 @@ const SOURCE_CONFIG: Record<string, {label: string; className: string}> = {
   },
 }
 
-export function SourceBadge({source, className}: {source: string; className?: string}) {
-  const key = source.trim().toLowerCase()
+export function SourceBadge({source, className}: {source?: string | null; className?: string}) {
+  const rawSource = source?.trim() ?? ''
+  const key = rawSource.toLowerCase()
   const config =
     key === ''
       ? {label: 'Unknown', className: 'text-muted-foreground border-border/50'}
       : SOURCE_CONFIG[key] ?? {
-          label: source.charAt(0).toUpperCase() + source.slice(1),
+          label: rawSource.charAt(0).toUpperCase() + rawSource.slice(1),
           className: 'text-muted-foreground border-border/50',
         }
 

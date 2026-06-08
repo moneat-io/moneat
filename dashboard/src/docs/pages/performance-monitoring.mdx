@@ -5,7 +5,7 @@ description: Distributed tracing, transaction tracking, and service maps.
 
 # Performance Monitoring
 
-Moneat supports three performance monitoring paths: Sentry-compatible transactions, Datadog-compatible APM traces, and OpenTelemetry (OTLP) traces. All store data in ClickHouse and are accessible from the **Performance** section in the sidebar.
+Moneat ingests distributed traces and spans from Sentry-compatible SDKs, the Datadog Agent, and any OTLP exporter, then shows them in one Performance view.
 
 ## Sentry Transactions
 
@@ -58,7 +58,7 @@ Metrics are stored in ClickHouse and available for querying via custom dashboard
 
 ## Service Map
 
-The service map is built from APM spans (Datadog and OTLP). It shows services as nodes and inter-service calls as edges, with error rates and average durations per edge. The map uses automatic layout via Dagre.
+The service map is built from APM spans across all telemetry sources. It shows services as nodes and inter-service calls as edges, with error rates and average durations per edge. The map uses automatic layout via Dagre.
 
 Available at **Performance > Service Map**.
 

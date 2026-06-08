@@ -16,6 +16,10 @@
 
 package com.moneat.services
 
+import com.moneat.alerts.models.AlertLifecycleEvent
+import com.moneat.alerts.models.AlertSource
+import com.moneat.alerts.models.AlertStatus
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
@@ -32,6 +36,10 @@ import com.moneat.synthetics.routes.SyntheticsCheckExecutor
 import com.moneat.synthetics.routes.SyntheticsService
 import com.moneat.synthetics.routes.UpdateSyntheticTestRequest
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.workflows.services.WorkflowService
+import io.mockk.coVerify
+import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -105,6 +113,38 @@ class SyntheticsServiceTest {
             config = config
         )
     }
+
+    private fun syntheticTestData(
+        id: java.util.UUID = java.util.UUID.randomUUID(),
+        lastStatus: String? = null,
+        alertOnFailure: Boolean = true
+    ): SyntheticTestData {
+        val now = kotlin.time.Clock.System.now()
+        return SyntheticTestData(
+            id = id,
+            organizationId = TEST_ORG_ID,
+            name = "Synthetic Alert Test",
+            testType = "api",
+            active = true,
+            intervalSeconds = 60,
+            timeoutSeconds = 10,
+            url = "https://example.com/health",
+            method = "GET",
+            assertions = "[]",
+            status = "active",
+            lastStatus = lastStatus,
+            retryCount = 0,
+            retryIntervalMs = 100,
+            alertOnFailure = alertOnFailure,
+            createdAt = now,
+            updatedAt = now
+        )
+    }
+
+    private fun executorReturning(result: SyntheticCheckResult): SyntheticsCheckExecutor =
+        object : SyntheticsCheckExecutor() {
+            override suspend fun executeTest(test: SyntheticTestData): SyntheticCheckResult = result
+        }
 
     // ──── CRUD: Create ────
 
@@ -439,6 +479,62 @@ class SyntheticsServiceTest {
         val result = executor.executeTest(testData)
         assertEquals("passed", result.status)
     }
+
+    // ──── Alert Lifecycle ────
+
+    @Test
+    fun `executeTestAndRecord publishes firing alert for failed check`() =
+        runBlocking {
+            val workflowService = mockk<WorkflowService>(relaxed = true)
+            val service = SyntheticsService(
+                billingQuotaService = mockk<BillingQuotaService>(relaxed = true),
+                workflowService = workflowService
+            )
+            val eventSlot = slot<AlertLifecycleEvent>()
+            val testData = syntheticTestData()
+            val failure = SyntheticCheckResult(
+                status = "failed",
+                durationMs = 42,
+                errorMessage = "status code 500"
+            )
+
+            service.executeTestAndRecord(testData, executorReturning(failure))
+
+            coVerify(exactly = 1) {
+                workflowService.publishAlertTriggered(capture(eventSlot))
+            }
+            val event = eventSlot.captured
+            assertEquals(AlertStatus.FIRING, event.status)
+            assertEquals(AlertSource.SYNTHETIC_TEST, event.source)
+            assertEquals("moneat-synthetic-${testData.id}", event.deduplicationKey)
+            assertEquals(TEST_ORG_ID, event.organizationId)
+            assertTrue(event.description.contains("status code 500"))
+        }
+
+    @Test
+    fun `executeTestAndRecord publishes recovery alert after failed synthetic passes`() =
+        runBlocking {
+            val workflowService = mockk<WorkflowService>(relaxed = true)
+            val service = SyntheticsService(
+                billingQuotaService = mockk<BillingQuotaService>(relaxed = true),
+                workflowService = workflowService
+            )
+            val eventSlot = slot<AlertLifecycleEvent>()
+            val testData = syntheticTestData(lastStatus = "failed")
+            val success = SyntheticCheckResult(status = "passed", durationMs = 33)
+
+            service.executeTestAndRecord(testData, executorReturning(success))
+
+            coVerify(exactly = 1) {
+                workflowService.publishAlertTriggered(capture(eventSlot))
+            }
+            val event = eventSlot.captured
+            assertEquals(AlertStatus.RESOLVED, event.status)
+            assertEquals(AlertSource.SYNTHETIC_TEST, event.source)
+            assertEquals("moneat-synthetic-${testData.id}", event.deduplicationKey)
+            assertEquals(TEST_ORG_ID, event.organizationId)
+            assertTrue(event.description.contains("passed after previous failures"))
+        }
 
     // ──── Global Variables CRUD ────
 

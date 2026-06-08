@@ -148,7 +148,7 @@ function AdminOrganizationsPage() {
         </Card>
         <Card className="px-4 py-3">
           <div className="text-xs text-muted-foreground">Over 90% Quota</div>
-          <div className={`text-xl font-bold tabular-nums ${orgsOverQuota > 0 ? 'text-red-600 dark:text-red-400' : ''}`}>
+          <div className={`text-xl font-bold tabular-nums ${orgsOverQuota > 0 ? 'text-danger-fg' : ''}`}>
             {orgsOverQuota}
           </div>
         </Card>
@@ -190,7 +190,7 @@ function AdminOrganizationsPage() {
                     <SortIndicator column="quota" sortBy={sortBy} sortDir={sortDir} />
                   </TableHead>
                   <TableHead className="text-right">Members</TableHead>
-                  <TableHead className="text-right">Projects</TableHead>
+                  <TableHead className="text-right">Services</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

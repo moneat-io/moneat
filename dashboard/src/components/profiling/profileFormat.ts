@@ -39,14 +39,15 @@ export function formatCompact(value: number): string {
   return compactFormatter.format(value)
 }
 
+// Profile types are categorical, so each maps to a distinct chart hue.
 const TYPE_COLORS: Record<string, string> = {
-  cpu: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
-  wall: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  heap: 'bg-green-500/15 text-green-400 border-green-500/30',
-  alloc: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-  goroutine: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
-  mutex: 'bg-red-500/15 text-red-400 border-red-500/30',
-  block: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
+  cpu: 'bg-chart-6/15 text-chart-6 border-chart-6/30',
+  wall: 'bg-chart-2/15 text-chart-2 border-chart-2/30',
+  heap: 'bg-chart-4/15 text-chart-4 border-chart-4/30',
+  alloc: 'bg-chart-9/15 text-chart-9 border-chart-9/30',
+  goroutine: 'bg-chart-7/15 text-chart-7 border-chart-7/30',
+  mutex: 'bg-chart-8/15 text-chart-8 border-chart-8/30',
+  block: 'bg-chart-5/15 text-chart-5 border-chart-5/30',
 }
 
 export function profileTypeBadgeClass(type: string): string {

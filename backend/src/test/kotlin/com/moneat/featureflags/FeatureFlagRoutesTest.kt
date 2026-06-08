@@ -36,6 +36,8 @@ import com.moneat.featureflags.routes.featureFlagRoutes
 import com.moneat.featureflags.services.FeatureFlagEvaluator
 import com.moneat.featureflags.services.FeatureFlagEventService
 import com.moneat.featureflags.services.FeatureFlagService
+import com.moneat.org.services.OrgMembershipService
+import com.moneat.org.services.OrgRole
 import com.moneat.testsupport.RouteTestSupport
 import com.moneat.testsupport.RouteTestSupport.installJwtAuth
 import com.moneat.testsupport.RouteTestSupport.withAuth
@@ -55,7 +57,9 @@ import io.ktor.server.application.Application
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
+import io.mockk.Runs
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -187,6 +191,21 @@ class FeatureFlagRoutesTest {
     }
 
     @Test
+    fun `management routes require admin role`() = testApplication {
+        val service = mockManagementService()
+        val membershipService = mockk<OrgMembershipService>()
+        every {
+            membershipService.requireRole(ROUTE_TEST_ORG_ID, ROUTE_TEST_USER_ID, OrgRole.ADMIN)
+        } throws IllegalStateException("Insufficient permissions")
+        application { installFeatureFlagRoutes(service, membershipService = membershipService) }
+        val token = RouteTestSupport.createToken(ROUTE_TEST_USER_ID, ROUTE_TEST_ORG_ID)
+
+        val response = client.get("/v1/feature-flags") { withAuth(token) }
+
+        assertEquals(HttpStatusCode.Forbidden, response.status)
+    }
+
+    @Test
     fun `ofrep routes evaluate flags and track events`() = testApplication {
         val service = mockk<FeatureFlagService>()
         val evaluator = mockk<FeatureFlagEvaluator>()
@@ -286,10 +305,16 @@ class FeatureFlagRoutesTest {
         service: FeatureFlagService,
         evaluator: FeatureFlagEvaluator = mockk(relaxed = true),
         eventService: FeatureFlagEventService = mockk(relaxed = true),
+        membershipService: OrgMembershipService = adminMembershipService(),
     ) {
         installJwtAuth()
-        routing { featureFlagRoutes(service, evaluator, eventService) }
+        routing { featureFlagRoutes(service, evaluator, eventService, membershipService) }
     }
+
+    private fun adminMembershipService(): OrgMembershipService =
+        mockk<OrgMembershipService>().also {
+            every { it.requireRole(ROUTE_TEST_ORG_ID, ROUTE_TEST_USER_ID, OrgRole.ADMIN) } just Runs
+        }
 
     private fun mockManagementService(): FeatureFlagService {
         val service = mockk<FeatureFlagService>()

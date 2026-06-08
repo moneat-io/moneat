@@ -31,11 +31,13 @@ import com.moneat.events.models.TransactionSummaryResponse
 import com.moneat.events.models.TransactionWithSpansResponse
 import com.moneat.events.routes.apiRoutes
 import com.moneat.events.services.DashboardService
+import com.moneat.events.services.IssueListQuery
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.RouteTestSupport
+import com.moneat.testsupport.RouteTestSupport.installApiRouteRateLimits
 import com.moneat.testsupport.RouteTestSupport.installJwtAuth
 import com.moneat.testsupport.RouteTestSupport.withAuth
 import com.moneat.testsupport.TestDatabaseHelper
@@ -49,9 +51,6 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.application.Application
-import io.ktor.server.application.install
-import io.ktor.server.plugins.ratelimit.RateLimit
-import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
@@ -69,7 +68,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.seconds
 
 class EventApiRoutesTest {
     companion object {
@@ -115,17 +113,18 @@ class EventApiRoutesTest {
 
     private fun Application.installTestApp() {
         installJwtAuth()
-        install(RateLimit) {
-            register(RateLimitName("api")) {
-                requestKey { "test-user" }
-                rateLimiter(limit = 1000, refillPeriod = 1.seconds)
-            }
-        }
-        routing { apiRoutes() }
+        installApiRouteRateLimits("test-user")
+        routing { apiRoutes(includePublicContactRoutes = false) }
     }
 
-    private fun token(userId: Int): String =
-        RouteTestSupport.createToken(userId)
+    private data class SeededProjectScope(
+        val userId: Int,
+        val orgId: Int,
+        val projectId: Long
+    )
+
+    private fun token(userId: Int, orgId: Int? = null): String =
+        RouteTestSupport.createToken(userId, orgId)
 
     private fun demoToken(): String =
         JWT.create().withIssuer("moneat").withAudience("moneat-users")
@@ -135,6 +134,11 @@ class EventApiRoutesTest {
             .sign(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
 
     private fun seedUserWithProject(): Pair<Int, Long> {
+        val scope = seedUserWithProjectScope()
+        return Pair(scope.userId, scope.projectId)
+    }
+
+    private fun seedUserWithProjectScope(): SeededProjectScope {
         val orgId = transaction {
             Organizations.insert {
                 it[name] = "Event API Test Org"
@@ -162,7 +166,7 @@ class EventApiRoutesTest {
                 it[slug] = "test-project-${System.nanoTime()}"
             } get Projects.id
         }
-        return Pair(userId, projectId)
+        return SeededProjectScope(userId, orgId, projectId)
     }
 
     // ──── Authentication ────
@@ -242,6 +246,82 @@ class EventApiRoutesTest {
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("issue-1"))
+    }
+
+    @Test
+    fun `GET org issues forwards organization and service filters`() = testApplication {
+        val scope = seedUserWithProjectScope()
+        coEvery {
+            mockDashboardService.getIssues(
+                match {
+                    it.organizationId == scope.orgId &&
+                        it.page == 2 &&
+                        it.limit == 5 &&
+                        it.status == "resolved" &&
+                        it.serviceNames == listOf("Test Project") &&
+                        it.serviceIds == listOf(scope.projectId)
+                }
+            )
+        } returns listOf(sampleIssue(scope.projectId))
+
+        application { installTestApp() }
+        val url =
+            "/v1/issues?page=2&limit=5&status=resolved" +
+                "&services=Test%20Project&serviceIds=${scope.projectId}"
+        val response = client.get(url) {
+            withAuth(token(scope.userId, scope.orgId))
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("issue-1"))
+        coVerify {
+            mockDashboardService.getIssues(any<IssueListQuery>())
+        }
+    }
+
+    @Test
+    fun `GET org issues returns 400 for invalid service id filter`() = testApplication {
+        val scope = seedUserWithProjectScope()
+
+        application { installTestApp() }
+        val response = client.get("/v1/issues?serviceIds=not-a-service-id") {
+            withAuth(token(scope.userId, scope.orgId))
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        coVerify(exactly = 0) {
+            mockDashboardService.getIssues(any<IssueListQuery>())
+        }
+    }
+
+    @Test
+    fun `GET org issues returns 400 for non-positive pagination`() = testApplication {
+        val scope = seedUserWithProjectScope()
+
+        application { installTestApp() }
+        val response = client.get("/v1/issues?page=0&limit=-1") {
+            withAuth(token(scope.userId, scope.orgId))
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        coVerify(exactly = 0) {
+            mockDashboardService.getIssues(any<IssueListQuery>())
+        }
+    }
+
+    @Test
+    fun `GET org issues returns 404 when user lacks organization access`() = testApplication {
+        val scope = seedUserWithProjectScope()
+
+        application { installTestApp() }
+        val response = client.get("/v1/issues") {
+            withAuth(token(scope.userId, orgId = 99999))
+        }
+
+        assertEquals(HttpStatusCode.NotFound, response.status)
+        coVerify(exactly = 0) {
+            mockDashboardService.getIssues(any<IssueListQuery>())
+        }
     }
 
     @Test
@@ -555,6 +635,7 @@ class EventApiRoutesTest {
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("issue-found-1"))
+        assertTrue(response.bodyAsText().contains("projectResourceId"))
     }
 
     @Test

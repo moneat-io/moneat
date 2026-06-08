@@ -18,6 +18,7 @@ package com.moneat.routes
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.monitor.routes.infraRoutes
+import com.moneat.shared.models.InfrastructureMapSavedViews
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
@@ -27,12 +28,18 @@ import com.moneat.testsupport.RouteTestSupport.withAuth
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.TestIpConstants
 import com.moneat.testsupport.TestOidConstants
+import io.ktor.client.HttpClient
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
 import io.ktor.server.application.Application
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
@@ -56,7 +63,19 @@ import kotlin.test.assertTrue
 class InfraRoutesTest {
     companion object {
         private const val INFRA_EVENTS_PATH = "/v1/infra/events"
+        private const val SAVED_VIEWS_PATH = "/v1/infra/map/saved-views"
+        private const val SAVED_VIEW_NAME_MAX_LENGTH = 48
+        private const val OVERLONG_SAVED_VIEW_NAME_LENGTH = SAVED_VIEW_NAME_MAX_LENGTH + 1
     }
+
+    private data class SavedMapViewRequest(
+        val name: String = "Production hosts",
+        val resourceKind: String = "hosts",
+        val groupBy: String = "tag:env",
+        val fillBy: String = "health",
+        val sizeBy: String = "memory",
+        val searchQuery: String = "prod"
+    )
 
     @BeforeTest
     fun setup() {
@@ -66,7 +85,12 @@ class InfraRoutesTest {
             driver = "org.h2.Driver"
         )
         TransactionManager.defaultDatabase = db
-        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships)
+        TestDatabaseHelper.resetSchemaForH2WithJsonb(
+            Users,
+            Organizations,
+            Memberships,
+            InfrastructureMapSavedViews
+        )
 
         mockkObject(ClickHouseClient)
         mockkStatic(HttpResponse::bodyAsText)
@@ -82,7 +106,7 @@ class InfraRoutesTest {
         installJwtAuth()
     }
 
-    private fun token(userId: Int): String = RouteTestSupport.createToken(userId)
+    private fun token(userId: Int, orgId: Int? = null): String = RouteTestSupport.createToken(userId, orgId)
 
     private fun seedUser(): Int = transaction {
         Users.insert {
@@ -129,6 +153,33 @@ class InfraRoutesTest {
         coEvery { ClickHouseClient.execute(any(), any()) } returns mockResponse
     }
 
+    private suspend fun createSavedMapView(
+        client: HttpClient,
+        bearerToken: String,
+        request: SavedMapViewRequest = SavedMapViewRequest(),
+    ): HttpResponse =
+        client.post(SAVED_VIEWS_PATH) {
+            withAuth(bearerToken)
+            contentType(ContentType.Application.Json)
+            setBody(
+                """
+                {
+                  "name": "${request.name}",
+                  "resource_kind": "${request.resourceKind}",
+                  "group_by": "${request.groupBy}",
+                  "fill_by": "${request.fillBy}",
+                  "size_by": "${request.sizeBy}",
+                  "search_query": "${request.searchQuery}"
+                }
+                """.trimIndent()
+            )
+        }
+
+    private fun savedViewId(responseBody: String): String {
+        val match = Regex(""""id":(\d+)""").find(responseBody)
+        return match?.groupValues?.get(1) ?: error("expected saved view id in response: $responseBody")
+    }
+
     // ──── Unauthenticated requests ────
 
     @Test
@@ -158,6 +209,194 @@ class InfraRoutesTest {
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("\"events\":[]"))
+        }
+
+    // ──── Infrastructure map saved views ────
+
+    @Test
+    fun `saved map views are persisted for current user and organization`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+
+            application {
+                installAuth()
+                routing { infraRoutes() }
+            }
+
+            val createResponse = createSavedMapView(client, token(userId, orgId))
+            assertEquals(HttpStatusCode.Created, createResponse.status)
+            val createBody = createResponse.bodyAsText()
+            assertTrue(createBody.contains("\"name\":\"Production hosts\""))
+            assertTrue(createBody.contains("\"resource_kind\":\"hosts\""))
+            val viewId = savedViewId(createBody)
+
+            val updateResponse = createSavedMapView(
+                client,
+                token(userId, orgId),
+                SavedMapViewRequest(
+                    name = "production HOSTS",
+                    groupBy = "status",
+                    fillBy = "lastSeen",
+                    sizeBy = "cpu",
+                    searchQuery = "web"
+                )
+            )
+            assertEquals(HttpStatusCode.OK, updateResponse.status)
+            assertTrue(updateResponse.bodyAsText().contains("\"search_query\":\"web\""))
+
+            val listResponse = client.get(SAVED_VIEWS_PATH) {
+                withAuth(token(userId, orgId))
+            }
+            val listBody = listResponse.bodyAsText()
+            assertEquals(HttpStatusCode.OK, listResponse.status)
+            assertTrue(listBody.contains("\"views\":["))
+            assertTrue(listBody.contains("\"name\":\"production HOSTS\""))
+            assertTrue(listBody.contains("\"group_by\":\"status\""))
+
+            val deleteResponse = client.delete("$SAVED_VIEWS_PATH/$viewId") {
+                withAuth(token(userId, orgId))
+            }
+            assertEquals(HttpStatusCode.NoContent, deleteResponse.status)
+
+            val emptyListResponse = client.get(SAVED_VIEWS_PATH) {
+                withAuth(token(userId, orgId))
+            }
+            assertTrue(emptyListResponse.bodyAsText().contains("\"views\":[]"))
+        }
+
+    @Test
+    fun `saved map views are isolated by current user within an organization`() =
+        testApplication {
+            val orgId = seedOrg()
+            val ownerUserId = seedUser()
+            val otherUserId = seedUser()
+            seedMembership(ownerUserId, orgId)
+            seedMembership(otherUserId, orgId)
+
+            application {
+                installAuth()
+                routing { infraRoutes() }
+            }
+
+            val createResponse = createSavedMapView(client, token(ownerUserId, orgId))
+            assertEquals(HttpStatusCode.Created, createResponse.status)
+            val viewId = savedViewId(createResponse.bodyAsText())
+
+            val otherListResponse = client.get(SAVED_VIEWS_PATH) {
+                withAuth(token(otherUserId, orgId))
+            }
+            assertEquals(HttpStatusCode.OK, otherListResponse.status)
+            assertTrue(otherListResponse.bodyAsText().contains("\"views\":[]"))
+
+            val otherDeleteResponse = client.delete("$SAVED_VIEWS_PATH/$viewId") {
+                withAuth(token(otherUserId, orgId))
+            }
+            assertEquals(HttpStatusCode.NotFound, otherDeleteResponse.status)
+
+            val ownerListResponse = client.get(SAVED_VIEWS_PATH) {
+                withAuth(token(ownerUserId, orgId))
+            }
+            assertTrue(ownerListResponse.bodyAsText().contains("\"name\":\"Production hosts\""))
+        }
+
+    @Test
+    fun `saved map views reject inaccessible or ambiguous organization context`() =
+        testApplication {
+            val userId = seedUser()
+            val firstOrgId = seedOrg()
+            val secondOrgId = seedOrg()
+            val inaccessibleOrgId = seedOrg()
+            seedMembership(userId, firstOrgId)
+            seedMembership(userId, secondOrgId)
+
+            application {
+                installAuth()
+                routing { infraRoutes() }
+            }
+
+            val inaccessibleResponse = client.get(SAVED_VIEWS_PATH) {
+                withAuth(token(userId, inaccessibleOrgId))
+            }
+            assertEquals(HttpStatusCode.Forbidden, inaccessibleResponse.status)
+
+            val ambiguousResponse = client.get(SAVED_VIEWS_PATH) {
+                withAuth(token(userId))
+            }
+            assertEquals(HttpStatusCode.BadRequest, ambiguousResponse.status)
+        }
+
+    @Test
+    fun `DELETE saved map view validates id and returns 404 when scoped row is missing`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+
+            application {
+                installAuth()
+                routing { infraRoutes() }
+            }
+
+            val invalidIdResponse = client.delete("$SAVED_VIEWS_PATH/not-a-number") {
+                withAuth(token(userId, orgId))
+            }
+            assertEquals(HttpStatusCode.BadRequest, invalidIdResponse.status)
+
+            val missingResponse = client.delete("$SAVED_VIEWS_PATH/99999") {
+                withAuth(token(userId, orgId))
+            }
+            assertEquals(HttpStatusCode.NotFound, missingResponse.status)
+        }
+
+    @Test
+    fun `POST saved map view rejects invalid options`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+
+            application {
+                installAuth()
+                routing { infraRoutes() }
+            }
+
+            val response = createSavedMapView(
+                client,
+                token(userId, orgId),
+                SavedMapViewRequest(
+                    name = "Bad containers",
+                    resourceKind = "containers",
+                    groupBy = "agent",
+                    fillBy = "health",
+                    sizeBy = "cpu",
+                    searchQuery = ""
+                )
+            )
+
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+            assertTrue(response.bodyAsText().contains("Invalid group option"))
+        }
+
+    @Test
+    fun `POST saved map view rejects names that exceed the persisted key limit`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+
+            application {
+                installAuth()
+                routing { infraRoutes() }
+            }
+
+            val response = createSavedMapView(
+                client,
+                token(userId, orgId),
+                SavedMapViewRequest(
+                    name = "x".repeat(OVERLONG_SAVED_VIEW_NAME_LENGTH)
+                )
+            )
+
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+            assertTrue(
+                response.bodyAsText().contains(
+                    "Saved view name must be at most $SAVED_VIEW_NAME_MAX_LENGTH characters"
+                )
+            )
         }
 
     // ──── GET /infra/events ────

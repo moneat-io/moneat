@@ -350,7 +350,7 @@ describe('Integrations API', () => {
   describe('getIncidentProviderRules', () => {
     it('fetches routing rules for a provider', async () => {
       const mockRules = [
-        { id: 1, alertSource: 'severity == critical', incidentSeverity: 'critical' },
+        { id: 1, alertSource: 'severity == critical', alertPriority: 'P0' },
       ]
 
       server.use(

@@ -68,7 +68,7 @@ export function ToolInvocation({invocation}: ToolInvocationProps) {
         {invocation.status === 'invoking' ? (
           <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
         ) : invocation.status === 'completed' ? (
-          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success-fg" />
         ) : (
           <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" />
         )}

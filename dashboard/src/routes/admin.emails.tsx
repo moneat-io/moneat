@@ -79,24 +79,24 @@ function AdminEmailsPage() {
           value={formatNumber(data.totalSent)}
           subtitle="All time"
           icon={Send}
-          iconColor="text-blue-600 dark:text-blue-400"
-          iconBg="bg-blue-100 dark:bg-blue-950"
+          iconColor="text-chart-1"
+          iconBg="bg-chart-1/15"
         />
         <MetricCard
           title="Emails This Period"
           value={formatNumber(timelineData.reduce((sum, d) => sum + d.count, 0))}
           subtitle={periodLabel}
           icon={Mail}
-          iconColor="text-purple-600 dark:text-purple-400"
-          iconBg="bg-purple-100 dark:bg-purple-950"
+          iconColor="text-chart-4"
+          iconBg="bg-chart-4/15"
         />
         <MetricCard
           title="Estimated SES Cost"
           value={`$${data.estimatedCost.toFixed(2)}`}
           subtitle="At $0.10 per 1,000 emails"
           icon={DollarSign}
-          iconColor="text-emerald-600 dark:text-emerald-400"
-          iconBg="bg-emerald-100 dark:bg-emerald-950"
+          iconColor="text-success-fg"
+          iconBg="bg-success-bg"
         />
       </div>
 
@@ -112,8 +112,8 @@ function AdminEmailsPage() {
               <AreaChart data={timelineData}>
                 <defs>
                   <linearGradient id="gradient-emails" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.02} />
+                    <stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="hsl(var(--chart-1))" stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" vertical={false} />
@@ -137,7 +137,7 @@ function AdminEmailsPage() {
                 <Area
                   type="monotone"
                   dataKey="count"
-                  stroke="#3b82f6"
+                  stroke="hsl(var(--chart-1))"
                   fill="url(#gradient-emails)"
                   strokeWidth={2}
                   name="Emails Sent"
@@ -186,7 +186,7 @@ function AdminEmailsPage() {
                     )
                   }}
                 />
-                <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="count" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (

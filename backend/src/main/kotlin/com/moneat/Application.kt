@@ -20,7 +20,7 @@ import com.moneat.config.EnvConfig
 import com.moneat.config.EnvironmentValidator
 import com.moneat.config.configureClickHouse
 import com.moneat.config.configureRedis
-import com.moneat.di.appModules
+import com.moneat.di.buildAppModules
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.plugins.configureBackgroundJobs
 import com.moneat.plugins.configureDatabases
@@ -82,7 +82,8 @@ fun Application.module() {
 
     install(Koin) {
         slf4jLogger()
-        modules(appModules)
+        val frontendBaseUrl = environment.config.property("email.frontendUrl").getString()
+        modules(buildAppModules(frontendBaseUrl = frontendBaseUrl))
     }
     if (workflowWorkerMode() == WorkflowWorkerMode.EGRESS) {
         configureSerialization()

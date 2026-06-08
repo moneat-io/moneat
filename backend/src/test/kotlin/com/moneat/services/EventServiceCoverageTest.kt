@@ -125,6 +125,8 @@ class EventServiceCoverageTest {
             ProjectKeyVerification(true, "jvm")
         every { eventRepository.getOrganizationIdForProject(any()) } returns null
         every { eventRepository.getOrganizationIdForProject(testProjectId) } returns testOrgId
+        every { eventRepository.getServiceNameForProject(any()) } returns null
+        every { eventRepository.getServiceNameForProject(testProjectId) } returns "test-project"
 
         coEvery { eventRepository.insertErrorEvent(any()) } returns true
         coEvery { eventRepository.insertTransaction(any()) } returns true
@@ -1256,6 +1258,79 @@ class EventServiceCoverageTest {
 
         assertTrue(errorSlot.isCaptured)
         assertEquals("warning", errorSlot.captured.level)
+    }
+
+    @Test
+    fun `storeEvent normalizes service tag to service name and writes organization`() = runBlocking {
+        val errorSlot = slot<ErrorEventInsertData>()
+        coEvery { eventRepository.insertErrorEvent(capture(errorSlot)) } returns true
+
+        val eventJson = Json.encodeToString(
+            SentryEvent(
+                eventId = "service-tag-1",
+                level = "error",
+                message = "Service tag fallback",
+                tags = mapOf("service" to "checkout-api"),
+                exception = ExceptionInfo(
+                    values = listOf(ExceptionValue(type = "ServiceError", value = "failed"))
+                )
+            )
+        )
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(eventId = "service-tag-1", items = listOf(EnvelopeItem("event", eventJson)))
+        )
+
+        assertTrue(errorSlot.isCaptured)
+        assertEquals(testOrgId, errorSlot.captured.organizationId)
+        assertEquals("checkout-api", errorSlot.captured.tags?.get("service"))
+        assertEquals("checkout-api", errorSlot.captured.tags?.get("service.name"))
+    }
+
+    @Test
+    fun `storeEvent adds project service name when service tags are absent`() = runBlocking {
+        val errorSlot = slot<ErrorEventInsertData>()
+        coEvery { eventRepository.insertErrorEvent(capture(errorSlot)) } returns true
+
+        val eventJson = Json.encodeToString(
+            SentryEvent(
+                eventId = "service-fallback-1",
+                level = "error",
+                message = "Project fallback",
+                exception = ExceptionInfo(
+                    values = listOf(ExceptionValue(type = "FallbackError", value = "failed"))
+                )
+            )
+        )
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(eventId = "service-fallback-1", items = listOf(EnvelopeItem("event", eventJson)))
+        )
+
+        assertTrue(errorSlot.isCaptured)
+        assertEquals("test-project", errorSlot.captured.tags?.get("service.name"))
+    }
+
+    @Test
+    fun `storeEvent skips insert when organization is missing`() = runBlocking {
+        every { eventRepository.getOrganizationIdForProject(testProjectId) } returns null
+
+        val eventJson = Json.encodeToString(
+            SentryEvent(
+                eventId = "missing-org-1",
+                level = "error",
+                message = "Missing org",
+                exception = ExceptionInfo(
+                    values = listOf(ExceptionValue(type = "MissingOrgError", value = "failed"))
+                )
+            )
+        )
+
+        eventService.processStoreEvent(testProjectId, eventJson)
+
+        coVerify(exactly = 0) { eventRepository.insertErrorEvent(any()) }
     }
 
     @Test

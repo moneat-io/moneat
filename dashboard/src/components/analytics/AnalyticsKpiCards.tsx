@@ -14,7 +14,7 @@ function ComparisonBadge({current, previous, invert}: {current: number; previous
   const pct = ((current - previous) / previous) * 100
   const isPositive = invert ? pct < 0 : pct > 0
   return (
-    <span className={`inline-flex items-center text-[10px] font-medium ${isPositive ? 'text-green-600' : 'text-red-500'}`}>
+    <span className={`inline-flex items-center text-[10px] font-medium ${isPositive ? 'text-success-fg' : 'text-danger-fg'}`}>
       {pct > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
       {Math.abs(pct).toFixed(1)}%
     </span>

@@ -90,7 +90,7 @@ Moneat is Sentry SDK, Datadog Agent, and OpenTelemetry (OTLP) compatible. Point 
 | Performance Monitoring | Distributed tracing with transaction and span breakdowns | [Docs](https://moneat.io/docs) |
 | Continuous Profiling | Flamegraph visualization (pprof, JFR, Sentry formats) | [Docs](https://moneat.io/docs) |
 | Logging | Centralized, searchable log management via OTLP and ClickHouse | [Docs](https://moneat.io/docs) |
-| OpenTelemetry (OTLP) | Ingest logs, traces, and metrics via standard OTLP/HTTP endpoints | [Docs](https://moneat.io/docs) |
+| OpenTelemetry Ingestion | Send logs, traces, and metrics from any OTLP exporter or Collector | [Docs](https://moneat.io/docs) |
 | Uptime & Status Pages | HTTP/TCP/ping checks with public status pages | [Docs](https://moneat.io/docs) |
 | Synthetics | API, multi-step, SSL, DNS, TCP, and UDP synthetic tests | [Docs](https://moneat.io/docs) |
 | Custom Dashboards | Drag-and-drop widgets, Grafana dashboard import | [Docs](https://moneat.io/docs) |
@@ -100,7 +100,7 @@ Moneat is Sentry SDK, Datadog Agent, and OpenTelemetry (OTLP) compatible. Point 
 | AI Observability | Trace and debug LLM calls | [Docs](https://moneat.io/docs) |
 | MCP Server | Model Context Protocol endpoint for AI coding assistants | [Docs](https://moneat.io/docs) |
 | User Feedback | Sentry-compatible feedback ingestion with status workflows | [Docs](https://moneat.io/docs) |
-| Datadog Compatibility | Ingest from existing Datadog agents with no code changes | [Docs](https://moneat.io/docs) |
+| Datadog Agent Compatibility | Ingest from existing Datadog agents with no code changes | [Docs](https://moneat.io/docs) |
 | On-Call & Incidents | PagerDuty-style escalations *(Enterprise)* | [Pricing](https://moneat.io/pricing) |
 | SSO (OIDC) | Sign in with any OpenID Connect provider | [Docs](https://moneat.io/docs) |
 | SSO (SAML) & Enforcement | SAML 2.0 and mandatory SSO *(Enterprise)* | [Pricing](https://moneat.io/pricing) |
@@ -248,7 +248,10 @@ Authenticate with an OTLP API key (created in **Settings → OTLP API Keys**) pa
 
 ## Telemetry
 
-Self-hosted deployments collect anonymous usage telemetry (CPU count, memory, aggregate event counts, deployment config). No personal data, event contents, or secrets are collected. [Learn more.](https://moneat.io/docs/self-hosting/telemetry)
+Self-hosted deployments send a periodic telemetry pulse. These are the exact fields included:
+Moneat version, CPU count, memory usage, OS name and architecture, JVM version, aggregate
+project/user/event/issue counts, SSL enabled status, and a random deployment ID. No other fields
+are included in the telemetry payload. [Learn more.](https://moneat.io/docs/self-hosting/telemetry)
 
 Opt out:
 

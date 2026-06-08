@@ -15,7 +15,9 @@ Moneat captures LLM calls, traces multi-step agent executions, and tracks token 
 - **Error monitoring** - LLM failures, timeouts, and rate limits
 - **Model analytics** - Performance, cost, and error rates across models
 
-## Getting Started with Sentry SDKs
+## Getting Started
+
+### Sentry-Compatible SDKs
 
 If your application uses a Sentry SDK with AI integrations, point your DSN to your Moneat instance to start sending LLM observability data.
 
@@ -31,7 +33,7 @@ If your application uses a Sentry SDK with AI integrations, point your DSN to yo
     },
     {
       title: 'Point the DSN to Moneat',
-      content: 'Instead of using a Sentry DSN, configure the SDK to point to your Moneat instance. You can find your project DSN in your project settings. It follows this format:',
+      content: 'Instead of using a Sentry DSN, configure the SDK to point to your Moneat instance. You can find your service DSN in your service settings. It follows this format:',
     },
   ]}
 />
@@ -54,7 +56,7 @@ If you're not using a Sentry SDK, you can send LLM generation events directly to
 POST /api/{projectId}/llm/
 ```
 
-Authenticate using either the `X-Sentry-Auth` header or the `sentry_key` query parameter with your project's public key. The endpoint accepts gzip-compressed payloads via the `Content-Encoding: gzip` header.
+Authenticate using either the `X-Sentry-Auth` header or the `sentry_key` query parameter with your service public key. The endpoint accepts gzip-compressed payloads via the `Content-Encoding: gzip` header.
 
 ### Payload Format
 
@@ -142,7 +144,7 @@ LLM generation data is stored in ClickHouse with plan-specific retention. Check 
 
 ## Next Steps
 
-- [Getting Started](/docs/getting-started) - Set up your account and first project
+- [Getting Started](/docs/getting-started) - Set up your account and first service
 - [SDK Setup](/docs/sdk-setup) - Platform-specific SDK configuration
 - [Error Monitoring](/docs/error-monitoring) - Error capture and issue grouping
 - [Billing & Plans](/docs/billing) - Usage quotas and billing

@@ -20,13 +20,13 @@ import {CheckCircle2, Clock, Pause, XCircle} from 'lucide-react'
 export function getStatusBadge(status: string) {
   switch (status) {
     case 'up':
-      return <Badge className="bg-emerald-500 hover:bg-emerald-600"><CheckCircle2 className="mr-1 h-3 w-3" />Up</Badge>
+      return <Badge variant="success"><CheckCircle2 className="mr-1 h-3 w-3" />Up</Badge>
     case 'down':
-      return <Badge className="bg-red-500 hover:bg-red-600"><XCircle className="mr-1 h-3 w-3" />Down</Badge>
+      return <Badge variant="danger"><XCircle className="mr-1 h-3 w-3" />Down</Badge>
     case 'paused':
-      return <Badge variant="outline"><Pause className="mr-1 h-3 w-3" />Paused</Badge>
+      return <Badge variant="neutral"><Pause className="mr-1 h-3 w-3" />Paused</Badge>
     case 'pending':
     default:
-      return <Badge variant="secondary"><Clock className="mr-1 h-3 w-3" />Pending</Badge>
+      return <Badge variant="info"><Clock className="mr-1 h-3 w-3" />Pending</Badge>
   }
 }

@@ -29,7 +29,7 @@ import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.UpdateDashboardAlertRequest
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertLifecycleEvent
-import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertStatus
 import com.moneat.incident.services.IncidentService
 import com.moneat.shared.services.RetentionPolicyService
@@ -139,11 +139,18 @@ class DashboardAlertService(
         validateWarningThreshold(request.condition, request.warningThreshold, request.threshold)
         val now = Clock.System.now()
         val channelsJson = json.encodeToString(NotificationChannels.serializer(), request.notificationChannels)
+        val alertPriority = normalizeAlertPriority(request.alertPriority ?: request.legacyIncidentSeverity)
 
         return transaction {
-            DashboardWidgets.selectAll().where {
-                (DashboardWidgets.id eq request.widgetId) and (DashboardWidgets.dashboardId eq dashboardId)
-            }.firstOrNull() ?: throw IllegalArgumentException("Widget not found in this dashboard")
+            DashboardWidgets.innerJoin(Dashboards)
+                .selectAll()
+                .where {
+                    (DashboardWidgets.id eq request.widgetId) and
+                        (DashboardWidgets.dashboardId eq dashboardId) and
+                        (Dashboards.id eq dashboardId) and
+                        (Dashboards.orgId eq orgId)
+                }
+                .firstOrNull() ?: throw IllegalArgumentException("Widget not found in this dashboard")
 
             val id = DashboardWidgetAlerts.insert {
                 it[DashboardWidgetAlerts.widgetId] = request.widgetId
@@ -155,7 +162,7 @@ class DashboardAlertService(
                 it[DashboardWidgetAlerts.warningThreshold] = request.warningThreshold
                 it[DashboardWidgetAlerts.metricIndex] = request.metricIndex
                 it[DashboardWidgetAlerts.durationSeconds] = request.durationSeconds
-                it[DashboardWidgetAlerts.incidentSeverity] = request.incidentSeverity
+                it[DashboardWidgetAlerts.alertPriority] = alertPriority
                 it[DashboardWidgetAlerts.enabled] = request.enabled
                 it[DashboardWidgetAlerts.notificationChannels] = channelsJson
                 it[DashboardWidgetAlerts.createdBy] = createdBy
@@ -215,7 +222,8 @@ class DashboardAlertService(
                 if (warningThresholdProvided) it[warningThreshold] = request.warningThreshold
                 request.metricIndex?.let { v -> it[metricIndex] = v }
                 request.durationSeconds?.let { v -> it[durationSeconds] = v }
-                request.incidentSeverity?.let { v -> it[incidentSeverity] = v }
+                val requestedAlertPriority = request.alertPriority ?: request.legacyIncidentSeverity
+                requestedAlertPriority?.let { v -> it[alertPriority] = normalizeAlertPriority(v) }
                 request.enabled?.let { v -> it[enabled] = v }
                 request.notificationChannels?.let { v ->
                     it[notificationChannels] = json.encodeToString(NotificationChannels.serializer(), v)
@@ -254,7 +262,7 @@ class DashboardAlertService(
         val warningThreshold: Double?,
         val metricIndex: Int,
         val durationSeconds: Int,
-        val incidentSeverity: String?,
+        val alertPriority: String?,
         val notificationChannels: NotificationChannels,
         val lastTriggeredAt: Instant?,
         val lastTriggeredLevel: String?,
@@ -283,7 +291,7 @@ class DashboardAlertService(
                         warningThreshold = row[DashboardWidgetAlerts.warningThreshold],
                         metricIndex = row[DashboardWidgetAlerts.metricIndex],
                         durationSeconds = row[DashboardWidgetAlerts.durationSeconds],
-                        incidentSeverity = row[DashboardWidgetAlerts.incidentSeverity],
+                        alertPriority = row[DashboardWidgetAlerts.alertPriority],
                         notificationChannels = suspendRunCatching {
                             json.decodeFromString<NotificationChannels>(row[DashboardWidgetAlerts.notificationChannels])
                         }.getOrElse {
@@ -379,15 +387,15 @@ class DashboardAlertService(
         }
 
         val baseUrl = config.property("email.frontendUrl").getString()
-        val incidentSeverity =
+        val configuredAlertPriority =
             if (previousLevel == DashboardAlertLevel.ERROR) {
-                alert.incidentSeverity?.let { AlertSeverity.fromString(it) }
+                alert.alertPriority?.let { AlertPriority.fromString(it) }
             } else {
                 null
             }
-        val workflowSeverity = incidentSeverity ?: when (previousLevel) {
-            DashboardAlertLevel.WARNING -> AlertSeverity.LOW
-            DashboardAlertLevel.ERROR -> AlertSeverity.HIGH
+        val workflowPriority = configuredAlertPriority ?: when (previousLevel) {
+            DashboardAlertLevel.WARNING -> AlertPriority.P3
+            DashboardAlertLevel.ERROR -> AlertPriority.P1
         }
         val formattedValue = "%.2f".format(currentValue)
         val recoveredThreshold = when (previousLevel) {
@@ -402,7 +410,7 @@ class DashboardAlertService(
             AlertLifecycleEvent(
                 title = title,
                 description = description,
-                severity = workflowSeverity,
+                priority = workflowPriority,
                 status = AlertStatus.RESOLVED,
                 source = AlertSource.DASHBOARD_ALERT,
                 deduplicationKey = "moneat-dashboard-alert-${alert.alertId}",
@@ -417,7 +425,7 @@ class DashboardAlertService(
         }.onFailure { e ->
             logger.error(e) { "Failed to publish recovered dashboard alert workflow ${alert.alertId}" }
         }
-        if (incidentSeverity != null) {
+        if (configuredAlertPriority != null) {
             suspendRunCatching {
                 incidentService.autoResolveAlert(
                     organizationId = alert.orgId.toInt(),
@@ -500,7 +508,7 @@ class DashboardAlertService(
         val builtInProjectId = projectId ?: return emptyList()
         val retentionDays =
             retentionPolicyService.getRetentionDaysForProject(builtInProjectId) ?: DEFAULT_RETENTION_DAYS
-        return queryEngine.executeQuery(queryDsl, builtInProjectId, null, retentionDays)
+        return queryEngine.executeQuery(queryDsl, builtInProjectId, null, retentionDays, orgId)
     }
 
     private fun resolveCustomDataSource(
@@ -693,22 +701,22 @@ class DashboardAlertService(
         val formattedValue = "%.2f".format(currentValue)
         val formattedThreshold = "%.2f".format(trigger.threshold)
 
-        val alertSeverity =
+        val configuredAlertPriority =
             if (trigger.level == DashboardAlertLevel.ERROR) {
-                alert.incidentSeverity?.let { AlertSeverity.fromString(it) }
+                alert.alertPriority?.let { AlertPriority.fromString(it) }
             } else {
                 null
             }
-        val workflowSeverity = alertSeverity ?: when (trigger.level) {
-            DashboardAlertLevel.WARNING -> AlertSeverity.LOW
-            DashboardAlertLevel.ERROR -> AlertSeverity.HIGH
+        val workflowPriority = configuredAlertPriority ?: when (trigger.level) {
+            DashboardAlertLevel.WARNING -> AlertPriority.P3
+            DashboardAlertLevel.ERROR -> AlertPriority.P1
         }
         val event =
             AlertLifecycleEvent(
                 title = "Dashboard ${trigger.level.label}: ${alert.name}",
                 description = "${alert.widgetTitle} on ${alert.dashboardTitle}:" +
                     " value $formattedValue ${alert.condition} $formattedThreshold",
-                severity = workflowSeverity,
+                priority = workflowPriority,
                 status = AlertStatus.FIRING,
                 source = AlertSource.DASHBOARD_ALERT,
                 deduplicationKey = "moneat-dashboard-alert-${alert.alertId}",
@@ -724,9 +732,9 @@ class DashboardAlertService(
         }.onFailure { e ->
             logger.error(e) { "Failed to publish dashboard alert workflow" }
         }
-        if (alertSeverity != null) {
+        if (configuredAlertPriority != null) {
             suspendRunCatching {
-                incidentService.fireAlert(event.copy(severity = alertSeverity), publishWorkflow = false)
+                incidentService.fireAlert(event.copy(priority = configuredAlertPriority), publishWorkflow = false)
             }.onFailure { e ->
                 logger.error(e) { "Failed to fire dashboard alert incident" }
             }
@@ -752,6 +760,13 @@ class DashboardAlertService(
             "==" -> require(warningThreshold == errorThreshold) {
                 "Warning threshold must match the error threshold for == alerts"
             }
+        }
+    }
+
+    private fun normalizeAlertPriority(value: String?): String? {
+        if (value.isNullOrBlank()) return null
+        return requireNotNull(AlertPriority.wireValue(value)) {
+            "Invalid alert priority: $value"
         }
     }
 
@@ -794,7 +809,9 @@ class DashboardAlertService(
             warningThreshold = row[DashboardWidgetAlerts.warningThreshold],
             metricIndex = row[DashboardWidgetAlerts.metricIndex],
             durationSeconds = row[DashboardWidgetAlerts.durationSeconds],
-            incidentSeverity = row[DashboardWidgetAlerts.incidentSeverity],
+            alertPriority = row[DashboardWidgetAlerts.alertPriority]?.let { priority ->
+                AlertPriority.wireValue(priority) ?: priority
+            },
             enabled = row[DashboardWidgetAlerts.enabled],
             notificationChannels = channels,
             lastTriggeredAt = row[DashboardWidgetAlerts.lastTriggeredAt]?.toString(),

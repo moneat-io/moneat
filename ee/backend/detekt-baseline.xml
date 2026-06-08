@@ -1,0 +1,28 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>CyclomaticComplexMethod:ConnectionRoutes.kt$fun Route.connectionRoutes(vault: WorkflowConnectionVault)</ID>
+    <ID>CyclomaticComplexMethod:EscalationEngine.kt$EscalationEngine$private fun notifyUser( incidentId: Int, userId: Int, title: String, priority: String, smsFallbackDelayMinutes: Int = 2, stepIndex: Int, iteration: Int )</ID>
+    <ID>CyclomaticComplexMethod:EscalationRoutes.kt$fun Route.escalationRoutes()</ID>
+    <ID>CyclomaticComplexMethod:NotificationPreferencesRoutes.kt$fun Route.notificationPreferencesRoutes( getPushService: () -> PushNotificationService, )</ID>
+    <ID>CyclomaticComplexMethod:OnCallRoutes.kt$fun Route.onCallRoutes( getSlackUserGroupSyncService: (() -> com.moneat.enterprise.oncall.services.SlackUserGroupSyncService?)? = null, getPushNotificationService: (() -> com.moneat.enterprise.oncall.services.PushNotificationService)? = null, )</ID>
+    <ID>CyclomaticComplexMethod:OnCallRoutes.kt$private fun buildScheduleTimeline( scheduleId: Int, rangeStart: Instant, rangeEnd: Instant, ): ScheduleTimelineResponse?</ID>
+    <ID>CyclomaticComplexMethod:RbacRoutes.kt$fun Route.rbacRoutes(service: RbacService)</ID>
+    <ID>CyclomaticComplexMethod:TwilioWebhookRoutes.kt$fun Route.twilioWebhookRoutes()</ID>
+    <ID>LongParameterList:AiAssistantService.kt$AiAssistantService$( state: ConversationState, userId: Int, orgId: Int, onToolInvoking: suspend (tool: String, args: JsonObject) -> Unit = { _, _ -> }, onToolResult: suspend (tool: String, summary: String, isError: Boolean) -> Unit = { _, _, _ -> }, onConfirmationNeeded: suspend (requestId: String, tool: String, args: JsonObject) -> Unit = { _, _, _ -> }, )</ID>
+    <ID>LongParameterList:AiAssistantService.kt$AiAssistantService$( writer: Writer, userId: Int, orgId: Int, message: String, conversationId: String?, projectId: Long? = null, userTimezone: String? = null, )</ID>
+    <ID>LongParameterList:EnterpriseAiChatService.kt$EnterpriseAiChatService$( conversationId: Int, role: String, content: String, pageContext: String?, model: String?, tokensUsed: Int?, )</ID>
+    <ID>LongParameterList:EnterpriseAiChatService.kt$EnterpriseAiChatService$( writer: Writer, userId: Int, orgId: Int, message: String, conversationId: Int?, currentPage: String?, timeRange: String?, )</ID>
+    <ID>LongParameterList:EscalationEngine.kt$EscalationEngine$( incidentId: Int, target: EscalationStepTarget, title: String, priority: String, smsFallbackDelayMinutes: Int, stepIndex: Int, iteration: Int, )</ID>
+    <ID>LongParameterList:EscalationEngine.kt$EscalationEngine$( incidentId: Int, userId: Int, phoneNumber: String, title: String, priority: String, delayMinutes: Long, stepIndex: Int, iteration: Int )</ID>
+    <ID>LongParameterList:EscalationEngine.kt$EscalationEngine$( incidentId: Int, userId: Int, title: String, priority: String, smsFallbackDelayMinutes: Int = 2, stepIndex: Int, iteration: Int )</ID>
+    <ID>LongParameterList:EscalationEngine.kt$EscalationEngine$( organizationId: Int, escalationPolicyId: Int, title: String, description: String?, priority: String, alertSource: String?, deduplicationKey: String?, metadata: Map&lt;String, JsonElement>? = null, )</ID>
+    <ID>LongParameterList:IncidentManagementService.kt$OnCallAlertService$( organizationId: Int, status: String? = null, statuses: List&lt;String>? = null, priority: String? = null, limit: Int = 50, offset: Int = 0, currentUserId: Int? = null, )</ID>
+    <ID>LongParameterList:OnCallIncidentService.kt$OnCallIncidentService$( organizationId: Int, userId: Int, alertId: Int?, title: String, description: String?, severity: String, )</ID>
+    <ID>LongParameterList:OnCallScheduleService.kt$OnCallScheduleService$( organizationId: Int, name: String, rotationType: String, handoffTime: LocalTime, timezone: String, participantIds: List&lt;Int>, )</ID>
+    <ID>LongParameterList:OnCallScheduleService.kt$OnCallScheduleService$( scheduleId: Int, name: String? = null, rotationType: String? = null, handoffTime: LocalTime? = null, timezone: String? = null, participantIds: List&lt;Int>? = null, )</ID>
+    <ID>LongParameterList:PushNotificationService.kt$PushNotificationService$( userId: Int, alertId: Int, title: String, priority: String, payloadType: String = "alert", idKey: String = "alertId", body: String = "Tap to view alert details", )</ID>
+    <ID>LongParameterList:TwilioService.kt$TwilioService$( userId: Int, incidentId: Int, channel: String, twilioSid: String?, status: String, phoneNumber: String, )</ID>
+  </CurrentIssues>
+</SmellBaseline>

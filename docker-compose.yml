@@ -20,7 +20,7 @@ services:
       retries: 5
 
   clickhouse:
-    image: clickhouse/clickhouse-server:26.2-alpine
+    image: clickhouse/clickhouse-server:26.5-alpine
     container_name: moneat-clickhouse
     environment:
       CLICKHOUSE_DB: moneat
@@ -188,6 +188,9 @@ services:
     image: datadog/agent:${DATADOG_AGENT_TAG:-7}
     container_name: moneat-datadog-agent
     restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
     environment:
       # Core
       DD_API_KEY: ${DD_API_KEY:-}
@@ -198,11 +201,13 @@ services:
       DD_APM_ENABLED: "true"
       DD_APM_NON_LOCAL_TRAFFIC: "true"
       # Continuous Profiling
-      DD_PROFILING_ENABLED: "true"
+      DD_APM_CONFIG_PROFILING_DD_URL: ${DD_APM_CONFIG_PROFILING_DD_URL:-https://api.moneat.io/api/v2/profile?api_key=${DD_API_KEY:-}}
       # Live Processes
       DD_PROCESS_AGENT_ENABLED: "true"
       # Log Collection
       DD_LOGS_ENABLED: "true"
+      DD_LOGS_CONFIG_LOGS_DD_URL: ${DD_LOGS_DD_URL:-api.moneat.io:443}
+      DD_LOGS_CONFIG_LOGS_NO_SSL: "false"
       DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL: "true"
       # Dynamic Instrumentation (Probes / Debugger)
       DD_DYNAMIC_INSTRUMENTATION_ENABLED: "true"

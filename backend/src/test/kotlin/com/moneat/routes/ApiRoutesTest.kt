@@ -28,6 +28,7 @@ import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.MockHttpServer
+import com.moneat.testsupport.RouteTestSupport.installApiRouteRateLimits
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
@@ -44,8 +45,6 @@ import io.ktor.server.auth.Authentication
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.jwt.jwt
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.server.plugins.ratelimit.RateLimit
-import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -56,7 +55,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.seconds
 
 class ApiRoutesTest {
     private val jwtSecret = "test-secret-for-unit-tests"
@@ -144,13 +142,8 @@ class ApiRoutesTest {
                             validate { JWTPrincipal(it.payload) }
                         }
                     }
-                    install(RateLimit) {
-                        register(RateLimitName("api")) {
-                            requestKey { "test-user" }
-                            rateLimiter(limit = 1000, refillPeriod = 1.seconds)
-                        }
-                    }
-                    routing { apiRoutes() }
+                    installApiRouteRateLimits("test-user")
+                    routing { apiRoutes(includePublicContactRoutes = false) }
                 }
 
                 val response =
@@ -194,13 +187,8 @@ class ApiRoutesTest {
                             validate { JWTPrincipal(it.payload) }
                         }
                     }
-                    install(RateLimit) {
-                        register(RateLimitName("api")) {
-                            requestKey { "test-user" }
-                            rateLimiter(limit = 1000, refillPeriod = 1.seconds)
-                        }
-                    }
-                    routing { apiRoutes() }
+                    installApiRouteRateLimits("test-user")
+                    routing { apiRoutes(includePublicContactRoutes = false) }
                 }
 
                 val response =
@@ -229,13 +217,8 @@ class ApiRoutesTest {
                         validate { JWTPrincipal(it.payload) }
                     }
                 }
-                install(RateLimit) {
-                    register(RateLimitName("api")) {
-                        requestKey { "test-user" }
-                        rateLimiter(limit = 1000, refillPeriod = 1.seconds)
-                    }
-                }
-                routing { apiRoutes() }
+                installApiRouteRateLimits("test-user")
+                routing { apiRoutes(includePublicContactRoutes = false) }
             }
 
             val response =
@@ -263,13 +246,8 @@ class ApiRoutesTest {
                         validate { JWTPrincipal(it.payload) }
                     }
                 }
-                install(RateLimit) {
-                    register(RateLimitName("api")) {
-                        requestKey { "test-user" }
-                        rateLimiter(limit = 1000, refillPeriod = 1.seconds)
-                    }
-                }
-                routing { apiRoutes() }
+                installApiRouteRateLimits("test-user")
+                routing { apiRoutes(includePublicContactRoutes = false) }
             }
 
             val response =

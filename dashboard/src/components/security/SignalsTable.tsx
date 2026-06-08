@@ -38,12 +38,12 @@ export function SignalsTable({signals, selectedId, onSelect}: SignalsTableProps)
       <table className="w-full text-xs">
         <thead>
           <tr className="border-b text-left text-muted-foreground">
-            <th className="pb-1.5 pr-2 font-medium">Severity</th>
-            <th className="pb-1.5 pr-2 font-medium">Signal</th>
-            <th className="pb-1.5 pr-2 font-medium">Status</th>
-            <th className="pb-1.5 pr-2 font-medium">Source</th>
-            <th className="pb-1.5 pr-2 font-medium text-right">Samples</th>
-            <th className="pb-1.5 font-medium">Last seen</th>
+            <th className="px-4 py-2 font-medium">Severity</th>
+            <th className="px-4 py-2 font-medium">Signal</th>
+            <th className="px-4 py-2 font-medium">Status</th>
+            <th className="px-4 py-2 font-medium">Source</th>
+            <th className="px-4 py-2 font-medium text-right">Samples</th>
+            <th className="px-4 py-2 font-medium">Last seen</th>
           </tr>
         </thead>
         <tbody>
@@ -60,20 +60,20 @@ export function SignalsTable({signals, selectedId, onSelect}: SignalsTableProps)
                 'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                 selectedId === s.id && 'bg-muted/40'
               )}>
-              <td className="py-1.5 pr-2">
+              <td className="px-4 py-2">
                 <Badge variant="outline" className={cn('text-[10px]', colorFor(severityColors, s.severity))}>
                   {s.severity}
                 </Badge>
               </td>
-              <td className="py-1.5 pr-2 font-medium">{s.rule_name}</td>
-              <td className="py-1.5 pr-2">
+              <td className="px-4 py-2 font-medium">{s.rule_name}</td>
+              <td className="px-4 py-2">
                 <Badge variant="outline" className={cn('text-[10px]', colorFor(statusColors, s.status))}>
                   {STATUS_LABELS[s.status]}
                 </Badge>
               </td>
-              <td className="py-1.5 pr-2 text-muted-foreground">{s.source.replace(/_/g, ' ')}</td>
-              <td className="py-1.5 pr-2 text-right tabular-nums">{s.sample_count}</td>
-              <td className="py-1.5 text-muted-foreground">{s.last_seen}</td>
+              <td className="px-4 py-2 text-muted-foreground">{s.source.replace(/_/g, ' ')}</td>
+              <td className="px-4 py-2 text-right tabular-nums">{s.sample_count}</td>
+              <td className="px-4 py-2 text-muted-foreground">{s.last_seen}</td>
             </tr>
           ))}
           {signals.length === 0 && (

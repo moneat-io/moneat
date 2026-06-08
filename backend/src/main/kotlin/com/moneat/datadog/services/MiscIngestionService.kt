@@ -231,16 +231,29 @@ object MiscIngestionService {
     }
 
     fun enqueueContainerImage(orgId: Int, payload: DdContainerImagePayload) {
-        val entry = QueuedContainerImageEntry(
-            imageName = payload.imageName, imageTag = payload.imageTag,
-            digest = payload.digest, registry = payload.registry,
-            sizeBytes = payload.sizeBytes, os = payload.os,
-            architecture = payload.architecture, layers = payload.layers,
-            tags = parseDdTagList(payload.tags),
-            timestampMs = System.currentTimeMillis(),
-        )
-        val batch = QueuedMiscBatch(orgId, "container_images", containerImages = listOf(entry))
+        enqueueContainerImages(orgId, listOf(payload))
+    }
+
+    fun enqueueContainerImages(orgId: Int, payloads: List<DdContainerImagePayload>): Int {
+        val now = System.currentTimeMillis()
+        val entries = payloads.map { payload ->
+            QueuedContainerImageEntry(
+                imageName = payload.imageName,
+                imageTag = payload.imageTag,
+                digest = payload.digest,
+                registry = payload.registry,
+                sizeBytes = payload.sizeBytes,
+                os = payload.os,
+                architecture = payload.architecture,
+                layers = payload.layers,
+                tags = parseDdTagList(payload.tags),
+                timestampMs = now,
+            )
+        }
+        if (entries.isEmpty()) return 0
+        val batch = QueuedMiscBatch(orgId, "container_images", containerImages = entries)
         RedisConfig.sync().lpush(MISC_QUEUE_KEY, json.encodeToString(batch))
+        return entries.size
     }
 
     fun enqueueSbom(orgId: Int, payload: DdSbomPayload): Int {

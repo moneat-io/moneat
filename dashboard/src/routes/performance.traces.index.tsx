@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute, Link} from '@tanstack/react-router'
-import {useQuery} from '@tanstack/react-query'
+import {useQuery, useQueryClient} from '@tanstack/react-query'
 import {useEffect, useMemo, useRef, useState, type ReactNode, type RefObject} from 'react'
 import {
   CartesianGrid,
@@ -42,7 +42,6 @@ import {
   RefreshCw,
   Search,
   Server,
-  SlidersHorizontal,
   X,
 } from 'lucide-react'
 import {
@@ -59,9 +58,12 @@ import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
 import {Input} from '@/components/ui/input'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
-import {Switch} from '@/components/ui/switch'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
+import {ExplorerShell} from '@/components/filters/ExplorerShell'
+import {FacetRail} from '@/components/filters/FacetRail'
+import {SearchFilterBar} from '@/components/filters/SearchFilterBar'
+import type {FacetFilter, FacetRailSection, FacetSchema} from '@/lib/filters/types'
 import {cn} from '@/lib/utils'
 
 export const Route = createFileRoute('/performance/traces/')({
@@ -91,30 +93,64 @@ const REFRESH_OPTIONS = [
 ] as const
 
 const SERVICE_DOTS = [
-  'bg-rose-500',
-  'bg-violet-500',
-  'bg-blue-500',
-  'bg-emerald-500',
-  'bg-amber-500',
-  'bg-cyan-500',
+  'bg-chart-1',
+  'bg-chart-2',
+  'bg-chart-3',
+  'bg-chart-4',
+  'bg-chart-6',
+  'bg-chart-7',
 ]
 
-type TraceStatusSelect = 'all' | ApmStatusFilter
-type RefreshValue = (typeof REFRESH_OPTIONS)[number]['value']
+const TRACE_FACET_SCHEMA = [
+  {
+    key: 'service',
+    label: 'Service',
+    aliases: ['svc'],
+    color: 'bg-chart-1',
+    allowExclude: false,
+  },
+  {
+    key: 'operation',
+    label: 'Operation',
+    aliases: ['resource', 'op'],
+    color: 'bg-chart-2',
+    singleSelect: true,
+    allowExclude: false,
+  },
+  {
+    key: 'env',
+    label: 'Environment',
+    aliases: ['environment'],
+    color: 'bg-chart-3',
+    singleSelect: true,
+    allowExclude: false,
+  },
+  {
+    key: 'status',
+    label: 'Status',
+    color: 'bg-chart-4',
+    singleSelect: true,
+    allowExclude: false,
+    suggestions: ['error', 'ok'],
+  },
+  {
+    key: 'source',
+    label: 'Source',
+    color: 'bg-chart-6',
+    singleSelect: true,
+    allowExclude: false,
+  },
+] satisfies FacetSchema
 
-interface TraceFilters {
-  service: string
-  source: string
-  status: TraceStatusSelect
-  env: string
-}
+type RefreshValue = (typeof REFRESH_OPTIONS)[number]['value']
 
 interface OverviewParams {
   timeRange: ApmTimeRange
-  service?: string
+  services?: string[]
   source?: string
   status?: ApmStatusFilter
   env?: string
+  operation?: string
   search?: string
 }
 
@@ -178,31 +214,29 @@ const RECENT_TRACE_SKELETON_CELLS: SkeletonCellSpec[] = [
 ]
 
 function PerformanceTracesPage() {
+  const queryClient = useQueryClient()
   const [timeRange, setTimeRange] = useState<ApmTimeRange>('24h')
   const [refresh, setRefresh] = useState<RefreshValue>('15s')
-  const [draftFilters, setDraftFilters] = useState<TraceFilters>(emptyFilters)
-  const [appliedFilters, setAppliedFilters] = useState<TraceFilters>(emptyFilters)
+  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
   const [search, setSearch] = useState('')
-  const [errorsOnly, setErrorsOnly] = useState(false)
   const [page, setPage] = useState(0)
   const [showErroringResources, setShowErroringResources] = useState(false)
   const [erroringResourcesScrollKey, setErroringResourcesScrollKey] = useState(0)
   const erroringResourcesRef = useRef<HTMLDivElement | null>(null)
 
   const queryParams = useMemo(
-    () => toOverviewParams(timeRange, appliedFilters),
-    [timeRange, appliedFilters],
+    () => toOverviewParams(timeRange, facetFilters),
+    [timeRange, facetFilters],
   )
   const debouncedSearch = useDebouncedValue(search.trim(), SEARCH_DEBOUNCE_MS)
   const traceQueryParams = useMemo<TraceListParams>(
     () => ({
       ...queryParams,
-      status: errorsOnly ? 'error' : queryParams.status,
       search: debouncedSearch === '' ? undefined : debouncedSearch,
       limit: TRACE_PAGE_SIZE,
       offset: page * TRACE_PAGE_SIZE,
     }),
-    [debouncedSearch, errorsOnly, page, queryParams],
+    [debouncedSearch, page, queryParams],
   )
   const overviewParams = useMemo<OverviewParams>(
     () => ({
@@ -229,6 +263,7 @@ function PerformanceTracesPage() {
   const traces = tracesQuery.data?.traces ?? []
   const totalTraces = tracesQuery.data?.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalTraces / TRACE_PAGE_SIZE))
+  const railSections = useMemo(() => buildTraceFacetSections(overview), [overview])
 
   useEffect(() => {
     if (page >= totalPages) {
@@ -247,26 +282,13 @@ function PerformanceTracesPage() {
     panel.scrollIntoView({block: 'start', behavior: 'smooth'})
   }, [erroringResourcesScrollKey, showErroringResources])
 
-  const applyFilters = () => {
-    setAppliedFilters(draftFilters)
+  const updateFacetFilters = (filters: FacetFilter[]) => {
+    setFacetFilters(filters)
     setPage(0)
   }
 
   const updateSearch = (value: string) => {
     setSearch(value)
-    setPage(0)
-  }
-
-  const updateErrorsOnly = (value: boolean) => {
-    setErrorsOnly(value)
-    setPage(0)
-  }
-
-  const clearFilters = () => {
-    setDraftFilters(emptyFilters)
-    setAppliedFilters(emptyFilters)
-    setSearch('')
-    setErrorsOnly(false)
     setPage(0)
   }
 
@@ -276,45 +298,58 @@ function PerformanceTracesPage() {
   }
 
   return (
-    <div className="min-w-0 px-4 py-4 sm:px-6 lg:px-8">
-      <div className="mb-4 flex flex-col gap-3 border-b pb-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-xl font-semibold tracking-tight">Health overview</h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Analyze trace health, latency, and errors across services. Telemetry sources are metadata only.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Select value={timeRange} onValueChange={(value) => {
-            setTimeRange(value as ApmTimeRange)
-            setPage(0)
-          }}>
-            <SelectTrigger className="h-9 w-[164px] gap-2">
-              <CalendarDays className="h-4 w-4 text-muted-foreground" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {TIME_RANGE_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+    <ExplorerShell
+      className="min-h-[calc(100vh-4rem)]"
+      title="Traces"
+      icon={<Gauge className="h-4 w-4 text-muted-foreground" />}
+      searchBar={(
+        <SearchFilterBar
+          query={search}
+          onQueryChange={updateSearch}
+          facetFilters={facetFilters}
+          onFacetFiltersChange={updateFacetFilters}
+          schema={TRACE_FACET_SCHEMA}
+          placeholder="Search trace ID, resource, or service"
+          trailing={(
+            <Select
+              value={timeRange}
+              onValueChange={(value) => {
+                setTimeRange(value as ApmTimeRange)
+                setPage(0)
+              }}
+            >
+              <SelectTrigger className="h-[30px] w-[154px] gap-2">
+                <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TIME_RANGE_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+      )}
+      actions={(
+        <>
           <Button
             variant="outline"
             size="sm"
-            className="h-9 gap-2"
+            className="h-[30px] gap-2"
             onClick={() => {
-              overviewQuery.refetch()
-              tracesQuery.refetch()
+              void overviewQuery.refetch()
+              void tracesQuery.refetch()
+              void queryClient.refetchQueries({queryKey: ['apm-erroring-resources']})
             }}
           >
-            <RefreshCw className="h-4 w-4" />
+            <RefreshCw className="h-3.5 w-3.5" />
             Refresh
           </Button>
           <Select value={refresh} onValueChange={(value) => setRefresh(value as RefreshValue)}>
-            <SelectTrigger className="h-9 w-[92px]">
+            <SelectTrigger className="h-[30px] w-[92px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -325,211 +360,119 @@ function PerformanceTracesPage() {
               ))}
             </SelectContent>
           </Select>
-        </div>
-      </div>
-
-      <TraceFilterBar
-        filters={draftFilters}
-        overview={overview}
-        onChange={setDraftFilters}
-        onApply={applyFilters}
-        onClear={clearFilters}
-      />
-
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-        {overviewQuery.isLoading ? (
-          Array.from({length: KPI_CARD_COUNT}, (_, index) => (
-            <KpiCardSkeleton key={`kpi-card-skeleton-${index}`} />
-          ))
-        ) : (
-          <>
-            <KpiCard
-              title="Total Traces"
-              value={formatCount(overview.stats.totalTraces)}
-              previous={overview.stats.previous.totalTraces}
-              current={overview.stats.totalTraces}
-              icon={<Layers className="h-4 w-4" />}
-            />
-            <KpiCard
-              title="Error Rate"
-              value={formatPercent(overview.stats.errorRate)}
-              previous={overview.stats.previous.errorRate}
-              current={overview.stats.errorRate}
-              icon={<AlertTriangle className="h-4 w-4" />}
-              inverted
-            />
-            <KpiCard
-              title="p50 Latency"
-              value={formatDuration(overview.stats.p50DurationNs)}
-              previous={overview.stats.previous.p50DurationNs}
-              current={overview.stats.p50DurationNs}
-              icon={<Clock className="h-4 w-4" />}
-              series={overview.latencySeries.map((point) => point.p50DurationNs)}
-              inverted
-            />
-            <KpiCard
-              title="p95 Latency"
-              value={formatDuration(overview.stats.p95DurationNs)}
-              previous={overview.stats.previous.p95DurationNs}
-              current={overview.stats.p95DurationNs}
-              icon={<Gauge className="h-4 w-4" />}
-              series={overview.latencySeries.map((point) => point.p95DurationNs)}
-              inverted
-            />
-            <KpiCard
-              title="p99 Latency"
-              value={formatDuration(overview.stats.p99DurationNs)}
-              previous={overview.stats.previous.p99DurationNs}
-              current={overview.stats.p99DurationNs}
-              icon={<Gauge className="h-4 w-4" />}
-              series={overview.latencySeries.map((point) => point.p99DurationNs)}
-              inverted
-            />
-            <KpiCard
-              title="Avg Spans / Trace"
-              value={overview.stats.avgSpansPerTrace.toFixed(1)}
-              previous={overview.stats.previous.avgSpansPerTrace}
-              current={overview.stats.avgSpansPerTrace}
-              icon={<Hash className="h-4 w-4" />}
-              inverted
-            />
-          </>
-        )}
-      </div>
-
-      <div className="mt-4 grid min-w-0 gap-3 xl:grid-cols-2 2xl:grid-cols-[1fr_1fr_1fr]">
-        <ServiceHealthPanel overview={overview} isLoading={overviewQuery.isLoading} />
-        <LatencyPanel overview={overview} isLoading={overviewQuery.isLoading} />
-        <ErrorsResourcesPanel
-          overview={overview}
-          isLoading={overviewQuery.isLoading}
-          isShowingAllErroringResources={showErroringResources}
-          onViewAllErroringResources={viewAllErroringResources}
-        />
-      </div>
-
-      {showErroringResources && (
-        <AllErroringResourcesPanel
-          panelRef={erroringResourcesRef}
-          queryParams={queryParams}
-          refreshMs={refreshMs}
-          onClose={() => setShowErroringResources(false)}
+        </>
+      )}
+      rail={(
+        <FacetRail
+          sections={railSections}
+          facetFilters={facetFilters}
+          onFacetFiltersChange={updateFacetFilters}
+          title="Trace facets"
         />
       )}
+      toolbar={<span className="text-xs text-muted-foreground">{formatCount(totalTraces)} traces</span>}
+    >
+      <div className="min-w-0 px-4 py-4 sm:px-6 lg:px-8">
+        <div className="mb-4 border-b pb-4">
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold tracking-tight">Health overview</h1>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+              Analyze trace health, latency, and errors across services. Telemetry sources are metadata only.
+            </p>
+          </div>
+        </div>
 
-      <RecentTracesPanel
-        traces={traces}
-        totalTraces={totalTraces}
-        page={page}
-        totalPages={totalPages}
-        search={search}
-        errorsOnly={errorsOnly}
-        isLoading={tracesQuery.isLoading}
-        onSearch={updateSearch}
-        onErrorsOnly={updateErrorsOnly}
-        onPageChange={setPage}
-      />
-    </div>
-  )
-}
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+          {overviewQuery.isLoading ? (
+            Array.from({length: KPI_CARD_COUNT}, (_, index) => (
+              <KpiCardSkeleton key={`kpi-card-skeleton-${index}`} />
+            ))
+          ) : (
+            <>
+              <KpiCard
+                title="Total Traces"
+                value={formatCount(overview.stats.totalTraces)}
+                previous={overview.stats.previous.totalTraces}
+                current={overview.stats.totalTraces}
+                icon={<Layers className="h-4 w-4" />}
+              />
+              <KpiCard
+                title="Error Rate"
+                value={formatPercent(overview.stats.errorRate)}
+                previous={overview.stats.previous.errorRate}
+                current={overview.stats.errorRate}
+                icon={<AlertTriangle className="h-4 w-4" />}
+                inverted
+              />
+              <KpiCard
+                title="p50 Latency"
+                value={formatDuration(overview.stats.p50DurationNs)}
+                previous={overview.stats.previous.p50DurationNs}
+                current={overview.stats.p50DurationNs}
+                icon={<Clock className="h-4 w-4" />}
+                series={overview.latencySeries.map((point) => point.p50DurationNs)}
+                inverted
+              />
+              <KpiCard
+                title="p95 Latency"
+                value={formatDuration(overview.stats.p95DurationNs)}
+                previous={overview.stats.previous.p95DurationNs}
+                current={overview.stats.p95DurationNs}
+                icon={<Gauge className="h-4 w-4" />}
+                series={overview.latencySeries.map((point) => point.p95DurationNs)}
+                inverted
+              />
+              <KpiCard
+                title="p99 Latency"
+                value={formatDuration(overview.stats.p99DurationNs)}
+                previous={overview.stats.previous.p99DurationNs}
+                current={overview.stats.p99DurationNs}
+                icon={<Gauge className="h-4 w-4" />}
+                series={overview.latencySeries.map((point) => point.p99DurationNs)}
+                inverted
+              />
+              <KpiCard
+                title="Avg Spans / Trace"
+                value={overview.stats.avgSpansPerTrace.toFixed(1)}
+                previous={overview.stats.previous.avgSpansPerTrace}
+                current={overview.stats.avgSpansPerTrace}
+                icon={<Hash className="h-4 w-4" />}
+                inverted
+              />
+            </>
+          )}
+        </div>
 
-function TraceFilterBar({
-  filters,
-  overview,
-  onChange,
-  onApply,
-  onClear,
-}: {
-  filters: TraceFilters
-  overview: ApmOverviewResponse
-  onChange: (filters: TraceFilters) => void
-  onApply: () => void
-  onClear: () => void
-}) {
-  return (
-    <div className="grid gap-2 rounded-lg border bg-card p-3 lg:grid-cols-[1fr_1fr_1fr_1fr_auto_auto]">
-      <FilterSelect
-        label="Service"
-        value={filters.service}
-        placeholder="All services"
-        options={overview.facets.services}
-        onChange={(service) => onChange({...filters, service})}
-      />
-      <FilterSelect
-        label="Source"
-        value={filters.source}
-        placeholder="All sources"
-        options={overview.facets.sources}
-        onChange={(source) => onChange({...filters, source})}
-      />
-      <div className="space-y-1">
-        <div className="text-xs font-medium text-muted-foreground">Status</div>
-        <Select
-          value={filters.status}
-          onValueChange={(status) => onChange({...filters, status: status as TraceStatusSelect})}
-        >
-          <SelectTrigger className="h-9">
-            <SelectValue placeholder="All statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="error">Errors</SelectItem>
-            <SelectItem value="ok">OK</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <FilterSelect
-        label="Environment"
-        value={filters.env}
-        placeholder="All environments"
-        options={overview.facets.environments}
-        onChange={(env) => onChange({...filters, env})}
-      />
-      <div className="flex items-end">
-        <Button variant="outline" size="sm" className="h-9 w-full gap-2" onClick={onClear}>
-          Clear
-        </Button>
-      </div>
-      <div className="flex items-end">
-        <Button size="sm" className="h-9 w-full gap-2" onClick={onApply}>
-          <SlidersHorizontal className="h-4 w-4" />
-          Apply
-        </Button>
-      </div>
-    </div>
-  )
-}
+        <div className="mt-4 grid min-w-0 gap-3 xl:grid-cols-2 2xl:grid-cols-[1fr_1fr_1fr]">
+          <ServiceHealthPanel overview={overview} isLoading={overviewQuery.isLoading} />
+          <LatencyPanel overview={overview} isLoading={overviewQuery.isLoading} />
+          <ErrorsResourcesPanel
+            overview={overview}
+            isLoading={overviewQuery.isLoading}
+            isShowingAllErroringResources={showErroringResources}
+            onViewAllErroringResources={viewAllErroringResources}
+          />
+        </div>
 
-function FilterSelect({
-  label,
-  value,
-  placeholder,
-  options,
-  onChange,
-}: {
-  label: string
-  value: string
-  placeholder: string
-  options: Array<{value: string; count: number}>
-  onChange: (value: string) => void
-}) {
-  return (
-    <div className="space-y-1">
-      <div className="text-xs font-medium text-muted-foreground">{label}</div>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="h-9">
-          <SelectValue placeholder={placeholder} />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">{placeholder}</SelectItem>
-          {options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.value} ({formatCount(option.count)})
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+        {showErroringResources && (
+          <AllErroringResourcesPanel
+            panelRef={erroringResourcesRef}
+            queryParams={queryParams}
+            refreshMs={refreshMs}
+            onClose={() => setShowErroringResources(false)}
+          />
+        )}
+
+        <RecentTracesPanel
+          traces={traces}
+          totalTraces={totalTraces}
+          page={page}
+          totalPages={totalPages}
+          isLoading={tracesQuery.isLoading}
+          onPageChange={setPage}
+        />
+      </div>
+    </ExplorerShell>
   )
 }
 
@@ -565,7 +508,7 @@ function KpiCard({
         {series.length > 1 && (
           <MiniSparkline
             values={series}
-            className="h-10 w-20 text-violet-500"
+            className="h-10 w-20 text-primary"
           />
         )}
       </CardContent>
@@ -681,9 +624,9 @@ function LatencyPanel({
           Latency distribution (ms)
         </CardTitle>
         <div className="flex items-center gap-4 text-xs text-muted-foreground">
-          <LegendDot className="bg-violet-500" label="p50" />
-          <LegendDot className="bg-blue-500" label="p95" />
-          <LegendDot className="bg-teal-500" label="p99" />
+          <LegendDot className="bg-chart-1" label="p50" />
+          <LegendDot className="bg-chart-2" label="p95" />
+          <LegendDot className="bg-chart-3" label="p99" />
         </div>
       </CardHeader>
       <CardContent className="h-[242px] px-3 pb-3 pt-0">
@@ -707,9 +650,9 @@ function LatencyPanel({
                 labelClassName="text-xs"
                 contentStyle={{fontSize: 12, borderRadius: 8}}
               />
-              <Line type="monotone" dataKey="p50" stroke="#8b5cf6" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="p95" stroke="#3b82f6" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="p99" stroke="#14b8a6" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="p50" stroke="hsl(var(--chart-1))" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="p95" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="p99" stroke="hsl(var(--chart-3))" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -794,9 +737,10 @@ function AllErroringResourcesPanel({
   const debouncedSearch = useDebouncedValue(resourceSearch.trim(), SEARCH_DEBOUNCE_MS)
   const resourceFilterKey = [
     queryParams.timeRange,
-    queryParams.service ?? '',
+    queryParams.services?.join(',') ?? '',
     queryParams.source ?? '',
     queryParams.env ?? '',
+    queryParams.operation ?? '',
     debouncedSearch,
   ].join('\u001f')
   const page = pageState.key === resourceFilterKey ? pageState.page : 0
@@ -971,7 +915,7 @@ function AllErroringResourceRow({resource}: {resource: ApmResourceStatsItem}) {
         {resource.service}
       </TableCell>
       <TableCell className="text-right tabular-nums">{formatCount(resource.totalHits)}</TableCell>
-      <TableCell className="text-right tabular-nums text-rose-600 dark:text-rose-400">
+      <TableCell className="text-right tabular-nums text-danger-fg">
         {formatCount(resource.totalErrors)}
       </TableCell>
       <TableCell className="text-right">
@@ -1068,7 +1012,7 @@ function ErrorGroupTable({
               <TableCell className="max-w-[160px] truncate text-xs text-muted-foreground">
                 {error.service}
               </TableCell>
-              <TableCell className="text-right tabular-nums text-rose-600 dark:text-rose-400">
+              <TableCell className="text-right tabular-nums text-danger-fg">
                 {formatCount(error.count)}
               </TableCell>
               <TableCell className="pr-4 text-right">
@@ -1098,48 +1042,21 @@ function RecentTracesPanel({
   totalTraces,
   page,
   totalPages,
-  search,
-  errorsOnly,
   isLoading,
-  onSearch,
-  onErrorsOnly,
   onPageChange,
 }: {
   traces: ApmTraceListItem[]
   totalTraces: number
   page: number
   totalPages: number
-  search: string
-  errorsOnly: boolean
   isLoading: boolean
-  onSearch: (value: string) => void
-  onErrorsOnly: (value: boolean) => void
   onPageChange: (page: number) => void
 }) {
   return (
     <Card className="mt-4 min-w-0 overflow-hidden rounded-lg">
-      <CardHeader className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+      <CardHeader className="flex flex-row items-center justify-between gap-3 px-4 py-3">
         <CardTitle className="text-sm">Recent traces</CardTitle>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="relative w-full sm:w-[320px]">
-            <Search
-              className={cn(
-                'pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2',
-                'text-muted-foreground',
-              )}
-            />
-            <Input
-              value={search}
-              onChange={(event) => onSearch(event.target.value)}
-              className="h-9 pl-9"
-              placeholder="Search by trace ID or resource..."
-            />
-          </div>
-          <label className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Switch checked={errorsOnly} onCheckedChange={onErrorsOnly} />
-            Show errors only
-          </label>
-        </div>
+        <span className="text-xs text-muted-foreground">{formatCount(totalTraces)} traces</span>
       </CardHeader>
       <CardContent className="px-0 pb-0">
         <div className="overflow-x-auto">
@@ -1309,10 +1226,10 @@ function SkeletonBlock({className}: {className?: string}) {
 
 function ErrorMeter({rate}: {rate: number}) {
   const pct = rate * 100
-  const color = pct >= 5 ? 'bg-rose-500' : pct > 0 ? 'bg-amber-500' : 'bg-emerald-500'
+  const color = pct >= 5 ? 'bg-danger-solid' : pct > 0 ? 'bg-warning-solid' : 'bg-success-solid'
   return (
     <div className="flex items-center justify-end gap-2">
-      <span className={cn('tabular-nums', pct > 0 && 'text-rose-600 dark:text-rose-400')}>
+      <span className={cn('tabular-nums', pct > 0 && 'text-danger-fg')}>
         {formatPercent(rate)}
       </span>
       <span className="h-1.5 w-12 overflow-hidden rounded-full bg-muted">
@@ -1324,7 +1241,7 @@ function ErrorMeter({rate}: {rate: number}) {
 
 function DurationMeter({value}: {value: number}) {
   const ratio = Math.min(1, value / DURATION_BAR_MAX_NS)
-  const color = ratio > 0.75 ? 'bg-rose-500' : ratio > 0.3 ? 'bg-amber-500' : 'bg-emerald-500'
+  const color = ratio > 0.75 ? 'bg-danger-solid' : ratio > 0.3 ? 'bg-warning-solid' : 'bg-success-solid'
   return (
     <div className="flex items-center justify-end gap-2">
       <span className="tabular-nums">{formatDuration(value)}</span>
@@ -1345,7 +1262,7 @@ function TraceStatusBadge({hasError}: {hasError: boolean}) {
     )
   }
   return (
-    <Badge variant="outline" className="gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
+    <Badge variant="outline" className="gap-1 text-[11px] text-success-fg">
       <CheckCircle2 className="h-3 w-3" />
       OK
     </Badge>
@@ -1367,7 +1284,7 @@ function Delta({
   const rawDelta = (current - previous) / previous
   const good = inverted ? rawDelta <= 0 : rawDelta >= 0
   return (
-    <div className={cn('mt-1 text-xs tabular-nums', good ? 'text-emerald-600' : 'text-rose-600')}>
+    <div className={cn('mt-1 text-xs tabular-nums', good ? 'text-success-fg' : 'text-danger-fg')}>
       {rawDelta >= 0 ? '+' : ''}
       {(rawDelta * 100).toFixed(1)}% vs previous
     </div>
@@ -1411,13 +1328,6 @@ function EmptyTableRow({colSpan, label}: {colSpan: number; label: string}) {
   )
 }
 
-const emptyFilters: TraceFilters = {
-  service: 'all',
-  source: 'all',
-  status: 'all',
-  env: 'all',
-}
-
 const emptyPreviousStats = {
   totalTraces: 0,
   errorRate: 0,
@@ -1448,16 +1358,84 @@ const emptyOverview: ApmOverviewResponse = {
     services: [],
     sources: [],
     environments: [],
+    operations: [],
   },
 }
 
-function toOverviewParams(timeRange: ApmTimeRange, filters: TraceFilters): OverviewParams {
+function buildTraceFacetSections(overview: ApmOverviewResponse): FacetRailSection[] {
+  const okTraces = Math.max(0, overview.stats.totalTraces - overview.stats.errorTraces)
+
+  return [
+    {
+      key: 'service',
+      label: 'Service',
+      color: 'bg-chart-1',
+      allowExclude: false,
+      options: overview.facets.services,
+    },
+    {
+      key: 'operation',
+      label: 'Operation',
+      color: 'bg-chart-2',
+      singleSelect: true,
+      allowExclude: false,
+      options: overview.facets.operations ?? [],
+    },
+    {
+      key: 'env',
+      label: 'Environment',
+      color: 'bg-chart-3',
+      singleSelect: true,
+      allowExclude: false,
+      options: overview.facets.environments,
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      color: 'bg-chart-4',
+      singleSelect: true,
+      allowExclude: false,
+      options: [
+        {value: 'error', label: 'Errors', count: overview.stats.errorTraces},
+        {value: 'ok', label: 'OK', count: okTraces},
+      ],
+    },
+    {
+      key: 'source',
+      label: 'Source',
+      color: 'bg-chart-6',
+      singleSelect: true,
+      allowExclude: false,
+      options: overview.facets.sources,
+    },
+  ]
+}
+
+function facetValues(filters: readonly FacetFilter[], key: string): string[] {
+  return filters
+    .filter((filter) => filter.key === key && !filter.exclude)
+    .map((filter) => filter.value)
+}
+
+function firstFacetValue(filters: readonly FacetFilter[], key: string): string | undefined {
+  return facetValues(filters, key)[0]
+}
+
+function toStatusFilter(value: string | undefined): ApmStatusFilter | undefined {
+  if (value === 'error' || value === 'ok') return value
+  return undefined
+}
+
+function toOverviewParams(timeRange: ApmTimeRange, filters: readonly FacetFilter[]): OverviewParams {
+  const services = facetValues(filters, 'service')
+
   return {
     timeRange,
-    service: filters.service === 'all' ? undefined : filters.service,
-    source: filters.source === 'all' ? undefined : filters.source,
-    status: filters.status === 'all' ? undefined : filters.status,
-    env: filters.env === 'all' ? undefined : filters.env,
+    services: services.length > 0 ? services : undefined,
+    source: firstFacetValue(filters, 'source'),
+    status: toStatusFilter(firstFacetValue(filters, 'status')),
+    env: firstFacetValue(filters, 'env'),
+    operation: firstFacetValue(filters, 'operation'),
   }
 }
 
@@ -1509,7 +1487,7 @@ function formatRelativeTime(ns: number): string {
 }
 
 function serviceDot(index: number): string {
-  return SERVICE_DOTS[index % SERVICE_DOTS.length] ?? 'bg-slate-500'
+  return SERVICE_DOTS[index % SERVICE_DOTS.length] ?? 'bg-muted-foreground'
 }
 
 function serviceDotFromName(service: string): string {

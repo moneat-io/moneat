@@ -56,7 +56,7 @@ import org.slf4j.LoggerFactory
 import java.net.URLEncoder
 import java.security.MessageDigest
 import java.security.SecureRandom
-import java.util.*
+import java.util.Base64
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import kotlin.math.abs
@@ -1056,8 +1056,8 @@ fun Route.integrationCallbackRoutes() {
                                             return@post
                                         }
 
-                                        // Verify user's organization matches incident's organization
-                                        val incident = bridge.getIncident(incidentId, userId)
+                                        // Verify user's organization matches alert's organization
+                                        val alert = bridge.getAlert(incidentId, userId)
                                         val userOrgId =
                                             transaction {
                                                 Memberships
@@ -1067,34 +1067,34 @@ fun Route.integrationCallbackRoutes() {
                                                     ?.get(Memberships.organization_id)
                                             }
 
-                                        if (incident == null ||
+                                        if (alert == null ||
                                             userOrgId == null ||
-                                            incident.organizationId != userOrgId
+                                            alert.organizationId != userOrgId
                                         ) {
                                             call.respond(
                                                 mapOf(
                                                     "response_type" to "ephemeral",
-                                                    "text" to "❌ Incident not found or access denied"
+                                                    "text" to "❌ Alert not found or access denied"
                                                 )
                                             )
                                             return@post
                                         }
 
-                                        val acknowledged = bridge.acknowledgeIncident(incidentId, userId)
+                                        val acknowledged = bridge.acknowledgeAlert(incidentId, userId)
 
                                         if (acknowledged) {
                                             // Send success response
                                             call.respond(
                                                 mapOf(
                                                     "response_type" to "in_channel",
-                                                    "text" to "✅ Incident acknowledged by <@$slackUserId>"
+                                                    "text" to "✅ Alert acknowledged by <@$slackUserId>"
                                                 )
                                             )
                                         } else {
                                             call.respond(
                                                 mapOf(
                                                     "response_type" to "ephemeral",
-                                                    "text" to "❌ Failed to acknowledge incident"
+                                                    "text" to "❌ Failed to acknowledge alert"
                                                 )
                                             )
                                         }

@@ -16,6 +16,7 @@
 
 import {createFileRoute, isRedirect, Link, Outlet, redirect, useRouterState} from '@tanstack/react-router'
 import {api} from '@/lib/api'
+import {APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
 import {
     AlertTriangle,
     ArrowLeft,
@@ -42,7 +43,7 @@ export const Route = createFileRoute('/admin')({
     try {
       const user = await api.getCurrentUser()
       if (!user.isAdmin) {
-        throw redirect({to: '/'})
+        throw redirect({to: '/', search: APP_OVERVIEW_SEARCH})
       }
     } catch (e) {
       if (isRedirect(e)) throw e
@@ -177,6 +178,7 @@ function AdminLayout() {
         <div className="px-2 py-3 border-t">
           <Link
             to="/"
+            search={APP_OVERVIEW_SEARCH}
             onClick={() => setMobileMenuOpen(false)}
             className="flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
           >

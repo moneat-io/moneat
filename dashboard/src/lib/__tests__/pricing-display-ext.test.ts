@@ -90,19 +90,19 @@ describe('pricing-display', () => {
       expect(model.includedLimits.some(l => l.includes('2 TB'))).toBe(true)
     })
 
-    it('shows unlimited projects when maxProjects is null', () => {
+    it('shows unlimited services when maxProjects is null', () => {
       const model = buildPricingCardModel(makeTier({ maxProjects: null }), 'monthly')
-      expect(model.includedLimits.some(l => l.includes('Unlimited projects'))).toBe(true)
+      expect(model.includedLimits.some(l => l.includes('Unlimited services'))).toBe(true)
     })
 
-    it('shows project count when maxProjects is set', () => {
+    it('shows service count when maxProjects is set', () => {
       const model = buildPricingCardModel(makeTier({ maxProjects: 5 }), 'monthly')
-      expect(model.includedLimits.some(l => l.includes('5 projects'))).toBe(true)
+      expect(model.includedLimits.some(l => l.includes('5 services'))).toBe(true)
     })
 
-    it('shows singular project for 1', () => {
+    it('shows singular service for 1', () => {
       const model = buildPricingCardModel(makeTier({ maxProjects: 1 }), 'monthly')
-      expect(model.includedLimits.some(l => l.includes('1 project') && !l.includes('projects'))).toBe(true)
+      expect(model.includedLimits.some(l => l.includes('1 service') && !l.includes('services'))).toBe(true)
     })
 
     it('shows monitor count and interval', () => {

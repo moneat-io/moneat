@@ -31,6 +31,7 @@ import { replaysMethods } from './modules/replays'
 import { feedbackMethods } from './modules/feedback'
 import { authTokensMethods } from './modules/auth-tokens'
 import { billingMethods } from './modules/billing'
+import { contactMethods } from './modules/contact'
 import { adminMethods } from './modules/admin'
 import { notificationsMethods } from './modules/notifications'
 import { uptimeMethods } from './modules/uptime'
@@ -43,11 +44,13 @@ import { analyticsMethods } from './modules/analytics'
 import { dashboardsMethods } from './modules/dashboards'
 import { syntheticsMethods } from './modules/synthetics'
 import { logIndexesMethods } from './modules/log-indexes'
+import { logManagementMethods } from './modules/log-management'
 import { workflowsMethods } from './modules/workflows'
 import { workflowConnectionsMethods } from './modules/connections'
 import { featureFlagsMethods } from './modules/feature-flags'
 import { mcpMethods } from './modules/mcp'
 import { securityMethods } from './modules/security'
+import { rbacMethods } from './modules/rbac'
 
 const core = createApiClientCore()
 
@@ -69,6 +72,7 @@ export const api = {
   ...feedbackMethods(core),
   ...authTokensMethods(core),
   ...billingMethods(core),
+  ...contactMethods(core),
   ...adminMethods(core),
   ...notificationsMethods(core),
   ...uptimeMethods(core),
@@ -81,11 +85,13 @@ export const api = {
   ...dashboardsMethods(core),
   ...syntheticsMethods(core),
   ...logIndexesMethods(core),
+  ...logManagementMethods(core),
   ...workflowsMethods(core),
   ...workflowConnectionsMethods(core),
   ...featureFlagsMethods(core),
   ...mcpMethods(core),
   ...securityMethods(core),
+  ...rbacMethods(core),
 }
 
 export { formatErrorForLogging } from './utils'

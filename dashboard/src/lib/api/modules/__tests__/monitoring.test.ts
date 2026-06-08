@@ -198,6 +198,170 @@ describe('Monitoring API module', () => {
     })
   })
 
+  // ──── Infrastructure Map Saved Views ────
+
+  describe('getInfrastructureMapSavedViews', () => {
+    it('maps saved map views from backend response', async () => {
+      server.use(
+        http.get(`${API_BASE}/v1/infra/map/saved-views`, () =>
+          HttpResponse.json({
+            views: [
+              {
+                id: 7,
+                name: 'Production hosts',
+                resource_kind: 'hosts',
+                group_by: 'tag:env',
+                fill_by: 'health',
+                size_by: 'memory',
+                search_query: 'prod',
+                schema_version: 1,
+                created_at: '2026-06-04T16:00:00Z',
+                updated_at: '2026-06-04T16:05:00Z',
+              },
+            ],
+          })
+        )
+      )
+
+      const result = await api.getInfrastructureMapSavedViews()
+
+      expect(result.views).toEqual([
+        {
+          id: '7',
+          name: 'Production hosts',
+          resourceKind: 'hosts',
+          groupBy: 'tag:env',
+          fillBy: 'health',
+          sizeBy: 'memory',
+          searchQuery: 'prod',
+          schemaVersion: 1,
+          createdAt: '2026-06-04T16:00:00Z',
+          updatedAt: '2026-06-04T16:05:00Z',
+        },
+      ])
+    })
+
+    it('maps camelCase saved map views and default state fallbacks', async () => {
+      server.use(
+        http.get(`${API_BASE}/v1/infra/map/saved-views`, () =>
+          HttpResponse.json({
+            views: [
+              {
+                id: 'camel-view',
+                name: 'Container images',
+                resourceKind: 'containers',
+                groupBy: 'image',
+                fillBy: 'lastSeen',
+                sizeBy: 'network',
+                searchQuery: 'redis',
+                schemaVersion: 2,
+                createdAt: '2026-06-04T16:15:00Z',
+                updatedAt: '2026-06-04T16:20:00Z',
+              },
+              {
+                id: 8,
+                name: 'Defaults',
+              },
+            ],
+          })
+        )
+      )
+
+      const result = await api.getInfrastructureMapSavedViews()
+
+      expect(result.views).toEqual([
+        {
+          id: 'camel-view',
+          name: 'Container images',
+          resourceKind: 'containers',
+          groupBy: 'image',
+          fillBy: 'lastSeen',
+          sizeBy: 'network',
+          searchQuery: 'redis',
+          schemaVersion: 2,
+          createdAt: '2026-06-04T16:15:00Z',
+          updatedAt: '2026-06-04T16:20:00Z',
+        },
+        {
+          id: '8',
+          name: 'Defaults',
+          resourceKind: 'hosts',
+          groupBy: 'status',
+          fillBy: 'health',
+          sizeBy: 'uniform',
+          searchQuery: '',
+          schemaVersion: 1,
+          createdAt: '',
+          updatedAt: '',
+        },
+      ])
+    })
+
+    it('returns an empty saved map view list when response omits views', async () => {
+      server.use(
+        http.get(`${API_BASE}/v1/infra/map/saved-views`, () => HttpResponse.json({}))
+      )
+
+      await expect(api.getInfrastructureMapSavedViews()).resolves.toEqual({views: []})
+    })
+  })
+
+  describe('saveInfrastructureMapView', () => {
+    it('posts map view state to backend and maps response', async () => {
+      server.use(
+        http.post(`${API_BASE}/v1/infra/map/saved-views`, async ({ request }) => {
+          const body = (await request.json()) as Record<string, unknown>
+          expect(body).toEqual({
+            name: 'Container load',
+            resource_kind: 'containers',
+            group_by: 'host',
+            fill_by: 'cpu',
+            size_by: 'cpu',
+            search_query: 'api',
+          })
+          return HttpResponse.json({
+            id: 9,
+            name: 'Container load',
+            resource_kind: 'containers',
+            group_by: 'host',
+            fill_by: 'cpu',
+            size_by: 'cpu',
+            search_query: 'api',
+            schema_version: 1,
+            created_at: '2026-06-04T16:00:00Z',
+            updated_at: '2026-06-04T16:10:00Z',
+          })
+        })
+      )
+
+      const result = await api.saveInfrastructureMapView({
+        name: 'Container load',
+        resourceKind: 'containers',
+        groupBy: 'host',
+        fillBy: 'cpu',
+        sizeBy: 'cpu',
+        searchQuery: 'api',
+      })
+
+      expect(result).toMatchObject({
+        id: '9',
+        name: 'Container load',
+        resourceKind: 'containers',
+      })
+    })
+  })
+
+  describe('deleteInfrastructureMapSavedView', () => {
+    it('deletes a saved map view', async () => {
+      server.use(
+        http.delete(`${API_BASE}/v1/infra/map/saved-views/9`, () =>
+          new HttpResponse(null, { status: 204 })
+        )
+      )
+      await expect(api.deleteInfrastructureMapSavedView('9')).resolves.toBeUndefined()
+    })
+  })
+
   // ──── Connections ────
 
   describe('getConnections', () => {
@@ -466,7 +630,7 @@ describe('Monitoring API module', () => {
                 threshold: 90,
                 duration_seconds: 300,
                 enabled: true,
-                incident_severity: 'CRITICAL',
+                alert_priority: 'P0',
                 last_triggered_at: 1700000000,
                 created_at: 1690000000,
               },
@@ -481,7 +645,7 @@ describe('Monitoring API module', () => {
                 threshold: 80,
                 duration_seconds: 60,
                 enabled: false,
-                incident_severity: null,
+                alert_priority: null,
                 created_at: 1690000000,
               },
             ],
@@ -494,7 +658,7 @@ describe('Monitoring API module', () => {
                 threshold: 90,
                 duration_seconds: 300,
                 enabled: true,
-                incident_severity: 'CRITICAL',
+                alert_priority: 'P0',
                 created_at: 1690000000,
               },
             ],
@@ -512,7 +676,7 @@ describe('Monitoring API module', () => {
         threshold: 90,
         durationSeconds: 300,
         enabled: true,
-        incidentSeverity: 'CRITICAL',
+        alertPriority: 'P0',
         createdAt: 1690000000,
       })
       expect(config.hostAlerts).toHaveLength(1)
@@ -543,7 +707,7 @@ describe('Monitoring API module', () => {
                 threshold: 95,
                 durationSeconds: 120,
                 enabled: true,
-                incidentSeverity: 'HIGH',
+                alertPriority: 'P1',
                 createdAt: 1695000000,
               },
             ],
@@ -560,7 +724,7 @@ describe('Monitoring API module', () => {
         hostId: 2,
         metric: 'disk',
         durationSeconds: 120,
-        incidentSeverity: 'HIGH',
+        alertPriority: 'P1',
       })
     })
 
@@ -579,7 +743,7 @@ describe('Monitoring API module', () => {
                 threshold: 1000,
                 duration_seconds: 0,
                 enabled: true,
-                incident_severity: null,
+                alert_priority: null,
                 created_at: 1690000000,
               },
             ],
@@ -626,7 +790,7 @@ describe('Monitoring API module', () => {
             threshold: 90,
             duration_seconds: 300,
             enabled: true,
-            incident_severity: null,
+            alert_priority: null,
             created_at: 1700000000,
           })
         })
@@ -684,13 +848,26 @@ describe('Monitoring API module', () => {
             threshold: 95,
             duration_seconds: 300,
             enabled: true,
-            incident_severity: null,
+            alert_priority: null,
             created_at: 1700000000,
           })
         })
       )
       const alert = await api.updateHostAlert(1, 50, { threshold: 95 })
-      expect(alert.threshold).toBe(95)
+      expect(alert?.threshold).toBe(95)
+    })
+
+    it('returns undefined for a no-content update response', async () => {
+      server.use(
+        http.put(`${API_BASE}/v1/monitor/hosts/1/alerts/50`, async ({ request }) => {
+          const body = (await request.json()) as Record<string, unknown>
+          expect(body.enabled).toBe(false)
+          return new HttpResponse(null, { status: 204 })
+        })
+      )
+
+      const alert = await api.updateHostAlert(1, 50, { enabled: false })
+      expect(alert).toBeUndefined()
     })
   })
 
@@ -715,6 +892,98 @@ describe('Monitoring API module', () => {
         })
       )
       await api.deleteHostAlert(1, 50, 'global')
+    })
+  })
+
+  // ──── Alert Lifecycles ────
+
+  describe('getAlertLifecycles', () => {
+    it('passes lifecycle filters and returns episodes', async () => {
+      server.use(
+        http.get(`${API_BASE}/v1/alerts/lifecycles`, ({ request }) => {
+          const url = new URL(request.url)
+          expect(url.searchParams.get('status')).toBe('FIRING')
+          expect(url.searchParams.get('limit')).toBe('25')
+          return HttpResponse.json([
+            {
+              id: 1,
+              organization_id: 10,
+              source: 'HOST_ALERT',
+              deduplication_key: 'host-1',
+              episode_seq: 2,
+              episode_key: 'host-1#2',
+              status: 'FIRING',
+              opened_at: '2026-06-02T12:00:00Z',
+              last_seen_at: '2026-06-02T12:05:00Z',
+              notification_count: 1,
+              created_at: '2026-06-02T12:00:00Z',
+              updated_at: '2026-06-02T12:05:00Z',
+            },
+          ])
+        })
+      )
+
+      const result = await api.getAlertLifecycles({status: 'FIRING', limit: 25})
+      expect(result[0].episode_key).toBe('host-1#2')
+      expect(result[0].notification_count).toBe(1)
+    })
+  })
+
+  describe('ignoreAlertLifecycle', () => {
+    it('posts an ignore reason', async () => {
+      server.use(
+        http.post(`${API_BASE}/v1/alerts/lifecycles/7/ignore`, async ({ request }) => {
+          const body = (await request.json()) as Record<string, unknown>
+          expect(body.reason).toBe('Investigating')
+          return HttpResponse.json({
+            id: 7,
+            organization_id: 10,
+            source: 'HOST_ALERT',
+            deduplication_key: 'host-1',
+            episode_seq: 1,
+            episode_key: 'host-1#1',
+            status: 'FIRING',
+            opened_at: '2026-06-02T12:00:00Z',
+            last_seen_at: '2026-06-02T12:00:00Z',
+            notification_count: 1,
+            suppressed_at: '2026-06-02T12:10:00Z',
+            suppress_reason: 'Investigating',
+            created_at: '2026-06-02T12:00:00Z',
+            updated_at: '2026-06-02T12:10:00Z',
+          })
+        })
+      )
+
+      const result = await api.ignoreAlertLifecycle(7, 'Investigating')
+      expect(result.suppress_reason).toBe('Investigating')
+    })
+  })
+
+  describe('unignoreAlertLifecycle', () => {
+    it('posts to unignore an episode', async () => {
+      server.use(
+        http.post(`${API_BASE}/v1/alerts/lifecycles/7/unignore`, () =>
+          HttpResponse.json({
+            id: 7,
+            organization_id: 10,
+            source: 'HOST_ALERT',
+            deduplication_key: 'host-1',
+            episode_seq: 1,
+            episode_key: 'host-1#1',
+            status: 'FIRING',
+            opened_at: '2026-06-02T12:00:00Z',
+            last_seen_at: '2026-06-02T12:00:00Z',
+            notification_count: 1,
+            suppressed_at: null,
+            suppress_reason: null,
+            created_at: '2026-06-02T12:00:00Z',
+            updated_at: '2026-06-02T12:11:00Z',
+          })
+        )
+      )
+
+      const result = await api.unignoreAlertLifecycle(7)
+      expect(result.suppressed_at).toBeNull()
     })
   })
 

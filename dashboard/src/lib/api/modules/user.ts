@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import { syncDemoEpochFromUser } from '../../demo'
 import type { ApiClientCore } from '../client'
 import type {
   AccountDeletionValidation,
@@ -21,24 +22,30 @@ import type {
   OrganizationDeletionValidation,
 } from '../types'
 
+type CurrentUserResponse = {
+  id: number
+  email: string
+  name?: string
+  emailVerified: boolean
+  onboardingCompleted: boolean
+  isAdmin?: boolean
+  orgId?: number
+  organizationSlug?: string
+  orgRole?: string
+  demoEpochMs?: number | null
+  sidebarHiddenItems?: string[]
+  timezone?: string | null
+}
+
 export function userMethods(core: ApiClientCore) {
   const base = core.API_BASE
 
   return {
-    getCurrentUser: () =>
-      core.request<{
-        id: number
-        email: string
-        name?: string
-        emailVerified: boolean
-        onboardingCompleted: boolean
-        isAdmin?: boolean
-        organizationSlug?: string
-        orgRole?: string
-        demoEpochMs?: number
-        sidebarHiddenItems?: string[]
-        timezone?: string | null
-      }>(`${base}/user`),
+    getCurrentUser: async (): Promise<CurrentUserResponse> => {
+      const user = await core.request<CurrentUserResponse>(`${base}/user`)
+      syncDemoEpochFromUser(user)
+      return user
+    },
 
     updateSidebarPreferences: (hiddenItems: string[]) =>
       core.request<{ hiddenItems: string[] }>(

@@ -27,6 +27,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import {Badge} from '@/components/ui/badge'
+import {SectionHeader} from '@/components/AdminComponents'
 import {Loader2, TrendingUp, Users, DollarSign, Target} from 'lucide-react'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {useState} from 'react'
@@ -99,10 +100,7 @@ function AttributionPage() {
 
   return (
     <div className="container mx-auto py-8 space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold">Attribution Analytics</h1>
-        <p className="text-muted-foreground mt-2">Track ROAS and marketing campaign performance</p>
-      </div>
+      <SectionHeader title="Attribution Analytics" description="Track ROAS and marketing campaign performance" />
 
       {/* Summary Cards */}
       {data && (
@@ -207,13 +205,13 @@ function AttributionPage() {
                       <TableCell className="text-right">
                         {metric.paidOrganizations}
                         {metric.paidOrganizations > 0 && (
-                          <Badge variant="secondary" className="ml-2">
+                          <Badge variant="success" size="sm" className="ml-2">
                             Active
                           </Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <span className={metric.conversionRate > 10 ? 'text-green-600 font-semibold' : ''}>
+                        <span className={metric.conversionRate > 10 ? 'text-success-fg font-semibold' : ''}>
                           {formatPercent(metric.conversionRate)}
                         </span>
                       </TableCell>
@@ -223,7 +221,7 @@ function AttributionPage() {
                       <TableCell className="text-right">
                         {formatCurrency(metric.averageMrr)}
                       </TableCell>
-                      <TableCell className="text-right text-green-600 font-semibold">
+                      <TableCell className="text-right text-success-fg font-semibold">
                         {formatCurrency(metric.estimatedLtv)}
                       </TableCell>
                     </TableRow>

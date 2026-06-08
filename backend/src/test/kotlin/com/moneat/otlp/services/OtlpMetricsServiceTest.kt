@@ -697,6 +697,7 @@ class OtlpMetricsServiceTest {
 
         val row = jsonRows(query).single()
         assertEquals("42", row["organization_id"]?.jsonPrimitive?.content)
+        assertEquals("123", row["service_id"]?.jsonPrimitive?.content)
         assertEquals("123", row["project_id"]?.jsonPrimitive?.content)
         assertEquals("2023-11-14 22:13:20.123", row["timestamp"]?.jsonPrimitive?.content)
         assertEquals("O'Brien \"prod\"\nline", row["tags"]?.jsonObject?.get("odd")?.jsonPrimitive?.content)

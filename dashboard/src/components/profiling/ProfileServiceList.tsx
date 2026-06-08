@@ -37,11 +37,20 @@ import {
 } from './profileFormat'
 
 interface Props {
-  serviceFilter: string
-  onServiceFilterChange: (val: string) => void
+  serviceFilter?: string
+  serviceFilters?: readonly string[]
+  typeFilter?: string
+  query?: string
+  onServiceFilterChange?: (val: string) => void
 }
 
-export function ProfileServiceList({serviceFilter, onServiceFilterChange}: Props) {
+export function ProfileServiceList({
+  serviceFilter = '',
+  serviceFilters = [],
+  typeFilter = '',
+  query = '',
+  onServiceFilterChange,
+}: Props) {
   const {data, isLoading} = useQuery({
     queryKey: ['profileServices'],
     queryFn: () => api.getProfileServices(),
@@ -49,12 +58,29 @@ export function ProfileServiceList({serviceFilter, onServiceFilterChange}: Props
   })
 
   const services = data?.services ?? []
+  const selectedServices = useMemo(
+    () => new Set(serviceFilters.map((service) => service.trim()).filter((service) => service !== '')),
+    [serviceFilters],
+  )
 
   const filtered = useMemo(() => {
-    const q = serviceFilter.trim().toLowerCase()
-    if (!q) return services
-    return services.filter((s) => s.service.toLowerCase().includes(q))
-  }, [services, serviceFilter])
+    const q = (query || serviceFilter).trim().toLowerCase()
+    const normalizedType = typeFilter.trim().toLowerCase()
+    return services.filter((service) => {
+      const matchesSelected = selectedServices.size === 0 || selectedServices.has(service.service)
+      const matchesType =
+        normalizedType === '' ||
+        service.types.some((type) => type.profileType.toLowerCase() === normalizedType)
+      const matchesQuery = !q || [
+        service.service,
+        ...service.environments,
+        ...service.languages,
+        ...service.runtimes,
+        ...service.types.map((type) => type.profileType),
+      ].some((value) => value.toLowerCase().includes(q))
+      return matchesSelected && matchesType && matchesQuery
+    })
+  }, [query, selectedServices, services, serviceFilter, typeFilter])
 
   if (isLoading) {
     return (
@@ -70,15 +96,17 @@ export function ProfileServiceList({serviceFilter, onServiceFilterChange}: Props
 
   return (
     <div className="space-y-2">
-      <div className="relative max-w-xs">
-        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-        <Input
-          placeholder="Filter by service..."
-          value={serviceFilter}
-          onChange={(e) => onServiceFilterChange(e.target.value)}
-          className="pl-8 h-7 text-xs"
-        />
-      </div>
+      {onServiceFilterChange && (
+        <div className="relative max-w-xs">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Filter by service..."
+            value={serviceFilter}
+            onChange={(e) => onServiceFilterChange(e.target.value)}
+            className="pl-8 h-7 text-xs"
+          />
+        </div>
+      )}
 
       {data && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-1.5">
@@ -112,7 +140,7 @@ export function ProfileServiceList({serviceFilter, onServiceFilterChange}: Props
 
       {filtered.length === 0 ? (
         <p className="text-xs text-muted-foreground py-6 text-center">
-          No services match "{serviceFilter}".
+          No services match "{query || serviceFilter || [...selectedServices].join(', ')}".
         </p>
       ) : (
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -137,13 +165,18 @@ function ServiceCard({service}: {service: ProfileServiceSummary}) {
       params={{service: service.service || '(unknown)'}}
       className="block group focus:outline-none"
     >
-      <Card className="h-full p-3 space-y-2 transition-colors group-hover:border-primary/40 group-hover:bg-accent/30 group-focus-visible:border-primary/60">
+      <Card
+        className={cn(
+          'h-full p-3 space-y-2 transition-colors group-hover:border-primary/40',
+          'group-hover:bg-accent/30 group-focus-visible:border-primary/60',
+        )}
+      >
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-1.5 min-w-0">
             <span
               className={cn(
                 'h-1.5 w-1.5 rounded-full shrink-0',
-                isLive ? 'bg-emerald-500 animate-pulse' : 'bg-muted-foreground/30',
+                isLive ? 'bg-success-solid animate-pulse' : 'bg-muted-foreground/30',
               )}
               title={isLive ? 'Receiving profiles' : 'Idle'}
             />
@@ -152,7 +185,12 @@ function ServiceCard({service}: {service: ProfileServiceSummary}) {
             </span>
           </div>
           {language && (
-            <span className="text-[10px] uppercase tracking-wide text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
+            <span
+              className={cn(
+                'text-[10px] uppercase tracking-wide text-muted-foreground bg-muted',
+                'px-1.5 py-0.5 rounded shrink-0',
+              )}
+            >
               {language}
             </span>
           )}

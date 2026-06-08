@@ -85,6 +85,9 @@ data class SsoConfigResponse(
     val hasClientSecret: Boolean = false,
     // Shared
     val emailDomain: String? = null,
+    val emailDomainVerified: Boolean = false,
+    val emailDomainVerificationRecordName: String? = null,
+    val emailDomainVerificationToken: String? = null,
     val requireSso: Boolean,
     val createdAt: String,
     val updatedAt: String,

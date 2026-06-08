@@ -27,6 +27,10 @@ import com.moneat.datadog.services.DdApmQueryTimeUnit
 import com.moneat.datadog.services.DdResourceStatsQuery
 import com.moneat.datadog.services.DdTraceListQuery
 import com.moneat.datadog.services.TraceIngestionService
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.OtelServiceProjectMappings
+import com.moneat.shared.models.Projects
+import com.moneat.testsupport.TestDatabaseHelper
 import io.sentry.ISpan
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -35,6 +39,8 @@ import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.msgpack.core.MessagePack
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -58,6 +64,13 @@ class TraceIngestionServiceCoverageTest {
 
     @BeforeTest
     fun setup() {
+        val db = Database.connect(
+            url = "jdbc:h2:mem:moneat_trace_ingestion_coverage;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+            driver = "org.h2.Driver",
+        )
+        TransactionManager.defaultDatabase = db
+        TestDatabaseHelper.resetSchema(Organizations, Projects, OtelServiceProjectMappings)
+
         mockkObject(ClickHouseClient)
         every { ClickHouseClient.getDatabase() } returns "test_db"
     }
@@ -450,6 +463,30 @@ class TraceIngestionServiceCoverageTest {
     }
 
     @Test
+    fun `listTraces applies services list to server side query`() = runBlocking {
+        val capturedQueries = mutableListOf<String>()
+        coEvery { ClickHouseClient.executeWithFormat(any(), any()) } coAnswers {
+            capturedQueries.add(firstArg())
+            if (secondArg<String>() == "TabSeparated") {
+                "0"
+            } else {
+                ""
+            }
+        }
+
+        TraceIngestionService.listTraces(
+            organizationId = 1,
+            query = DdTraceListQuery(
+                services = listOf("api", "worker"),
+                limit = 10,
+                offset = 0,
+            )
+        )
+
+        assertTrue(capturedQueries.any { it.contains("root_service IN ('api', 'worker')") })
+    }
+
+    @Test
     fun `listTraces applies search to server side query`() = runBlocking {
         val capturedQueries = mutableListOf<String>()
         coEvery { ClickHouseClient.executeWithFormat(any(), any()) } coAnswers {
@@ -499,6 +536,7 @@ class TraceIngestionServiceCoverageTest {
         assertTrue(capturedQueries.any { it.contains("UNION ALL") && it.contains("apm_trace_summaries") })
         assertTrue(capturedQueries.any { it.contains("trace_bucket < toStartOfHour(now() - INTERVAL 2 HOUR)") })
         assertTrue(capturedQueries.any { it.contains("bucket_start >= toStartOfHour(now() - INTERVAL 2 HOUR)") })
+        assertTrue(capturedQueries.any { it.contains("SELECT 'operation' as facet_type") })
     }
 
     // ===================== getTraceDetail =====================
@@ -544,6 +582,7 @@ class TraceIngestionServiceCoverageTest {
 
         val result = TraceIngestionService.getServiceMap(1)
         assertTrue(result.services.isEmpty())
+        assertTrue(result.edges.isEmpty())
     }
 
     @Test
@@ -560,7 +599,7 @@ class TraceIngestionServiceCoverageTest {
                 """.trimIndent()
             } else {
                 """
-                {"from_service":"web","to_service":"db"}
+                {"from_service":"web","to_service":"db","call_count":42,"error_count":2,"avg_duration_ns":300000.0}
                 """.trimIndent()
             }
         }
@@ -570,6 +609,12 @@ class TraceIngestionServiceCoverageTest {
         assertEquals("web", result.services[0].service)
         assertEquals(listOf("db"), result.services[0].callsTo)
         assertTrue(result.services[1].callsTo.isEmpty())
+        assertEquals(1, result.edges.size)
+        assertEquals("web", result.edges[0].fromService)
+        assertEquals("db", result.edges[0].toService)
+        assertEquals(42L, result.edges[0].callCount)
+        assertEquals(2L, result.edges[0].errorCount)
+        assertEquals(300000.0, result.edges[0].avgDurationNs, 0.001)
         assertTrue(capturedQueries.any { it.contains("apm_service_stats_hourly") })
         assertTrue(capturedQueries.any { it.contains("apm_service_edges_hourly") })
         assertTrue(capturedQueries.none { it.contains("INNER JOIN") })
@@ -581,11 +626,71 @@ class TraceIngestionServiceCoverageTest {
         val span = mockk<ISpan>(relaxed = true)
         coEvery { ClickHouseClient.executeWithFormat(any(), any(), span) } returns ""
 
-        TraceIngestionService.getServiceMap(1, span)
+        TraceIngestionService.getServiceMap(1, parentSpan = span)
 
         coVerify(exactly = 2) {
             ClickHouseClient.executeWithFormat(any(), any(), span)
         }
+    }
+
+    @Test
+    fun `getServiceMap applies env and source filters`() = runBlocking {
+        val capturedQueries = mutableListOf<String>()
+        coEvery { ClickHouseClient.executeWithFormat(any(), any()) } coAnswers {
+            capturedQueries.add(firstArg())
+            ""
+        }
+
+        TraceIngestionService.getServiceMap(
+            1,
+            DdApmQueryTimeRange(6, DdApmQueryTimeUnit.HOUR),
+            env = "prod",
+            source = "otel",
+        )
+
+        assertTrue(capturedQueries.isNotEmpty())
+        assertTrue(capturedQueries.all { it.contains("env = 'prod'") })
+        assertTrue(capturedQueries.all { it.contains("source = 'otel'") })
+        assertTrue(capturedQueries.all { it.contains("INTERVAL 6 HOUR") })
+    }
+
+    @Test
+    fun `getServiceLatencyPercentiles parses percentile row`() = runBlocking {
+        val capturedQueries = mutableListOf<String>()
+        coEvery { ClickHouseClient.executeWithFormat(any(), any()) } coAnswers {
+            capturedQueries.add(firstArg())
+            """{"p50_duration_ns":1000,"p90_duration_ns":5000,"p99_duration_ns":9000,"sample_count":420}"""
+        }
+
+        val result = TraceIngestionService.getServiceLatencyPercentiles(
+            1,
+            "web",
+            DdApmQueryTimeRange(6, DdApmQueryTimeUnit.HOUR),
+            env = "prod",
+            source = "otlp",
+        )
+
+        assertEquals("web", result.service)
+        assertEquals(1000L, result.p50DurationNs)
+        assertEquals(5000L, result.p90DurationNs)
+        assertEquals(9000L, result.p99DurationNs)
+        assertEquals(420L, result.sampleCount)
+        assertTrue(capturedQueries.single().contains("apm_traces_final"))
+        assertTrue(capturedQueries.single().contains("apm_trace_summaries"))
+        assertTrue(capturedQueries.single().contains("root_service = 'web'"))
+        assertTrue(capturedQueries.single().contains("env = 'prod'"))
+        assertTrue(capturedQueries.single().contains("source = 'otlp'"))
+        assertTrue(capturedQueries.single().contains("INTERVAL 6 HOUR"))
+    }
+
+    @Test
+    fun `getServiceLatencyPercentiles returns zeros for blank response`() = runBlocking {
+        coEvery { ClickHouseClient.executeWithFormat(any(), any()) } returns ""
+
+        val result = TraceIngestionService.getServiceLatencyPercentiles(1, "web")
+
+        assertEquals(0L, result.p50DurationNs)
+        assertEquals(0L, result.sampleCount)
     }
 
     // ===================== getApmErrors =====================
@@ -597,7 +702,7 @@ class TraceIngestionServiceCoverageTest {
 
         val result = TraceIngestionService.getApmErrors(
             organizationId = 1,
-            service = null,
+            services = emptyList(),
             limit = 10,
             offset = 0
         )
@@ -640,7 +745,7 @@ class TraceIngestionServiceCoverageTest {
 
         val result = TraceIngestionService.getApmErrors(
             organizationId = 1,
-            service = "api",
+            services = listOf("api"),
             limit = 10,
             offset = 0
         )
@@ -778,7 +883,7 @@ class TraceIngestionServiceCoverageTest {
         )
         TraceIngestionService.getApmErrors(
             organizationId = 1,
-            service = null,
+            services = emptyList(),
             limit = 10,
             offset = 0,
             timeRange = timeRange

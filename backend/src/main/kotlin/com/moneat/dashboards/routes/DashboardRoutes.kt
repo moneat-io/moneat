@@ -360,7 +360,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDashboardQuery(
             )
             call.respond(results)
         } else {
-            val results = queryEngine.executeQuery(effectiveQuery, projectId, demoEpochMs, retentionDays)
+            val results = queryEngine.executeQuery(effectiveQuery, projectId, demoEpochMs, retentionDays, orgId)
             call.respond(results)
         }
     } catch (e: IllegalArgumentException) {
@@ -379,7 +379,7 @@ private suspend fun executeSingleQuery(
     dataSourceExecutor: CustomDataSourceExecutor,
 ): List<Map<String, kotlinx.serialization.json.JsonElement>>? {
     if (!queryEngine.isCustomDataSource(effectiveQuery.dataSource)) {
-        return queryEngine.executeQuery(effectiveQuery, projectId, demoEpochMs, retentionDays)
+        return queryEngine.executeQuery(effectiveQuery, projectId, demoEpochMs, retentionDays, orgId)
     }
     val sourceId = queryEngine.parseCustomDataSourceId(effectiveQuery.dataSource) ?: return null
     val source = dataSourceService.getDataSource(sourceId, orgId) ?: return null

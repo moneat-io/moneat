@@ -29,6 +29,8 @@ import com.moneat.featureflags.models.UpdateFeatureFlagRequest
 import com.moneat.featureflags.services.FeatureFlagEvaluator
 import com.moneat.featureflags.services.FeatureFlagEventService
 import com.moneat.featureflags.services.FeatureFlagService
+import com.moneat.org.services.OrgMembershipService
+import com.moneat.org.services.OrgRole
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -62,150 +64,194 @@ private const val DEFAULT_ANALYTICS_HOURS = 24
 private const val MICROSECONDS_PER_MILLISECOND = 1_000.0
 private const val FLAG_KEY_PATH = "/{flagKey}"
 private const val FEATURE_FLAG_NOT_FOUND = "Feature flag not found"
+private const val MISSING_ORG_MESSAGE = "No active organization"
+private const val FORBIDDEN_MESSAGE = "Insufficient permissions"
+
+private data class FeatureFlagManagementContext(
+    val organizationId: Int,
+    val userId: Int,
+)
 
 fun Route.featureFlagRoutes(
     featureFlagService: FeatureFlagService = GlobalContext.get().get(),
     evaluator: FeatureFlagEvaluator = GlobalContext.get().get(),
     eventService: FeatureFlagEventService = GlobalContext.get().get(),
+    membershipService: OrgMembershipService = GlobalContext.get().get(),
 ) {
-    managementFeatureFlagRoutes(featureFlagService)
+    managementFeatureFlagRoutes(featureFlagService, membershipService)
     runtimeFeatureFlagRoutes(featureFlagService, evaluator, eventService)
 }
 
-private fun Route.managementFeatureFlagRoutes(featureFlagService: FeatureFlagService) {
+private fun Route.managementFeatureFlagRoutes(
+    featureFlagService: FeatureFlagService,
+    membershipService: OrgMembershipService,
+) {
     route("/v1/feature-flags") {
         authenticate("auth-jwt") {
-            environmentManagementRoutes(featureFlagService)
-            segmentManagementRoutes(featureFlagService)
-            sdkKeyManagementRoutes(featureFlagService)
-            featureFlagAuditRoutes(featureFlagService)
-            featureFlagAnalyticsRoutes(featureFlagService)
-            flagManagementRoutes(featureFlagService)
+            environmentManagementRoutes(featureFlagService, membershipService)
+            segmentManagementRoutes(featureFlagService, membershipService)
+            sdkKeyManagementRoutes(featureFlagService, membershipService)
+            featureFlagAuditRoutes(featureFlagService, membershipService)
+            featureFlagAnalyticsRoutes(featureFlagService, membershipService)
+            flagManagementRoutes(featureFlagService, membershipService)
         }
     }
 }
 
-private fun Route.environmentManagementRoutes(featureFlagService: FeatureFlagService) {
+private fun Route.environmentManagementRoutes(
+    featureFlagService: FeatureFlagService,
+    membershipService: OrgMembershipService,
+) {
     get("/environments") {
-        val orgId = call.orgId()
-        call.respond(mapOf("environments" to featureFlagService.listEnvironments(orgId)))
+        val context = call.requireFeatureFlagAdmin(membershipService) ?: return@get
+        call.respond(mapOf("environments" to featureFlagService.listEnvironments(context.organizationId)))
     }
 
     post("/environments") {
         call.respondHandlingBadRequest {
+            val context = call.requireFeatureFlagAdmin(membershipService) ?: return@respondHandlingBadRequest
             val request = call.receive<CreateFeatureFlagEnvironmentRequest>()
-            val response = featureFlagService.createEnvironment(call.orgId(), call.userId(), request)
+            val response = featureFlagService.createEnvironment(context.organizationId, context.userId, request)
             call.respond(HttpStatusCode.Created, response)
         }
     }
 }
 
-private fun Route.segmentManagementRoutes(featureFlagService: FeatureFlagService) {
+private fun Route.segmentManagementRoutes(
+    featureFlagService: FeatureFlagService,
+    membershipService: OrgMembershipService,
+) {
     get("/segments") {
-        call.respond(mapOf("segments" to featureFlagService.listSegments(call.orgId())))
+        val context = call.requireFeatureFlagAdmin(membershipService) ?: return@get
+        call.respond(mapOf("segments" to featureFlagService.listSegments(context.organizationId)))
     }
 
     post("/segments") {
         call.respondHandlingBadRequest {
+            val context = call.requireFeatureFlagAdmin(membershipService) ?: return@respondHandlingBadRequest
             val request = call.receive<FeatureFlagSegmentRequest>()
-            val response = featureFlagService.upsertSegment(call.orgId(), call.userId(), request)
+            val response = featureFlagService.upsertSegment(context.organizationId, context.userId, request)
             call.respond(HttpStatusCode.OK, response)
         }
     }
 
     delete("/segments/{key}") {
+        val context = call.requireFeatureFlagAdmin(membershipService) ?: return@delete
         val key = call.parameters["key"].orEmpty()
-        val deleted = featureFlagService.deleteSegment(call.orgId(), call.userId(), key)
+        val deleted = featureFlagService.deleteSegment(context.organizationId, context.userId, key)
         if (deleted) call.respond(HttpStatusCode.NoContent) else call.respondNotFound("Segment not found")
     }
 }
 
-private fun Route.sdkKeyManagementRoutes(featureFlagService: FeatureFlagService) {
+private fun Route.sdkKeyManagementRoutes(
+    featureFlagService: FeatureFlagService,
+    membershipService: OrgMembershipService,
+) {
     get("/sdk-keys") {
-        call.respond(mapOf("keys" to featureFlagService.listSdkKeys(call.orgId())))
+        val context = call.requireFeatureFlagAdmin(membershipService) ?: return@get
+        call.respond(mapOf("keys" to featureFlagService.listSdkKeys(context.organizationId)))
     }
 
     post("/sdk-keys") {
         call.respondHandlingBadRequest {
+            val context = call.requireFeatureFlagAdmin(membershipService) ?: return@respondHandlingBadRequest
             val request = call.receive<FeatureFlagSdkKeyRequest>()
-            val response = featureFlagService.createSdkKey(call.orgId(), call.userId(), request)
+            val response = featureFlagService.createSdkKey(context.organizationId, context.userId, request)
             call.respond(HttpStatusCode.Created, response)
         }
     }
 
     delete("/sdk-keys/{id}") {
+        val context = call.requireFeatureFlagAdmin(membershipService) ?: return@delete
         val id = call.parameters["id"]?.toIntOrNull()
         if (id == null) {
             call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid SDK key ID"))
             return@delete
         }
-        val revoked = featureFlagService.revokeSdkKey(call.orgId(), call.userId(), id)
+        val revoked = featureFlagService.revokeSdkKey(context.organizationId, context.userId, id)
         if (revoked) call.respond(HttpStatusCode.NoContent) else call.respondNotFound("SDK key not found")
     }
 }
 
-private fun Route.featureFlagAuditRoutes(featureFlagService: FeatureFlagService) {
+private fun Route.featureFlagAuditRoutes(
+    featureFlagService: FeatureFlagService,
+    membershipService: OrgMembershipService,
+) {
     get("/audit") {
+        val context = call.requireFeatureFlagAdmin(membershipService) ?: return@get
         val limit = call.request.queryParameters["limit"]?.toIntOrNull()
             ?.coerceIn(1, MAX_AUDIT_LIMIT)
             ?: DEFAULT_AUDIT_LIMIT
-        call.respond(mapOf("events" to featureFlagService.listAuditEvents(call.orgId(), limit)))
+        call.respond(mapOf("events" to featureFlagService.listAuditEvents(context.organizationId, limit)))
     }
 }
 
-private fun Route.featureFlagAnalyticsRoutes(featureFlagService: FeatureFlagService) {
+private fun Route.featureFlagAnalyticsRoutes(
+    featureFlagService: FeatureFlagService,
+    membershipService: OrgMembershipService,
+) {
     get("/analytics") {
+        val context = call.requireFeatureFlagAdmin(membershipService) ?: return@get
         val environment = call.request.queryParameters["environment"]
         val hours = call.request.queryParameters["hours"]?.toIntOrNull() ?: DEFAULT_ANALYTICS_HOURS
-        call.respond(featureFlagService.analytics(call.orgId(), environment, hours))
+        call.respond(featureFlagService.analytics(context.organizationId, environment, hours))
     }
 }
 
-private fun Route.flagManagementRoutes(featureFlagService: FeatureFlagService) {
+private fun Route.flagManagementRoutes(
+    featureFlagService: FeatureFlagService,
+    membershipService: OrgMembershipService,
+) {
     get {
+        val context = call.requireFeatureFlagAdmin(membershipService) ?: return@get
         val environment = call.request.queryParameters["environment"]
-        call.respond(featureFlagService.listFlags(call.orgId(), environment))
+        call.respond(featureFlagService.listFlags(context.organizationId, environment))
     }
 
     post {
         call.respondHandlingBadRequest {
+            val context = call.requireFeatureFlagAdmin(membershipService) ?: return@respondHandlingBadRequest
             val request = call.receive<CreateFeatureFlagRequest>()
-            val response = featureFlagService.createFlag(call.orgId(), call.userId(), request)
+            val response = featureFlagService.createFlag(context.organizationId, context.userId, request)
             call.respond(HttpStatusCode.Created, response)
         }
     }
 
     route(FLAG_KEY_PATH) {
         get {
+            val context = call.requireFeatureFlagAdmin(membershipService) ?: return@get
             val flagKey = call.parameters["flagKey"].orEmpty()
             val environment = call.request.queryParameters["environment"]
-            val flag = featureFlagService.getFlag(call.orgId(), flagKey, environment)
+            val flag = featureFlagService.getFlag(context.organizationId, flagKey, environment)
             if (flag == null) call.respondNotFound(FEATURE_FLAG_NOT_FOUND) else call.respond(flag)
         }
 
         put {
             call.respondHandlingBadRequest {
+                val context = call.requireFeatureFlagAdmin(membershipService) ?: return@respondHandlingBadRequest
                 val flagKey = call.parameters["flagKey"].orEmpty()
                 val request = call.receive<UpdateFeatureFlagRequest>()
-                val response = featureFlagService.updateFlag(call.orgId(), call.userId(), flagKey, request)
+                val response = featureFlagService.updateFlag(context.organizationId, context.userId, flagKey, request)
                 if (response == null) call.respondNotFound(FEATURE_FLAG_NOT_FOUND) else call.respond(response)
             }
         }
 
         delete {
+            val context = call.requireFeatureFlagAdmin(membershipService) ?: return@delete
             val flagKey = call.parameters["flagKey"].orEmpty()
-            val deleted = featureFlagService.archiveFlag(call.orgId(), call.userId(), flagKey)
+            val deleted = featureFlagService.archiveFlag(context.organizationId, context.userId, flagKey)
             if (deleted) call.respond(HttpStatusCode.NoContent) else call.respondNotFound(FEATURE_FLAG_NOT_FOUND)
         }
 
         put("/config/{environmentKey}") {
             call.respondHandlingBadRequest {
+                val context = call.requireFeatureFlagAdmin(membershipService) ?: return@respondHandlingBadRequest
                 val flagKey = call.parameters["flagKey"].orEmpty()
                 val environmentKey = call.parameters["environmentKey"].orEmpty()
                 val request = call.receive<UpdateFeatureFlagConfigRequest>()
                 val response = featureFlagService.updateConfig(
-                    organizationId = call.orgId(),
-                    actorUserId = call.userId(),
+                    organizationId = context.organizationId,
+                    actorUserId = context.userId,
                     flagKey = flagKey,
                     environmentKey = environmentKey,
                     request = request,
@@ -360,12 +406,33 @@ private fun Map<String, String>.toJsonObject(): JsonObject {
     }
 }
 
-private fun ApplicationCall.orgId(): Int {
-    return checkNotNull(principal<JWTPrincipal>()).payload.getClaim("orgId").asInt()
-}
+private suspend fun ApplicationCall.requireFeatureFlagAdmin(
+    membershipService: OrgMembershipService,
+): FeatureFlagManagementContext? {
+    val principal = principal<JWTPrincipal>()
+    val orgId = principal?.payload?.getClaim("orgId")?.asInt()
+    val userId = principal?.payload?.getClaim("userId")?.asInt()
+    if (orgId == null) {
+        respond(HttpStatusCode.Forbidden, ErrorResponse(MISSING_ORG_MESSAGE))
+        return null
+    }
+    if (userId == null) {
+        respond(HttpStatusCode.Forbidden, ErrorResponse(FORBIDDEN_MESSAGE))
+        return null
+    }
 
-private fun ApplicationCall.userId(): Int {
-    return checkNotNull(principal<JWTPrincipal>()).payload.getClaim("userId").asInt()
+    val allowed =
+        try {
+            membershipService.requireRole(orgId, userId, OrgRole.ADMIN)
+            true
+        } catch (_: IllegalStateException) {
+            false
+        }
+    if (!allowed) {
+        respond(HttpStatusCode.Forbidden, ErrorResponse(FORBIDDEN_MESSAGE))
+        return null
+    }
+    return FeatureFlagManagementContext(orgId, userId)
 }
 
 private suspend fun ApplicationCall.respondNotFound(message: String) {

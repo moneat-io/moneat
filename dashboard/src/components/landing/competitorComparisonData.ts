@@ -84,7 +84,7 @@ export interface CompetitorPageData {
 export const SOURCE_REVIEW_DATE = 'May 26, 2026'
 
 export const moneatPricingSummary =
-  'Moneat pricing starts at free, then $29 Pro, $79 Team, and $199 Business. ' +
+  'Moneat pricing starts at free, then $29 Pro and $79 Team, with custom Enterprise pricing for larger teams. ' +
   'Core telemetry is covered by tier ingestion, with paid overage at $0.40/GB. ' +
   'APM spans, custom metrics, infrastructure metric series-hours, and analytics pageviews have separate ' +
   'limits and overages: $0.30/1M spans, $0.50/100K custom metrics, $0.10/100K infra series-hours, ' +
@@ -342,11 +342,11 @@ export const competitorPages: CompetitorPageData[] = [
     migrationSteps: [
       {
         title: 'Start with one DSN swap',
-        detail: 'Point one project at Moneat and verify grouping, release context, source maps, and alert behavior.',
+        detail: 'Point one service at Moneat and verify grouping, release context, source maps, and alert behavior.',
       },
       {
         title: 'Add operating context',
-        detail: 'Bring in logs, traces, hosts, and uptime checks around the same project before changing broader SDK rollout.',
+        detail: 'Bring in logs, traces, hosts, and uptime checks around the same service before changing broader SDK rollout.',
       },
       {
         title: 'Move response workflows last',
@@ -504,7 +504,7 @@ export const competitorPages: CompetitorPageData[] = [
       },
       {
         title: 'Test telemetry compatibility',
-        detail: 'Send one Sentry SDK project, one Datadog Agent host, and one OTLP service to Moneat.',
+        detail: 'Send one Sentry SDK service, one Datadog Agent host, and one OTLP service to Moneat.',
       },
       {
         title: 'Decide hosted vs controlled',
@@ -662,7 +662,7 @@ export const competitorPages: CompetitorPageData[] = [
       },
       {
         title: 'Add non-OTel migration paths',
-        detail: 'Test a Sentry SDK project and a Datadog Agent host if your estate is not purely OpenTelemetry.',
+        detail: 'Test a Sentry SDK service and a Datadog Agent host if your estate is not purely OpenTelemetry.',
       },
       {
         title: 'Validate response workflows',
@@ -738,6 +738,67 @@ export const competitorPages: CompetitorPageData[] = [
 export const competitorPageBySlug = new Map(
   competitorPages.map((page) => [page.slug, page]),
 )
+
+export type MarkKind = 'yes' | 'partial' | 'no'
+export type CellValue = MarkKind | string
+
+export const COMPARE_ORDER: CompetitorSlug[] = ['datadog', 'sentry', 'signoz', 'better-stack']
+
+export const compareColumns = COMPARE_ORDER.map((slug) => competitorPages.find((c) => c.slug === slug))
+  .filter((page): page is (typeof competitorPages)[number] => Boolean(page))
+  .map((page) => ({slug: page.slug, name: page.name, route: page.route}))
+
+export const compareRows: Array<{
+  label: string
+  moneat: CellValue
+  values: Record<CompetitorSlug, CellValue>
+}> = [
+  {
+    label: 'Error tracking',
+    moneat: 'yes',
+    values: {datadog: 'yes', sentry: 'yes', signoz: 'partial', 'better-stack': 'partial'},
+  },
+  {
+    label: 'Log management',
+    moneat: 'yes',
+    values: {datadog: 'yes', sentry: 'partial', signoz: 'yes', 'better-stack': 'yes'},
+  },
+  {
+    label: 'APM & distributed tracing',
+    moneat: 'yes',
+    values: {datadog: 'yes', sentry: 'yes', signoz: 'yes', 'better-stack': 'partial'},
+  },
+  {
+    label: 'Infrastructure & host metrics',
+    moneat: 'yes',
+    values: {datadog: 'yes', sentry: 'no', signoz: 'yes', 'better-stack': 'partial'},
+  },
+  {
+    label: 'Uptime & status pages',
+    moneat: 'yes',
+    values: {datadog: 'partial', sentry: 'partial', signoz: 'partial', 'better-stack': 'yes'},
+  },
+  {
+    label: 'On-call & incidents',
+    moneat: 'yes',
+    values: {datadog: 'yes', sentry: 'no', signoz: 'no', 'better-stack': 'yes'},
+  },
+  {
+    label: 'Open source & self-host',
+    moneat: 'yes',
+    values: {datadog: 'no', sentry: 'partial', signoz: 'yes', 'better-stack': 'no'},
+  },
+  {
+    label: 'Pricing model',
+    moneat: 'Tiered — no per-host fee',
+    values: {
+      datadog: 'Per-host + per-product',
+      sentry: 'Per-event volume',
+      signoz: 'Usage or self-host',
+      'better-stack': 'Per-monitor + seat',
+    },
+  },
+]
 
 export function getCompetitorPage(slug: CompetitorSlug): CompetitorPageData {
   const page = competitorPageBySlug.get(slug)

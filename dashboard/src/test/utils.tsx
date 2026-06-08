@@ -17,7 +17,6 @@
 import React from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render } from '@testing-library/react'
-import { ProjectProvider } from '@/contexts/ProjectContext'
 
 /** Clears localStorage, sessionStorage, and sets authenticated state for tests. */
 export function clearAuthStorage(): void {
@@ -36,7 +35,7 @@ export function renderWithQueryClient(ui: React.ReactElement) {
   )
 }
 
-/** Renders a route component with QueryClientProvider and ProjectProvider. */
+/** Renders a route component with QueryClientProvider. */
 export function renderRouteWithProviders(Component: React.ComponentType) {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -46,9 +45,7 @@ export function renderRouteWithProviders(Component: React.ComponentType) {
   })
   return render(
     <QueryClientProvider client={queryClient}>
-      <ProjectProvider>
-        <Component />
-      </ProjectProvider>
+      <Component />
     </QueryClientProvider>
   )
 }

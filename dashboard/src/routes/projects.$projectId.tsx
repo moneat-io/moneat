@@ -16,7 +16,7 @@
 
 import {createFileRoute, Outlet, redirect, useRouterState} from '@tanstack/react-router'
 import {api} from '@/lib/api'
-import {ProjectTelemetrySetupHub} from '@/components/projects/ProjectTelemetrySetupHub'
+import {ServiceTelemetrySetupHub} from '@/components/projects/ServiceTelemetrySetupHub'
 
 export const Route = createFileRoute('/projects/$projectId')({
   validateSearch: (search: Record<string, unknown>): {sources?: string} => {
@@ -28,21 +28,21 @@ export const Route = createFileRoute('/projects/$projectId')({
     }
   },
   loader: async ({ params }) => {
-    const project = await api.getProject(params.projectId)
-    return { project }
+    const service = await api.getProject(params.projectId)
+    return { service }
   },
-  component: SetupPage,
+  component: SourcesIngestionPage,
 })
 
-function SetupPage() {
+function SourcesIngestionPage() {
   const routerState = useRouterState()
   const showingChildPage = /^\/projects\/[^/]+\/(settings|traces|spans)\/?/.test(routerState.location.pathname)
-  const { project } = Route.useLoaderData()
+  const { service } = Route.useLoaderData()
   const { sources } = Route.useSearch()
 
   if (showingChildPage) {
     return <Outlet />
   }
 
-  return <ProjectTelemetrySetupHub project={project} selectedSourcesParam={sources} />
+  return <ServiceTelemetrySetupHub service={service} selectedSourcesParam={sources} />
 }

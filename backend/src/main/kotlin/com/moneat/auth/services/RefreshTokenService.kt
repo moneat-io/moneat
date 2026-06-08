@@ -32,7 +32,9 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import java.security.MessageDigest
 import java.security.SecureRandom
-import java.util.*
+import java.util.Base64
+import java.util.Date
+import java.util.UUID
 
 data class RefreshTokenResponse(
     val accessToken: String,

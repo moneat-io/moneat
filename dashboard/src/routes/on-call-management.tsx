@@ -17,9 +17,99 @@
 import {createFileRoute} from '@tanstack/react-router'
 import {Phone, Calendar, ArrowUpRight, MessageSquare, Clock, Users} from 'lucide-react'
 import {FeaturePageTemplate, type FeaturePageConfig} from '@/components/landing/FeaturePageTemplate'
+import {WindowFrame, StatTile, GRADIENT_BG} from '@/components/landing/Landing'
+import {cn} from '@/lib/utils'
 import {getFeaturePageSeoInput} from '@/lib/seo/routes'
 
 const pageSeo = getFeaturePageSeoInput('on-call-management')
+
+// Feature-specific hero: on-call management panel showing who is on call now,
+// an escalation policy chain, and one active incident row — the surface this
+// feature actually shows.
+function OnCallHero() {
+  const escalationSteps: Array<{step: string; who: string; delay: string}> = [
+    {step: 'L1', who: 'Jordan Diaz', delay: 'immediate'},
+    {step: 'L2', who: 'Platform SRE', delay: 'after 5m'},
+    {step: 'L3', who: 'Eng Leadership', delay: 'after 15m'},
+  ]
+  return (
+    <div className="relative">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -inset-x-10 -bottom-12 top-8 bg-[radial-gradient(closest-side,rgba(124,92,246,0.28),rgba(34,211,238,0.05)_60%,transparent)] blur-2xl"
+      />
+      <WindowFrame title="moneat · on-call" live className="relative">
+        <div className="grid gap-3">
+          {/* On call now */}
+          <div className="flex items-center gap-3 rounded-md border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
+            <div
+              className={cn(
+                'flex size-8 shrink-0 items-center justify-center rounded-md font-brandmono text-[12px] font-semibold text-white',
+                GRADIENT_BG,
+              )}
+            >
+              JD
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="font-brandmono text-[12px] font-medium text-slate-100">Jordan Diaz</div>
+              <div className="font-brandmono text-[10px] text-slate-500">Mon–Fri · 09:00–17:00</div>
+            </div>
+            <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 font-brandmono text-[10px] text-emerald-400">
+              ON CALL
+            </span>
+          </div>
+
+          {/* Escalation policy */}
+          <div>
+            <div className="mb-1.5 font-brandmono text-[10px] uppercase tracking-[0.12em] text-slate-500">
+              Escalation policy
+            </div>
+            <div className="overflow-hidden rounded-md border border-white/[0.07]">
+              {escalationSteps.map((s, i) => (
+                <div
+                  key={s.step}
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-2',
+                    i > 0 && 'border-t border-white/[0.06]',
+                    i === 0 && 'bg-white/[0.03]',
+                  )}
+                >
+                  <span className="w-5 shrink-0 font-brandmono text-[10px] font-semibold text-slate-400">{s.step}</span>
+                  <span className="flex-1 font-brandmono text-[11px] text-slate-200">{s.who}</span>
+                  <span className="font-brandmono text-[10px] text-slate-500">{s.delay}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Active incident */}
+          <div>
+            <div className="mb-1.5 font-brandmono text-[10px] uppercase tracking-[0.12em] text-slate-500">
+              Active incidents
+            </div>
+            <div className="flex items-center gap-3 rounded-md border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
+              <span className="size-2 shrink-0 rounded-full bg-rose-400" />
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-brandmono text-[12px] text-slate-100">API latency SLO breach</div>
+                <div className="font-brandmono text-[10px] text-slate-500">production · api-gateway</div>
+              </div>
+              <span className="rounded border border-rose-500/30 bg-rose-500/10 px-1.5 py-0.5 font-brandmono text-[10px] text-rose-400">
+                FIRING
+              </span>
+            </div>
+          </div>
+
+          {/* Stat strip */}
+          <div className="grid grid-cols-3 gap-2.5">
+            <StatTile label="MTTA" value="3m" accent />
+            <StatTile label="on call" value="4" />
+            <StatTile label="open" value="1" />
+          </div>
+        </div>
+      </WindowFrame>
+    </div>
+  )
+}
 
 const config: FeaturePageConfig = {
   slug: pageSeo.slug,
@@ -34,6 +124,7 @@ const config: FeaturePageConfig = {
   accentColor: 'text-orange-400',
   screenshot: pageSeo.image,
   screenshotAlt: 'On-call escalation policies with rotation schedules',
+  heroVisual: <OnCallHero />,
   subFeatures: [
     {icon: Calendar, title: 'On-Call Schedules', description: 'Create rotating schedules with daily, weekly, or custom rotation patterns for your team.', iconColor: 'text-orange-400'},
     {icon: ArrowUpRight, title: 'Escalation Policies', description: 'Define multi-level escalation chains so incidents never go unacknowledged.', iconColor: 'text-red-400'},

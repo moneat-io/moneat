@@ -17,6 +17,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo } from 'react'
 import { Logo } from '@/components/Logo'
+import { APP_OVERVIEW_SEARCH } from '@/lib/overview-route'
+import { setDemoEpoch } from '@/lib/demo'
 
 export const Route = createFileRoute('/auth/sso/callback')({
   component: SsoCallbackPage,
@@ -39,9 +41,10 @@ function SsoCallbackPage() {
     }
 
     // Auth token is now set as httpOnly cookie by the backend redirect
-    sessionStorage.setItem('authenticated', 'true')
+    setDemoEpoch(null)
+    globalThis.sessionStorage?.setItem('authenticated', 'true')
     const timer = setTimeout(() => {
-      navigate({ to: '/' })
+      navigate({ to: '/', search: APP_OVERVIEW_SEARCH })
     }, 100)
     return () => clearTimeout(timer)
   }, [navigate, error])

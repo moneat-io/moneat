@@ -64,7 +64,8 @@ import mu.KotlinLogging
 import java.security.MessageDigest
 import java.time.Instant
 import com.moneat.utils.suspendRunCatching
-import java.util.*
+import java.util.Base64
+import java.util.UUID
 import kotlin.text.Charsets
 
 private val logger = KotlinLogging.logger {}
@@ -192,6 +193,7 @@ class LogService(private val logRepository: LogRepository) {
                 toUUID('${escapeSql(entry.logId)}'),
                 ${batch.effectiveOrganizationId},
                 ${entry.projectId ?: 0L},
+                ${entry.projectId ?: 0L},
                 toUUID('${escapeSql(systemIdValue)}'),
                 fromUnixTimestamp64Milli(${entry.timestampMs}),
                 '${escapeSql(entry.level)}',
@@ -218,6 +220,7 @@ class LogService(private val logRepository: LogRepository) {
             INSERT INTO `$clickhouseDb`.logs (
                 log_id,
                 organization_id,
+                service_id,
                 project_id,
                 system_id,
                 timestamp,
@@ -279,25 +282,75 @@ class LogService(private val logRepository: LogRepository) {
     fun matchesTailFilters(
         log: LogEntryResponse,
         filters: LogTailFilters
+    ): Boolean =
+        matchesIncludedTailFilters(log, filters) &&
+            matchesExcludedTailFilters(log, filters) &&
+            matchesTailTagFilters(log, filters) &&
+            matchesTailQueryFilter(log, filters)
+
+    private fun matchesIncludedTailFilters(
+        log: LogEntryResponse,
+        filters: LogTailFilters
     ): Boolean {
         if (filters.levels.isNotEmpty() && log.level.lowercase() !in filters.levels) {
             return false
         }
-        if (!filters.service.isNullOrBlank() && !log.service.equals(filters.service, ignoreCase = true)) {
+        if (!matchesOptionalIgnoreCase(log.service, filters.service)) {
             return false
         }
-        if (!filters.environment.isNullOrBlank() && !log.environment.equals(filters.environment, ignoreCase = true)) {
+        if (!matchesOptionalIgnoreCase(log.environment, filters.environment)) {
             return false
         }
-        if (!filters.query.isNullOrBlank()) {
-            val query = filters.query.lowercase()
-            val haystack = "${log.message}\n${log.body}".lowercase()
-            if (!haystack.contains(query)) {
-                return false
-            }
+        if (!matchesOptionalIgnoreCase(log.containerName, filters.containerName)) {
+            return false
         }
         return true
     }
+
+    private fun matchesExcludedTailFilters(
+        log: LogEntryResponse,
+        filters: LogTailFilters
+    ): Boolean {
+        if (matchesExcludedIgnoreCase(log.service, filters.excludeService)) {
+            return false
+        }
+        if (matchesExcludedIgnoreCase(log.environment, filters.excludeEnvironment)) {
+            return false
+        }
+        if (matchesExcludedIgnoreCase(log.containerName, filters.excludeContainerName)) {
+            return false
+        }
+        return true
+    }
+
+    private fun matchesTailTagFilters(
+        log: LogEntryResponse,
+        filters: LogTailFilters
+    ): Boolean {
+        if (filters.tags.any { (key, value) -> log.tags[key] != value }) {
+            return false
+        }
+        if (filters.excludeTags.any { (key, value) -> log.tags[key] == value }) {
+            return false
+        }
+        return true
+    }
+
+    private fun matchesTailQueryFilter(
+        log: LogEntryResponse,
+        filters: LogTailFilters
+    ): Boolean {
+        if (filters.query.isNullOrBlank()) return true
+        val query = filters.query.lowercase()
+        val haystack = "${log.message}\n${log.body}".lowercase()
+        return haystack.contains(query)
+    }
+
+    private fun matchesOptionalIgnoreCase(actual: String, expected: String?): Boolean =
+        expected.isNullOrBlank() || actual.lowercase() == expected.lowercase()
+
+    private fun matchesExcludedIgnoreCase(actual: String, excluded: String?): Boolean =
+        !excluded.isNullOrBlank() && actual.lowercase() == excluded.lowercase()
 
     suspend fun queryLogs(
         organizationId: Long,
@@ -1434,7 +1487,7 @@ class LogService(private val logRepository: LogRepository) {
             service = resourceCtx.serviceName.ifEmpty { attributes["service.name"] },
             serviceNamespace = resourceCtx.serviceNamespace.ifEmpty { attributes["service.namespace"] },
             environment = resourceCtx.environment.ifEmpty {
-                attributes["deployment.environment"] ?: attributes["service.environment"]
+                OtlpParsingUtils.extractDeploymentEnvironment(attributes)
             },
             host = resourceCtx.hostName.ifEmpty { attributes["host.name"] },
             source = "otlp",
@@ -1512,7 +1565,7 @@ class LogService(private val logRepository: LogRepository) {
             service = resourceCtx.serviceName.ifEmpty { attributes["service.name"] },
             serviceNamespace = resourceCtx.serviceNamespace.ifEmpty { attributes["service.namespace"] },
             environment = resourceCtx.environment.ifEmpty {
-                attributes["deployment.environment"] ?: attributes["service.environment"]
+                OtlpParsingUtils.extractDeploymentEnvironment(attributes)
             },
             host = resourceCtx.hostName.ifEmpty { attributes["host.name"] },
             source = "otlp",

@@ -31,8 +31,8 @@ const platforms = [
     id: 'python',
     name: 'Python',
     icon: Globe,
-    color: 'text-yellow-500',
-    bgColor: 'bg-yellow-500/10',
+    color: 'text-chart-3',
+    bgColor: 'bg-chart-3/10',
     steps: [
       {
         title: 'Install the OpenTelemetry SDK',
@@ -73,8 +73,8 @@ logger.info("Hello from Moneat!")`,
     id: 'nodejs',
     name: 'Node.js',
     icon: Server,
-    color: 'text-green-500',
-    bgColor: 'bg-green-500/10',
+    color: 'text-chart-1',
+    bgColor: 'bg-chart-1/10',
     steps: [
       {
         title: 'Install dependencies',
@@ -112,8 +112,8 @@ logger.emit({
     id: 'go',
     name: 'Go',
     icon: Cpu,
-    color: 'text-cyan-500',
-    bgColor: 'bg-cyan-500/10',
+    color: 'text-chart-2',
+    bgColor: 'bg-chart-2/10',
     steps: [
       {
         title: 'Install the OTLP exporter',
@@ -160,8 +160,8 @@ func main() {
     id: 'java',
     name: 'Java / Kotlin',
     icon: Smartphone,
-    color: 'text-orange-500',
-    bgColor: 'bg-orange-500/10',
+    color: 'text-chart-4',
+    bgColor: 'bg-chart-4/10',
     steps: [
       {
         title: 'Add the OTLP dependency',
@@ -194,8 +194,8 @@ val loggerProvider = SdkLoggerProvider.builder()
     id: 'curl',
     name: 'cURL / HTTP',
     icon: TerminalSquare,
-    color: 'text-purple-500',
-    bgColor: 'bg-purple-500/10',
+    color: 'text-chart-5',
+    bgColor: 'bg-chart-5/10',
     steps: [
       {
         title: 'Send logs directly via the OTLP HTTP endpoint',
@@ -232,8 +232,8 @@ export function LogSetupGuide({sdkVersions}: LogSetupGuideProps) {
   return (
     <div className="mx-auto max-w-3xl py-8">
       <div className="mb-8 text-center">
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/20 to-violet-500/20 ring-1 ring-blue-500/30">
-          <BookOpen className="h-8 w-8 text-blue-500" />
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/30">
+          <BookOpen className="h-8 w-8 text-primary" />
         </div>
         <h3 className="mb-2 text-xl font-semibold">Get Started with Log Ingestion</h3>
         <p className="text-sm text-muted-foreground leading-relaxed max-w-lg mx-auto">
@@ -247,10 +247,10 @@ export function LogSetupGuide({sdkVersions}: LogSetupGuideProps) {
         </Button>
       </div>
 
-      <div className="mb-10 rounded-xl border border-blue-500/20 bg-gradient-to-br from-blue-500/5 to-cyan-500/5 p-5">
+      <div className="mb-10 rounded-xl border border-primary/20 bg-primary/5 p-5">
         <div className="mb-5 flex items-start gap-3">
-          <div className="mt-0.5 rounded-md bg-blue-500/10 p-2 ring-1 ring-blue-500/20">
-            <BookOpen className="h-4 w-4 text-blue-500" />
+          <div className="mt-0.5 rounded-md bg-primary/10 p-2 ring-1 ring-primary/20">
+            <BookOpen className="h-4 w-4 text-primary" />
           </div>
           <div>
             <h4 className="text-sm font-semibold text-foreground">OpenTelemetry Logs (Recommended)</h4>
@@ -288,7 +288,7 @@ export function LogSetupGuide({sdkVersions}: LogSetupGuideProps) {
                   <div className="flex items-center gap-3">
                     <div className={cn(
                       'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold',
-                      'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                      'bg-primary/10 text-primary'
                     )}>
                       {index + 1}
                     </div>
@@ -303,9 +303,9 @@ export function LogSetupGuide({sdkVersions}: LogSetupGuideProps) {
                 </div>
               ))}
 
-              <div className="ml-9 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4">
+              <div className="ml-9 rounded-lg border border-success-border bg-success-bg p-4">
                 <div className="flex items-start gap-3">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success-fg" />
                   <div className="text-sm text-muted-foreground">
                     <p className="font-medium text-foreground">That&apos;s it!</p>
                     <p className="mt-1">

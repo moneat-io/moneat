@@ -27,7 +27,17 @@ private const val SEVERITY_MEDIUM_RANK = 3
 private const val SEVERITY_LOW_RANK = 2
 private const val SEVERITY_INFO_RANK = 1
 private const val SEVERITY_UNKNOWN_RANK = 0
-private val SEVERITY_RESOURCE_TYPES = setOf("AlertSeverity", "SecuritySeverity")
+private const val PRIORITY_P0_RANK = 6
+private const val PRIORITY_P1_RANK = 5
+private const val PRIORITY_P2_RANK = 4
+private const val PRIORITY_P3_RANK = 3
+private const val PRIORITY_P4_RANK = 2
+private const val PRIORITY_P5_RANK = 1
+private const val INCIDENT_SEV0_RANK = 5
+private const val INCIDENT_SEV1_RANK = 4
+private const val INCIDENT_SEV2_RANK = 3
+private const val INCIDENT_SEV3_RANK = 2
+private const val INCIDENT_SEV4_RANK = 1
 
 object WorkflowConditionEvaluator {
     fun matchesAll(
@@ -67,10 +77,8 @@ object WorkflowConditionEvaluator {
             "not_contains" -> actual?.contains(expected.orEmpty(), ignoreCase = true) != true
             "gt", "gte", "lt", "lte" -> compareNumbers(actual, expected, operation)
             "at_least" -> {
-                val expectedRank = severityRank(expected)
-                resourceType in SEVERITY_RESOURCE_TYPES &&
-                    expectedRank > 0 &&
-                    severityRank(actual) >= expectedRank
+                val expectedRank = rankedValue(resourceType, expected)
+                expectedRank > 0 && rankedValue(resourceType, actual) >= expectedRank
             }
             else -> false
         }
@@ -97,7 +105,41 @@ object WorkflowConditionEvaluator {
     ): Boolean =
         actual != null && actual.compareTo(expected.orEmpty(), ignoreCase = true) == 0
 
-    private fun severityRank(value: String?): Int =
+    private fun rankedValue(
+        resourceType: String?,
+        value: String?
+    ): Int =
+        when (resourceType) {
+            "AlertPriority" -> alertPriorityRank(value)
+            "IncidentSeverity" -> incidentSeverityRank(value)
+            "SecuritySeverity" -> securitySeverityRank(value)
+            else -> SEVERITY_UNKNOWN_RANK
+        }
+
+    private fun alertPriorityRank(value: String?): Int =
+        when (value?.uppercase()?.replace('_', '-')) {
+            "P0" -> PRIORITY_P0_RANK
+            "P1" -> PRIORITY_P1_RANK
+            "P2" -> PRIORITY_P2_RANK
+            "P3" -> PRIORITY_P3_RANK
+            "P4" -> PRIORITY_P4_RANK
+            "P5" -> PRIORITY_P5_RANK
+            else -> SEVERITY_UNKNOWN_RANK
+        }
+
+    private fun incidentSeverityRank(value: String?): Int {
+        val normalized = value?.uppercase()?.replace('_', '-') ?: return SEVERITY_UNKNOWN_RANK
+        return when {
+            normalized in setOf("SEV0", "SEV-0") -> INCIDENT_SEV0_RANK
+            normalized in setOf("SEV1", "SEV-1") -> INCIDENT_SEV1_RANK
+            normalized in setOf("SEV2", "SEV-2") -> INCIDENT_SEV2_RANK
+            normalized in setOf("SEV3", "SEV-3") -> INCIDENT_SEV3_RANK
+            normalized in setOf("SEV4", "SEV-4") -> INCIDENT_SEV4_RANK
+            else -> SEVERITY_UNKNOWN_RANK
+        }
+    }
+
+    private fun securitySeverityRank(value: String?): Int =
         when (value?.uppercase()) {
             "CRITICAL" -> SEVERITY_CRITICAL_RANK
             "HIGH" -> SEVERITY_HIGH_RANK

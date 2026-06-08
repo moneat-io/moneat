@@ -19,6 +19,7 @@ package com.moneat.events.services
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -42,6 +43,7 @@ class FeedbackServiceTest {
         every {
             queryHelper.timestampRetentionClause(any(), any(), any())
         } returns "timestamp >= now() - INTERVAL 30 DAY"
+        coEvery { queryHelper.getOrganizationRetentionDays(any()) } returns 30
         service = FeedbackService(queryHelper)
     }
 
@@ -76,6 +78,17 @@ class FeedbackServiceTest {
             put("platform", "android")
             put("sdk_name", "sentry.java.android")
             put("sdk_version", "7.14.0")
+            put("source_type", "sentry")
+            put("source_name", "Sentry-compatible SDK")
+            put("source_event_name", "feedback")
+            put("trace_id", "")
+            put("span_id", "")
+            put(
+                "resource_attributes",
+                buildJsonObject {
+                    put("service.name", "checkout-api")
+                }
+            )
         }
         coEvery { queryHelper.executeJsonEachRowQuery(any(), any()) } returns listOf(row)
 
@@ -83,5 +96,79 @@ class FeedbackServiceTest {
         assertEquals(FEEDBACK_UUID, detail?.feedbackId)
         assertEquals("2026-05-29T17:39:22.000Z", detail?.timestamp)
         assertEquals("unresolved", detail?.status)
+        assertEquals("sentry", detail?.sourceType)
+        assertEquals("Sentry-compatible SDK", detail?.sourceName)
+        assertEquals("feedback", detail?.sourceEventName)
+        assertEquals("", detail?.traceId)
+        assertEquals("", detail?.spanId)
+        assertEquals(mapOf("service.name" to "checkout-api"), detail?.resourceAttributes)
+    }
+
+    @Test
+    fun `getFeedbackForServices scopes query to selected services`() = runBlocking {
+        val querySlot = slot<String>()
+        coEvery { queryHelper.executeJsonEachRowQuery(capture(querySlot), "Feedback list") } returns emptyList()
+
+        val result =
+            service.getFeedbackForServices(
+                organizationId = 1,
+                serviceIds = listOf(1L, 2L),
+                status = "resolved"
+            )
+
+        assertEquals(emptyList(), result)
+        assertEquals(true, querySlot.captured.contains("project_id IN (1, 2)"))
+        assertEquals(true, querySlot.captured.contains("status = 'resolved'"))
+    }
+
+    @Test
+    fun `getFeedback scopes project query through service scope`() = runBlocking {
+        val querySlot = slot<String>()
+        coEvery { queryHelper.executeJsonEachRowQuery(capture(querySlot), "Feedback list") } returns emptyList()
+
+        val result = service.getFeedback(projectId = 3L, status = "archived")
+
+        assertEquals(emptyList(), result)
+        assertEquals(true, querySlot.captured.contains("project_id = 3"))
+        assertEquals(true, querySlot.captured.contains("status = 'archived'"))
+    }
+
+    @Test
+    fun `getFeedback maps list source metadata with Sentry defaults`() = runBlocking {
+        val row = buildJsonObject {
+            put("feedback_id", FEEDBACK_UUID)
+            put("message", "Checkout keeps spinning")
+            put("contact_email", "user0@example.com")
+            put("name", "Jordan Lee")
+            put("url", "https://shop.acme.com/checkout")
+            put("status", "unresolved")
+            put("created_at", "2026-05-29T17:39:22.000Z")
+            put("environment", "production")
+            put("release", "1.3.0")
+            put("platform", "android")
+            put("associated_event_id", "event-1")
+            put("replay_id", "replay-1")
+            put("trace_id", "00000000000000000000000000000001")
+            put("span_id", "0000000000000001")
+            put(
+                "resource_attributes",
+                buildJsonObject {
+                    put("service.name", "checkout-api")
+                }
+            )
+        }
+        coEvery { queryHelper.executeJsonEachRowQuery(any(), "Feedback list") } returns listOf(row)
+
+        val result = service.getFeedback(projectId = 3L)
+
+        assertEquals(1, result.size)
+        assertEquals("event-1", result.single().associatedEventId)
+        assertEquals("replay-1", result.single().replayId)
+        assertEquals("sentry", result.single().sourceType)
+        assertEquals("Sentry-compatible SDK", result.single().sourceName)
+        assertEquals("feedback", result.single().sourceEventName)
+        assertEquals("00000000000000000000000000000001", result.single().traceId)
+        assertEquals("0000000000000001", result.single().spanId)
+        assertEquals(mapOf("service.name" to "checkout-api"), result.single().resourceAttributes)
     }
 }

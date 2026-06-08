@@ -76,6 +76,7 @@ function mapOtlpObservedService(service: Record<string, unknown>): OtlpObservedS
     seenLogs: (service.seenLogs ?? service.seen_logs ?? false) as boolean,
     seenTraces: (service.seenTraces ?? service.seen_traces ?? false) as boolean,
     seenMetrics: (service.seenMetrics ?? service.seen_metrics ?? false) as boolean,
+    seenFeedback: (service.seenFeedback ?? service.seen_feedback ?? false) as boolean,
     lastEnvironment: (service.lastEnvironment ?? service.last_environment) as string | null | undefined,
     firstSeenAt: (service.firstSeenAt ?? service.first_seen_at) as string,
     lastSeenAt: (service.lastSeenAt ?? service.last_seen_at) as string,
@@ -306,16 +307,19 @@ export function logsMethods(core: ApiClientCore) {
         levels?: string[]
         service?: string
         environment?: string
+        containerName?: string
+        tags?: Record<string, string>
+        excludeService?: string
+        excludeEnvironment?: string
+        excludeContainerName?: string
+        excludeTags?: Record<string, string>
       } = {}
     ) => {
-      const params = new URLSearchParams()
-      if (options.query) params.set('q', options.query)
-      if (options.levels && options.levels.length > 0) {
-        options.levels.forEach((level) => { params.append('level', level) })
-      }
-      if (options.service) params.set('service', options.service)
-      if (options.environment) params.set('environment', options.environment)
-      return new EventSource(`${base}/logs/tail?${params.toString()}`, { withCredentials: true })
+      const params = buildLogFilterParams(options)
+      if (options.containerName) params.set('containerName', options.containerName)
+      return new globalThis.EventSource(urlWithQuery(`${base}/logs/tail`, params.toString()), {
+        withCredentials: true,
+      })
     },
 
     getLogAggregate: async (

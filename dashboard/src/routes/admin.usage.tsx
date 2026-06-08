@@ -88,44 +88,44 @@ function AdminUsagePage() {
           value={formatNumber(totals.total)}
           subtitle={periodLabel}
           icon={ArrowRightLeft}
-          iconColor="text-blue-600 dark:text-blue-400"
-          iconBg="bg-blue-100 dark:bg-blue-950"
+          iconColor="text-primary"
+          iconBg="bg-[hsl(var(--primary)/0.12)]"
         />
         <MetricCard
           title="Errors"
           value={formatNumber(totals.error)}
           icon={AlertCircle}
-          iconColor="text-red-600 dark:text-red-400"
-          iconBg="bg-red-100 dark:bg-red-950"
+          iconColor="text-danger-fg"
+          iconBg="bg-danger-bg"
         />
         <MetricCard
           title="Transactions"
           value={formatNumber(totals.transaction)}
           icon={ArrowRightLeft}
-          iconColor="text-blue-600 dark:text-blue-400"
-          iconBg="bg-blue-100 dark:bg-blue-950"
+          iconColor="text-chart-1"
+          iconBg="bg-chart-1/15"
         />
         <MetricCard
           title="Replays"
           value={formatNumber(totals.replay)}
           icon={MonitorPlay}
-          iconColor="text-violet-600 dark:text-violet-400"
-          iconBg="bg-violet-100 dark:bg-violet-950"
+          iconColor="text-chart-4"
+          iconBg="bg-chart-4/15"
         />
         <MetricCard
           title="Logs"
           value={formatNumber(totals.log)}
           icon={FileText}
-          iconColor="text-cyan-600 dark:text-cyan-400"
-          iconBg="bg-cyan-100 dark:bg-cyan-950"
+          iconColor="text-chart-6"
+          iconBg="bg-chart-6/15"
         />
         <MetricCard
           title="Data Ingested"
           value={formatBytes(data.totalBytes)}
           subtitle={periodLabel}
           icon={HardDrive}
-          iconColor="text-emerald-600 dark:text-emerald-400"
-          iconBg="bg-emerald-100 dark:bg-emerald-950"
+          iconColor="text-success-fg"
+          iconBg="bg-success-bg"
           className="col-span-2 sm:col-span-1"
         />
       </div>

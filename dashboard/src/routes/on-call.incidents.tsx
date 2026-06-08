@@ -16,9 +16,12 @@
 
 import {createFileRoute, Link, Outlet, useRouterState} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
-import {api, type IncidentListFilters, type IncidentStatus} from '@/lib/api'
+import {api} from '@/lib/api'
 import {Card, CardContent} from '@/components/ui/card'
-import {Badge} from '@/components/ui/badge'
+import {Badge, type BadgeProps} from '@/components/ui/badge'
+import {EmptyState} from '@/components/ui/empty-state'
+import {StatusDot, type StatusTone} from '@/components/ui/status-dot'
+import {PageHeader} from '@/components/ui/page-header'
 import {
   Select,
   SelectContent,
@@ -26,32 +29,48 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {Filter, Zap, Clock, CheckCircle2, ChevronRight, Inbox, Eye, AlertTriangle} from 'lucide-react'
-import {useState, useEffect} from 'react'
+import {Filter, Zap, Clock, CheckCircle2, ChevronRight, FileText, ShieldAlert} from 'lucide-react'
+import {useState} from 'react'
 import {cn} from '@/lib/utils'
 
 export const Route = createFileRoute('/on-call/incidents')({
-  component: Incidents,
+  component: DeclaredIncidents,
 })
 
-type AlertStatusFilter = IncidentStatus | 'active' | 'all'
+type IncidentSeverity = 'SEV-0' | 'SEV-1' | 'SEV-2' | 'SEV-3' | 'SEV-4'
+type IncidentStatus = 'OPEN' | 'RESOLVED'
+type IncidentStatusFilter = IncidentStatus | 'all'
+type IncidentSeverityFilter = IncidentSeverity | 'all'
 
-const DEFAULT_ALERT_STATUS_FILTER: AlertStatusFilter = 'active'
-const ACTIVE_ALERT_STATUSES: IncidentStatus[] = ['TRIGGERED', 'ACKNOWLEDGED']
+const DEFAULT_DECLARED_INCIDENT_STATUS_FILTER: IncidentStatus = 'OPEN'
 
-const getPriorityConfig = (priority: string) => {
-  if (priority.startsWith('P0')) return {color: 'bg-red-500/15 text-red-400 border-red-500/30', dot: 'bg-red-500', label: 'Critical'}
-  if (priority.startsWith('P1')) return {color: 'bg-orange-500/15 text-orange-400 border-orange-500/30', dot: 'bg-orange-500', label: 'High'}
-  if (priority.startsWith('P2')) return {color: 'bg-amber-500/15 text-amber-400 border-amber-500/30', dot: 'bg-amber-500', label: 'Medium'}
-  if (priority.startsWith('P3')) return {color: 'bg-blue-500/15 text-blue-400 border-blue-500/30', dot: 'bg-blue-500', label: 'Low'}
-  if (priority.startsWith('P4')) return {color: 'bg-slate-500/15 text-slate-400 border-slate-500/30', dot: 'bg-slate-500', label: 'Info'}
-  return {color: 'bg-muted text-muted-foreground', dot: 'bg-muted-foreground', label: 'Unknown'}
+// Incident severity mapped onto the shared status language.
+function severityTone(severity: string): StatusTone {
+  const severityMatch = /^SEV-?(\d)/i.exec(severity)
+  const severityLevel = severityMatch?.[1]
+  if (severityLevel === '0' || severityLevel === '1') return 'danger'
+  if (severityLevel === '2') return 'warning'
+  if (severityLevel === '3') return 'info'
+  return 'neutral'
 }
 
-const getStatusConfig = (status: string) => {
-  if (status === 'TRIGGERED') return {color: 'bg-red-500/15 text-red-400 border-red-500/30', icon: Zap, label: 'Triggered'}
-  if (status === 'ACKNOWLEDGED') return {color: 'bg-amber-500/15 text-amber-400 border-amber-500/30', icon: Clock, label: 'Acknowledged'}
-  return {color: 'bg-green-500/15 text-green-400 border-green-500/30', icon: CheckCircle2, label: 'Resolved'}
+function severityBadgeVariant(severity: string): BadgeProps['variant'] {
+  switch (severityTone(severity)) {
+    case 'danger':
+      return 'danger'
+    case 'warning':
+      return 'warning'
+    case 'info':
+      return 'info'
+    default:
+      return 'neutral'
+  }
+}
+
+const getStatusConfig = (status: string): {variant: BadgeProps['variant']; icon: typeof Zap; label: string} => {
+  if (status === 'OPEN') return {variant: 'danger', icon: Zap, label: 'Open'}
+  if (status === 'RESOLVED') return {variant: 'success', icon: CheckCircle2, label: 'Resolved'}
+  return {variant: 'neutral', icon: Clock, label: status}
 }
 
 function timeAgo(date: string) {
@@ -65,114 +84,61 @@ function timeAgo(date: string) {
   return `${days}d ago`
 }
 
-function isEscalatingSoon(nextEscalationAt?: string): boolean {
-  if (!nextEscalationAt) return false
-  const diff = new Date(nextEscalationAt).getTime() - Date.now()
-  return diff > 0 && diff <= 2 * 60 * 1000
-}
-
-function toIncidentStatusFilter(statusFilter: AlertStatusFilter): IncidentListFilters['status'] | undefined {
-  if (statusFilter === 'active') return ACTIVE_ALERT_STATUSES
-  if (statusFilter === 'all') return undefined
-  return statusFilter
-}
-
-function toAlertStatusFilter(value: string): AlertStatusFilter {
-  if (
-    value === 'active' ||
-    value === 'all' ||
-    value === 'TRIGGERED' ||
-    value === 'ACKNOWLEDGED' ||
-    value === 'RESOLVED'
-  ) {
-    return value
-  }
-  return DEFAULT_ALERT_STATUS_FILTER
-}
-
-function nextAlertStatusFilter(current: AlertStatusFilter, status: IncidentStatus): AlertStatusFilter {
-  return current === status ? DEFAULT_ALERT_STATUS_FILTER : status
-}
-
-function isAlertStatusActive(current: AlertStatusFilter, status: IncidentStatus): boolean {
-  return current === status || (current === 'active' && ACTIVE_ALERT_STATUSES.includes(status))
-}
-
-function Incidents() {
+function DeclaredIncidents() {
   const pathname = useRouterState({select: state => state.location.pathname})
-  const [statusFilter, setStatusFilter] = useState<AlertStatusFilter>(DEFAULT_ALERT_STATUS_FILTER)
-  const [priorityFilter, setPriorityFilter] = useState<string>('all')
-  const [, setTick] = useState(0)
-  const isIncidentDetailRoute = pathname.startsWith('/on-call/incidents/')
-
-  // Re-render every 30s to update "escalating soon" badges
-  useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 30000)
-    return () => clearInterval(interval)
-  }, [])
+  const [statusFilter, setStatusFilter] =
+    useState<IncidentStatusFilter>(DEFAULT_DECLARED_INCIDENT_STATUS_FILTER)
+  const [severityFilter, setSeverityFilter] = useState<IncidentSeverityFilter>('all')
+  const isDetailRoute = pathname.startsWith('/on-call/incidents/')
 
   const {data: incidents, isLoading} = useQuery({
-    queryKey: ['incidents', statusFilter, priorityFilter],
+    queryKey: ['on-call-incidents', statusFilter, severityFilter],
     queryFn: () => {
-      const filters: IncidentListFilters = {}
-      const status = toIncidentStatusFilter(statusFilter)
-      if (status) filters.status = status
-      if (priorityFilter !== 'all') filters.priorityLevel = priorityFilter
-      return api.getIncidents(filters)
+      const filters: { status?: string; severity?: string } = {}
+      if (statusFilter !== 'all') filters.status = statusFilter
+      if (severityFilter !== 'all') filters.severity = severityFilter
+      return api.getOnCallIncidents(filters)
     },
     refetchInterval: 30000,
   })
 
-  const triggeredCount = incidents?.filter(i => i.status === 'TRIGGERED').length || 0
-  const acknowledgedCount = incidents?.filter(i => i.status === 'ACKNOWLEDGED').length || 0
+  const openCount = incidents?.filter(i => i.status === 'OPEN').length || 0
   const resolvedCount = incidents?.filter(i => i.status === 'RESOLVED').length || 0
+  const hasIncidents = incidents !== undefined && incidents.length > 0
 
-  if (isIncidentDetailRoute) {
+  if (isDetailRoute) {
     return <Outlet />
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-xl font-bold tracking-tight">Alerts</h2>
-          <p className="text-muted-foreground text-xs mt-0.5">View and manage on-call alerts</p>
-        </div>
-      </div>
+      <PageHeader
+        icon={ShieldAlert}
+        title="Incidents"
+        description="Manage user-declared incidents"
+      />
 
       {/* Stats Row */}
       {!isLoading && incidents && incidents.length > 0 && (
         <div className="flex gap-1.5">
           <button
-            onClick={() => setStatusFilter(nextAlertStatusFilter(statusFilter, 'TRIGGERED'))}
+            onClick={() => setStatusFilter(statusFilter === 'OPEN' ? 'all' : 'OPEN')}
             className={cn(
-              'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all',
-              isAlertStatusActive(statusFilter, 'TRIGGERED')
-                ? 'bg-red-500/15 border-red-500/40 text-red-400'
+              'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors',
+              statusFilter === 'OPEN'
+                ? 'bg-danger-bg border-danger-border text-danger-fg'
                 : 'hover:bg-muted/60'
             )}
           >
             <Zap className="h-3 w-3" />
-            <span>{triggeredCount} Triggered</span>
+            <span>{openCount} Open</span>
           </button>
           <button
-            onClick={() => setStatusFilter(nextAlertStatusFilter(statusFilter, 'ACKNOWLEDGED'))}
+            onClick={() => setStatusFilter(statusFilter === 'RESOLVED' ? 'all' : 'RESOLVED')}
             className={cn(
-              'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all',
-              isAlertStatusActive(statusFilter, 'ACKNOWLEDGED')
-                ? 'bg-amber-500/15 border-amber-500/40 text-amber-400'
-                : 'hover:bg-muted/60'
-            )}
-          >
-            <Clock className="h-3 w-3" />
-            <span>{acknowledgedCount} Acknowledged</span>
-          </button>
-          <button
-            onClick={() => setStatusFilter(nextAlertStatusFilter(statusFilter, 'RESOLVED'))}
-            className={cn(
-              'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all',
-              isAlertStatusActive(statusFilter, 'RESOLVED')
-                ? 'bg-green-500/15 border-green-500/40 text-green-400'
+              'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors',
+              statusFilter === 'RESOLVED'
+                ? 'bg-success-bg border-success-border text-success-fg'
                 : 'hover:bg-muted/60'
             )}
           >
@@ -189,38 +155,35 @@ function Incidents() {
           <span>Filter:</span>
         </div>
         <div className="w-44">
-          <Select value={statusFilter} onValueChange={(value) => setStatusFilter(toAlertStatusFilter(value))}>
+          <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as IncidentStatusFilter)}>
             <SelectTrigger className="h-8">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="active">Open</SelectItem>
               <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="TRIGGERED">Triggered</SelectItem>
-              <SelectItem value="ACKNOWLEDGED">Acknowledged</SelectItem>
+              <SelectItem value="OPEN">Open</SelectItem>
               <SelectItem value="RESOLVED">Resolved</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div className="w-44">
-          <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+          <Select value={severityFilter} onValueChange={(value) => setSeverityFilter(value as IncidentSeverityFilter)}>
             <SelectTrigger className="h-8">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Priorities</SelectItem>
-              <SelectItem value="P0">P0 - Critical</SelectItem>
-              <SelectItem value="P1">P1 - High</SelectItem>
-              <SelectItem value="P2">P2 - Medium</SelectItem>
-              <SelectItem value="P3">P3 - Low</SelectItem>
-              <SelectItem value="P4">P4 - Info</SelectItem>
-              <SelectItem value="P5">P5 - None</SelectItem>
+              <SelectItem value="all">All Severities</SelectItem>
+              <SelectItem value="SEV-0">SEV-0</SelectItem>
+              <SelectItem value="SEV-1">SEV-1</SelectItem>
+              <SelectItem value="SEV-2">SEV-2</SelectItem>
+              <SelectItem value="SEV-3">SEV-3</SelectItem>
+              <SelectItem value="SEV-4">SEV-4</SelectItem>
             </SelectContent>
           </Select>
         </div>
-        {(statusFilter !== 'all' || priorityFilter !== 'all') && (
+        {(statusFilter !== 'all' || severityFilter !== 'all') && (
           <button
-            onClick={() => {setStatusFilter('all'); setPriorityFilter('all')}}
+            onClick={() => {setStatusFilter('all'); setSeverityFilter('all')}}
             className="text-xs text-muted-foreground hover:text-foreground underline"
           >
             Clear filters
@@ -229,17 +192,16 @@ function Incidents() {
       </div>
 
       {/* Incidents List */}
-      {isLoading ? (
+      {isLoading && (
         <div className="flex items-center justify-center py-10">
-          <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-red-500" />
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-primary" />
         </div>
-      ) : incidents && incidents.length > 0 ? (
+      )}
+      {!isLoading && hasIncidents && (
         <div className="space-y-2">
-          {incidents.map((incident) => {
-            const priorityCfg = getPriorityConfig(incident.priorityLevel)
+          {incidents?.map((incident) => {
             const statusCfg = getStatusConfig(incident.status)
             const StatusIcon = statusCfg.icon
-            const escalatingSoon = isEscalatingSoon(incident.nextEscalationAt)
             return (
               <Link
                 key={incident.id}
@@ -248,63 +210,45 @@ function Incidents() {
                 className="block group"
               >
                 <Card className={cn(
-                  'transition-all border-l-4',
-                  incident.status === 'TRIGGERED' && 'border-l-red-500 hover:border-red-500/40',
-                  incident.status === 'ACKNOWLEDGED' && 'border-l-amber-500 hover:border-amber-500/40',
+                  'transition-colors border-l-[3px]',
+                  incident.status === 'OPEN' && 'border-l-danger-solid hover:border-danger-border',
                   incident.status === 'RESOLVED' && 'border-l-transparent hover:border-muted-foreground/20',
                 )}>
                   <CardContent className="p-3">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-3 min-w-0">
-                        <div className={cn('flex-shrink-0 h-2.5 w-2.5 rounded-full mt-2', priorityCfg.dot)} />
+                        <StatusDot tone={severityTone(incident.severity)} className="mt-2" />
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <h3 className="font-semibold text-sm group-hover:text-foreground truncate">
                               {incident.title}
                             </h3>
-                            {incident.viewedByCurrentUser && (
-                              <span title="You've viewed this incident">
-                                <Eye className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                              </span>
-                            )}
                           </div>
                           {incident.description && (
                             <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">{incident.description}</p>
                           )}
                           <div className="flex items-center gap-3 mt-1.5 text-[11px] text-muted-foreground">
-                            <span>{timeAgo(incident.triggeredAt)}</span>
-                            {incident.alertSource && (
+                            <span>Declared {timeAgo(incident.declaredAt)}</span>
+                            {incident.declaredByName && (
                               <>
                                 <span className="text-muted-foreground/40">·</span>
-                                <span>{incident.alertSource}</span>
-                              </>
-                            )}
-                            {incident.acknowledgedByName && (
-                              <>
-                                <span className="text-muted-foreground/40">·</span>
-                                <span className="text-amber-400">Ack by {incident.acknowledgedByName}</span>
+                                <span>by {incident.declaredByName}</span>
                               </>
                             )}
                             {incident.resolvedByName && (
                               <>
                                 <span className="text-muted-foreground/40">·</span>
-                                <span className="text-green-400">Resolved by {incident.resolvedByName}</span>
+                                <span className="text-success-fg">Resolved by {incident.resolvedByName}</span>
                               </>
                             )}
                           </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        {escalatingSoon && (
-                          <Badge variant="outline" className="text-xs gap-1 bg-orange-500/15 text-orange-400 border-orange-500/30 animate-pulse">
-                            <AlertTriangle className="h-3 w-3" />
-                            Escalating soon
-                          </Badge>
-                        )}
-                        <Badge variant="outline" className={cn('text-xs', priorityCfg.color)}>
-                          {incident.priorityLevel}
+                        <Badge variant={severityBadgeVariant(incident.severity)} size="sm">
+                          {incident.severity}
                         </Badge>
-                        <Badge variant="outline" className={cn('text-xs gap-1', statusCfg.color)}>
+                        <Badge variant={statusCfg.variant} size="sm" className="gap-1">
                           <StatusIcon className="h-3 w-3" />
                           {statusCfg.label}
                         </Badge>
@@ -317,18 +261,17 @@ function Incidents() {
             )
           })}
         </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center py-12 border border-dashed rounded-xl">
-          <div className="inline-flex items-center justify-center h-11 w-11 rounded-full bg-muted/60 mb-3">
-            <Inbox className="h-5 w-5 text-muted-foreground" />
-          </div>
-          <h3 className="text-sm font-semibold mb-0.5">No alerts found</h3>
-          <p className="text-xs text-muted-foreground text-center max-w-sm">
-            {statusFilter !== 'all' || priorityFilter !== 'all'
-              ? 'No alerts match your current filters. Try adjusting or clearing filters.'
-              : 'Alerts will appear here when triggered by your alerting rules.'}
-          </p>
-        </div>
+      )}
+      {!isLoading && !hasIncidents && (
+        <EmptyState
+          icon={FileText}
+          title="No incidents found"
+          description={
+            statusFilter !== 'all' || severityFilter !== 'all'
+              ? 'No incidents match your current filters. Try adjusting or clearing filters.'
+              : 'User-declared incidents will appear here.'
+          }
+        />
       )}
     </div>
   )

@@ -65,23 +65,33 @@ interface Props {
   embedded?: boolean
   scope?: ProfileScope
   serviceFilter?: string
+  serviceFilters?: readonly string[]
   onServiceFilterChange?: (val: string) => void
   typeFilter?: string
   onTypeFilterChange?: (val: string) => void
+  query?: string
 }
 
 export function ProfileList({
   embedded = false,
   scope,
   serviceFilter = '',
+  serviceFilters = [],
   onServiceFilterChange,
   typeFilter = '',
   onTypeFilterChange,
+  query = '',
 }: Props) {
+  const selectedServices = useMemo(
+    () => serviceFilters.map((service) => service.trim()).filter((service) => service !== ''),
+    [serviceFilters],
+  )
+  const selectedServicesKey = selectedServices.join('\u001f')
+
   const {data, isLoading} = useQuery({
     queryKey: embedded
       ? ['profiles', 'embedded', scope]
-      : ['profiles', serviceFilter, typeFilter],
+      : ['profiles', serviceFilter, selectedServicesKey, typeFilter],
     queryFn: () =>
       api.getProfiles(
         embedded
@@ -95,6 +105,7 @@ export function ProfileList({
             }
           : {
               service: serviceFilter || undefined,
+              ...(selectedServices.length > 0 ? {services: [...selectedServices]} : {}),
               type: typeFilter || undefined,
               limit: DEFAULT_LIMIT,
             },
@@ -103,25 +114,40 @@ export function ProfileList({
   })
 
   const profiles = data?.profiles ?? []
+  const normalizedQuery = query.trim().toLowerCase()
+  const visibleProfiles = useMemo(() => {
+    if (!normalizedQuery) return profiles
+    return profiles.filter((profile) =>
+      [
+        profile.service,
+        profile.profileType,
+        profile.env,
+        profile.host,
+        profile.language,
+        profile.runtime,
+        profile.source,
+      ].some((value) => value?.toLowerCase().includes(normalizedQuery))
+    )
+  }, [normalizedQuery, profiles])
 
   const stats = useMemo(() => {
-    if (embedded || profiles.length === 0) return null
+    if (embedded || visibleProfiles.length === 0) return null
 
-    const services = new Set(profiles.map((p) => p.service))
-    const types = new Set(profiles.map((p) => p.profileType))
-    const totalSize = profiles.reduce((sum, p) => sum + p.sizeBytes, 0)
-    const durations = profiles.map((p) => p.durationNs)
+    const services = new Set(visibleProfiles.map((p) => p.service))
+    const types = new Set(visibleProfiles.map((p) => p.profileType))
+    const totalSize = visibleProfiles.reduce((sum, p) => sum + p.sizeBytes, 0)
+    const durations = visibleProfiles.map((p) => p.durationNs)
     const avgDuration =
       durations.reduce((sum, d) => sum + d, 0) / durations.length
 
     return {
-      totalProfiles: data?.totalCount ?? profiles.length,
+      totalProfiles: normalizedQuery ? visibleProfiles.length : data?.totalCount ?? profiles.length,
       serviceCount: services.size,
       typeCount: types.size,
       totalSize,
       avgDuration,
     }
-  }, [embedded, profiles, data?.totalCount])
+  }, [embedded, normalizedQuery, profiles.length, visibleProfiles, data?.totalCount])
 
   const availableTypes = useMemo(
     () => [...new Set(profiles.map((p) => p.profileType))].sort(),
@@ -147,6 +173,14 @@ export function ProfileList({
     return <ProfilingEmptyState />
   }
 
+  if (visibleProfiles.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground py-6 text-center">
+        No profiles match "{query}".
+      </p>
+    )
+  }
+
   const table = (
     <Table className="[&_th]:h-8 [&_th]:px-2 [&_th]:text-xs [&_td]:py-1.5 [&_td]:px-2 [&_td]:text-xs">
       <TableHeader>
@@ -162,7 +196,7 @@ export function ProfileList({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {profiles.map((profile: ProfileResponse) => {
+        {visibleProfiles.map((profile: ProfileResponse) => {
           const parsedStart = parseUtcDate(profile.startTime)
           return (
             <TableRow key={profile.profileId} className="group">
@@ -237,38 +271,43 @@ export function ProfileList({
     return table
   }
 
+  const showInlineFilters = Boolean(onServiceFilterChange || onTypeFilterChange)
+
   return (
     <div className="space-y-2">
-      {/* Filters */}
-      <div className="flex items-center gap-1.5">
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <Input
-            placeholder="Filter by service..."
-            value={serviceFilter}
-            onChange={(e) => onServiceFilterChange?.(e.target.value)}
-            className="pl-8 h-7 text-xs"
-          />
+      {showInlineFilters && (
+        <div className="flex items-center gap-1.5">
+          {onServiceFilterChange && (
+            <div className="relative flex-1 max-w-xs">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Filter by service..."
+                value={serviceFilter}
+                onChange={(e) => onServiceFilterChange(e.target.value)}
+                className="pl-8 h-7 text-xs"
+              />
+            </div>
+          )}
+          {onTypeFilterChange && availableTypes.length > 1 && (
+            <Select
+              value={typeFilter || '__all'}
+              onValueChange={(v) => onTypeFilterChange(v === '__all' ? '' : v)}
+            >
+              <SelectTrigger className="h-7 w-[140px] text-xs">
+                <SelectValue placeholder="All types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all">All types</SelectItem>
+                {availableTypes.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {t}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
-        {availableTypes.length > 1 && (
-          <Select
-            value={typeFilter || '__all'}
-            onValueChange={(v) => onTypeFilterChange?.(v === '__all' ? '' : v)}
-          >
-            <SelectTrigger className="h-7 w-[140px] text-xs">
-              <SelectValue placeholder="All types" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all">All types</SelectItem>
-              {availableTypes.map((t) => (
-                <SelectItem key={t} value={t}>
-                  {t}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-      </div>
+      )}
 
       {/* Summary stats */}
       {stats && (

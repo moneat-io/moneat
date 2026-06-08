@@ -217,7 +217,7 @@ export function TeamSettings() {
 
           {inviteMutation.isSuccess && (
             <Alert>
-              <AlertDescription className="text-green-700">
+              <AlertDescription className="text-success-fg">
                 Invitation sent successfully!
               </AlertDescription>
             </Alert>
@@ -276,7 +276,7 @@ export function TeamSettings() {
                             Change Role
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            className="text-red-600"
+                            className="text-danger-fg"
                             onClick={() => setMemberToRemove(member)}
                           >
                             <UserMinus className="mr-2 h-4 w-4" />

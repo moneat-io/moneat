@@ -138,7 +138,7 @@ class SummaryServiceTest {
                 it[providerConfigId] = 1
                 it[this.alertSource] = alertSource
                 it[deduplicationKey] = dedupKey
-                it[incidentSeverity] = "critical"
+                it[alertPriority] = "critical"
                 it[incidentStatus] = "triggered"
                 it[title] = "CPU alert fired"
                 it[success] = true

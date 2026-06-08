@@ -9,7 +9,8 @@
 import {createFileRoute} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
-import {Card, CardContent} from '@/components/ui/card'
+import {SectionCard} from '@/components/ui/section-card'
+import {EmptyState} from '@/components/ui/empty-state'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Input} from '@/components/ui/input'
 import {Badge} from '@/components/ui/badge'
@@ -60,17 +61,11 @@ function NdmPaths() {
 
   if (paths.length === 0) {
     return (
-      <Card className="border-dashed">
-        <CardContent className="py-16 text-center">
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500/10 to-blue-500/10">
-            <Wifi className="h-8 w-8 text-cyan-500" />
-          </div>
-          <h3 className="text-lg font-semibold mb-2">No path data</h3>
-          <p className="text-muted-foreground max-w-sm mx-auto">
-            Network path data will appear here once collected by the agent.
-          </p>
-        </CardContent>
-      </Card>
+      <EmptyState
+        icon={Wifi}
+        title="No path data"
+        description="Network path data will appear here once collected by the agent."
+      />
     )
   }
 
@@ -78,7 +73,7 @@ function NdmPaths() {
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-1.5 text-sm">
-          <Wifi className="h-3.5 w-3.5 text-cyan-500" />
+          <Wifi className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="font-semibold tabular-nums">{paths.length}</span>
           <span className="text-muted-foreground text-xs">paths</span>
         </div>
@@ -95,13 +90,13 @@ function NdmPaths() {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <p className="font-medium">No paths match your search</p>
-          <p className="text-sm mt-1">Try adjusting your search query.</p>
-        </div>
+        <EmptyState
+          icon={Search}
+          title="No paths match your search"
+          description="Try adjusting your search query."
+        />
       ) : (
-        <Card className="overflow-hidden border-border/60">
-          <CardContent className="p-0">
+        <SectionCard title="Paths" icon={Wifi} iconTone="info" count={filtered.length} flushBody>
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent bg-muted/30">
@@ -119,7 +114,7 @@ function NdmPaths() {
                       <TableCell className="pl-4 font-mono text-xs">{p.source}</TableCell>
                       <TableCell className="font-mono text-xs">{p.destination}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="text-xs tabular-nums">{hopCount} hops</Badge>
+                        <Badge variant="neutral" size="sm" className="tabular-nums">{hopCount} hops</Badge>
                       </TableCell>
                       <TableCell className="text-right pr-4 text-xs text-muted-foreground">{p.collectedAt}</TableCell>
                     </TableRow>
@@ -127,8 +122,7 @@ function NdmPaths() {
                 })}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
+        </SectionCard>
       )}
     </div>
   )

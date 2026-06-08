@@ -34,7 +34,7 @@ import com.moneat.dashboards.services.DataSourceCredentials
 import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.dashboards.services.DashboardQueryEngine
 import com.moneat.alerts.models.AlertSource
-import com.moneat.alerts.models.AlertSeverity
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.incident.services.IncidentService
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.testsupport.TestDatabaseHelper
@@ -89,6 +89,7 @@ class DashboardAlertServiceTest {
     companion object {
         private var db: Database? = null
         private const val ORG_ID = 1L
+        private const val OTHER_ORG_ID = 2L
         private const val CREATED_BY = 100L
         private const val DEFAULT_PROJECT_ID = 1L
         private const val RECOVERY_RETENTION_DAYS = 90
@@ -182,7 +183,7 @@ class DashboardAlertServiceTest {
                     warning_threshold DOUBLE PRECISION,
                     metric_index INT DEFAULT 0 NOT NULL,
                     duration_seconds INT DEFAULT 0 NOT NULL,
-                    incident_severity VARCHAR(20),
+                    alert_priority VARCHAR(20),
                     enabled BOOLEAN DEFAULT TRUE NOT NULL,
                     notification_channels TEXT NOT NULL, -- H2: JSONB unsupported; production uses JSONB
                     last_triggered_at TIMESTAMP,
@@ -229,12 +230,13 @@ class DashboardAlertServiceTest {
 
     private fun seedDashboard(
         title: String = "Test Dashboard",
-        projectId: Long? = DEFAULT_PROJECT_ID
+        projectId: Long? = DEFAULT_PROJECT_ID,
+        orgId: Long = ORG_ID
     ): Long =
         transaction {
             val now = Clock.System.now()
             Dashboards.insert {
-                it[orgId] = ORG_ID
+                it[Dashboards.orgId] = orgId
                 it[Dashboards.projectId] = projectId
                 it[Dashboards.title] = title
                 it[createdBy] = CREATED_BY
@@ -269,7 +271,7 @@ class DashboardAlertServiceTest {
         val warningThreshold: Double? = null,
         val metricIndex: Int = 0,
         val durationSeconds: Int = 0,
-        val incidentSeverity: String? = null,
+        val alertPriority: String? = null,
         val enabled: Boolean = true,
         val notificationChannels: NotificationChannels = NotificationChannels(),
     )
@@ -285,7 +287,7 @@ class DashboardAlertServiceTest {
         warningThreshold = overrides.warningThreshold,
         metricIndex = overrides.metricIndex,
         durationSeconds = overrides.durationSeconds,
-        incidentSeverity = overrides.incidentSeverity,
+        alertPriority = overrides.alertPriority,
         enabled = overrides.enabled,
         notificationChannels = overrides.notificationChannels,
     )
@@ -333,7 +335,7 @@ class DashboardAlertServiceTest {
         assertTrue(response.enabled)
         assertEquals(0, response.metricIndex)
         assertEquals(0, response.durationSeconds)
-        assertNull(response.incidentSeverity)
+        assertNull(response.alertPriority)
         assertNull(response.lastTriggeredAt)
         assertNull(response.lastTriggeredLevel)
         assertNull(response.lastValue)
@@ -386,13 +388,13 @@ class DashboardAlertServiceTest {
             createdBy = CREATED_BY,
             request = buildCreateRequest(
                 widgetId,
-                AlertRequestOverrides(metricIndex = 2, durationSeconds = 300, incidentSeverity = "CRITICAL"),
+                AlertRequestOverrides(metricIndex = 2, durationSeconds = 300, alertPriority = "CRITICAL"),
             ),
         )
 
         assertEquals(2, response.metricIndex)
         assertEquals(300, response.durationSeconds)
-        assertEquals("CRITICAL", response.incidentSeverity)
+        assertEquals("P0", response.alertPriority)
     }
 
     @Test
@@ -496,6 +498,23 @@ class DashboardAlertServiceTest {
                 request = buildCreateRequest(widgetId),
             )
         }
+    }
+
+    @Test
+    fun `createAlert fails when dashboard belongs to another org`() {
+        val dashboardId = seedDashboard(orgId = OTHER_ORG_ID)
+        val widgetId = seedWidget(dashboardId)
+
+        val error = assertFailsWith<IllegalArgumentException> {
+            service.createAlert(
+                dashboardId = dashboardId,
+                orgId = ORG_ID,
+                createdBy = CREATED_BY,
+                request = buildCreateRequest(widgetId),
+            )
+        }
+
+        assertEquals("Widget not found in this dashboard", error.message)
     }
 
     // ──── listAlerts tests ────
@@ -814,7 +833,7 @@ class DashboardAlertServiceTest {
                 retentionPolicyService.getRetentionDaysForProject(any())
             } returns RECOVERY_RETENTION_DAYS
             coEvery {
-                queryEngine.executeQuery(any(), any(), any(), any())
+                queryEngine.executeQuery(any(), any(), any(), any(), any())
             } returns listOf(mapOf("total" to JsonPrimitive(RECOVERED_TOTAL)))
 
             val dashboardId = seedDashboard()
@@ -833,7 +852,7 @@ class DashboardAlertServiceTest {
                         AlertRequestOverrides(
                             condition = ">",
                             threshold = RECOVERY_THRESHOLD,
-                            incidentSeverity = "HIGH",
+                            alertPriority = "HIGH",
                             notificationChannels = NotificationChannels(email = false, slack = true, discord = false),
                         ),
                     ),
@@ -878,7 +897,7 @@ class DashboardAlertServiceTest {
                 retentionPolicyService.getRetentionDaysForProject(any())
             } returns RECOVERY_RETENTION_DAYS
             coEvery {
-                queryEngine.executeQuery(any(), any(), any(), any())
+                queryEngine.executeQuery(any(), any(), any(), any(), any())
             } returns listOf(mapOf("total" to JsonPrimitive(90.0)))
 
             val dashboardId = seedDashboard()
@@ -897,7 +916,7 @@ class DashboardAlertServiceTest {
                         AlertRequestOverrides(
                             threshold = 100.0,
                             warningThreshold = 80.0,
-                            incidentSeverity = "CRITICAL",
+                            alertPriority = "CRITICAL",
                         ),
                     ),
                 )
@@ -910,7 +929,7 @@ class DashboardAlertServiceTest {
             coVerify(exactly = 1) {
                 workflowService.publishAlertTriggered(
                     match {
-                        it.severity == AlertSeverity.LOW &&
+                        it.priority == AlertPriority.P3 &&
                             it.title == "Dashboard Warning: High Error Rate" &&
                             it.source == AlertSource.DASHBOARD_ALERT &&
                             it.metadata["alert.display_title"]?.jsonPrimitive?.content == "High Error Rate" &&
@@ -930,7 +949,7 @@ class DashboardAlertServiceTest {
                 retentionPolicyService.getRetentionDaysForProject(any())
             } returns RECOVERY_RETENTION_DAYS
             coEvery {
-                queryEngine.executeQuery(any(), any(), any(), any())
+                queryEngine.executeQuery(any(), any(), any(), any(), any())
             } returns listOf(mapOf("total" to JsonPrimitive(125.0)))
 
             val dashboardId = seedDashboard()
@@ -949,7 +968,7 @@ class DashboardAlertServiceTest {
                         AlertRequestOverrides(
                             threshold = 100.0,
                             warningThreshold = 80.0,
-                            incidentSeverity = "HIGH",
+                            alertPriority = "HIGH",
                             notificationChannels = NotificationChannels(email = false, slack = false, discord = false),
                         ),
                     ),
@@ -963,7 +982,7 @@ class DashboardAlertServiceTest {
             coVerify(exactly = 1) {
                 incidentService.fireAlert(
                     match {
-                        it.severity == AlertSeverity.HIGH &&
+                        it.priority == AlertPriority.P1 &&
                             it.title == "Dashboard Error: High Error Rate"
                     },
                     publishWorkflow = false,
@@ -990,7 +1009,7 @@ class DashboardAlertServiceTest {
                 retentionPolicyService.getRetentionDaysForProject(any())
             } returns RECOVERY_RETENTION_DAYS
             coEvery {
-                queryEngine.executeQuery(any(), any(), any(), any())
+                queryEngine.executeQuery(any(), any(), any(), any(), any())
             } returns listOf(mapOf("total" to JsonPrimitive(90.0)))
 
             val dashboardId = seedDashboard()
@@ -1032,7 +1051,7 @@ class DashboardAlertServiceTest {
                 retentionPolicyService.getRetentionDaysForProject(any())
             } returns RECOVERY_RETENTION_DAYS
             coEvery {
-                queryEngine.executeQuery(any(), any(), any(), any())
+                queryEngine.executeQuery(any(), any(), any(), any(), any())
             } returns listOf(mapOf("total" to JsonPrimitive(90.0)))
 
             val dashboardId = seedDashboard()
@@ -1071,7 +1090,7 @@ class DashboardAlertServiceTest {
                 retentionPolicyService.getRetentionDaysForProject(any())
             } returns RECOVERY_RETENTION_DAYS
             coEvery {
-                queryEngine.executeQuery(any(), any(), any(), any())
+                queryEngine.executeQuery(any(), any(), any(), any(), any())
             } returns listOf(mapOf("total" to JsonPrimitive(70.0)))
 
             val dashboardId = seedDashboard()
@@ -1117,7 +1136,7 @@ class DashboardAlertServiceTest {
 
             callPrivateSuspend("evaluateAlerts")
 
-            coVerify(exactly = 0) { queryEngine.executeQuery(any(), any(), any(), any()) }
+            coVerify(exactly = 0) { queryEngine.executeQuery(any(), any(), any(), any(), any()) }
         }
 
     @Test
@@ -1130,7 +1149,7 @@ class DashboardAlertServiceTest {
                 retentionPolicyService.getRetentionDaysForProject(any())
             } returns RECOVERY_RETENTION_DAYS
             coEvery {
-                queryEngine.executeQuery(any(), any(), any(), any())
+                queryEngine.executeQuery(any(), any(), any(), any(), any())
             } throws RuntimeException("query failed")
 
             val dashboardId = seedDashboard()
@@ -1230,7 +1249,7 @@ class DashboardAlertServiceTest {
 
             assertTrue(result.isEmpty())
             coVerify(exactly = 0) {
-                queryEngine.executeQuery(any(), any(), any(), any())
+                queryEngine.executeQuery(any(), any(), any(), any(), any())
             }
         }
 
@@ -1243,7 +1262,7 @@ class DashboardAlertServiceTest {
                 retentionPolicyService.getRetentionDaysForProject(DEFAULT_PROJECT_ID)
             } returns null
             coEvery {
-                queryEngine.executeQuery(query, DEFAULT_PROJECT_ID, null, RECOVERY_RETENTION_DAYS)
+                queryEngine.executeQuery(query, DEFAULT_PROJECT_ID, null, RECOVERY_RETENTION_DAYS, ORG_ID)
             } returns rows
 
             val result = service.executeQueryForAlert(

@@ -22,6 +22,7 @@ import com.moneat.datadog.reserveDatadogQuota
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.services.TraceIngestionService
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
@@ -29,6 +30,8 @@ import io.ktor.server.request.contentType
 import io.ktor.server.request.receiveChannel
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
+import io.ktor.server.routing.get
+import io.ktor.server.routing.head
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
@@ -48,11 +51,18 @@ private val json = Json {
 }
 
 private const val QUEUE_KEY = "moneat:traces:queue"
+private const val TRACE_V02_PATH = "/v0.2/traces"
+private const val TRACE_STATS_V02_PATH = "/v0.2/stats"
+private const val TRACE_STATS_V06_PATH = "/v0.6/stats"
+private const val SUPPORT_FLARE_PATH = "/flare"
 
 fun Route.traceIngestRoutes(
     quotaService: BillingQuotaService = BillingQuotaService(),
 ) {
     route("/dd") {
+        get("/_health") { respondAgentDiagnosticOk() }
+        head("/_health") { respondAgentDiagnosticOk() }
+
         // PUT /dd/v0.3/traces - v0.3 format (msgpack)
         put("/v0.3/traces") { handleTraceIntake(quotaService) }
         // PUT /dd/v0.4/traces - v0.4 format (msgpack, primary)
@@ -63,15 +73,39 @@ fun Route.traceIngestRoutes(
         put("/v0.7/traces") { handleTraceIntake(quotaService) }
 
         // PUT /dd/v0.6/stats - trace stats (local agent format)
-        put("/v0.6/stats") { handleTraceStats(quotaService) }
+        put(TRACE_STATS_V06_PATH) { handleTraceStats(quotaService) }
 
         // DD agent backend/edge format - sent by dd-agent trace writer when forwarding to
         // the configured DD_APM_DD_URL (e.g. https://api.moneat.io/dd)
         route("/api") {
-            post("/v0.2/traces") { handleTraceIntake(quotaService) }
-            post("/v0.6/stats") { handleTraceStats(quotaService) }
+            post(TRACE_V02_PATH) { handleTraceIntake(quotaService) }
+            put(TRACE_V02_PATH) { handleTraceIntake(quotaService) }
+            post(TRACE_STATS_V02_PATH) { handleTraceStats(quotaService) }
+            put(TRACE_STATS_V02_PATH) { handleTraceStats(quotaService) }
+            post(TRACE_STATS_V06_PATH) { handleTraceStats(quotaService) }
+            put(TRACE_STATS_V06_PATH) { handleTraceStats(quotaService) }
+        }
+
+        route("/support") {
+            get(SUPPORT_FLARE_PATH) { respondAgentDiagnosticOk() }
+            head(SUPPORT_FLARE_PATH) { respondAgentDiagnosticOk() }
+            post(SUPPORT_FLARE_PATH) { respondAgentDiagnosticOk() }
         }
     }
+
+    // Some DD agent writers strip path prefixes from configured intake URLs.
+    route("/api") {
+        post(TRACE_V02_PATH) { handleTraceIntake(quotaService) }
+        put(TRACE_V02_PATH) { handleTraceIntake(quotaService) }
+        post(TRACE_STATS_V02_PATH) { handleTraceStats(quotaService) }
+        put(TRACE_STATS_V02_PATH) { handleTraceStats(quotaService) }
+        post(TRACE_STATS_V06_PATH) { handleTraceStats(quotaService) }
+        put(TRACE_STATS_V06_PATH) { handleTraceStats(quotaService) }
+    }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.respondAgentDiagnosticOk() {
+    call.respond(HttpStatusCode.OK, mapOf("status" to "ok", "compatibility" to "agent-diagnostic"))
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleTraceIntake(
@@ -90,7 +124,13 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleTraceIntake(
     val isJson = contentType.withoutParameters() == ContentType.Application.Json
     val isProtobuf = contentType.contentSubtype.contains("protobuf")
     val tracesJsonElement = if (isJson) {
-        json.parseToJsonElement(bytes.decodeToString())
+        suspendRunCatching {
+            json.parseToJsonElement(bytes.decodeToString())
+        }.getOrElse { e ->
+            logger.warn(e) { "Failed to parse DD trace payload" }
+            call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Unparseable trace payload"))
+            return
+        }
     } else {
         null
     }
@@ -149,11 +189,19 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleTraceStats(
 
     val rawBytes = call.receiveChannel().toByteArray()
     val bytes = DecompressionService.decompress(rawBytes, call.request.headers["Content-Encoding"])
-    val body = bytes.decodeToString()
+    val isJson = call.request.contentType().withoutParameters() == ContentType.Application.Json
 
-    val payload = json.decodeFromString<
-        com.moneat.datadog.models.DdStatsPayload
-        >(body)
+    val payload = suspendRunCatching {
+        if (isJson) {
+            json.decodeFromString<com.moneat.datadog.models.DdStatsPayload>(bytes.decodeToString())
+        } else {
+            TraceIngestionService.parseMsgpackStats(bytes)
+        }
+    }.getOrElse { e ->
+        logger.warn(e) { "Failed to parse DD trace stats payload" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Unparseable trace stats payload"))
+        return
+    }
     val requestedUnits = payload.stats.sumOf { it.stats.size }
     if (!reserveDatadogQuota(call, quotaService, organizationId, requestedUnits, "dd_trace", bytes.size.toLong())) {
         return
@@ -169,11 +217,11 @@ private fun countTraceSpans(
     tracesJsonElement: JsonElement?,
     isProtobuf: Boolean,
 ): Int? {
-    if (tracesJsonElement != null) {
-        return tracesJsonElement.jsonArray.sumOf { trace -> trace.jsonArray.size }
-    }
-
     return runCatching {
+        if (tracesJsonElement != null) {
+            return@runCatching tracesJsonElement.jsonArray.sumOf { trace -> trace.jsonArray.size }
+        }
+
         val traces = if (isProtobuf) {
             TraceIngestionService.parseProtobufAgentPayload(bytes)
         } else {

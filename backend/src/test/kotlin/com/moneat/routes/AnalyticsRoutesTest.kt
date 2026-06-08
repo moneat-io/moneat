@@ -27,6 +27,7 @@ import com.moneat.analytics.models.RealtimeResponse
 import com.moneat.analytics.models.RetentionResponse
 import com.moneat.analytics.models.TimeseriesPoint
 import com.moneat.analytics.routes.analyticsRoutes
+import com.moneat.analytics.services.AnalyticsQueryScope
 import com.moneat.analytics.services.AnalyticsService
 import com.moneat.events.services.DashboardService
 import com.moneat.shared.models.Memberships
@@ -61,6 +62,7 @@ import kotlin.test.assertTrue
 class AnalyticsRoutesTest {
     companion object {
         private const val PROJECT_ID = 1L
+        private const val SECOND_PROJECT_ID = 2L
         private const val OVERVIEW_PERIOD_30D = "/overview?period=30d"
         private var db: Database? = null
     }
@@ -91,7 +93,8 @@ class AnalyticsRoutesTest {
         installJwtAuth()
     }
 
-    private fun token(userId: Int): String = RouteTestSupport.createToken(userId)
+    private fun token(userId: Int, orgId: Int? = null): String =
+        RouteTestSupport.createToken(userId, orgId)
 
     private fun seedUser(): Int = transaction {
         Users.insert {
@@ -99,6 +102,24 @@ class AnalyticsRoutesTest {
             it[password_hash] = "hash"
             it[email_verified] = true
         } get Users.id
+    }
+
+    private fun seedOrganizationMembership(): Pair<Int, Int> {
+        val userId = seedUser()
+        val orgId = transaction {
+            Organizations.insert {
+                it[name] = "Analytics Org"
+                it[slug] = "analytics-org-${System.nanoTime()}"
+            } get Organizations.id
+        }
+        transaction {
+            Memberships.insert {
+                it[user_id] = userId
+                it[organization_id] = orgId
+                it[role] = "owner"
+            }
+        }
+        return userId to orgId
     }
 
     private fun installRoutes(app: Application) {
@@ -198,6 +219,117 @@ class AnalyticsRoutesTest {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.BadRequest, r.status)
+    }
+
+    @Test
+    fun `GET org overview forwards service id and name filters`() = testApplication {
+        val (userId, orgId) = seedOrganizationMembership()
+        every { mockDashboardService.getServiceIdsForOrganization(orgId) } returns
+            listOf(PROJECT_ID, SECOND_PROJECT_ID)
+        every { mockDashboardService.resolveServiceId(orgId, "API") } returns SECOND_PROJECT_ID
+        coEvery {
+            mockAnalyticsService.getOverview(
+                match<AnalyticsQueryScope> { it.serviceIds == listOf(PROJECT_ID, SECOND_PROJECT_ID) },
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+            )
+        } returns overviewResponse
+
+        application { installRoutes(this) }
+        val r = client.get("/v1/analytics/overview?period=30d&serviceIds=$PROJECT_ID&services=API") {
+            withAuth(token(userId, orgId))
+        }
+
+        assertEquals(HttpStatusCode.OK, r.status)
+        coVerify(exactly = 1) {
+            mockAnalyticsService.getOverview(
+                match<AnalyticsQueryScope> { it.serviceIds == listOf(PROJECT_ID, SECOND_PROJECT_ID) },
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+            )
+        }
+    }
+
+    @Test
+    fun `GET org pages uses all organization services when filters are absent`() = testApplication {
+        val (userId, orgId) = seedOrganizationMembership()
+        every { mockDashboardService.getServiceIdsForOrganization(orgId) } returns
+            listOf(PROJECT_ID, SECOND_PROJECT_ID)
+        coEvery {
+            mockAnalyticsService.getPages(
+                match<AnalyticsQueryScope> { it.serviceIds == listOf(PROJECT_ID, SECOND_PROJECT_ID) },
+                any(),
+                any(),
+                any(),
+                10,
+            )
+        } returns breakdownResponse
+
+        application { installRoutes(this) }
+        val r = client.get("/v1/analytics/pages?period=30d&limit=10") {
+            withAuth(token(userId, orgId))
+        }
+
+        assertEquals(HttpStatusCode.OK, r.status)
+        coVerify(exactly = 1) {
+            mockAnalyticsService.getPages(
+                match<AnalyticsQueryScope> { it.serviceIds == listOf(PROJECT_ID, SECOND_PROJECT_ID) },
+                any(),
+                any(),
+                any(),
+                10,
+            )
+        }
+    }
+
+    @Test
+    fun `GET org overview returns 400 for invalid service id filter`() = testApplication {
+        val (userId, orgId) = seedOrganizationMembership()
+
+        application { installRoutes(this) }
+        val r = client.get("/v1/analytics/overview?serviceIds=not-a-service-id") {
+            withAuth(token(userId, orgId))
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, r.status)
+        coVerify(exactly = 0) {
+            mockAnalyticsService.getOverview(
+                any<AnalyticsQueryScope>(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+            )
+        }
+    }
+
+    @Test
+    fun `GET org overview returns 404 when user lacks organization access`() = testApplication {
+        val userId = seedUser()
+
+        application { installRoutes(this) }
+        val r = client.get("/v1/analytics/overview") {
+            withAuth(token(userId, 99999))
+        }
+
+        assertEquals(HttpStatusCode.NotFound, r.status)
+        coVerify(exactly = 0) {
+            mockAnalyticsService.getOverview(
+                any<AnalyticsQueryScope>(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+            )
+        }
     }
 
     // ──── Overview ────

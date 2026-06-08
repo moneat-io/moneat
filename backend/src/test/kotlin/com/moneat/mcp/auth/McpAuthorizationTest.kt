@@ -26,11 +26,14 @@ import com.moneat.mcp.protocol.ToolCallResult
 import com.moneat.mcp.protocol.ToolContent
 import com.moneat.mcp.tools.GetContainerMetricsTool
 import com.moneat.mcp.tools.GetHostMetricsTool
+import com.moneat.security.detection.DetectionRules
+import com.moneat.security.signals.SecuritySignals
 import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Users
 import com.moneat.statuspage.models.StatusPages
+import com.moneat.synthetics.routes.SyntheticTests
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.uptime.models.UptimeMonitors
 import kotlinx.coroutines.runBlocking
@@ -39,6 +42,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -172,12 +176,17 @@ class McpAuthorizationTest {
         assertTrue(result.content[0].text!!.contains("host not found"))
     }
 
+    // ──── Security object access tests ────
+
     @Test
     fun `owned objects authorize successfully`() = runBlocking {
         val dashboardId = seedDashboard(organizationId = 1)
         val monitorId = seedUptimeMonitor(organizationId = 1)
+        val syntheticTestId = seedSyntheticTest(organizationId = 1)
         val pageId = seedStatusPage(organizationId = 1)
         val dataSourceId = seedDataSource(organizationId = 1)
+        val securitySignalId = seedSecuritySignal(organizationId = 1)
+        val detectionRuleId = seedDetectionRule(organizationId = 1)
 
         val result = registryWithNoopTool().callTool(
             name = "read_project",
@@ -185,9 +194,12 @@ class McpAuthorizationTest {
                 mapOf(
                     "dashboard_id" to JsonPrimitive(dashboardId),
                     "monitor_id" to JsonPrimitive(monitorId.toString()),
+                    "synthetic_test_id" to JsonPrimitive(syntheticTestId.toString()),
                     "page_id" to JsonPrimitive(pageId.toString()),
                     "status_page_id" to JsonPrimitive(pageId.toString()),
                     "data_source_id" to JsonPrimitive(dataSourceId),
+                    "security_signal_id" to JsonPrimitive(securitySignalId),
+                    "detection_rule_id" to JsonPrimitive(detectionRuleId),
                 )
             ),
             context = context,
@@ -196,6 +208,8 @@ class McpAuthorizationTest {
         assertTrue(!result.isError)
         assertTrue(result.content[0].text!!.contains("ok"))
     }
+
+    // ──── Cross-org security object tests ────
 
     @Test
     fun `objects from another org return authorization errors`() = runBlocking {
@@ -206,8 +220,23 @@ class McpAuthorizationTest {
                 JsonPrimitive(seedUptimeMonitor(organizationId = 2).toString()),
                 "uptime monitor not found",
             ),
+            Triple(
+                "synthetic_test_id",
+                JsonPrimitive(seedSyntheticTest(organizationId = 2).toString()),
+                "synthetic test not found",
+            ),
             Triple("page_id", JsonPrimitive(seedStatusPage(organizationId = 2).toString()), "status page not found"),
             Triple("data_source_id", JsonPrimitive(seedDataSource(organizationId = 2)), "data source not found"),
+            Triple(
+                "security_signal_id",
+                JsonPrimitive(seedSecuritySignal(organizationId = 2)),
+                "security signal not found",
+            ),
+            Triple(
+                "detection_rule_id",
+                JsonPrimitive(seedDetectionRule(organizationId = 2)),
+                "detection rule not found",
+            ),
         )
 
         cases.forEach { (key, value, expectedError) ->
@@ -288,6 +317,17 @@ class McpAuthorizationTest {
             monitorId
         }
 
+    private fun seedSyntheticTest(organizationId: Int): UUID =
+        transaction {
+            seedOrganization(organizationId)
+            val testId = UUID.randomUUID()
+            SyntheticTests.insert {
+                it[id] = testId
+                it[SyntheticTests.organizationId] = organizationId
+            }
+            testId
+        }
+
     private fun seedStatusPage(organizationId: Int): UUID =
         transaction {
             seedOrganization(organizationId)
@@ -337,6 +377,55 @@ class McpAuthorizationTest {
             dataSourceId
         }
 
+    // ──── Security object helpers ────
+
+    private fun seedSecuritySignal(organizationId: Int): Int =
+        transaction {
+            seedOrganization(organizationId)
+            val now = Clock.System.now()
+            SecuritySignals.insertAndGetId {
+                it[SecuritySignals.organizationId] = organizationId
+                it[SecuritySignals.signalSource] = "detection"
+                it[SecuritySignals.ruleId] = "rule-$organizationId"
+                it[SecuritySignals.ruleName] = "Rule $organizationId"
+                it[SecuritySignals.severity] = "high"
+                it[SecuritySignals.status] = "open"
+                it[SecuritySignals.dedupKey] = "rule-$organizationId|host=web"
+                it[SecuritySignals.entities] = "{}"
+                it[SecuritySignals.sampleCount] = 1
+                it[SecuritySignals.tags] = "[]"
+                it[SecuritySignals.firstSeen] = now
+                it[SecuritySignals.lastSeen] = now
+                it[SecuritySignals.createdAt] = now
+                it[SecuritySignals.updatedAt] = now
+            }.value
+        }
+
+    private fun seedDetectionRule(organizationId: Int): Int =
+        transaction {
+            seedOrganization(organizationId)
+            val now = Clock.System.now()
+            DetectionRules.insertAndGetId {
+                it[DetectionRules.organizationId] = organizationId
+                it[DetectionRules.name] = "Rule $organizationId"
+                it[DetectionRules.description] = ""
+                it[DetectionRules.ruleSource] = "logs"
+                it[DetectionRules.filter] = "*"
+                it[DetectionRules.groupBy] = "[]"
+                it[DetectionRules.windowSeconds] = 300
+                it[DetectionRules.type] = "threshold"
+                it[DetectionRules.thresholdCount] = 1
+                it[DetectionRules.severity] = "medium"
+                it[DetectionRules.signalTitle] = ""
+                it[DetectionRules.signalMessage] = ""
+                it[DetectionRules.suppressions] = "[]"
+                it[DetectionRules.enabled] = false
+                it[DetectionRules.tags] = "[]"
+                it[DetectionRules.createdAt] = now
+                it[DetectionRules.updatedAt] = now
+            }.value
+        }
+
     private fun seedOrganization(id: Int) {
         if (Organizations.selectAll().where { Organizations.id eq id }.count() > 0) {
             return
@@ -354,7 +443,10 @@ class McpAuthorizationTest {
                 "dashboards",
                 "custom_data_sources",
                 "uptime_monitors",
+                "synthetic_tests",
                 "status_pages",
+                "security_signals",
+                "detection_rules",
             ).forEach { tableName ->
                 exec("DROP TABLE IF EXISTS $tableName")
             }
@@ -402,11 +494,66 @@ class McpAuthorizationTest {
             )
             exec(
                 """
+                CREATE TABLE synthetic_tests (
+                    id UUID PRIMARY KEY,
+                    organization_id INT NOT NULL
+                )
+                """.trimIndent()
+            )
+            exec(
+                """
                 CREATE TABLE status_pages (
                     id UUID PRIMARY KEY,
                     organization_id INT NOT NULL,
                     name VARCHAR(255) NOT NULL,
                     slug VARCHAR(100) NOT NULL,
+                    created_at TIMESTAMP NOT NULL,
+                    updated_at TIMESTAMP NOT NULL
+                )
+                """.trimIndent()
+            )
+            exec(
+                """
+                CREATE TABLE security_signals (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    organization_id INT NOT NULL,
+                    source VARCHAR(32) NOT NULL,
+                    rule_id VARCHAR(255) NOT NULL,
+                    rule_name VARCHAR(255) NOT NULL,
+                    severity VARCHAR(16) NOT NULL,
+                    status VARCHAR(16) NOT NULL DEFAULT 'open',
+                    archive_reason VARCHAR(16),
+                    dedup_key TEXT NOT NULL,
+                    entities TEXT NOT NULL DEFAULT '{}',
+                    sample_count INT NOT NULL DEFAULT 1,
+                    assignee_user_id INT,
+                    tags TEXT NOT NULL DEFAULT '[]',
+                    first_seen TIMESTAMP NOT NULL,
+                    last_seen TIMESTAMP NOT NULL,
+                    created_at TIMESTAMP NOT NULL,
+                    updated_at TIMESTAMP NOT NULL
+                )
+                """.trimIndent()
+            )
+            exec(
+                """
+                CREATE TABLE detection_rules (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    organization_id INT NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    description TEXT NOT NULL DEFAULT '',
+                    source VARCHAR(32) NOT NULL DEFAULT 'logs',
+                    filter TEXT NOT NULL DEFAULT '',
+                    group_by TEXT NOT NULL DEFAULT '[]',
+                    window_seconds INT NOT NULL DEFAULT 300,
+                    type VARCHAR(32) NOT NULL DEFAULT 'threshold',
+                    threshold_count INT,
+                    severity VARCHAR(16) NOT NULL DEFAULT 'medium',
+                    signal_title TEXT NOT NULL DEFAULT '',
+                    signal_message TEXT NOT NULL DEFAULT '',
+                    suppressions TEXT NOT NULL DEFAULT '[]',
+                    enabled BOOLEAN NOT NULL DEFAULT FALSE,
+                    tags TEXT NOT NULL DEFAULT '[]',
                     created_at TIMESTAMP NOT NULL,
                     updated_at TIMESTAMP NOT NULL
                 )

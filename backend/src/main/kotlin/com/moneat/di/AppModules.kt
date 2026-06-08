@@ -17,6 +17,7 @@
 package com.moneat.di
 
 import com.moneat.ai.AiChatService
+import com.moneat.alerts.services.AlertEpisodeService
 import com.moneat.analytics.services.AnalyticsService
 import com.moneat.analytics.services.GeoIpService
 import com.moneat.analytics.services.SessionHashService
@@ -65,6 +66,7 @@ import com.moneat.llm.services.LlmDashboardService
 import com.moneat.logs.repositories.LogRepository
 import com.moneat.logs.repositories.LogRepositoryImpl
 import com.moneat.logs.services.LogIndexService
+import com.moneat.logs.services.LogManagementService
 import com.moneat.logs.services.LogService
 import com.moneat.monitor.repositories.HostAlertRepository
 import com.moneat.monitor.repositories.HostAlertRepositoryImpl
@@ -72,9 +74,10 @@ import com.moneat.monitor.repositories.HostRepository
 import com.moneat.monitor.repositories.HostRepositoryImpl
 import com.moneat.monitor.services.AgentApiKeyService
 import com.moneat.monitor.services.MonitorAlertService
+import com.moneat.monitor.services.MonitorService
 import com.moneat.security.detection.DetectionScheduler
 import com.moneat.security.vulnerabilities.VulnerabilityAdvisorySyncJob
-import com.moneat.monitor.services.MonitorService
+import com.moneat.contact.services.ContactService
 import com.moneat.notifications.services.AlertNotificationPreferencesService
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
@@ -129,9 +132,11 @@ val sharedModule = module {
     single<OrganizationRepository> { OrganizationRepositoryImpl() }
 
     single { EmailService() }
+    single { ContactService(get()) }
     single { SlackService() }
     single { DiscordService() }
     single { AlertNotificationPreferencesService() }
+    single { AlertEpisodeService() }
     single { WorkflowStepRenderer() }
     single {
         WorkflowTrustedActionExecutor(
@@ -150,7 +155,7 @@ val sharedModule = module {
     single { ExecuteEgressActionActivityImpl(get()) }
     single { TemporalClientProvider() }
     single<WorkflowExecutionEngine> { TemporalWorkflowExecutionEngine(get()) }
-    single { WorkflowService(get(), get(), get(), get(), get(), get(), get()) }
+    single { WorkflowService(get(), get(), get(), get(), get(), get(), get(), get()) }
     single { WorkflowGovernanceService(get()) }
     single { IncidentService(get()) }
 
@@ -257,15 +262,25 @@ val logsModule = module {
     single { OtlpApiKeyService() }
     single { OtlpServiceRoutingService() }
     single { LogIndexService() }
+    single { LogManagementService() }
 }
 
 /** Uptime monitoring and status pages. */
-val uptimeModule = module {
+fun uptimeModule(frontendBaseUrl: String) = module {
     single<UptimeMonitorRepository> { UptimeMonitorRepositoryImpl() }
 
     single { UptimeService(get(), get()) }
     single { UptimeCheckExecutor() }
-    single { UptimeScheduler(get(), get(), get(), get()) }
+    single {
+        UptimeScheduler(
+            uptimeService = get(),
+            checkExecutor = get(),
+            incidentService = get(),
+            billingQuotaService = get(),
+            workflowService = get(),
+            frontendBaseUrl = frontendBaseUrl
+        )
+    }
     single { StatusPageService(get()) }
 }
 
@@ -329,19 +344,24 @@ val aiModule = module {
 }
 
 /** All application modules combined in load order. */
-val appModules = listOf(
-    sharedModule,
-    authModule,
-    billingModule,
-    orgModule,
-    eventsModule,
-    monitorModule,
-    logsModule,
-    uptimeModule,
-    dashboardsModule,
-    summaryModule,
-    llmModule,
-    analyticsModule,
-    featureFlagsModule,
-    aiModule,
-)
+private const val DEFAULT_FRONTEND_BASE_URL = "https://moneat.io"
+
+fun buildAppModules(frontendBaseUrl: String = DEFAULT_FRONTEND_BASE_URL) =
+    listOf(
+        sharedModule,
+        authModule,
+        billingModule,
+        orgModule,
+        eventsModule,
+        monitorModule,
+        logsModule,
+        uptimeModule(frontendBaseUrl),
+        dashboardsModule,
+        summaryModule,
+        llmModule,
+        analyticsModule,
+        featureFlagsModule,
+        aiModule,
+    )
+
+val appModules = buildAppModules()

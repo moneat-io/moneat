@@ -17,11 +17,23 @@
 package com.moneat.datadog.services
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.datadog.models.DdSpan
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.OtelServiceProjectMappings
+import com.moneat.shared.models.Projects
+import com.moneat.testsupport.TestDatabaseHelper
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.HttpStatusCode
 import io.mockk.coEvery
 import io.mockk.every
+import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.Test
 import org.msgpack.core.MessageBufferPacker
 import org.msgpack.core.MessagePack
@@ -409,6 +421,121 @@ class TraceIngestionServiceTest {
     }
 
     @Test
+    fun `parseMsgpackStats maps Agent stats payload`() {
+        val packer = MessagePack.newDefaultBufferPacker()
+        packer.packMapHeader(4)
+        packer.packString("AgentHostname")
+        packer.packString("agent-host")
+        packer.packString("AgentEnv")
+        packer.packString("staging")
+        packer.packString("AgentVersion")
+        packer.packString("7.72.0")
+        packer.packString("Stats")
+        packer.packArrayHeader(1)
+        packClientStatsPayload(packer)
+        packer.close()
+
+        val result = TraceIngestionService.parseMsgpackStats(packer.toByteArray())
+
+        assertEquals("agent-host", result.hostname)
+        assertEquals("staging", result.env)
+        assertEquals("7.72.0", result.version)
+        val bucket = result.stats.single()
+        assertEquals(1700000000000000000L, bucket.start)
+        assertEquals(10000000000L, bucket.duration)
+        val entry = bucket.stats.single()
+        assertEquals("web.request", entry.name)
+        assertEquals("api", entry.service)
+        assertEquals("GET /health", entry.resource)
+        assertEquals("web", entry.type)
+        assertEquals(200, entry.httpStatusCode)
+        assertEquals(2, entry.hits)
+        assertEquals(1, entry.topLevelHits)
+        assertEquals(0, entry.errors)
+        assertEquals(50000000L, entry.duration)
+        assertEquals(2, entry.okSummary?.count)
+        assertEquals(42.0, entry.okSummary?.sum)
+    }
+
+    @Test
+    fun `parseMsgpackStats skips malformed stats container levels`() {
+        val packer = MessagePack.newDefaultBufferPacker()
+        packer.packMapHeader(1)
+        packer.packString("Stats")
+        packer.packArrayHeader(3)
+        packer.packString("skip-client")
+        packer.packMapHeader(1)
+        packer.packString("Stats")
+        packer.packString("skip-stats")
+        packer.packMapHeader(1)
+        packer.packString("Stats")
+        packer.packArrayHeader(2)
+        packer.packString("skip-bucket")
+        packer.packMapHeader(3)
+        packer.packString("Start")
+        packer.packDouble(1234.0)
+        packer.packString("Duration")
+        packer.packNil()
+        packer.packString("Stats")
+        packer.packString("skip-grouped")
+        packer.close()
+
+        val result = TraceIngestionService.parseMsgpackStats(packer.toByteArray())
+
+        assertEquals(2, result.stats.size)
+        assertEquals(0L, result.stats[0].start)
+        assertEquals(1234L, result.stats[1].start)
+        assertEquals(0L, result.stats[1].duration)
+        assertTrue(result.stats[1].stats.isEmpty())
+    }
+
+    @Test
+    fun `parseMsgpackStats coerces invalid grouped stats fields safely`() {
+        val packer = MessagePack.newDefaultBufferPacker()
+        packer.packMapHeader(4)
+        packer.packString("AgentHostname")
+        packer.packNil()
+        packer.packString("AgentEnv")
+        packer.packArrayHeader(0)
+        packer.packString("AgentVersion")
+        packer.packString("7.72.0")
+        packer.packString("Stats")
+        packer.packArrayHeader(1)
+        packer.packMapHeader(1)
+        packer.packString("Stats")
+        packer.packArrayHeader(1)
+        packer.packMapHeader(1)
+        packer.packString("Stats")
+        packer.packArrayHeader(2)
+        packer.packString("skip-entry")
+        packWeirdGroupedStatsEntry(packer)
+        packer.close()
+
+        val result = TraceIngestionService.parseMsgpackStats(packer.toByteArray())
+
+        assertEquals("", result.hostname)
+        assertEquals("", result.env)
+        assertEquals("7.72.0", result.version)
+        assertEquals(2, result.stats.single().stats.size)
+        val emptyEntry = result.stats.single().stats.first()
+        assertEquals("", emptyEntry.name)
+        val entry = result.stats.single().stats.last()
+        assertEquals("", entry.name)
+        assertEquals("", entry.service)
+        assertEquals("GET /checkout", entry.resource)
+        assertEquals("web", entry.type)
+        assertEquals(503, entry.httpStatusCode)
+        assertEquals(false, entry.synthetics)
+        assertEquals(0L, entry.hits)
+        assertEquals(0L, entry.topLevelHits)
+        assertEquals(1L, entry.errors)
+        assertEquals(50L, entry.duration)
+        assertEquals(null, entry.okSummary)
+        assertEquals(4L, entry.errorSummary?.count)
+        assertEquals(20.0, entry.errorSummary?.sum)
+    }
+
+    @Test
     fun `parseTraceId accepts unsigned numeric values`() {
         val parsed = TraceIngestionService.parseTraceId("18446744073709551615")
         assertEquals(ULong.MAX_VALUE, parsed)
@@ -418,6 +545,66 @@ class TraceIngestionServiceTest {
     fun `parseTraceId rejects non numeric input`() {
         assertEquals(null, TraceIngestionService.parseTraceId("0 OR 1=1"))
         assertEquals(null, TraceIngestionService.parseTraceId("abc"))
+    }
+
+    @Test
+    fun `insertTraces writes mapped service id and release version`() = runBlocking {
+        val db = Database.connect(
+            url = "jdbc:h2:mem:moneat_dd_trace_release;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+            driver = "org.h2.Driver",
+        )
+        TransactionManager.defaultDatabase = db
+        TestDatabaseHelper.resetSchema(Organizations, Projects, OtelServiceProjectMappings)
+        val (orgId, projectId) = transaction {
+            val insertedOrgId = Organizations.insert {
+                it[name] = "Test Org"
+                it[slug] = "test-org"
+            } get Organizations.id
+            val insertedProjectId = Projects.insert {
+                it[organization_id] = insertedOrgId
+                it[name] = "Checkout API"
+                it[slug] = "checkout-api"
+            } get Projects.id
+            insertedOrgId to insertedProjectId
+        }
+
+        val queries = mutableListOf<String>()
+        val response = mockk<HttpResponse>()
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "test_db"
+            every { response.status } returns HttpStatusCode.OK
+            coEvery { ClickHouseClient.execute(capture(queries)) } returns response
+
+            TraceIngestionService.insertTraces(
+                organizationId = orgId,
+                traces = listOf(
+                    listOf(
+                        DdSpan(
+                            traceId = 1uL,
+                            spanId = 2uL,
+                            parentId = 0uL,
+                            name = "rack.request",
+                            service = "checkout-api",
+                            resource = "GET /checkout",
+                            type = "web",
+                            start = 1_700_000_000_000_000_000L,
+                            duration = 50_000_000L,
+                            error = 0,
+                            meta = mapOf("version" to "2026.06.04"),
+                            metrics = emptyMap(),
+                        )
+                    )
+                ),
+            )
+
+            val insert = queries.single { it.contains(".apm_spans") && it.contains("INSERT INTO") }
+            assertTrue(insert.contains("service_id, project_id"))
+            assertTrue(Regex("""(?s),\s*$projectId,\s*$projectId,\s*'rack.request'""").containsMatchIn(insert))
+            assertTrue(insert.contains("'2026.06.04'"))
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
     }
 
     // ──── HELPERS ────
@@ -500,5 +687,85 @@ class TraceIngestionServiceTest {
             is Double -> packer.packDouble(mv)
             else -> packer.packString(mv.toString())
         }
+    }
+
+    private fun packClientStatsPayload(packer: MessageBufferPacker) {
+        packer.packMapHeader(1)
+        packer.packString("Stats")
+        packer.packArrayHeader(1)
+        packer.packMapHeader(3)
+        packer.packString("Start")
+        packer.packLong(1700000000000000000L)
+        packer.packString("Duration")
+        packer.packLong(10000000000L)
+        packer.packString("Stats")
+        packer.packArrayHeader(1)
+        packGroupedStats(packer)
+    }
+
+    private fun packGroupedStats(packer: MessageBufferPacker) {
+        packer.packMapHeader(11)
+        packer.packString("Name")
+        packer.packString("web.request")
+        packer.packString("Service")
+        packer.packString("api")
+        packer.packString("Resource")
+        packer.packString("GET /health")
+        packer.packString("Type")
+        packer.packString("web")
+        packer.packString("HTTPStatusCode")
+        packer.packInt(200)
+        packer.packString("Hits")
+        packer.packLong(2)
+        packer.packString("TopLevelHits")
+        packer.packLong(1)
+        packer.packString("Errors")
+        packer.packLong(0)
+        packer.packString("Duration")
+        packer.packLong(50000000L)
+        packer.packString("Synthetics")
+        packer.packBoolean(false)
+        packer.packString("OkSummary")
+        packer.packMapHeader(2)
+        packer.packString("Count")
+        packer.packLong(2)
+        packer.packString("Sum")
+        packer.packDouble(42.0)
+    }
+
+    private fun packWeirdGroupedStatsEntry(packer: MessageBufferPacker) {
+        packer.packMapHeader(13)
+        packer.packString("Name")
+        packer.packNil()
+        packer.packString("Service")
+        packer.packArrayHeader(0)
+        packer.packString("Resource")
+        packer.packString("GET /checkout")
+        packer.packString("Type")
+        packer.packString("web")
+        packer.packString("HTTPStatusCode")
+        packer.packDouble(503.0)
+        packer.packString("Synthetics")
+        packer.packString("not-a-boolean")
+        packer.packString("Hits")
+        packer.packNil()
+        packer.packString("TopLevelHits")
+        packer.packString("not-a-number")
+        packer.packString("Errors")
+        packer.packDouble(1.9)
+        packer.packString("Duration")
+        packer.packLong(50L)
+        packer.packString("OkSummary")
+        packer.packString("not-a-map")
+        packer.packString("ErrorSummary")
+        packer.packMapHeader(3)
+        packer.packString("Count")
+        packer.packDouble(4.0)
+        packer.packString("Sum")
+        packer.packLong(20L)
+        packer.packString("Ignored")
+        packer.packString("value")
+        packer.packString("IgnoredField")
+        packer.packString("value")
     }
 }

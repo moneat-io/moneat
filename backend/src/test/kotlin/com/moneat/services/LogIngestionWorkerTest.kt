@@ -18,10 +18,19 @@ package com.moneat.services
 
 import com.moneat.logs.models.QueuedLogBatch
 import com.moneat.logs.models.QueuedLogEntry
+import com.moneat.logs.models.LogEntryResponse
+import com.moneat.logs.models.LogIndexResponse
+import com.moneat.logs.models.LogPipelineResponse
 import com.moneat.logs.repositories.LogRepositoryImpl
+import com.moneat.logs.services.LogIndexService
 import com.moneat.logs.services.LogIngestionWorker
+import com.moneat.logs.services.LogManagementService
 import com.moneat.logs.services.LogService
 import com.moneat.monitoring.OperationalMetrics
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -91,6 +100,123 @@ class LogIngestionWorkerTest {
         }
 
     @Test
+    fun `processMessageForTest applies pipelines indexes quota and publishes live logs`() =
+        runBlocking {
+            val logService = mockk<LogService>()
+            val logIndexService = mockk<LogIndexService>()
+            val logManagementService = mockk<LogManagementService>()
+            val originalEntry = queuedEntry(logId = "route-me", level = "error", message = "before")
+            val pipedEntry = originalEntry.copy(message = "after")
+            val inserted = listOf(logEntryResponse(logId = "route-me", message = "after"))
+            val batch = QueuedLogBatch(organizationId = 99L, source = "sdk", logs = listOf(originalEntry))
+            val payload = LogService(LogRepositoryImpl()).encodeQueueMessage(batch)
+            val index = logIndexResponse(name = "errors", filterQuery = "level:error")
+            val pipeline = logPipelineResponse(name = "Cleanup")
+            val dlq = mutableListOf<String>()
+
+            every { logService.decodeQueueMessage(payload) } returns batch
+            coEvery { logIndexService.getActiveIndexesCached(99) } returns listOf(index)
+            coEvery { logManagementService.getActivePipelinesCached(99) } returns listOf(pipeline)
+            every { logManagementService.applyPipelines(listOf(originalEntry), listOf(pipeline)) } returns
+                listOf(pipedEntry)
+            coEvery {
+                logIndexService.filterWithinDailyQuota(99, any(), listOf(index))
+            } answers {
+                secondArg()
+            }
+            coEvery { logService.insertBatch(any()) } returns inserted
+            coEvery { logService.publishLiveLogs(99L, inserted) } returns Unit
+
+            val worker = LogIngestionWorker(
+                queueKey = "log:q",
+                dlqKey = "log:dlq",
+                workerCount = 1,
+                logService = logService,
+                logIndexService = logIndexService,
+                logManagementService = logManagementService
+            )
+
+            worker.processMessageForTest(workerId = 4, payload = payload) { dlq.add(it) }
+
+            assertEquals(emptyList(), dlq)
+            coVerify {
+                logService.insertBatch(
+                    match { insertedBatch ->
+                        insertedBatch.logs.single().indexName == "errors" &&
+                            insertedBatch.logs.single().message == "after"
+                    }
+                )
+            }
+            coVerify { logService.publishLiveLogs(99L, inserted) }
+        }
+
+    @Test
+    fun `processMessageForTest skips org scoped lookups when org id is outside Int range`() =
+        runBlocking {
+            val logService = mockk<LogService>()
+            val logIndexService = mockk<LogIndexService>(relaxed = true)
+            val logManagementService = mockk<LogManagementService>(relaxed = true)
+            val entry = queuedEntry(logId = "large-org", level = "info", message = "hello")
+            val orgId = Int.MAX_VALUE.toLong() + 1L
+            val batch = QueuedLogBatch(organizationId = orgId, source = "sdk", logs = listOf(entry))
+            val payload = LogService(LogRepositoryImpl()).encodeQueueMessage(batch)
+            val inserted = listOf(logEntryResponse(logId = "large-org", message = "hello"))
+
+            every { logService.decodeQueueMessage(payload) } returns batch
+            every { logManagementService.applyPipelines(listOf(entry), emptyList()) } returns listOf(entry)
+            coEvery { logService.insertBatch(batch) } returns inserted
+            coEvery { logService.publishLiveLogs(orgId, inserted) } returns Unit
+
+            val worker = LogIngestionWorker(
+                queueKey = "log:q",
+                dlqKey = "log:dlq",
+                workerCount = 1,
+                logService = logService,
+                logIndexService = logIndexService,
+                logManagementService = logManagementService
+            )
+
+            worker.processMessageForTest(workerId = 5, payload = payload)
+
+            coVerify(exactly = 0) { logIndexService.getActiveIndexesCached(any()) }
+            coVerify(exactly = 0) { logManagementService.getActivePipelinesCached(any()) }
+            coVerify(exactly = 0) { logIndexService.filterWithinDailyQuota(any(), any(), any()) }
+            coVerify { logService.publishLiveLogs(orgId, inserted) }
+        }
+
+    @Test
+    fun `processMessageForTest returns before insert when quota filtering drops all logs`() =
+        runBlocking {
+            val logService = mockk<LogService>()
+            val logIndexService = mockk<LogIndexService>()
+            val logManagementService = mockk<LogManagementService>()
+            val entry = queuedEntry(logId = "quota", level = "info", message = "hello")
+            val batch = QueuedLogBatch(organizationId = 100L, source = "sdk", logs = listOf(entry))
+            val payload = LogService(LogRepositoryImpl()).encodeQueueMessage(batch)
+            val index = logIndexResponse(name = "main", filterQuery = "")
+
+            every { logService.decodeQueueMessage(payload) } returns batch
+            coEvery { logIndexService.getActiveIndexesCached(100) } returns listOf(index)
+            coEvery { logManagementService.getActivePipelinesCached(100) } returns emptyList()
+            every { logManagementService.applyPipelines(listOf(entry), emptyList()) } returns listOf(entry)
+            coEvery { logIndexService.filterWithinDailyQuota(100, any(), listOf(index)) } returns emptyList()
+
+            val worker = LogIngestionWorker(
+                queueKey = "log:q",
+                dlqKey = "log:dlq",
+                workerCount = 1,
+                logService = logService,
+                logIndexService = logIndexService,
+                logManagementService = logManagementService
+            )
+
+            worker.processMessageForTest(workerId = 6, payload = payload)
+
+            coVerify(exactly = 0) { logService.insertBatch(any()) }
+            coVerify(exactly = 0) { logService.publishLiveLogs(any(), any()) }
+        }
+
+    @Test
     fun `processMessageForTest records DLQ failure when callback throws`() =
         runBlocking {
             val worker = LogIngestionWorker("log:q", "log:dlq", 1)
@@ -108,4 +234,75 @@ class LogIngestionWorkerTest {
             assertContains(rendered, "dlq_key=\"log:dlq\"")
             assertContains(rendered, "status=\"failure\"")
         }
+
+    private fun queuedEntry(
+        logId: String,
+        level: String,
+        message: String
+    ): QueuedLogEntry =
+        QueuedLogEntry(
+            logId = logId,
+            timestampMs = 1_738_372_400_000,
+            level = level,
+            message = message,
+            body = message,
+            service = "api",
+            environment = "prod",
+            host = "host-1",
+            source = "sdk",
+            containerName = "",
+            containerId = "",
+            containerImage = "",
+            traceId = "",
+            spanId = ""
+        )
+
+    private fun logIndexResponse(
+        name: String,
+        filterQuery: String
+    ): LogIndexResponse =
+        LogIndexResponse(
+            id = 1,
+            name = name,
+            filterQuery = filterQuery,
+            retentionDays = 30,
+            samplingRate = 1.0f,
+            priority = 0,
+            isActive = true,
+            createdAt = "2026-06-04T00:00:00Z",
+            updatedAt = "2026-06-04T00:00:00Z"
+        )
+
+    private fun logPipelineResponse(name: String): LogPipelineResponse =
+        LogPipelineResponse(
+            id = 1,
+            name = name,
+            description = "",
+            steps = emptyList(),
+            priority = 0,
+            isActive = true,
+            createdAt = "2026-06-04T00:00:00Z",
+            updatedAt = "2026-06-04T00:00:00Z"
+        )
+
+    private fun logEntryResponse(
+        logId: String,
+        message: String
+    ): LogEntryResponse =
+        LogEntryResponse(
+            logId = logId,
+            timestamp = "2026-06-04T00:00:00Z",
+            level = "info",
+            message = message,
+            body = message,
+            service = "api",
+            environment = "prod",
+            host = "host-1",
+            source = "sdk",
+            containerName = "",
+            containerId = "",
+            containerImage = "",
+            traceId = "",
+            spanId = ""
+        )
 }

@@ -44,7 +44,8 @@ import {
 } from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
-import {Card, CardContent} from '@/components/ui/card'
+import {PageHeader} from '@/components/ui/page-header'
+import {EmptyState} from '@/components/ui/empty-state'
 import {useState, memo, useMemo} from 'react'
 import {ImportExportModal} from '@/components/dashboards/ImportExportModal'
 import {
@@ -159,27 +160,19 @@ function DashboardListPage() {
   return (
     <div>
       {/* Page header */}
-      <div className="border-b bg-card/50">
-        <div className="px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <div className="flex items-center justify-center h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-primary/10 text-primary shrink-0">
-                <LayoutDashboard className="h-4 w-4 sm:h-5 sm:w-5" />
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-lg sm:text-xl font-bold tracking-tight">Dashboards</h1>
-                <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                  Build custom dashboards with drag-and-drop widgets
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-              <Link to="/dashboards/datasources" title="Data Sources">
-                <Button variant="outline" size="sm" className="gap-1 text-xs h-8">
+      <div className="border-b bg-card/50 px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
+        <PageHeader
+          icon={LayoutDashboard}
+          title="Dashboards"
+          description="Build custom dashboards with drag-and-drop widgets"
+          actions={
+            <>
+              <Button asChild variant="outline" size="sm" className="gap-1 text-xs h-8">
+                <Link to="/dashboards/datasources" title="Data Sources">
                   <Database className="h-3 w-3 shrink-0" />
                   <span className="hidden sm:inline">Data Sources</span>
-                </Button>
-              </Link>
+                </Link>
+              </Button>
               <Button variant="outline" size="sm" onClick={() => setShowImport(true)} className="gap-1 text-xs h-8">
                 <Import className="h-3 w-3 shrink-0" />
                 Import
@@ -189,9 +182,9 @@ function DashboardListPage() {
                 <span className="hidden sm:inline">New Dashboard</span>
                 <span className="sm:hidden">New</span>
               </Button>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+        />
       </div>
 
       <div className="px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
@@ -378,7 +371,7 @@ function DashboardListPage() {
                 ))}
               </div>
             ) : (
-              <EmptyState
+              <DashboardsEmptyState
                 selectedFolder={selectedFolder}
                 folderLabel={folderLabel}
                 onCreateBlank={handleCreateBlank}
@@ -426,20 +419,22 @@ function SidebarButton({
   )
 }
 
+// Decorative per-card accent bars cycle the categorical chart palette (literal
+// classes so Tailwind emits them); they encode identity, not status.
 const CARD_ACCENT_COLORS = [
-  'from-blue-500 to-blue-600',
-  'from-violet-500 to-purple-600',
-  'from-emerald-500 to-teal-600',
-  'from-amber-500 to-orange-600',
-  'from-rose-500 to-pink-600',
-  'from-cyan-500 to-sky-600',
+  'from-chart-1 to-chart-1/70',
+  'from-chart-2 to-chart-2/70',
+  'from-chart-3 to-chart-3/70',
+  'from-chart-4 to-chart-4/70',
+  'from-chart-5 to-chart-5/70',
+  'from-chart-6 to-chart-6/70',
 ]
 
 function getAccentColor(id: number) {
   return CARD_ACCENT_COLORS[id % CARD_ACCENT_COLORS.length]
 }
 
-function EmptyState({
+function DashboardsEmptyState({
   selectedFolder,
   folderLabel,
   onCreateBlank,
@@ -454,110 +449,92 @@ function EmptyState({
 }) {
   if (selectedFolder === 'favorites') {
     return (
-      <Card className="border-dashed border-2">
-        <CardContent className="flex flex-col items-center justify-center py-16">
-          <div className="bg-amber-500/10 p-4 rounded-full mb-5">
-            <Star className="h-8 w-8 text-amber-500" />
-          </div>
-          <h3 className="text-xl font-semibold mb-2">No favorites yet</h3>
-          <p className="text-muted-foreground text-center max-w-sm leading-relaxed">
-            Star dashboards you use often for quick access. Click the star icon on any dashboard card to add it here.
-          </p>
-        </CardContent>
-      </Card>
+      <EmptyState
+        icon={Star}
+        title="No favorites yet"
+        description="Star dashboards you use often for quick access. Click the star icon on any dashboard card to add it here."
+      />
     )
   }
 
   if (selectedFolder === 'uncategorized') {
     return (
-      <Card className="border-dashed border-2">
-        <CardContent className="flex flex-col items-center justify-center py-16">
-          <div className="bg-muted p-4 rounded-full mb-5">
-            <Folder className="h-8 w-8 text-muted-foreground" />
-          </div>
-          <h3 className="text-xl font-semibold mb-2">No uncategorized dashboards</h3>
-          <p className="text-muted-foreground text-center max-w-sm leading-relaxed">
-            Dashboards that haven't been moved into a folder will appear here.
-          </p>
-          <Button className="mt-5" onClick={onCreateBlank}>
+      <EmptyState
+        icon={Folder}
+        title="No uncategorized dashboards"
+        description="Dashboards that haven't been moved into a folder will appear here."
+        action={
+          <Button onClick={onCreateBlank}>
             <Plus className="h-4 w-4 mr-1.5" />
             Create Dashboard
           </Button>
-        </CardContent>
-      </Card>
+        }
+      />
     )
   }
 
   if (typeof selectedFolder === 'number') {
     return (
-      <Card className="border-dashed border-2">
-        <CardContent className="flex flex-col items-center justify-center py-16">
-          <div className="bg-primary/10 p-4 rounded-full mb-5">
-            <Folder className="h-8 w-8 text-primary" />
-          </div>
-          <h3 className="text-xl font-semibold mb-2">{folderLabel} is empty</h3>
-          <p className="text-muted-foreground text-center max-w-sm leading-relaxed">
-            Move existing dashboards here or create a new one to get started.
-          </p>
-          <Button className="mt-5" onClick={onCreateBlank}>
+      <EmptyState
+        icon={Folder}
+        title={`${folderLabel} is empty`}
+        description="Move existing dashboards here or create a new one to get started."
+        action={
+          <Button onClick={onCreateBlank}>
             <Plus className="h-4 w-4 mr-1.5" />
             Create Dashboard
           </Button>
-        </CardContent>
-      </Card>
+        }
+      />
     )
   }
 
   return (
-    <Card className="border-dashed border-2">
-      <CardContent className="flex flex-col items-center justify-center py-20">
-        <div className="bg-primary/10 p-5 rounded-full mb-6">
-          <LayoutDashboard className="h-10 w-10 text-primary" />
-        </div>
-        <h3 className="text-2xl font-semibold mb-3">Create your first dashboard</h3>
-        <p className="text-muted-foreground text-center mb-8 max-w-lg leading-relaxed">
-          Visualize your data with custom charts, tables, and metrics.
-          Start from scratch, use a template, or import from Grafana and Datadog.
-        </p>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <Button variant="outline" size="lg" onClick={onCreateFromTemplate}>
+    <EmptyState
+      icon={LayoutDashboard}
+      title="Create your first dashboard"
+      description="Visualize your data with custom charts, tables, and metrics. Start from scratch, use a template, or import from Grafana and other tools."
+      action={
+        <>
+          <Button variant="outline" onClick={onCreateFromTemplate}>
             <Sparkles className="h-4 w-4 mr-2" />
             Start from Template
           </Button>
-          <Button variant="outline" size="lg" onClick={onImport}>
+          <Button variant="outline" onClick={onImport}>
             <Import className="h-4 w-4 mr-2" />
             Import Dashboard
           </Button>
-          <Button size="lg" onClick={onCreateBlank}>
+          <Button onClick={onCreateBlank}>
             <Plus className="h-4 w-4 mr-2" />
             Blank Dashboard
           </Button>
+        </>
+      }
+    >
+      <div className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-2xl w-full">
+        <div className="flex flex-col items-center text-center gap-2 p-4">
+          <div className="h-10 w-10 rounded-lg bg-chart-1/15 flex items-center justify-center">
+            <BarChart3 className="h-5 w-5 text-chart-1" />
+          </div>
+          <span className="text-sm font-medium">Rich Visualizations</span>
+          <span className="text-xs text-muted-foreground">Charts, tables & stats</span>
         </div>
-        <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-2xl w-full">
-          <div className="flex flex-col items-center text-center gap-2 p-4">
-            <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-              <BarChart3 className="h-5 w-5 text-blue-500" />
-            </div>
-            <span className="text-sm font-medium">Rich Visualizations</span>
-            <span className="text-xs text-muted-foreground">Charts, tables & stats</span>
+        <div className="flex flex-col items-center text-center gap-2 p-4">
+          <div className="h-10 w-10 rounded-lg bg-chart-3/15 flex items-center justify-center">
+            <LineChart className="h-5 w-5 text-chart-3" />
           </div>
-          <div className="flex flex-col items-center text-center gap-2 p-4">
-            <div className="h-10 w-10 rounded-lg bg-violet-500/10 flex items-center justify-center">
-              <LineChart className="h-5 w-5 text-violet-500" />
-            </div>
-            <span className="text-sm font-medium">Drag & Drop</span>
-            <span className="text-xs text-muted-foreground">Flexible grid layout</span>
-          </div>
-          <div className="flex flex-col items-center text-center gap-2 p-4">
-            <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-              <PieChart className="h-5 w-5 text-emerald-500" />
-            </div>
-            <span className="text-sm font-medium">Multiple Sources</span>
-            <span className="text-xs text-muted-foreground">ClickHouse, Postgres & more</span>
-          </div>
+          <span className="text-sm font-medium">Drag & Drop</span>
+          <span className="text-xs text-muted-foreground">Flexible grid layout</span>
         </div>
-      </CardContent>
-    </Card>
+        <div className="flex flex-col items-center text-center gap-2 p-4">
+          <div className="h-10 w-10 rounded-lg bg-chart-2/15 flex items-center justify-center">
+            <PieChart className="h-5 w-5 text-chart-2" />
+          </div>
+          <span className="text-sm font-medium">Multiple Sources</span>
+          <span className="text-xs text-muted-foreground">ClickHouse, Postgres & more</span>
+        </div>
+      </div>
+    </EmptyState>
   )
 }
 
@@ -697,7 +674,7 @@ const DashboardCard = memo(function DashboardCard({
               title={dashboard.is_favorited ? 'Remove from favorites' : 'Add to favorites'}
             >
               <Star
-                className={`h-4 w-4 ${dashboard.is_favorited ? 'fill-amber-400 text-amber-500' : 'text-muted-foreground'}`}
+                className={`h-4 w-4 ${dashboard.is_favorited ? 'fill-warning-solid text-warning-fg' : 'text-muted-foreground'}`}
               />
             </button>
             <DropdownMenu>

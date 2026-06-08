@@ -50,6 +50,7 @@ private val logger = KotlinLogging.logger {}
 /** Server-side filters/paging for the profile list endpoint. */
 data class DdProfileListQuery(
     val service: String? = null,
+    val services: List<String> = emptyList(),
     val profileType: String? = null,
     val source: String? = null,
     val env: String? = null,
@@ -64,6 +65,7 @@ data class DdProfileListQuery(
 /** Shared dimensions used by profile dashboard queries. */
 data class ProfileQueryFilters(
     val service: String? = null,
+    val services: List<String> = emptyList(),
     val profileType: String? = null,
     val source: String? = null,
     val env: String? = null,
@@ -118,6 +120,7 @@ data class ProfileMergeSelection(
 private fun DdProfileListQuery.toFilters(): ProfileQueryFilters =
     ProfileQueryFilters(
         service = service,
+        services = services,
         profileType = profileType,
         source = source,
         env = env,
@@ -334,8 +337,8 @@ object ProfileIngestionService {
                 toString(profile_id) as profile_id,
                 host, service, env, version,
                 runtime, language, profile_type,
-                toString(start_time) as start_time,
-                toString(end_time) as end_time,
+                toString(start_time) as profile_start_time,
+                toString(end_time) as profile_end_time,
                 duration_ns, storage_key,
                 tags, size_bytes, source
             FROM `$clickhouseDb`.profiles
@@ -438,9 +441,7 @@ object ProfileIngestionService {
         val sparkQuery = """
             SELECT
                 service,
-                toUnixTimestamp64Milli(
-                    toStartOfInterval(start_time, INTERVAL $sparkStep SECOND)
-                ) AS ts,
+                ${bucketTimestampMsSql("start_time", sparkStep)} AS ts,
                 count() AS count
             FROM `$clickhouseDb`.profiles
             WHERE $sparkWhere
@@ -516,9 +517,7 @@ object ProfileIngestionService {
         )
         val sql = """
             SELECT
-                toUnixTimestamp64Milli(
-                    toStartOfInterval(start_time, INTERVAL $stepSeconds SECOND)
-                ) AS ts,
+                ${bucketTimestampMsSql("start_time", stepSeconds)} AS ts,
                 count() AS count,
                 sum(size_bytes) AS sizeBytes
             FROM `$clickhouseDb`.profiles
@@ -639,9 +638,7 @@ object ProfileIngestionService {
         val clauses = mutableListOf(
             ClickHouseQueryUtils.orgIdClause(organizationId.toLong())
         )
-        filters.service?.takeIf { it.isNotBlank() }?.let {
-            clauses.add("service = '${escapeSql(it)}'")
-        }
+        serviceFilterClause(filters.service, filters.services)?.let(clauses::add)
         filters.profileType?.takeIf { it.isNotBlank() }?.let {
             clauses.add("profile_type = '${escapeSql(it)}'")
         }
@@ -662,6 +659,21 @@ object ProfileIngestionService {
         return clauses.joinToString(" AND ")
     }
 
+    private fun serviceFilterClause(service: String?, services: List<String>): String? {
+        val values = (services + listOfNotNull(service))
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+        return when (values.size) {
+            0 -> null
+            1 -> "service = '${escapeSql(values.first())}'"
+            else -> {
+                val serviceList = values.joinToString(", ") { "'${escapeSql(it)}'" }
+                "service IN ($serviceList)"
+            }
+        }
+    }
+
     private fun parseProfileRow(line: String): DdProfileResponse {
         val obj = json.parseToJsonElement(line).jsonObject
         val tagsMap = parseJsonStringMap(obj["tags"])
@@ -669,6 +681,8 @@ object ProfileIngestionService {
         val service = serviceFromColumn.ifBlank {
             firstNonBlankTag(tagsMap, "service", "service.name", "service_name")
         }
+        val startTime = obj["start_time"] ?: obj["profile_start_time"]
+        val endTime = obj["end_time"] ?: obj["profile_end_time"]
         return DdProfileResponse(
             profileId = obj["profile_id"]!!.jsonPrimitive.content,
             host = obj["host"]?.jsonPrimitive?.content ?: "",
@@ -678,8 +692,8 @@ object ProfileIngestionService {
             runtime = obj["runtime"]?.jsonPrimitive?.content ?: "",
             language = obj["language"]?.jsonPrimitive?.content ?: "",
             profileType = obj["profile_type"]!!.jsonPrimitive.content,
-            startTime = obj["start_time"]!!.jsonPrimitive.content,
-            endTime = obj["end_time"]!!.jsonPrimitive.content,
+            startTime = startTime!!.jsonPrimitive.content,
+            endTime = endTime!!.jsonPrimitive.content,
             durationNs = obj["duration_ns"]!!.jsonPrimitive.long,
             sizeBytes = obj["size_bytes"]!!.jsonPrimitive.long,
             tags = tagsMap,
@@ -709,6 +723,9 @@ object ProfileIngestionService {
         val windowSec = (toMs - fromMs) / MILLIS_PER_SECOND_L
         return (windowSec / SPARKLINE_BUCKETS).coerceAtLeast(MIN_BUCKET_SECONDS)
     }
+
+    private fun bucketTimestampMsSql(column: String, stepSeconds: Long): String =
+        "toInt64(toUnixTimestamp(toStartOfInterval($column, INTERVAL $stepSeconds SECOND))) * $MILLIS_PER_SECOND_L"
 
     private data class ExistingSession(
         val profileId: String,

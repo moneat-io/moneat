@@ -65,7 +65,9 @@ object WorkflowBlueprintCatalog {
     private const val CATEGORY_UPTIME = "uptime"
     private const val CATEGORY_TRIAGE = "triage"
 
-    private const val DEDUP_KEY = "alert.deduplication_key"
+    private const val EPISODE_KEY = "alert.episode_key"
+    private const val INCIDENT_ID = "incident.id"
+    private const val NOTIFICATION_SEQUENCE = "alert.notification_sequence"
     private const val ALERT_STATUS = "alert.status"
     private const val INCIDENT_STATUS = "incident.status"
     private const val SECURITY_RULE_ID = "security.rule_id"
@@ -82,7 +84,7 @@ object WorkflowBlueprintCatalog {
                 description = "Post a formatted message to the Slack alert channel when an alert fires.",
                 category = CATEGORY_ALERTING,
                 triggerName = TRIGGER_ALERT_TRIGGERED,
-                onceForTemplate = listOf(DEDUP_KEY),
+                onceForTemplate = listOf(EPISODE_KEY, NOTIFICATION_SEQUENCE),
                 tags = listOf("slack", "notifications"),
                 steps = listOf(
                     slackAlertStep(
@@ -93,13 +95,13 @@ object WorkflowBlueprintCatalog {
             WorkflowBlueprint(
                 key = "alert_email_critical",
                 name = "Email team on critical alert",
-                description = "Email organization members when a critical-severity alert fires.",
+                description = "Email organization members when a high-priority alert fires.",
                 category = CATEGORY_ALERTING,
                 triggerName = TRIGGER_ALERT_TRIGGERED,
-                onceForTemplate = listOf(DEDUP_KEY),
+                onceForTemplate = listOf(EPISODE_KEY, NOTIFICATION_SEQUENCE),
                 tags = listOf("email", "critical"),
                 conditions = listOf(
-                    WorkflowConditionConfig("alert.severity", "at_least", "HIGH")
+                    WorkflowConditionConfig("alert.priority", "at_least", "P1")
                 ),
                 steps = listOf(
                     emailAlertStep(
@@ -114,7 +116,7 @@ object WorkflowBlueprintCatalog {
                 description = "Post a recovery message to Slack when an alert resolves.",
                 category = CATEGORY_ALERTING,
                 triggerName = "alert.resolved",
-                onceForTemplate = listOf(DEDUP_KEY, ALERT_STATUS),
+                onceForTemplate = listOf(EPISODE_KEY, ALERT_STATUS),
                 tags = listOf("slack", "recovery"),
                 steps = listOf(
                     slackAlertStep("*Resolved:* {{alert.display_title}}\n{{alert.url}}")
@@ -126,7 +128,7 @@ object WorkflowBlueprintCatalog {
                 description = "Send alerts to both Slack and Discord alert channels in parallel.",
                 category = CATEGORY_ALERTING,
                 triggerName = TRIGGER_ALERT_TRIGGERED,
-                onceForTemplate = listOf(DEDUP_KEY),
+                onceForTemplate = listOf(EPISODE_KEY, NOTIFICATION_SEQUENCE),
                 tags = listOf("slack", "discord"),
                 steps = listOf(
                     slackAlertStep("*{{alert.priority}} {{alert.display_title}}*\n{{alert.description}}"),
@@ -142,7 +144,7 @@ object WorkflowBlueprintCatalog {
                 description = "Page the on-call responders and notify Slack when a monitor fires.",
                 category = CATEGORY_ALERTING,
                 triggerName = "monitor.alerted",
-                onceForTemplate = listOf(DEDUP_KEY),
+                onceForTemplate = listOf(EPISODE_KEY, NOTIFICATION_SEQUENCE),
                 tags = listOf("oncall", "monitor"),
                 steps = listOf(
                     oncallPageStep(
@@ -158,7 +160,7 @@ object WorkflowBlueprintCatalog {
                 description = "Create a status page incident and notify Slack when an uptime monitor is down.",
                 category = CATEGORY_UPTIME,
                 triggerName = "uptime.down",
-                onceForTemplate = listOf(DEDUP_KEY),
+                onceForTemplate = listOf(EPISODE_KEY, NOTIFICATION_SEQUENCE),
                 tags = listOf("uptime", "statuspage"),
                 steps = listOf(
                     statusIncidentStep(
@@ -174,7 +176,7 @@ object WorkflowBlueprintCatalog {
                 description = "Update the status page and notify Slack when an uptime monitor recovers.",
                 category = CATEGORY_UPTIME,
                 triggerName = "uptime.up",
-                onceForTemplate = listOf(DEDUP_KEY, ALERT_STATUS),
+                onceForTemplate = listOf(EPISODE_KEY, ALERT_STATUS),
                 tags = listOf("uptime", "statuspage", "recovery"),
                 steps = listOf(
                     statusUpdateStep(description = "Service has recovered and is operating normally."),
@@ -187,7 +189,7 @@ object WorkflowBlueprintCatalog {
                 description = "Email members and post to Slack when a synthetic test fails.",
                 category = CATEGORY_ALERTING,
                 triggerName = "synthetic.failed",
-                onceForTemplate = listOf(DEDUP_KEY),
+                onceForTemplate = listOf(EPISODE_KEY, NOTIFICATION_SEQUENCE),
                 tags = listOf("synthetic", "notifications"),
                 steps = listOf(
                     emailAlertStep(
@@ -203,7 +205,7 @@ object WorkflowBlueprintCatalog {
                 description = "Page responders and announce a newly created incident on Slack.",
                 category = CATEGORY_INCIDENT,
                 triggerName = TRIGGER_INCIDENT_CREATED,
-                onceForTemplate = listOf(DEDUP_KEY),
+                onceForTemplate = listOf(INCIDENT_ID),
                 tags = listOf("incident", "oncall"),
                 steps = listOf(
                     oncallPageStep(
@@ -219,7 +221,7 @@ object WorkflowBlueprintCatalog {
                 description = "Create a status page incident when a new incident is created.",
                 category = CATEGORY_INCIDENT,
                 triggerName = TRIGGER_INCIDENT_CREATED,
-                onceForTemplate = listOf(DEDUP_KEY),
+                onceForTemplate = listOf(INCIDENT_ID),
                 tags = listOf("incident", "statuspage"),
                 steps = listOf(
                     statusIncidentStep(
@@ -234,7 +236,7 @@ object WorkflowBlueprintCatalog {
                 description = "Update the status page and notify Slack when an incident resolves.",
                 category = CATEGORY_INCIDENT,
                 triggerName = "incident.resolved",
-                onceForTemplate = listOf(DEDUP_KEY, INCIDENT_STATUS),
+                onceForTemplate = listOf(INCIDENT_ID, INCIDENT_STATUS),
                 tags = listOf("incident", "recovery"),
                 steps = listOf(
                     statusUpdateStep(description = "The incident has been resolved."),
@@ -284,7 +286,7 @@ object WorkflowBlueprintCatalog {
                 description = "Pull recent logs for enrichment and post a triage note to Slack.",
                 category = CATEGORY_TRIAGE,
                 triggerName = "monitor.alerted",
-                onceForTemplate = listOf(DEDUP_KEY),
+                onceForTemplate = listOf(EPISODE_KEY, NOTIFICATION_SEQUENCE),
                 tags = listOf("triage", "logs"),
                 steps = listOf(
                     WorkflowStepConfig(
@@ -304,7 +306,7 @@ object WorkflowBlueprintCatalog {
                 description = "Silence noisy alerts and notify Slack when an incident is created.",
                 category = CATEGORY_INCIDENT,
                 triggerName = TRIGGER_INCIDENT_CREATED,
-                onceForTemplate = listOf(DEDUP_KEY),
+                onceForTemplate = listOf(EPISODE_KEY),
                 tags = listOf("incident", "silence"),
                 steps = listOf(
                     WorkflowStepConfig(

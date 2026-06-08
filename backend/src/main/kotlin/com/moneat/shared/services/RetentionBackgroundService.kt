@@ -35,6 +35,16 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 private val logger = KotlinLogging.logger {}
 
+private const val PROJECT_ID_COLUMN = "project_id"
+private const val SERVICE_ID_COLUMN = "service_id"
+private const val LLM_GENERATIONS_HOURLY_TABLE = "llm_generations_hourly_mv"
+
+private data class ProjectScopedRetentionTable(
+    val name: String,
+    val timeColumn: String,
+    val idColumn: String = SERVICE_ID_COLUMN
+)
+
 class RetentionBackgroundService(
     private val retentionPolicyService: RetentionPolicyService = RetentionPolicyService()
 ) {
@@ -164,11 +174,11 @@ class RetentionBackgroundService(
         if (projectIds.isEmpty()) return 0
         val tables =
             listOf(
-                "events" to "timestamp",
-                "spans" to "start_timestamp",
-                "sessions" to "started",
-                "user_feedback" to "timestamp",
-                "issues" to "last_seen"
+                ProjectScopedRetentionTable("events", "timestamp"),
+                ProjectScopedRetentionTable("spans", "start_timestamp"),
+                ProjectScopedRetentionTable("sessions", "started"),
+                ProjectScopedRetentionTable("user_feedback", "timestamp"),
+                ProjectScopedRetentionTable("issues", "last_seen")
             )
         return submitProjectScopedDeletes(projectIds, tables, retentionDays)
     }
@@ -179,8 +189,8 @@ class RetentionBackgroundService(
     ): Int {
         if (projectIds.isEmpty()) return 0
         val tables = listOf(
-            "replay_events" to "timestamp",
-            "replay_segments" to "timestamp"
+            ProjectScopedRetentionTable("replay_events", "timestamp"),
+            ProjectScopedRetentionTable("replay_segments", "timestamp")
         )
         return submitProjectScopedDeletes(projectIds, tables, replayRetentionDays)
     }
@@ -191,8 +201,8 @@ class RetentionBackgroundService(
     ): Int {
         if (projectIds.isEmpty()) return 0
         val tables = listOf(
-            "llm_generations" to "timestamp",
-            "llm_generations_hourly_mv" to "hour"
+            ProjectScopedRetentionTable("llm_generations", "timestamp"),
+            ProjectScopedRetentionTable(LLM_GENERATIONS_HOURLY_TABLE, "hour", PROJECT_ID_COLUMN)
         )
         return submitProjectScopedDeletes(projectIds, tables, llmRetentionDays)
     }
@@ -203,8 +213,8 @@ class RetentionBackgroundService(
     ): Int {
         if (projectIds.isEmpty()) return 0
         val tables = listOf(
-            "analytics_events" to "timestamp",
-            "analytics_sessions_hourly" to "hour"
+            ProjectScopedRetentionTable("analytics_events", "timestamp"),
+            ProjectScopedRetentionTable("analytics_sessions_hourly", "hour")
         )
         return submitProjectScopedDeletes(projectIds, tables, analyticsRetentionDays)
     }
@@ -227,20 +237,20 @@ class RetentionBackgroundService(
 
     private suspend fun submitProjectScopedDeletes(
         projectIds: List<Long>,
-        tables: List<Pair<String, String>>,
+        tables: List<ProjectScopedRetentionTable>,
         retentionDays: Int
     ): Int {
         var mutations = 0
         for (chunk in projectIds.chunked(idChunkSize)) {
             val projectList = chunk.joinToString(",")
-            for ((table, timeColumn) in tables) {
+            for (table in tables) {
                 val query =
                     """
-                    ALTER TABLE `$clickhouseDb`.`$table`
-                    DELETE WHERE project_id IN ($projectList)
-                        AND $timeColumn < now() - INTERVAL $retentionDays DAY
+                    ALTER TABLE `$clickhouseDb`.`${table.name}`
+                    DELETE WHERE ${table.idColumn} IN ($projectList)
+                        AND ${table.timeColumn} < now() - INTERVAL $retentionDays DAY
                     """.trimIndent()
-                if (submitMutation(query, "$table(project)")) {
+                if (submitMutation(query, "${table.name}(project)")) {
                     mutations++
                 }
             }
@@ -298,7 +308,7 @@ class RetentionBackgroundService(
             val query =
                 """
                 ALTER TABLE `$clickhouseDb`.logs
-                DELETE WHERE project_id IN ($projectList)
+                DELETE WHERE service_id IN ($projectList)
                     AND timestamp < now() - INTERVAL $logRetentionDays DAY
                 """.trimIndent()
             if (submitMutation(query, "logs(project)")) {

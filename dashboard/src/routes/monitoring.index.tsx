@@ -18,9 +18,12 @@ import {createFileRoute, Link, redirect, useNavigate} from '@tanstack/react-rout
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api, type DdHostResponse} from '@/lib/api'
 import {cn, formatRelativeTime} from '@/lib/utils'
+import {parseDate} from '@/lib/date-format'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import {StatusDot} from '@/components/ui/status-dot'
+import {EmptyState} from '@/components/ui/empty-state'
 import {Separator} from '@/components/ui/separator'
 import {
   Dialog,
@@ -46,7 +49,6 @@ import {
   Copy,
   Cpu,
   HardDrive,
-  HelpCircle,
   LayoutGrid,
   List,
   Loader2,
@@ -68,6 +70,42 @@ import {Prism as SyntaxHighlighter} from 'react-syntax-highlighter'
 import {oneDark, oneLight} from 'react-syntax-highlighter/dist/esm/styles/prism'
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io'
+
+function datadogLogsEndpoint(ingestUrl: string): {address: string; noSsl: boolean} {
+  try {
+    const parsed = new URL(ingestUrl)
+    const port = parsed.port || (parsed.protocol === 'http:' ? '80' : '443')
+    return {
+      address: `${parsed.hostname}:${port}`,
+      noSsl: parsed.protocol === 'http:',
+    }
+  } catch {
+    return {
+      address: ingestUrl.replace(/^https?:\/\//, '').replace(/\/.*$/, ''),
+      noSsl: false,
+    }
+  }
+}
+
+function datadogForwarderEndpoint(backendUrl: string): string {
+  const normalized = backendUrl.replace(/\/$/, '')
+  try {
+    const parsed = new URL(normalized)
+    const port = parsed.port ? `:${parsed.port}` : ''
+    return parsed.protocol === 'https:' ? `${parsed.hostname}${port}` : normalized
+  } catch {
+    return normalized
+  }
+}
+
+function datadogProfileEndpoint(backendUrl: string, apiKey?: string | null): string {
+  const endpoint = backendUrl.replace(/\/$/, '') + '/api/v2/profile'
+  return apiKey ? endpoint + '?api_key=' + encodeURIComponent(apiKey) : endpoint
+}
+
+function datadogTelemetryEndpoint(backendUrl: string): string {
+  return backendUrl.replace(/\/$/, '') + '/dd/telemetry/proxy'
+}
 
 function MonitoringPage() {
   return <MonitoringHostsPage />
@@ -166,9 +204,13 @@ type AgentOptions = {
   processes: boolean
 }
 
-function getDatadogYaml(options: AgentOptions): string {
+function getDatadogYaml(options: AgentOptions, apiKey?: string | null): string {
   const backendUrl = BACKEND_URL.replace(/\/$/, '')
   const ingestUrl = backendUrl + '/dd'
+  const logsEndpoint = datadogLogsEndpoint(ingestUrl)
+  const forwarderEndpoint = datadogForwarderEndpoint(backendUrl)
+  const profileEndpoint = datadogProfileEndpoint(backendUrl, apiKey)
+  const telemetryEndpoint = datadogTelemetryEndpoint(backendUrl)
 
   let yaml = `# Datadog Agent configuration for Moneat
 docker_query_timeout: 15`
@@ -178,43 +220,55 @@ docker_query_timeout: 15`
 
 # Continuous Profiling (agent uses this URL verbatim)
 apm_config:
-  profiling_dd_url: ${ingestUrl}/profiling/v1/input`
+  profiling_dd_url: ${profileEndpoint}
+  telemetry:
+    dd_url: ${telemetryEndpoint}`
+  }
+
+  if (options.logs) {
+    yaml += `
+
+# Log Collection
+logs_config:
+  logs_dd_url: ${logsEndpoint.address}
+  logs_no_ssl: ${logsEndpoint.noSsl}`
   }
 
   yaml += `
 
 # EPForwarder tracks (cannot be set via env vars)
 container_lifecycle:
-  dd_url: ${backendUrl}
+  dd_url: ${forwarderEndpoint}
 container_image:
-  dd_url: ${backendUrl}
+  dd_url: ${forwarderEndpoint}
 sbom:
-  dd_url: ${backendUrl}
+  dd_url: ${forwarderEndpoint}
 network_devices:
   metadata:
-    dd_url: ${backendUrl}
+    dd_url: ${forwarderEndpoint}
   snmp_traps:
     forwarder:
-      dd_url: ${backendUrl}
+      dd_url: ${forwarderEndpoint}
   netflow:
     forwarder:
-      dd_url: ${backendUrl}
+      dd_url: ${forwarderEndpoint}
 synthetics:
   forwarder:
-    dd_url: ${backendUrl}
+    dd_url: ${forwarderEndpoint}
 database_monitoring:
   metrics:
-    dd_url: ${backendUrl}
+    dd_url: ${forwarderEndpoint}
   samples:
-    dd_url: ${backendUrl}
+    dd_url: ${forwarderEndpoint}
   activity:
-    dd_url: ${backendUrl}`
+    dd_url: ${forwarderEndpoint}`
 
   return yaml
 }
 
 function getDockerRunCommand(apiKey: string, options: AgentOptions): string {
   const ingestUrl = BACKEND_URL.replace(/\/$/, '') + '/dd'
+  const logsEndpoint = datadogLogsEndpoint(ingestUrl)
   
   let envs = `  -e DD_API_KEY="${apiKey}" \\\n  -e DD_DD_URL="${ingestUrl}" \\`
   
@@ -223,7 +277,11 @@ function getDockerRunCommand(apiKey: string, options: AgentOptions): string {
   }
   
   if (options.logs) {
-    envs += `\n  -e DD_LOGS_ENABLED=true \\\n  -e DD_LOGS_CONFIG_DD_URL="${ingestUrl}" \\\n  -e DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true \\`
+    envs +=
+      `\n  -e DD_LOGS_ENABLED=true \\` +
+      `\n  -e DD_LOGS_CONFIG_LOGS_DD_URL="${logsEndpoint.address}" \\` +
+      `\n  -e DD_LOGS_CONFIG_LOGS_NO_SSL=${logsEndpoint.noSsl} \\` +
+      `\n  -e DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true \\`
   }
   
   if (options.processes) {
@@ -250,6 +308,7 @@ ${envs}
 
 function getDockerComposeCommand(apiKey: string, options: AgentOptions): string {
   const ingestUrl = BACKEND_URL.replace(/\/$/, '') + '/dd'
+  const logsEndpoint = datadogLogsEndpoint(ingestUrl)
   
   let envs = `      - DD_API_KEY=${apiKey}\n      - DD_DD_URL=${ingestUrl}`
   
@@ -258,7 +317,11 @@ function getDockerComposeCommand(apiKey: string, options: AgentOptions): string 
   }
   
   if (options.logs) {
-    envs += `\n      - DD_LOGS_ENABLED=true\n      - DD_LOGS_CONFIG_DD_URL=${ingestUrl}\n      - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true`
+    envs +=
+      `\n      - DD_LOGS_ENABLED=true` +
+      `\n      - DD_LOGS_CONFIG_LOGS_DD_URL=${logsEndpoint.address}` +
+      `\n      - DD_LOGS_CONFIG_LOGS_NO_SSL=${logsEndpoint.noSsl}` +
+      `\n      - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true`
   }
   
   if (options.processes) {
@@ -358,7 +421,13 @@ function AddHostDialog({
   }
 
   const handleCopyYaml = () => {
-    copyWithToast(getDatadogYaml(options), setCopiedYaml, 'YAML config copied to clipboard', 'Please copy the config manually', toast)
+    copyWithToast(
+      getDatadogYaml(options, createdKey),
+      setCopiedYaml,
+      'YAML config copied to clipboard',
+      'Please copy the config manually',
+      toast
+    )
   }
 
   return (
@@ -368,7 +437,7 @@ function AddHostDialog({
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <HardDrive className="h-5 w-5 text-blue-500" />
+                <HardDrive className="h-5 w-5 text-primary" />
                 Add New Host
               </DialogTitle>
               <DialogDescription>
@@ -404,7 +473,7 @@ function AddHostDialog({
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                <CheckCircle2 className="h-5 w-5 text-success-fg" />
                 Agent Key Created
               </DialogTitle>
               <DialogDescription>
@@ -470,8 +539,8 @@ function AddHostDialog({
               {/* Step 1: datadog.yaml */}
               <div className="space-y-2">
                 <Label className="flex items-center gap-2 text-sm font-medium">
-                  <span className="flex items-center justify-center h-5 w-5 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 text-xs font-bold shrink-0">1</span>
-                  <FileCode className="h-3.5 w-3.5 text-blue-500" />
+                  <span className="flex items-center justify-center h-5 w-5 rounded-full bg-info-bg text-info-fg text-xs font-bold shrink-0">1</span>
+                  <FileCode className="h-3.5 w-3.5 text-info-fg" />
                   Save configuration file
                 </Label>
                 <p className="text-xs text-muted-foreground">
@@ -479,7 +548,7 @@ function AddHostDialog({
                   This configures advanced telemetry tracks that cannot be set via environment variables.
                 </p>
                 <div className="relative group">
-                  <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 dark:bg-zinc-900">
+                  <div className="overflow-hidden rounded-lg border bg-card">
                     <SyntaxHighlighter
                       language="yaml"
                       style={isDark ? oneDark : oneLight}
@@ -499,7 +568,7 @@ function AddHostDialog({
                       showLineNumbers={false}
                       wrapLongLines={false}
                     >
-                      {getDatadogYaml(options)}
+                      {getDatadogYaml(options, createdKey)}
                     </SyntaxHighlighter>
                   </div>
                   <Button
@@ -510,7 +579,7 @@ function AddHostDialog({
                   >
                     {copiedYaml ? (
                       <>
-                        <Check className="h-3.5 w-3.5 text-emerald-500" />
+                        <Check className="h-3.5 w-3.5 text-success-fg" />
                         Copied
                       </>
                     ) : (
@@ -526,8 +595,8 @@ function AddHostDialog({
               {/* Step 2: Run the agent */}
               <div className="space-y-2">
                 <Label className="flex items-center gap-2 text-sm font-medium">
-                  <span className="flex items-center justify-center h-5 w-5 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 text-xs font-bold shrink-0">2</span>
-                  <Terminal className="h-3.5 w-3.5 text-blue-500" />
+                  <span className="flex items-center justify-center h-5 w-5 rounded-full bg-info-bg text-info-fg text-xs font-bold shrink-0">2</span>
+                  <Terminal className="h-3.5 w-3.5 text-info-fg" />
                   Run the agent
                 </Label>
                 <p className="text-xs text-muted-foreground">
@@ -540,7 +609,7 @@ function AddHostDialog({
                   </TabsList>
                   <TabsContent value="docker" className="mt-3">
                     <div className="relative group">
-                      <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 dark:bg-zinc-900">
+                      <div className="overflow-hidden rounded-lg border bg-card">
                         <SyntaxHighlighter
                           language="bash"
                           style={isDark ? oneDark : oneLight}
@@ -571,7 +640,7 @@ function AddHostDialog({
                       >
                         {copied ? (
                           <>
-                            <Check className="h-3.5 w-3.5 text-emerald-500" />
+                            <Check className="h-3.5 w-3.5 text-success-fg" />
                             Copied
                           </>
                         ) : (
@@ -585,7 +654,7 @@ function AddHostDialog({
                   </TabsContent>
                   <TabsContent value="compose" className="mt-3">
                     <div className="relative group">
-                      <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 dark:bg-zinc-900">
+                      <div className="overflow-hidden rounded-lg border bg-card">
                         <SyntaxHighlighter
                           language="bash"
                           style={isDark ? oneDark : oneLight}
@@ -616,7 +685,7 @@ function AddHostDialog({
                       >
                         {copied ? (
                           <>
-                            <Check className="h-3.5 w-3.5 text-emerald-500" />
+                            <Check className="h-3.5 w-3.5 text-success-fg" />
                             Copied
                           </>
                         ) : (
@@ -644,7 +713,7 @@ function AddHostDialog({
   )
 }
 
-function AddHostButton({onClick}: {onClick: () => void}) {
+function AddHostButton({onClick}: Readonly<{onClick: () => void}>) {
   return (
     <Button className="gap-2" onClick={onClick}>
       <Plus className="h-4 w-4" />
@@ -653,14 +722,7 @@ function AddHostButton({onClick}: {onClick: () => void}) {
   )
 }
 
-export function HostsHeaderActions() {
-  const [addDialogOpen, setAddDialogOpen] = useState(false)
-  const {data: ddHostsData} = useQuery({
-    queryKey: ['hosts'],
-    queryFn: () => api.getHosts(),
-    enabled: api.isAuthenticated(),
-  })
-  const hosts = ddHostsData?.hosts ?? []
+function HostsHeaderActions({hosts, onAddHost}: Readonly<{hosts: DdHostResponse[]; onAddHost: () => void}>) {
   const {data: billingUsage} = useQuery({
     queryKey: ['billingUsage'],
     queryFn: () => api.getBillingUsage(),
@@ -672,44 +734,27 @@ export function HostsHeaderActions() {
   const isAtLimit = !isSelfHosted && hosts.length >= hostLimit
 
   return (
-    <>
-      <AddHostDialog isOpen={addDialogOpen} setIsOpen={setAddDialogOpen} />
-      <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2">
+      {isAtLimit ? (
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <a href="/docs/datadog-agent/agent-setup" target="_blank" rel="noreferrer"
-                className="inline-flex items-center justify-center p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-                aria-label="View docs">
-                <HelpCircle className="h-4 w-4" />
-              </a>
+              <Link to="/settings" search={{tab: 'billing'}}>
+                <Button variant="default" size="sm" className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Upgrade to Add More
+                </Button>
+              </Link>
             </TooltipTrigger>
             <TooltipContent>
-              <p>View docs</p>
+              <p>You&apos;ve reached the limit for your {currentPlan} plan</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
-        {isAtLimit ? (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Link to="/settings" search={{tab: 'billing'}}>
-                  <Button variant="default" size="sm" className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    Upgrade to Add More
-                  </Button>
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>You&apos;ve reached the limit for your {currentPlan} plan</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        ) : (
-          <AddHostButton onClick={() => setAddDialogOpen(true)} />
-        )}
-      </div>
-    </>
+      ) : (
+        <AddHostButton onClick={onAddHost} />
+      )}
+    </div>
   )
 }
 
@@ -728,13 +773,11 @@ function HostCard({host, onDelete}: {host: DdHostResponse; onDelete: (id: number
       className="block group"
     >
       <Card className="relative overflow-hidden transition-all duration-200 hover:border-primary/20 group-hover:-translate-y-0.5">
-        {/* Top color accent bar */}
+        {/* Top status accent bar */}
         <div
           className={cn(
             'absolute top-0 left-0 right-0 h-1',
-            online
-              ? 'bg-gradient-to-r from-emerald-500 to-teal-500'
-              : 'bg-gradient-to-r from-red-500 to-rose-500'
+            online ? 'bg-success-solid' : 'bg-danger-solid'
           )}
         />
 
@@ -744,7 +787,7 @@ function HostCard({host, onDelete}: {host: DdHostResponse; onDelete: (id: number
               <div
                 className={cn(
                   'flex items-center justify-center h-10 w-10 rounded-lg shrink-0',
-                  online ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-red-500/10 text-red-600 dark:text-red-400'
+                  online ? 'bg-success-bg text-success-fg' : 'bg-danger-bg text-danger-fg'
                 )}
               >
                 {online ? <Server className="h-5 w-5" /> : <ServerOff className="h-5 w-5" />}
@@ -757,21 +800,8 @@ function HostCard({host, onDelete}: {host: DdHostResponse; onDelete: (id: number
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <Badge
-                variant={online ? 'default' : 'secondary'}
-                className={cn(
-                  'text-xs',
-                  online
-                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 border-emerald-500/20'
-                    : 'bg-red-500/15 text-red-700 dark:text-red-300 hover:bg-red-500/20 border-red-500/20'
-                )}
-              >
-                <div
-                  className={cn(
-                    'h-1.5 w-1.5 rounded-full mr-1.5',
-                    online ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
-                  )}
-                />
+              <Badge variant={online ? 'success' : 'danger'} size="sm" className="gap-1.5">
+                <StatusDot tone={online ? 'success' : 'danger'} size="sm" pulse={online} />
                 {online ? 'up' : 'down'}
               </Badge>
               <Button
@@ -798,7 +828,7 @@ function HostCard({host, onDelete}: {host: DdHostResponse; onDelete: (id: number
                 <TooltipTrigger asChild>
                   <div className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors">
                     <div className="flex h-10 w-10 items-center justify-center">
-                      <span className="text-lg font-bold tabular-nums text-violet-600 dark:text-violet-400">
+                      <span className="text-lg font-bold tabular-nums text-chart-1">
                         {host.cpuCores ?? '—'}
                       </span>
                     </div>
@@ -819,7 +849,7 @@ function HostCard({host, onDelete}: {host: DdHostResponse; onDelete: (id: number
                 <TooltipTrigger asChild>
                   <div className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors">
                     <div className="flex h-10 w-10 items-center justify-center">
-                      <span className="text-xs font-bold tabular-nums text-orange-600 dark:text-orange-400 leading-tight text-center">
+                      <span className="text-xs font-bold tabular-nums text-chart-2 leading-tight text-center">
                         {host.memoryTotalKb ? formatBytes(host.memoryTotalKb) : '—'}
                       </span>
                     </div>
@@ -840,7 +870,7 @@ function HostCard({host, onDelete}: {host: DdHostResponse; onDelete: (id: number
                 <TooltipTrigger asChild>
                   <div className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/40 hover:bg-muted/60 transition-colors">
                     <div className="flex h-10 w-10 items-center justify-center">
-                      <span className="text-xs font-bold tabular-nums text-sky-600 dark:text-sky-400 font-mono">
+                      <span className="text-xs font-bold tabular-nums text-chart-3 font-mono">
                         v{host.agentVersion || '—'}
                       </span>
                     </div>
@@ -863,7 +893,7 @@ function HostCard({host, onDelete}: {host: DdHostResponse; onDelete: (id: number
           <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
             <div className="flex items-center justify-between gap-2 min-w-0">
               <div className="flex items-center gap-1.5 text-muted-foreground shrink-0">
-                <Microchip className="h-3.5 w-3.5 text-violet-500" />
+                <Microchip className="h-3.5 w-3.5 text-chart-1" />
                 <span className="text-xs">Processor</span>
               </div>
               <span className="font-mono text-xs font-medium truncate" title={host.processor}>
@@ -873,7 +903,7 @@ function HostCard({host, onDelete}: {host: DdHostResponse; onDelete: (id: number
 
             <div className="flex items-center justify-between gap-2 min-w-0">
               <div className="flex items-center gap-1.5 text-muted-foreground shrink-0">
-                <Network className="h-3.5 w-3.5 text-sky-500" />
+                <Network className="h-3.5 w-3.5 text-chart-3" />
                 <span className="text-xs">Platform</span>
               </div>
               <span className="font-mono text-xs font-medium truncate" title={host.platform}>
@@ -948,7 +978,7 @@ function MonitoringHostsPage() {
         case 'memory':
           return ((a.memoryTotalKb || 0) - (b.memoryTotalKb || 0)) * dir
         case 'lastSeen':
-          return (new Date(a.lastSeenAt).getTime() - new Date(b.lastSeenAt).getTime()) * dir
+          return (parseDate(a.lastSeenAt).getTime() - parseDate(b.lastSeenAt).getTime()) * dir
         default:
           return 0
       }
@@ -1007,34 +1037,39 @@ function MonitoringHostsPage() {
           {!isLoadingHosts && hosts.length > 0 && (
             <div className="flex items-center gap-3 text-sm flex-wrap">
               <div className="flex items-center gap-1.5">
-                <HardDrive className="h-3.5 w-3.5 text-blue-500" />
+                <HardDrive className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="font-semibold tabular-nums">{hosts.length}</span>
                 <span className="text-muted-foreground text-xs">hosts</span>
               </div>
               <div className="h-4 w-px bg-border" />
               <div className="flex items-center gap-1.5">
-                <CircleCheck className="h-3.5 w-3.5 text-emerald-500" />
+                <CircleCheck className="h-3.5 w-3.5 text-success-fg" />
                 <span className="font-semibold tabular-nums">{onlineCount}</span>
                 <span className="text-muted-foreground text-xs">online</span>
               </div>
               <div className="h-4 w-px bg-border" />
               <div className="flex items-center gap-1.5">
-                <CircleX className="h-3.5 w-3.5 text-red-500" />
+                <CircleX className="h-3.5 w-3.5 text-danger-fg" />
                 <span className="font-semibold tabular-nums">{offlineCount}</span>
                 <span className="text-muted-foreground text-xs">offline</span>
               </div>
               <div className="h-4 w-px bg-border" />
               <div className="flex items-center gap-1.5">
-                <Cpu className="h-3.5 w-3.5 text-violet-500" />
+                <Cpu className="h-3.5 w-3.5 text-chart-1" />
                 <span className="font-semibold tabular-nums">{totalCores}</span>
                 <span className="text-muted-foreground text-xs">cores</span>
               </div>
               <div className="h-4 w-px bg-border" />
               <div className="flex items-center gap-1.5">
-                <MemoryStick className="h-3.5 w-3.5 text-sky-500" />
+                <MemoryStick className="h-3.5 w-3.5 text-chart-3" />
                 <span className="font-semibold tabular-nums">{formatBytes(totalMemoryKb)}</span>
                 <span className="text-muted-foreground text-xs">memory</span>
               </div>
+            </div>
+          )}
+          {!isLoadingHosts && hosts.length > 0 && (
+            <div className="sm:ml-auto">
+              <HostsHeaderActions hosts={hosts} onAddHost={() => setAddDialogOpen(true)} />
             </div>
           )}
         </div>
@@ -1053,9 +1088,9 @@ function MonitoringHostsPage() {
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1 rounded-lg border bg-background p-1">
                 {([
-                  {key: 'all' as const, color: 'bg-blue-500', count: hosts.length},
-                  {key: 'online' as const, color: 'bg-emerald-500', count: onlineCount},
-                  {key: 'offline' as const, color: 'bg-red-500', count: offlineCount},
+                  {key: 'all' as const, tone: 'neutral' as const, count: hosts.length},
+                  {key: 'online' as const, tone: 'success' as const, count: onlineCount},
+                  {key: 'offline' as const, tone: 'danger' as const, count: offlineCount},
                 ]).map((f) => (
                   <button
                     key={f.key}
@@ -1067,7 +1102,7 @@ function MonitoringHostsPage() {
                         : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                     )}
                   >
-                    <div className={cn('h-1.5 w-1.5 rounded-full', f.color)} />
+                    <StatusDot tone={f.tone} size="sm" />
                     <span className="capitalize">{f.key}</span>
                     <span className="ml-0.5 text-[10px] text-muted-foreground">{f.count}</span>
                   </button>
@@ -1109,24 +1144,18 @@ function MonitoringHostsPage() {
             </div>
           </div>
         ) : hosts.length === 0 ? (
-          <Card className="border-dashed">
-            <CardContent className="py-16 text-center">
-              <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/10 to-violet-500/10">
-                <HardDrive className="h-10 w-10 text-blue-500" />
-              </div>
-              <h3 className="text-xl font-semibold mb-2">No hosts yet</h3>
-              <p className="text-muted-foreground mb-8 max-w-sm mx-auto">
-                Start monitoring your servers by deploying the agent. You&apos;ll get a Docker
-                command to deploy in seconds.
-              </p>
-              <AddHostButton onClick={() => setAddDialogOpen(true)} />
-            </CardContent>
-          </Card>
+          <EmptyState
+            icon={HardDrive}
+            title="No hosts yet"
+            description="Start monitoring your servers by deploying the agent. You'll get a Docker command to deploy in seconds."
+            action={<AddHostButton onClick={() => setAddDialogOpen(true)} />}
+          />
         ) : filtered.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <p className="font-medium">No hosts match your filters</p>
-            <p className="text-sm mt-1">Try adjusting your search or status filter.</p>
-          </div>
+          <EmptyState
+            icon={Search}
+            title="No hosts match your filters"
+            description="Try adjusting your search or status filter."
+          />
         ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filtered.map((host) => (
@@ -1186,21 +1215,8 @@ function MonitoringHostsPage() {
                         onClick={() => navigate({to: '/monitoring/hosts/$hostId', params: {hostId: String(host.id)}})}
                       >
                         <TableCell className="pl-4">
-                          <Badge
-                            variant="secondary"
-                            className={cn(
-                              'text-xs gap-1.5',
-                              online
-                                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20 hover:bg-emerald-500/20'
-                                : 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/20 hover:bg-red-500/20'
-                            )}
-                          >
-                            <div
-                              className={cn(
-                                'h-1.5 w-1.5 rounded-full',
-                                online ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
-                              )}
-                            />
+                          <Badge variant={online ? 'success' : 'danger'} size="sm" className="gap-1.5">
+                            <StatusDot tone={online ? 'success' : 'danger'} size="sm" pulse={online} />
                             {online ? 'Online' : 'Offline'}
                           </Badge>
                         </TableCell>
@@ -1211,8 +1227,8 @@ function MonitoringHostsPage() {
                               className={cn(
                                 'flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
                                 online
-                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                                  : 'bg-red-500/10 text-red-600 dark:text-red-400'
+                                  ? 'bg-success-bg text-success-fg'
+                                  : 'bg-danger-bg text-danger-fg'
                               )}
                             >
                               {online ? <Server className="h-4 w-4" /> : <ServerOff className="h-4 w-4" />}
@@ -1272,7 +1288,7 @@ function MonitoringHostsPage() {
 
                         <TableCell>
                           <div className="flex items-center gap-1.5">
-                            <Cpu className="h-3.5 w-3.5 text-violet-500" />
+                            <Cpu className="h-3.5 w-3.5 text-chart-1" />
                             <span className="text-sm font-medium tabular-nums">
                               {host.cpuCores || '—'}
                             </span>
@@ -1287,7 +1303,7 @@ function MonitoringHostsPage() {
                             {host.memoryTotalKb > 0 && (
                               <div className="h-1.5 w-full rounded-full bg-muted/80 overflow-hidden">
                                 <div
-                                  className="h-full rounded-full transition-all duration-500 bg-sky-500"
+                                  className="h-full rounded-full transition-all duration-500 bg-chart-3"
                                   style={{width: `${Math.min(100, memPct)}%`}}
                                 />
                               </div>
@@ -1297,10 +1313,7 @@ function MonitoringHostsPage() {
 
                         <TableCell>
                           {host.agentVersion ? (
-                            <Badge
-                              variant="outline"
-                              className="text-[10px] font-medium font-mono border-violet-500/30 text-violet-600 dark:text-violet-400 bg-violet-500/5"
-                            >
+                            <Badge variant="neutral" size="sm" className="font-mono">
                               v{host.agentVersion}
                             </Badge>
                           ) : (

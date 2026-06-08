@@ -46,6 +46,7 @@ import {
   Brain,
   Bell,
   Shield,
+  ShieldCheck,
   Settings,
   Folder,
   BarChart3,
@@ -60,9 +61,11 @@ import {
   Database,
   Bug,
   Router,
+  Map as MapIcon,
   Sparkles,
 } from 'lucide-react'
 import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
+import {APP_OVERVIEW_HREF} from '@/lib/overview-route'
 
 const PAGE_ITEMS: Array<{
   label: string
@@ -71,7 +74,13 @@ const PAGE_ITEMS: Array<{
   icon: React.ComponentType<{className?: string}>
   keywords?: string[]
 }> = [
-  {label: 'Overview', description: 'Project metrics and key stats', href: '/', icon: Home, keywords: ['home']},
+  {
+    label: 'Overview',
+    description: 'Service metrics and key stats',
+    href: APP_OVERVIEW_HREF,
+    icon: Home,
+    keywords: ['home'],
+  },
   {label: 'Issues', description: 'Errors and exceptions', href: '/issues', icon: AlertCircle, keywords: ['errors', 'bugs']},
   {label: 'Traces', description: 'Distributed traces and service latency', href: '/performance/traces', icon: Timer, keywords: ['performance', 'traces', 'services', 'latency']},
   {label: 'APM Traces', description: 'Application performance traces and spans', href: '/apm-traces', icon: Cpu, keywords: ['apm', 'traces', 'spans', 'distributed tracing']},
@@ -80,7 +89,8 @@ const PAGE_ITEMS: Array<{
   {label: 'Dashboards', description: 'Custom metrics and visualizations', href: '/dashboards', icon: LayoutDashboard, keywords: ['widgets']},
   {label: 'Feature Flags', description: 'OpenFeature flags and experiments', href: '/feature-flags', icon: Flag, keywords: ['flags', 'openfeature', 'ofrep', 'experiments']},
   {label: 'Monitoring', description: 'Infrastructure and system health', href: '/monitoring', icon: Server, keywords: ['infrastructure', 'systems', 'servers']},
-  {label: 'Service Map', description: 'Service dependencies from traces', href: '/monitoring/service-map', icon: Network, keywords: ['service map', 'dependencies', 'traces', 'topology']},
+  {label: 'Monitoring – Map', description: 'Visual map for services, hosts, and containers', href: '/monitoring/map?scope=services', icon: MapIcon, keywords: ['infrastructure map', 'host map', 'containers', 'tags', 'topology']},
+  {label: 'Service Map', description: 'Service dependency topology', href: '/monitoring/map?scope=services', icon: Network, keywords: ['service map', 'dependencies', 'traces', 'topology']},
   {label: 'Monitoring – Hosts', description: 'Host metrics and system resources', href: '/monitoring/hosts', icon: Server, keywords: ['infrastructure', 'servers', 'cpu', 'memory', 'disk']},
   {label: 'Monitoring – Containers', description: 'Docker and Kubernetes container metrics', href: '/monitoring/containers', icon: Box, keywords: ['docker', 'kubernetes', 'k8s', 'pods']},
   {label: 'Monitoring – Processes', description: 'Running process explorer', href: '/monitoring/processes', icon: Terminal, keywords: ['processes', 'pid', 'cpu', 'top']},
@@ -158,6 +168,14 @@ const SETTINGS_ITEMS: Array<{
     tab: 'team',
     icon: Settings,
     keywords: ['users', 'members', 'permissions', 'roles'],
+  },
+  {
+    label: 'RBAC',
+    description: 'Configure custom access roles',
+    href: '/settings?tab=rbac',
+    tab: 'rbac',
+    icon: ShieldCheck,
+    keywords: ['permissions', 'roles', 'access control', 'rbac'],
   },
   {
     label: 'Billing',
@@ -269,13 +287,15 @@ export function CommandPalette() {
   const filteredSettings = useMemo(() => {
     if (!search.trim()) return []
     const q = search.trim().toLowerCase()
-    return SETTINGS_ITEMS.filter(
-      (s) =>
+    return SETTINGS_ITEMS.filter((s) => {
+      if (s.label === 'RBAC' && !hasEnterpriseModule(features, 'advanced_rbac')) return false
+      return (
         s.label.toLowerCase().includes(q) ||
         s.description.toLowerCase().includes(q) ||
         s.keywords?.some((k) => k.toLowerCase().includes(q) || q.includes(k.toLowerCase()))
-    )
-  }, [search])
+      )
+    })
+  }, [features, search])
 
   const handleInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter' && search.startsWith('/')) {
@@ -317,7 +337,7 @@ export function CommandPalette() {
             <div className="relative">
               <CommandInput
                 className="pr-24"
-                placeholder="Search dashboards, projects, pages..."
+                placeholder="Search dashboards, services, pages..."
                 value={search}
                 onValueChange={handleSearchChange}
                 onKeyDown={handleInputKeyDown}
@@ -413,7 +433,7 @@ export function CommandPalette() {
                 </CommandGroup>
               )}
               {searchResult?.projects && searchResult.projects.length > 0 && (
-                <CommandGroup heading="Projects">
+                <CommandGroup heading="Services">
                   {searchResult.projects.map((p) => (
                     <CommandItem
                       key={p.id}

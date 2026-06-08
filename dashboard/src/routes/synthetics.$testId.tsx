@@ -17,11 +17,14 @@
 import {createFileRoute, Link} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api, type SyntheticResultResponse} from '@/lib/api'
-import {Badge} from '@/components/ui/badge'
+import {Badge, type BadgeProps} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
-import {Card, CardContent, CardHeader, CardTitle} from '@/components/ui/card'
+import {SectionCard} from '@/components/ui/section-card'
+import {StatCard} from '@/components/ui/stat-card'
+import {EmptyState} from '@/components/ui/empty-state'
+import {PageHeader} from '@/components/ui/page-header'
 import {cn} from '@/lib/utils'
-import {ArrowLeft, Play, Clock, Activity, AlertTriangle, CheckCircle2} from 'lucide-react'
+import {ArrowLeft, Play, Clock, Activity, AlertTriangle, CheckCircle2, FlaskConical, Settings, History, LineChart as LineChartIcon} from 'lucide-react'
 import {useToast} from '@/hooks/useToast'
 import {
   LineChart,
@@ -37,10 +40,16 @@ export const Route = createFileRoute('/synthetics/$testId')({
   component: SyntheticTestDetail,
 })
 
-const statusColors: Record<string, string> = {
-  passed: 'bg-green-500/15 text-green-500 border-green-500/30',
-  failed: 'bg-red-500/15 text-red-500 border-red-500/30',
-  skipped: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
+// Pass/fail/skip mapped onto the shared status language.
+function statusVariant(status?: string | null): BadgeProps['variant'] {
+  switch ((status ?? '').toLowerCase()) {
+    case 'passed':
+      return 'success'
+    case 'failed':
+      return 'danger'
+    default:
+      return 'neutral'
+  }
 }
 
 function UptimeBar({results}: {results: SyntheticResultResponse[]}) {
@@ -55,7 +64,7 @@ function UptimeBar({results}: {results: SyntheticResultResponse[]}) {
           key={i}
           className={cn(
             'flex-1 min-w-[3px] max-w-[8px] rounded-sm h-full',
-            r.status === 'passed' ? 'bg-green-500' : 'bg-red-500'
+            r.status === 'passed' ? 'bg-success-solid' : 'bg-danger-solid'
           )}
           title={`${r.status} — ${r.durationMs}ms — ${r.timestamp}`}
         />
@@ -118,109 +127,93 @@ function SyntheticTestDetail() {
 
   if (!test) {
     return (
-      <div className="text-center py-8">
-        <p className="text-muted-foreground">Test not found</p>
-        <Link to="/synthetics" className="text-primary hover:underline mt-2 inline-block">
-          Back to tests
-        </Link>
-      </div>
+      <EmptyState
+        icon={FlaskConical}
+        title="Test not found"
+        description="This synthetic test may have been removed."
+        action={
+          <Button asChild variant="outline" size="sm">
+            <Link to="/synthetics">Back to tests</Link>
+          </Button>
+        }
+      />
     )
   }
 
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Link to="/synthetics">
-            <Button variant="ghost" size="icon" className="h-7 w-7">
-              <ArrowLeft className="h-3.5 w-3.5" />
+      <PageHeader
+        title={
+          <span className="flex items-center gap-2">
+            <Button asChild variant="ghost" size="icon" className="h-7 w-7 -ml-1">
+              <Link to="/synthetics">
+                <ArrowLeft className="h-3.5 w-3.5" />
+              </Link>
             </Button>
-          </Link>
-          <div>
-            <h2 className="text-lg font-bold">{test.name}</h2>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <Badge variant="outline" className="text-[10px]">{test.testType}</Badge>
-              <Badge
-                variant="outline"
-                className={cn('text-[10px]', test.lastStatus === 'passed'
-                  ? 'bg-green-500/15 text-green-500' : test.lastStatus === 'failed'
-                    ? 'bg-red-500/15 text-red-500' : 'bg-slate-500/15 text-slate-400')}
-              >
-                {test.lastStatus || 'pending'}
-              </Badge>
-              {test.tags && test.tags.length > 0 && test.tags.map((tag) => (
-                <Badge key={tag} variant="secondary" className="text-[10px]">{tag}</Badge>
-              ))}
-            </div>
-          </div>
-        </div>
-        <Button size="sm" className="h-7 text-xs" onClick={() => runMutation.mutate()} disabled={runMutation.isPending}>
-          <Play className="h-3 w-3 mr-1" />Run Now
-        </Button>
-      </div>
+            {test.name}
+          </span>
+        }
+        description={
+          <span className="flex flex-wrap items-center gap-1.5">
+            <Badge variant="neutral" size="sm" className="uppercase">{test.testType}</Badge>
+            <Badge variant={statusVariant(test.lastStatus)} size="sm">
+              {test.lastStatus || 'pending'}
+            </Badge>
+            {test.tags && test.tags.length > 0 && test.tags.map((tag) => (
+              <Badge key={tag} variant="neutral" size="sm">{tag}</Badge>
+            ))}
+          </span>
+        }
+        actions={
+          <Button size="sm" onClick={() => runMutation.mutate()} disabled={runMutation.isPending}>
+            <Play className="h-4 w-4 mr-1" />Run now
+          </Button>
+        }
+      />
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <Card>
-          <CardContent className="pt-3 pb-2 px-3">
-            <div className="flex items-center gap-1.5 text-muted-foreground text-[11px] mb-0.5">
-              <CheckCircle2 className="h-3 w-3" />Uptime
-            </div>
-            <div className="text-lg font-bold">
-              {summary ? `${summary.uptimePercent.toFixed(1)}%` : '—'}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-3 pb-2 px-3">
-            <div className="flex items-center gap-1.5 text-muted-foreground text-[11px] mb-0.5">
-              <Clock className="h-3 w-3" />Avg Response
-            </div>
-            <div className="text-lg font-bold">
-              {summary ? `${Math.round(summary.avgResponseMs)}ms` : '—'}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-3 pb-2 px-3">
-            <div className="flex items-center gap-1.5 text-muted-foreground text-[11px] mb-0.5">
-              <Activity className="h-3 w-3" />P95 Response
-            </div>
-            <div className="text-lg font-bold">
-              {summary ? `${Math.round(summary.p95ResponseMs)}ms` : '—'}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-3 pb-2 px-3">
-            <div className="flex items-center gap-1.5 text-muted-foreground text-[11px] mb-0.5">
-              <AlertTriangle className="h-3 w-3" />Failures
-            </div>
-            <div className="text-lg font-bold">
-              {summary ? summary.failureCount : '—'}
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard
+          label="Uptime"
+          value={summary ? `${summary.uptimePercent.toFixed(1)}%` : '—'}
+          icon={CheckCircle2}
+          tone="success"
+        />
+        <StatCard
+          label="Avg response"
+          value={summary ? `${Math.round(summary.avgResponseMs)}` : '—'}
+          unit={summary ? 'ms' : undefined}
+          icon={Clock}
+          tone="info"
+        />
+        <StatCard
+          label="P95 response"
+          value={summary ? `${Math.round(summary.p95ResponseMs)}` : '—'}
+          unit={summary ? 'ms' : undefined}
+          icon={Activity}
+          tone="accent"
+        />
+        <StatCard
+          label="Failures"
+          value={summary ? summary.failureCount : '—'}
+          icon={AlertTriangle}
+          tone={summary && summary.failureCount > 0 ? 'danger' : 'neutral'}
+        />
       </div>
 
       {/* Uptime Bar */}
-      <Card>
-        <CardHeader className="py-2 px-3"><CardTitle className="text-xs">Uptime History</CardTitle></CardHeader>
-        <CardContent className="px-3 pb-3 pt-0">
+      <SectionCard title="Uptime history" icon={Activity} iconTone="muted">
           <UptimeBar results={results} />
           <div className="flex justify-between text-[11px] text-muted-foreground mt-1.5">
             <span>Older</span>
             <span>Recent</span>
           </div>
-        </CardContent>
-      </Card>
+      </SectionCard>
 
       {/* Response Time Chart */}
       {chartData.length > 0 && (
-        <Card>
-          <CardHeader className="py-2 px-3"><CardTitle className="text-xs">Response Time</CardTitle></CardHeader>
-          <CardContent className="px-3 pb-3 pt-0">
+        <SectionCard title="Response time" icon={LineChartIcon} iconTone="accent">
             <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData}>
@@ -255,15 +248,12 @@ function SyntheticTestDetail() {
                 </LineChart>
               </ResponsiveContainer>
             </div>
-          </CardContent>
-        </Card>
+        </SectionCard>
       )}
 
       {/* Test Configuration */}
-      <Card>
-        <CardHeader className="py-2 px-3"><CardTitle className="text-xs">Configuration</CardTitle></CardHeader>
-        <CardContent className="px-3 pb-3 pt-0">
-          <div className="grid grid-cols-2 gap-2 text-xs">
+      <SectionCard title="Configuration" icon={Settings} iconTone="muted">
+          <div className="grid grid-cols-2 gap-2 text-sm">
             {test.url && (
               <div>
                 <span className="text-muted-foreground">URL</span>
@@ -293,52 +283,50 @@ function SyntheticTestDetail() {
               </div>
             )}
           </div>
-        </CardContent>
-      </Card>
+      </SectionCard>
 
       {/* Results History */}
-      <Card>
-        <CardHeader className="py-2 px-3"><CardTitle className="text-xs">Results History</CardTitle></CardHeader>
-        <CardContent className="px-3 pb-3 pt-0">
+      <SectionCard title="Results history" icon={History} iconTone="muted" flushBody>
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="pb-1.5 pr-2 font-medium">Status</th>
-                  <th className="pb-1.5 pr-2 font-medium">Duration</th>
-                  <th className="pb-1.5 pr-2 font-medium">Error</th>
-                  <th className="pb-1.5 font-medium">Time</th>
+                <tr className="border-b bg-muted/40 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                  <th className="px-4 py-2 font-medium">Status</th>
+                  <th className="px-4 py-2 font-medium">Duration</th>
+                  <th className="px-4 py-2 font-medium">Error</th>
+                  <th className="px-4 py-2 font-medium">Time</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-border/40">
                 {results.slice(0, 50).map((r) => (
-                  <tr key={r.resultId} className="border-b last:border-0 hover:bg-muted/30">
-                    <td className="py-1.5 pr-2">
-                      <Badge variant="outline" className={cn('text-[10px]', statusColors[r.status] || '')}>
+                  <tr key={r.resultId} className="transition-colors hover:bg-accent/40">
+                    <td className="px-4 py-1.5">
+                      <Badge variant={statusVariant(r.status)} size="sm">
                         {r.status}
                       </Badge>
                     </td>
-                    <td className="py-1.5 pr-2">{r.durationMs}ms</td>
-                    <td className="py-1.5 pr-2 text-muted-foreground max-w-xs truncate">
+                    <td className="px-4 py-1.5 tabular-nums">{r.durationMs}ms</td>
+                    <td className="px-4 py-1.5 text-muted-foreground max-w-xs truncate">
                       {r.errorMessage || '—'}
                     </td>
-                    <td className="py-1.5 text-muted-foreground">
+                    <td className="px-4 py-1.5 tabular-nums text-muted-foreground">
                       {new Date(r.timestamp).toLocaleString()}
                     </td>
                   </tr>
                 ))}
-                {results.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="py-6 text-center text-muted-foreground">
-                      No results yet. Run the test to see results.
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
+            {results.length === 0 && (
+              <div className="py-4">
+                <EmptyState
+                  icon={History}
+                  title="No results yet"
+                  description="Run the test to see results here."
+                />
+              </div>
+            )}
           </div>
-        </CardContent>
-      </Card>
+      </SectionCard>
     </div>
   )
 }

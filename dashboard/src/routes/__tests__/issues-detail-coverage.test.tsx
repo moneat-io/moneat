@@ -1,10 +1,11 @@
 import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, fireEvent, waitFor } from '@testing-library/react'
 import { renderRoute, clearAuthStorage } from '@/test/utils'
 
-const { mockNavigate, mockToast, mockApi } = vi.hoisted(() => ({
+const { mockNavigate, mockSearch, mockToast, mockApi } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
+  mockSearch: vi.fn(),
   mockToast: vi.fn(),
   mockApi: {
     isAuthenticated: vi.fn(),
@@ -52,6 +53,7 @@ vi.mock('@tanstack/react-router', () => ({
     ...options,
     options,
     useParams: () => ({ issueId: 'issue-123' }),
+    useSearch: () => mockSearch(),
   }),
   Link: ({ children, ...props }: { children: React.ReactNode }) => React.createElement('a', props, children),
   redirect: (opts: Record<string, unknown>) => ({ ...opts, __redirect: true }),
@@ -161,6 +163,7 @@ describe('Issue Detail - full data coverage', () => {
     clearAuthStorage()
     mockApi.isAuthenticated.mockReturnValue(true)
     mockApi.checkAuth.mockResolvedValue(true)
+    mockSearch.mockReturnValue({})
     mockApi.getProjects.mockResolvedValue([])
     mockApi.updateIssue.mockResolvedValue(undefined)
     mockApi.getIssue.mockResolvedValue(null)
@@ -188,11 +191,11 @@ describe('Issue Detail - full data coverage', () => {
     expect(screen.getByText('javascript')).toBeInTheDocument()
     expect(screen.getByText('app.main')).toBeInTheDocument()
 
-    // Event stats
+    // Event stats (KPI tiles)
     expect(screen.getByText('42')).toBeInTheDocument()
-    expect(screen.getByText('events')).toBeInTheDocument()
+    expect(screen.getByText('Events')).toBeInTheDocument()
     expect(screen.getByText('7')).toBeInTheDocument()
-    expect(screen.getByText('users')).toBeInTheDocument()
+    expect(screen.getByText('Users affected')).toBeInTheDocument()
 
     // Resolve button for unresolved
     expect(screen.getByText('Resolve')).toBeInTheDocument()
@@ -209,35 +212,59 @@ describe('Issue Detail - full data coverage', () => {
     expect(screen.getAllByText('Chrome').length).toBeGreaterThan(0)
 
     // Event details
-    expect(screen.getByText('Event Details')).toBeInTheDocument()
+    expect(screen.getByText('Event details')).toBeInTheDocument()
     expect(screen.getByText('production')).toBeInTheDocument()
     expect(screen.getByText('v1.2.3')).toBeInTheDocument()
     expect(screen.getByText('test@example.com')).toBeInTheDocument()
 
     // Traces
-    expect(screen.getByText('Traces (1)')).toBeInTheDocument()
+    expect(screen.getByText('Traces')).toBeInTheDocument()
     expect(screen.getByText('GET /api/data')).toBeInTheDocument()
     expect(screen.getByText('1.50s')).toBeInTheDocument()
 
     // Replays
-    expect(screen.getByText('Replays (2)')).toBeInTheDocument()
+    expect(screen.getByText('Replays')).toBeInTheDocument()
     expect(screen.getByText('user@example.com')).toBeInTheDocument()
     expect(screen.getByText('Anonymous')).toBeInTheDocument()
 
     // Recent events (2 events triggers this section)
-    expect(screen.getByText('Recent Events (2)')).toBeInTheDocument()
+    expect(screen.getByText('Recent events')).toBeInTheDocument()
 
-    // Logs Context
-    expect(screen.getByText('Logs Context')).toBeInTheDocument()
+    // Logs context
+    expect(screen.getByText('Logs context')).toBeInTheDocument()
 
     // Spans (loaded via secondary query after transactions)
-    expect(await screen.findByText(/Spans Preview/)).toBeInTheDocument()
+    expect(await screen.findByText(/Spans preview/)).toBeInTheDocument()
     expect(screen.getByText('span-waterfall')).toBeInTheDocument()
 
     // Context sections
-    expect(screen.getByText('Tags & Context')).toBeInTheDocument()
+    expect(screen.getByText('Tags & context')).toBeInTheDocument()
     expect(screen.getByText('This error has an associated APM trace')).toBeInTheDocument()
     expect(screen.getByText('View trace')).toBeInTheDocument()
+  })
+
+  it('uses the linked projectId search param for issue reads and updates', async () => {
+    mockSearch.mockReturnValue({ projectId: 'proj-2' })
+    mockApi.getIssue.mockResolvedValue({ ...mockIssue, status: 'unresolved' })
+
+    renderRoute(IssueDetailRoute)
+
+    await waitFor(() => {
+      expect(mockApi.getIssue).toHaveBeenCalledWith('issue-123', 'proj-2')
+    })
+    expect(mockApi.getIssueEvents).toHaveBeenCalledWith('issue-123', 50, 'proj-2')
+    expect(mockApi.getIssueTransactions).toHaveBeenCalledWith('issue-123', 20, 'proj-2')
+    expect(mockApi.getReplaysForIssue).toHaveBeenCalledWith('issue-123', 10, 'proj-2')
+
+    fireEvent.click(await screen.findByText('Resolve'))
+
+    await waitFor(() => {
+      expect(mockApi.updateIssue).toHaveBeenCalledWith(
+        'issue-123',
+        { status: 'resolved' },
+        'proj-2'
+      )
+    })
   })
 
   it('renders resolved issue with Unresolve button', async () => {
@@ -263,7 +290,7 @@ describe('Issue Detail - full data coverage', () => {
 
     renderRoute(IssueDetailRoute)
 
-    expect(await screen.findByText('Resolves in Next Release')).toBeInTheDocument()
+    expect(await screen.findByText('Resolves in next release')).toBeInTheDocument()
   })
 
   it('renders event with no exception as "No stack trace available"', async () => {
@@ -344,6 +371,8 @@ describe('Issue Detail - full data coverage', () => {
 
     renderRoute(IssueDetailRoute)
 
-    expect(screen.getByText('Loading...')).toBeInTheDocument()
+    // The loading state renders skeleton placeholders rather than the issue body.
+    expect(document.querySelector('.animate-pulse')).not.toBeNull()
+    expect(screen.queryByText('Resolve')).not.toBeInTheDocument()
   })
 })

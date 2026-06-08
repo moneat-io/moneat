@@ -12,7 +12,7 @@ type Theme = 'light' | 'dark' | 'midnight' | 'forest' | 'sunset' | 'gamer' | 're
 
 const VT323_FONT_ID = 'vt323-font'
 const IBM_PLEX_MONO_FONT_ID = 'ibm-plex-mono-font'
-const DEFAULT_THEME: Theme = 'light'
+const DEFAULT_THEME: Theme = 'dark'
 
 function loadGamerFont() {
   if (!globalThis.document) return

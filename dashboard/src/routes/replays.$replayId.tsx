@@ -20,7 +20,7 @@ import {useCallback, useMemo, useRef, useState} from 'react'
 import {api} from '@/lib/api'
 import {formatRelativeTime} from '@/lib/utils'
 import {useTimezone} from '@/hooks/useTimezone'
-import {formatDateTime as formatDateTimeUtil} from '@/lib/date-format'
+import {formatDateTime as formatDateTimeUtil, parseDate} from '@/lib/date-format'
 import {ReplayPlayer, type ReplayPlayerHandle} from '@/components/ReplayPlayer'
 import {MobileReplayViewer, type MobileReplayViewerHandle, type ReplayStatusBarContext} from '@/components/MobileReplayViewer'
 import {ReplayTimelinePanel} from '@/components/ReplayTimelinePanel'
@@ -62,7 +62,7 @@ function formatDuration(ms: number) {
 
 function formatDate(isoString: string, timezone: string) {
   if (!isoString) return 'N/A'
-  const date = new Date(isoString)
+  const date = parseDate(isoString)
   if (isNaN(date.getTime())) return 'Invalid Date'
   return formatDateTimeUtil(date, timezone)
 }
@@ -351,6 +351,8 @@ function ReplayDetailPage() {
   )
   const durationMs =
     recordingDurationMs > 0 ? recordingDurationMs : computedDurationMs > 0 ? computedDurationMs : (replay?.durationMs ?? 0)
+  const replayProjectId = replay?.projectResourceId ??
+    (replay?.projectId != null ? String(replay.projectId) : undefined)
   const mobileCompressedTimeMapper = useMemo(
     () => (isMobileReplay ? createMobileCompressedTimeMapper(events) : null),
     [events, isMobileReplay]
@@ -496,7 +498,7 @@ function ReplayDetailPage() {
 
       let normalizedOffset = Math.max(0, rawOffset)
       if (mobileCompressedTimeMapper) {
-        const absoluteMs = Date.parse(item.timestamp)
+        const absoluteMs = parseDate(item.timestamp).getTime()
         if (Number.isFinite(absoluteMs)) {
           normalizedOffset = mobileCompressedTimeMapper(absoluteMs)
         }
@@ -553,7 +555,7 @@ function ReplayDetailPage() {
         {/* Compact header bar */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
           <div className="flex items-center gap-2">
-            <Play className="h-4 w-4 text-indigo-500 dark:text-indigo-400" />
+            <Play className="h-4 w-4 text-primary" />
             <span className="font-semibold text-base">
               {replay.user?.email || replay.user?.username || replay.user?.id || 'Anonymous'}
             </span>
@@ -583,7 +585,7 @@ function ReplayDetailPage() {
             {formatRelativeTime(replay.startedAt)}
           </span>
           <span className="inline-flex items-center gap-1.5 text-xs">
-            <span className="font-semibold text-indigo-600 dark:text-indigo-400">{formatDuration(durationMs)}</span>
+            <span className="font-semibold text-primary tabular-nums">{formatDuration(durationMs)}</span>
             <span className="text-muted-foreground">duration</span>
           </span>
         </div>
@@ -665,7 +667,7 @@ function ReplayDetailPage() {
               <ReplayTimelinePanel
                 items={timelineItems}
                 currentOffsetMs={currentOffsetMs}
-                projectId={replay.projectResourceId ?? replay.projectId}
+                projectId={replayProjectId}
                 onSeek={handleSeek}
               />
             ) : (
@@ -816,7 +818,7 @@ function ReplayDetailPage() {
             {replay.errorIds && replay.errorIds.length > 0 && (
               <div className="rounded-lg border bg-card p-3">
                 <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
-                  <AlertCircle className="h-3.5 w-3.5 text-red-500" />
+                  <AlertCircle className="h-3.5 w-3.5 text-danger-fg" />
                   Errors ({replay.errorIds.length})
                 </div>
                 <div className="space-y-1.5 max-h-[160px] overflow-auto">
@@ -825,6 +827,7 @@ function ReplayDetailPage() {
                       key={errorId}
                       to="/issues/$issueId"
                       params={{ issueId: errorId }}
+                      search={{ projectId: replayProjectId }}
                       className="flex items-center justify-between rounded border p-1.5 transition-colors hover:bg-accent group"
                     >
                       <span className="font-mono text-xs text-muted-foreground truncate min-w-0">{errorId}</span>

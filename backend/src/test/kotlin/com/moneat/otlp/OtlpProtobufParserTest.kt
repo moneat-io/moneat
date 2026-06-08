@@ -105,7 +105,7 @@ class OtlpProtobufParserTest {
             val resource = Resource.newBuilder().addAllAttributes(
                 listOf(
                     kv("service.name", stringAnyValue(TEST_SERVICE_NAME)),
-                    kv("deployment.environment", stringAnyValue("prod")),
+                    kv("deployment.environment.name", stringAnyValue("prod")),
                     kv("host.name", stringAnyValue("web-01")),
                     kv("service.version", stringAnyValue("1.0.0")),
                 )
@@ -117,6 +117,16 @@ class OtlpProtobufParserTest {
             assertEquals("web-01", ctx.hostName)
             assertEquals("1.0.0", ctx.serviceVersion)
             assertEquals(TEST_SERVICE_NAME, ctx.attributes["service.name"])
+        }
+
+        @Test
+        fun `falls back to legacy deployment environment attribute`() {
+            val resource = Resource.newBuilder().addAllAttributes(
+                listOf(kv("deployment.environment", stringAnyValue("prod")))
+            ).build()
+
+            val ctx = OtlpProtobufParser.extractResourceContext(resource)
+            assertEquals("prod", ctx.environment)
         }
 
         @Test

@@ -95,21 +95,24 @@ class WorkflowConditionEvaluatorTest {
         assertFalse(WorkflowConditionEvaluator.evaluate(null, null, "gte", "5"))
     }
 
-    // ──── evaluate: severity (at_least) ────
+    // ──── evaluate: priority and severity (at_least) ────
 
     @Test
-    fun `at_least requires a severity resource type and ranks correctly`() {
-        assertTrue(WorkflowConditionEvaluator.evaluate("AlertSeverity", "CRITICAL", "at_least", "HIGH"))
-        assertTrue(WorkflowConditionEvaluator.evaluate("AlertSeverity", "HIGH", "at_least", "HIGH"))
-        assertFalse(WorkflowConditionEvaluator.evaluate("AlertSeverity", "LOW", "at_least", "HIGH"))
+    fun `at_least ranks alert priorities incident severities and security severities correctly`() {
+        assertTrue(WorkflowConditionEvaluator.evaluate("AlertPriority", "P0", "at_least", "P1"))
+        assertTrue(WorkflowConditionEvaluator.evaluate("AlertPriority", "P1", "at_least", "P1"))
+        assertFalse(WorkflowConditionEvaluator.evaluate("AlertPriority", "P3", "at_least", "P1"))
+        assertTrue(WorkflowConditionEvaluator.evaluate("IncidentSeverity", "SEV-0", "at_least", "SEV-1"))
+        assertTrue(WorkflowConditionEvaluator.evaluate("IncidentSeverity", "sev1", "at_least", "SEV-1"))
+        assertFalse(WorkflowConditionEvaluator.evaluate("IncidentSeverity", "SEV-3", "at_least", "SEV-1"))
         assertTrue(WorkflowConditionEvaluator.evaluate("SecuritySeverity", "high", "at_least", "medium"))
     }
 
     @Test
-    fun `at_least is false for non-severity resource or unknown expected`() {
-        assertFalse(WorkflowConditionEvaluator.evaluate("String", "CRITICAL", "at_least", "HIGH"))
-        assertFalse(WorkflowConditionEvaluator.evaluate("AlertSeverity", "CRITICAL", "at_least", "BOGUS"))
-        assertFalse(WorkflowConditionEvaluator.evaluate("AlertSeverity", "INFO", "at_least", "LOW"))
+    fun `at_least is false for non-ranked resource or unknown expected`() {
+        assertFalse(WorkflowConditionEvaluator.evaluate("String", "P0", "at_least", "P1"))
+        assertFalse(WorkflowConditionEvaluator.evaluate("AlertPriority", "P0", "at_least", "BOGUS"))
+        assertFalse(WorkflowConditionEvaluator.evaluate("AlertPriority", "INFO", "at_least", "P3"))
     }
 
     @Test
@@ -123,14 +126,14 @@ class WorkflowConditionEvaluatorTest {
     fun `matchesAll requires every condition and reads scope by reference`() {
         val scope =
             mapOf(
-                "alert.severity" to "HIGH",
+                "alert.priority" to "P1",
                 "alert.status" to "FIRING"
             ).typedWorkflowScope()
         assertTrue(
             WorkflowConditionEvaluator.matchesAll(
                 triggerName = "alert.triggered",
                 conditions = listOf(
-                    WorkflowConditionConfig("alert.severity", "at_least", "MEDIUM"),
+                    WorkflowConditionConfig("alert.priority", "at_least", "P2"),
                     WorkflowConditionConfig("alert.status", "eq", "FIRING")
                 ),
                 scope = scope
@@ -140,7 +143,7 @@ class WorkflowConditionEvaluatorTest {
             WorkflowConditionEvaluator.matchesAll(
                 triggerName = "alert.triggered",
                 conditions = listOf(
-                    WorkflowConditionConfig("alert.severity", "at_least", "MEDIUM"),
+                    WorkflowConditionConfig("alert.priority", "at_least", "MEDIUM"),
                     WorkflowConditionConfig("alert.status", "eq", "RESOLVED")
                 ),
                 scope = scope

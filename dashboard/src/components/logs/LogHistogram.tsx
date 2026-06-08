@@ -18,7 +18,7 @@ import {useMemo} from 'react'
 import {Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis} from 'recharts'
 import type {LogAggregateBucket} from '@/lib/api'
 import {useTimezone} from '@/hooks/useTimezone'
-import {formatDateTime, formatMonthDay, formatTimeHM} from '@/lib/date-format'
+import {formatDateTime, formatMonthDay, formatTimeHM, parseDate} from '@/lib/date-format'
 import {logIntervalToMs} from '@/components/logs/logInterval'
 
 interface LogHistogramProps {
@@ -38,16 +38,27 @@ interface HistogramPoint {
   [key: string]: string | number
 }
 
+// Level fills use the shared status language; non-level groups fall back to the
+// categorical chart palette (style guide).
 const LEVEL_COLORS: Record<string, string> = {
-  fatal: '#e11d48',
-  error: '#ef4444',
-  warn: '#f59e0b',
-  info: '#6366f1',
-  debug: '#14b8a6',
-  trace: '#a1a1aa',
+  fatal: 'hsl(var(--danger-solid))',
+  error: 'hsl(var(--chart-8))',
+  warn: 'hsl(var(--warning-solid))',
+  info: 'hsl(var(--info-solid))',
+  debug: 'hsl(var(--chart-3))',
+  trace: 'hsl(var(--muted-foreground))',
 }
 
-const GROUP_COLORS = ['#ef4444', '#f59e0b', '#6366f1', '#14b8a6', '#a855f7', '#22c55e', '#ec4899', '#0ea5e9']
+const GROUP_COLORS = [
+  'hsl(var(--chart-1))',
+  'hsl(var(--chart-2))',
+  'hsl(var(--chart-3))',
+  'hsl(var(--chart-4))',
+  'hsl(var(--chart-6))',
+  'hsl(var(--chart-7))',
+  'hsl(var(--chart-9))',
+  'hsl(var(--chart-10))',
+]
 const MAX_BAR_WIDTH_PX = 14
 
 const levelOrder = ['fatal', 'error', 'warn', 'info', 'debug', 'trace']
@@ -63,7 +74,7 @@ function colorForGroup(key: string): string {
 
 function toTimestampMs(value: string | undefined): number | undefined {
   if (!value) return undefined
-  const timestamp = new Date(value).getTime()
+  const timestamp = parseDate(value).getTime()
   return Number.isNaN(timestamp) ? undefined : timestamp
 }
 
@@ -91,14 +102,14 @@ export function LogHistogram({
     }
     return formatMonthDay(date, timezone)
   }
-  const formatTooltipTime = (ts: number): string => formatDateTime(new Date(ts), timezone)
+  const formatTooltipTime = (ts: number): string => formatDateTime(ts, timezone)
   const {chartData, groupKeys, totalRangeMs, domainMin, domainMax, estimatedBucketCount} = useMemo(() => {
     const keys = new Set<string>()
     const data: HistogramPoint[] = buckets
       .map((b) => {
         const point: HistogramPoint = {
           timestamp: b.timestamp,
-          timestampMs: new Date(b.timestamp).getTime(),
+          timestampMs: parseDate(b.timestamp).getTime(),
           total: b.count,
         }
         if (grouped && Object.keys(b.groups).length > 0) {
@@ -185,6 +196,7 @@ export function LogHistogram({
           />
           <Tooltip
             cursor={false}
+            wrapperStyle={{zIndex: 30}}
             labelFormatter={(ts) => formatTooltipTime(ts as number)}
             formatter={formatTooltipValue}
             contentStyle={{

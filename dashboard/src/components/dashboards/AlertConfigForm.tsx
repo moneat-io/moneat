@@ -16,7 +16,7 @@
 
 import {useEffect, useMemo, useState} from 'react'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
-import type {CreateDashboardAlertRequest, DashboardAlertCondition, QueryDsl} from '@/lib/api'
+import type {AlertPriority, CreateDashboardAlertRequest, DashboardAlertCondition, QueryDsl} from '@/lib/api'
 import {api} from '@/lib/api'
 import {Button} from '@/components/ui/button'
 import {Bell, BellOff, Plus, Trash2} from 'lucide-react'
@@ -34,12 +34,14 @@ const CONDITIONS = [
   {value: '==', label: '=='},
 ] as const
 
-const SEVERITIES = [
+const ALERT_PRIORITIES = [
   {value: '', label: 'None'},
-  {value: 'CRITICAL', label: 'Critical'},
-  {value: 'HIGH', label: 'High'},
-  {value: 'MEDIUM', label: 'Medium'},
-  {value: 'LOW', label: 'Low'},
+  {value: 'P0', label: 'P0'},
+  {value: 'P1', label: 'P1'},
+  {value: 'P2', label: 'P2'},
+  {value: 'P3', label: 'P3'},
+  {value: 'P4', label: 'P4'},
+  {value: 'P5', label: 'P5'},
 ] as const
 
 interface AlertConfigFormProps {
@@ -93,7 +95,7 @@ export function AlertConfigForm({
     warning_threshold: null,
     metric_index: 0,
     duration_seconds: 0,
-    incident_severity: null,
+    alert_priority: null,
     enabled: true,
     notification_channels: {email: true, slack: true, discord: true},
   })
@@ -169,7 +171,7 @@ export function AlertConfigForm({
               {metricLabels[alert.metric_index] || 'metric'} {formatAlertThresholdSummary(alert)}
             </span>
             {alert.last_triggered_at && (
-              <span className="text-xs text-orange-500 shrink-0">
+              <span className="text-xs text-warning-fg shrink-0">
                 {alert.last_triggered_level ?? 'FIRING'}
               </span>
             )}
@@ -243,7 +245,7 @@ export function AlertConfigForm({
                   htmlFor="alert-warning-threshold"
                   className="mb-0.5 flex items-center gap-1.5 text-xs text-muted-foreground"
                 >
-                  <span className="h-2 w-2 rounded-full bg-amber-500" />
+                  <span className="h-2 w-2 rounded-full bg-warning-solid" />
                   Warning<span className="sr-only"> threshold</span>
                 </label>
                 <input
@@ -279,20 +281,23 @@ export function AlertConfigForm({
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div>
-              <label className="text-xs text-muted-foreground mb-0.5 block">Severity</label>
+              <label htmlFor="alert-priority" className="text-xs text-muted-foreground mb-0.5 block">
+                Alert priority
+              </label>
               <select
+                id="alert-priority"
                 className="w-full rounded-md border bg-background px-2 py-1.5 text-sm"
-                value={form.incident_severity ?? ''}
+                value={form.alert_priority ?? ''}
                 onChange={(e) =>
                   setForm({
                     ...form,
-                    incident_severity: e.target.value
-                      ? (e.target.value as 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW')
+                    alert_priority: e.target.value
+                      ? (e.target.value as AlertPriority)
                       : null,
                   })
                 }
               >
-                {SEVERITIES.map((s) => (
+                {ALERT_PRIORITIES.map((s) => (
                   <option key={s.value} value={s.value}>
                     {s.label}
                   </option>

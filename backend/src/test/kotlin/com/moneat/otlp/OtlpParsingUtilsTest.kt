@@ -253,7 +253,7 @@ class OtlpParsingUtilsTest {
                         )
                         add(
                             buildJsonObject {
-                                put("key", "deployment.environment")
+                                put("key", "deployment.environment.name")
                                 put("value", buildJsonObject { put("stringValue", "production") })
                             }
                         )
@@ -280,6 +280,26 @@ class OtlpParsingUtilsTest {
             assertEquals("web-01", ctx.hostName)
             assertEquals("2.1.0", ctx.serviceVersion)
             assertEquals(4, ctx.attributes.size)
+        }
+
+        @Test
+        fun `falls back to legacy deployment_environment for environment`() {
+            val resource = buildJsonObject {
+                put(
+                    "attributes",
+                    buildJsonArray {
+                        add(
+                            buildJsonObject {
+                                put("key", "deployment.environment")
+                                put("value", buildJsonObject { put("stringValue", "production") })
+                            }
+                        )
+                    }
+                )
+            }
+
+            val ctx = OtlpParsingUtils.extractResourceContext(resource)
+            assertEquals("production", ctx.environment)
         }
 
         @Test

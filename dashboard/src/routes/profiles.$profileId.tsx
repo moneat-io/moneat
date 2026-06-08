@@ -13,6 +13,7 @@ import {api} from '@/lib/api'
 import {Flamegraph} from '@/components/profiling/Flamegraph'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
+import {EmptyState} from '@/components/ui/empty-state'
 import {
   ArrowLeft,
   Clock,
@@ -56,14 +57,15 @@ function formatTime(iso: string): string {
   }
 }
 
+// Profile types are categorical — differentiate with the chart palette (style guide).
 const TYPE_COLORS: Record<string, string> = {
-  cpu: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
-  wall: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-  heap: 'bg-green-500/15 text-green-400 border-green-500/30',
-  alloc: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-  goroutine: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
-  mutex: 'bg-red-500/15 text-red-400 border-red-500/30',
-  block: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
+  cpu: 'bg-chart-6/15 text-chart-6 border-chart-6/30',
+  wall: 'bg-chart-2/15 text-chart-2 border-chart-2/30',
+  heap: 'bg-chart-4/15 text-chart-4 border-chart-4/30',
+  alloc: 'bg-chart-3/15 text-chart-3 border-chart-3/30',
+  goroutine: 'bg-chart-10/15 text-chart-10 border-chart-10/30',
+  mutex: 'bg-chart-8/15 text-chart-8 border-chart-8/30',
+  block: 'bg-chart-5/15 text-chart-5 border-chart-5/30',
 }
 
 function profileTypeBadgeClass(type: string): string {
@@ -134,17 +136,32 @@ function ProfileDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="p-3 flex flex-col items-center justify-center py-16 gap-2">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        <p className="text-xs text-muted-foreground">Loading profile...</p>
+      <div
+        className="flex flex-col gap-2 p-3"
+        style={{height: 'calc(100vh - var(--header-height, 0px))'}}
+      >
+        <div className="h-7 w-64 shrink-0 animate-pulse rounded bg-muted" />
+        <div className="flex-1 animate-pulse rounded-lg border bg-card" />
       </div>
     )
   }
 
   if (!profile) {
     return (
-      <div className="p-3 flex flex-col items-center justify-center py-16 gap-2">
-        <p className="text-xs text-muted-foreground">Profile not found</p>
+      <div className="p-6">
+        <EmptyState
+          icon={Layers}
+          title="Profile not found"
+          description="The profile may have expired out of the retention window, or the ID may be incorrect."
+          action={
+            <Button asChild variant="secondary" size="sm">
+              <Link to="/profiles">
+                <ArrowLeft className="h-4 w-4" />
+                Back to profiles
+              </Link>
+            </Button>
+          }
+        />
       </div>
     )
   }
@@ -226,7 +243,7 @@ function ProfileDetailPage() {
           </Button>
           <div className="space-y-0.5 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-lg font-bold tracking-tight leading-tight">
+              <h1 className="text-xl font-semibold tracking-tight leading-tight">
                 {profile?.service || 'Profile'}
               </h1>
               {profile && (

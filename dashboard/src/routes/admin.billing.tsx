@@ -100,6 +100,7 @@ function HelpTip({text}: {text: string}) {
 const KNOWN_TIERS = ['FREE', 'PRO', 'TEAM', 'BUSINESS']
 const TIER_ORDER: Record<string, number> = {FREE: 0, PRO: 1, TEAM: 2, BUSINESS: 3}
 const BYTES_PER_GB = 1024 * 1024 * 1024
+const PRICING_PREVIEW_LIMIT_COUNT = 6
 
 function formatRetentionSummary(
   errorDays: number,
@@ -520,6 +521,11 @@ function AdminBillingPage() {
     [migrateTierVersions, targetVersion],
   )
 
+  const targetTierForm = useMemo(
+    () => (targetTierConfig ? buildCreateFormFromConfig(targetTierConfig) : null),
+    [targetTierConfig],
+  )
+
   const currentMigrateTierConfig = useMemo(
     () => migrateTierVersions.find((v) => v.isCurrent),
     [migrateTierVersions],
@@ -763,7 +769,7 @@ function AdminBillingPage() {
                       <TableCell>{formatInterval(plan.tier.monitorIntervalSeconds)}</TableCell>
                       <TableCell>
                         {plan.tier.paygEnabled ? (
-                          <Badge variant="outline" className="text-emerald-600 border-emerald-300">
+                          <Badge variant="success">
                             Enabled
                           </Badge>
                         ) : (
@@ -825,7 +831,7 @@ function AdminBillingPage() {
             {/* Event Limits Section Header */}
             <div className="bg-muted/30 border border-border rounded-md p-3">
               <div className="flex items-start gap-2">
-                <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                <Info className="h-4 w-4 text-info-fg mt-0.5 flex-shrink-0" />
                 <div className="text-xs text-muted-foreground">
                   <strong>Event limits are for internal abuse prevention only.</strong> Stripe metering currently bills non-LLM/non-log overage in unit-based streams.
                   Keep these limits aligned with your Stripe overage policy (use -1 for unlimited replay sessions).
@@ -1131,8 +1137,8 @@ function AdminBillingPage() {
               {/* Specs */}
               <div className="space-y-1.5">
                 <Label htmlFor="maxProjects">
-                  Max Projects
-                  <HelpTip text="Maximum number of projects an organization on this tier can create. Leave blank for unlimited." />
+                  Max Services
+                  <HelpTip text="Maximum number of services an organization on this tier can create. Leave blank for unlimited." />
                 </Label>
                 <Input
                   id="maxProjects"
@@ -1144,7 +1150,7 @@ function AdminBillingPage() {
                     setCreateForm((p) => ({...p, maxProjects: val}))
                   }}
                 />
-                <FieldHint>{createForm.maxProjects ? `${createForm.maxProjects} projects` : 'Unlimited projects'}</FieldHint>
+                <FieldHint>{createForm.maxProjects ? `${createForm.maxProjects} services` : 'Unlimited services'}</FieldHint>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="maxSystems">
@@ -1551,7 +1557,11 @@ function AdminBillingPage() {
 
             {/* Changes summary vs current version */}
             {currentTierConfig && (
-              <ChangeSummary current={currentTierConfig} form={createForm} />
+              <ChangeSummary
+                current={currentTierConfig}
+                form={createForm}
+                title={`Changes from current v${currentTierConfig.version}:`}
+              />
             )}
 
             <Separator />
@@ -1627,35 +1637,19 @@ function AdminBillingPage() {
             </DialogHeader>
 
             <div className="space-y-3 my-2">
-              <h4 className="text-sm font-medium">New configuration:</h4>
-              <div className="rounded border bg-muted/50 p-3 text-sm space-y-1">
-                <p><strong>Tier:</strong> {createTier}</p>
-                <p><strong>Monthly Price:</strong> ${centsToDollars(createForm.monthlyPriceCents)}/mo</p>
-                <p><strong>Yearly Price:</strong> ${centsToDollars(createForm.yearlyPriceCents)}/yr</p>
-                <p><strong>Monthly Data Limit:</strong> {createForm.monthlyGbLimitGb} GB</p>
-                <p><strong>Trial:</strong> {createForm.trialDays} day(s)</p>
-                <p><strong>Total Limit:</strong> {formatTotalQuotaLimit([
-                  createForm.monthlyErrorLimit,
-                  createForm.monthlyTransactionLimit,
-                  createForm.monthlyReplayLimit,
-                  createForm.monthlyFeedbackLimit,
-                ])}</p>
-                <p><strong>Errors:</strong> {formatQuotaLimit(createForm.monthlyErrorLimit)}</p>
-                <p><strong>Transactions:</strong> {formatQuotaLimit(createForm.monthlyTransactionLimit)}</p>
-                <p><strong>Replays:</strong> {formatQuotaLimit(createForm.monthlyReplayLimit)}</p>
-                <p><strong>Feedback:</strong> {formatQuotaLimit(createForm.monthlyFeedbackLimit)}</p>
-                <p><strong>LLM Events:</strong> {formatQuotaLimit(createForm.monthlyLlmEventLimit)}</p>
-                <p><strong>Retention:</strong> {createFormRetentionSummary(createForm)}</p>
-                <p><strong>Max Projects:</strong> {createForm.maxProjects || 'Unlimited'}</p>
-                <p><strong>Max Systems:</strong> {createForm.maxSystems}</p>
-                <p><strong>Monitor Interval:</strong> {formatInterval(createForm.monitorIntervalSeconds)}</p>
-                <p><strong>PAYG:</strong> {createForm.paygEnabled ? `Enabled (${createForm.paygRateMicrosPerUnit} micros/unit)` : 'Disabled'}</p>
-                <p><strong>Overage:</strong> ${(createForm.overageRateCentsPerGb / 100).toFixed(2)}/GB logs, ${(createForm.errorOverageRateCentsPer1k / 100).toFixed(2)}/1K errors, ${(createForm.replayOverageRateCentsPerGb / 100).toFixed(2)}/GB replays, ${(createForm.llmOverageRateCentsPer1k / 100).toFixed(2)}/1K LLM</p>
-                <p><strong>On-Call:</strong> {createForm.oncallEnabled ? `$${(createForm.oncallPerUserMonthlyCents / 100).toFixed(2)}/user/mo` : 'Disabled'}</p>
-              </div>
-              <div className="flex items-start gap-2 rounded border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950 p-3">
-                <Info className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                <p className="text-sm text-amber-800 dark:text-amber-200">
+              {currentTierConfig ? (
+                <ChangeSummary
+                  current={currentTierConfig}
+                  form={createForm}
+                  title="Selected changes:"
+                  emptyMessage={`No changes from current v${currentTierConfig.version}.`}
+                />
+              ) : (
+                <CreateConfigSummary tier={createTier} form={createForm} />
+              )}
+              <div className="flex items-start gap-2 rounded border border-warning-border bg-warning-bg p-3">
+                <Info className="h-4 w-4 text-warning-fg mt-0.5 shrink-0" />
+                <p className="text-sm text-warning-fg">
                   Existing subscribers will <strong>not</strong> be affected until you run a migration.
                 </p>
               </div>
@@ -1871,7 +1865,7 @@ function AdminBillingPage() {
                 </Select>
                 {currentMigrateTierConfig && (
                   <FieldHint>
-                    Currently on v{currentMigrateTierConfig.version}
+                    Active config: v{currentMigrateTierConfig.version}
                   </FieldHint>
                 )}
               </div>
@@ -1911,23 +1905,30 @@ function AdminBillingPage() {
               <div className="rounded border bg-muted/50 p-3 text-sm space-y-1">
                 <p className="font-medium mb-1">Target v{targetTierConfig.version} details:</p>
                 <p>Price: ${centsToDollars(targetTierConfig.monthlyPriceCents)}/mo</p>
-                <p>Total Limit: {formatQuotaLimit(targetTierConfig.monthlyUnitLimit)}</p>
-                <p>Errors: {formatQuotaLimit(targetTierConfig.monthlyErrorLimit)}</p>
-                <p>Transactions: {formatQuotaLimit(targetTierConfig.monthlyTransactionLimit)}</p>
-                <p>Replays: {formatQuotaLimit(targetTierConfig.monthlyReplayLimit)}</p>
-                <p>Feedback: {formatQuotaLimit(targetTierConfig.monthlyFeedbackLimit)}</p>
+                <p>Yearly Price: ${centsToDollars(targetTierConfig.yearlyPriceCents)}/yr</p>
+                <p>Monthly Data Limit: {Math.round(targetTierConfig.monthlyGbLimit / BYTES_PER_GB)} GB</p>
                 <p>LLM Events: {formatQuotaLimit(targetTierConfig.monthlyLlmEventLimit ?? 0)}</p>
                 <p>Retention: {retentionSummary(targetTierConfig)}</p>
+                <p>Max Services: {targetTierConfig.maxProjects ?? 'Unlimited'}</p>
                 <p>Max Systems: {targetTierConfig.maxSystems}</p>
                 <p>PAYG: {targetTierConfig.paygEnabled ? 'Enabled' : 'Disabled'}</p>
               </div>
             )}
 
+            {currentMigrateTierConfig && targetTierForm && (
+              <ChangeSummary
+                current={currentMigrateTierConfig}
+                form={targetTierForm}
+                title={`Target changes from active v${currentMigrateTierConfig.version}:`}
+                emptyMessage={`Target v${targetVersion} matches the current billing config.`}
+              />
+            )}
+
             {/* Dry run result */}
             {dryRunResult && (
-              <div className="flex items-start gap-2 rounded border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950 p-3">
-                <Info className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
-                <p className="text-sm text-blue-800 dark:text-blue-200">
+              <div className="flex items-start gap-2 rounded border border-info-border bg-info-bg p-3">
+                <Info className="h-4 w-4 text-info-fg mt-0.5 shrink-0" />
+                <p className="text-sm text-info-fg">
                   Dry run result: <strong>{dryRunResult.affected} subscription(s)</strong> would be
                   migrated to v{dryRunResult.version}.
                 </p>
@@ -1970,7 +1971,7 @@ function AdminBillingPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                <AlertTriangle className="h-5 w-5 text-warning-fg" />
                 Confirm Migration
               </DialogTitle>
               <DialogDescription>
@@ -2076,8 +2077,8 @@ function AdminBillingPage() {
                       <TableCell className="text-xs text-muted-foreground">
                         {sub.currentPeriodStart && sub.currentPeriodEnd ? (
                           <>
-                            {formatDate(new Date(sub.currentPeriodStart), timezone)} &ndash;{' '}
-                            {formatDate(new Date(sub.currentPeriodEnd), timezone)}
+                            {formatDate(sub.currentPeriodStart, timezone)} &ndash;{' '}
+                            {formatDate(sub.currentPeriodEnd, timezone)}
                           </>
                         ) : (
                           '—'
@@ -2100,9 +2101,44 @@ function AdminBillingPage() {
   )
 }
 
-// ─── Change Summary Component ─────────────────────────────────────────────────
+// ─── Review Components ────────────────────────────────────────────────────────
 
-function ChangeSummary({current, form}: {current: BillingTierConfig; form: CreateFormState}) {
+function CreateConfigSummary({tier, form}: {tier: string; form: CreateFormState}) {
+  return (
+    <div className="rounded border bg-muted/50 p-3 text-sm space-y-1">
+      <p><strong>Tier:</strong> {tier}</p>
+      <p><strong>Monthly Price:</strong> ${centsToDollars(form.monthlyPriceCents)}/mo</p>
+      <p><strong>Yearly Price:</strong> ${centsToDollars(form.yearlyPriceCents)}/yr</p>
+      <p><strong>Monthly Data Limit:</strong> {form.monthlyGbLimitGb} GB</p>
+      <p><strong>Trial:</strong> {form.trialDays} day(s)</p>
+      <p><strong>LLM Events:</strong> {formatQuotaLimit(form.monthlyLlmEventLimit)}</p>
+      <p><strong>Retention:</strong> {createFormRetentionSummary(form)}</p>
+      <p><strong>Max Services:</strong> {form.maxProjects || 'Unlimited'}</p>
+      <p><strong>Max Systems:</strong> {form.maxSystems}</p>
+      <p><strong>Monitor Interval:</strong> {formatInterval(form.monitorIntervalSeconds)}</p>
+      <p>
+        <strong>PAYG:</strong>{' '}
+        {form.paygEnabled ? `Enabled (${form.paygRateMicrosPerUnit} micros/unit)` : 'Disabled'}
+      </p>
+      <p>
+        <strong>On-Call:</strong>{' '}
+        {form.oncallEnabled ? `$${(form.oncallPerUserMonthlyCents / 100).toFixed(2)}/user/mo` : 'Disabled'}
+      </p>
+    </div>
+  )
+}
+
+function ChangeSummary({
+  current,
+  form,
+  title,
+  emptyMessage,
+}: {
+  current: BillingTierConfig
+  form: CreateFormState
+  title: string
+  emptyMessage?: string
+}) {
   const changes: Array<{field: string; from: string; to: string}> = []
   const currentErrorLimit = normalizeQuotaForForm(current.monthlyErrorLimit)
   const currentTransactionLimit = normalizeQuotaForForm(current.monthlyTransactionLimit)
@@ -2206,7 +2242,7 @@ function ChangeSummary({current, form}: {current: BillingTierConfig; form: Creat
   const formMaxProjects = form.maxProjects.trim() ? Number(form.maxProjects) : null
   if (current.maxProjects !== formMaxProjects) {
     changes.push({
-      field: 'Max Projects',
+      field: 'Max Services',
       from: current.maxProjects != null ? String(current.maxProjects) : 'Unlimited',
       to: formMaxProjects != null ? String(formMaxProjects) : 'Unlimited',
     })
@@ -2313,23 +2349,21 @@ function ChangeSummary({current, form}: {current: BillingTierConfig; form: Creat
     return (
       <div className="flex items-center gap-2 rounded border p-3 text-sm text-muted-foreground">
         <Info className="h-4 w-4 shrink-0" />
-        No changes from current v{current.version}. Modify the fields above to see a diff.
+        {emptyMessage ?? `No changes from current v${current.version}. Modify the fields above to see a diff.`}
       </div>
     )
   }
 
   return (
     <div className="rounded border p-3 space-y-2">
-      <p className="text-sm font-medium">
-        Changes from current v{current.version}:
-      </p>
+      <p className="text-sm font-medium">{title}</p>
       <div className="space-y-1">
         {changes.map((c) => (
           <div key={c.field} className="text-sm flex items-center gap-2">
             <span className="text-muted-foreground w-36 shrink-0">{c.field}:</span>
-            <span className="text-red-600 dark:text-red-400 line-through">{c.from}</span>
+            <span className="text-danger-fg line-through">{c.from}</span>
             <span className="text-muted-foreground">&rarr;</span>
-            <span className="text-emerald-600 dark:text-emerald-400 font-medium">{c.to}</span>
+            <span className="text-success-fg font-medium">{c.to}</span>
           </div>
         ))}
       </div>
@@ -2349,11 +2383,11 @@ function PricingPreviewGrid({
       {cards.map((tier) => (
         <Card
           key={tier.tierName}
-          className={tier.highlight ? 'relative border-sky-500/50' : 'border-border/60'}
+          className={tier.highlight ? 'relative border-primary/50' : 'border-border/60'}
         >
           {tier.highlight && (
             <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-              <span className="inline-flex items-center rounded-full bg-gradient-to-r from-sky-500 to-cyan-400 px-3 py-1 text-[10px] font-semibold text-white">
+              <span className="inline-flex items-center rounded-full bg-primary px-3 py-1 text-[10px] font-semibold text-primary-foreground">
                 Most popular
               </span>
             </div>
@@ -2373,10 +2407,10 @@ function PricingPreviewGrid({
           </CardHeader>
           <CardContent className="space-y-2">
             <ul className="space-y-1.5">
-              {tier.features.slice(0, 6).map((feature) => (
+              {tier.includedLimits.slice(0, PRICING_PREVIEW_LIMIT_COUNT).map((feature) => (
                 <li key={feature} className="flex items-start gap-2">
-                  <div className={`mt-0.5 rounded-full p-0.5 ${tier.highlight ? 'bg-sky-500/10' : 'bg-emerald-500/10'}`}>
-                    <Check className={`h-3 w-3 ${tier.highlight ? 'text-sky-500' : 'text-emerald-500'}`} />
+                  <div className={`mt-0.5 rounded-full p-0.5 ${tier.highlight ? 'bg-[hsl(var(--primary)/0.12)]' : 'bg-success-bg'}`}>
+                    <Check className={`h-3 w-3 ${tier.highlight ? 'text-primary' : 'text-success-fg'}`} />
                   </div>
                   <span className="text-xs leading-tight">{feature}</span>
                 </li>
@@ -2384,7 +2418,7 @@ function PricingPreviewGrid({
             </ul>
             <div className="pt-2 text-center">
               <Button
-                className={`w-full ${tier.highlight ? 'bg-sky-500 hover:bg-sky-400 text-white' : ''}`}
+                className="w-full"
                 variant={tier.highlight ? 'default' : 'outline'}
                 size="sm"
                 disabled

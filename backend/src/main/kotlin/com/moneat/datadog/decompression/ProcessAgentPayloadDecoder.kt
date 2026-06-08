@@ -17,6 +17,7 @@
 package com.moneat.datadog.decompression
 
 import com.google.protobuf.CodedInputStream
+import com.google.protobuf.CodedOutputStream
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_3
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_4
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_5
@@ -24,10 +25,13 @@ import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_6
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_7
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_8
 import com.moneat.datadog.decompression.ProtoWireConstants.FIELD_SHIFT
+import com.moneat.datadog.models.DatadogConnection
+import com.moneat.datadog.models.DatadogConnectionsPayload
 import com.moneat.datadog.models.DatadogContainer
 import com.moneat.datadog.models.DatadogContainerPayload
 import com.moneat.datadog.models.DatadogProcess
 import com.moneat.datadog.models.DatadogProcessPayload
+import java.io.ByteArrayOutputStream
 
 /**
  * Decodes the Datadog process-agent MessageV3 binary wire format.
@@ -35,7 +39,7 @@ import com.moneat.datadog.models.DatadogProcessPayload
  * Header layout (16 bytes, little-endian):
  *   byte 0   : version  (uint8) — must be 3
  *   byte 1   : encoding (uint8) — 0=Protobuf, 2=ZstdPB, 4=Zstd1xPB, 5=ZstdPBxNoCgo
- *   byte 2   : type     (uint8) — 12=Proc, 39=Container, 53=ProcDiscovery
+ *   byte 2   : type     (uint8) — 12=Proc, 22=Connections, 39=Container, 53=ProcDiscovery
  *   byte 3   : subscriptionID (uint8, unused by agent)
  *   bytes 4-7: orgID    (int32 LE, unused by agent)
  *   bytes 8-15: timestamp (int64 LE)
@@ -54,17 +58,22 @@ object ProcessAgentPayloadDecoder {
 
     // Protobuf wire format constants
     private const val PROTO_WIRE_FLOAT = 5 // 32-bit float wire type
+    private const val PROTO_FIELD_10 = 10
     private const val PROTO_FIELD_11 = 11
     private const val PROTO_FIELD_12 = 12
     private const val PROTO_FIELD_16 = 16
     private const val PROTO_FIELD_17 = 17
+    private const val PROTO_FIELD_19 = 19
     private const val PROTO_FIELD_20 = 20
     private const val PROTO_FIELD_21 = 21
     private const val PROTO_FIELD_23 = 23
     private const val PROTO_FIELD_26 = 26
+    private const val IPV6_PROTOCOL_SUFFIX = "6"
 
     // Type constants
     const val TYPE_COLLECTOR_PROC: Int = 12
+    const val TYPE_COLLECTOR_CONNECTIONS: Int = 22
+    const val TYPE_RES_COLLECTOR: Int = 23
     const val TYPE_COLLECTOR_CONTAINER: Int = 39
     const val TYPE_COLLECTOR_PROC_DISCOVERY: Int = 53
 
@@ -86,6 +95,12 @@ object ProcessAgentPayloadDecoder {
         5 to "W",
         6 to "X",
         7 to "Z"
+    )
+    private val CONNECTION_DIRECTIONS = mapOf(
+        1 to "incoming",
+        2 to "outgoing",
+        3 to "local",
+        4 to "none"
     )
 
     data class MessageHeader(val version: Int, val encoding: Int, val type: Int)
@@ -112,7 +127,30 @@ object ProcessAgentPayloadDecoder {
         }
     }
 
-    // ── CollectorContainer (type 39) ──────────────────────────────────────────
+    fun encodeCollectorResponse(
+        activeClients: Int = 0,
+        intervalSeconds: Int = 0,
+    ): ByteArray {
+        val header = ByteArray(HEADER_SIZE)
+        header[0] = MSG_VERSION_V3
+        header[1] = ENC_PROTOBUF.toByte()
+        header[2] = TYPE_RES_COLLECTOR.toByte()
+
+        val responseHeader = encodeProto {
+            writeInt32(FIELD_4, TYPE_RES_COLLECTOR)
+        }
+        val status = encodeProto {
+            writeInt32(1, activeClients)
+            writeInt32(2, intervalSeconds)
+        }
+        val body = encodeProto {
+            writeByteArray(1, responseHeader)
+            writeByteArray(FIELD_3, status)
+        }
+        return header + body
+    }
+
+    // ── CollectorContainer (type 39) ──────────
     // Proto fields:
     //   1 (string)           : hostName
     //   3 (repeated message) : containers
@@ -134,6 +172,107 @@ object ProcessAgentPayloadDecoder {
             }
         }
         return DatadogContainerPayload(host = hostName, containers = containers)
+    }
+
+    // ── CollectorConnections (type 22) ───────
+    // Proto fields:
+    //   2 (string)           : hostName
+    //   3 (repeated message) : connections
+
+    fun decodeCollectorConnections(proto: ByteArray): DatadogConnectionsPayload {
+        val input = CodedInputStream.newInstance(proto)
+        var hostName = ""
+        val connections = mutableListOf<DatadogConnection>()
+
+        while (!input.isAtEnd) {
+            when (val tag = input.readTag()) {
+                0 -> break
+                (2 shl FIELD_SHIFT) or 2 -> hostName = input.readString()
+                (FIELD_3 shl FIELD_SHIFT) or 2 ->
+                    connections += decodeConnection(input.readByteArray())
+                else -> input.skipField(tag)
+            }
+        }
+        return DatadogConnectionsPayload(host = hostName, connections = connections)
+    }
+
+    // Connection proto fields we care about:
+    //   1  (int32)  : pid
+    //   5  (message): laddr
+    //   6  (message): raddr
+    //   10 (enum)   : family (0=v4, 1=v6)
+    //   11 (enum)   : type (0=tcp, 1=udp)
+    //   16 (uint64) : lastBytesSent
+    //   17 (uint64) : lastBytesReceived
+    //   19 (enum)   : direction
+    private fun decodeConnection(bytes: ByteArray): DatadogConnection {
+        val input = CodedInputStream.newInstance(bytes)
+        var pid = 0
+        var localAddr = NetworkAddr()
+        var remoteAddr = NetworkAddr()
+        var family = 0
+        var type = 0
+        var bytesSent = 0L
+        var bytesReceived = 0L
+        var direction = 0
+
+        while (!input.isAtEnd) {
+            when (val tag = input.readTag()) {
+                0 -> break
+                (1 shl FIELD_SHIFT) or 0 -> pid = input.readInt32()
+                (FIELD_5 shl FIELD_SHIFT) or 2 -> localAddr = decodeAddr(input.readByteArray())
+                (FIELD_6 shl FIELD_SHIFT) or 2 -> remoteAddr = decodeAddr(input.readByteArray())
+                (PROTO_FIELD_10 shl FIELD_SHIFT) or 0 -> family = input.readEnum()
+                (PROTO_FIELD_11 shl FIELD_SHIFT) or 0 -> type = input.readEnum()
+                (PROTO_FIELD_16 shl FIELD_SHIFT) or 0 -> bytesSent = input.readUInt64()
+                (PROTO_FIELD_17 shl FIELD_SHIFT) or 0 -> bytesReceived = input.readUInt64()
+                (PROTO_FIELD_19 shl FIELD_SHIFT) or 0 -> direction = input.readEnum()
+                else -> input.skipField(tag)
+            }
+        }
+
+        val familyName = if (family == 1) "IPv6" else "IPv4"
+        return DatadogConnection(
+            pid = pid,
+            localAddr = localAddr.ip,
+            localPort = localAddr.port,
+            remoteAddr = remoteAddr.ip,
+            remotePort = remoteAddr.port,
+            protocol = connectionProtocol(type, familyName),
+            family = familyName,
+            direction = CONNECTION_DIRECTIONS[direction] ?: "",
+            bytesSent = bytesSent,
+            bytesRecv = bytesReceived,
+        )
+    }
+
+    private data class NetworkAddr(
+        val ip: String = "",
+        val port: Int = 0,
+    )
+
+    // Addr proto fields:
+    //   2 (string): ip
+    //   3 (int32) : port
+    private fun decodeAddr(bytes: ByteArray): NetworkAddr {
+        val input = CodedInputStream.newInstance(bytes)
+        var ip = ""
+        var port = 0
+
+        while (!input.isAtEnd) {
+            when (val tag = input.readTag()) {
+                0 -> break
+                (2 shl FIELD_SHIFT) or 2 -> ip = input.readString()
+                (FIELD_3 shl FIELD_SHIFT) or 0 -> port = input.readInt32()
+                else -> input.skipField(tag)
+            }
+        }
+        return NetworkAddr(ip = ip, port = port)
+    }
+
+    private fun connectionProtocol(type: Int, family: String): String {
+        val baseProtocol = if (type == 1) "udp" else "tcp"
+        return if (family == "IPv6") "$baseProtocol$IPV6_PROTOCOL_SUFFIX" else baseProtocol
     }
 
     // Container proto fields we care about:
@@ -190,7 +329,7 @@ object ProcessAgentPayloadDecoder {
         )
     }
 
-    // ── CollectorProc (type 12) ───────────────────────────────────────────────
+    // ── CollectorProc (type 12) ──────────────
     // Proto fields:
     //   2 (string)           : hostName
     //   3 (repeated message) : processes
@@ -210,6 +349,59 @@ object ProcessAgentPayloadDecoder {
             }
         }
         return DatadogProcessPayload(host = hostName, processes = processes)
+    }
+
+    // ── CollectorProcDiscovery (type 53) ─────
+    // Proto fields:
+    //   1 (string)           : hostName
+    //   4 (repeated message) : processDiscoveries
+
+    fun decodeCollectorProcDiscovery(proto: ByteArray): DatadogProcessPayload {
+        val input = CodedInputStream.newInstance(proto)
+        var hostName = ""
+        val processes = mutableListOf<DatadogProcess>()
+
+        while (!input.isAtEnd) {
+            when (val tag = input.readTag()) {
+                0 -> break
+                (1 shl FIELD_SHIFT) or 2 -> hostName = input.readString()
+                (FIELD_4 shl FIELD_SHIFT) or 2 ->
+                    processes += decodeProcessDiscovery(input.readByteArray())
+                else -> input.skipField(tag)
+            }
+        }
+        return DatadogProcessPayload(host = hostName, processes = processes)
+    }
+
+    private fun decodeProcessDiscovery(bytes: ByteArray): DatadogProcess {
+        val input = CodedInputStream.newInstance(bytes)
+        var pid = 0
+        var nsPid = 0
+        var cmdName = ""
+        var cmdFull = ""
+        var userName = ""
+
+        while (!input.isAtEnd) {
+            when (val tag = input.readTag()) {
+                0 -> break
+                (1 shl FIELD_SHIFT) or 0 -> pid = input.readInt32()
+                (2 shl FIELD_SHIFT) or 0 -> nsPid = input.readInt32()
+                (FIELD_4 shl FIELD_SHIFT) or 2 -> {
+                    val command = decodeCommand(input.readByteArray())
+                    cmdName = command.first
+                    cmdFull = command.second
+                }
+                (FIELD_5 shl FIELD_SHIFT) or 2 -> userName = decodeProcessUser(input.readByteArray())
+                else -> input.skipField(tag)
+            }
+        }
+        return DatadogProcess(
+            pid = if (pid != 0) pid else nsPid,
+            name = cmdName,
+            command = cmdFull,
+            user = userName,
+            state = "unknown",
+        )
     }
 
     // Process proto fields:
@@ -342,5 +534,13 @@ object ProcessAgentPayloadDecoder {
             }
         }
         return Pair(totalPct, numThreads)
+    }
+
+    private fun encodeProto(block: CodedOutputStream.() -> Unit): ByteArray {
+        val output = ByteArrayOutputStream()
+        val coded = CodedOutputStream.newInstance(output)
+        coded.block()
+        coded.flush()
+        return output.toByteArray()
     }
 }

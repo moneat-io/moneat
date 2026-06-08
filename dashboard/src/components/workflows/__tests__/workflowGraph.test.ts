@@ -82,7 +82,7 @@ const catalog: WorkflowCatalogResponse = {
     label: 'When an alert triggers',
     description: 'Alert trigger.',
     scope: [],
-    default_once_for_template: ['alert.deduplication_key'],
+    default_once_for_template: ['alert.episode_key', 'alert.notification_sequence'],
   }],
   steps: [emailStep],
   node_types: [],
@@ -273,7 +273,7 @@ describe('workflow graph conversion', () => {
   it('builds drafts from catalog defaults and existing workflows', () => {
     expect(emptyWorkflowDraft(catalog)).toMatchObject({
       triggerName: 'alert.triggered',
-      onceForTemplate: 'alert.deduplication_key',
+      onceForTemplate: 'alert.episode_key, alert.notification_sequence',
     })
 
     expect(draftFromWorkflow(workflowResponse({name: 'Existing'}))).toMatchObject({
@@ -328,10 +328,10 @@ describe('workflow graph labels and defaults', () => {
 
   it('formats references and statuses', () => {
     expect(splitReferences('alert.id, , alert.source')).toEqual(['alert.id', 'alert.source'])
-    expect(statusClass('complete')).toContain('emerald')
-    expect(statusClass('failed')).toContain('red')
-    expect(statusClass('running')).toContain('blue')
-    expect(statusClass('pending')).toContain('amber')
+    expect(statusClass('complete')).toContain('success')
+    expect(statusClass('failed')).toContain('danger')
+    expect(statusClass('running')).toContain('info')
+    expect(statusClass('pending')).toContain('warning')
   })
 })
 

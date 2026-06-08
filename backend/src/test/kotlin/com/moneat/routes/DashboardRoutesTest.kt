@@ -188,7 +188,7 @@ class DashboardRoutesTest {
         id = id, widgetId = 1L, dashboardId = dashboardId,
         name = "Test Alert", condition = "gt",
         threshold = 90.0, metricIndex = 0,
-        durationSeconds = 60, incidentSeverity = null,
+        durationSeconds = 60, alertPriority = null,
         enabled = true,
         notificationChannels = NotificationChannels(),
         lastTriggeredAt = null, lastValue = null,

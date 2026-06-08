@@ -433,6 +433,7 @@ class UptimeService(
             lastStatusChangeAt = monitor.lastStatusChangeAt?.toEpochMilliseconds(),
             consecutiveFailures = monitor.consecutiveFailures,
             pushToken = if (monitor.type.lowercase() == "push") monitor.pushToken else null,
+            alertPriority = monitor.alertPriority,
             uptime24h = stats.first,
             uptime7d = stats.second,
             uptime30d = stats.third,

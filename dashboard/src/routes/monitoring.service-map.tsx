@@ -8,27 +8,13 @@
 
 import {createFileRoute, redirect} from '@tanstack/react-router'
 import {api} from '@/lib/api'
-import {ServiceMap} from '@/components/apm/ServiceMap'
 
 export const Route = createFileRoute('/monitoring/service-map')({
   beforeLoad: () => {
     if (!api.isAuthenticated()) {
       throw redirect({to: '/login'})
     }
+    throw redirect({to: '/monitoring/map', search: {scope: 'services'}})
   },
-  component: MonitoringServiceMapPage,
+  component: () => null,
 })
-
-function MonitoringServiceMapPage() {
-  return (
-    <div className="container mx-auto px-4 py-4 space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Service Map</h1>
-        <p className="text-muted-foreground text-sm mt-0.5">
-          Service dependency graph from trace telemetry
-        </p>
-      </div>
-      <ServiceMap />
-    </div>
-  )
-}

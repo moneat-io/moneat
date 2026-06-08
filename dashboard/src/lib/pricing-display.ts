@@ -195,7 +195,7 @@ function buildIncludedLimits(tier: PricingCardTierInput): string[] {
     )
   }
 
-  limits.push(tier.maxProjects == null ? 'Unlimited projects' : `${tier.maxProjects} project${tier.maxProjects === 1 ? '' : 's'}`)
+  limits.push(tier.maxProjects == null ? 'Unlimited services' : `${tier.maxProjects} service${tier.maxProjects === 1 ? '' : 's'}`)
   limits.push(`${formatMonitorLimit(tier.maxSystems)} (${tier.monitorIntervalSeconds}s interval)`)
 
   // Analytics limits

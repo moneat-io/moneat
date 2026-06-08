@@ -37,49 +37,100 @@ import {formatBytes, formatDuration, parseUtcDate} from './profileFormat'
 const ALL_ENVS = '__all'
 const MERGE_PROFILE_CAP = 25
 
-const RANGES: Record<string, {label: string; ms: number}> = {
+type ProfileRangeKey = '1h' | '6h' | '24h' | '7d'
+
+const PROFILE_TIME_PRESETS: Array<{
+  label: string
+  value: ProfileRangeKey
+  minutes: number
+}> = [
+  {label: '1h', value: '1h', minutes: 60},
+  {label: '6h', value: '6h', minutes: 360},
+  {label: '24h', value: '24h', minutes: 1440},
+  {label: '7d', value: '7d', minutes: 10080},
+]
+
+const RANGES: Record<ProfileRangeKey, {label: string; ms: number}> = {
   '1h': {label: '1h', ms: 60 * 60 * 1000},
   '6h': {label: '6h', ms: 6 * 60 * 60 * 1000},
   '24h': {label: '24h', ms: 24 * 60 * 60 * 1000},
   '7d': {label: '7d', ms: 7 * 24 * 60 * 60 * 1000},
 }
-type RangeKey = keyof typeof RANGES
 
-interface Props {
-  service: string
+interface ServiceExplorerFilters {
+  service?: string
+  env?: string
+  type?: string
+  rangeKey: ProfileRangeKey
 }
 
-export function ServiceExplorer({service}: Props) {
-  const [env, setEnv] = useState<string>(ALL_ENVS)
-  const [rangeKey, setRangeKey] = useState<RangeKey>('24h')
-  const [selectedType, setSelectedType] = useState<string | null>(null)
-  const [sampleType, setSampleType] = useState<string | null>(null)
-  const [thread, setThread] = useState<string | null>(null)
-  const [zoom, setZoom] = useState<{from: number; to: number} | null>(null)
+interface SampleSelection {
+  signature: string
+  sampleType: string | null
+  thread: string | null
+}
+
+interface ZoomSelection {
+  signature: string
+  from: number
+  to: number
+}
+
+interface Props {
+  service?: string
+  filters?: ServiceExplorerFilters
+}
+
+export function ServiceExplorer({service, filters}: Props) {
+  const [internalEnv, setInternalEnv] = useState<string>(ALL_ENVS)
+  const [internalRangeKey, setInternalRangeKey] = useState<ProfileRangeKey>('24h')
+  const [internalSelectedType, setInternalSelectedType] = useState<string | null>(null)
+  const [sampleSelection, setSampleSelection] = useState<SampleSelection>({
+    signature: '',
+    sampleType: null,
+    thread: null,
+  })
+  const [zoom, setZoom] = useState<ZoomSelection | null>(null)
   const [showBrowse, setShowBrowse] = useState(false)
+  const filtersControlled = filters !== undefined
+  const activeService = filtersControlled ? filters.service : service
+  const activeRangeKey = filters?.rangeKey ?? internalRangeKey
 
   const {data: servicesData, isLoading: servicesLoading} = useQuery({
     queryKey: ['profileServices'],
     queryFn: () => api.getProfileServices(),
     enabled: api.isAuthenticated(),
   })
-  const summary = servicesData?.services.find((s) => s.service === service)
+  const summary = activeService
+    ? servicesData?.services.find((s) => s.service === activeService)
+    : undefined
 
   const range = useMemo(() => {
     const to = getNow()
-    return {from: to - RANGES[rangeKey].ms, to}
-  }, [rangeKey])
-  const mergeWindow = zoom ?? range
+    return {from: to - RANGES[activeRangeKey].ms, to}
+  }, [activeRangeKey])
 
-  const envParam = env === ALL_ENVS ? undefined : env
+  const envParam = filtersControlled
+    ? filters.env
+    : internalEnv === ALL_ENVS
+      ? undefined
+      : internalEnv
   const effectiveType =
-    selectedType ?? summary?.types[0]?.profileType ?? undefined
+    filters?.type ?? internalSelectedType ?? summary?.types[0]?.profileType ?? undefined
+  const filterSignature = [activeService ?? '', envParam ?? '', effectiveType ?? ''].join('\u001f')
+  const zoomSignature = `${filterSignature}\u001f${activeRangeKey}`
+  const activeZoom = zoom?.signature === zoomSignature ? zoom : null
+  const mergeWindow = activeZoom ?? range
+  const activeSampleType =
+    sampleSelection.signature === filterSignature ? sampleSelection.sampleType : null
+  const activeThread =
+    sampleSelection.signature === filterSignature ? sampleSelection.thread : null
 
   const {data: timeseries} = useQuery({
-    queryKey: ['profileTimeseries', service, envParam, effectiveType, range.from, range.to],
+    queryKey: ['profileTimeseries', activeService, envParam, effectiveType, range.from, range.to],
     queryFn: () =>
       api.getProfileTimeseries({
-        service,
+        service: activeService,
         env: envParam,
         type: effectiveType,
         from: range.from,
@@ -92,23 +143,23 @@ export function ServiceExplorer({service}: Props) {
   const {data: merged, isFetching: mergeFetching} = useQuery({
     queryKey: [
       'mergedFlamegraph',
-      service,
+      activeService,
       envParam,
       effectiveType,
       mergeWindow.from,
       mergeWindow.to,
-      sampleType,
-      thread,
+      activeSampleType,
+      activeThread,
     ],
     queryFn: () =>
       api.getMergedFlamegraph({
-        service,
+        service: activeService,
         env: envParam,
         type: effectiveType,
         from: mergeWindow.from,
         to: mergeWindow.to,
-        sampleType,
-        thread,
+        sampleType: activeSampleType,
+        thread: activeThread,
         maxProfiles: MERGE_PROFILE_CAP,
       }),
     enabled: api.isAuthenticated(),
@@ -127,23 +178,38 @@ export function ServiceExplorer({service}: Props) {
   )
 
   const handleTypeChange = (type: string) => {
-    setSelectedType(type)
-    setSampleType(null)
-    setThread(null)
+    setInternalSelectedType(type)
+    setSampleSelection({signature: '', sampleType: null, thread: null})
   }
 
-  const handleRangeChange = (key: RangeKey) => {
-    setRangeKey(key)
+  const handleRangeChange = (key: ProfileRangeKey) => {
+    setInternalRangeKey(key)
     setZoom(null)
   }
 
   const toggleBucket = (ts: number) => {
     if (!bucketMs) return
-    if (zoom && zoom.from === ts) {
+    if (activeZoom && activeZoom.from === ts) {
       setZoom(null)
     } else {
-      setZoom({from: ts, to: ts + bucketMs})
+      setZoom({signature: zoomSignature, from: ts, to: ts + bucketMs})
     }
+  }
+
+  const handleSampleTypeChange = (value: string) => {
+    setSampleSelection({
+      signature: filterSignature,
+      sampleType: value,
+      thread: null,
+    })
+  }
+
+  const handleThreadChange = (value: string | null) => {
+    setSampleSelection((current) => ({
+      signature: filterSignature,
+      sampleType: current.signature === filterSignature ? current.sampleType : null,
+      thread: value,
+    }))
   }
 
   if (servicesLoading) {
@@ -209,7 +275,7 @@ export function ServiceExplorer({service}: Props) {
             <div className="flex items-center gap-2 flex-wrap">
               <Server className="h-4 w-4 text-muted-foreground" />
               <h1 className="text-lg font-bold tracking-tight leading-tight truncate">
-                {service}
+                {activeService ?? 'All services'}
               </h1>
               {language && (
                 <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
@@ -223,54 +289,56 @@ export function ServiceExplorer({service}: Props) {
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {types.length > 1 && (
-            <Select value={effectiveType} onValueChange={handleTypeChange}>
-              <SelectTrigger className="h-7 w-[130px] text-xs">
-                <SelectValue placeholder="Type" />
-              </SelectTrigger>
-              <SelectContent>
-                {types.map((t) => (
-                  <SelectItem key={t.profileType} value={t.profileType}>
-                    {t.profileType} ({t.count.toLocaleString()})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          {environments.length > 1 && (
-            <Select value={env} onValueChange={setEnv}>
-              <SelectTrigger className="h-7 w-[150px] text-xs">
-                <SelectValue placeholder="All environments" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL_ENVS}>All environments</SelectItem>
-                {environments.map((e) => (
-                  <SelectItem key={e} value={e}>
-                    {e}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          <div className="inline-flex rounded-md border p-0.5 text-xs">
-            {(Object.keys(RANGES) as RangeKey[]).map((key) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => handleRangeChange(key)}
-                className={cn(
-                  'px-2 py-1 rounded font-medium transition-colors',
-                  rangeKey === key
-                    ? 'bg-secondary text-secondary-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {RANGES[key].label}
-              </button>
-            ))}
+        {!filtersControlled && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {types.length > 1 && (
+              <Select value={effectiveType} onValueChange={handleTypeChange}>
+                <SelectTrigger className="h-7 w-[130px] text-xs">
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {types.map((t) => (
+                    <SelectItem key={t.profileType} value={t.profileType}>
+                      {t.profileType} ({t.count.toLocaleString()})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {environments.length > 1 && (
+              <Select value={internalEnv} onValueChange={setInternalEnv}>
+                <SelectTrigger className="h-7 w-[150px] text-xs">
+                  <SelectValue placeholder="All environments" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_ENVS}>All environments</SelectItem>
+                  {environments.map((e) => (
+                    <SelectItem key={e} value={e}>
+                      {e}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <div className="inline-flex rounded-md border p-0.5 text-xs">
+              {PROFILE_TIME_PRESETS.map((preset) => (
+                <button
+                  key={preset.value}
+                  type="button"
+                  onClick={() => handleRangeChange(preset.value)}
+                  className={cn(
+                    'px-2 py-1 rounded font-medium transition-colors',
+                    activeRangeKey === preset.value
+                      ? 'bg-secondary text-secondary-foreground'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Volume timeline */}
@@ -279,14 +347,14 @@ export function ServiceExplorer({service}: Props) {
           <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">
             Profile volume
           </span>
-          {zoom ? (
+          {activeZoom ? (
             <button
               type="button"
               onClick={() => setZoom(null)}
               className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline"
             >
               <X className="h-3 w-3" />
-              {new Date(zoom.from).toLocaleString()} — clear selection
+              {new Date(activeZoom.from).toLocaleString()} — clear selection
             </button>
           ) : (
             <span className="text-[10px] text-muted-foreground">
@@ -296,8 +364,8 @@ export function ServiceExplorer({service}: Props) {
         </div>
         <VolumeTimeline
           buckets={buckets}
-          rangeMs={RANGES[rangeKey].ms}
-          selectedFrom={zoom?.from ?? null}
+          rangeMs={RANGES[activeRangeKey].ms}
+          selectedFrom={activeZoom?.from ?? null}
           onSelect={toggleBucket}
         />
       </div>
@@ -315,15 +383,15 @@ export function ServiceExplorer({service}: Props) {
         <Flamegraph
           frames={merged?.frames}
           language={language}
-          service={service}
+          service={activeService}
           meta={metaSidebar}
           sampleTypes={merged?.sampleTypes}
           threads={merged?.threads}
           selectedSampleType={merged?.selectedSampleType}
           selectedThread={merged?.selectedThread ?? null}
           unit={merged?.unit}
-          onSampleTypeChange={setSampleType}
-          onThreadChange={setThread}
+          onSampleTypeChange={handleSampleTypeChange}
+          onThreadChange={handleThreadChange}
           emptyMessage={
             mergeFetching
               ? 'Aggregating profiles…'
@@ -347,7 +415,7 @@ export function ServiceExplorer({service}: Props) {
             <ProfileList
               embedded
               scope={{
-                service,
+                service: activeService,
                 env: envParam,
                 type: effectiveType,
                 from: mergeWindow.from,

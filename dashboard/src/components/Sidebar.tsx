@@ -19,7 +19,6 @@ import {Link, useNavigate, useRouterState} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
-import {useProject} from '@/contexts/ProjectContext'
 import {ThemeSwitcher} from '@/components/ThemeSwitcher'
 import {Avatar, AvatarFallback} from '@/components/ui/avatar'
 import {Button} from '@/components/ui/button'
@@ -31,9 +30,9 @@ import {
     BarChart3,
     Bell,
     BookOpen,
+    Boxes,
     Brain,
     HelpCircle,
-    ChevronDown,
     ChevronLeft,
     ChevronRight,
     Flag,
@@ -47,7 +46,6 @@ import {
     MessageSquare,
     Package,
     Play,
-    Plus,
     Rocket,
     ScrollText,
     Search,
@@ -55,12 +53,12 @@ import {
     Settings,
     Shield,
     ShieldAlert,
+    SlidersHorizontal,
     Sparkles,
     Timer,
     Workflow,
 } from 'lucide-react'
 import {cn} from '@/lib/utils'
-import {getPlatformInfo} from '@/routes/projects'
 import {Tooltip, TooltipContent, TooltipTrigger} from '@/components/ui/tooltip'
 import {
   DropdownMenu,
@@ -72,16 +70,18 @@ import {
 import {Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,} from '@/components/ui/dialog'
 import {Logo} from '@/components/Logo'
 import {isSidebarItemVisible} from '@/lib/sidebar-config'
+import {APP_OVERVIEW_HREF, APP_OVERVIEW_SEARCH, isAppOverviewSearch} from '@/lib/overview-route'
 import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
 import {useCommandPalette} from '@/hooks/useCommandPalette'
 import {
-  ProjectSetupForm,
-  type ProjectSetupSubmission,
-} from '@/components/projects/ProjectSetupForm'
+  ServiceSetupForm,
+  type ServiceSetupSubmission,
+} from '@/components/projects/ServiceSetupForm'
 import {
   serializeTelemetrySourceIds,
-  storeTelemetrySourceIdsForProject,
+  storeTelemetrySourceIdsForService,
 } from '@/lib/telemetry-sources'
+import {primaryServiceResourceId} from '@/lib/service-facet-scope'
 
 export const SIDEBAR_COLLAPSED_WIDTH = 56
 export const SIDEBAR_EXPANDED_WIDTH = 176
@@ -102,18 +102,17 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
   const currentPath = router.location.pathname
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { selectedProjectId, setSelectedProjectId } = useProject()
   const { toast } = useToast()
   const { data: features } = useEnterpriseFeatures()
   const { openPalette } = useCommandPalette() ?? {}
 
-  // Create project dialog state
+  // Create service dialog state
   const [showCreateDialog, setShowCreateDialog] = useState(false)
 
   useEffect(() => {
     const handler = () => setShowCreateDialog(true)
-    globalThis.addEventListener('open-create-project-dialog', handler)
-    return () => globalThis.removeEventListener('open-create-project-dialog', handler)
+    globalThis.addEventListener('open-create-service-dialog', handler)
+    return () => globalThis.removeEventListener('open-create-service-dialog', handler)
   }, [])
   const { data: user } = useQuery({
     queryKey: ['currentUser'],
@@ -126,61 +125,50 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
     queryFn: () => api.getProjects(),
     enabled: api.isAuthenticated(),
   })
+  const primaryServiceId = primaryServiceResourceId(projects)
 
-  const activeProject = projects?.find((project) =>
-    project.resourceId === selectedProjectId || String(project.id) === selectedProjectId
-  ) ?? projects?.[0] ?? null
-  const activeProjectId = activeProject?.resourceId ?? null
-
-  useEffect(() => {
-    if (activeProject && selectedProjectId !== activeProject.resourceId) {
-      setSelectedProjectId(activeProject.resourceId)
-    }
-  }, [activeProject, selectedProjectId, setSelectedProjectId])
-
-  const createProjectMutation = useMutation({
-    mutationFn: (data: ProjectSetupSubmission) =>
+  const createServiceMutation = useMutation({
+    mutationFn: (data: ServiceSetupSubmission) =>
       api.createProject(data.name, data.framework, data.targets),
-    onSuccess: (project, submission) => {
-      storeTelemetrySourceIdsForProject(project.resourceId, submission.sourceIds)
-      trackEvent('Project Create', {
-        framework: project.framework || 'none',
+    onSuccess: (service, submission) => {
+      storeTelemetrySourceIdsForService(service.resourceId, submission.sourceIds)
+      trackEvent('Service Create', {
+        framework: service.framework || 'none',
         sources: serializeTelemetrySourceIds(submission.sourceIds),
       })
       queryClient.invalidateQueries({ queryKey: ['projects'] })
-      setSelectedProjectId(project.resourceId)
       resetCreateForm()
       navigate({
         to: '/projects/$projectId',
-        params: { projectId: project.resourceId },
+        params: { projectId: service.resourceId },
         search: { sources: serializeTelemetrySourceIds(submission.sourceIds) },
       })
     },
     onError: (error: Error) => {
       if (error.message.includes('project_limit_reached')) {
         toast({
-          title: 'Project Limit Reached',
+          title: 'Service Limit Reached',
           description: (
             <>
-              You've reached the maximum number of projects for your plan.{' '}
+              You've reached the maximum number of services for your plan.{' '}
               <Link to="/settings" search={{tab: 'billing'}} className="underline font-medium">
                 Upgrade your plan
               </Link>{' '}
-              to add more projects.
+              to add more services.
             </>
           ),
           variant: 'destructive',
         })
       } else if (error.message.includes('already exists')) {
         toast({
-          title: 'Project Already Exists',
-          description: 'A project with this name already exists. Please choose a different name.',
+          title: 'Service Already Exists',
+          description: 'A service with this name already exists. Please choose a different name.',
           variant: 'destructive',
         })
       } else {
         toast({
           title: 'Error',
-          description: error.message || 'Failed to create project. Please try again.',
+          description: error.message || 'Failed to create service. Please try again.',
           variant: 'destructive',
         })
       }
@@ -189,7 +177,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
 
   const resetCreateForm = () => {
     setShowCreateDialog(false)
-    createProjectMutation.reset()
+    createServiceMutation.reset()
   }
 
   type NavGroupId = 'core' | 'infrastructure' | 'insights' | 'operations' | 'analytics' | 'management'
@@ -230,8 +218,9 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
 
   const baseNavItems: NavItem[] = [
     // Core Observability
-    { key: 'overview', icon: Home, label: 'Overview', href: '/', requiresProject: false, group: 'core' },
+    { key: 'overview', icon: Home, label: 'Overview', href: APP_OVERVIEW_HREF, requiresProject: false, group: 'core' },
     { key: 'issues', icon: AlertCircle, label: 'Issues', href: '/issues', requiresProject: false, group: 'core' },
+    { key: 'services', icon: Boxes, label: 'Services', href: '/services', requiresProject: false, group: 'core' },
     { key: 'performance', icon: Timer, label: 'Traces', href: '/performance/traces', requiresProject: false, group: 'core' },
     { key: 'logs', icon: ScrollText, label: 'Logs', href: '/logs', requiresProject: false, group: 'core' },
     ...datadogCoreNavItems,
@@ -275,6 +264,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
     { key: 'workflows', icon: Workflow, label: 'Workflows', href: '/workflows', requiresProject: false, group: 'operations' },
     { key: 'analytics', icon: BarChart3, label: 'Analytics', href: '/analytics', requiresProject: false, group: 'analytics' },
     // Management
+    { key: 'configuration', icon: SlidersHorizontal, label: 'Configuration', href: '/configuration', requiresProject: false, group: 'management' },
     ...adminNavItems,
   ]
 
@@ -312,13 +302,17 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
   const renderSidebarContent = () => (
     <>
       {/* Logo at top */}
-      <div className={cn('shrink-0 border-b flex items-center justify-center py-2', isExpanded ? 'px-2.5' : 'px-1.5')}>
-        <Link to="/" className="flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-ring rounded">
+      <div className={cn('shrink-0 border-b flex items-center justify-center h-[var(--app-header-h)]', isExpanded ? 'px-2.5' : 'px-1.5')}>
+        <Link
+          to="/"
+          search={APP_OVERVIEW_SEARCH}
+          className="flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-ring rounded"
+        >
           {isExpanded ? <Logo className="h-6" /> : <Logo markOnly className="h-6 w-8" />}
         </Link>
       </div>
       {/* Search bar */}
-      <div className={cn('shrink-0 border-b p-1.5', !isExpanded && 'px-1.5')}>
+      <div className="shrink-0 border-b flex items-center h-[var(--app-subheader-h)] px-1.5">
         {isExpanded ? (
           <button
             type="button"
@@ -351,146 +345,6 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
           </Tooltip>
         )}
       </div>
-      {/* Project chooser */}
-      <div className={cn('shrink-0 border-b p-1.5', !isExpanded && 'px-1.5')}>
-        {projects && projects.length > 0 ? (
-          (() => {
-            const platformId = activeProject ? (activeProject.keys?.[0]?.platformTarget || activeProject.framework || 'other') : 'other'
-            const platformInfo = getPlatformInfo(platformId) || getPlatformInfo('other')
-            const PlatformIcon = platformInfo?.icon || Package
-            return isExpanded ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="Switch project"
-                  className="flex w-full items-center gap-1.5 rounded-md border bg-muted/50 px-2 py-1 text-left text-xs cursor-default transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  {activeProject && (
-                    <div
-                      className="h-4 w-4 rounded flex items-center justify-center flex-shrink-0"
-                      style={{backgroundColor: platformInfo?.color || '#4b5563'}}
-                    >
-                      <PlatformIcon className="h-2.5 w-2.5 text-white" />
-                    </div>
-                  )}
-                  <span className="flex-1 truncate text-foreground">{activeProject?.name}</span>
-                  <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" side="right" className="w-[--radix-dropdown-menu-trigger-width] min-w-[10rem]">
-                {projects.map((project) => {
-                  const pId = project.keys?.[0]?.platformTarget || project.framework || 'other'
-                  const pInfo = getPlatformInfo(pId) || getPlatformInfo('other')
-                  const PIco = pInfo?.icon || Package
-                  return (
-                    <DropdownMenuItem
-                      key={project.id}
-                      onClick={() => setSelectedProjectId(project.resourceId)}
-                      className={cn(
-                        'flex items-center gap-2',
-                        project.id === activeProject?.id && 'bg-accent'
-                      )}
-                    >
-                    <div
-                      className="h-4 w-4 rounded flex items-center justify-center flex-shrink-0"
-                      style={{backgroundColor: pInfo?.color || '#4b5563'}}
-                    >
-                      <PIco className="h-2.5 w-2.5 text-white" />
-                      </div>
-                      <span className="truncate">{project.name}</span>
-                    </DropdownMenuItem>
-                  )
-                })}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => window.dispatchEvent(new CustomEvent('open-create-project-dialog'))} className="text-xs">
-                  <Plus className="h-3 w-3" />
-                  New Project
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  aria-label={activeProject ? `Switch project: ${activeProject.name}` : 'Switch project'}
-                  title={activeProject ? `Switch project: ${activeProject.name}` : 'Switch project'}
-                  className="flex w-full items-center justify-center rounded-md border bg-muted/50 p-1.5 cursor-default transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  {activeProject && (
-                    <div
-                      className="h-4 w-4 rounded flex items-center justify-center"
-                      style={{backgroundColor: platformInfo?.color || '#4b5563'}}
-                    >
-                      <PlatformIcon className="h-2.5 w-2.5 text-white" />
-                    </div>
-                  )}
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" side="right" className="min-w-[10rem]">
-                {projects.map((project) => {
-                  const pId = project.keys?.[0]?.platformTarget || project.framework || 'other'
-                  const pInfo = getPlatformInfo(pId) || getPlatformInfo('other')
-                  const PIco = pInfo?.icon || Package
-                  return (
-                    <DropdownMenuItem
-                      key={project.id}
-                      onClick={() => setSelectedProjectId(project.resourceId)}
-                      className={cn(
-                        'flex items-center gap-2',
-                        project.id === activeProject?.id && 'bg-accent'
-                      )}
-                    >
-                    <div
-                      className="h-4 w-4 rounded flex items-center justify-center flex-shrink-0"
-                      style={{backgroundColor: pInfo?.color || '#4b5563'}}
-                    >
-                      <PIco className="h-2.5 w-2.5 text-white" />
-                      </div>
-                      <span className="truncate">{project.name}</span>
-                    </DropdownMenuItem>
-                  )
-                })}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => window.dispatchEvent(new CustomEvent('open-create-project-dialog'))} className="text-xs">
-                  <Plus className="h-3 w-3" />
-                  New Project
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )
-            })()
-        ) : (
-          isExpanded ? (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => window.dispatchEvent(new CustomEvent('open-create-project-dialog'))}
-              className="w-full justify-center gap-1 h-7 text-xs"
-            >
-              <Plus className="h-3 w-3" />
-              New Project
-            </Button>
-          ) : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="Create new project"
-                  onClick={() => window.dispatchEvent(new CustomEvent('open-create-project-dialog'))}
-                  className="flex w-full items-center justify-center rounded-md border bg-muted/50 p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                <p>New Project</p>
-              </TooltipContent>
-            </Tooltip>
-          )
-        )}
-      </div>
       {/* Navigation Items */}
       <nav
         className={cn(
@@ -513,8 +367,8 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
               )}
               <div className={cn('space-y-1')}>
                 {group.items.map((item) => {
-                  const isActive = item.href === '/'
-                    ? currentPath === '/'
+                  const isActive = item.href === APP_OVERVIEW_HREF
+                    ? currentPath === '/' && isAppOverviewSearch(router.location.search)
                     : currentPath === item.href ||
                       (currentPath.startsWith(item.href + '/') &&
                         !navItems.some(
@@ -598,7 +452,16 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" side="right" className="w-48">
-                <DropdownMenuItem onClick={() => navigate({ to: activeProjectId ? `/projects/${activeProjectId}` : '/' })}>
+                <DropdownMenuItem
+                  onClick={() => {
+                    if (primaryServiceId) {
+                      navigate({to: `/projects/${primaryServiceId}`})
+                      return
+                    }
+
+                    navigate({to: '/', search: APP_OVERVIEW_SEARCH})
+                  }}
+                >
                   <Rocket className="h-4 w-4 mr-2" />
                   Source setup
                 </DropdownMenuItem>
@@ -676,7 +539,16 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" side="right" className="w-48">
-                <DropdownMenuItem onClick={() => navigate({ to: activeProjectId ? `/projects/${activeProjectId}` : '/' })}>
+                <DropdownMenuItem
+                  onClick={() => {
+                    if (primaryServiceId) {
+                      navigate({to: `/projects/${primaryServiceId}`})
+                      return
+                    }
+
+                    navigate({to: '/', search: APP_OVERVIEW_SEARCH})
+                  }}
+                >
                   <Rocket className="h-4 w-4 mr-2" />
                   Source setup
                 </DropdownMenuItem>
@@ -740,21 +612,21 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
         {renderSidebarContent()}
       </div>
 
-      {/* Create Project Dialog */}
+      {/* Create Service Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={(open) => { if (!open) resetCreateForm() }}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
-            <DialogTitle>Create New Project</DialogTitle>
+            <DialogTitle>Create New Service</DialogTitle>
             <DialogDescription>
-              Pick the application and telemetry sources you want Moneat to walk you through.
+              Pick the service and telemetry sources you want Moneat to walk you through.
             </DialogDescription>
           </DialogHeader>
 
-          <ProjectSetupForm
+          <ServiceSetupForm
             autoFocus
-            isSubmitting={createProjectMutation.isPending}
+            isSubmitting={createServiceMutation.isPending}
             onCancel={resetCreateForm}
-            onSubmit={(submission) => createProjectMutation.mutate(submission)}
+            onSubmit={(submission) => createServiceMutation.mutate(submission)}
           />
         </DialogContent>
       </Dialog>

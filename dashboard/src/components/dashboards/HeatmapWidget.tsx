@@ -21,12 +21,12 @@ interface HeatmapWidgetProps {
 }
 
 const HEAT_COLORS = [
-  'bg-emerald-100 dark:bg-emerald-950',
-  'bg-emerald-200 dark:bg-emerald-900',
-  'bg-emerald-300 dark:bg-emerald-800',
-  'bg-emerald-400 dark:bg-emerald-700',
-  'bg-emerald-500 dark:bg-emerald-600',
-  'bg-emerald-600 dark:bg-emerald-500',
+  'bg-chart-3/15',
+  'bg-chart-3/30',
+  'bg-chart-3/45',
+  'bg-chart-3/60',
+  'bg-chart-3/80',
+  'bg-chart-3',
 ]
 
 export const HeatmapWidget = memo(function HeatmapWidget({data}: HeatmapWidgetProps) {

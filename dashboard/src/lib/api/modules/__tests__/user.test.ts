@@ -49,6 +49,47 @@ describe('User API', () => {
     expect(result).toEqual(mock)
   })
 
+  it('clears stale demo epoch when the current user is not demo', async () => {
+    sessionStorage.setItem('demoEpochMs', '1700000000000')
+    const mock = {
+      id: 1,
+      email: 'user@example.com',
+      name: 'Test User',
+      emailVerified: true,
+      onboardingCompleted: true,
+      demoEpochMs: null,
+    }
+
+    server.use(
+      http.get(`${API_BASE}/v1/user`, () => {
+        return HttpResponse.json(mock)
+      })
+    )
+
+    await api.getCurrentUser()
+    expect(sessionStorage.getItem('demoEpochMs')).toBeNull()
+  })
+
+  it('stores demo epoch when the current user is demo', async () => {
+    const mock = {
+      id: -1,
+      email: 'demo@moneat.dev',
+      name: 'Demo User',
+      emailVerified: true,
+      onboardingCompleted: true,
+      demoEpochMs: 1700000000000,
+    }
+
+    server.use(
+      http.get(`${API_BASE}/v1/user`, () => {
+        return HttpResponse.json(mock)
+      })
+    )
+
+    await api.getCurrentUser()
+    expect(sessionStorage.getItem('demoEpochMs')).toBe('1700000000000')
+  })
+
   // ──── updateSidebarPreferences ────
 
   it('updates sidebar preferences', async () => {

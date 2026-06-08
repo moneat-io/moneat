@@ -254,6 +254,11 @@ class DashboardQueryHelper(
         return retentionPolicyService.getRetentionDaysForProject(projectId) ?: PricingTier.FREE.retentionDays
     }
 
+    suspend fun getOrganizationRetentionDays(organizationId: Int): Int =
+        suspendRunCatching {
+            retentionPolicyService.getRetentionDaysForOrganization(organizationId)
+        }.getOrDefault(PricingTier.FREE.retentionDays)
+
     fun timestampRetentionClause(
         column: String,
         retentionDays: Int,
