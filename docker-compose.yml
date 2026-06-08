@@ -86,7 +86,7 @@ services:
         SQL
 
   temporal:
-    image: temporalio/auto-setup:1.27.2
+    image: temporalio/auto-setup:1.27.4
     container_name: moneat-temporal
     restart: unless-stopped
     depends_on:
