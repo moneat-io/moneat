@@ -157,9 +157,10 @@ class OrgRoutesFullCoverageTest {
         }
     }
 
-    private fun token(userId: Int, orgId: Int): String = JWT.create()
+    private fun token(userId: Int, orgId: Int?): String = JWT.create()
         .withIssuer("moneat").withAudience("moneat-users")
-        .withClaim("userId", userId).withClaim("orgId", orgId)
+        .withClaim("userId", userId)
+        .apply { if (orgId != null) withClaim("orgId", orgId) }
         .withClaim("email", "user$userId@test.com")
         .sign(Algorithm.HMAC256(JWT_SECRET))
 
@@ -1132,7 +1133,7 @@ class OrgRoutesFullCoverageTest {
             assertEquals(
                 HttpStatusCode.NotFound,
                 client.get("/integrations") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(u, 1)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(u, null)}")
                 }.status
             )
         }
@@ -1170,7 +1171,7 @@ class OrgRoutesFullCoverageTest {
             assertEquals(
                 HttpStatusCode.NotFound,
                 client.get("/integrations/slack/channels") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(u, 1)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(u, null)}")
                 }.status
             )
         }
@@ -1225,7 +1226,7 @@ class OrgRoutesFullCoverageTest {
             assertEquals(
                 HttpStatusCode.NotFound,
                 client.put("/integrations/slack/channel") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(u, 1)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(u, null)}")
                     contentType(ContentType.Application.Json)
                     setBody("""{"channelId":"C2","channelName":"a"}""")
                 }.status
@@ -1263,7 +1264,7 @@ class OrgRoutesFullCoverageTest {
             assertEquals(
                 HttpStatusCode.NotFound,
                 client.get("/integrations/slack/usergroups") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(u, 1)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(u, null)}")
                 }.status
             )
         }
@@ -1316,7 +1317,7 @@ class OrgRoutesFullCoverageTest {
             assertEquals(
                 HttpStatusCode.NotFound,
                 client.put("/integrations/slack/toggle") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(u, 1)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(u, null)}")
                 }.status
             )
         }
@@ -1369,7 +1370,7 @@ class OrgRoutesFullCoverageTest {
             assertEquals(
                 HttpStatusCode.NotFound,
                 client.delete("/integrations/slack") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(u, 1)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(u, null)}")
                 }.status
             )
         }
@@ -1423,7 +1424,7 @@ class OrgRoutesFullCoverageTest {
             assertEquals(
                 HttpStatusCode.NotFound,
                 client.post("/integrations/slack/test") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(u, 1)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(u, null)}")
                 }.status
             )
         }
@@ -1461,7 +1462,7 @@ class OrgRoutesFullCoverageTest {
             assertEquals(
                 HttpStatusCode.NotFound,
                 client.get("/integrations/discord/channels") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(u, 1)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(u, null)}")
                 }.status
             )
         }
@@ -1516,7 +1517,7 @@ class OrgRoutesFullCoverageTest {
             assertEquals(
                 HttpStatusCode.NotFound,
                 client.put("/integrations/discord/channel") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(u, 1)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(u, null)}")
                     contentType(ContentType.Application.Json)
                     setBody("""{"channelId":"D2","channelName":"a"}""")
                 }.status
@@ -1573,7 +1574,7 @@ class OrgRoutesFullCoverageTest {
             assertEquals(
                 HttpStatusCode.NotFound,
                 client.put("/integrations/discord/toggle") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(u, 1)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(u, null)}")
                 }.status
             )
         }
@@ -1644,7 +1645,7 @@ class OrgRoutesFullCoverageTest {
             assertEquals(
                 HttpStatusCode.NotFound,
                 client.delete("/integrations/discord") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(u, 1)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(u, null)}")
                 }.status
             )
         }
@@ -1698,7 +1699,7 @@ class OrgRoutesFullCoverageTest {
             assertEquals(
                 HttpStatusCode.NotFound,
                 client.post("/integrations/discord/test") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(u, 1)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(u, null)}")
                 }.status
             )
         }

@@ -16,6 +16,7 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.datadog.models.CreateDdApiKeyRequest
 import com.moneat.datadog.services.DatadogService
 import io.ktor.http.HttpStatusCode
@@ -37,8 +38,7 @@ fun Application.datadogRoutes() {
             route("/v1/agent-api-keys") {
                 get {
                     val principal = call.principal<JWTPrincipal>()
-                    val organizationId = principal?.payload
-                        ?.getClaim("orgId")?.asInt()
+                    val organizationId = principal?.currentOrgIdOrNull()
                         ?: return@get call.respond(
                             HttpStatusCode.Unauthorized,
                             mapOf("error" to "Invalid token")
@@ -49,8 +49,7 @@ fun Application.datadogRoutes() {
 
                 post {
                     val principal = call.principal<JWTPrincipal>()
-                    val organizationId = principal?.payload
-                        ?.getClaim("orgId")?.asInt()
+                    val organizationId = principal?.currentOrgIdOrNull()
                         ?: return@post call.respond(
                             HttpStatusCode.Unauthorized,
                             mapOf("error" to "Invalid token")
@@ -70,8 +69,7 @@ fun Application.datadogRoutes() {
 
                 delete("/{id}") {
                     val principal = call.principal<JWTPrincipal>()
-                    val organizationId = principal?.payload
-                        ?.getClaim("orgId")?.asInt()
+                    val organizationId = principal?.currentOrgIdOrNull()
                         ?: return@delete call.respond(
                             HttpStatusCode.Unauthorized,
                             mapOf("error" to "Invalid token")

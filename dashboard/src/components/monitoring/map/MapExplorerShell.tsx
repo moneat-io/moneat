@@ -56,7 +56,7 @@ export function MapExplorerShell({
 }: MapExplorerShellProps) {
   return (
     <div className={cn('flex h-full flex-col', className)}>
-      <div className="flex flex-wrap items-center gap-2 border-b px-3 py-1.5">
+      <div className="flex min-h-[var(--app-header-h)] flex-wrap items-center gap-2 border-b px-3 py-1.5">
         <div className="flex shrink-0 items-center gap-2">
           {icon}
           <h2 className="whitespace-nowrap text-sm font-semibold leading-tight">{title}</h2>

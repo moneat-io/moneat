@@ -16,6 +16,7 @@
 
 package com.moneat.apm.routes
 
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.apm.services.ApmServiceCatalogService
 import com.moneat.apm.services.ApmServiceQuery
 import com.moneat.datadog.services.DdApmQueryTimeRange
@@ -168,9 +169,7 @@ internal fun Route.apmServiceDashboardRouteHandlers() {
 }
 
 private fun ApplicationCall.organizationId(): Int? =
-    principal<JWTPrincipal>()?.payload
-        ?.getClaim("orgId")
-        ?.asInt()
+    principal<JWTPrincipal>()?.currentOrgIdOrNull()
 
 private suspend fun ApplicationCall.respondUnauthorized() {
     respond(

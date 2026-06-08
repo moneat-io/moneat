@@ -116,10 +116,11 @@ class StatusPageRoutesTest {
         }
     }
 
-    private fun token(userId: Int): String =
+    private fun token(userId: Int, orgId: Int? = null): String =
         JWT.create()
             .withIssuer("moneat").withAudience("moneat-users")
             .withClaim("userId", userId)
+            .apply { if (orgId != null) withClaim("orgId", orgId) }
             .sign(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
 
     private fun seedUser(): Int =
@@ -214,9 +215,9 @@ class StatusPageRoutesTest {
                 installAuth()
                 routing { statusPageRoutes() }
             }
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             val response = client.get("/v1/status-pages") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
         }
@@ -231,7 +232,7 @@ class StatusPageRoutesTest {
             val (userId, orgId) = seedUserAndOrg()
             seedStatusPage(orgId)
             val response = client.get("/v1/status-pages") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("Test Page"))
@@ -262,10 +263,10 @@ class StatusPageRoutesTest {
                 installAuth()
                 routing { statusPageRoutes() }
             }
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             val slug = "new-page-${System.nanoTime()}"
             val response = client.post("/v1/status-pages") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"My Page","slug":"$slug"}""")
             }
@@ -284,7 +285,7 @@ class StatusPageRoutesTest {
             seedStatusPageTier(orgId, statusPagesEnabled = false, customDomainsEnabled = true)
 
             val response = client.post("/v1/status-pages") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"My Page","slug":"disabled-page"}""")
             }
@@ -300,9 +301,9 @@ class StatusPageRoutesTest {
                 installAuth()
                 routing { statusPageRoutes() }
             }
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             val response = client.post("/v1/status-pages") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"Bad","slug":"INVALID SLUG!"}""")
             }
@@ -347,9 +348,9 @@ class StatusPageRoutesTest {
                 installAuth()
                 routing { statusPageRoutes() }
             }
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             val response = client.get("/v1/status-pages/${UUID.randomUUID()}") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.NotFound, response.status)
         }
@@ -364,7 +365,7 @@ class StatusPageRoutesTest {
             val (userId, orgId) = seedUserAndOrg()
             val pageId = seedStatusPage(orgId)
             val response = client.get("/v1/status-pages/$pageId") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("Test Page"))
@@ -411,9 +412,9 @@ class StatusPageRoutesTest {
                 installAuth()
                 routing { statusPageRoutes() }
             }
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             val response = client.put("/v1/status-pages/${UUID.randomUUID()}") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"Updated"}""")
             }
@@ -430,7 +431,7 @@ class StatusPageRoutesTest {
             val (userId, orgId) = seedUserAndOrg()
             val pageId = seedStatusPage(orgId)
             val response = client.put("/v1/status-pages/$pageId") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"Updated Name"}""")
             }
@@ -475,9 +476,9 @@ class StatusPageRoutesTest {
                 installAuth()
                 routing { statusPageRoutes() }
             }
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             val response = client.delete("/v1/status-pages/${UUID.randomUUID()}") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.NotFound, response.status)
         }
@@ -492,7 +493,7 @@ class StatusPageRoutesTest {
             val (userId, orgId) = seedUserAndOrg()
             val pageId = seedStatusPage(orgId)
             val response = client.delete("/v1/status-pages/$pageId") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.NoContent, response.status)
         }
@@ -601,7 +602,7 @@ class StatusPageRoutesTest {
             val (userId, orgId) = seedUserAndOrg()
             val pageId = seedStatusPage(orgId)
             val response = client.post("/v1/status-pages/$pageId/incidents") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"title":"Site down","status":"investigating","message":"We are looking into it"}""")
             }
@@ -655,7 +656,7 @@ class StatusPageRoutesTest {
 
             // First create an incident
             val createResp = client.post("/v1/status-pages/$pageId/incidents") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"title":"Original","status":"investigating","message":"Looking into it"}""")
             }
@@ -664,7 +665,7 @@ class StatusPageRoutesTest {
                 .jsonObject["id"]!!.jsonPrimitive.content
 
             val response = client.put("/v1/status-pages/$pageId/incidents/$incidentId") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"title":"Updated"}""")
             }
@@ -684,7 +685,7 @@ class StatusPageRoutesTest {
             val incidentId = UUID.randomUUID()
 
             val response = client.put("/v1/status-pages/$pageId/incidents/$incidentId") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"title":"x"}""")
             }
@@ -705,7 +706,7 @@ class StatusPageRoutesTest {
 
             // Create incident first
             val createResp = client.post("/v1/status-pages/$pageId/incidents") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"title":"Outage","status":"investigating","message":"Investigating"}""")
             }
@@ -714,7 +715,7 @@ class StatusPageRoutesTest {
                 .jsonObject["id"]!!.jsonPrimitive.content
 
             val response = client.post("/v1/status-pages/$pageId/incidents/$incidentId/updates") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"status":"identified","message":"Root cause identified"}""")
             }
@@ -751,7 +752,7 @@ class StatusPageRoutesTest {
             val pageId = seedStatusPage(orgId)
 
             val response = client.post("/v1/status-pages/$pageId/domains") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"domain":"status.example.com"}""")
             }
@@ -771,7 +772,7 @@ class StatusPageRoutesTest {
             val pageId = seedStatusPage(orgId)
 
             val response = client.post("/v1/status-pages/$pageId/domains") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"domain":"status.example.com"}""")
             }
@@ -808,7 +809,7 @@ class StatusPageRoutesTest {
 
             // Add domain first
             val addResp = client.post("/v1/status-pages/$pageId/domains") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"domain":"status2.example.com"}""")
             }
@@ -817,7 +818,7 @@ class StatusPageRoutesTest {
                 .jsonObject["id"]!!.jsonPrimitive.content.toInt()
 
             val response = client.delete("/v1/status-pages/$pageId/domains/$domainId") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.NoContent, response.status)
         }
@@ -849,7 +850,7 @@ class StatusPageRoutesTest {
             val pageId = seedStatusPage(orgId)
 
             val response = client.get("/v1/status-pages/$pageId/incidents") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
         }

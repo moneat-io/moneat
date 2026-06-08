@@ -16,23 +16,18 @@
 
 package com.moneat.summary.routes
 
-import com.moneat.shared.models.Memberships
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.summary.services.SummaryService
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.route
 import com.moneat.utils.suspendRunCatching
 import mu.KotlinLogging
-import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
 import java.time.DateTimeException
 import java.time.ZoneId
@@ -40,17 +35,6 @@ import java.time.ZoneId
 private val logger = KotlinLogging.logger {}
 
 private val validPeriods = setOf("24h", "7d", "30d")
-private const val INVALID_TOKEN = "Invalid token"
-private const val NO_ORGANIZATION_MEMBERSHIP = "No organization membership"
-
-private fun getOrganizationIdsForUser(userId: Int): List<Int> {
-    return transaction {
-        Memberships
-            .selectAll()
-            .where { Memberships.user_id eq userId }
-            .map { it[Memberships.organization_id] }
-    }
-}
 
 /**
  * Handles expected failure modes from JDBC/Exposed, ClickHouse HTTP, and JSON parsing.
@@ -81,25 +65,7 @@ fun Route.summaryRoutes(
                     "Infrastructure summary error",
                     "Failed to get summary",
                 ) {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal?.payload
-                        ?.getClaim("userId")?.asInt()
-                    if (userId == null) {
-                        call.respond(
-                            HttpStatusCode.Unauthorized,
-                            ErrorResponse(INVALID_TOKEN),
-                        )
-                        return@runSummaryServiceCall
-                    }
-
-                    val orgIds = getOrganizationIdsForUser(userId)
-                    if (orgIds.isEmpty()) {
-                        call.respond(
-                            HttpStatusCode.Forbidden,
-                            ErrorResponse(NO_ORGANIZATION_MEMBERSHIP),
-                        )
-                        return@runSummaryServiceCall
-                    }
+                    val orgId = call.requireCurrentOrg()?.orgId ?: return@runSummaryServiceCall
 
                     val period = call.parameters["period"] ?: "24h"
                     if (period !in validPeriods) {
@@ -115,7 +81,7 @@ fun Route.summaryRoutes(
 
                     val result = summaryService
                         .getInfrastructureSummary(
-                            orgIds.first(),
+                            orgId,
                             period,
                         )
                     call.respond(HttpStatusCode.OK, result)
@@ -128,25 +94,7 @@ fun Route.summaryRoutes(
                     "Overnight summary error",
                     "Failed to get summary",
                 ) {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal?.payload
-                        ?.getClaim("userId")?.asInt()
-                    if (userId == null) {
-                        call.respond(
-                            HttpStatusCode.Unauthorized,
-                            ErrorResponse(INVALID_TOKEN),
-                        )
-                        return@runSummaryServiceCall
-                    }
-
-                    val orgIds = getOrganizationIdsForUser(userId)
-                    if (orgIds.isEmpty()) {
-                        call.respond(
-                            HttpStatusCode.Forbidden,
-                            ErrorResponse(NO_ORGANIZATION_MEMBERSHIP),
-                        )
-                        return@runSummaryServiceCall
-                    }
+                    val orgId = call.requireCurrentOrg()?.orgId ?: return@runSummaryServiceCall
 
                     val timezone = call.parameters["timezone"]
                         ?: "America/New_York"
@@ -163,7 +111,7 @@ fun Route.summaryRoutes(
                     }
 
                     val result = summaryService
-                        .getOvernightSummary(orgIds.first(), timezone)
+                        .getOvernightSummary(orgId, timezone)
                     call.respond(HttpStatusCode.OK, result)
                 }
             }
@@ -174,28 +122,10 @@ fun Route.summaryRoutes(
                     "Weekly report error",
                     "Failed to get report",
                 ) {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal?.payload
-                        ?.getClaim("userId")?.asInt()
-                    if (userId == null) {
-                        call.respond(
-                            HttpStatusCode.Unauthorized,
-                            ErrorResponse(INVALID_TOKEN),
-                        )
-                        return@runSummaryServiceCall
-                    }
-
-                    val orgIds = getOrganizationIdsForUser(userId)
-                    if (orgIds.isEmpty()) {
-                        call.respond(
-                            HttpStatusCode.Forbidden,
-                            ErrorResponse(NO_ORGANIZATION_MEMBERSHIP),
-                        )
-                        return@runSummaryServiceCall
-                    }
+                    val orgId = call.requireCurrentOrg()?.orgId ?: return@runSummaryServiceCall
 
                     val result = summaryService
-                        .getWeeklyReport(orgIds.first())
+                        .getWeeklyReport(orgId)
                     call.respond(HttpStatusCode.OK, result)
                 }
             }
@@ -206,25 +136,7 @@ fun Route.summaryRoutes(
                     "Incident context error",
                     "Failed to get context",
                 ) {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal?.payload
-                        ?.getClaim("userId")?.asInt()
-                    if (userId == null) {
-                        call.respond(
-                            HttpStatusCode.Unauthorized,
-                            ErrorResponse(INVALID_TOKEN),
-                        )
-                        return@runSummaryServiceCall
-                    }
-
-                    val orgIds = getOrganizationIdsForUser(userId)
-                    if (orgIds.isEmpty()) {
-                        call.respond(
-                            HttpStatusCode.Forbidden,
-                            ErrorResponse(NO_ORGANIZATION_MEMBERSHIP),
-                        )
-                        return@runSummaryServiceCall
-                    }
+                    val orgId = call.requireCurrentOrg()?.orgId ?: return@runSummaryServiceCall
 
                     val incidentId = call.parameters["incident_id"]
                         ?.toLongOrNull()
@@ -238,7 +150,7 @@ fun Route.summaryRoutes(
 
                     val result = summaryService
                         .getIncidentContext(
-                            orgIds.first(),
+                            orgId,
                             incidentId,
                         )
                     call.respond(HttpStatusCode.OK, result)

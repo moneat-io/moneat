@@ -14,62 +14,14 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import type {ComponentType} from 'react'
 import {Search} from 'lucide-react'
 
-import {cn} from '@/lib/utils'
 import {Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 
-export type SegmentedOption<TValue extends string> = Readonly<{
-  value: TValue
-  label: string
-  icon: ComponentType<{className?: string}>
-}>
-
-export type MapModeSwitchProps<TValue extends string> = Readonly<{
-  value: TValue
-  options: ReadonlyArray<SegmentedOption<TValue>>
-  onChange: (value: TValue) => void
-  ariaLabel: string
-}>
-
-/**
- * The mockup's `.seg` segmented control: a pill group that sits immediately
- * left of the search box. The selected segment is raised on a card-colored
- * chip; the rest read as muted text.
- */
-export function MapModeSwitch<TValue extends string>({
-  value,
-  options,
-  onChange,
-  ariaLabel,
-}: MapModeSwitchProps<TValue>) {
-  return (
-    <fieldset className="flex h-7 shrink-0 rounded-md border bg-muted/40 p-0.5">
-      <legend className="sr-only">{ariaLabel}</legend>
-      {options.map((option) => {
-        const Icon = option.icon
-        const active = option.value === value
-        return (
-          <button
-            key={option.value}
-            type="button"
-            aria-pressed={active}
-            title={option.label}
-            onClick={() => onChange(option.value)}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-sm px-2.5 text-xs font-medium transition-colors',
-              active ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <Icon className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">{option.label}</span>
-          </button>
-        )
-      })}
-    </fieldset>
-  )
-}
+// The map's mode switch is the shared SegmentedTabs control, re-exported under
+// its original name so existing map imports keep working.
+export {SegmentedTabs as MapModeSwitch} from '@/components/filters/SegmentedTabs'
+export type {SegmentedOption} from '@/components/filters/SegmentedTabs'
 
 export type MapControlOption<TValue extends string> = Readonly<{
   value: TValue

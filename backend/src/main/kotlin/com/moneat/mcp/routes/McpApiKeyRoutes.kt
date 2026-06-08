@@ -16,6 +16,7 @@
 
 package com.moneat.mcp.routes
 
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.mcp.models.CreateMcpApiKeyRequest
 import com.moneat.mcp.models.McpApiKeysResponse
 import com.moneat.mcp.models.UpdateMcpApiKeyRequest
@@ -29,8 +30,6 @@ import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -217,13 +216,8 @@ private data class McpClaims(
 )
 
 private suspend fun ApplicationCall.requireMcpClaims(): McpClaims? {
-    val orgId = claimIntOrNull("orgId")
-    val userId = claimIntOrNull("userId")
-    if (orgId == null || userId == null) {
-        respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_CLAIMS))
-        return null
-    }
-    return McpClaims(organizationId = orgId, userId = userId)
+    val context = requireCurrentOrg(INVALID_TOKEN_CLAIMS) ?: return null
+    return McpClaims(organizationId = context.orgId, userId = context.userId)
 }
 
 private suspend fun ApplicationCall.requireMcpAdminClaims(
@@ -243,9 +237,6 @@ private suspend fun ApplicationCall.requireMcpAdminClaims(
     }
     return claims
 }
-
-private fun ApplicationCall.claimIntOrNull(name: String): Int? =
-    runCatching { principal<JWTPrincipal>()?.payload?.getClaim(name)?.asInt() }.getOrNull()
 
 private fun validateToolSelection(
     tools: List<String>?,

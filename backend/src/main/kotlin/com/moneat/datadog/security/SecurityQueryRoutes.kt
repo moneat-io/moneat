@@ -16,6 +16,7 @@
 
 package com.moneat.datadog.security
 
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.ClickHouseQueryException
 import com.moneat.config.isClickHouseError
@@ -336,7 +337,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleComplianceTrends
  */
 private fun io.ktor.server.routing.RoutingContext.extractOrgId(): Int? {
     val principal = call.principal<JWTPrincipal>()
-    return principal?.payload?.getClaim("orgId")?.asInt()
+    return principal?.currentOrgIdOrNull()
 }
 
 /** Empty list-with-count payload returned when the caller token carries no `orgId` claim. */

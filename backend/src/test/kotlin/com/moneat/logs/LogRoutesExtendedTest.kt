@@ -139,6 +139,36 @@ class LogRoutesExtendedTest {
         }
 
     @Test
+    fun `GET logs returns 401 when JWT has no org`() =
+        testApplication {
+            application {
+                installJwtAuth()
+                routing { logRoutes(mockLogService, mockOtlpApiKeyService, mockLogIndexService) }
+            }
+
+            val response = client.get("/v1/logs") {
+                withAuth(RouteTestSupport.createToken(userId = 1, orgId = null))
+            }
+
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+        }
+
+    @Test
+    fun `GET log pipelines returns 401 when JWT has no org`() =
+        testApplication {
+            application {
+                installJwtAuth()
+                routing { logRoutes(mockLogService, mockOtlpApiKeyService, mockLogIndexService) }
+            }
+
+            val response = client.get("/v1/logs/pipelines") {
+                withAuth(RouteTestSupport.createToken(userId = 1, orgId = null))
+            }
+
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+        }
+
+    @Test
     fun `GET logs top returns 401 without JWT`() =
         testApplication {
             application {

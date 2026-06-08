@@ -148,7 +148,7 @@ class WorkflowRoutesTest {
             setupApp()
 
             val response = client.get("/v1/workflows") {
-                withAuth(RouteTestSupport.createToken(userId = userId + 100))
+                withAuth(RouteTestSupport.createToken(userId = userId + 100, orgId = null))
             }
 
             assertEquals(HttpStatusCode.Forbidden, response.status)

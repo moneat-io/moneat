@@ -103,9 +103,11 @@ class MonitorRoutesMockTest {
         }
     }
 
-    private fun token(userId: Int): String =
+    private fun token(userId: Int, orgId: Int? = null): String =
         JWT.create().withIssuer("moneat").withAudience("moneat-users")
-            .withClaim("userId", userId).sign(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
+            .withClaim("userId", userId)
+            .apply { if (orgId != null) withClaim("orgId", orgId) }
+            .sign(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
 
     private fun seedUser(): Int =
         transaction {
@@ -181,7 +183,7 @@ class MonitorRoutesMockTest {
             }
 
             val response = client.get("/v1/monitor/hosts") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("test-system"))
@@ -212,7 +214,7 @@ class MonitorRoutesMockTest {
             }
 
             val response = client.get("/v1/monitor/hosts/${system.id}") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("test-system"))
@@ -240,7 +242,7 @@ class MonitorRoutesMockTest {
             }
 
             val response = client.get("/v1/monitor/hosts/$systemId") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.NotFound, response.status)
         }
@@ -270,7 +272,7 @@ class MonitorRoutesMockTest {
             }
 
             val response = client.delete("/v1/monitor/hosts/${system.id}") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.NoContent, response.status)
         }
@@ -307,7 +309,7 @@ class MonitorRoutesMockTest {
             }
 
             val response = client.get("/v1/monitor/hosts/${system.id}/metrics?from=1000&to=2000") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
         }
@@ -349,7 +351,7 @@ class MonitorRoutesMockTest {
             }
 
             val response = client.get("/v1/monitor/hosts/${system.id}/containers") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("my-container"))
@@ -381,7 +383,7 @@ class MonitorRoutesMockTest {
             }
 
             val response = client.get("/v1/monitor/hosts/${system.id}/logs") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
         }
@@ -423,7 +425,7 @@ class MonitorRoutesMockTest {
             }
 
             val response = client.get("/v1/monitor/hosts/${system.id}/alerts") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("cpu_percent"))
@@ -460,7 +462,7 @@ class MonitorRoutesMockTest {
             }
 
             val response = client.get("/v1/monitor/hosts/${system.id}/alerts/config") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("global"))
@@ -487,7 +489,7 @@ class MonitorRoutesMockTest {
             }
 
             val response = client.get("/v1/monitor/hosts/not-a-uuid") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.BadRequest, response.status)
         }
@@ -517,7 +519,7 @@ class MonitorRoutesMockTest {
             }
 
             val response = client.put("/v1/monitor/hosts/${system.id}/alerts/scope") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"scope":"host"}""")
             }
@@ -546,7 +548,7 @@ class MonitorRoutesMockTest {
             }
 
             val response = client.put("/v1/monitor/hosts/${system.id}/alerts/scope") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"scope":"invalid"}""")
             }
@@ -590,7 +592,7 @@ class MonitorRoutesMockTest {
             }
 
             val response = client.post("/v1/monitor/hosts/${system.id}/alerts") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"metric":"mem_percent","condition":"gt","threshold":80.0,"duration_seconds":60}""")
             }
@@ -623,7 +625,7 @@ class MonitorRoutesMockTest {
             }
 
             val response = client.put("/v1/monitor/hosts/${system.id}/alerts/1") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"enabled":false}""")
             }
@@ -653,7 +655,7 @@ class MonitorRoutesMockTest {
             }
 
             val response = client.put("/v1/monitor/hosts/${system.id}/alerts/99") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"enabled":false}""")
             }
@@ -685,7 +687,7 @@ class MonitorRoutesMockTest {
             }
 
             val response = client.delete("/v1/monitor/hosts/${system.id}/alerts/1") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.NoContent, response.status)
         }
@@ -726,7 +728,7 @@ class MonitorRoutesMockTest {
             val response = client.get(
                 "/v1/monitor/hosts/${system.id}/containers/my-container/metrics?from=1000&to=2000"
             ) {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
         }

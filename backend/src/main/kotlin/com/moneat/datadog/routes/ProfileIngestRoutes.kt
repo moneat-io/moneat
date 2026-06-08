@@ -129,7 +129,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleProfileUpload(
                 )
             }
         }
-        part.dispose()
+        part.release()
     }
 
     // Filter to parseable profile files (pprof or JFR)

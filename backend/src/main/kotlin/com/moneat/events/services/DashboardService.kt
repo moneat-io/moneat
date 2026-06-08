@@ -104,9 +104,9 @@ class DashboardService(
         accessService.getIssueIdForEvent(eventId)
 
     suspend fun getProjects(
-        userId: Int,
+        orgId: Int,
         demoEpochMs: Long? = null
-    ): List<ProjectResponse> = projectService.getProjects(userId, demoEpochMs)
+    ): List<ProjectResponse> = projectService.getProjects(orgId, demoEpochMs)
 
     fun getServiceIdsForOrganization(orgId: Int): List<Long> =
         projectRepository.getProjectsForOrganizations(listOf(orgId)).map { it.projectId }
@@ -118,9 +118,9 @@ class DashboardService(
         projectService.getProject(projectId)
 
     suspend fun createProject(
-        userId: Int,
+        orgId: Int,
         request: com.moneat.events.models.CreateProjectRequest
-    ): ProjectResponse = projectService.createProject(userId, request)
+    ): ProjectResponse = projectService.createProject(orgId, request)
 
     fun addProjectTarget(
         projectId: Long,

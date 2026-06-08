@@ -88,7 +88,6 @@ function SsoTabContent({
       ssoConfig?.organizationId === undefined || ssoConfig.organizationId === organizationId
     if (ssoConfig && configBelongsToOrganization && !initializedRef.current) {
       initializedRef.current = true
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setProviderType(ssoConfig.providerType === 'saml' ? 'saml' : 'oidc')
       setFormData({
         isEnabled: ssoConfig.isEnabled,

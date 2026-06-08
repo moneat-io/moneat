@@ -19,6 +19,7 @@ package com.moneat.analytics.routes
 import com.moneat.analytics.models.AnalyticsFilter
 import com.moneat.analytics.services.AnalyticsQueryScope
 import com.moneat.analytics.services.AnalyticsService
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.config.EnvConfig
 import com.moneat.events.services.DashboardService
 import com.moneat.plugins.isDemoUser
@@ -372,7 +373,7 @@ private suspend fun extractOrganizationContext(
     val organizationId = if (call.isDemoUser()) {
         EnvConfig.Demo.ORG_ID.toInt()
     } else {
-        val orgId = principal.payload.getClaim("orgId").asInt()
+        val orgId = principal.currentOrgIdOrNull()
         if (orgId == null || !hasOrganizationAccess(userId, orgId)) {
             call.respond(HttpStatusCode.NotFound, ErrorResponse(ERROR_NO_ORGANIZATION_ACCESS))
             return null

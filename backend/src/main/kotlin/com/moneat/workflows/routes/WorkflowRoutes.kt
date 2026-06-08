@@ -16,6 +16,7 @@
 
 package com.moneat.workflows.routes
 
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.suspendRunCatching
 import com.moneat.enterprise.FeatureRegistry
@@ -398,7 +399,7 @@ private fun RoutingContext.instanceIdFromPath(): Int? =
 
 internal fun RoutingContext.currentOrganizationId(): Int? {
     val principal = call.principal<JWTPrincipal>() ?: return null
-    return principal.payload.getClaim("orgId").asInt()
+    return principal.currentOrgIdOrNull()
 }
 
 internal fun RoutingContext.currentUserId(): Int? {

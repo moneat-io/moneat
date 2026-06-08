@@ -393,67 +393,67 @@ class IncidentRoutesTest {
         assertEquals(HttpStatusCode.OK, response.status)
     }
 
-    // ──── No Membership Returns 403 ────
+    // ──── No current org claim returns 401 ────
 
     @Test
-    fun `GET providers returns 403 for user with no membership`() = testApplication {
+    fun `GET providers returns 401 without current org`() = testApplication {
         installRoutes()()
-        val token = RouteTestSupport.createToken(userId = NO_MEMBERSHIP_USER_ID)
+        val token = RouteTestSupport.createToken(userId = NO_MEMBERSHIP_USER_ID, orgId = null)
         val response = client.get("/api/incident-providers") {
             withAuth(token)
         }
-        assertEquals(HttpStatusCode.Forbidden, response.status)
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
 
     @Test
-    fun `POST test returns 403 for user with no membership`() = testApplication {
+    fun `POST test returns 401 without current org`() = testApplication {
         installRoutes()()
-        val token = RouteTestSupport.createToken(userId = NO_MEMBERSHIP_USER_ID)
+        val token = RouteTestSupport.createToken(userId = NO_MEMBERSHIP_USER_ID, orgId = null)
         val response = client.post("/api/incident-providers/1/test") {
             withAuth(token)
         }
-        assertEquals(HttpStatusCode.Forbidden, response.status)
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
 
     @Test
-    fun `GET rules returns 403 for user with no membership`() = testApplication {
+    fun `GET rules returns 401 without current org`() = testApplication {
         installRoutes()()
-        val token = RouteTestSupport.createToken(userId = NO_MEMBERSHIP_USER_ID)
+        val token = RouteTestSupport.createToken(userId = NO_MEMBERSHIP_USER_ID, orgId = null)
         val response = client.get("/api/incident-providers/1/rules") {
             withAuth(token)
         }
-        assertEquals(HttpStatusCode.Forbidden, response.status)
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
 
     @Test
-    fun `PUT rules returns 403 for user with no membership`() = testApplication {
+    fun `PUT rules returns 401 without current org`() = testApplication {
         installRoutes()()
-        val token = RouteTestSupport.createToken(userId = NO_MEMBERSHIP_USER_ID)
+        val token = RouteTestSupport.createToken(userId = NO_MEMBERSHIP_USER_ID, orgId = null)
         val response = client.put("/api/incident-providers/1/rules") {
             withAuth(token)
             contentType(ContentType.Application.Json)
             setBody("[]")
         }
-        assertEquals(HttpStatusCode.Forbidden, response.status)
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
 
     @Test
-    fun `GET events returns 403 for user with no membership`() = testApplication {
+    fun `GET events returns 401 without current org`() = testApplication {
         installRoutes()()
-        val token = RouteTestSupport.createToken(userId = NO_MEMBERSHIP_USER_ID)
+        val token = RouteTestSupport.createToken(userId = NO_MEMBERSHIP_USER_ID, orgId = null)
         val response = client.get("/api/incident-providers/1/events") {
             withAuth(token)
         }
-        assertEquals(HttpStatusCode.Forbidden, response.status)
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
 
     @Test
-    fun `DELETE returns 403 for user with no membership`() = testApplication {
+    fun `DELETE returns 401 without current org`() = testApplication {
         installRoutes()()
-        val token = RouteTestSupport.createToken(userId = NO_MEMBERSHIP_USER_ID)
+        val token = RouteTestSupport.createToken(userId = NO_MEMBERSHIP_USER_ID, orgId = null)
         val response = client.delete("/api/incident-providers/1") {
             withAuth(token)
         }
-        assertEquals(HttpStatusCode.Forbidden, response.status)
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
 }

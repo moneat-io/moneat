@@ -18,6 +18,8 @@ package com.moneat.events.routes
 
 import com.moneat.alerts.models.SuppressAlertEpisodeRequest
 import com.moneat.alerts.services.AlertEpisodeService
+import com.moneat.auth.currentOrgIdOrNull
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.auth.routes.accountDeletionRoutes
 import com.moneat.billing.routes.billingRoutes
 import com.moneat.billing.routes.publicBillingRoutes
@@ -155,8 +157,9 @@ fun Route.apiRoutes(includePublicContactRoutes: Boolean = true) {
 
                 // User profile
                 get("/user") {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal!!.payload.getClaim("userId").asInt()
+                    val context = call.requireCurrentOrg() ?: return@get
+                    val userId = context.userId
+                    val currentOrgId = context.orgId
                     val demoEpochMs = call.getDemoEpochMs()
 
                     val userResponse =
@@ -165,10 +168,13 @@ fun Route.apiRoutes(includePublicContactRoutes: Boolean = true) {
                                 ?: return@transaction null
                             val membership = Memberships
                                 .selectAll()
-                                .where { Memberships.user_id eq userId }
+                                .where {
+                                    (Memberships.user_id eq userId) and
+                                        (Memberships.organization_id eq currentOrgId)
+                                }
                                 .firstOrNull()
-                            val orgId = membership?.get(Memberships.organization_id)
-                            val orgSlug = orgId?.let { id ->
+                            val orgId = membership?.get(Memberships.organization_id) ?: currentOrgId
+                            val orgSlug = orgId.let { id ->
                                 Organizations
                                     .selectAll()
                                     .where { Organizations.id eq id }
@@ -372,41 +378,20 @@ fun Route.apiRoutes(includePublicContactRoutes: Boolean = true) {
 
                 // Update sidebar preferences
                 put("/user/sidebar-preferences") {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal!!.payload.getClaim("userId").asInt()
-                    val organizationIdClaim = principal.payload.getClaim("orgId").asInt()
+                    val context = call.requireCurrentOrg() ?: return@put
+                    val userId = context.userId
+                    val organizationId = context.orgId
                     val request = call.receive<UpdateSidebarPreferencesRequest>()
 
                     val (hiddenItems, errorStatus, errorMessage) =
                         transaction {
                             val membership =
-                                if (organizationIdClaim != null) {
-                                    Memberships
-                                        .selectAll()
-                                        .where {
-                                            (Memberships.user_id eq userId) and
-                                                (Memberships.organization_id eq organizationIdClaim)
-                                        }.firstOrNull()
-                                } else {
-                                    // Avoid cross-org writes when token is missing org context.
-                                    val memberships =
-                                        Memberships
-                                            .selectAll()
-                                            .where { Memberships.user_id eq userId }
-                                            .limit(2)
-                                            .toList()
-                                    when {
-                                        memberships.isEmpty() -> null
-
-                                        memberships.size == 1 -> memberships.first()
-
-                                        else -> return@transaction Triple<List<String>?, HttpStatusCode?, String?>(
-                                            null,
-                                            HttpStatusCode.BadRequest,
-                                            "Organization context required for users in multiple organizations"
-                                        )
-                                    }
-                                }
+                                Memberships
+                                    .selectAll()
+                                    .where {
+                                        (Memberships.user_id eq userId) and
+                                            (Memberships.organization_id eq organizationId)
+                                    }.firstOrNull()
                                     ?: return@transaction Triple<List<String>?, HttpStatusCode?, String?>(
                                         null,
                                         HttpStatusCode.NotFound,
@@ -414,7 +399,6 @@ fun Route.apiRoutes(includePublicContactRoutes: Boolean = true) {
                                     )
 
                             val membershipId = membership[Memberships.id]
-                            val organizationId = membership[Memberships.organization_id]
 
                             Triple(
                                 SidebarPreferenceService.updatePreferences(
@@ -470,21 +454,19 @@ fun Route.apiRoutes(includePublicContactRoutes: Boolean = true) {
 
                 // Projects
                 get("/projects") {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal!!.payload.getClaim("userId").asInt()
+                    val context = call.requireCurrentOrg() ?: return@get
                     val demoEpochMs = call.getDemoEpochMs()
 
-                    val projects = dashboardService.getProjects(userId, demoEpochMs)
+                    val projects = dashboardService.getProjects(context.orgId, demoEpochMs)
                     call.respond(projects)
                 }
 
                 post("/projects") {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal!!.payload.getClaim("userId").asInt()
+                    val context = call.requireCurrentOrg() ?: return@post
                     val request = call.receive<CreateProjectRequest>()
 
                     try {
-                        val project = dashboardService.createProject(userId, request)
+                        val project = dashboardService.createProject(context.orgId, request)
                         call.respond(HttpStatusCode.Created, project)
                     } catch (e: IllegalStateException) {
                         if (e.message == "project_limit_reached") {
@@ -1538,23 +1520,9 @@ fun Route.apiRoutes(includePublicContactRoutes: Boolean = true) {
 
                 // Alert Notification Preferences (Unified Alerting System)
                 get("/alert-notification-preferences") {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal!!.payload.getClaim("userId").asInt()
-
-                    // Get user's primary organization
-                    val organizationId =
-                        transaction {
-                            Memberships
-                                .selectAll()
-                                .where { Memberships.user_id eq userId }
-                                .firstOrNull()
-                                ?.get(Memberships.organization_id)
-                        }
-
-                    if (organizationId == null) {
-                        call.respond(HttpStatusCode.NotFound, "User not in any organization")
-                        return@get
-                    }
+                    val context = call.requireCurrentOrg() ?: return@get
+                    val userId = context.userId
+                    val organizationId = context.orgId
 
                     val prefsService = koin.get<AlertNotificationPreferencesService>()
                     val preferences = prefsService.getPreferences(userId, organizationId)
@@ -1563,27 +1531,13 @@ fun Route.apiRoutes(includePublicContactRoutes: Boolean = true) {
                 }
 
                 put("/alert-notification-preferences/{alertSource}") {
-                    val principal = call.principal<JWTPrincipal>()
-                    val userId = principal!!.payload.getClaim("userId").asInt()
+                    val context = call.requireCurrentOrg() ?: return@put
+                    val userId = context.userId
+                    val organizationId = context.orgId
 
                     val alertSource = call.parameters["alertSource"]
                     if (alertSource.isNullOrBlank()) {
                         call.respond(HttpStatusCode.BadRequest, "Alert source required")
-                        return@put
-                    }
-
-                    // Get user's primary organization
-                    val organizationId =
-                        transaction {
-                            Memberships
-                                .selectAll()
-                                .where { Memberships.user_id eq userId }
-                                .firstOrNull()
-                                ?.get(Memberships.organization_id)
-                        }
-
-                    if (organizationId == null) {
-                        call.respond(HttpStatusCode.NotFound, "User not in any organization")
                         return@put
                     }
 
@@ -1762,7 +1716,7 @@ private fun ApplicationCall.queryCsvValues(name: String): List<String> =
         ?: emptyList()
 
 private suspend fun ApplicationCall.resolveSubscriptionOrganizationId(userId: Int): Int? {
-    val orgId = principal<JWTPrincipal>()?.payload?.getClaim("orgId")?.asInt()
+    val orgId = currentOrgIdOrNull()
     if (orgId == null || !hasOrganizationAccess(userId, orgId)) {
         respond(HttpStatusCode.NotFound, ErrorResponse(ERROR_NO_ORGANIZATION_ACCESS))
         return null

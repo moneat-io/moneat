@@ -90,9 +90,7 @@ const overview = {
 }
 
 function selectProductTab() {
-  const productTab = screen.getByRole('tab', {name: 'Product'})
-  fireEvent.pointerDown(productTab, {button: 0, ctrlKey: false})
-  fireEvent.mouseDown(productTab, {button: 0, ctrlKey: false})
+  const productTab = screen.getByRole('button', {name: 'Product'})
   fireEvent.click(productTab)
 }
 

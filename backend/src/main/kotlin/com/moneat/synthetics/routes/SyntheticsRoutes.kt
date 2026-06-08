@@ -16,8 +16,8 @@
 
 package com.moneat.synthetics.routes
 
+import com.moneat.auth.currentOrgContextOrNull
 import com.moneat.config.ClickHouseClient
-import com.moneat.shared.models.Memberships
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
@@ -42,9 +42,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import mu.KotlinLogging
-import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
 import java.util.UUID
 import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
@@ -57,14 +54,12 @@ private val json = Json { ignoreUnknownKeys = true }
 private const val DEFAULT_LIMIT = 100
 private const val MAX_LIMIT = 500
 
-private fun getOrgIdsForUser(userId: Int): List<Int> {
-    return transaction {
-        Memberships
-            .selectAll()
-            .where { Memberships.user_id eq userId }
-            .map { it[Memberships.organization_id] }
-    }
-}
+private fun getOrgIdsForUser(userId: Int, principal: JWTPrincipal?): List<Int> =
+    principal
+        ?.currentOrgContextOrNull()
+        ?.takeIf { it.userId == userId }
+        ?.let { listOf(it.orgId) }
+        .orEmpty()
 
 private fun orgIdsToChCondition(orgIds: List<Int>): String {
     return orgIds.joinToString(",") { "toUInt64($it)" }
@@ -119,7 +114,7 @@ fun Route.syntheticsRoutes() {
             get("/synthetics/results") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
+                val orgIds = getOrgIdsForUser(userId, principal)
                 if (orgIds.isEmpty()) {
                     call.respondText(
                         """{"results":[],"totalCount":0}""",
@@ -195,7 +190,7 @@ fun Route.syntheticsRoutes() {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload
                     .getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
+                val orgIds = getOrgIdsForUser(userId, principal)
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
@@ -211,7 +206,7 @@ fun Route.syntheticsRoutes() {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload
                     .getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
+                val orgIds = getOrgIdsForUser(userId, principal)
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
@@ -246,7 +241,7 @@ fun Route.syntheticsRoutes() {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload
                     .getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
+                val orgIds = getOrgIdsForUser(userId, principal)
                 if (orgIds.isEmpty()) {
                     call.respondText(
                         """{"results":[],"totalCount":0}""",
@@ -312,7 +307,7 @@ fun Route.syntheticsRoutes() {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload
                     .getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
+                val orgIds = getOrgIdsForUser(userId, principal)
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
@@ -348,7 +343,7 @@ fun Route.syntheticsRoutes() {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload
                     .getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
+                val orgIds = getOrgIdsForUser(userId, principal)
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
@@ -376,7 +371,7 @@ fun Route.syntheticsRoutes() {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload
                     .getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
+                val orgIds = getOrgIdsForUser(userId, principal)
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
@@ -413,7 +408,7 @@ fun Route.syntheticsRoutes() {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload
                     .getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
+                val orgIds = getOrgIdsForUser(userId, principal)
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
@@ -448,7 +443,7 @@ fun Route.syntheticsRoutes() {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload
                     .getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
+                val orgIds = getOrgIdsForUser(userId, principal)
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
@@ -488,7 +483,7 @@ fun Route.syntheticsRoutes() {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload
                     .getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
+                val orgIds = getOrgIdsForUser(userId, principal)
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
@@ -506,7 +501,7 @@ fun Route.syntheticsRoutes() {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload
                     .getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
+                val orgIds = getOrgIdsForUser(userId, principal)
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
@@ -526,7 +521,7 @@ fun Route.syntheticsRoutes() {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload
                     .getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
+                val orgIds = getOrgIdsForUser(userId, principal)
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
@@ -562,7 +557,7 @@ fun Route.syntheticsRoutes() {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload
                     .getClaim("userId").asInt()
-                val orgIds = getOrgIdsForUser(userId)
+                val orgIds = getOrgIdsForUser(userId, principal)
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,

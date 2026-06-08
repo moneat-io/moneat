@@ -16,14 +16,13 @@
 
 package com.moneat.auth.routes
 
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.auth.services.AuthTokenService
 import com.moneat.events.models.CreateAuthTokenRequest
 import com.moneat.events.models.UpdateAuthTokenRequest
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -50,13 +49,13 @@ fun Route.authTokenRoutes(
 private suspend fun io.ktor.server.routing.RoutingContext.handleCreateAuthToken(
     authTokenService: AuthTokenService,
 ) {
-    val principal = call.principal<JWTPrincipal>()
-    val userId = principal!!.payload.getClaim("userId").asInt()
+    val context = call.requireCurrentOrg() ?: return
     val request = call.receive<CreateAuthTokenRequest>()
     try {
         val tokenResponse =
             authTokenService.generateToken(
-                userId = userId,
+                userId = context.userId,
+                orgId = context.orgId,
                 name = request.name,
                 scopes = request.scopes,
                 expiresInDays = request.expiresInDays
@@ -70,23 +69,21 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCreateAuthToken(
 private suspend fun io.ktor.server.routing.RoutingContext.handleListAuthTokens(
     authTokenService: AuthTokenService,
 ) {
-    val principal = call.principal<JWTPrincipal>()
-    val userId = principal!!.payload.getClaim("userId").asInt()
-    val tokens = authTokenService.listUserTokens(userId)
+    val context = call.requireCurrentOrg() ?: return
+    val tokens = authTokenService.listUserTokens(context.userId)
     call.respond(tokens)
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleRevokeAuthToken(
     authTokenService: AuthTokenService,
 ) {
-    val principal = call.principal<JWTPrincipal>()
-    val userId = principal!!.payload.getClaim("userId").asInt()
+    val context = call.requireCurrentOrg() ?: return
     val tokenId = call.parameters["tokenId"]?.toIntOrNull()
     if (tokenId == null) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid token ID"))
         return
     }
-    val success = authTokenService.revokeToken(userId, tokenId)
+    val success = authTokenService.revokeToken(context.userId, tokenId)
     if (success) {
         call.respond(HttpStatusCode.NoContent)
     } else {
@@ -97,8 +94,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleRevokeAuthToken(
 private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateAuthToken(
     authTokenService: AuthTokenService,
 ) {
-    val principal = call.principal<JWTPrincipal>()
-    val userId = principal!!.payload.getClaim("userId").asInt()
+    val context = call.requireCurrentOrg() ?: return
     val tokenId = call.parameters["tokenId"]?.toIntOrNull()
     if (tokenId == null) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid token ID"))
@@ -108,7 +104,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateAuthToken(
     try {
         val success =
             authTokenService.updateToken(
-                userId = userId,
+                userId = context.userId,
                 tokenId = tokenId,
                 name = request.name,
                 scopes = request.scopes

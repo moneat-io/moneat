@@ -4,18 +4,16 @@
 
 package com.moneat.enterprise.ai.routes
 
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.enterprise.ai.models.AiChatStreamRequest
 import com.moneat.enterprise.ai.models.AiConfirmRequest
 import com.moneat.enterprise.ai.models.SseError
 import com.moneat.enterprise.ai.services.EnterpriseAiChatService
-import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Users
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondTextWriter
@@ -45,8 +43,8 @@ fun Route.aiEnterpriseRoutes(
              * Returns SSE stream with search progress and context_ready event.
              */
             post("/chat/stream") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
+                val context = call.requireCurrentOrg() ?: return@post
+                val userId = context.userId
 
                 if (!isAdmin(userId)) {
                     call.respond(
@@ -56,11 +54,7 @@ fun Route.aiEnterpriseRoutes(
                     return@post
                 }
 
-                val orgId = getOrgId(userId)
-                if (orgId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "No organization found"))
-                    return@post
-                }
+                val orgId = context.orgId
 
                 val request = call.receive<AiChatStreamRequest>()
                 if (request.message.isBlank()) {
@@ -98,20 +92,14 @@ fun Route.aiEnterpriseRoutes(
              * Returns SSE stream with LLM response and cost info.
              */
             post("/chat/confirm") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
+                val context = call.requireCurrentOrg() ?: return@post
+                val userId = context.userId
 
                 if (!isAdmin(userId)) {
                     call.respond(
                         HttpStatusCode.Forbidden,
                         mapOf("error" to "AI chat is only available for admin users")
                     )
-                    return@post
-                }
-
-                val orgId = getOrgId(userId)
-                if (orgId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "No organization found"))
                     return@post
                 }
 
@@ -140,16 +128,6 @@ fun Route.aiEnterpriseRoutes(
                 }
             }
         }
-    }
-}
-
-private fun getOrgId(userId: Int): Int? {
-    return transaction {
-        Memberships
-            .selectAll()
-            .where { Memberships.user_id eq userId }
-            .firstOrNull()
-            ?.get(Memberships.organization_id)
     }
 }
 

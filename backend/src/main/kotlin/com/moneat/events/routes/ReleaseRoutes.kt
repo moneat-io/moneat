@@ -526,7 +526,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.receiveSourceMapUpload
             fileName = part.originalFileName ?: "unknown"
             fileBytes = part.provider().toByteArray()
         }
-        part.dispose()
+        part.release()
     }
 
     val finalFileName = filePath ?: fileName
@@ -549,7 +549,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.receiveUploadedSourceM
                 bytes = sourceMapChunkBytes(part)
             )
         }
-        part.dispose()
+        part.release()
     }
     return chunks
 }

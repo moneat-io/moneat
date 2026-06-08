@@ -16,6 +16,7 @@
 
 package com.moneat.llm.routes
 
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.config.EnvConfig
 import com.moneat.events.services.DashboardService
 import com.moneat.llm.services.LlmDashboardService
@@ -119,7 +120,7 @@ private suspend fun ApplicationCall.resolveLlmOrganizationId(
 ): Int? {
     if (isDemoUser()) return EnvConfig.Demo.ORG_ID.toInt()
 
-    val organizationId = principal.payload.getClaim("orgId").asInt()
+    val organizationId = principal.currentOrgIdOrNull()
     if (organizationId != null && hasOrganizationAccess(userId, organizationId)) {
         return organizationId
     }

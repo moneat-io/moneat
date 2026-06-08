@@ -16,6 +16,7 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.apm.routes.apmServiceDashboardRouteHandlers
 import com.moneat.datadog.services.DdApmQueryTimeRange
 import com.moneat.datadog.services.DdApmQueryTimeUnit
@@ -172,9 +173,7 @@ fun Route.traceDashboardRoutes(includeServiceDashboardRoutes: Boolean = true) {
 }
 
 private fun ApplicationCall.organizationId(): Int? =
-    principal<JWTPrincipal>()?.payload
-        ?.getClaim("orgId")
-        ?.asInt()
+    principal<JWTPrincipal>()?.currentOrgIdOrNull()
 
 private suspend fun ApplicationCall.respondUnauthorized() {
     respond(

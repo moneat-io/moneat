@@ -16,7 +16,7 @@
 
 package com.moneat.statuspage.routes
 
-import com.moneat.shared.models.Memberships
+import com.moneat.auth.currentOrgContextOrNull
 import com.moneat.statuspage.models.AddCustomDomainRequest
 import com.moneat.statuspage.models.AddMonitorsRequest
 import com.moneat.statuspage.models.CreateIncidentRequest
@@ -42,9 +42,6 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import com.moneat.utils.suspendRunCatching
 import mu.KotlinLogging
-import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
 import java.util.UUID
 
@@ -80,14 +77,12 @@ private fun String.toUUIDOrNull(): UUID? {
 /**
  * Helper to get organization IDs for a user.
  */
-private fun getOrganizationIdsForUser(userId: Int): List<Int> {
-    return transaction {
-        Memberships
-            .selectAll()
-            .where { Memberships.user_id eq userId }
-            .map { it[Memberships.organization_id] }
-    }
-}
+private fun getOrganizationIdsForUser(userId: Int, principal: JWTPrincipal?): List<Int> =
+    principal
+        ?.currentOrgContextOrNull()
+        ?.takeIf { it.userId == userId }
+        ?.let { listOf(it.orgId) }
+        .orEmpty()
 
 /**
  * Status page routes - both authenticated management and public endpoints.
@@ -113,7 +108,7 @@ fun Route.statusPageRoutes(
                         return@runStatusPageRoute
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
+                    val organizationIds = getOrganizationIdsForUser(userId, principal)
                     if (organizationIds.isEmpty()) {
                         call.respond(HttpStatusCode.OK, emptyList<StatusPageResponse>())
                         return@runStatusPageRoute
@@ -140,7 +135,7 @@ fun Route.statusPageRoutes(
                         return@post
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
+                    val organizationIds = getOrganizationIdsForUser(userId, principal)
                     if (organizationIds.isEmpty()) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@post
@@ -197,7 +192,7 @@ fun Route.statusPageRoutes(
                         return@runStatusPageRoute
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
+                    val organizationIds = getOrganizationIdsForUser(userId, principal)
                     if (organizationIds.isEmpty()) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@runStatusPageRoute
@@ -233,7 +228,7 @@ fun Route.statusPageRoutes(
                         return@put
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
+                    val organizationIds = getOrganizationIdsForUser(userId, principal)
                     if (organizationIds.isEmpty()) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@put
@@ -285,7 +280,7 @@ fun Route.statusPageRoutes(
                         return@delete
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
+                    val organizationIds = getOrganizationIdsForUser(userId, principal)
                     if (organizationIds.isEmpty()) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@delete
@@ -319,7 +314,7 @@ fun Route.statusPageRoutes(
                         return@post
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
+                    val organizationIds = getOrganizationIdsForUser(userId, principal)
                     if (organizationIds.isEmpty()) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@post
@@ -364,7 +359,7 @@ fun Route.statusPageRoutes(
                         return@delete
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
+                    val organizationIds = getOrganizationIdsForUser(userId, principal)
                     if (organizationIds.isEmpty()) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@delete
@@ -398,7 +393,7 @@ fun Route.statusPageRoutes(
                         return@get
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
+                    val organizationIds = getOrganizationIdsForUser(userId, principal)
                     if (organizationIds.isEmpty()) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@get
@@ -436,7 +431,7 @@ fun Route.statusPageRoutes(
                         return@post
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
+                    val organizationIds = getOrganizationIdsForUser(userId, principal)
                     if (organizationIds.isEmpty()) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@post
@@ -481,7 +476,7 @@ fun Route.statusPageRoutes(
                         return@put
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
+                    val organizationIds = getOrganizationIdsForUser(userId, principal)
                     if (organizationIds.isEmpty()) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@put
@@ -526,7 +521,7 @@ fun Route.statusPageRoutes(
                         return@post
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
+                    val organizationIds = getOrganizationIdsForUser(userId, principal)
                     if (organizationIds.isEmpty()) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@post
@@ -573,7 +568,7 @@ fun Route.statusPageRoutes(
                         return@post
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
+                    val organizationIds = getOrganizationIdsForUser(userId, principal)
                     if (organizationIds.isEmpty()) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@post
@@ -626,7 +621,7 @@ fun Route.statusPageRoutes(
                         return@post
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
+                    val organizationIds = getOrganizationIdsForUser(userId, principal)
                     if (organizationIds.isEmpty()) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@post
@@ -661,7 +656,7 @@ fun Route.statusPageRoutes(
                         return@delete
                     }
 
-                    val organizationIds = getOrganizationIdsForUser(userId)
+                    val organizationIds = getOrganizationIdsForUser(userId, principal)
                     if (organizationIds.isEmpty()) {
                         call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization found"))
                         return@delete

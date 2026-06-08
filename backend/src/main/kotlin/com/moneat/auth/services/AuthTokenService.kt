@@ -19,15 +19,14 @@ package com.moneat.auth.services
 import com.moneat.config.EnvConfig
 import com.moneat.events.models.AuthTokenResponse
 import com.moneat.shared.models.AuthTokens
-import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.plus
-import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.isNotNull
 import org.jetbrains.exposed.v1.core.less
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -90,6 +89,7 @@ class AuthTokenService {
      */
     fun generateToken(
         userId: Int,
+        orgId: Int,
         name: String,
         scopes: List<String>,
         expiresInDays: Int? = null
@@ -107,9 +107,9 @@ class AuthTokenService {
         // Look up the user's org slug for the token payload
         val orgSlug =
             transaction {
-                (Memberships innerJoin Organizations)
+                Organizations
                     .selectAll()
-                    .where { Memberships.user_id eq userId }
+                    .where { Organizations.id eq orgId }
                     .firstOrNull()
                     ?.get(Organizations.slug)
             } ?: "default"
