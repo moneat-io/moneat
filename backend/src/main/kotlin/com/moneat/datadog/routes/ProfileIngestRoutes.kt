@@ -99,7 +99,7 @@ fun Route.profileIngestRoutes(
                         )
                     }
                 }
-                part.dispose()
+                part.release()
             }
 
             // Filter to parseable profile files (pprof or JFR)
