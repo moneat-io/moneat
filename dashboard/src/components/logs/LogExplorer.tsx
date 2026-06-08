@@ -556,6 +556,11 @@ function LogExplorerActions({
   )
 }
 
+function deferCreateAction(action: () => void) {
+  // Let Radix dropdown finish its close/focus cycle before opening a modal.
+  globalThis.setTimeout(action, 0)
+}
+
 function LogExplorerToolbar({
   vizMode,
   onVizModeChange,
@@ -632,11 +637,11 @@ function LogExplorerToolbar({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuItem onSelect={onCreateMetric}>
+            <DropdownMenuItem onSelect={() => deferCreateAction(onCreateMetric)}>
               <Activity className="mr-2 h-3.5 w-3.5" />
               Create metric…
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={onCreateMonitor}>
+            <DropdownMenuItem onSelect={() => deferCreateAction(onCreateMonitor)}>
               <Bell className="mr-2 h-3.5 w-3.5" />
               Create monitor…
             </DropdownMenuItem>
