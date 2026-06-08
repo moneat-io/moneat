@@ -145,8 +145,20 @@ function logsEndpoint(): LogsEndpoint {
     const port = parsed.port || (parsed.protocol === 'http:' ? '80' : '443')
     return {address: `${parsed.hostname}:${port}`, noSsl: parsed.protocol === 'http:'}
   } catch {
-    return {address: INGEST_URL.replace(/^https?:\/\//, '').replace(/\/.*$/, ''), noSsl: false}
+    return {address: stripUrlParts(INGEST_URL), noSsl: false}
   }
+}
+
+function stripUrlParts(value: string): string {
+  let withoutProtocol = value
+  if (value.startsWith('https://')) {
+    withoutProtocol = value.slice('https://'.length)
+  } else if (value.startsWith('http://')) {
+    withoutProtocol = value.slice('http://'.length)
+  }
+  const pathStart = withoutProtocol.indexOf('/')
+  if (pathStart === -1) return withoutProtocol
+  return withoutProtocol.slice(0, pathStart)
 }
 
 function forwarderEndpoint(): string {
