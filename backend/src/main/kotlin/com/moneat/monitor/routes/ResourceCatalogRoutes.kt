@@ -17,6 +17,7 @@
 package com.moneat.monitor.routes
 
 import com.moneat.monitor.services.ResourceCatalogService
+import com.moneat.utils.OrganizationContextMissingException
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
@@ -57,7 +58,7 @@ fun Route.resourceCatalogRoutes(
 private fun ApplicationCall.resolveResourceCatalogOrganizationId(): Int {
     val principal = principal<JWTPrincipal>()
     return principal?.payload?.getClaim("orgId")?.asInt()
-        ?: throw BadRequestException("Organization context required")
+        ?: throw OrganizationContextMissingException()
 }
 
 private fun ApplicationCall.resolveResourceCatalogLimit(): Int? {

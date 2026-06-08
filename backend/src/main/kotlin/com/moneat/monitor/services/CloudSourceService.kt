@@ -49,6 +49,7 @@ private const val CLOUD_PROVIDER_AZURE = "azure"
 private const val CLOUD_SOURCE_STATUS_HEALTHY = "healthy"
 private const val CLOUD_SOURCE_STATUS_SYNCING = "syncing"
 private const val CLOUD_SOURCE_STATUS_ERROR = "error"
+private const val UNSUPPORTED_CLOUD_PROVIDER = "Unsupported cloud provider"
 private const val CLOUD_EXTERNAL_ID_PREFIX = "mnt-ext-"
 private const val CLOUD_EXTERNAL_ID_HASH_LENGTH = 24
 private const val HEX_BYTE_MASK = 0xff
@@ -88,11 +89,11 @@ data class CloudResourceWriteRequest(
     val resources: List<CloudSourceSyncResource>
 )
 
-class InvalidCloudSourceException(message: String) : RuntimeException(message)
+class InvalidCloudSourceException(message: String = UNSUPPORTED_CLOUD_PROVIDER) : RuntimeException(message)
 
 class CloudSourceConnectorUnavailableException(message: String) : RuntimeException(message)
 
-interface CloudSourceVerifier {
+fun interface CloudSourceVerifier {
     suspend fun verifyAndDiscover(source: CloudSourceVerificationRequest): CloudSourceSyncResult
 }
 
@@ -109,7 +110,7 @@ class ManagedIdentityCloudSourceVerifier(
             CLOUD_PROVIDER_AWS -> awsAccountResource(source)
             CLOUD_PROVIDER_GCP -> gcpProjectResource(source)
             CLOUD_PROVIDER_AZURE -> azureSubscriptionResource(source)
-            else -> throw InvalidCloudSourceException("Unsupported cloud provider")
+            else -> throw InvalidCloudSourceException()
         }
         return CloudSourceSyncResult(resources = listOf(resource))
     }
@@ -235,7 +236,7 @@ class CloudSourceService(
             CLOUD_PROVIDER_AWS -> awsPreview(externalId)
             CLOUD_PROVIDER_GCP -> gcpPreview(externalId)
             CLOUD_PROVIDER_AZURE -> azurePreview(externalId)
-            else -> throw InvalidCloudSourceException("Unsupported cloud provider")
+            else -> throw InvalidCloudSourceException()
         }
     }
 
@@ -420,7 +421,7 @@ class CloudSourceService(
                 config.tenantId.required("Azure tenant ID")
                 config.subscriptionId.required("Azure subscription ID")
             }
-            else -> throw InvalidCloudSourceException("Unsupported cloud provider")
+            else -> throw InvalidCloudSourceException()
         }
     }
 
@@ -552,5 +553,5 @@ private fun String.normalizedProvider(): String =
         CLOUD_PROVIDER_AWS -> CLOUD_PROVIDER_AWS
         CLOUD_PROVIDER_GCP -> CLOUD_PROVIDER_GCP
         CLOUD_PROVIDER_AZURE -> CLOUD_PROVIDER_AZURE
-        else -> throw InvalidCloudSourceException("Unsupported cloud provider")
+        else -> throw InvalidCloudSourceException()
     }

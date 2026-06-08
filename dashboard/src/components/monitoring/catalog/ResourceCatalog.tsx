@@ -21,7 +21,7 @@
 // split into the reusable ResourceDetailPanel. Compact density throughout.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import {useMemo, useState, type ComponentType, type KeyboardEvent} from 'react'
+import {useMemo, useState, type ComponentType, type KeyboardEvent, type ReactNode} from 'react'
 import {Link} from '@tanstack/react-router'
 import {
   Activity,
@@ -515,6 +515,49 @@ export function ResourceCatalog() {
     </div>
   )
 
+  let catalogContent: ReactNode
+  if (isLoading) {
+    catalogContent = (
+      <div className="flex h-full items-center justify-center text-muted-foreground">
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading resources…
+      </div>
+    )
+  } else if (sorted.length === 0) {
+    catalogContent = (
+      <div className="p-3">
+        <EmptyState
+          icon={Search}
+          title="No resources match"
+          description="Try removing a filter or broadening your search."
+          action={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setQuery('')
+                setFacetFilters([])
+              }}
+            >
+              Clear filters
+            </Button>
+          }
+        />
+      </div>
+    )
+  } else if (selected) {
+    catalogContent = (
+      <div className="flex h-full min-h-0 gap-3 p-3">
+        <CompactList resources={sorted} selectedId={selectedId} onSelect={setSelectedId} />
+        <ResourceDetailPanel resource={selected} onSelect={setSelectedId} onClose={() => setSelectedId(null)} />
+      </div>
+    )
+  } else {
+    catalogContent = (
+      <ResourceTable resources={sorted} sortKey={sortKey} sortDir={sortDir} onSort={handleSort} onSelect={setSelectedId} />
+    )
+  }
+
   return (
     <div className="h-[calc(100vh-var(--header-height,0px)-43px)] min-h-[520px]">
       <ExplorerShell
@@ -535,39 +578,7 @@ export function ResourceCatalog() {
         rail={<CatalogFacetRail sections={sections} facetFilters={facetFilters} onFacetFiltersChange={setFacetFilters} />}
         toolbar={toolbar}
       >
-        {isLoading ? (
-          <div className="flex h-full items-center justify-center text-muted-foreground">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading resources…
-          </div>
-        ) : sorted.length === 0 ? (
-          <div className="p-3">
-            <EmptyState
-              icon={Search}
-              title="No resources match"
-              description="Try removing a filter or broadening your search."
-              action={
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setQuery('')
-                    setFacetFilters([])
-                  }}
-                >
-                  Clear filters
-                </Button>
-              }
-            />
-          </div>
-        ) : selected ? (
-          <div className="flex h-full min-h-0 gap-3 p-3">
-            <CompactList resources={sorted} selectedId={selectedId} onSelect={setSelectedId} />
-            <ResourceDetailPanel resource={selected} onSelect={setSelectedId} onClose={() => setSelectedId(null)} />
-          </div>
-        ) : (
-          <ResourceTable resources={sorted} sortKey={sortKey} sortDir={sortDir} onSort={handleSort} onSelect={setSelectedId} />
-        )}
+        {catalogContent}
       </ExplorerShell>
     </div>
   )

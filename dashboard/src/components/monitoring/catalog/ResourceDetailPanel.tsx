@@ -92,11 +92,40 @@ const DETAIL_TABS: readonly {readonly id: DetailTab; readonly label: string}[] =
 ]
 
 const HOST_RESOURCE_ID_PATTERN = /^host:(?:\d+:)?(\d+)$/
+const COST_MONTH_KEYS = ['six-months-ago', 'five-months-ago', 'four-months-ago', 'three-months-ago', 'last-month', 'current'] as const
 
 function getMetricsHostId(resource: Resource): string | null {
   if (resource.kind !== 'host') return null
   const result = HOST_RESOURCE_ID_PATTERN.exec(resource.id)
   return result?.[1] ?? null
+}
+
+function metricTileVisual({
+  pct,
+  seed,
+  tone,
+}: {
+  readonly pct?: number
+  readonly seed?: string
+  readonly tone: 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'accent'
+}) {
+  if (pct !== undefined) {
+    return (
+      <div className="mt-1.5">
+        <Meter value={pct} tone={tone} />
+      </div>
+    )
+  }
+  if (seed) {
+    return <Sparkline seed={seed} tone={tone} className="mt-1 h-6 w-full" />
+  }
+  return null
+}
+
+function errorRateTone(rate: number): 'success' | 'warning' | 'danger' {
+  if (rate >= 2) return 'danger'
+  if (rate >= 1) return 'warning'
+  return 'success'
 }
 
 function FieldRow({label, value}: {readonly label: string; readonly value: ReactNode}) {
@@ -147,13 +176,7 @@ function MetricTile({
         <span className="text-lg font-semibold tabular-nums">{value}</span>
         {unit && <span className="text-[11px] text-muted-foreground">{unit}</span>}
       </div>
-      {pct !== undefined ? (
-        <div className="mt-1.5">
-          <Meter value={pct} tone={tone} />
-        </div>
-      ) : seed ? (
-        <Sparkline seed={seed} tone={tone} className="mt-1 h-6 w-full" />
-      ) : null}
+      {metricTileVisual({pct, seed, tone})}
     </div>
   )
 }
@@ -174,7 +197,7 @@ function OverviewTab({resource}: {readonly resource: Resource}) {
             value={`${t.errorRatePct}`}
             unit="%"
             icon={AlertTriangle}
-            tone={t.errorRatePct >= 2 ? 'danger' : t.errorRatePct >= 1 ? 'warning' : 'success'}
+            tone={errorRateTone(t.errorRatePct)}
             seed={`${resource.id}-err`}
           />
         )}
@@ -498,7 +521,7 @@ function CostTab({resource}: {readonly resource: Resource}) {
         </div>
         <div className="mt-3 flex h-14 items-end gap-1">
           {months.map((m, i) => (
-            <div key={i} className="flex flex-1 flex-col items-center gap-1">
+            <div key={COST_MONTH_KEYS[i]} className="flex flex-1 flex-col items-center gap-1">
               <div
                 className={cn('w-full rounded-sm', i === months.length - 1 ? 'bg-primary' : 'bg-primary/30')}
                 style={{height: `${Math.max(6, (m / maxMonth) * 100)}%`}}

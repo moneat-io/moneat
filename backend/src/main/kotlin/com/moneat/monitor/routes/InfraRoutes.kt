@@ -23,6 +23,7 @@ import com.moneat.monitor.services.InfrastructureMapSavedViewService
 import com.moneat.monitor.services.InvalidInfrastructureMapSavedViewException
 import com.moneat.shared.models.Memberships
 import com.moneat.utils.ErrorResponse
+import com.moneat.utils.OrganizationContextMissingException
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
@@ -102,8 +103,7 @@ private suspend fun ApplicationCall.resolveSavedViewScope(): SavedViewScope? {
             null
         }
         OrganizationScopeResult.MissingContext -> {
-            respond(HttpStatusCode.BadRequest, ErrorResponse("Organization context required"))
-            null
+            throw OrganizationContextMissingException()
         }
     }
 }

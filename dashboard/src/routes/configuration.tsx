@@ -69,6 +69,12 @@ const MODES: readonly ConfigMode[] = [
   },
 ]
 
+function renderConfigTab(tab: ConfigTab) {
+  if (tab === 'infrastructure') return <InfrastructureAgentSetup />
+  if (tab === 'cloud') return <CloudAccountSetup />
+  return <ServicesAndSdksSetup />
+}
+
 function ConfigurationPage() {
   const {tab} = useSearch({from: '/configuration'})
   const navigate = useNavigate({from: '/configuration'})
@@ -109,13 +115,7 @@ function ConfigurationPage() {
         <p className="text-xs text-muted-foreground">{activeMode.description}</p>
       </div>
 
-      {tab === 'infrastructure' ? (
-        <InfrastructureAgentSetup />
-      ) : tab === 'cloud' ? (
-        <CloudAccountSetup />
-      ) : (
-        <ServicesAndSdksSetup />
-      )}
+      {renderConfigTab(tab)}
     </div>
   )
 }

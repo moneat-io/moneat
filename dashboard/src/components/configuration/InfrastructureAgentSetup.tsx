@@ -174,6 +174,7 @@ function AgentKeyField({
   readonly onCreate: (name: string) => void
 }) {
   const [name, setName] = useState('Infrastructure agent')
+  const helperText = agentKeyHelperText(existingCount)
 
   if (createdKey) {
     return (
@@ -209,12 +210,18 @@ function AgentKeyField({
         </Button>
       </div>
       <p className="text-[11px] text-muted-foreground">
-        {existingCount > 0
-          ? `${existingCount} agent ${existingCount === 1 ? 'key' : 'keys'} already exist. Create a new one to embed it here — existing secrets can't be revealed again.`
-          : 'Generate an organization agent key. It is shown once and dropped straight into the config.'}
+        {helperText}
       </p>
     </div>
   )
+}
+
+function agentKeyHelperText(existingCount: number): string {
+  if (existingCount <= 0) {
+    return 'Generate an organization agent key. It is shown once and dropped straight into the config.'
+  }
+  const keyLabel = existingCount === 1 ? 'key' : 'keys'
+  return `${existingCount} agent ${keyLabel} already exist. Create a new one to embed it here — existing secrets can't be revealed again.`
 }
 
 function VerifyPanel() {

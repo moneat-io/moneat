@@ -165,7 +165,8 @@ function telemetryEndpoint(): string {
 }
 
 function resolveKey(apiKey?: string | null): string {
-  return apiKey && apiKey.trim() ? apiKey.trim() : PLACEHOLDER_AGENT_KEY
+  const trimmed = apiKey?.trim()
+  return trimmed ? trimmed : PLACEHOLDER_AGENT_KEY
 }
 
 // ─── datadog.yaml (capability-gated) ─────────────────────────────────────────
@@ -282,10 +283,10 @@ export function buildDockerRun(apiKey: string | null | undefined, caps: AgentCap
   const key = resolveKey(apiKey)
   const envs = dockerEnvLines(key, caps).map((line) => `  -e ${line} \\`).join('\n')
   const volumes = dockerVolumeLines(caps).map((line) => `  -v ${line} \\`).join('\n')
-  return `docker run -d \\
-  --name dd-agent \\
-  --restart always \\
-  --network host \\
+  return String.raw`docker run -d \
+  --name dd-agent \
+  --restart always \
+  --network host \
 ${envs}
 ${volumes}
   gcr.io/datadoghq/agent:7`
@@ -315,8 +316,8 @@ docker compose up -d`
 
 export function buildHostInstall(apiKey: string | null | undefined): string {
   const key = resolveKey(apiKey)
-  return `# 1. Install the Datadog-compatible agent (v7)
-DD_API_KEY="${key}" DD_INSTALL_ONLY=true \\
+  return String.raw`# 1. Install the Datadog-compatible agent (v7)
+DD_API_KEY="${key}" DD_INSTALL_ONLY=true \
   bash -c "$(curl -L https://install.datadoghq.com/scripts/install_script_agent7.sh)"
 
 # 2. Save the config from the datadog.yaml tab to:
@@ -369,11 +370,11 @@ clusterAgent:
 }
 
 export function buildHelmInstall(): string {
-  return `helm repo add datadog https://helm.datadoghq.com
+  return String.raw`helm repo add datadog https://helm.datadoghq.com
 helm repo update
 
-helm install moneat-agent \\
-  -f values.yaml \\
+helm install moneat-agent \
+  -f values.yaml \
   datadog/datadog`
 }
 

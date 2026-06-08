@@ -52,6 +52,7 @@ private const val FULL_PERCENT = 100
 private const val BYTES_PER_KIB = 1024.0
 private const val NANOS_PER_MILLISECOND = 1_000_000
 private const val CATALOG_UNKNOWN_TIMESTAMP = "1970-01-01T00:00:00.000Z"
+private const val CLOUD_ON_PREM = "on-prem"
 
 interface ResourceCatalogQueryClient {
     suspend fun listApmServices(organizationIds: List<Int>, limit: Int): List<JsonObject>
@@ -292,7 +293,7 @@ class ResourceCatalogService(
             health = host.status.toCatalogHealth(),
             environment = "prod",
             region = "unknown",
-            cloud = "on-prem",
+            cloud = CLOUD_ON_PREM,
             owner = null,
             tags = tags,
             telemetry = CatalogResourceTelemetry(
@@ -324,7 +325,7 @@ class ResourceCatalogService(
             health = serviceHealth(spanCount, errorRate),
             environment = row.s("env").toEnvironment(),
             region = "unknown",
-            cloud = "on-prem",
+            cloud = CLOUD_ON_PREM,
             owner = null,
             tags = listOf("source:apm"),
             telemetry = CatalogResourceTelemetry(
@@ -434,7 +435,7 @@ class ResourceCatalogService(
             health = row.s("reachability")?.toCatalogHealth() ?: row.s("status").toCatalogHealth(),
             environment = tags.envFromTags(),
             region = "unknown",
-            cloud = "on-prem",
+            cloud = CLOUD_ON_PREM,
             owner = null,
             tags = tags,
             telemetry = CatalogResourceTelemetry(cpuPct = 0, memPct = 0),
@@ -612,7 +613,7 @@ private fun List<String>.cloudFromTags(): String =
         "aws" -> "aws"
         "gcp", "google_cloud", "google-cloud" -> "gcp"
         "azure" -> "azure"
-        else -> "on-prem"
+        else -> CLOUD_ON_PREM
     }
 
 private fun String?.toCloudProvider(): String =
@@ -620,7 +621,7 @@ private fun String?.toCloudProvider(): String =
         "aws" -> "aws"
         "gcp", "google_cloud", "google-cloud" -> "gcp"
         "azure" -> "azure"
-        else -> "on-prem"
+        else -> CLOUD_ON_PREM
     }
 
 private fun List<String>.firstTagValue(key: String): String? =

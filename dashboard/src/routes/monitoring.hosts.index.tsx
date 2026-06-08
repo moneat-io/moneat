@@ -69,7 +69,7 @@ import {
   Trash2,
   FileCode,
 } from 'lucide-react'
-import {useEffect, useMemo, useState} from 'react'
+import {useEffect, useMemo, useState, type ComponentProps, type Dispatch, type SetStateAction} from 'react'
 import {useIsSelfHosted} from '@/hooks/useEnterpriseFeatures'
 import {useToast} from '@/hooks/useToast'
 import {Prism as SyntaxHighlighter} from 'react-syntax-highlighter'
@@ -111,19 +111,7 @@ async function copyToClipboard(text: string): Promise<boolean> {
     await navigator.clipboard.writeText(text)
     return true
   } catch {
-    try {
-      const textarea = document.createElement('textarea')
-      textarea.value = text
-      textarea.style.position = 'fixed'
-      textarea.style.opacity = '0'
-      document.body.appendChild(textarea)
-      textarea.select()
-      document.execCommand('copy')
-      document.body.removeChild(textarea)
-      return true
-    } catch {
-      return false
-    }
+    return false
   }
 }
 
@@ -164,6 +152,64 @@ function getCreateKeyErrorToast(error: Error) {
 type StatusFilter = 'all' | 'online' | 'offline'
 type SortField = 'hostname' | 'cores' | 'memory' | 'lastSeen'
 type SortDir = 'asc' | 'desc'
+type InstallType = 'docker' | 'compose'
+
+interface AddHostDialogProps {
+  readonly isOpen: boolean
+  readonly setIsOpen: (v: boolean) => void
+}
+
+interface CopyCodeButtonProps {
+  readonly copied: boolean
+  readonly onClick: () => void
+}
+
+interface CreateAgentKeyFormProps {
+  readonly keyName: string
+  readonly isPending: boolean
+  readonly onKeyNameChange: (value: string) => void
+  readonly onSubmit: ComponentProps<'form'>['onSubmit']
+  readonly onClose: () => void
+}
+
+interface AgentInstallInstructionsProps {
+  readonly createdKey: string
+  readonly options: AgentCapabilities
+  readonly setOptions: Dispatch<SetStateAction<AgentCapabilities>>
+  readonly isDark: boolean
+  readonly copied: boolean
+  readonly copiedYaml: boolean
+  readonly installType: InstallType
+  readonly onInstallTypeChange: (value: string) => void
+  readonly onCopyCommand: () => void
+  readonly onCopyYaml: () => void
+  readonly onClose: () => void
+}
+
+interface SortIndicatorProps {
+  readonly field: SortField
+  readonly sortField: SortField
+  readonly sortDir: SortDir
+}
+
+interface HostCardProps {
+  readonly host: DdHostResponse
+  readonly onDelete: (id: number, name: string) => void
+}
+
+interface HostsContentProps {
+  readonly isLoadingHosts: boolean
+  readonly hosts: readonly DdHostResponse[]
+  readonly filtered: readonly DdHostResponse[]
+  readonly viewMode: 'list' | 'grid'
+  readonly maxMemory: number
+  readonly sortField: SortField
+  readonly sortDir: SortDir
+  readonly onSort: (field: SortField) => void
+  readonly onDelete: (id: number, name: string) => void
+  readonly onAddHost: () => void
+  readonly onOpenHost: (id: number) => void
+}
 
 function defaultHostAgentCapabilities(): AgentCapabilities {
   return {...DEFAULT_AGENT_CAPABILITIES, profiling: true}
@@ -172,10 +218,7 @@ function defaultHostAgentCapabilities(): AgentCapabilities {
 function AddHostDialog({
   isOpen,
   setIsOpen,
-}: {
-  isOpen: boolean
-  setIsOpen: (v: boolean) => void
-}) {
+}: AddHostDialogProps) {
   const {toast} = useToast()
   const queryClient = useQueryClient()
   const [keyName, setKeyName] = useState('')
@@ -203,8 +246,8 @@ function AddHostDialog({
     onError: (error: Error) => toast(getCreateKeyErrorToast(error)),
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit: ComponentProps<'form'>['onSubmit'] = (event) => {
+    event.preventDefault()
     if (keyName.trim()) {
       createAgentKeyMutation.mutate(keyName.trim())
     }
@@ -239,288 +282,292 @@ function AddHostDialog({
     )
   }
 
+  const dialogContent = createdKey ? (
+    <AgentInstallInstructions
+      createdKey={createdKey}
+      options={options}
+      setOptions={setOptions}
+      isDark={isDark}
+      copied={copied}
+      copiedYaml={copiedYaml}
+      installType={installType}
+      onInstallTypeChange={(value) => setInstallType(value as InstallType)}
+      onCopyCommand={handleCopyCommand}
+      onCopyYaml={handleCopyYaml}
+      onClose={handleClose}
+    />
+  ) : (
+    <CreateAgentKeyForm
+      keyName={keyName}
+      isPending={createAgentKeyMutation.isPending}
+      onKeyNameChange={setKeyName}
+      onSubmit={handleSubmit}
+      onClose={handleClose}
+    />
+  )
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => (open ? setIsOpen(true) : handleClose())}>
       <DialogContent className="max-w-4xl">
-        {!createdKey ? (
-          <>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <HardDrive className="h-5 w-5 text-primary" />
-                Add New Host
-              </DialogTitle>
-              <DialogDescription>
-                Enter a name for the agent key, then deploy the agent on your server.
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit}>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Key Name</Label>
-                  <Input
-                    id="name"
-                    placeholder="e.g., Production Server, Dev Machine"
-                    value={keyName}
-                    onChange={(e) => setKeyName(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={handleClose}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={createAgentKeyMutation.isPending || !keyName.trim()}>
-                  {createAgentKeyMutation.isPending
-                    ? 'Creating...'
-                    : 'Create Key & Continue'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </>
-        ) : (
-          <>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-success-fg" />
-                Agent Key Created
-              </DialogTitle>
-              <DialogDescription>
-                Configure and deploy the Datadog-compatible agent on your server.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-5 py-4 max-h-[70vh] overflow-y-auto">
-              {/* Options toggles */}
-              <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-0.5">
-                    <p className="text-sm font-medium">Container Monitoring</p>
-                    <p className="text-xs text-muted-foreground">
-                      Mounts Docker socket for container metrics and stats.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={options.containers}
-                    onCheckedChange={(containers) => setOptions((current) => ({...current, containers}))}
-                  />
-                </div>
-                
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-0.5">
-                    <p className="text-sm font-medium">APM & Profiling</p>
-                    <p className="text-xs text-muted-foreground">
-                      Enable tracing and continuous profiling collection.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={options.apm && options.profiling}
-                    onCheckedChange={(enabled) =>
-                      setOptions((current) => ({...current, apm: enabled, profiling: enabled}))
-                    }
-                  />
-                </div>
-
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-0.5">
-                    <p className="text-sm font-medium">Log Collection</p>
-                    <p className="text-xs text-muted-foreground">
-                      Enable log forwarding from containers and files.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={options.logs}
-                    onCheckedChange={(logs) => setOptions((current) => ({...current, logs}))}
-                  />
-                </div>
-
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-0.5">
-                    <p className="text-sm font-medium">Live Processes</p>
-                    <p className="text-xs text-muted-foreground">
-                      Monitor running processes and their resource usage.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={options.processes}
-                    onCheckedChange={(processes) => setOptions((current) => ({...current, processes}))}
-                  />
-                </div>
-              </div>
-
-              {/* Step 1: datadog.yaml */}
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2 text-sm font-medium">
-                  <span className="flex items-center justify-center h-5 w-5 rounded-full bg-info-bg text-info-fg text-xs font-bold shrink-0">1</span>
-                  <FileCode className="h-3.5 w-3.5 text-info-fg" />
-                  Save configuration file
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Save this as <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">/etc/datadog-agent/datadog.yaml</code> on your server.
-                  This configures advanced telemetry tracks that cannot be set via environment variables.
-                </p>
-                <div className="relative group">
-                  <div className="overflow-hidden rounded-lg border bg-card">
-                    <SyntaxHighlighter
-                      language="yaml"
-                      style={isDark ? oneDark : oneLight}
-                      customStyle={{
-                        margin: 0,
-                        padding: '1rem',
-                        paddingRight: '5rem',
-                        fontSize: '0.8125rem',
-                        lineHeight: 1.6,
-                        background: 'transparent',
-                      }}
-                      codeTagProps={{
-                        style: {
-                          fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-                        },
-                      }}
-                      showLineNumbers={false}
-                      wrapLongLines={false}
-                    >
-                      {buildAgentYaml(options, createdKey)}
-                    </SyntaxHighlighter>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="absolute top-2.5 right-2.5 h-8 gap-1.5 text-xs"
-                    onClick={handleCopyYaml}
-                  >
-                    {copiedYaml ? (
-                      <>
-                        <Check className="h-3.5 w-3.5 text-success-fg" />
-                        Copied
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3.5 w-3.5" />
-                        Copy
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </div>
-
-              {/* Step 2: Run the agent */}
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2 text-sm font-medium">
-                  <span className="flex items-center justify-center h-5 w-5 rounded-full bg-info-bg text-info-fg text-xs font-bold shrink-0">2</span>
-                  <Terminal className="h-3.5 w-3.5 text-info-fg" />
-                  Run the agent
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Run this command on your server to start the agent. It mounts the config file from step 1.
-                </p>
-                <Tabs value={installType} onValueChange={(v) => setInstallType(v as 'docker' | 'compose')} className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="docker">Docker</TabsTrigger>
-                    <TabsTrigger value="compose">Docker Compose</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="docker" className="mt-3">
-                    <div className="relative group">
-                      <div className="overflow-hidden rounded-lg border bg-card">
-                        <SyntaxHighlighter
-                          language="bash"
-                          style={isDark ? oneDark : oneLight}
-                          customStyle={{
-                            margin: 0,
-                            padding: '1rem',
-                            paddingRight: '5rem',
-                            fontSize: '0.8125rem',
-                            lineHeight: 1.6,
-                            background: 'transparent',
-                          }}
-                          codeTagProps={{
-                            style: {
-                              fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-                            },
-                          }}
-                          showLineNumbers={false}
-                          wrapLongLines={false}
-                        >
-                          {createdKey ? buildDockerRun(createdKey, options) : ''}
-                        </SyntaxHighlighter>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="absolute top-2.5 right-2.5 h-8 gap-1.5 text-xs"
-                        onClick={handleCopyCommand}
-                      >
-                        {copied ? (
-                          <>
-                            <Check className="h-3.5 w-3.5 text-success-fg" />
-                            Copied
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="h-3.5 w-3.5" />
-                            Copy
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </TabsContent>
-                  <TabsContent value="compose" className="mt-3">
-                    <div className="relative group">
-                      <div className="overflow-hidden rounded-lg border bg-card">
-                        <SyntaxHighlighter
-                          language="bash"
-                          style={isDark ? oneDark : oneLight}
-                          customStyle={{
-                            margin: 0,
-                            padding: '1rem',
-                            paddingRight: '5rem',
-                            fontSize: '0.8125rem',
-                            lineHeight: 1.6,
-                            background: 'transparent',
-                          }}
-                          codeTagProps={{
-                            style: {
-                              fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-                            },
-                          }}
-                          showLineNumbers={false}
-                          wrapLongLines={false}
-                        >
-                          {createdKey ? buildDockerCompose(createdKey, options) : ''}
-                        </SyntaxHighlighter>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="absolute top-2.5 right-2.5 h-8 gap-1.5 text-xs"
-                        onClick={handleCopyCommand}
-                      >
-                        {copied ? (
-                          <>
-                            <Check className="h-3.5 w-3.5 text-success-fg" />
-                            Copied
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="h-3.5 w-3.5" />
-                            Copy
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </TabsContent>
-                </Tabs>
-              </div>
-
-            </div>
-            <DialogFooter>
-              <Button onClick={handleClose} className="w-full sm:w-auto">
-                Done
-              </Button>
-            </DialogFooter>
-          </>
-        )}
+        {dialogContent}
       </DialogContent>
     </Dialog>
+  )
+}
+
+function CreateAgentKeyForm({
+  keyName,
+  isPending,
+  onKeyNameChange,
+  onSubmit,
+  onClose,
+}: CreateAgentKeyFormProps) {
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2">
+          <HardDrive className="h-5 w-5 text-primary" />
+          Add New Host
+        </DialogTitle>
+        <DialogDescription>
+          Enter a name for the agent key, then deploy the agent on your server.
+        </DialogDescription>
+      </DialogHeader>
+      <form onSubmit={onSubmit}>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="name">Key Name</Label>
+            <Input
+              id="name"
+              placeholder="e.g., Production Server, Dev Machine"
+              value={keyName}
+              onChange={(event) => onKeyNameChange(event.target.value)}
+              required
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isPending || !keyName.trim()}>
+            {isPending ? 'Creating...' : 'Create Key & Continue'}
+          </Button>
+        </DialogFooter>
+      </form>
+    </>
+  )
+}
+
+function CopyCodeButton({copied, onClick}: CopyCodeButtonProps) {
+  return (
+    <Button
+      size="sm"
+      variant="secondary"
+      className="absolute top-2.5 right-2.5 h-8 gap-1.5 text-xs"
+      onClick={onClick}
+    >
+      {copied ? (
+        <>
+          <Check className="h-3.5 w-3.5 text-success-fg" />
+          Copied
+        </>
+      ) : (
+        <>
+          <Copy className="h-3.5 w-3.5" />
+          Copy
+        </>
+      )}
+    </Button>
+  )
+}
+
+function AgentCapabilityToggles({
+  options,
+  setOptions,
+}: Readonly<{
+  options: AgentCapabilities
+  setOptions: Dispatch<SetStateAction<AgentCapabilities>>
+}>) {
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3">
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-0.5">
+          <p className="text-sm font-medium">Container Monitoring</p>
+          <p className="text-xs text-muted-foreground">Mounts Docker socket for container metrics and stats.</p>
+        </div>
+        <Switch
+          checked={options.containers}
+          onCheckedChange={(containers) => setOptions((current) => ({...current, containers}))}
+        />
+      </div>
+
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-0.5">
+          <p className="text-sm font-medium">APM & Profiling</p>
+          <p className="text-xs text-muted-foreground">Enable tracing and continuous profiling collection.</p>
+        </div>
+        <Switch
+          checked={options.apm && options.profiling}
+          onCheckedChange={(enabled) => setOptions((current) => ({...current, apm: enabled, profiling: enabled}))}
+        />
+      </div>
+
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-0.5">
+          <p className="text-sm font-medium">Log Collection</p>
+          <p className="text-xs text-muted-foreground">Enable log forwarding from containers and files.</p>
+        </div>
+        <Switch
+          checked={options.logs}
+          onCheckedChange={(logs) => setOptions((current) => ({...current, logs}))}
+        />
+      </div>
+
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-0.5">
+          <p className="text-sm font-medium">Live Processes</p>
+          <p className="text-xs text-muted-foreground">Monitor running processes and their resource usage.</p>
+        </div>
+        <Switch
+          checked={options.processes}
+          onCheckedChange={(processes) => setOptions((current) => ({...current, processes}))}
+        />
+      </div>
+    </div>
+  )
+}
+
+function InstallCodeBlock({
+  code,
+  language,
+  isDark,
+  copied,
+  onCopy,
+}: Readonly<{
+  code: string
+  language: 'bash' | 'yaml'
+  isDark: boolean
+  copied: boolean
+  onCopy: () => void
+}>) {
+  return (
+    <div className="relative group">
+      <div className="overflow-hidden rounded-lg border bg-card">
+        <SyntaxHighlighter
+          language={language}
+          style={isDark ? oneDark : oneLight}
+          customStyle={{
+            margin: 0,
+            padding: '1rem',
+            paddingRight: '5rem',
+            fontSize: '0.8125rem',
+            lineHeight: 1.6,
+            background: 'transparent',
+          }}
+          codeTagProps={{
+            style: {
+              fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+            },
+          }}
+          showLineNumbers={false}
+          wrapLongLines={false}
+        >
+          {code}
+        </SyntaxHighlighter>
+      </div>
+      <CopyCodeButton copied={copied} onClick={onCopy} />
+    </div>
+  )
+}
+
+function AgentInstallInstructions({
+  createdKey,
+  options,
+  setOptions,
+  isDark,
+  copied,
+  copiedYaml,
+  installType,
+  onInstallTypeChange,
+  onCopyCommand,
+  onCopyYaml,
+  onClose,
+}: AgentInstallInstructionsProps) {
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2">
+          <CheckCircle2 className="h-5 w-5 text-success-fg" />
+          Agent Key Created
+        </DialogTitle>
+        <DialogDescription>
+          Configure and deploy the Datadog-compatible agent on your server.
+        </DialogDescription>
+      </DialogHeader>
+      <div className="space-y-5 py-4 max-h-[70vh] overflow-y-auto">
+        <AgentCapabilityToggles options={options} setOptions={setOptions} />
+
+        <div className="space-y-2">
+          <Label className="flex items-center gap-2 text-sm font-medium">
+            <span className="flex items-center justify-center h-5 w-5 rounded-full bg-info-bg text-info-fg text-xs font-bold shrink-0">1</span>
+            <FileCode className="h-3.5 w-3.5 text-info-fg" />
+            Save configuration file
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            Save this as <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">/etc/datadog-agent/datadog.yaml</code> on your server.
+            This configures advanced telemetry tracks that cannot be set via environment variables.
+          </p>
+          <InstallCodeBlock
+            code={buildAgentYaml(options, createdKey)}
+            language="yaml"
+            isDark={isDark}
+            copied={copiedYaml}
+            onCopy={onCopyYaml}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label className="flex items-center gap-2 text-sm font-medium">
+            <span className="flex items-center justify-center h-5 w-5 rounded-full bg-info-bg text-info-fg text-xs font-bold shrink-0">2</span>
+            <Terminal className="h-3.5 w-3.5 text-info-fg" />
+            Run the agent
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            Run this command on your server to start the agent. It mounts the config file from step 1.
+          </p>
+          <Tabs value={installType} onValueChange={onInstallTypeChange} className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="docker">Docker</TabsTrigger>
+              <TabsTrigger value="compose">Docker Compose</TabsTrigger>
+            </TabsList>
+            <TabsContent value="docker" className="mt-3">
+              <InstallCodeBlock
+                code={buildDockerRun(createdKey, options)}
+                language="bash"
+                isDark={isDark}
+                copied={copied}
+                onCopy={onCopyCommand}
+              />
+            </TabsContent>
+            <TabsContent value="compose" className="mt-3">
+              <InstallCodeBlock
+                code={buildDockerCompose(createdKey, options)}
+                language="bash"
+                isDark={isDark}
+                copied={copied}
+                onCopy={onCopyCommand}
+              />
+            </TabsContent>
+          </Tabs>
+        </div>
+      </div>
+      <DialogFooter>
+        <Button onClick={onClose} className="w-full sm:w-auto">
+          Done
+        </Button>
+      </DialogFooter>
+    </>
   )
 }
 
@@ -569,12 +616,12 @@ function HostsHeaderActions({hosts, onAddHost}: Readonly<{hosts: DdHostResponse[
   )
 }
 
-function SortIndicator({field, sortField, sortDir}: {field: SortField; sortField: SortField; sortDir: 'asc' | 'desc'}) {
+function SortIndicator({field, sortField, sortDir}: SortIndicatorProps) {
   if (sortField !== field) return null
   return <span className="ml-1 text-[10px]">{sortDir === 'asc' ? '▲' : '▼'}</span>
 }
 
-function HostCard({host, onDelete}: {host: DdHostResponse; onDelete: (id: number, name: string) => void}) {
+function HostCard({host, onDelete}: HostCardProps) {
   const online = host.isOnline
 
   return (
@@ -733,6 +780,257 @@ function HostCard({host, onDelete}: {host: DdHostResponse; onDelete: (id: number
         </CardContent>
       </Card>
     </Link>
+  )
+}
+
+function HostsContent({
+  isLoadingHosts,
+  hosts,
+  filtered,
+  viewMode,
+  maxMemory,
+  sortField,
+  sortDir,
+  onSort,
+  onDelete,
+  onAddHost,
+  onOpenHost,
+}: HostsContentProps) {
+  if (isLoadingHosts) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <p className="text-muted-foreground text-sm">Loading hosts...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (hosts.length === 0) {
+    return (
+      <EmptyState
+        icon={HardDrive}
+        title="No hosts yet"
+        description="Start monitoring your servers by deploying the agent. You'll get a Docker command to deploy in seconds."
+        action={<AddHostButton onClick={onAddHost} />}
+      />
+    )
+  }
+
+  if (filtered.length === 0) {
+    return (
+      <EmptyState
+        icon={Search}
+        title="No hosts match your filters"
+        description="Try adjusting your search or status filter."
+      />
+    )
+  }
+
+  if (viewMode === 'grid') {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {filtered.map((host) => (
+          <HostCard key={host.id} host={host} onDelete={onDelete} />
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <Card className="overflow-hidden border-border/60">
+      <CardContent className="p-0">
+        <Table className="min-w-[900px]">
+          <TableHeader>
+            <TableRow className="hover:bg-transparent bg-muted/30">
+              <TableHead className="pl-4">Status</TableHead>
+              <TableHead
+                className="cursor-pointer select-none hover:text-foreground transition-colors"
+                onClick={() => onSort('hostname')}
+              >
+                Host
+                <SortIndicator field="hostname" sortField={sortField} sortDir={sortDir} />
+              </TableHead>
+              <TableHead>OS / Platform</TableHead>
+              <TableHead>Processor</TableHead>
+              <TableHead
+                className="cursor-pointer select-none hover:text-foreground transition-colors"
+                onClick={() => onSort('cores')}
+              >
+                CPU Cores
+                <SortIndicator field="cores" sortField={sortField} sortDir={sortDir} />
+              </TableHead>
+              <TableHead
+                className="min-w-[160px] cursor-pointer select-none hover:text-foreground transition-colors"
+                onClick={() => onSort('memory')}
+              >
+                Memory
+                <SortIndicator field="memory" sortField={sortField} sortDir={sortDir} />
+              </TableHead>
+              <TableHead>Agent</TableHead>
+              <TableHead
+                className="text-right pr-4 cursor-pointer select-none hover:text-foreground transition-colors"
+                onClick={() => onSort('lastSeen')}
+              >
+                Last Seen
+                <SortIndicator field="lastSeen" sortField={sortField} sortDir={sortDir} />
+              </TableHead>
+              <TableHead className="pr-4 text-right w-[80px]">Action</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filtered.map((host) => (
+              <HostTableRow
+                key={host.id}
+                host={host}
+                maxMemory={maxMemory}
+                onDelete={onDelete}
+                onOpenHost={onOpenHost}
+              />
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  )
+}
+
+function HostTableRow({
+  host,
+  maxMemory,
+  onDelete,
+  onOpenHost,
+}: Readonly<{
+  host: DdHostResponse
+  maxMemory: number
+  onDelete: (id: number, name: string) => void
+  onOpenHost: (id: number) => void
+}>) {
+  const online = host.isOnline
+  const memPct = maxMemory > 0 ? (host.memoryTotalKb / maxMemory) * 100 : 0
+
+  return (
+    <TableRow
+      className="group hover:bg-muted/50 transition-colors cursor-pointer"
+      onClick={() => onOpenHost(host.id)}
+    >
+      <TableCell className="pl-4">
+        <Badge variant={online ? 'success' : 'danger'} size="sm" className="gap-1.5">
+          <StatusDot tone={online ? 'success' : 'danger'} size="sm" pulse={online} />
+          {online ? 'Online' : 'Offline'}
+        </Badge>
+      </TableCell>
+
+      <TableCell>
+        <div className="flex items-center gap-3 min-w-0">
+          <div
+            className={cn(
+              'flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
+              online ? 'bg-success-bg text-success-fg' : 'bg-danger-bg text-danger-fg'
+            )}
+          >
+            {online ? <Server className="h-4 w-4" /> : <ServerOff className="h-4 w-4" />}
+          </div>
+          <div className="min-w-0">
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <p className="font-medium text-sm truncate max-w-[230px]">{host.hostname}</p>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <p className="font-mono text-xs">{host.hostname}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            {host.firstSeenAt && (
+              <p className="text-[11px] text-muted-foreground truncate max-w-[230px]">
+                First seen {formatRelativeTime(host.firstSeenAt)}
+              </p>
+            )}
+          </div>
+        </div>
+      </TableCell>
+
+      <TableCell>
+        <div className="min-w-0">
+          <p className="text-sm truncate max-w-[180px]">{host.os || '—'}</p>
+          {host.platform && host.platform !== host.os && (
+            <p className="text-[11px] text-muted-foreground truncate max-w-[180px]">{host.platform}</p>
+          )}
+        </div>
+      </TableCell>
+
+      <TableCell>
+        <TooltipProvider delayDuration={300}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Microchip className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span className="text-xs font-mono truncate max-w-[160px]">{host.processor || '—'}</span>
+              </div>
+            </TooltipTrigger>
+            {host.processor && (
+              <TooltipContent side="top" className="max-w-xs">
+                <p className="font-mono text-xs">{host.processor}</p>
+              </TooltipContent>
+            )}
+          </Tooltip>
+        </TooltipProvider>
+      </TableCell>
+
+      <TableCell>
+        <div className="flex items-center gap-1.5">
+          <Cpu className="h-3.5 w-3.5 text-chart-1" />
+          <span className="text-sm font-medium tabular-nums">{host.cpuCores || '—'}</span>
+        </div>
+      </TableCell>
+
+      <TableCell>
+        <div className="space-y-1">
+          <p className="text-xs font-medium tabular-nums">
+            {host.memoryTotalKb ? formatBytes(host.memoryTotalKb) : '—'}
+          </p>
+          {host.memoryTotalKb > 0 && (
+            <div className="h-1.5 w-full rounded-full bg-muted/80 overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-500 bg-chart-3"
+                style={{width: `${Math.min(100, memPct)}%`}}
+              />
+            </div>
+          )}
+        </div>
+      </TableCell>
+
+      <TableCell>
+        {host.agentVersion ? (
+          <Badge variant="neutral" size="sm" className="font-mono">
+            v{host.agentVersion}
+          </Badge>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        )}
+      </TableCell>
+
+      <TableCell className="text-right pr-4 text-xs text-muted-foreground">
+        {host.lastSeenAt ? formatRelativeTime(host.lastSeenAt) : 'Never seen'}
+      </TableCell>
+
+      <TableCell className="pr-4 text-right">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 w-7 p-0"
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            onDelete(host.id, host.hostname)
+          }}
+        >
+          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+        </Button>
+      </TableCell>
+    </TableRow>
   )
 }
 
@@ -947,217 +1245,19 @@ function MonitoringHostsPage() {
           </div>
         )}
 
-        {isLoadingHosts ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="flex flex-col items-center gap-3">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              <p className="text-muted-foreground text-sm">Loading hosts...</p>
-            </div>
-          </div>
-        ) : hosts.length === 0 ? (
-          <EmptyState
-            icon={HardDrive}
-            title="No hosts yet"
-            description="Start monitoring your servers by deploying the agent. You'll get a Docker command to deploy in seconds."
-            action={<AddHostButton onClick={() => setAddDialogOpen(true)} />}
-          />
-        ) : filtered.length === 0 ? (
-          <EmptyState
-            icon={Search}
-            title="No hosts match your filters"
-            description="Try adjusting your search or status filter."
-          />
-        ) : viewMode === 'grid' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filtered.map((host) => (
-              <HostCard key={host.id} host={host} onDelete={handleDelete} />
-            ))}
-          </div>
-        ) : (
-          <Card className="overflow-hidden border-border/60">
-            <CardContent className="p-0">
-              <Table className="min-w-[900px]">
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent bg-muted/30">
-                    <TableHead className="pl-4">Status</TableHead>
-                    <TableHead
-                      className="cursor-pointer select-none hover:text-foreground transition-colors"
-                      onClick={() => toggleSort('hostname')}
-                    >
-                      Host
-                      <SortIndicator field="hostname" sortField={sortField} sortDir={sortDir} />
-                    </TableHead>
-                    <TableHead>OS / Platform</TableHead>
-                    <TableHead>Processor</TableHead>
-                    <TableHead
-                      className="cursor-pointer select-none hover:text-foreground transition-colors"
-                      onClick={() => toggleSort('cores')}
-                    >
-                      CPU Cores
-                      <SortIndicator field="cores" sortField={sortField} sortDir={sortDir} />
-                    </TableHead>
-                    <TableHead
-                      className="min-w-[160px] cursor-pointer select-none hover:text-foreground transition-colors"
-                      onClick={() => toggleSort('memory')}
-                    >
-                      Memory
-                      <SortIndicator field="memory" sortField={sortField} sortDir={sortDir} />
-                    </TableHead>
-                    <TableHead>Agent</TableHead>
-                    <TableHead
-                      className="text-right pr-4 cursor-pointer select-none hover:text-foreground transition-colors"
-                      onClick={() => toggleSort('lastSeen')}
-                    >
-                      Last Seen
-                      <SortIndicator field="lastSeen" sortField={sortField} sortDir={sortDir} />
-                    </TableHead>
-                    <TableHead className="pr-4 text-right w-[80px]">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((host: DdHostResponse) => {
-                    const online = host.isOnline
-                    const memPct = maxMemory > 0 ? (host.memoryTotalKb / maxMemory) * 100 : 0
-
-                    return (
-                      <TableRow
-                        key={host.id}
-                        className="group hover:bg-muted/50 transition-colors cursor-pointer"
-                        onClick={() => navigate({to: '/monitoring/hosts/$hostId', params: {hostId: String(host.id)}})}
-                      >
-                        <TableCell className="pl-4">
-                          <Badge variant={online ? 'success' : 'danger'} size="sm" className="gap-1.5">
-                            <StatusDot tone={online ? 'success' : 'danger'} size="sm" pulse={online} />
-                            {online ? 'Online' : 'Offline'}
-                          </Badge>
-                        </TableCell>
-
-                        <TableCell>
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div
-                              className={cn(
-                                'flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
-                                online
-                                  ? 'bg-success-bg text-success-fg'
-                                  : 'bg-danger-bg text-danger-fg'
-                              )}
-                            >
-                              {online ? <Server className="h-4 w-4" /> : <ServerOff className="h-4 w-4" />}
-                            </div>
-                            <div className="min-w-0">
-                              <TooltipProvider delayDuration={300}>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <p className="font-medium text-sm truncate max-w-[230px]">
-                                      {host.hostname}
-                                    </p>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="top">
-                                    <p className="font-mono text-xs">{host.hostname}</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                              {host.firstSeenAt && (
-                                <p className="text-[11px] text-muted-foreground truncate max-w-[230px]">
-                                  First seen {formatRelativeTime(host.firstSeenAt)}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        </TableCell>
-
-                        <TableCell>
-                          <div className="min-w-0">
-                            <p className="text-sm truncate max-w-[180px]">{host.os || '—'}</p>
-                            {host.platform && host.platform !== host.os && (
-                              <p className="text-[11px] text-muted-foreground truncate max-w-[180px]">
-                                {host.platform}
-                              </p>
-                            )}
-                          </div>
-                        </TableCell>
-
-                        <TableCell>
-                          <TooltipProvider delayDuration={300}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div className="flex items-center gap-1.5 min-w-0">
-                                  <Microchip className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                  <span className="text-xs font-mono truncate max-w-[160px]">
-                                    {host.processor || '—'}
-                                  </span>
-                                </div>
-                              </TooltipTrigger>
-                              {host.processor && (
-                                <TooltipContent side="top" className="max-w-xs">
-                                  <p className="font-mono text-xs">{host.processor}</p>
-                                </TooltipContent>
-                              )}
-                            </Tooltip>
-                          </TooltipProvider>
-                        </TableCell>
-
-                        <TableCell>
-                          <div className="flex items-center gap-1.5">
-                            <Cpu className="h-3.5 w-3.5 text-chart-1" />
-                            <span className="text-sm font-medium tabular-nums">
-                              {host.cpuCores || '—'}
-                            </span>
-                          </div>
-                        </TableCell>
-
-                        <TableCell>
-                          <div className="space-y-1">
-                            <p className="text-xs font-medium tabular-nums">
-                              {host.memoryTotalKb ? formatBytes(host.memoryTotalKb) : '—'}
-                            </p>
-                            {host.memoryTotalKb > 0 && (
-                              <div className="h-1.5 w-full rounded-full bg-muted/80 overflow-hidden">
-                                <div
-                                  className="h-full rounded-full transition-all duration-500 bg-chart-3"
-                                  style={{width: `${Math.min(100, memPct)}%`}}
-                                />
-                              </div>
-                            )}
-                          </div>
-                        </TableCell>
-
-                        <TableCell>
-                          {host.agentVersion ? (
-                            <Badge variant="neutral" size="sm" className="font-mono">
-                              v{host.agentVersion}
-                            </Badge>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-
-                        <TableCell className="text-right pr-4 text-xs text-muted-foreground">
-                          {host.lastSeenAt ? formatRelativeTime(host.lastSeenAt) : 'Never seen'}
-                        </TableCell>
-
-                        <TableCell className="pr-4 text-right">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 w-7 p-0"
-                            onClick={(e) => {
-                              e.preventDefault()
-                              e.stopPropagation()
-                              handleDelete(host.id, host.hostname)
-                            }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        )}
+        <HostsContent
+          isLoadingHosts={isLoadingHosts}
+          hosts={hosts}
+          filtered={filtered}
+          viewMode={viewMode}
+          maxMemory={maxMemory}
+          sortField={sortField}
+          sortDir={sortDir}
+          onSort={toggleSort}
+          onDelete={handleDelete}
+          onAddHost={() => setAddDialogOpen(true)}
+          onOpenHost={(hostId) => navigate({to: '/monitoring/hosts/$hostId', params: {hostId: String(hostId)}})}
+        />
       </div>
     </div>
   )

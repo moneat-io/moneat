@@ -21,6 +21,7 @@ import com.moneat.monitor.services.CloudSourceConnectorUnavailableException
 import com.moneat.monitor.services.CloudSourceService
 import com.moneat.monitor.services.InvalidCloudSourceException
 import com.moneat.utils.ErrorResponse
+import com.moneat.utils.OrganizationContextMissingException
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
@@ -100,11 +101,11 @@ fun Route.cloudSourceRoutes(
 
 private fun ApplicationCall.resolveCloudSourceScope(): CloudSourceScope {
     val payload = principal<JWTPrincipal>()?.payload
-        ?: throw BadRequestException("Organization context required")
+        ?: throw OrganizationContextMissingException()
     val userId = payload.getClaim("userId")?.asInt()
-        ?: throw BadRequestException("Organization context required")
+        ?: throw OrganizationContextMissingException()
     val organizationId = payload.getClaim("orgId")?.asInt()
-        ?: throw BadRequestException("Organization context required")
+        ?: throw OrganizationContextMissingException()
     return CloudSourceScope(userId, organizationId)
 }
 

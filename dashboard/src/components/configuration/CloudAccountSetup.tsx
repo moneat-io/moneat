@@ -30,7 +30,6 @@ import {SectionCard} from '@/components/ui/section-card'
 import {useToast} from '@/hooks/useToast'
 
 type CollectId = 'metrics' | 'inventory' | 'cost'
-type SourceStatus = 'healthy' | 'syncing' | 'pending' | 'error' | string
 
 interface FieldDef {
   readonly key: keyof CloudSourceProviderConfig
@@ -98,7 +97,7 @@ function providerDisplay(provider: CloudSourceProvider): ProviderDef {
   return PROVIDERS.find((option) => option.id === provider) ?? PROVIDERS[0]
 }
 
-function statusBadgeVariant(status: SourceStatus): 'success' | 'warning' | 'danger' | 'neutral' {
+function statusBadgeVariant(status: string): 'success' | 'warning' | 'danger' | 'neutral' {
   if (status === 'healthy') return 'success'
   if (status === 'syncing' || status === 'pending') return 'warning'
   if (status === 'error') return 'danger'

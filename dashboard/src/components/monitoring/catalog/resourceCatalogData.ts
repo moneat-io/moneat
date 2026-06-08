@@ -208,8 +208,8 @@ export const CHANGE_TONE: Record<ChangeKind, StatusTone> = {
 
 export function hashSeed(seed: string): number {
   let h = 2166136261
-  for (let i = 0; i < seed.length; i += 1) {
-    h ^= seed.charCodeAt(i)
+  for (const char of seed) {
+    h ^= char.codePointAt(0) ?? 0
     h = Math.imul(h, 16777619)
   }
   return h >>> 0
@@ -487,7 +487,8 @@ export function sortResources(list: readonly Resource[], key: SortKey, dir: Sort
   const sign = dir === 'asc' ? 1 : -1
   return [...list].sort((a, b) => {
     const primary = compareBy(a, b, key) * sign
-    return primary !== 0 ? primary : a.name.localeCompare(b.name)
+    if (primary === 0) return a.name.localeCompare(b.name)
+    return primary
   })
 }
 
@@ -895,7 +896,7 @@ export const MOCK_RESOURCES: readonly Resource[] = [
       {label: 'Disk free > 15%', pass: false},
     ],
     monthlyUsd: 680,
-    costTrendPct: 1.0,
+    costTrendPct: 1,
     costBreakdown: [
       {label: 'Compute (r6i.2xlarge)', usd: 540},
       {label: 'EBS storage (io2)', usd: 120},
@@ -1292,7 +1293,7 @@ export const MOCK_RESOURCES: readonly Resource[] = [
       {label: 'No public read', pass: false},
     ],
     monthlyUsd: 280,
-    costTrendPct: 3.0,
+    costTrendPct: 3,
     costBreakdown: [
       {label: 'Storage (4.1 TB)', usd: 96},
       {label: 'Requests', usd: 44},
