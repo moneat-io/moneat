@@ -22,6 +22,7 @@ vi.mock('@tanstack/react-router', () => ({
   redirect: (o: Record<string, unknown>) => ({...o, __redirect: true}),
   Link: ({children, ...props}: {children: React.ReactNode}) => React.createElement('a', props, children),
   useNavigate: () => vi.fn(),
+  useSearch: () => ({tab: 'services'}),
   useRouter: () => ({invalidate: vi.fn()}),
 }))
 

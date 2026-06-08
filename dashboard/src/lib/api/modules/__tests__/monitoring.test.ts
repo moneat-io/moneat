@@ -464,6 +464,97 @@ describe('Monitoring API module', () => {
     })
   })
 
+  // ──── Cloud Sources ────
+
+  describe('cloud source setup', () => {
+    it('fetches setup preview by provider', async () => {
+      server.use(
+        http.get(`${API_BASE}/v1/cloud-sources/setup-preview`, ({ request }) => {
+          const url = new URL(request.url)
+          expect(url.searchParams.get('provider')).toBe('aws')
+          return HttpResponse.json({
+            provider: 'aws',
+            externalId: 'mnt-ext-test',
+            principal: 'arn:aws:iam::499432741914:role/MoneatCloudSource',
+            snippetLabel: 'Trust policy',
+            snippetLanguage: 'json',
+            snippet: '{}',
+          })
+        })
+      )
+
+      const result = await api.getCloudSourceSetupPreview('aws')
+
+      expect(result.externalId).toBe('mnt-ext-test')
+    })
+
+    it('creates a cloud source', async () => {
+      server.use(
+        http.post(`${API_BASE}/v1/cloud-sources`, async ({ request }) => {
+          const body = (await request.json()) as Record<string, unknown>
+          expect(body.provider).toBe('aws')
+          expect(body.collectLogs).toBe(false)
+          return HttpResponse.json({
+            id: 1,
+            provider: 'aws',
+            displayName: 'Production AWS',
+            status: 'healthy',
+            config: body.config,
+            collectMetrics: true,
+            collectInventory: true,
+            collectCost: true,
+            collectLogs: false,
+            externalId: 'mnt-ext-test',
+            lastSyncAt: '2026-06-07T12:00:00Z',
+            lastError: null,
+            createdAt: '2026-06-07T12:00:00Z',
+            updatedAt: '2026-06-07T12:00:00Z',
+          }, {status: 201})
+        })
+      )
+
+      const result = await api.createCloudSource({
+        provider: 'aws',
+        displayName: 'Production AWS',
+        config: {accountId: '123456789012', roleName: 'MoneatIntegrationRole'},
+        collectMetrics: true,
+        collectInventory: true,
+        collectCost: true,
+        collectLogs: false,
+      })
+
+      expect(result.status).toBe('healthy')
+    })
+
+    it('lists, syncs, and deletes cloud sources', async () => {
+      const source = {
+        id: 1,
+        provider: 'aws',
+        displayName: 'Production AWS',
+        status: 'healthy',
+        config: {accountId: '123456789012'},
+        collectMetrics: true,
+        collectInventory: true,
+        collectCost: false,
+        collectLogs: false,
+        externalId: 'mnt-ext-test',
+        lastSyncAt: null,
+        lastError: null,
+        createdAt: '2026-06-07T12:00:00Z',
+        updatedAt: '2026-06-07T12:00:00Z',
+      }
+      server.use(
+        http.get(`${API_BASE}/v1/cloud-sources`, () => HttpResponse.json([source])),
+        http.post(`${API_BASE}/v1/cloud-sources/1/sync`, () => HttpResponse.json(source)),
+        http.delete(`${API_BASE}/v1/cloud-sources/1`, () => new HttpResponse(null, {status: 204}))
+      )
+
+      await expect(api.getCloudSources()).resolves.toEqual([source])
+      await expect(api.syncCloudSource(1)).resolves.toEqual(source)
+      await expect(api.deleteCloudSource(1)).resolves.toBeUndefined()
+    })
+  })
+
   // ──── Monitor Hosts ────
 
   describe('getMonitorHosts', () => {

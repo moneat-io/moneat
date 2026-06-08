@@ -67,20 +67,20 @@ export function TelemetrySourcePicker({
               type="button"
               onClick={() => onChange(toggleTelemetrySourceId(value, source.id))}
               className={cn(
-                'flex min-h-28 items-start gap-3 rounded-lg border-2 p-3 text-left transition-all',
+                'flex items-start gap-2.5 rounded-md border p-2.5 text-left transition-colors',
                 isSelected ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
               )}
               aria-pressed={isSelected}
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted">
-                <Icon className="h-4 w-4" />
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-muted">
+                <Icon className="h-3.5 w-3.5" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-2 text-sm font-medium">
+                <span className="flex items-center gap-1.5 text-sm font-medium">
                   {source.shortLabel}
                   {isSelected ? <Check className="h-3.5 w-3.5 text-primary" /> : null}
                 </span>
-                <span className="mt-1 block text-xs leading-5 text-muted-foreground">{source.description}</span>
+                <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">{source.description}</span>
               </span>
             </button>
           )

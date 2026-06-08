@@ -143,6 +143,7 @@ import { Route as AdminBillingRouteImport } from './routes/admin.billing'
 import { Route as AdminAttributionRouteImport } from './routes/admin.attribution'
 import { Route as PerformanceTracesIndexRouteImport } from './routes/performance.traces.index'
 import { Route as MonitoringKubernetesIndexRouteImport } from './routes/monitoring.kubernetes.index'
+import { Route as MonitoringHostsIndexRouteImport } from './routes/monitoring.hosts.index'
 import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects.$projectId.settings'
 import { Route as ProfilesServiceServiceRouteImport } from './routes/profiles.service.$service'
 import { Route as PerformanceTracesTraceIdRouteImport } from './routes/performance.traces.$traceId'
@@ -835,6 +836,11 @@ const MonitoringKubernetesIndexRoute =
     path: '/',
     getParentRoute: () => MonitoringKubernetesRoute,
   } as any)
+const MonitoringHostsIndexRoute = MonitoringHostsIndexRouteImport.update({
+  id: '/hosts/',
+  path: '/hosts/',
+  getParentRoute: () => MonitoringRoute,
+} as any)
 const ProjectsProjectIdSettingsRoute =
   ProjectsProjectIdSettingsRouteImport.update({
     id: '/settings',
@@ -1072,6 +1078,7 @@ export interface FileRoutesByFullPath {
   '/performance/traces/$traceId': typeof PerformanceTracesTraceIdRoute
   '/profiles/service/$service': typeof ProfilesServiceServiceRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
+  '/monitoring/hosts/': typeof MonitoringHostsIndexRoute
   '/monitoring/kubernetes/': typeof MonitoringKubernetesIndexRoute
   '/performance/traces/': typeof PerformanceTracesIndexRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
@@ -1208,6 +1215,7 @@ export interface FileRoutesByTo {
   '/performance/traces/$traceId': typeof PerformanceTracesTraceIdRoute
   '/profiles/service/$service': typeof ProfilesServiceServiceRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
+  '/monitoring/hosts': typeof MonitoringHostsIndexRoute
   '/monitoring/kubernetes': typeof MonitoringKubernetesIndexRoute
   '/performance/traces': typeof PerformanceTracesIndexRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
@@ -1361,6 +1369,7 @@ export interface FileRoutesById {
   '/performance/traces/$traceId': typeof PerformanceTracesTraceIdRoute
   '/profiles/service/$service': typeof ProfilesServiceServiceRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
+  '/monitoring/hosts/': typeof MonitoringHostsIndexRoute
   '/monitoring/kubernetes/': typeof MonitoringKubernetesIndexRoute
   '/performance/traces/': typeof PerformanceTracesIndexRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
@@ -1515,6 +1524,7 @@ export interface FileRouteTypes {
     | '/performance/traces/$traceId'
     | '/profiles/service/$service'
     | '/projects/$projectId/settings'
+    | '/monitoring/hosts/'
     | '/monitoring/kubernetes/'
     | '/performance/traces/'
     | '/projects/$projectId/spans/$spanId'
@@ -1651,6 +1661,7 @@ export interface FileRouteTypes {
     | '/performance/traces/$traceId'
     | '/profiles/service/$service'
     | '/projects/$projectId/settings'
+    | '/monitoring/hosts'
     | '/monitoring/kubernetes'
     | '/performance/traces'
     | '/projects/$projectId/spans/$spanId'
@@ -1803,6 +1814,7 @@ export interface FileRouteTypes {
     | '/performance/traces/$traceId'
     | '/profiles/service/$service'
     | '/projects/$projectId/settings'
+    | '/monitoring/hosts/'
     | '/monitoring/kubernetes/'
     | '/performance/traces/'
     | '/projects/$projectId/spans/$spanId'
@@ -2824,6 +2836,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MonitoringKubernetesIndexRouteImport
       parentRoute: typeof MonitoringKubernetesRoute
     }
+    '/monitoring/hosts/': {
+      id: '/monitoring/hosts/'
+      path: '/hosts'
+      fullPath: '/monitoring/hosts/'
+      preLoaderRoute: typeof MonitoringHostsIndexRouteImport
+      parentRoute: typeof MonitoringRoute
+    }
     '/projects/$projectId/settings': {
       id: '/projects/$projectId/settings'
       path: '/settings'
@@ -3118,6 +3137,7 @@ interface MonitoringRouteChildren {
   MonitoringServiceMapRoute: typeof MonitoringServiceMapRoute
   MonitoringIndexRoute: typeof MonitoringIndexRoute
   MonitoringHostsHostIdRoute: typeof MonitoringHostsHostIdRoute
+  MonitoringHostsIndexRoute: typeof MonitoringHostsIndexRoute
 }
 
 const MonitoringRouteChildren: MonitoringRouteChildren = {
@@ -3134,6 +3154,7 @@ const MonitoringRouteChildren: MonitoringRouteChildren = {
   MonitoringServiceMapRoute: MonitoringServiceMapRoute,
   MonitoringIndexRoute: MonitoringIndexRoute,
   MonitoringHostsHostIdRoute: MonitoringHostsHostIdRoute,
+  MonitoringHostsIndexRoute: MonitoringHostsIndexRoute,
 }
 
 const MonitoringRouteWithChildren = MonitoringRoute._addFileChildren(

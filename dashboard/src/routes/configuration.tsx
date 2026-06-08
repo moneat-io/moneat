@@ -14,26 +14,25 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useMemo, useState} from 'react'
-import {createFileRoute, redirect} from '@tanstack/react-router'
-import {useQuery} from '@tanstack/react-query'
-import {Plus, SlidersHorizontal} from 'lucide-react'
+import {createFileRoute, redirect, useNavigate, useSearch} from '@tanstack/react-router'
+import {Boxes, CloudCog, ServerCog, SlidersHorizontal, type LucideIcon} from 'lucide-react'
 import {api} from '@/lib/api'
-import {Button} from '@/components/ui/button'
-import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
-import {Label} from '@/components/ui/label'
+import {cn} from '@/lib/utils'
 import {PageHeader} from '@/components/ui/page-header'
-import {EmptyState} from '@/components/ui/empty-state'
-import {TelemetrySourcePicker} from '@/components/projects/TelemetrySourcePicker'
-import {ServiceSettingsCard} from '@/components/projects/ServiceSettingsCard'
-import {
-  DEFAULT_SELECTED_TELEMETRY_SOURCE_IDS,
-  loadTelemetrySourceIdsForService,
-  storeTelemetrySourceIdsForService,
-  type TelemetrySourceId,
-} from '@/lib/telemetry-sources'
+import {ServicesAndSdksSetup} from '@/components/configuration/ServicesAndSdksSetup'
+import {InfrastructureAgentSetup} from '@/components/configuration/InfrastructureAgentSetup'
+import {CloudAccountSetup} from '@/components/configuration/CloudAccountSetup'
+
+type ConfigTab = 'services' | 'infrastructure' | 'cloud'
+
+function parseConfigTab(value: unknown): ConfigTab {
+  return value === 'infrastructure' || value === 'cloud' ? value : 'services'
+}
 
 export const Route = createFileRoute('/configuration')({
+  validateSearch: (search: Record<string, unknown>): {tab: ConfigTab} => ({
+    tab: parseConfigTab(search.tab),
+  }),
   beforeLoad: async ({location}) => {
     if (!api.isAuthenticated()) {
       throw redirect({to: '/login', search: {redirect: location.href}})
@@ -42,117 +41,81 @@ export const Route = createFileRoute('/configuration')({
   component: ConfigurationPage,
 })
 
-// Creation is owned by the sidebar's shared dialog — Configuration just opens it.
-function openCreateServiceDialog() {
-  globalThis.dispatchEvent(new CustomEvent('open-create-service-dialog'))
+interface ConfigMode {
+  readonly id: ConfigTab
+  readonly label: string
+  readonly icon: LucideIcon
+  readonly description: string
 }
 
-function loadSourcesForService(serviceId: string | null): TelemetrySourceId[] {
-  if (!serviceId) return DEFAULT_SELECTED_TELEMETRY_SOURCE_IDS
-  const stored = loadTelemetrySourceIdsForService(serviceId)
-  return stored.length > 0 ? stored : DEFAULT_SELECTED_TELEMETRY_SOURCE_IDS
+const MODES: readonly ConfigMode[] = [
+  {
+    id: 'services',
+    label: 'Services & SDKs',
+    icon: Boxes,
+    description: 'Instrument applications with a Sentry-compatible SDK or OpenTelemetry.',
+  },
+  {
+    id: 'infrastructure',
+    label: 'Infrastructure agent',
+    icon: ServerCog,
+    description: 'Deploy the agent across hosts, containers, and Kubernetes — pick what to collect and copy the config.',
+  },
+  {
+    id: 'cloud',
+    label: 'Cloud',
+    icon: CloudCog,
+    description: 'Connect an AWS, Google Cloud, or Azure account to pull metrics, inventory, and cost agentlessly.',
+  },
+]
+
+function renderConfigTab(tab: ConfigTab) {
+  if (tab === 'infrastructure') return <InfrastructureAgentSetup />
+  if (tab === 'cloud') return <CloudAccountSetup />
+  return <ServicesAndSdksSetup />
 }
 
 function ConfigurationPage() {
-  const {data: services, isLoading} = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => api.getProjects(),
-    enabled: api.isAuthenticated(),
-  })
-
-  // Local service selection for this page only.
-  const [chosenId, setChosenId] = useState<string | null>(null)
-  const selectedId = useMemo(() => {
-    if (!services || services.length === 0) return null
-    const ids = services.map((service) => service.resourceId)
-    if (chosenId && ids.includes(chosenId)) return chosenId
-    return services[0].resourceId
-  }, [services, chosenId])
-
-  // Telemetry-source selection for the chosen service, persisted to localStorage.
-  // Reload (without an effect) whenever the selected service changes.
-  const [sources, setSources] = useState<TelemetrySourceId[]>(() => loadSourcesForService(selectedId))
-  const [sourcesServiceId, setSourcesServiceId] = useState<string | null>(selectedId)
-  if (selectedId !== sourcesServiceId) {
-    setSourcesServiceId(selectedId)
-    setSources(loadSourcesForService(selectedId))
-  }
-
-  const handleSourcesChange = (next: TelemetrySourceId[]) => {
-    setSources(next)
-    if (selectedId) storeTelemetrySourceIdsForService(selectedId, next)
-  }
+  const {tab} = useSearch({from: '/configuration'})
+  const navigate = useNavigate({from: '/configuration'})
+  const activeMode = MODES.find((mode) => mode.id === tab) ?? MODES[0]
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 p-4 sm:p-6">
+    <div className="mx-auto max-w-6xl space-y-4 p-4 sm:p-6">
       <PageHeader
         icon={SlidersHorizontal}
         title="Configuration"
-        description="Create and configure your services and their telemetry sources."
-        actions={
-          <Button size="sm" onClick={openCreateServiceDialog}>
-            <Plus className="h-4 w-4" />
-            New Service
-          </Button>
-        }
+        description="Connect telemetry — instrument services, deploy the infrastructure agent, or link a cloud account."
       />
 
-      {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading services…</p>
-      ) : !services || services.length === 0 ? (
-        <EmptyState
-          icon={SlidersHorizontal}
-          title="No services yet"
-          description="Create a service to configure its telemetry sources and platform."
-          action={
-            <Button onClick={openCreateServiceDialog}>
-              <Plus className="h-4 w-4" />
-              New Service
-            </Button>
-          }
-        />
-      ) : (
-        <>
-          <div className="flex max-w-sm flex-col gap-1.5">
-            <Label htmlFor="service-select">Service</Label>
-            <select
-              id="service-select"
-              value={selectedId ?? ''}
-              onChange={(event) => setChosenId(event.target.value)}
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              {services.map((service) => (
-                <option key={service.resourceId} value={service.resourceId}>
-                  {service.name}
-                </option>
-              ))}
-            </select>
-          </div>
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-card p-1">
+          {MODES.map((mode) => {
+            const Icon = mode.icon
+            const active = mode.id === tab
+            return (
+              <button
+                key={mode.id}
+                type="button"
+                onClick={() => navigate({search: {tab: mode.id}})}
+                aria-pressed={active}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                  active
+                    ? 'bg-secondary text-secondary-foreground'
+                    : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {mode.label}
+              </button>
+            )
+          })}
+        </div>
+        <p className="text-xs text-muted-foreground">{activeMode.description}</p>
+      </div>
 
-          {selectedId && (
-            <>
-              <Card>
-                <CardHeader>
-                  <CardTitle>Telemetry sources</CardTitle>
-                  <CardDescription>
-                    Choose which integrations this service uses — this controls the configuration shown below.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <TelemetrySourcePicker value={sources} onChange={handleSourcesChange} label="" description="" />
-                </CardContent>
-              </Card>
-
-              <ServiceSettingsCard
-                key={selectedId}
-                serviceId={selectedId}
-                sourceIds={sources}
-                onDeleted={() => setChosenId(null)}
-              />
-            </>
-          )}
-        </>
-      )}
+      {renderConfigTab(tab)}
     </div>
   )
 }

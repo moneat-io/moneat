@@ -14,20 +14,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-// The Infrastructure landing is the source-neutral Resource Catalog: a unified
-// inventory of hosts, containers, pods, services, cloud resources and network
-// devices. Per-kind browsing is a facet of the catalog; the classic host
-// inventory now lives at /monitoring/hosts.
+package com.moneat.utils
 
-import {createFileRoute, redirect} from '@tanstack/react-router'
-import {api} from '@/lib/api'
-import {ResourceCatalog} from '@/components/monitoring/catalog/ResourceCatalog'
+import io.ktor.server.plugins.BadRequestException
 
-export const Route = createFileRoute('/monitoring/')({
-  beforeLoad: () => {
-    if (!api.isAuthenticated()) {
-      throw redirect({to: '/login'})
+class OrganizationContextMissingException : BadRequestException(MESSAGE) {
+    companion object {
+        const val MESSAGE = "Organization context required"
     }
-  },
-  component: ResourceCatalog,
-})
+}
