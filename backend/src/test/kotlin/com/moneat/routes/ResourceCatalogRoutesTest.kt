@@ -74,7 +74,7 @@ class ResourceCatalogRoutesTest {
             routing { resourceCatalogRoutes(catalogService) }
         }
 
-        val token = RouteTestSupport.createToken(userId = USER_ID)
+        val token = RouteTestSupport.createToken(userId = USER_ID, orgId = null)
         val response = client.get("/v1/monitoring/resources") { withAuth(token) }
 
         assertEquals(HttpStatusCode.BadRequest, response.status)
