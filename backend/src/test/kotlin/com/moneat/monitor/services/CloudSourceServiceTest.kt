@@ -26,6 +26,10 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -101,6 +105,26 @@ class CloudSourceServiceTest {
         assertTrue(preview.externalId.startsWith("mnt-ext-"))
         assertTrue(preview.snippet.contains("sts:ExternalId"))
         assertTrue(preview.snippet.contains(AWS_PRINCIPAL_ARN))
+
+        val statement = Json.parseToJsonElement(preview.snippet)
+            .jsonObject
+            .getValue("Statement")
+            .jsonArray
+            .single()
+            .jsonObject
+        val principal = statement.getValue("Principal").jsonObject.getValue("AWS").jsonPrimitive.content
+        val condition = statement
+            .getValue("Condition")
+            .jsonObject
+            .getValue("StringEquals")
+            .jsonObject
+            .getValue("sts:ExternalId")
+            .jsonPrimitive
+            .content
+
+        assertEquals(AWS_PRINCIPAL_ARN, principal)
+        assertEquals("sts:AssumeRole", statement.getValue("Action").jsonPrimitive.content)
+        assertEquals(preview.externalId, condition)
     }
 
     @Test

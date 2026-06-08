@@ -29,6 +29,11 @@ import com.moneat.shared.models.CloudSources
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import com.moneat.utils.ClickHouseSqlUtils.mapToSqlMap
 import io.ktor.client.statement.bodyAsText
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
@@ -55,6 +60,10 @@ private const val CLOUD_EXTERNAL_ID_HASH_LENGTH = 24
 private const val HEX_BYTE_MASK = 0xff
 private const val CLICKHOUSE_ERROR_PREVIEW_LENGTH = 300
 private const val CLOUD_SOURCE_DISPLAY_NAME_MAX_LENGTH = 120
+
+private val cloudSourceSnippetJson = Json {
+    prettyPrint = true
+}
 
 data class CloudSourceIdentityConfig(
     val awsPrincipalArn: String? = null,
@@ -428,19 +437,39 @@ class CloudSourceService(
     private fun awsPreview(externalId: String): CloudSourceSetupPreview {
         val principal = identityConfig.awsPrincipalArn ?: "arn:aws:iam::<moneat-account-id>:root"
         val externalIdConditionKey = listOf("sts", "ExternalId").joinToString(":")
-        val snippet = """
-            {
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Principal": {"AWS": "$principal"},
-                  "Action": "sts:AssumeRole",
-                  "Condition": {"StringEquals": {"$externalIdConditionKey": "$externalId"}}
-                }
-              ]
+        val snippet = cloudSourceSnippetJson.encodeToString(
+            buildJsonObject {
+                put("Version", "2012-10-17")
+                put(
+                    "Statement",
+                    buildJsonArray {
+                        add(
+                            buildJsonObject {
+                                put("Effect", "Allow")
+                                put(
+                                    "Principal",
+                                    buildJsonObject {
+                                        put("AWS", principal)
+                                    }
+                                )
+                                put("Action", "sts:AssumeRole")
+                                put(
+                                    "Condition",
+                                    buildJsonObject {
+                                        put(
+                                            "StringEquals",
+                                            buildJsonObject {
+                                                put(externalIdConditionKey, externalId)
+                                            }
+                                        )
+                                    }
+                                )
+                            }
+                        )
+                    }
+                )
             }
-        """.trimIndent()
+        )
         return CloudSourceSetupPreview(
             provider = CLOUD_PROVIDER_AWS,
             externalId = externalId,
