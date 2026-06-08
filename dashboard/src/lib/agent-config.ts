@@ -159,8 +159,8 @@ function forwarderEndpoint(): string {
   }
 }
 
-function profileEndpoint(apiKey: string): string {
-  return `${backendBaseUrl}/api/v2/profile?${API_KEY_FIELD}=${encodeURIComponent(apiKey)}`
+function profileEndpoint(): string {
+  return `${backendBaseUrl}/api/v2/profile`
 }
 
 function telemetryEndpoint(): string {
@@ -196,7 +196,7 @@ export function buildAgentYaml(caps: AgentCapabilities, apiKey?: string | null, 
   if (caps.apm || caps.profiling) {
     const apm = ['apm_config:']
     if (caps.apm) apm.push(`  apm_dd_url: ${INGEST_URL}`)
-    if (caps.profiling) apm.push(`  profiling_dd_url: ${profileEndpoint(key)}`)
+    if (caps.profiling) apm.push(`  profiling_dd_url: ${profileEndpoint()}`)
     apm.push('  telemetry:', `    dd_url: ${telemetryEndpoint()}`)
     blocks.push(apm.join('\n'))
   }

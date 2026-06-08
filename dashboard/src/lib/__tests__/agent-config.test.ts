@@ -61,6 +61,8 @@ describe('buildAgentYaml', () => {
     expect(yaml).toContain('sbom:')
     expect(yaml).toContain('network_devices:')
     expect(yaml).toContain('database_monitoring:')
+    expect(yaml).toMatch(/profiling_dd_url: .*\/api\/v2\/profile/)
+    expect(yaml).not.toContain('/api/v2/profile?')
   })
 
   it('emits only the header when nothing but infra metrics is enabled', () => {
