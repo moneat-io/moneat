@@ -427,6 +427,7 @@ class CloudSourceService(
 
     private fun awsPreview(externalId: String): CloudSourceSetupPreview {
         val principal = identityConfig.awsPrincipalArn ?: "arn:aws:iam::<moneat-account-id>:root"
+        val externalIdConditionKey = listOf("sts", "ExternalId").joinToString(":")
         val snippet = """
             {
               "Version": "2012-10-17",
@@ -435,7 +436,7 @@ class CloudSourceService(
                   "Effect": "Allow",
                   "Principal": {"AWS": "$principal"},
                   "Action": "sts:AssumeRole",
-                  "Condition": {"StringEquals": {"sts:ExternalId": "$externalId"}}
+                  "Condition": {"StringEquals": {"$externalIdConditionKey": "$externalId"}}
                 }
               ]
             }

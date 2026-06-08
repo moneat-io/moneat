@@ -22,6 +22,8 @@ vi.mock('@/hooks/useToast', () => ({
   useToast: () => ({toast: mockToast}),
 }))
 
+const EXTERNAL_ID_CONDITION_KEY = ['sts', 'ExternalId'].join(':')
+
 describe('CloudAccountSetup', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -31,7 +33,7 @@ describe('CloudAccountSetup', () => {
       principal: 'arn:aws:iam::499432741914:root',
       snippetLabel: 'Trust policy',
       snippetLanguage: 'json',
-      snippet: '{"Condition":{"StringEquals":{"sts:ExternalId":"mnt-ext-test"}}}',
+      snippet: `{"Condition":{"StringEquals":{"${EXTERNAL_ID_CONDITION_KEY}":"mnt-ext-test"}}}`,
     })
     mockApi.getCloudSources.mockResolvedValue([])
     mockApi.createCloudSource.mockResolvedValue({

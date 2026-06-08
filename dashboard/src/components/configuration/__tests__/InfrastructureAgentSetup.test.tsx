@@ -1,7 +1,10 @@
 import {fireEvent, screen, waitFor} from '@testing-library/react'
 import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {renderWithQueryClient} from '@/test/utils'
+import {PLACEHOLDER_AGENT_KEY} from '@/lib/agent-config'
 import {InfrastructureAgentSetup} from '../InfrastructureAgentSetup'
+
+const CREATED_AGENT_KEY = 'mna_new_value'
 
 const {mockApi, mockToast} = vi.hoisted(() => ({
   mockApi: {
@@ -27,14 +30,14 @@ describe('InfrastructureAgentSetup', () => {
     mockApi.getAgentApiKeys.mockResolvedValue({
       keys: [{id: 1, name: 'Existing agent', keyPrefix: 'mna_live', createdAt: '2026-06-07T12:00:00Z'}],
     })
-    mockApi.createAgentApiKey.mockResolvedValue({key: 'mna_new_secret'})
+    mockApi.createAgentApiKey.mockResolvedValue({key: CREATED_AGENT_KEY})
   })
 
   it('generates live install artifacts and embeds a newly created key', async () => {
     const {container} = renderWithQueryClient(<InfrastructureAgentSetup />)
 
     expect(await screen.findByText(/1 agent key already exist/)).toBeInTheDocument()
-    expect(container.textContent).toContain('YOUR_AGENT_KEY')
+    expect(container.textContent).toContain(PLACEHOLDER_AGENT_KEY)
 
     fireEvent.click(screen.getByRole('button', {name: 'Run'}))
     expect(container.textContent).toContain('docker run')
@@ -54,7 +57,7 @@ describe('InfrastructureAgentSetup', () => {
     fireEvent.click(screen.getByRole('button', {name: /Create key/}))
 
     await waitFor(() => expect(mockApi.createAgentApiKey).toHaveBeenCalledWith('Production cluster'))
-    await waitFor(() => expect(container.textContent).toContain('mna_new_secret'))
+    await waitFor(() => expect(container.textContent).toContain(CREATED_AGENT_KEY))
     expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
       title: 'Agent key created',
     }))

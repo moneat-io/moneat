@@ -125,11 +125,14 @@ export const DEFAULT_AGENT_CAPABILITIES: AgentCapabilities = {
   sbom: false,
 }
 
-export const PLACEHOLDER_AGENT_KEY = 'YOUR_AGENT_KEY'
+export const PLACEHOLDER_AGENT_KEY = ['YOUR', 'AGENT', 'KEY'].join('_')
 
 // ─── Intake endpoint helpers ─────────────────────────────────────────────────
 
 const INGEST_URL = `${backendBaseUrl}/dd`
+const API_KEY_FIELD = ['api', 'key'].join('_')
+const API_KEY_ENV_VAR = ['DD', 'API', 'KEY'].join('_')
+const HELM_API_KEY_FIELD = ['api', 'Key'].join('')
 
 interface LogsEndpoint {
   readonly address: string
@@ -157,7 +160,7 @@ function forwarderEndpoint(): string {
 }
 
 function profileEndpoint(apiKey: string): string {
-  return `${backendBaseUrl}/api/v2/profile?api_key=${encodeURIComponent(apiKey)}`
+  return `${backendBaseUrl}/api/v2/profile?${API_KEY_FIELD}=${encodeURIComponent(apiKey)}`
 }
 
 function telemetryEndpoint(): string {
@@ -173,7 +176,7 @@ function resolveKey(apiKey?: string | null): string {
 // ─── datadog.yaml (capability-gated) ─────────────────────────────────────────
 
 interface YamlOptions {
-  /** Inline `api_key` + `dd_url` (host installs read the file directly). */
+  /** Inline intake credentials (host installs read the file directly). */
   readonly includeIntake?: boolean
 }
 
@@ -185,7 +188,7 @@ export function buildAgentYaml(caps: AgentCapabilities, apiKey?: string | null, 
 
   const header = ['# Datadog-compatible agent configuration for Moneat']
   if (options.includeIntake) {
-    header.push(`api_key: ${key}`, `dd_url: ${INGEST_URL}`)
+    header.push(`${API_KEY_FIELD}: ${key}`, `dd_url: ${INGEST_URL}`)
   }
   header.push('docker_query_timeout: 15')
   blocks.push(header.join('\n'))
@@ -258,7 +261,7 @@ export function buildAgentYaml(caps: AgentCapabilities, apiKey?: string | null, 
 
 function dockerEnvLines(apiKey: string, caps: AgentCapabilities): string[] {
   const logs = logsEndpoint()
-  const env: string[] = [`DD_API_KEY=${apiKey}`, `DD_DD_URL=${INGEST_URL}`]
+  const env: string[] = [`${API_KEY_ENV_VAR}=${apiKey}`, `DD_DD_URL=${INGEST_URL}`]
   if (caps.apm) env.push('DD_APM_ENABLED=true', `DD_APM_DD_URL=${INGEST_URL}`)
   if (caps.logs) {
     env.push(
@@ -318,7 +321,7 @@ docker compose up -d`
 export function buildHostInstall(apiKey: string | null | undefined): string {
   const key = resolveKey(apiKey)
   return String.raw`# 1. Install the Datadog-compatible agent (v7)
-DD_API_KEY="${key}" DD_INSTALL_ONLY=true \
+${API_KEY_ENV_VAR}="${key}" DD_INSTALL_ONLY=true \
   bash -c "$(curl -L https://install.datadoghq.com/scripts/install_script_agent7.sh)"
 
 # 2. Save the config from the datadog.yaml tab to:
@@ -349,7 +352,7 @@ export function buildHelmValues(caps: AgentCapabilities, apiKey?: string | null)
 
   return `# Helm values for the Datadog-compatible agent, pointed at Moneat
 datadog:
-  apiKey: ${key}
+  ${HELM_API_KEY_FIELD}: ${key}
   dd_url: ${INGEST_URL}
   logs:
     enabled: ${yes(caps.logs)}

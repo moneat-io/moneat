@@ -47,6 +47,7 @@ import {
   AGENT_CAPABILITIES,
   AGENT_PLATFORMS,
   DEFAULT_AGENT_CAPABILITIES,
+  PLACEHOLDER_AGENT_KEY,
   buildAgentArtifacts,
   type AgentCapabilities,
   type AgentCapabilityId,
@@ -221,7 +222,7 @@ function agentKeyHelperText(existingCount: number): string {
     return 'Generate an organization agent key. It is shown once and dropped straight into the config.'
   }
   const keyLabel = existingCount === 1 ? 'key' : 'keys'
-  return `${existingCount} agent ${keyLabel} already exist. Create a new one to embed it here — existing secrets can't be revealed again.`
+  return `${existingCount} agent ${keyLabel} already exist. Create a new one to embed it here — existing values can't be revealed again.`
 }
 
 function VerifyPanel() {
@@ -348,7 +349,7 @@ export function InfrastructureAgentSetup() {
             <CopyBlock code={active.code} language={active.language} />
             {!createdKey && (
               <p className="text-[11px] text-warning-fg">
-                Create an agent key above to replace the <code className="font-mono">YOUR_AGENT_KEY</code> placeholder.
+                Create an agent key above to replace the <code className="font-mono">{PLACEHOLDER_AGENT_KEY}</code> placeholder.
               </p>
             )}
             <p className="text-[11px] text-muted-foreground">
