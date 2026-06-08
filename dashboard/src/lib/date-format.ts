@@ -20,14 +20,17 @@
  * Use useTimezone() to obtain the current user's timezone preference.
  */
 
-function toDate(date: Date | string | number): Date {
+export type DateInput = Date | string | number
+
+export function parseDate(date: DateInput): Date {
   if (date instanceof Date) return date
+  if (typeof date === 'string') return new Date(normalizeDateString(date))
   return new Date(date)
 }
 
 /** Full date + time: "Jan 15, 2:34:56 PM" */
-export function formatDateTime(date: Date | string | number, timezone: string): string {
-  const d = toDate(date)
+export function formatDateTime(date: DateInput, timezone: string): string {
+  const d = parseDate(date)
   if (isNaN(d.getTime())) return String(date)
   return new Intl.DateTimeFormat(undefined, {
     timeZone: timezone,
@@ -40,8 +43,8 @@ export function formatDateTime(date: Date | string | number, timezone: string): 
 }
 
 /** Date only: "Jan 15, 2025" */
-export function formatDate(date: Date | string | number, timezone: string): string {
-  const d = toDate(date)
+export function formatDate(date: DateInput, timezone: string): string {
+  const d = parseDate(date)
   if (isNaN(d.getTime())) return String(date)
   return new Intl.DateTimeFormat(undefined, {
     timeZone: timezone,
@@ -52,8 +55,8 @@ export function formatDate(date: Date | string | number, timezone: string): stri
 }
 
 /** Month + day only: "Jan 15" */
-export function formatMonthDay(date: Date | string | number, timezone: string): string {
-  const d = toDate(date)
+export function formatMonthDay(date: DateInput, timezone: string): string {
+  const d = parseDate(date)
   if (isNaN(d.getTime())) return String(date)
   return new Intl.DateTimeFormat(undefined, {
     timeZone: timezone,
@@ -63,8 +66,8 @@ export function formatMonthDay(date: Date | string | number, timezone: string): 
 }
 
 /** Time only: "02:34:56" (24h) */
-export function formatTime(date: Date | string | number, timezone: string): string {
-  const d = toDate(date)
+export function formatTime(date: DateInput, timezone: string): string {
+  const d = parseDate(date)
   if (isNaN(d.getTime())) return String(date)
   return new Intl.DateTimeFormat(undefined, {
     timeZone: timezone,
@@ -76,8 +79,8 @@ export function formatTime(date: Date | string | number, timezone: string): stri
 }
 
 /** Hour + minute only: "02:34" (24h) */
-export function formatTimeHM(date: Date | string | number, timezone: string): string {
-  const d = toDate(date)
+export function formatTimeHM(date: DateInput, timezone: string): string {
+  const d = parseDate(date)
   if (isNaN(d.getTime())) return String(date)
   return new Intl.DateTimeFormat(undefined, {
     timeZone: timezone,
@@ -88,8 +91,8 @@ export function formatTimeHM(date: Date | string | number, timezone: string): st
 }
 
 /** Hour + minute, 12h format: "2:34 PM" */
-export function formatTimeHM12(date: Date | string | number, timezone: string): string {
-  const d = toDate(date)
+export function formatTimeHM12(date: DateInput, timezone: string): string {
+  const d = parseDate(date)
   if (isNaN(d.getTime())) return String(date)
   return new Intl.DateTimeFormat(undefined, {
     timeZone: timezone,
@@ -100,8 +103,8 @@ export function formatTimeHM12(date: Date | string | number, timezone: string): 
 }
 
 /** Full date + time with milliseconds: "Jan 15, 02:34:56.789" */
-export function formatDateTimeWithMs(date: Date | string | number, timezone: string): string {
-  const d = toDate(date)
+export function formatDateTimeWithMs(date: DateInput, timezone: string): string {
+  const d = parseDate(date)
   if (isNaN(d.getTime())) return String(date)
   const base = new Intl.DateTimeFormat(undefined, {
     timeZone: timezone,
@@ -116,8 +119,8 @@ export function formatDateTimeWithMs(date: Date | string | number, timezone: str
 }
 
 /** Time with milliseconds: "02:34:56.789" (24h) */
-export function formatTimeWithMs(date: Date | string | number, timezone: string): string {
-  const d = toDate(date)
+export function formatTimeWithMs(date: DateInput, timezone: string): string {
+  const d = parseDate(date)
   if (isNaN(d.getTime())) return String(date)
   const base = new Intl.DateTimeFormat(undefined, {
     timeZone: timezone,
@@ -131,8 +134,8 @@ export function formatTimeWithMs(date: Date | string | number, timezone: string)
 }
 
 /** Full datetime with weekday and timezone name: "Mon, Jan 15, 2025, 02:34:56 EST" */
-export function formatDateTimeFull(date: Date | string | number, timezone: string): string {
-  const d = toDate(date)
+export function formatDateTimeFull(date: DateInput, timezone: string): string {
+  const d = parseDate(date)
   if (isNaN(d.getTime())) return String(date)
   return new Intl.DateTimeFormat(undefined, {
     timeZone: timezone,
@@ -150,4 +153,62 @@ export function formatDateTimeFull(date: Date | string | number, timezone: strin
 /** Returns the browser's current timezone identifier */
 export function browserTimezone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone
+}
+
+function normalizeDateString(value: string): string {
+  const trimmed = value.trim()
+  if (trimmed.includes('T')) return trimmed
+
+  const separatorIndex = trimmed.indexOf(' ')
+  if (separatorIndex > 0) {
+    const datePart = trimmed.slice(0, separatorIndex)
+    const timePart = trimmed.slice(separatorIndex + 1)
+    if (isIsoDatePart(datePart) && isClockTimePart(timePart)) {
+      return `${datePart}T${timePart}Z`
+    }
+  }
+
+  return trimmed
+}
+
+function isIsoDatePart(value: string): boolean {
+  return value.length === 10 &&
+    isDigit(value[0]) &&
+    isDigit(value[1]) &&
+    isDigit(value[2]) &&
+    isDigit(value[3]) &&
+    value[4] === '-' &&
+    isDigit(value[5]) &&
+    isDigit(value[6]) &&
+    value[7] === '-' &&
+    isDigit(value[8]) &&
+    isDigit(value[9])
+}
+
+function isClockTimePart(value: string): boolean {
+  const timeAndFraction = value.split('.')
+  if (timeAndFraction.length > 2) return false
+
+  const timePart = timeAndFraction[0]
+  const fractionPart = timeAndFraction[1]
+  const hasValidTime = timePart.length === 8 &&
+    isDigit(timePart[0]) &&
+    isDigit(timePart[1]) &&
+    timePart[2] === ':' &&
+    isDigit(timePart[3]) &&
+    isDigit(timePart[4]) &&
+    timePart[5] === ':' &&
+    isDigit(timePart[6]) &&
+    isDigit(timePart[7])
+
+  if (!hasValidTime) return false
+  return fractionPart === undefined || isDigitString(fractionPart)
+}
+
+function isDigitString(value: string): boolean {
+  return value.length > 0 && Array.from(value).every(isDigit)
+}
+
+function isDigit(value: string | undefined): boolean {
+  return value !== undefined && value >= '0' && value <= '9'
 }

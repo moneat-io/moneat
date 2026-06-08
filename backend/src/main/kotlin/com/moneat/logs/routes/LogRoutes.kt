@@ -18,25 +18,38 @@ package com.moneat.logs.routes
 
 import kotlinx.serialization.SerializationException
 import java.io.IOException
+import java.io.Writer
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.QuotaExceededResponse
 import com.moneat.datadog.decompression.DecompressionService
+import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.events.services.EventService
+import com.moneat.enterprise.FeatureRegistry
+import com.moneat.logs.LogPermissions
 import com.moneat.logs.models.CreateLogIndexRequest
 import com.moneat.logs.models.LogQueryRequest
 import com.moneat.logs.models.LogTailFilters
 import com.moneat.logs.models.UpdateLogIndexRequest
 import com.moneat.logs.services.LogIndexService
+import com.moneat.logs.services.LogManagementService
 import com.moneat.logs.services.LogService
 import com.moneat.otlp.OtlpAuth
 import com.moneat.otlp.models.CreateOtlpApiKeyRequest
+import com.moneat.otlp.models.CreateOtlpServiceMappingRequest
 import com.moneat.otlp.services.OtlpApiKeyService
+import com.moneat.otlp.services.OtlpServiceDescriptor
+import com.moneat.otlp.services.OtlpServiceRoutingService
+import com.moneat.otlp.services.OtlpSignalType
+import com.moneat.org.services.OrgMembershipService
+import com.moneat.org.services.OrgRole
 import com.moneat.plugins.getDemoEpochMs
 import com.moneat.plugins.isDemoUser
+import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.utils.ErrorResponse
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -64,7 +77,6 @@ import org.koin.core.context.GlobalContext
 import java.time.Instant
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -76,449 +88,517 @@ fun Route.logRoutes(
     logService: LogService = GlobalContext.get().get(),
     otlpApiKeyService: OtlpApiKeyService = GlobalContext.get().get(),
     logIndexService: LogIndexService = GlobalContext.get().get(),
+    otlpServiceRoutingService: OtlpServiceRoutingService = GlobalContext.get().get(),
+    logManagementService: LogManagementService = GlobalContext.get().get(),
+    membershipService: OrgMembershipService = GlobalContext.get().get(),
+    dashboardAlertService: DashboardAlertService = GlobalContext.get().get(),
 ) {
     route("/v1") {
         authenticate("auth-jwt") {
-            post("/logs/api-keys") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val orgId = principal.payload.getClaim("orgId").asInt()
+            registerOtlpApiKeyRoutes(otlpApiKeyService)
+            registerOtlpServiceRoutingRoutes(otlpServiceRoutingService)
+            registerLogIndexRoutes(logIndexService, membershipService)
+            registerLogQueryRoutes(logService)
+            registerLogManagementRoutes(
+                logManagementService = logManagementService,
+                logIndexService = logIndexService,
+                logService = logService,
+                membershipService = membershipService,
+                dashboardAlertService = dashboardAlertService
+            )
+        }
+        registerLogTailRoute(logService, membershipService)
+    }
+}
 
-                val request = call.receive<CreateOtlpApiKeyRequest>()
-                val name = request.name.trim()
-                if (name.isBlank()) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Name is required"))
-                    return@post
-                }
+private data class LogTimeRange(
+    val from: String?,
+    val to: String?,
+)
 
-                val response = otlpApiKeyService.createKey(organizationId = orgId, name = name, createdBy = userId)
-                call.respond(HttpStatusCode.Created, response)
-            }
+private fun Route.registerOtlpApiKeyRoutes(otlpApiKeyService: OtlpApiKeyService) {
+    post("/logs/api-keys") { call.createOtlpApiKey(otlpApiKeyService) }
+    get("/logs/api-keys") { call.listOtlpApiKeys(otlpApiKeyService) }
+    delete("/logs/api-keys/{id}") { call.deleteOtlpApiKey(otlpApiKeyService) }
+}
 
-            get("/logs/api-keys") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt()
+private suspend fun ApplicationCall.createOtlpApiKey(otlpApiKeyService: OtlpApiKeyService) {
+    val request = receive<CreateOtlpApiKeyRequest>()
+    val name = request.name.trim()
+    if (name.isBlank()) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse("Name is required"))
+        return
+    }
 
-                val keys = otlpApiKeyService.listKeys(orgId)
-                call.respond(HttpStatusCode.OK, mapOf("keys" to keys))
-            }
+    val response =
+        otlpApiKeyService.createKey(
+            organizationId = requiredOrganizationId(),
+            name = name,
+            createdBy = requiredUserId()
+        )
+    respond(HttpStatusCode.Created, response)
+}
 
-            delete("/logs/api-keys/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt()
+private suspend fun ApplicationCall.listOtlpApiKeys(otlpApiKeyService: OtlpApiKeyService) {
+    val keys = otlpApiKeyService.listKeys(requiredOrganizationId())
+    respond(HttpStatusCode.OK, mapOf("keys" to keys))
+}
 
-                val id = call.parameters["id"]?.toIntOrNull()
-                if (id == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid key ID"))
-                    return@delete
-                }
+private suspend fun ApplicationCall.deleteOtlpApiKey(otlpApiKeyService: OtlpApiKeyService) {
+    val id = parameters["id"]?.toIntOrNull()
+    if (id == null) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid key ID"))
+        return
+    }
 
-                val deleted = otlpApiKeyService.deleteKey(organizationId = orgId, keyId = id)
-                if (!deleted) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Key not found"))
-                    return@delete
-                }
-                call.respond(HttpStatusCode.NoContent)
-            }
+    val deleted = otlpApiKeyService.deleteKey(organizationId = requiredOrganizationId(), keyId = id)
+    if (!deleted) {
+        respond(HttpStatusCode.NotFound, ErrorResponse("Key not found"))
+        return
+    }
+    respond(HttpStatusCode.NoContent)
+}
 
-            // --- Log Indexes CRUD ---
+private fun Route.registerOtlpServiceRoutingRoutes(otlpServiceRoutingService: OtlpServiceRoutingService) {
+    get("/otlp/services") { call.listOtlpObservedServices(otlpServiceRoutingService) }
+    post("/otlp/service-mappings") { call.upsertOtlpServiceMapping(otlpServiceRoutingService) }
+    delete("/otlp/service-mappings/{id}") { call.deleteOtlpServiceMapping(otlpServiceRoutingService) }
+}
 
-            get("/logs/indexes") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt()
-                val indexes = logIndexService.list(orgId)
-                call.respond(
-                    HttpStatusCode.OK,
-                    mapOf("indexes" to indexes)
-                )
-            }
+private suspend fun ApplicationCall.listOtlpObservedServices(
+    otlpServiceRoutingService: OtlpServiceRoutingService
+) {
+    val services = otlpServiceRoutingService.listObservedServices(requiredOrganizationId())
+    respond(HttpStatusCode.OK, mapOf("services" to services))
+}
 
-            post("/logs/indexes") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt()
-                val request =
-                    call.receive<CreateLogIndexRequest>()
-                if (request.name.isBlank()) {
-                    call.respond(
-                        HttpStatusCode.BadRequest,
-                        ErrorResponse("Name is required")
-                    )
-                    return@post
-                }
-                val index = logIndexService.create(orgId, request)
-                call.respond(HttpStatusCode.Created, index)
-            }
+private suspend fun ApplicationCall.upsertOtlpServiceMapping(
+    otlpServiceRoutingService: OtlpServiceRoutingService
+) {
+    val response = otlpServiceRoutingService.upsertMapping(
+        requiredOrganizationId(),
+        receive<CreateOtlpServiceMappingRequest>()
+    )
+    if (response == null) {
+        respond(
+            HttpStatusCode.BadRequest,
+            ErrorResponse("Valid service name and organization project are required")
+        )
+        return
+    }
+    respond(HttpStatusCode.OK, response)
+}
 
-            put("/logs/indexes/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt()
-                val id = call.parameters["id"]?.toIntOrNull()
-                if (id == null) {
-                    call.respond(
-                        HttpStatusCode.BadRequest,
-                        ErrorResponse("Invalid index ID")
-                    )
-                    return@put
-                }
-                val request =
-                    call.receive<UpdateLogIndexRequest>()
-                val updated =
-                    logIndexService.update(orgId, id, request)
-                if (updated == null) {
-                    call.respond(
-                        HttpStatusCode.NotFound,
-                        ErrorResponse("Index not found")
-                    )
-                    return@put
-                }
-                call.respond(HttpStatusCode.OK, updated)
-            }
+private suspend fun ApplicationCall.deleteOtlpServiceMapping(
+    otlpServiceRoutingService: OtlpServiceRoutingService
+) {
+    val id = parameters["id"]?.toIntOrNull()
+    if (id == null) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid mapping ID"))
+        return
+    }
 
-            delete("/logs/indexes/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt()
-                val id = call.parameters["id"]?.toIntOrNull()
-                if (id == null) {
-                    call.respond(
-                        HttpStatusCode.BadRequest,
-                        ErrorResponse("Invalid index ID")
-                    )
-                    return@delete
-                }
-                val deleted =
-                    logIndexService.delete(orgId, id)
-                if (!deleted) {
-                    call.respond(
-                        HttpStatusCode.NotFound,
-                        ErrorResponse("Index not found")
-                    )
-                    return@delete
-                }
-                call.respond(HttpStatusCode.NoContent)
-            }
+    val deleted = otlpServiceRoutingService.deleteMapping(requiredOrganizationId(), id)
+    if (!deleted) {
+        respond(HttpStatusCode.NotFound, ErrorResponse("Mapping not found"))
+        return
+    }
+    respond(HttpStatusCode.NoContent)
+}
 
-            post("/logs/indexes/test") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt()
-                val body = call.receive<Map<String, String>>()
-                val filterQuery = body["filter_query"] ?: ""
-                val result =
-                    logIndexService.testFilter(orgId, filterQuery)
-                call.respond(HttpStatusCode.OK, result)
+private fun Route.registerLogIndexRoutes(
+    logIndexService: LogIndexService,
+    membershipService: OrgMembershipService
+) {
+    get("/logs/indexes") { call.listLogIndexes(logIndexService) }
+    post("/logs/indexes") {
+        if (call.ensureLogIndexAccess(membershipService)) call.createLogIndex(logIndexService)
+    }
+    put("/logs/indexes/{id}") {
+        if (call.ensureLogIndexAccess(membershipService)) call.updateLogIndex(logIndexService)
+    }
+    delete("/logs/indexes/{id}") {
+        if (call.ensureLogIndexAccess(membershipService)) call.deleteLogIndex(logIndexService)
+    }
+    post("/logs/indexes/test") {
+        if (call.ensureLogIndexAccess(membershipService)) call.testLogIndex(logIndexService)
+    }
+}
+
+private suspend fun ApplicationCall.listLogIndexes(logIndexService: LogIndexService) {
+    val indexes = logIndexService.list(requiredOrganizationId())
+    respond(HttpStatusCode.OK, mapOf("indexes" to indexes))
+}
+
+private suspend fun ApplicationCall.createLogIndex(logIndexService: LogIndexService) {
+    val request = receive<CreateLogIndexRequest>()
+    if (request.name.isBlank()) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse("Name is required"))
+        return
+    }
+    val index = logIndexService.create(requiredOrganizationId(), request)
+    respond(HttpStatusCode.Created, index)
+}
+
+private suspend fun ApplicationCall.updateLogIndex(logIndexService: LogIndexService) {
+    val id = parameters["id"]?.toIntOrNull()
+    if (id == null) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid index ID"))
+        return
+    }
+    val updated = logIndexService.update(requiredOrganizationId(), id, receive<UpdateLogIndexRequest>())
+    if (updated == null) {
+        respond(HttpStatusCode.NotFound, ErrorResponse("Index not found"))
+        return
+    }
+    respond(HttpStatusCode.OK, updated)
+}
+
+private suspend fun ApplicationCall.deleteLogIndex(logIndexService: LogIndexService) {
+    val id = parameters["id"]?.toIntOrNull()
+    if (id == null) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid index ID"))
+        return
+    }
+    val deleted = logIndexService.delete(requiredOrganizationId(), id)
+    if (!deleted) {
+        respond(HttpStatusCode.NotFound, ErrorResponse("Index not found"))
+        return
+    }
+    respond(HttpStatusCode.NoContent)
+}
+
+private suspend fun ApplicationCall.testLogIndex(logIndexService: LogIndexService) {
+    val body = receive<Map<String, String>>()
+    val result = logIndexService.testFilter(requiredOrganizationId(), body["filter_query"] ?: "")
+    respond(HttpStatusCode.OK, result)
+}
+
+private fun Route.registerLogQueryRoutes(logService: LogService) {
+    get("/logs") { call.queryLogs(logService) }
+    get("/logs/tag-values") { call.getLogTagValues(logService) }
+    get("/logs/filters") { call.getLogFilters(logService) }
+    get("/logs/aggregate") { call.aggregateLogs(logService) }
+    get("/logs/top") { call.getTopLogValues(logService) }
+    get("/logs/export") { call.exportLogs(logService) }
+}
+
+private suspend fun ApplicationCall.queryLogs(logService: LogService) {
+    val orgId = requiredOrganizationId().toLong()
+    val range = demoAwareLogTimeRange()
+    val logRequest =
+        LogQueryRequest(
+            limit = request.queryParameters["limit"]?.toIntOrNull() ?: 100,
+            cursor = request.queryParameters["cursor"],
+            query = request.queryParameters["q"] ?: request.queryParameters["query"],
+            levels = parseLevelQueryParams(this),
+            service = request.queryParameters["service"],
+            environment = request.queryParameters["environment"],
+            from = range.from,
+            to = range.to,
+            tags = parseTagQueryParams(this),
+            traceId = request.queryParameters["traceId"],
+            excludeService = request.queryParameters["excludeService"],
+            excludeEnvironment = request.queryParameters["excludeEnvironment"],
+            excludeContainerName = request.queryParameters["excludeContainerName"],
+            excludeTags = parseExcludeTagQueryParams(this)
+        )
+
+    val result = logService.queryLogs(orgId, logRequest)
+    respond(HttpStatusCode.OK, result)
+}
+
+private suspend fun ApplicationCall.getLogTagValues(logService: LogService) {
+    val key = request.queryParameters["key"]
+    if (key.isNullOrBlank()) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse("Missing tag key parameter"))
+        return
+    }
+
+    val result =
+        logService.getTagValues(
+            organizationId = requiredOrganizationId().toLong(),
+            key = key,
+            from = request.queryParameters["from"],
+            to = request.queryParameters["to"],
+            limit = request.queryParameters["limit"]?.toIntOrNull() ?: 50
+        )
+    respond(HttpStatusCode.OK, result)
+}
+
+private suspend fun ApplicationCall.getLogFilters(logService: LogService) {
+    val range = demoAwareLogTimeRange()
+    val result =
+        logService.getFilterOptionsWithCounts(
+            organizationId = requiredOrganizationId().toLong(),
+            from = range.from,
+            to = range.to
+        )
+    respond(HttpStatusCode.OK, result)
+}
+
+private suspend fun ApplicationCall.aggregateLogs(logService: LogService) {
+    val orgId = requiredOrganizationId().toLong()
+    val range = demoAwareLogTimeRange()
+    val result =
+        logService.aggregateLogs(
+            organizationId = orgId,
+            from = range.from,
+            to = range.to,
+            interval = request.queryParameters["interval"],
+            query = request.queryParameters["q"] ?: request.queryParameters["query"],
+            levels = parseLevelQueryParams(this),
+            service = request.queryParameters["service"],
+            environment = request.queryParameters["environment"],
+            tags = parseTagQueryParams(this),
+            excludeService = request.queryParameters["excludeService"],
+            excludeEnvironment = request.queryParameters["excludeEnvironment"],
+            excludeContainerName = request.queryParameters["excludeContainerName"],
+            excludeTags = parseExcludeTagQueryParams(this),
+            groupBy = request.queryParameters["groupBy"]
+        )
+    logger.debug {
+        "Aggregate logs response for org $orgId: ${result.buckets.size} buckets, " +
+            "totalCount=${result.totalCount}, interval=${result.interval}, from=${range.from}, " +
+            "to=${range.to}, isDemo=${isDemoUser()}"
+    }
+    respond(HttpStatusCode.OK, result)
+}
+
+private suspend fun ApplicationCall.getTopLogValues(logService: LogService) {
+    val field = request.queryParameters["field"]
+    if (field.isNullOrBlank()) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse("Missing field parameter"))
+        return
+    }
+
+    val range = demoAwareLogTimeRange()
+    val result =
+        logService.topValues(
+            organizationId = requiredOrganizationId().toLong(),
+            field = field,
+            limit = request.queryParameters["limit"]?.toIntOrNull() ?: 10,
+            from = range.from,
+            to = range.to,
+            query = request.queryParameters["q"] ?: request.queryParameters["query"],
+            levels = parseLevelQueryParams(this),
+            service = request.queryParameters["service"],
+            environment = request.queryParameters["environment"],
+            tags = parseTagQueryParams(this),
+            excludeService = request.queryParameters["excludeService"],
+            excludeEnvironment = request.queryParameters["excludeEnvironment"],
+            excludeContainerName = request.queryParameters["excludeContainerName"],
+            excludeTags = parseExcludeTagQueryParams(this)
+        )
+    respond(HttpStatusCode.OK, result)
+}
+
+private suspend fun ApplicationCall.exportLogs(logService: LogService) {
+    val csv =
+        logService.exportCsv(
+            organizationId = requiredOrganizationId().toLong(),
+            from = request.queryParameters["from"],
+            to = request.queryParameters["to"],
+            query = request.queryParameters["q"] ?: request.queryParameters["query"],
+            levels = parseLevelQueryParams(this),
+            service = request.queryParameters["service"],
+            environment = request.queryParameters["environment"],
+            tags = parseTagQueryParams(this),
+            excludeService = request.queryParameters["excludeService"],
+            excludeEnvironment = request.queryParameters["excludeEnvironment"],
+            excludeContainerName = request.queryParameters["excludeContainerName"],
+            excludeTags = parseExcludeTagQueryParams(this),
+            limit = request.queryParameters["limit"]?.toIntOrNull() ?: 5000
+        )
+
+    response.headers.append(HttpHeaders.ContentDisposition, "attachment; filename=\"logs-export.csv\"")
+    respondText(csv, ContentType.Text.CSV)
+}
+
+private fun Route.registerLogTailRoute(
+    logService: LogService,
+    membershipService: OrgMembershipService
+) {
+    get("/logs/tail") { call.tailLogs(logService, membershipService) }
+}
+
+private suspend fun ApplicationCall.tailLogs(
+    logService: LogService,
+    membershipService: OrgMembershipService
+) {
+    val identity = resolveTailIdentity()
+    if (identity == null) {
+        respond(HttpStatusCode.Unauthorized, ErrorResponse("Unauthorized"))
+        return
+    }
+    val (userId, orgId) = identity
+    if (!hasLogAccess(membershipService, orgId.toInt(), userId, LogPermissions.LIVE_TAIL)) {
+        respond(HttpStatusCode.Forbidden, ErrorResponse("Insufficient permissions"))
+        return
+    }
+
+    val filters =
+        LogTailFilters(
+            query = request.queryParameters["q"] ?: request.queryParameters["query"],
+            levels = parseLevelQueryParams(this).map { it.lowercase() }.toSet(),
+            service = request.queryParameters["service"],
+            environment = request.queryParameters["environment"],
+            containerName = request.queryParameters["containerName"] ?: request.queryParameters["container_name"],
+            tags = parseTagQueryParams(this),
+            excludeService = request.queryParameters["excludeService"],
+            excludeEnvironment = request.queryParameters["excludeEnvironment"],
+            excludeContainerName = request.queryParameters["excludeContainerName"]
+                ?: request.queryParameters["exclude_container_name"],
+            excludeTags = parseExcludeTagQueryParams(this)
+        )
+    val redisUrl = application.environment.config.property("redis.url").getString()
+    val channel = logService.liveChannel(orgId)
+    val queue = LinkedBlockingQueue<String>()
+
+    val client = RedisClient.create(RedisURI.create(redisUrl))
+    val connection = client.connectPubSub()
+    val listener = createLogTailListener(channel, queue)
+    connection.addListener(listener)
+    connection.sync().subscribe(channel)
+
+    response.headers.append(HttpHeaders.CacheControl, "no-cache")
+    response.headers.append(HttpHeaders.Connection, "keep-alive")
+    respondTextWriter(contentType = ContentType.Text.EventStream) {
+        try {
+            streamLogTailEvents(logService, queue, filters)
+        } catch (e: SerializationException) {
+            logger.debug { "SSE log tail disconnected for org $orgId: ${e.message}" }
+        } catch (e: IOException) {
+            logger.debug { "SSE log tail disconnected for org $orgId: ${e.message}" }
+        } catch (e: IllegalStateException) {
+            logger.debug { "SSE log tail disconnected for org $orgId: ${e.message}" }
+        } catch (e: IllegalArgumentException) {
+            logger.debug { "SSE log tail disconnected for org $orgId: ${e.message}" }
+        } finally {
+            closeLogTailConnection(connection, listener, channel)
+            client.shutdown()
+        }
+    }
+}
+
+private fun Writer.streamLogTailEvents(
+    logService: LogService,
+    queue: LinkedBlockingQueue<String>,
+    filters: LogTailFilters
+) {
+    write(": connected\n\n")
+    flush()
+
+    while (true) {
+        writeNextLogTailEvent(logService, queue, filters)
+    }
+}
+
+private fun Writer.writeNextLogTailEvent(
+    logService: LogService,
+    queue: LinkedBlockingQueue<String>,
+    filters: LogTailFilters
+) {
+    val next = queue.poll(SSE_POLL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+    if (next == null) {
+        write(": heartbeat\n\n")
+        flush()
+        return
+    }
+
+    val parsed = logService.parseLiveLog(next) ?: return
+    if (!logService.matchesTailFilters(parsed, filters)) return
+
+    write("data: $next\n\n")
+    flush()
+}
+
+private fun createLogTailListener(
+    channel: String,
+    queue: LinkedBlockingQueue<String>
+): RedisPubSubAdapter<String, String> =
+    object : RedisPubSubAdapter<String, String>() {
+        override fun message(ch: String, message: String) {
+            if (ch == channel) {
+                queue.offer(message)
             }
         }
+    }
 
-        authenticate("auth-jwt") {
-            get("/logs") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt().toLong()
-                val isDemo = call.isDemoUser()
-                val demoEpochMs = call.getDemoEpochMs()
+private fun closeLogTailConnection(
+    connection: io.lettuce.core.pubsub.StatefulRedisPubSubConnection<String, String>,
+    listener: RedisPubSubAdapter<String, String>,
+    channel: String,
+) {
+    try {
+        connection.sync().unsubscribe(channel)
+    } catch (_: SerializationException) {
+        // Ignored: cleanup failure should not mask SSE disconnect
+    } catch (_: IOException) {
+        // Ignored: cleanup failure should not mask SSE disconnect
+    } catch (_: IllegalStateException) {
+        // Ignored: cleanup failure should not mask SSE disconnect
+    } catch (_: IllegalArgumentException) {
+        // Ignored: cleanup failure should not mask SSE disconnect
+    }
+    connection.removeListener(listener)
+    connection.close()
+}
 
-                // For demo mode, if no time range specified, default to last 24 hours from demo epoch
-                val defaultFrom =
-                    if (isDemo && demoEpochMs != null && call.request.queryParameters["from"] == null) {
-                        val twentyFourHoursAgo = demoEpochMs - MILLIS_IN_24_HOURS
-                        Instant.ofEpochMilli(twentyFourHoursAgo).toString()
-                    } else {
-                        call.request.queryParameters["from"]
-                    }
+private fun ApplicationCall.demoAwareLogTimeRange(): LogTimeRange {
+    val requestedFrom = request.queryParameters["from"]
+    val requestedTo = request.queryParameters["to"]
+    val demoEpochMs = getDemoEpochMs()
+    if (!isDemoUser() || demoEpochMs == null) {
+        return LogTimeRange(requestedFrom, requestedTo)
+    }
 
-                val defaultTo =
-                    if (isDemo && demoEpochMs != null && call.request.queryParameters["to"] == null) {
-                        Instant.ofEpochMilli(demoEpochMs).toString()
-                    } else {
-                        call.request.queryParameters["to"]
-                    }
+    return LogTimeRange(
+        from = requestedFrom ?: Instant.ofEpochMilli(demoEpochMs - MILLIS_IN_24_HOURS).toString(),
+        to = requestedTo ?: Instant.ofEpochMilli(demoEpochMs).toString()
+    )
+}
 
-                val request =
-                    LogQueryRequest(
-                        limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 100,
-                        cursor = call.request.queryParameters["cursor"],
-                        query = call.request.queryParameters["q"] ?: call.request.queryParameters["query"],
-                        levels = parseLevelQueryParams(call),
-                        service = call.request.queryParameters["service"],
-                        environment = call.request.queryParameters["environment"],
-                        from = defaultFrom,
-                        to = defaultTo,
-                        tags = parseTagQueryParams(call),
-                        excludeService = call.request.queryParameters["excludeService"],
-                        excludeEnvironment = call.request.queryParameters["excludeEnvironment"],
-                        excludeContainerName = call.request.queryParameters["excludeContainerName"],
-                        excludeTags = parseExcludeTagQueryParams(call)
-                    )
+private fun ApplicationCall.requiredUserId(): Int =
+    principal<JWTPrincipal>()!!.payload.getClaim("userId").asInt()
 
-                val result = logService.queryLogs(orgId, request)
-                call.respond(HttpStatusCode.OK, result)
-            }
+private fun ApplicationCall.requiredOrganizationId(): Int =
+    principal<JWTPrincipal>()!!.payload.getClaim("orgId").asInt()
 
-            get("/logs/tag-values") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt().toLong()
+private suspend fun ApplicationCall.ensureLogIndexAccess(membershipService: OrgMembershipService): Boolean {
+    val allowed = hasLogAccess(
+        membershipService = membershipService,
+        organizationId = requiredOrganizationId(),
+        userId = requiredUserId(),
+        permission = LogPermissions.MANAGE
+    )
+    if (!allowed) {
+        respond(HttpStatusCode.Forbidden, ErrorResponse("Insufficient permissions"))
+    }
+    return allowed
+}
 
-                val key = call.request.queryParameters["key"]
-                if (key.isNullOrBlank()) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing tag key parameter"))
-                    return@get
-                }
+private suspend fun hasLogAccess(
+    membershipService: OrgMembershipService,
+    organizationId: Int,
+    userId: Int,
+    permission: String
+): Boolean {
+    val granular = FeatureRegistry.getPermissionBridge()?.hasPermission(organizationId, userId, permission)
+    return granular ?: suspendRunCatching {
+        membershipService.requireRole(organizationId, userId, OrgRole.ADMIN)
+        true
+    }.getOrElse { false }
+}
 
-                val result =
-                    logService.getTagValues(
-                        organizationId = orgId,
-                        key = key,
-                        from = call.request.queryParameters["from"],
-                        to = call.request.queryParameters["to"],
-                        limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
-                    )
-                call.respond(HttpStatusCode.OK, result)
-            }
-
-            get("/logs/filters") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt().toLong()
-                val isDemo = call.isDemoUser()
-                val demoEpochMs = call.getDemoEpochMs()
-
-                // For demo mode, if no time range specified, default to last 24 hours from demo epoch
-                val defaultFrom =
-                    if (isDemo && demoEpochMs != null && call.request.queryParameters["from"] == null) {
-                        val twentyFourHoursAgo = demoEpochMs - MILLIS_IN_24_HOURS
-                        Instant.ofEpochMilli(twentyFourHoursAgo).toString()
-                    } else {
-                        call.request.queryParameters["from"]
-                    }
-
-                val defaultTo =
-                    if (isDemo && demoEpochMs != null && call.request.queryParameters["to"] == null) {
-                        Instant.ofEpochMilli(demoEpochMs).toString()
-                    } else {
-                        call.request.queryParameters["to"]
-                    }
-
-                val result =
-                    logService.getFilterOptionsWithCounts(
-                        organizationId = orgId,
-                        from = defaultFrom,
-                        to = defaultTo
-                    )
-                call.respond(HttpStatusCode.OK, result)
-            }
-
-            get("/logs/aggregate") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt().toLong()
-                val isDemo = call.isDemoUser()
-                val demoEpochMs = call.getDemoEpochMs()
-
-                // For demo mode, if no time range specified, default to last 24 hours from demo epoch
-                val defaultFrom =
-                    if (isDemo && demoEpochMs != null && call.request.queryParameters["from"] == null) {
-                        val twentyFourHoursAgo = demoEpochMs - MILLIS_IN_24_HOURS
-                        Instant.ofEpochMilli(twentyFourHoursAgo).toString()
-                    } else {
-                        call.request.queryParameters["from"]
-                    }
-
-                val defaultTo =
-                    if (isDemo && demoEpochMs != null && call.request.queryParameters["to"] == null) {
-                        Instant.ofEpochMilli(demoEpochMs).toString()
-                    } else {
-                        call.request.queryParameters["to"]
-                    }
-
-                val result =
-                    logService.aggregateLogs(
-                        organizationId = orgId,
-                        from = defaultFrom,
-                        to = defaultTo,
-                        interval = call.request.queryParameters["interval"],
-                        query = call.request.queryParameters["q"] ?: call.request.queryParameters["query"],
-                        levels = parseLevelQueryParams(call),
-                        service = call.request.queryParameters["service"],
-                        environment = call.request.queryParameters["environment"],
-                        tags = parseTagQueryParams(call),
-                        excludeService = call.request.queryParameters["excludeService"],
-                        excludeEnvironment = call.request.queryParameters["excludeEnvironment"],
-                        excludeContainerName = call.request.queryParameters["excludeContainerName"],
-                        excludeTags = parseExcludeTagQueryParams(call),
-                        groupBy = call.request.queryParameters["groupBy"]
-                    )
-                logger.debug {
-                    "Aggregate logs response for org $orgId: ${result.buckets.size} buckets, " +
-                        "totalCount=${result.totalCount}, interval=${result.interval}, from=$defaultFrom, " +
-                        "to=$defaultTo, isDemo=$isDemo"
-                }
-                call.respond(HttpStatusCode.OK, result)
-            }
-
-            get("/logs/top") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt().toLong()
-                val isDemo = call.isDemoUser()
-                val demoEpochMs = call.getDemoEpochMs()
-
-                val field = call.request.queryParameters["field"]
-                if (field.isNullOrBlank()) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing field parameter"))
-                    return@get
-                }
-
-                // For demo mode, if no time range specified, default to last 24 hours from demo epoch
-                val defaultFrom =
-                    if (isDemo && demoEpochMs != null && call.request.queryParameters["from"] == null) {
-                        val twentyFourHoursAgo = demoEpochMs - MILLIS_IN_24_HOURS
-                        Instant.ofEpochMilli(twentyFourHoursAgo).toString()
-                    } else {
-                        call.request.queryParameters["from"]
-                    }
-
-                val defaultTo =
-                    if (isDemo && demoEpochMs != null && call.request.queryParameters["to"] == null) {
-                        Instant.ofEpochMilli(demoEpochMs).toString()
-                    } else {
-                        call.request.queryParameters["to"]
-                    }
-
-                val result =
-                    logService.topValues(
-                        organizationId = orgId,
-                        field = field,
-                        limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 10,
-                        from = defaultFrom,
-                        to = defaultTo,
-                        query = call.request.queryParameters["q"] ?: call.request.queryParameters["query"],
-                        levels = parseLevelQueryParams(call),
-                        service = call.request.queryParameters["service"],
-                        environment = call.request.queryParameters["environment"],
-                        tags = parseTagQueryParams(call),
-                        excludeService = call.request.queryParameters["excludeService"],
-                        excludeEnvironment = call.request.queryParameters["excludeEnvironment"],
-                        excludeContainerName = call.request.queryParameters["excludeContainerName"],
-                        excludeTags = parseExcludeTagQueryParams(call)
-                    )
-                call.respond(HttpStatusCode.OK, result)
-            }
-
-            get("/logs/export") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt().toLong()
-
-                val csv =
-                    logService.exportCsv(
-                        organizationId = orgId,
-                        from = call.request.queryParameters["from"],
-                        to = call.request.queryParameters["to"],
-                        query = call.request.queryParameters["q"] ?: call.request.queryParameters["query"],
-                        levels = parseLevelQueryParams(call),
-                        service = call.request.queryParameters["service"],
-                        environment = call.request.queryParameters["environment"],
-                        tags = parseTagQueryParams(call),
-                        excludeService = call.request.queryParameters["excludeService"],
-                        excludeEnvironment = call.request.queryParameters["excludeEnvironment"],
-                        excludeContainerName = call.request.queryParameters["excludeContainerName"],
-                        excludeTags = parseExcludeTagQueryParams(call),
-                        limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 5000
-                    )
-
-                call.response.headers.append(HttpHeaders.ContentDisposition, "attachment; filename=\"logs-export.csv\"")
-                call.respondText(csv, ContentType.Text.CSV)
-            }
-        }
-
-        get("/logs/tail") {
-            val principal = call.principal<JWTPrincipal>()
-            val orgId =
-                if (principal != null) {
-                    principal.payload.getClaim("orgId").asInt().toLong()
-                } else {
-                    val auth = authenticateTailRequest(call)
-                    if (auth == null) {
-                        call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Unauthorized"))
-                        return@get
-                    }
-                    auth.second
-                }
-
-            val filters =
-                LogTailFilters(
-                    query = call.request.queryParameters["q"] ?: call.request.queryParameters["query"],
-                    levels = parseLevelQueryParams(call).map { it.lowercase() }.toSet(),
-                    service = call.request.queryParameters["service"],
-                    environment = call.request.queryParameters["environment"]
-                )
-
-            val redisUrl =
-                call.application.environment.config
-                    .property("redis.url")
-                    .getString()
-            val channel = logService.liveChannel(orgId)
-            val queue = LinkedBlockingQueue<String>()
-
-            val client = RedisClient.create(RedisURI.create(redisUrl))
-            val connection = client.connectPubSub()
-            val listener =
-                object : RedisPubSubAdapter<String, String>() {
-                    override fun message(
-                        ch: String,
-                        message: String
-                    ) {
-                        if (ch == channel) {
-                            queue.offer(message)
-                        }
-                    }
-                }
-
-            connection.addListener(listener)
-            connection.sync().subscribe(channel)
-
-            call.response.headers.append(HttpHeaders.CacheControl, "no-cache")
-            call.response.headers.append(HttpHeaders.Connection, "keep-alive")
-
-            call.respondTextWriter(contentType = ContentType.Text.EventStream) {
-                try {
-                    write(": connected\n\n")
-                    flush()
-
-                    while (true) {
-                        val next = queue.poll(SSE_POLL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-                        if (next == null) {
-                            write(": heartbeat\n\n")
-                            flush()
-                            continue
-                        }
-
-                        val parsed = logService.parseLiveLog(next) ?: continue
-                        if (!logService.matchesTailFilters(parsed, filters)) continue
-
-                        write("data: $next\n\n")
-                        flush()
-                    }
-                } catch (e: SerializationException) {
-                    logger.debug { "SSE log tail disconnected for org $orgId: ${e.message}" }
-                } catch (e: IOException) {
-                    logger.debug { "SSE log tail disconnected for org $orgId: ${e.message}" }
-                } catch (e: IllegalStateException) {
-                    logger.debug { "SSE log tail disconnected for org $orgId: ${e.message}" }
-                } catch (e: IllegalArgumentException) {
-                    logger.debug { "SSE log tail disconnected for org $orgId: ${e.message}" }
-                } finally {
-                    try {
-                        connection.sync().unsubscribe(channel)
-                    } catch (_: SerializationException) {
-                        // Ignored: cleanup failure should not mask SSE disconnect
-                    } catch (_: IOException) {
-                        // Ignored: cleanup failure should not mask SSE disconnect
-                    } catch (_: IllegalStateException) {
-                        // Ignored: cleanup failure should not mask SSE disconnect
-                    } catch (_: IllegalArgumentException) {
-                        // Ignored: cleanup failure should not mask SSE disconnect
-                    }
-                    connection.removeListener(listener)
-                    connection.close()
-                    client.shutdown()
-                }
-            }
-        }
+private fun ApplicationCall.resolveTailIdentity(): Pair<Int, Long>? {
+    val principal = principal<JWTPrincipal>()
+    val principalUserId = principal?.payload?.getClaim("userId")?.asInt()
+    val principalOrgId = principal?.payload?.getClaim("orgId")?.asInt()?.toLong()
+    return if (principalUserId != null && principalOrgId != null) {
+        principalUserId to principalOrgId
+    } else {
+        authenticateTailRequest(this)
     }
 }
 
@@ -600,15 +680,33 @@ fun Route.logIngestRoutes(
     quotaService: BillingQuotaService = GlobalContext.get().get(),
     otlpApiKeyService: OtlpApiKeyService = GlobalContext.get().get(),
     eventService: EventService = GlobalContext.get().get(),
+    otlpServiceRoutingService: OtlpServiceRoutingService = GlobalContext.get().get(),
+    projectIdResolver: ProjectIdResolver = ProjectIdResolver(),
 ) {
     route("/v1") {
         // Standard OTLP/HTTP path alias
         post("/logs") {
-            handleOtlpLogIngest(call, logService, quotaService, otlpApiKeyService, eventService)
+            handleOtlpLogIngest(
+                call,
+                logService,
+                quotaService,
+                otlpApiKeyService,
+                eventService,
+                otlpServiceRoutingService,
+                projectIdResolver
+            )
         }
         // Moneat convention path
         post("/logs/otlp") {
-            handleOtlpLogIngest(call, logService, quotaService, otlpApiKeyService, eventService)
+            handleOtlpLogIngest(
+                call,
+                logService,
+                quotaService,
+                otlpApiKeyService,
+                eventService,
+                otlpServiceRoutingService,
+                projectIdResolver
+            )
         }
 
         post("/logs/ingest") {
@@ -665,7 +763,8 @@ fun Route.logIngestRoutes(
                     .propertyOrNull("logs.queueKey")
                     ?.getString()
                     ?: "moneat:logs:queue"
-            val accepted = logService.enqueueSdkLogs(organizationId.toLong(), entries, queueKey)
+            val routedEntries = routeLogEntries(organizationId, entries, otlpServiceRoutingService)
+            val accepted = logService.enqueueSdkLogs(organizationId.toLong(), routedEntries, queueKey)
             call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted))
         }
     }
@@ -677,6 +776,8 @@ private suspend fun handleOtlpLogIngest(
     quotaService: BillingQuotaService,
     otlpApiKeyService: OtlpApiKeyService,
     eventService: EventService,
+    otlpServiceRoutingService: OtlpServiceRoutingService,
+    projectIdResolver: ProjectIdResolver,
 ) {
     val contentType = call.request.header(HttpHeaders.ContentType) ?: ""
     val isJson = contentType.contains("application/json", ignoreCase = true)
@@ -692,7 +793,7 @@ private suspend fun handleOtlpLogIngest(
     }
 
     val organizationId: Int? =
-        OtlpAuth.resolveOtlpIngestOrganizationId(call, otlpApiKeyService, eventService)
+        OtlpAuth.resolveOtlpIngestOrganizationId(call, otlpApiKeyService, eventService, projectIdResolver)
 
     if (organizationId == null) {
         call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Missing or invalid OTLP API key or DSN"))
@@ -741,6 +842,31 @@ private suspend fun handleOtlpLogIngest(
             .propertyOrNull("logs.queueKey")
             ?.getString()
             ?: "moneat:logs:queue"
-    val accepted = logService.enqueueSdkLogs(organizationId.toLong(), parsedEntries, queueKey)
+    val routedEntries = routeLogEntries(organizationId, parsedEntries, otlpServiceRoutingService)
+    val accepted = logService.enqueueSdkLogs(organizationId.toLong(), routedEntries, queueKey)
     call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted))
+}
+
+private fun routeLogEntries(
+    organizationId: Int,
+    entries: List<com.moneat.logs.models.LogIngestEntry>,
+    routingService: OtlpServiceRoutingService,
+): List<com.moneat.logs.models.LogIngestEntry> {
+    val descriptors = entries.map { entry ->
+        val serviceName = entry.service ?: entry.resourceAttributes?.get("service.name")
+        OtlpServiceDescriptor(
+            serviceNamespace = entry.serviceNamespace ?: entry.resourceAttributes?.get("service.namespace"),
+            serviceName = serviceName,
+            environment = entry.environment,
+        )
+    }
+    val projectIds = routingService.resolveProjectIds(organizationId, descriptors, OtlpSignalType.LOGS)
+    return entries.map { entry ->
+        val serviceName = entry.service ?: entry.resourceAttributes?.get("service.name")
+        val identity = routingService.normalizeIdentity(
+            entry.serviceNamespace ?: entry.resourceAttributes?.get("service.namespace"),
+            serviceName,
+        )
+        entry.copy(projectId = identity?.let { projectIds[it] })
+    }
 }

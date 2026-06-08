@@ -246,6 +246,16 @@ describe('ApiClient', () => {
       await expect(api.getProjects()).rejects.toThrow('Project not found')
     })
 
+    it('preserves response status on API errors for retry policy decisions', async () => {
+      server.use(
+        http.get(`${API_BASE}/v1/projects`, () => {
+          return HttpResponse.json({ error: 'Project not found' }, { status: 404 })
+        })
+      )
+
+      await expect(api.getProjects()).rejects.toMatchObject({ status: 404 })
+    })
+
     it('falls back to status text when no error field in response', async () => {
       server.use(
         http.get(`${API_BASE}/v1/projects`, () => {

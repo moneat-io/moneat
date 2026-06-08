@@ -32,7 +32,7 @@ function SpanDetailPage() {
   
   const { data: spanDetail, isLoading, error } = useQuery({
     queryKey: ['span', projectId, spanId],
-    queryFn: () => api.getSpanDetails(parseInt(projectId), spanId),
+    queryFn: () => api.getSpanDetails(projectId, spanId),
   })
 
   if (isLoading) {
@@ -48,7 +48,7 @@ function SpanDetailPage() {
       <div className="p-6 space-y-4">
         <div className="text-destructive font-semibold">Span not found</div>
         <p className="text-muted-foreground text-sm">
-          The span <span className="font-mono">{spanId}</span> could not be found in project {projectId}.
+          The span <span className="font-mono">{spanId}</span> could not be found in service {projectId}.
         </p>
         <p className="text-muted-foreground text-sm">
           This could happen if:

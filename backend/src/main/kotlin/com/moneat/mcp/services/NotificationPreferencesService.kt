@@ -22,6 +22,7 @@ import com.moneat.events.models.ProjectNotificationPreferences
 import com.moneat.shared.models.NotificationPreferences
 import com.moneat.shared.models.Projects
 import kotlin.time.Clock
+import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
@@ -71,20 +72,24 @@ class NotificationPreferencesService {
             }.toList()
 
         val projectIds = projectPrefs.map { it[NotificationPreferences.project_id]!! }
-        val projectNames: Map<Long, String> = if (projectIds.isEmpty()) {
+        val projectRows = if (projectIds.isEmpty()) {
             emptyMap()
         } else {
             Projects
                 .selectAll()
                 .where { Projects.id inList projectIds }
-                .associate { it[Projects.id] to it[Projects.name] }
+                .associate { row ->
+                    row[Projects.id] to (row[Projects.name] to projectResourceId(row))
+                }
         }
 
         val projects = projectPrefs.map { pref ->
             val projectId = pref[NotificationPreferences.project_id]!!
+            val projectRow = projectRows[projectId]
             ProjectNotificationPreferences(
                 projectId = projectId,
-                projectName = projectNames[projectId] ?: "Unknown",
+                projectResourceId = projectRow?.second ?: projectId.toString(),
+                projectName = projectRow?.first ?: "Unknown",
                 issueAlerts = pref[NotificationPreferences.issue_alerts],
                 errorAlerts = pref[NotificationPreferences.error_alerts],
                 weeklySummary = pref[NotificationPreferences.weekly_summary],
@@ -93,6 +98,11 @@ class NotificationPreferencesService {
         }
 
         NotificationPreferencesResponse(global = globalPrefs, projects = projects)
+    }
+
+    private fun projectResourceId(row: ResultRow): String {
+        val resourceId = row[Projects.resource_id].toString()
+        return resourceId.takeUnless { it == "null" } ?: row[Projects.id].toString()
     }
 
     fun updatePreferences(

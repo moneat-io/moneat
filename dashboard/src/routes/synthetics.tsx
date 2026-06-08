@@ -18,8 +18,8 @@ import {createFileRoute, Outlet, redirect} from '@tanstack/react-router'
 import {BookOpen, FlaskConical, Plus} from 'lucide-react'
 import {useState} from 'react'
 import {api} from '@/lib/api'
-import {BetaBanner} from '@/components/BetaBanner'
 import {Button} from '@/components/ui/button'
+import {PageHeader} from '@/components/ui/page-header'
 import CreateSyntheticTestDialog from '@/components/CreateSyntheticTestDialog'
 
 export const Route = createFileRoute('/synthetics')({
@@ -37,29 +37,24 @@ function SyntheticsLayout() {
 
   return (
     <div className="space-y-2">
-      <BetaBanner pageKey="synthetics" />
-      <div className="p-3 space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 shrink-0">
-            <FlaskConical className="h-3.5 w-3.5 text-white" />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-lg font-bold">Synthetics</h2>
-            <p className="text-muted-foreground text-xs">Synthetic test results and monitoring</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <a href="/docs/datadog-agent/synthetics" target="_blank" rel="noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
-            <BookOpen className="h-3 w-3" />
-            View docs
-          </a>
-          <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-1 text-xs">
-            <Plus className="h-3 w-3" />New Test
-          </Button>
-        </div>
-      </div>
+      <div className="px-6 py-4 space-y-4">
+      <PageHeader
+        icon={FlaskConical}
+        title="Synthetics"
+        description="Synthetic test results and monitoring"
+        actions={
+          <>
+            <a href="/docs/datadog-agent/synthetics" target="_blank" rel="noreferrer"
+              className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+              <BookOpen className="h-3.5 w-3.5" />
+              View docs
+            </a>
+            <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-1.5">
+              <Plus className="h-4 w-4" />New test
+            </Button>
+          </>
+        }
+      />
       <Outlet />
     </div>
       <CreateSyntheticTestDialog

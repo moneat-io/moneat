@@ -24,8 +24,10 @@
 #       --features oncall
 #
 # Features:
-#   sso     — SAML/OIDC single sign-on
-#   oncall  — On-call scheduling and incident management
+#   sso                 — SAML/OIDC single sign-on
+#   oncall              — On-call scheduling and incident management
+#   advanced_rbac       — Fine-grained role-based access control
+#   workflows_advanced  — Advanced workflow automation
 #
 # Keep the private key offline and secure. Never commit it to any repository.
 set -euo pipefail
@@ -49,7 +51,7 @@ done
 
 # Defaults
 [[ -z "$PLAN" ]] && PLAN="enterprise"
-[[ -z "$FEATURES" ]] && FEATURES="sso,oncall"
+[[ -z "$FEATURES" ]] && FEATURES="sso,oncall,advanced_rbac,workflows_advanced"
 
 # Validate required args
 missing=()

@@ -153,6 +153,7 @@ class UserRepositoryImpl : UserRepository {
                     (Users.email eq normalizedEmail) and
                         (SsoConfigurations.emailDomain.isNotNull()) and
                         (SsoConfigurations.emailDomain.trim().lowerCase() eq normalizedDomain) and
+                        (SsoConfigurations.emailDomainVerified eq true) and
                         (SsoConfigurations.isEnabled eq true) and
                         (SsoConfigurations.requireSso eq true)
                 }.firstOrNull() != null

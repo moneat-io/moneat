@@ -16,18 +16,21 @@
 
 package com.moneat.incident.services
 
+import com.moneat.alerts.models.AlertLifecycleEvent
+import com.moneat.alerts.models.AlertPriority
+import com.moneat.alerts.models.AlertSource
+import com.moneat.alerts.models.AlertStatus
 import com.moneat.config.EnvConfig
 import com.moneat.enterprise.FeatureRegistry
-import com.moneat.incident.models.AlertSource
-import com.moneat.incident.models.IncidentEvent
 import com.moneat.incident.models.IncidentEventLog
 import com.moneat.incident.models.IncidentProviderConfigs
 import com.moneat.incident.models.IncidentRoutingRules
-import com.moneat.incident.models.IncidentSeverity
-import com.moneat.incident.models.IncidentStatus
 import com.moneat.incident.models.ProviderConfig
 import com.moneat.shared.models.EscalationPolicies
 import com.moneat.shared.models.EscalationPolicyAlertSources
+import com.moneat.utils.suspendRunCatching
+import com.moneat.workflows.services.AlertResolvedWorkflowEvent
+import com.moneat.workflows.services.WorkflowService
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
@@ -40,13 +43,14 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.slf4j.LoggerFactory
 import kotlin.time.Clock
-import com.moneat.utils.suspendRunCatching
 
 /**
  * Middleware service for dispatching incident alerts to configured providers.
- * Handles routing rule lookup, severity resolution, and event logging.
+ * Handles routing rule lookup, alert priority resolution, and event logging.
  */
-class IncidentService {
+class IncidentService(
+    private val workflowService: WorkflowService = WorkflowService()
+) {
     private val logger = LoggerFactory.getLogger(IncidentService::class.java)
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -62,17 +66,32 @@ class IncidentService {
 
     /**
      * Fire an alert to all enabled incident providers for the organization.
-     * Severity is resolved in order: per-monitor override > routing rule default > skip
+     * Priority is resolved in order: per-monitor override > routing rule default > skip
      */
-    suspend fun fireAlert(event: IncidentEvent) {
-        suspendRunCatching {
-            // Check if native on-call is enabled
-            val onCallEnabled = EnvConfig.get("ONCALL_ENABLED", "false").toBoolean()
+    suspend fun fireAlert(
+        event: AlertLifecycleEvent,
+        publishWorkflow: Boolean = true
+    ) {
+        // Check if native on-call is enabled
+        val onCallEnabled = EnvConfig.get("ONCALL_ENABLED", "false").toBoolean()
 
-            if (onCallEnabled) {
+        if (onCallEnabled) {
+            suspendRunCatching {
                 triggerNativeEscalation(event)
+            }.getOrElse { e ->
+                logger.error("Error triggering native escalation", e)
             }
+        }
 
+        if (publishWorkflow) {
+            suspendRunCatching {
+                workflowService.publishAlertTriggered(event)
+            }.getOrElse { e ->
+                logger.error("Error publishing alert-triggered workflow", e)
+            }
+        }
+
+        suspendRunCatching {
             val configs = getEnabledProviderConfigs(event.organizationId)
             if (configs.isEmpty()) {
                 logger.debug("No enabled incident providers for org ${event.organizationId}")
@@ -125,8 +144,29 @@ class IncidentService {
     suspend fun resolveAlert(
         organizationId: Int,
         source: AlertSource,
-        deduplicationKey: String
+        deduplicationKey: String,
+        title: String = "Alert resolved",
+        description: String = "Moneat resolved alert $deduplicationKey",
+        moneatUrl: String = "",
+        publishWorkflow: Boolean = true
     ) {
+        if (publishWorkflow) {
+            suspendRunCatching {
+                workflowService.publishAlertResolved(
+                    AlertResolvedWorkflowEvent(
+                        organizationId = organizationId,
+                        source = source.name,
+                        deduplicationKey = deduplicationKey,
+                        title = title,
+                        description = description,
+                        moneatUrl = moneatUrl,
+                    )
+                )
+            }.getOrElse { e ->
+                logger.error("Error publishing alert-resolved workflow", e)
+            }
+        }
+
         suspendRunCatching {
             val configs = getEnabledProviderConfigs(organizationId)
             if (configs.isEmpty()) {
@@ -197,14 +237,18 @@ class IncidentService {
     suspend fun autoResolveAlert(
         organizationId: Int,
         source: AlertSource,
-        deduplicationKey: String
+        deduplicationKey: String,
+        title: String = "Alert resolved",
+        description: String = "Moneat resolved alert $deduplicationKey",
+        moneatUrl: String = "",
+        publishWorkflow: Boolean = true
     ) {
         if (!isAutoResolvableSource(source)) {
             logger.warn("Skipping auto-resolve for source without clear signal: $source")
             return
         }
 
-        resolveAlert(organizationId, source, deduplicationKey)
+        resolveAlert(organizationId, source, deduplicationKey, title, description, moneatUrl, publishWorkflow)
     }
 
     internal fun isAutoResolvableSource(source: AlertSource): Boolean {
@@ -212,17 +256,17 @@ class IncidentService {
     }
 
     /**
-     * Get incident severity from per-monitor override or routing rule.
-     * Returns null if no severity is configured (alert should be skipped).
+     * Get alert priority from per-monitor override or routing rule.
+     * Returns null if no priority is configured (alert should be skipped).
      */
-    fun resolveIncidentSeverity(
+    fun resolveAlertPriority(
         providerConfigId: Int,
         alertSource: AlertSource,
-        monitorSeverityOverride: String?
-    ): IncidentSeverity? {
+        monitorPriorityOverride: String?
+    ): AlertPriority? {
         // First check per-monitor override
-        monitorSeverityOverride?.let {
-            return IncidentSeverity.fromString(it)
+        monitorPriorityOverride?.let {
+            return AlertPriority.fromString(it)
         }
 
         // Fall back to routing rule
@@ -235,7 +279,7 @@ class IncidentService {
                         IncidentRoutingRules.alertType.isNull()
                 }.firstOrNull()
                 ?.let { row ->
-                    IncidentSeverity.fromString(row[IncidentRoutingRules.incidentSeverity])
+                    AlertPriority.fromString(row[IncidentRoutingRules.alertPriority])
                 }
         }
     }
@@ -283,7 +327,7 @@ class IncidentService {
 
     private fun logEvent(
         config: ProviderConfig,
-        event: IncidentEvent,
+        event: AlertLifecycleEvent,
         success: Boolean,
         providerIncidentId: String? = null,
         errorMessage: String? = null
@@ -294,7 +338,7 @@ class IncidentService {
                 it[IncidentEventLog.providerConfigId] = config.id
                 it[IncidentEventLog.alertSource] = event.source.name
                 it[IncidentEventLog.deduplicationKey] = event.deduplicationKey
-                it[IncidentEventLog.incidentSeverity] = event.severity.name
+                it[IncidentEventLog.alertPriority] = event.priority.wire
                 it[IncidentEventLog.incidentStatus] = event.status.name
                 it[IncidentEventLog.title] = event.title
                 it[IncidentEventLog.description] = event.description
@@ -322,8 +366,8 @@ class IncidentService {
                 it[IncidentEventLog.providerConfigId] = config.id
                 it[IncidentEventLog.alertSource] = source.name
                 it[IncidentEventLog.deduplicationKey] = deduplicationKey
-                it[IncidentEventLog.incidentSeverity] = "N/A"
-                it[IncidentEventLog.incidentStatus] = IncidentStatus.RESOLVED.name
+                it[IncidentEventLog.alertPriority] = "N/A"
+                it[IncidentEventLog.incidentStatus] = AlertStatus.RESOLVED.name
                 it[IncidentEventLog.title] = "Alert Resolved"
                 it[IncidentEventLog.description] = null
                 it[IncidentEventLog.providerIncidentId] = providerIncidentId
@@ -338,7 +382,7 @@ class IncidentService {
     /**
      * Trigger native on-call escalation engine if configured.
      */
-    private suspend fun triggerNativeEscalation(event: IncidentEvent) {
+    private suspend fun triggerNativeEscalation(event: AlertLifecycleEvent) {
         val bridge = FeatureRegistry.getOnCallBridge()
         if (bridge == null) {
             logger.debug("On-call enterprise module not loaded — skipping native escalation")
@@ -353,18 +397,17 @@ class IncidentService {
                 return
             }
 
-            // Resolve priority level from severity
-            val priority = bridge.resolvePriority(event.organizationId, event.severity.name)
+            val priority = bridge.resolvePriority(event.organizationId, event.priority.wire)
             if (priority == null) {
-                logger.warn("Could not resolve priority for severity ${event.severity}")
+                logger.warn("Could not resolve alert priority ${event.priority.wire}")
                 return
             }
 
             // Check if we should escalate based on business hours
-            val shouldEscalate = bridge.shouldEscalate(event.organizationId, priority.priorityLevel)
+            val shouldEscalate = bridge.shouldEscalate(event.organizationId, priority.priority)
 
             if (!shouldEscalate) {
-                logger.debug("Alert deferred: outside business hours for priority ${priority.priorityLevel}")
+                logger.debug("Alert deferred: outside business hours for priority ${priority.priority}")
                 return
             }
 
@@ -375,7 +418,7 @@ class IncidentService {
                     escalationPolicyId = escalationPolicyId,
                     title = event.title,
                     description = event.description,
-                    priorityLevel = priority.priorityLevel,
+                    priority = priority.priority,
                     alertSource = event.source.name,
                     deduplicationKey = event.deduplicationKey,
                     metadata =

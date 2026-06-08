@@ -41,6 +41,7 @@ object PricingTierConfigs : Table("pricing_tier_configs") {
     val replay_retention_days = integer("replay_retention_days").default(0)
     val llm_retention_days = integer("llm_retention_days").default(0)
     val log_retention_days = integer("log_retention_days")
+    val apm_trace_retention_days = integer("apm_trace_retention_days").default(30)
     val status_pages_enabled = bool("status_pages_enabled").default(true)
     val status_page_custom_domain_enabled = bool("status_page_custom_domain_enabled").default(true)
     val session_replay_enabled = bool("session_replay_enabled").default(true)
@@ -175,6 +176,7 @@ data class PricingTierConfigResponse(
     val logRetentionDays: Int,
     val replayRetentionDays: Int,
     val llmRetentionDays: Int,
+    val apmTraceRetentionDays: Int,
     val statusPagesEnabled: Boolean,
     val statusPageCustomDomainEnabled: Boolean,
     val sessionReplayEnabled: Boolean,
@@ -251,6 +253,7 @@ data class BillingUsageResponse(
     val logRetentionDays: Int = 0,
     val replayRetentionDays: Int = 0,
     val llmRetentionDays: Int = 0,
+    val apmTraceRetentionDays: Int,
     val usedUnits: Long,
     val usedErrors: Long,
     val errorLimit: Long,
@@ -372,6 +375,69 @@ data class ApmSpanUsageDebugGroup(
 )
 
 @Serializable
+data class BillingUsageInsightsResponse(
+    val organizationId: Int,
+    val periodStart: String,
+    val periodEnd: String,
+    val generatedAt: String,
+    val billingMode: String,
+    val usage: BillingUsageResponse,
+    val dimensions: List<BillingInsightDimension>,
+    val apmSpanDebug: ApmSpanUsageDebugResponse? = null
+)
+
+@Serializable
+data class BillingInsightDimension(
+    val key: String,
+    val label: String,
+    val unit: String,
+    val used: Long,
+    val baseLimit: Long,
+    val effectiveLimit: Long?,
+    val percentOfBase: Double,
+    val percentOfEffective: Double?,
+    val overageCentsEstimate: Int,
+    val overageRateLabel: String?,
+    val forecast: BillingForecast,
+    val contributors: List<BillingContributor>,
+    val daily: List<BillingInsightDailyPoint>
+)
+
+@Serializable
+data class BillingForecast(
+    val window: String,
+    val confidence: String,
+    val dailyRate: Double,
+    val projectedPeriodEndUsage: Long,
+    val projectedBaseLimitHitDate: String?,
+    val projectedEffectiveLimitHitDate: String?,
+    val projectedOverageCents: Int,
+    val riskLevel: String,
+    val summary: String
+)
+
+@Serializable
+data class BillingContributor(
+    val key: String,
+    val label: String,
+    val kind: String,
+    val eventType: String? = null,
+    val projectId: Int? = null,
+    val projectName: String? = null,
+    val projectSlug: String? = null,
+    val units: Long,
+    val bytes: Long,
+    val percentage: Double
+)
+
+@Serializable
+data class BillingInsightDailyPoint(
+    val date: String,
+    val value: Long,
+    val bytes: Long
+)
+
+@Serializable
 data class CheckoutSessionRequest(
     val tierName: String,
     val billingInterval: String = "monthly", // "monthly" or "yearly"
@@ -438,6 +504,7 @@ data class CreateTierVersionRequest(
     val logRetentionDays: Int? = null,
     val replayRetentionDays: Int? = null,
     val llmRetentionDays: Int? = null,
+    val apmTraceRetentionDays: Int? = null,
     val statusPagesEnabled: Boolean? = null,
     val statusPageCustomDomainEnabled: Boolean? = null,
     val sessionReplayEnabled: Boolean? = null,

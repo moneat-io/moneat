@@ -24,8 +24,10 @@ import com.moneat.analytics.models.BreakdownRow
 import com.moneat.analytics.models.FunnelResponse
 import com.moneat.analytics.models.FunnelStep
 import com.moneat.analytics.models.RealtimeResponse
+import com.moneat.analytics.models.RetentionResponse
 import com.moneat.analytics.models.TimeseriesPoint
 import com.moneat.analytics.routes.analyticsRoutes
+import com.moneat.analytics.services.AnalyticsQueryScope
 import com.moneat.analytics.services.AnalyticsService
 import com.moneat.events.services.DashboardService
 import com.moneat.shared.models.Memberships
@@ -60,6 +62,7 @@ import kotlin.test.assertTrue
 class AnalyticsRoutesTest {
     companion object {
         private const val PROJECT_ID = 1L
+        private const val SECOND_PROJECT_ID = 2L
         private const val OVERVIEW_PERIOD_30D = "/overview?period=30d"
         private var db: Database? = null
     }
@@ -90,7 +93,8 @@ class AnalyticsRoutesTest {
         installJwtAuth()
     }
 
-    private fun token(userId: Int): String = RouteTestSupport.createToken(userId)
+    private fun token(userId: Int, orgId: Int? = null): String =
+        RouteTestSupport.createToken(userId, orgId)
 
     private fun seedUser(): Int = transaction {
         Users.insert {
@@ -98,6 +102,24 @@ class AnalyticsRoutesTest {
             it[password_hash] = "hash"
             it[email_verified] = true
         } get Users.id
+    }
+
+    private fun seedOrganizationMembership(): Pair<Int, Int> {
+        val userId = seedUser()
+        val orgId = transaction {
+            Organizations.insert {
+                it[name] = "Analytics Org"
+                it[slug] = "analytics-org-${System.nanoTime()}"
+            } get Organizations.id
+        }
+        transaction {
+            Memberships.insert {
+                it[user_id] = userId
+                it[organization_id] = orgId
+                it[role] = "owner"
+            }
+        }
+        return userId to orgId
     }
 
     private fun installRoutes(app: Application) {
@@ -144,9 +166,16 @@ class AnalyticsRoutesTest {
 
     private val funnelResponse = FunnelResponse(
         steps = listOf(
-            FunnelStep(name = "/home", visitors = 100, dropoff = 0.0),
-            FunnelStep(name = "/signup", visitors = 40, dropoff = 60.0),
-        )
+            FunnelStep(name = "/home", visitors = 100, dropoff = 0.0, conversionRate = 100.0),
+            FunnelStep(name = "/signup", visitors = 40, dropoff = 60.0, conversionRate = 40.0),
+        ),
+        overallConversion = 40.0,
+    )
+
+    private val retentionResponse = RetentionResponse(
+        startEvent = "signup.completed",
+        returnEvent = "recording.started",
+        cohorts = emptyList(),
     )
 
     // ──── Auth ────
@@ -190,6 +219,117 @@ class AnalyticsRoutesTest {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.BadRequest, r.status)
+    }
+
+    @Test
+    fun `GET org overview forwards service id and name filters`() = testApplication {
+        val (userId, orgId) = seedOrganizationMembership()
+        every { mockDashboardService.getServiceIdsForOrganization(orgId) } returns
+            listOf(PROJECT_ID, SECOND_PROJECT_ID)
+        every { mockDashboardService.resolveServiceId(orgId, "API") } returns SECOND_PROJECT_ID
+        coEvery {
+            mockAnalyticsService.getOverview(
+                match<AnalyticsQueryScope> { it.serviceIds == listOf(PROJECT_ID, SECOND_PROJECT_ID) },
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+            )
+        } returns overviewResponse
+
+        application { installRoutes(this) }
+        val r = client.get("/v1/analytics/overview?period=30d&serviceIds=$PROJECT_ID&services=API") {
+            withAuth(token(userId, orgId))
+        }
+
+        assertEquals(HttpStatusCode.OK, r.status)
+        coVerify(exactly = 1) {
+            mockAnalyticsService.getOverview(
+                match<AnalyticsQueryScope> { it.serviceIds == listOf(PROJECT_ID, SECOND_PROJECT_ID) },
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+            )
+        }
+    }
+
+    @Test
+    fun `GET org pages uses all organization services when filters are absent`() = testApplication {
+        val (userId, orgId) = seedOrganizationMembership()
+        every { mockDashboardService.getServiceIdsForOrganization(orgId) } returns
+            listOf(PROJECT_ID, SECOND_PROJECT_ID)
+        coEvery {
+            mockAnalyticsService.getPages(
+                match<AnalyticsQueryScope> { it.serviceIds == listOf(PROJECT_ID, SECOND_PROJECT_ID) },
+                any(),
+                any(),
+                any(),
+                10,
+            )
+        } returns breakdownResponse
+
+        application { installRoutes(this) }
+        val r = client.get("/v1/analytics/pages?period=30d&limit=10") {
+            withAuth(token(userId, orgId))
+        }
+
+        assertEquals(HttpStatusCode.OK, r.status)
+        coVerify(exactly = 1) {
+            mockAnalyticsService.getPages(
+                match<AnalyticsQueryScope> { it.serviceIds == listOf(PROJECT_ID, SECOND_PROJECT_ID) },
+                any(),
+                any(),
+                any(),
+                10,
+            )
+        }
+    }
+
+    @Test
+    fun `GET org overview returns 400 for invalid service id filter`() = testApplication {
+        val (userId, orgId) = seedOrganizationMembership()
+
+        application { installRoutes(this) }
+        val r = client.get("/v1/analytics/overview?serviceIds=not-a-service-id") {
+            withAuth(token(userId, orgId))
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, r.status)
+        coVerify(exactly = 0) {
+            mockAnalyticsService.getOverview(
+                any<AnalyticsQueryScope>(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+            )
+        }
+    }
+
+    @Test
+    fun `GET org overview returns 404 when user lacks organization access`() = testApplication {
+        val userId = seedUser()
+
+        application { installRoutes(this) }
+        val r = client.get("/v1/analytics/overview") {
+            withAuth(token(userId, 99999))
+        }
+
+        assertEquals(HttpStatusCode.NotFound, r.status)
+        coVerify(exactly = 0) {
+            mockAnalyticsService.getOverview(
+                any<AnalyticsQueryScope>(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+            )
+        }
     }
 
     // ──── Overview ────
@@ -568,17 +708,20 @@ class AnalyticsRoutesTest {
     // ──── Events ────
 
     @Test
-    fun `GET events returns 200`() = testApplication {
+    fun `GET events forwards product grouping params`() = testApplication {
         val userId = seedUser()
         stubAccess(userId)
         coEvery {
-            mockAnalyticsService.getEvents(PROJECT_ID, any(), any(), any(), any())
+            mockAnalyticsService.getEvents(PROJECT_ID, any(), any(), any(), 25, "user_id", "server")
         } returns breakdownResponse
         application { installRoutes(this) }
-        val r = client.get(authedGet("/events?period=30d")) {
+        val r = client.get(authedGet("/events?period=30d&limit=25&group_by=user_id&source=server")) {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
+        coVerify(exactly = 1) {
+            mockAnalyticsService.getEvents(PROJECT_ID, any(), any(), any(), 25, "user_id", "server")
+        }
     }
 
     // ──── Realtime ────
@@ -603,7 +746,7 @@ class AnalyticsRoutesTest {
         val userId = seedUser()
         stubAccess(userId)
         coEvery {
-            mockAnalyticsService.getFunnel(PROJECT_ID, any(), any(), any())
+            mockAnalyticsService.getFunnel(PROJECT_ID, any(), any(), any(), any(), any())
         } returns funnelResponse
         application { installRoutes(this) }
         val r = client.get(authedGet("/funnel?period=30d&steps=/home&steps=/signup")) {
@@ -612,6 +755,76 @@ class AnalyticsRoutesTest {
         assertEquals(HttpStatusCode.OK, r.status)
         val body = r.bodyAsText()
         assertTrue(body.contains("\"steps\""))
+    }
+
+    @Test
+    fun `GET funnel forwards product grouping params`() = testApplication {
+        val userId = seedUser()
+        stubAccess(userId)
+        coEvery {
+            mockAnalyticsService.getFunnel(
+                PROJECT_ID,
+                any(),
+                any(),
+                any(),
+                "user_id",
+                "server"
+            )
+        } returns funnelResponse
+        application { installRoutes(this) }
+        val path = "/funnel?period=30d&steps[]=signup.completed" +
+            "&steps[]=recording.started&group_by=user_id&source=server"
+        val r = client.get(authedGet(path)) {
+            withAuth(token(userId))
+        }
+        assertEquals(HttpStatusCode.OK, r.status)
+        coVerify(exactly = 1) {
+            mockAnalyticsService.getFunnel(
+                PROJECT_ID,
+                any(),
+                any(),
+                listOf("signup.completed", "recording.started"),
+                "user_id",
+                "server"
+            )
+        }
+    }
+
+    @Test
+    fun `GET retention returns 200`() = testApplication {
+        val userId = seedUser()
+        stubAccess(userId)
+        coEvery {
+            mockAnalyticsService.getRetention(
+                PROJECT_ID,
+                any(),
+                any(),
+                "signup.completed",
+                "recording.started",
+                listOf(1, 7, 30),
+            )
+        } returns retentionResponse
+        application { installRoutes(this) }
+        val path = "/retention?period=30d&start_event=signup.completed" +
+            "&return_event=recording.started&periods[]=1&periods[]=7&periods[]=30"
+        val r = client.get(
+            authedGet(path)
+        ) {
+            withAuth(token(userId))
+        }
+        assertEquals(HttpStatusCode.OK, r.status)
+        assertTrue(r.bodyAsText().contains("\"cohorts\""))
+    }
+
+    @Test
+    fun `GET retention returns 400 without events`() = testApplication {
+        val userId = seedUser()
+        stubAccess(userId)
+        application { installRoutes(this) }
+        val r = client.get(authedGet("/retention?period=30d")) {
+            withAuth(token(userId))
+        }
+        assertEquals(HttpStatusCode.BadRequest, r.status)
     }
 
     @Test

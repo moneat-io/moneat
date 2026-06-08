@@ -6,11 +6,15 @@ Disallow: /settings
 Disallow: /projects
 Disallow: /issues
 Disallow: /feedback
-Disallow: /performance
+# Anchored so the prefix match doesn't also block the /performance-monitoring marketing page.
+Disallow: /performance$
+Disallow: /performance/
 Disallow: /releases
 Disallow: /replays
 Disallow: /monitoring
-Disallow: /uptime
+# Anchored so the prefix match doesn't also block the /uptime-monitoring marketing page.
+Disallow: /uptime$
+Disallow: /uptime/
 Disallow: /status-pages
 Disallow: /accept-invite
 Disallow: /impersonate-callback

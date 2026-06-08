@@ -19,6 +19,7 @@ package com.moneat.services
 import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.config.ClickHouseClient
 import com.moneat.events.services.DashboardService
+import com.moneat.events.services.IssueListQuery
 import com.moneat.shared.models.IssueStatuses
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
@@ -28,14 +29,18 @@ import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import java.util.*
+import java.util.Collections
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DashboardServiceTest {
@@ -119,6 +124,76 @@ class DashboardServiceTest {
         }
 
     @Test
+    fun `getIssues for organization applies organization and service clauses`() =
+        runBlocking {
+            val queries = Collections.synchronizedList(mutableListOf<String>())
+            MockHttpServer { exchange ->
+                val query = exchange.requestBodyText()
+                queries += query
+                if (query.contains("events e") && query.contains("GROUP BY issue_id")) {
+                    exchange.respond(
+                        200,
+                        issueOrgRowJson(),
+                        contentType = "text/plain"
+                    )
+                } else {
+                    exchange.respond(200, "", contentType = "text/plain")
+                }
+            }.use { server ->
+                ClickHouseClient.close()
+                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+                org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager.defaultDatabase = db
+
+                transaction {
+                    Organizations.insert {
+                        it[id] = 1
+                        it[name] = "Test Org"
+                        it[slug] = "test-org"
+                    }
+                    Projects.insert {
+                        it[id] = 123
+                        it[organization_id] = 1
+                        it[name] = "API"
+                        it[slug] = "api"
+                    }
+                }
+
+                val service = DashboardService.create()
+                val issues = service.getIssues(
+                    IssueListQuery(
+                        organizationId = 1,
+                        page = 1,
+                        limit = 10,
+                        status = null,
+                        serviceIds = listOf(123)
+                    )
+                )
+
+                assertEquals(1, issues.size)
+                assertEquals("issue-org-1", issues.first().id)
+                assertTrue(queries.any { it.contains("organization_id = 1") })
+                assertTrue(queries.any { it.contains("project_id IN (123)") })
+            }
+        }
+
+    @Test
+    fun `org service read methods return empty results for empty service scope`() =
+        runBlocking {
+            val service = DashboardService.create()
+
+            val releases = service.getReleasesForServices(organizationId = 1, serviceIds = emptyList())
+            val releaseStats =
+                service.getReleaseStatsForServices(organizationId = 1, serviceIds = emptyList(), version = "1.0.0")
+            val replays = service.getReplaysForServices(organizationId = 1, serviceIds = emptyList())
+            val feedback = service.getFeedbackForServices(organizationId = 1, serviceIds = emptyList())
+
+            assertTrue(releases.isEmpty())
+            assertNull(releaseStats)
+            assertTrue(replays.isEmpty())
+            assertTrue(feedback.isEmpty())
+        }
+
+    @Test
     fun `getIssue returns detail with latest event and demo project name`() =
         runBlocking {
             MockHttpServer { exchange ->
@@ -182,6 +257,56 @@ class DashboardServiceTest {
                 assertNotNull(issue.latestEvent)
                 assertEquals("evt-1", issue.latestEvent.eventId)
                 assertEquals("prod", issue.latestEvent.tags["env"])
+                assertEquals("stack", issue.latestEvent.stackTrace)
+                val traceContext = issue.latestEvent.contextsJson?.jsonObject?.get("trace")?.jsonObject
+                assertEquals("t1", traceContext?.get("trace_id")?.jsonPrimitive?.contentOrNull)
+            }
+        }
+
+    private fun issueOrgRowJson(): String =
+        """{"issue_id":"issue-org-1","project_id":123,"title":"Org crash","culprit":"Api.kt",""" +
+            """"level":"error","platform":"kotlin","first_seen":"2026-02-01T01:00:00.000Z",""" +
+            """"last_seen":"2026-02-02T01:00:00.000Z","event_count":12,"user_count":4,""" +
+            """"status":"unresolved"}"""
+
+    @Test
+    fun `getIssueTransactions returns transactions linked by issue error trace id`() =
+        runBlocking {
+            val queries = Collections.synchronizedList(mutableListOf<String>())
+            MockHttpServer { exchange ->
+                val query = exchange.requestBodyText()
+                queries += query
+                when {
+                    query.contains("FROM `test`.issues") && query.contains("WHERE issue_id = 'issue-1'") -> {
+                        exchange.respond(200, """{"project_id":-1}""", contentType = "text/plain")
+                    }
+
+                    query.contains("event_type = 'transaction'") && query.contains("issue_id = 'issue-1'") -> {
+                        exchange.respond(
+                            200,
+                            """{"event_id":"txn-1","name":"ProjectWorkChain","op":"project.workchain",""" +
+                                """"duration":1250.0,"event_ts":"2026-02-03T00:00:00.000Z",""" +
+                                """"status":"internal_error","trace_id":"trace-1"}""",
+                            contentType = "text/plain"
+                        )
+                    }
+
+                    else -> {
+                        exchange.respond(200, "", contentType = "text/plain")
+                    }
+                }
+            }.use { server ->
+                ClickHouseClient.close()
+                ClickHouseClient.init(server.baseUrl, "test", "default", "")
+
+                val service = DashboardService.create()
+                val transactions = service.getIssueTransactions("issue-1", limit = 10)
+
+                assertEquals(1, transactions.size)
+                assertEquals("txn-1", transactions.first().eventId)
+                assertEquals("trace-1", transactions.first().traceId)
+                val traceSubquery = "SELECT DISTINCT JSONExtractString(contexts, 'trace', 'trace_id')"
+                assertTrue(queries.any { it.contains(traceSubquery) })
             }
         }
 

@@ -40,7 +40,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
-import java.util.*
+import java.util.UUID
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -74,6 +74,7 @@ class EventServiceTest {
         // Catchall defaults (registered first so specific overrides take precedence)
         every { eventRepository.verifyProjectKey(any(), any()) } returns ProjectKeyVerification(false, null)
         every { eventRepository.getOrganizationIdForProject(any()) } returns null
+        every { eventRepository.getServiceNameForProject(any()) } returns null
         // Specific mocks
         every { eventRepository.verifyProjectKey(testProjectId, validPublicKey) } returns
             ProjectKeyVerification(true, "jvm")
@@ -653,6 +654,25 @@ class EventServiceTest {
         assertEquals("event", envelope.items[0].type)
         assertEquals("transaction", envelope.items[1].type)
         assertEquals("feedback", envelope.items[2].type)
+    }
+
+    @Test
+    fun `SentryEnvelope parses implicit sessions item`() {
+        val envelope =
+            SentryEnvelope.parse(
+                """
+                {"event_id":"sessions-env"}
+                {"type":"sessions"}
+                {"aggregates":[]}
+                {"type":"event"}
+                {"event_id":"evt-1"}
+                """.trimIndent().toByteArray()
+            )
+
+        assertEquals(2, envelope.items.size)
+        assertEquals("sessions", envelope.items[0].type)
+        assertEquals("""{"aggregates":[]}""", envelope.items[0].payload)
+        assertEquals("event", envelope.items[1].type)
     }
 
     @Test

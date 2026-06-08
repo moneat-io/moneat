@@ -468,6 +468,7 @@ class AnalyticsIngestRoutesTest {
             periodStart = "2026-05-01",
             periodEnd = "2026-05-31",
             retentionDays = 30,
+            apmTraceRetentionDays = 30,
             usedUnits = 0,
             usedErrors = 0,
             errorLimit = 0,

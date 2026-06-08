@@ -25,5 +25,12 @@ data class McpContext(
     val userId: Int,
     val tokenId: Int,
     val scopes: Set<String>,
-    val sessionId: String
-)
+    val sessionId: String,
+    val mcpApiKeyId: Int? = null,
+    val allowedTools: Set<String>? = null,
+    val allowedResources: Set<String>? = null,
+) {
+    fun canUseTool(name: String): Boolean = allowedTools?.contains(name) ?: true
+
+    fun canUseResource(uri: String): Boolean = allowedResources?.contains(uri) ?: true
+}

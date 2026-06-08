@@ -1,0 +1,61 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+export interface McpApiKey {
+  id: number
+  name: string
+  keyPrefix: string
+  enabledTools: string[]
+  enabledResources: string[]
+  createdAt: string
+  lastUsedAt?: string
+  expiresAt?: string
+}
+
+export interface CreateMcpApiKeyResponse extends McpApiKey {
+  key: string
+}
+
+export interface McpToolCatalogTool {
+  name: string
+  description: string
+  readOnly: boolean
+}
+
+export interface McpToolCatalogSection {
+  id: string
+  label: string
+  description: string
+  tools: McpToolCatalogTool[]
+}
+
+export interface McpResourceCatalogItem {
+  uri: string
+  name: string
+  description?: string
+  mimeType?: string
+}
+
+export interface McpToolCatalog {
+  sections: McpToolCatalogSection[]
+  resources: McpResourceCatalogItem[]
+}
+
+export interface UpsertMcpApiKeyRequest {
+  name: string
+  enabledTools: string[]
+  enabledResources: string[]
+}

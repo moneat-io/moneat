@@ -24,9 +24,12 @@ import com.moneat.billing.models.CheckoutSessionRequest
 import com.moneat.billing.models.UpdateOnCallSeatsRequest
 import com.moneat.billing.models.UpdatePaygBudgetRequest
 import com.moneat.billing.models.UpdatePaygBudgetResponse
+import com.moneat.billing.services.BillingUsageInsightsService
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.PricingTierService
 import com.moneat.billing.services.StripeService
+import com.moneat.billing.services.getUsageInsightsSafely
+import com.moneat.config.EnvConfig
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.BooleanResponse
@@ -90,6 +93,7 @@ fun Route.billingRoutes(
     pricingTierService: PricingTierService = GlobalContext.get().get(),
     quotaService: BillingQuotaService = GlobalContext.get().get(),
     stripeService: StripeService = GlobalContext.get().get(),
+    insightsService: BillingUsageInsightsService = BillingUsageInsightsService(quotaService),
 ) {
     val usageTrackingService = UsageTrackingService.instance
 
@@ -147,6 +151,38 @@ fun Route.billingRoutes(
                 logger.warn(e) { "Failed to compute bytes for org $orgId, falling back to original usage response" }
                 call.respond(usage)
             }
+        }
+
+        get("/usage/insights") {
+            if (EnvConfig.SelfHost.enabled) {
+                call.respond(
+                    HttpStatusCode.Forbidden,
+                    ErrorResponse("Usage Insights is available in Moneat Cloud")
+                )
+                return@get
+            }
+            val principal =
+                call.principal<JWTPrincipal>() ?: run {
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse(AUTH_REQUIRED))
+                    return@get
+                }
+            val userId = principal.payload.getClaim("userId").asInt()
+            val orgId =
+                pricingTierService.getPrimaryOrganizationIdForUser(userId) ?: run {
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORG_ACCESS))
+                    return@get
+                }
+
+            val insights = insightsService.getUsageInsightsSafely(orgId)
+            if (insights == null) {
+                call.respond(
+                    HttpStatusCode.ServiceUnavailable,
+                    ErrorResponse("Usage insights are temporarily unavailable")
+                )
+                return@get
+            }
+
+            call.respond(insights)
         }
 
         get("/usage/apm-spans") {

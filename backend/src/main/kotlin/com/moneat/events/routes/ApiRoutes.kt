@@ -16,14 +16,17 @@
 
 package com.moneat.events.routes
 
+import com.moneat.alerts.models.SuppressAlertEpisodeRequest
+import com.moneat.alerts.services.AlertEpisodeService
 import com.moneat.auth.routes.accountDeletionRoutes
-import com.moneat.auth.services.Quadruple
 import com.moneat.billing.routes.billingRoutes
 import com.moneat.billing.routes.publicBillingRoutes
 import com.moneat.billing.services.PricingTierService
+import com.moneat.contact.routes.contactRoutes
 import com.moneat.events.models.AddTargetRequest
 import com.moneat.events.models.AlertNotificationPreferencesResponse
 import com.moneat.events.models.CreateProjectRequest
+import com.moneat.events.models.EventIssueLinkResponse
 import com.moneat.events.models.FeedbackUpdateRequest
 import com.moneat.events.models.IssueUpdateRequest
 import com.moneat.events.models.NotificationPreferencesData
@@ -37,6 +40,7 @@ import com.moneat.events.models.UpdateProjectRequest
 import com.moneat.events.models.UpdateSidebarPreferencesRequest
 import com.moneat.events.models.UserResponse
 import com.moneat.events.services.DashboardService
+import com.moneat.events.services.IssueListQuery
 import com.moneat.notifications.services.AlertNotificationPreferencesService
 import com.moneat.org.routes.integrationCallbackRoutes
 import com.moneat.org.routes.integrationRoutes
@@ -49,10 +53,12 @@ import com.moneat.shared.models.OnCallPhoneConsentEvents
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Users
+import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.shared.services.SdkVersionService
 import com.moneat.shared.services.SidebarPreferenceService
 import com.moneat.utils.DetailedErrorResponse
 import com.moneat.utils.ErrorResponse
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
@@ -80,24 +86,46 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import org.koin.core.context.GlobalContext
 import kotlin.time.Clock
-import com.moneat.utils.suspendRunCatching
 
+private const val DEFAULT_PAGE = 1
 private const val DEFAULT_PAGE_LIMIT = 25
 private const val DEFAULT_EVENTS_LIMIT = 50
 private const val DEFAULT_TRANSACTIONS_LIMIT = 20
 private const val DEFAULT_REPLAYS_LIMIT = 10
 private const val DEFAULT_ALERT_FREQUENCY_MINUTES = 30
+private const val DEFAULT_ALERT_LIFECYCLE_LIMIT = 50
+private const val DEMO_ORGANIZATION_ID = -1
+private const val DEMO_PRIMARY_SERVICE_ID = -1L
+private const val DEMO_CHECKOUT_SERVICE_ID = -2L
+private const val DEMO_MOBILE_SERVICE_ID = -3L
 private const val ERROR_NO_ORGANIZATION_ACCESS = "No organization access"
+private const val ERROR_INVALID_SERVICE_IDS = "Invalid serviceIds"
+private val DEMO_SERVICE_IDS = listOf(DEMO_PRIMARY_SERVICE_ID, DEMO_CHECKOUT_SERVICE_ID, DEMO_MOBILE_SERVICE_ID)
+
+private data class ServiceReadContext(
+    val organizationId: Int,
+    val serviceIds: List<Long>,
+    val demoEpochMs: Long?
+)
 
 @Suppress("kotlin:S3776")
-fun Route.apiRoutes() {
+fun Route.apiRoutes(includePublicContactRoutes: Boolean = true) {
     val koin = GlobalContext.get()
+    val alertEpisodeService = koin.get<AlertEpisodeService>()
     val dashboardService = koin.get<DashboardService>()
+    val projectIdResolver = koin.get<ProjectIdResolver>()
 
     // Public routes (no auth required)
     route("/v1") {
         // Public billing plans endpoint
         publicBillingRoutes()
+
+        if (includePublicContactRoutes) {
+            // Public Enterprise sales-contact form (IP rate-limited; each request can send email)
+            rateLimit(RateLimitName("contact")) {
+                contactRoutes()
+            }
+        }
     }
 
     authenticate("auth-jwt") {
@@ -123,58 +151,54 @@ fun Route.apiRoutes() {
                 // Integrations
                 integrationRoutes()
 
+                alertLifecycleRoutes(alertEpisodeService)
+
                 // User profile
                 get("/user") {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
                     val demoEpochMs = call.getDemoEpochMs()
 
-                    val (user, orgSlug, orgRole, sidebarHiddenItems) =
+                    val userResponse =
                         transaction {
-                            val userRow =
-                                Users.selectAll().where { Users.id eq userId }.firstOrNull()
-                                    ?: return@transaction Quadruple(null, null, null, emptyList())
-
-                            val membership =
-                                Memberships
+                            val userRow = Users.selectAll().where { Users.id eq userId }.firstOrNull()
+                                ?: return@transaction null
+                            val membership = Memberships
+                                .selectAll()
+                                .where { Memberships.user_id eq userId }
+                                .firstOrNull()
+                            val orgId = membership?.get(Memberships.organization_id)
+                            val orgSlug = orgId?.let { id ->
+                                Organizations
                                     .selectAll()
-                                    .where { Memberships.user_id eq userId }
+                                    .where { Organizations.id eq id }
                                     .firstOrNull()
-
-                            val slug =
-                                membership?.let { m ->
-                                    Organizations
-                                        .selectAll()
-                                        .where { Organizations.id eq m[Memberships.organization_id] }
-                                        .firstOrNull()
-                                        ?.get(Organizations.slug)
-                                }
-
-                            val role = membership?.get(Memberships.role)
+                                    ?.get(Organizations.slug)
+                            }
+                            val orgRole = membership?.get(Memberships.role)
                             val hiddenItems = membership?.get(Memberships.sidebar_hidden_items) ?: emptyList()
 
-                            Quadruple(userRow, slug, role, hiddenItems)
+                            UserResponse(
+                                id = userRow[Users.id],
+                                email = userRow[Users.email],
+                                name = userRow[Users.name],
+                                emailVerified = userRow[Users.email_verified],
+                                onboardingCompleted = userRow[Users.onboarding_completed],
+                                isAdmin = userRow[Users.is_admin],
+                                organizationSlug = orgSlug,
+                                orgRole = orgRole,
+                                demoEpochMs = demoEpochMs,
+                                sidebarHiddenItems = hiddenItems,
+                                phoneNumber = userRow[Users.phone_number],
+                                timezone = userRow[Users.timezone],
+                                orgId = orgId
+                            )
                         }
 
-                    if (user == null) {
+                    if (userResponse == null) {
                         call.respond(HttpStatusCode.NotFound, ErrorResponse("User not found"))
                     } else {
-                        call.respond(
-                            UserResponse(
-                                user[Users.id],
-                                user[Users.email],
-                                user[Users.name],
-                                user[Users.email_verified],
-                                user[Users.onboarding_completed],
-                                user[Users.is_admin],
-                                orgSlug,
-                                orgRole,
-                                demoEpochMs,
-                                sidebarHiddenItems,
-                                user[Users.phone_number],
-                                user[Users.timezone]
-                            )
-                        )
+                        call.respond(userResponse)
                     }
                 }
 
@@ -481,7 +505,7 @@ fun Route.apiRoutes() {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                         return@get
@@ -504,7 +528,7 @@ fun Route.apiRoutes() {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                         return@post
@@ -528,7 +552,7 @@ fun Route.apiRoutes() {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                         return@put
@@ -548,7 +572,7 @@ fun Route.apiRoutes() {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                         return@delete
@@ -564,13 +588,57 @@ fun Route.apiRoutes() {
                 }
 
                 // Issues
+                get("/issues") {
+                    val principal = call.principal<JWTPrincipal>()
+                    val userId = principal!!.payload.getClaim("userId").asInt()
+                    val isDemo = call.isDemoUser()
+                    val demoEpochMs = call.getDemoEpochMs()
+
+                    val organizationId =
+                        if (isDemo) {
+                            DEMO_ORGANIZATION_ID
+                        } else {
+                            call.resolveSubscriptionOrganizationId(userId) ?: return@get
+                        }
+                    val serviceIds = call.resolveServiceIdsQuery(projectIdResolver)
+                    if (serviceIds == null) {
+                        call.respond(HttpStatusCode.BadRequest, ERROR_INVALID_SERVICE_IDS)
+                        return@get
+                    }
+
+                    val page = call.request.queryParameters["page"]?.toIntOrNull() ?: DEFAULT_PAGE
+                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_PAGE_LIMIT
+                    if (page < 1 || limit < 1) {
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            ErrorResponse("page and limit must be positive integers")
+                        )
+                        return@get
+                    }
+                    val status = call.request.queryParameters["status"]
+                    val services = call.serviceNamesQuery()
+
+                    val issues = dashboardService.getIssues(
+                        IssueListQuery(
+                            organizationId = organizationId,
+                            page = page,
+                            limit = limit,
+                            status = status,
+                            serviceNames = services,
+                            serviceIds = serviceIds,
+                            demoEpochMs = demoEpochMs
+                        )
+                    )
+                    call.respond(issues)
+                }
+
                 get("/projects/{projectId}/issues") {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
                     val isDemo = call.isDemoUser()
                     val demoEpochMs = call.getDemoEpochMs()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest)
                         return@get
@@ -601,7 +669,7 @@ fun Route.apiRoutes() {
                         return@get
                     }
 
-                    val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectQueryId(projectIdResolver)
 
                     if (!isDemo) {
                         if (projectId != null) {
@@ -631,7 +699,7 @@ fun Route.apiRoutes() {
 
                     val issueId = call.parameters["issueId"]
                     val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_EVENTS_LIMIT
-                    val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectQueryId(projectIdResolver)
 
                     if (issueId == null) {
                         call.respond(HttpStatusCode.BadRequest)
@@ -662,7 +730,7 @@ fun Route.apiRoutes() {
 
                     val issueId = call.parameters["issueId"]
                     val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_TRANSACTIONS_LIMIT
-                    val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectQueryId(projectIdResolver)
 
                     if (issueId == null) {
                         call.respond(HttpStatusCode.BadRequest)
@@ -695,7 +763,7 @@ fun Route.apiRoutes() {
                         return@patch
                     }
 
-                    val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectQueryId(projectIdResolver)
                     val hasAccess = if (projectId != null) {
                         dashboardService.hasProjectAccess(userId, projectId)
                     } else {
@@ -707,7 +775,7 @@ fun Route.apiRoutes() {
                     }
 
                     val update = call.receive<IssueUpdateRequest>()
-                    dashboardService.updateIssue(issueId, update)
+                    dashboardService.updateIssue(issueId, update, projectId)
                     call.respond(HttpStatusCode.NoContent)
                 }
 
@@ -718,7 +786,7 @@ fun Route.apiRoutes() {
                     val isDemo = call.isDemoUser()
                     val demoEpochMs = call.getDemoEpochMs()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest)
                         return@get
@@ -746,7 +814,7 @@ fun Route.apiRoutes() {
                     val isDemo = call.isDemoUser()
                     val demoEpochMs = call.getDemoEpochMs()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest)
                         return@get
@@ -777,7 +845,7 @@ fun Route.apiRoutes() {
                     val isDemo = call.isDemoUser()
                     val demoEpochMs = call.getDemoEpochMs()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest)
                         return@get
@@ -873,7 +941,7 @@ fun Route.apiRoutes() {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     val traceId = call.parameters["traceId"]
 
                     if (projectId == null || traceId == null) {
@@ -899,7 +967,7 @@ fun Route.apiRoutes() {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     val spanId = call.parameters["spanId"]
 
                     if (projectId == null || spanId == null) {
@@ -921,13 +989,37 @@ fun Route.apiRoutes() {
                 }
 
                 // Replays
+                get("/replays") {
+                    val principal = call.principal<JWTPrincipal>()
+                    val userId = principal!!.payload.getClaim("userId").asInt()
+                    val context =
+                        call.resolveServiceReadContext(userId, dashboardService, projectIdResolver) ?: return@get
+
+                    val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
+                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_PAGE_LIMIT
+                    val environment = call.request.queryParameters["environment"]
+                    val period = call.request.queryParameters["period"] ?: "7d"
+
+                    val replays =
+                        dashboardService.getReplaysForServices(
+                            organizationId = context.organizationId,
+                            serviceIds = context.serviceIds,
+                            page = page,
+                            limit = limit,
+                            environment = environment,
+                            period = period,
+                            demoEpochMs = context.demoEpochMs
+                        )
+                    call.respond(replays)
+                }
+
                 get("/projects/{projectId}/replays") {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
                     val isDemo = call.isDemoUser()
                     val demoEpochMs = call.getDemoEpochMs()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest)
                         return@get
@@ -1017,13 +1109,35 @@ fun Route.apiRoutes() {
                     call.respond(timeline)
                 }
 
+                get("/feedback") {
+                    val principal = call.principal<JWTPrincipal>()
+                    val userId = principal!!.payload.getClaim("userId").asInt()
+                    val context =
+                        call.resolveServiceReadContext(userId, dashboardService, projectIdResolver) ?: return@get
+
+                    val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
+                    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_PAGE_LIMIT
+                    val status = call.request.queryParameters["status"]
+
+                    val feedback =
+                        dashboardService.getFeedbackForServices(
+                            organizationId = context.organizationId,
+                            serviceIds = context.serviceIds,
+                            page = page,
+                            limit = limit,
+                            status = status,
+                            demoEpochMs = context.demoEpochMs
+                        )
+                    call.respond(feedback)
+                }
+
                 get("/projects/{projectId}/feedback") {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
                     val isDemo = call.isDemoUser()
                     val demoEpochMs = call.getDemoEpochMs()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest)
                         return@get
@@ -1106,7 +1220,12 @@ fun Route.apiRoutes() {
                     if (issueId == null) {
                         call.respond(HttpStatusCode.NotFound)
                     } else {
-                        call.respond(mapOf("issueId" to issueId))
+                        call.respond(
+                            EventIssueLinkResponse(
+                                issueId = issueId,
+                                projectResourceId = projectIdResolver.resourceIdFor(projectId) ?: projectId.toString()
+                            )
+                        )
                     }
                 }
 
@@ -1120,7 +1239,7 @@ fun Route.apiRoutes() {
                         return@get
                     }
 
-                    val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectQueryId(projectIdResolver)
                     val hasAccess = if (projectId != null) {
                         dashboardService.hasProjectAccess(userId, projectId)
                     } else {
@@ -1137,12 +1256,51 @@ fun Route.apiRoutes() {
                 }
 
                 // Releases
+                get("/releases") {
+                    val principal = call.principal<JWTPrincipal>()
+                    val userId = principal!!.payload.getClaim("userId").asInt()
+                    val context =
+                        call.resolveServiceReadContext(userId, dashboardService, projectIdResolver) ?: return@get
+
+                    val releases =
+                        dashboardService.getReleasesForServices(
+                            organizationId = context.organizationId,
+                            serviceIds = context.serviceIds,
+                            parentSpan = call.getSentryTransaction()
+                        )
+                    call.respond(releases)
+                }
+
+                get("/releases/{version}/stats") {
+                    val principal = call.principal<JWTPrincipal>()
+                    val userId = principal!!.payload.getClaim("userId").asInt()
+                    val context =
+                        call.resolveServiceReadContext(userId, dashboardService, projectIdResolver) ?: return@get
+                    val version = call.parameters["version"]
+                    if (version == null) {
+                        call.respond(HttpStatusCode.BadRequest)
+                        return@get
+                    }
+
+                    val stats =
+                        dashboardService.getReleaseStatsForServices(
+                            organizationId = context.organizationId,
+                            serviceIds = context.serviceIds,
+                            version = version
+                        )
+                    if (stats == null) {
+                        call.respond(HttpStatusCode.NotFound)
+                    } else {
+                        call.respond(stats)
+                    }
+                }
+
                 get("/projects/{projectId}/releases") {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
                     val isDemo = call.isDemoUser()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest)
                         return@get
@@ -1161,7 +1319,7 @@ fun Route.apiRoutes() {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     val version = call.parameters["version"]
                     if (projectId == null || version == null) {
                         call.respond(HttpStatusCode.BadRequest)
@@ -1223,15 +1381,18 @@ fun Route.apiRoutes() {
                                             (NotificationPreferences.project_id.isNotNull())
                                     }.map { pref ->
                                         val projectId = pref[NotificationPreferences.project_id]!!
-                                        val projectName =
+                                        val projectRow =
                                             Projects
                                                 .selectAll()
                                                 .where { Projects.id eq projectId }
                                                 .firstOrNull()
-                                                ?.get(Projects.name) ?: "Unknown"
+                                        val projectName = projectRow?.get(Projects.name) ?: "Unknown"
+                                        val projectResourceId =
+                                            projectRow?.get(Projects.resource_id)?.toString() ?: projectId.toString()
 
                                         ProjectNotificationPreferences(
                                             projectId = projectId,
+                                            projectResourceId = projectResourceId,
                                             projectName = projectName,
                                             issueAlerts = pref[NotificationPreferences.issue_alerts],
                                             errorAlerts = pref[NotificationPreferences.error_alerts],
@@ -1311,7 +1472,7 @@ fun Route.apiRoutes() {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                         return@put
@@ -1455,7 +1616,7 @@ fun Route.apiRoutes() {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
 
-                    val projectId = call.parameters["projectId"]?.toLongOrNull()
+                    val projectId = call.resolveProjectPathId(projectIdResolver)
                     if (projectId == null) {
                         call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                         return@delete
@@ -1487,6 +1648,118 @@ fun Route.apiRoutes() {
         integrationCallbackRoutes()
     }
 }
+
+private fun Route.alertLifecycleRoutes(alertEpisodeService: AlertEpisodeService) {
+    get("/alerts/lifecycles") {
+        val userId = call.principal<JWTPrincipal>()!!.payload.getClaim("userId").asInt()
+        val orgId = call.resolveSubscriptionOrganizationId(userId) ?: return@get
+        val status = call.request.queryParameters["status"]
+        val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_ALERT_LIFECYCLE_LIMIT
+        call.respond(alertEpisodeService.listEpisodes(orgId, status, limit))
+    }
+
+    post("/alerts/lifecycles/{episodeId}/ignore") {
+        val userId = call.principal<JWTPrincipal>()!!.payload.getClaim("userId").asInt()
+        val orgId = call.resolveSubscriptionOrganizationId(userId) ?: return@post
+        val episodeId = call.alertEpisodeId() ?: return@post
+        val request = call.receive<SuppressAlertEpisodeRequest>()
+        val episode = alertEpisodeService.suppressEpisode(orgId, episodeId, userId, request.reason)
+            ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert episode not found"))
+        call.respond(episode)
+    }
+
+    post("/alerts/lifecycles/{episodeId}/unignore") {
+        val userId = call.principal<JWTPrincipal>()!!.payload.getClaim("userId").asInt()
+        val orgId = call.resolveSubscriptionOrganizationId(userId) ?: return@post
+        val episodeId = call.alertEpisodeId() ?: return@post
+        val episode = alertEpisodeService.unsuppressEpisode(orgId, episodeId)
+            ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert episode not found"))
+        call.respond(episode)
+    }
+}
+
+private suspend fun ApplicationCall.alertEpisodeId(): Int? {
+    val episodeId = parameters["episodeId"]?.toIntOrNull()
+    if (episodeId == null) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert episode ID"))
+    }
+    return episodeId
+}
+
+private fun ApplicationCall.resolveProjectPathId(projectIdResolver: ProjectIdResolver): Long? =
+    parameters["projectId"]?.let(projectIdResolver::resolve)
+
+private fun ApplicationCall.resolveProjectQueryId(projectIdResolver: ProjectIdResolver): Long? =
+    request.queryParameters["projectId"]?.let(projectIdResolver::resolve)
+
+private suspend fun ApplicationCall.resolveServiceReadContext(
+    userId: Int,
+    dashboardService: DashboardService,
+    projectIdResolver: ProjectIdResolver
+): ServiceReadContext? {
+    val isDemo = isDemoUser()
+    val organizationId =
+        if (isDemo) {
+            DEMO_ORGANIZATION_ID
+        } else {
+            resolveSubscriptionOrganizationId(userId) ?: return null
+        }
+
+    val serviceIds = resolveServiceIdsQuery(projectIdResolver)
+    if (serviceIds == null) {
+        respond(HttpStatusCode.BadRequest, ERROR_INVALID_SERVICE_IDS)
+        return null
+    }
+
+    val serviceNames = serviceNamesQuery()
+    val resolvedNameIds = serviceNames.mapNotNull { serviceName ->
+        dashboardService.resolveServiceId(organizationId, serviceName)
+    }
+    val requestedServiceIds = normalizeRequestedServiceIds(serviceIds + resolvedNameIds)
+    val organizationServiceIds =
+        if (isDemo) {
+            DEMO_SERVICE_IDS
+        } else {
+            dashboardService.getServiceIdsForOrganization(organizationId)
+        }
+    val scopedServiceIds =
+        if (serviceIds.isNotEmpty() || serviceNames.isNotEmpty()) {
+            requestedServiceIds.filter { serviceId -> serviceId in organizationServiceIds }
+        } else {
+            organizationServiceIds
+        }
+
+    return ServiceReadContext(organizationId, scopedServiceIds, getDemoEpochMs())
+}
+
+private fun normalizeRequestedServiceIds(serviceIds: List<Long>): List<Long> =
+    serviceIds
+        .flatMap { serviceId ->
+            if (serviceId == DEMO_PRIMARY_SERVICE_ID) {
+                DEMO_SERVICE_IDS
+            } else {
+                listOf(serviceId)
+            }
+        }
+        .distinct()
+
+private fun ApplicationCall.serviceNamesQuery(): List<String> =
+    queryCsvValues("services") + queryCsvValues("service")
+
+private fun ApplicationCall.resolveServiceIdsQuery(projectIdResolver: ProjectIdResolver): List<Long>? {
+    val rawServiceIds = queryCsvValues("serviceIds") + queryCsvValues("serviceId")
+    if (rawServiceIds.isEmpty()) return emptyList()
+    return rawServiceIds.map { rawServiceId ->
+        projectIdResolver.resolve(rawServiceId) ?: return null
+    }.distinct()
+}
+
+private fun ApplicationCall.queryCsvValues(name: String): List<String> =
+    request.queryParameters.getAll(name)
+        ?.flatMap { value -> value.split(",") }
+        ?.map { value -> value.trim() }
+        ?.filter { value -> value.isNotBlank() }
+        ?: emptyList()
 
 private suspend fun ApplicationCall.resolveSubscriptionOrganizationId(userId: Int): Int? {
     val orgId = principal<JWTPrincipal>()?.payload?.getClaim("orgId")?.asInt()

@@ -983,6 +983,25 @@ class BillingServicesExtendedTest {
     }
 
     @Test
+    fun `reserveUnits tracks session as aggregate ingestion without error counter`() {
+        transaction {
+            insertTestUsageCounter(organizationId = testOrgId)
+        }
+
+        val result = billingQuotaService.reserveUnits(
+            organizationId = testOrgId,
+            requestedUnits = 2,
+            eventType = "session",
+            requestedBytes = 500
+        )
+        assertTrue(result.allowed)
+        assertEquals(2L, result.usage.usedUnits, "sessions should count toward aggregate ingestion")
+        assertEquals(0L, result.usage.usedErrors, "sessions should not be normalized to errors")
+        assertEquals(500L, result.usage.usedBytes, "session bytes should count toward ingestion bytes")
+        assertEquals(0L, result.usage.usedErrorBytes, "session bytes should not be stored as error bytes")
+    }
+
+    @Test
     fun `reserveUnits normalizes apm to apm_span event type`() {
         transaction {
             PricingTierConfigs.update({ PricingTierConfigs.id eq proTierId }) {

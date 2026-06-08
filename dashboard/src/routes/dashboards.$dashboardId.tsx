@@ -25,8 +25,10 @@ import {DataSourceMapperModal} from '@/components/dashboards/DataSourceMapperMod
 import {VariableSettingsDialog} from '@/components/dashboards/VariableSettingsDialog'
 import {useWidgetClipboard} from '@/components/dashboards/useWidgetClipboard'
 import {useCallback, useEffect, useRef, useState} from 'react'
-import {useProject} from '@/contexts/ProjectContext'
 import {isDemo} from '@/lib/demo'
+import {EmptyState} from '@/components/ui/empty-state'
+import {LayoutDashboard} from 'lucide-react'
+import {primaryServiceResourceId} from '@/lib/service-facet-scope'
 
 interface DashboardSearch {
   edit?: boolean
@@ -43,7 +45,6 @@ function DashboardViewPage() {
   const {dashboardId} = Route.useParams()
   const {edit} = Route.useSearch()
   const queryClient = useQueryClient()
-  const {selectedProjectId} = useProject()
 
   const [isEditing, setIsEditing] = useState(edit ?? false)
   const [selectedWidget, setSelectedWidget] = useState<DashboardWidget | null>(null)
@@ -78,6 +79,11 @@ function DashboardViewPage() {
     queryFn: () => api.getDashboard(id),
     enabled: !isNaN(id),
   })
+  const {data: projects = []} = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => api.getProjects(),
+  })
+  const primaryServiceId = primaryServiceResourceId(projects)
 
   // Initialize variable values from dashboard variable defaults on first load
   useEffect(() => {
@@ -299,8 +305,12 @@ function DashboardViewPage() {
 
   if (!dashboard) {
     return (
-      <div className="p-6 flex items-center justify-center py-16 text-muted-foreground">
-        Dashboard not found
+      <div className="p-6">
+        <EmptyState
+          icon={LayoutDashboard}
+          title="Dashboard not found"
+          description="This dashboard may have been deleted or you may not have access to it."
+        />
       </div>
     )
   }
@@ -335,7 +345,7 @@ function DashboardViewPage() {
         widgets={dashboard.widgets}
         isEditing={isEditing}
         dashboardId={id}
-        projectId={selectedProjectId ?? undefined}
+        projectId={primaryServiceId}
         timeRange={timeRange}
         autoRefresh={autoRefresh}
         variableValues={variableValues}
@@ -350,7 +360,7 @@ function DashboardViewPage() {
           onSave={handleWidgetSave}
           onClose={() => setSelectedWidget(null)}
           dashboardId={id}
-          projectId={selectedProjectId ?? undefined}
+          projectId={primaryServiceId}
         />
       )}
 

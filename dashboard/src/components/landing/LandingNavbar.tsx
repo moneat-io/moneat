@@ -246,7 +246,7 @@ function MobileNav({tone = 'dark'}: LandingToneProps) {
         <Button
           variant="ghost"
           size="icon"
-          className={cn('md:hidden', isLight && 'text-slate-700 hover:bg-slate-100')}
+          className={cn('lg:hidden', isLight && 'text-slate-700 hover:bg-slate-100')}
           aria-label="Open menu"
         >
           <Menu />
@@ -302,6 +302,13 @@ function MobileNav({tone = 'dark'}: LandingToneProps) {
             className={navItemClass}
           >
             Pricing
+          </Link>
+          <Link
+            to="/compare"
+            onClick={() => setOpen(false)}
+            className={navItemClass}
+          >
+            Compare
           </Link>
           <Link
             to="/docs"
@@ -370,7 +377,7 @@ function MobileNav({tone = 'dark'}: LandingToneProps) {
             </Button>
           </Link>
           <Link to="/signup" onClick={() => setOpen(false)}>
-            <Button className={cn('w-full text-white', isLight ? 'bg-slate-950 hover:bg-slate-800' : 'bg-sky-500 hover:bg-sky-600 shadow-md shadow-sky-500/25')}>
+            <Button className={cn('w-full text-white', isLight ? 'bg-slate-950 hover:bg-slate-800' : 'border-0 bg-[linear-gradient(115deg,#8B5CF6_0%,#6366F1_48%,#22D3EE_100%)] shadow-[0_8px_24px_-8px_#6366F1] hover:brightness-110')}>
               Sign up free
             </Button>
           </Link>
@@ -413,13 +420,19 @@ export function LandingNavbar({tone = 'dark'}: LandingToneProps) {
         <Link to="/" className="flex items-center" aria-label="Moneat Home">
           <Logo className="h-8" />
         </Link>
-        <nav className="hidden md:flex items-center gap-8" aria-label="Main navigation">
+        <nav className="hidden items-center gap-8 lg:flex" aria-label="Main navigation">
           <PlatformMegaMenu tone={tone} />
           <Link
             to="/pricing"
             className={navLinkClass}
           >
             Pricing
+          </Link>
+          <Link
+            to="/compare"
+            className={navLinkClass}
+          >
+            Compare
           </Link>
           <Link
             to="/docs"
@@ -469,7 +482,7 @@ export function LandingNavbar({tone = 'dark'}: LandingToneProps) {
             </a>
           </div>
         </nav>
-        <div className="hidden md:flex items-center gap-3">
+        <div className="hidden items-center gap-3 lg:flex">
           <Link to="/login">
             <Button variant="ghost" className={cn('text-sm', isLight && 'text-slate-700 hover:bg-slate-100')}>
               Log in
@@ -479,7 +492,7 @@ export function LandingNavbar({tone = 'dark'}: LandingToneProps) {
             <Button
               className={cn(
                 'text-sm text-white',
-                isLight ? 'bg-slate-950 hover:bg-slate-800' : 'bg-sky-500 hover:bg-sky-600 shadow-md shadow-sky-500/25',
+                isLight ? 'bg-slate-950 hover:bg-slate-800' : 'border-0 bg-[linear-gradient(115deg,#8B5CF6_0%,#6366F1_48%,#22D3EE_100%)] shadow-[0_8px_24px_-8px_#6366F1] hover:brightness-110',
               )}
             >
               Sign up free
@@ -498,7 +511,7 @@ export function LandingFooter({tone = 'dark'}: LandingToneProps) {
     return (
       <footer className="border-t border-slate-200 bg-white px-4 py-14 text-slate-950 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-6xl">
-          <div className="grid gap-10 md:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr]">
+          <div className="grid gap-10 md:grid-cols-[1.2fr_0.8fr_0.8fr_0.9fr_0.8fr]">
             <div>
               <div className="mb-4 flex items-center gap-3">
                 <Logo className="h-7" markOnly />
@@ -555,8 +568,18 @@ export function LandingFooter({tone = 'dark'}: LandingToneProps) {
                 links: [
                   ['Documentation', '/docs'],
                   ['Pricing', '/pricing'],
+                  ['Compare', '/compare'],
                   ['Live Demo', '/demo'],
                   ['Blog', '/blog'],
+                ],
+              },
+              {
+                title: 'Alternatives',
+                links: [
+                  ['Datadog Alternative', '/datadog-alternative'],
+                  ['Sentry Alternative', '/sentry-alternative'],
+                  ['Better Stack Alternative', '/better-stack-alternative'],
+                  ['SigNoz Alternative', '/signoz-alternative'],
                 ],
               },
               {
@@ -606,7 +629,7 @@ export function LandingFooter({tone = 'dark'}: LandingToneProps) {
   return (
     <footer className="border-t border-white/[0.06] bg-[#070810] py-16 px-4 sm:px-6 lg:px-8">
       <div className="max-w-6xl mx-auto">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-10 mb-14">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-10 mb-14">
           <div className="col-span-2 md:col-span-1">
             <div className="flex items-center gap-3 mb-3">
               <Logo className="h-7" markOnly />
@@ -620,51 +643,109 @@ export function LandingFooter({tone = 'dark'}: LandingToneProps) {
           <div>
             <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Product</h4>
             <ul className="space-y-2.5">
-              <li><a href="/error-tracking" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">Error Tracking</a></li>
-              <li><a href="/log-management" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">Log Management</a></li>
-              <li><a href="/session-replay" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">Session Replay</a></li>
-              <li><a href="/performance-monitoring" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">APM & Traces</a></li>
-              <li><a href="/infrastructure-monitoring" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">Infrastructure</a></li>
-              <li><a href="/uptime-monitoring" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">Uptime Monitoring</a></li>
-              <li><a href="/on-call-management" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">On-Call</a></li>
-              <li><a href="/ai-observability" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">AI Observability</a></li>
+              <li><a href="/error-tracking" className="text-sm text-slate-500 hover:text-indigo-300 transition-colors">Error Tracking</a></li>
+              <li><a href="/log-management" className="text-sm text-slate-500 hover:text-indigo-300 transition-colors">Log Management</a></li>
+              <li><a href="/session-replay" className="text-sm text-slate-500 hover:text-indigo-300 transition-colors">Session Replay</a></li>
+              <li><a href="/performance-monitoring" className="text-sm text-slate-500 hover:text-indigo-300 transition-colors">APM & Traces</a></li>
+              <li><a href="/infrastructure-monitoring" className="text-sm text-slate-500 hover:text-indigo-300 transition-colors">Infrastructure</a></li>
+              <li><a href="/uptime-monitoring" className="text-sm text-slate-500 hover:text-indigo-300 transition-colors">Uptime Monitoring</a></li>
+              <li><a href="/on-call-management" className="text-sm text-slate-500 hover:text-indigo-300 transition-colors">On-Call</a></li>
+              <li><a href="/ai-observability" className="text-sm text-slate-500 hover:text-indigo-300 transition-colors">AI Observability</a></li>
             </ul>
           </div>
 
           <div>
             <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Resources</h4>
             <ul className="space-y-2.5">
-              <li><Link to="/docs" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">Documentation</Link></li>
-              <li><a href="/blog" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">Blog</a></li>
-              <li><Link to="/pricing" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">Pricing</Link></li>
-              <li><Link to="/demo" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">Live Demo</Link></li>
+              <li><Link to="/docs" className="text-sm text-slate-500 hover:text-indigo-300 transition-colors">Documentation</Link></li>
+              <li><a href="/blog" className="text-sm text-slate-500 hover:text-indigo-300 transition-colors">Blog</a></li>
+              <li><Link to="/pricing" className="text-sm text-slate-500 hover:text-indigo-300 transition-colors">Pricing</Link></li>
+              <li>
+                <Link to="/compare" className="text-sm text-slate-500 hover:text-indigo-300 transition-colors">
+                  Compare
+                </Link>
+              </li>
+              <li><Link to="/demo" className="text-sm text-slate-500 hover:text-indigo-300 transition-colors">Live Demo</Link></li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Alternatives</h4>
+            <ul className="space-y-2.5">
+              <li>
+                <Link
+                  to="/datadog-alternative"
+                  className="text-sm text-slate-500 hover:text-indigo-300 transition-colors"
+                >
+                  Datadog Alternative
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/sentry-alternative"
+                  className="text-sm text-slate-500 hover:text-indigo-300 transition-colors"
+                >
+                  Sentry Alternative
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/better-stack-alternative"
+                  className="text-sm text-slate-500 hover:text-indigo-300 transition-colors"
+                >
+                  Better Stack Alternative
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/signoz-alternative"
+                  className="text-sm text-slate-500 hover:text-indigo-300 transition-colors"
+                >
+                  SigNoz Alternative
+                </Link>
+              </li>
             </ul>
           </div>
 
           <div>
             <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Company</h4>
             <ul className="space-y-2.5">
-              <li><Link to="/legal/terms" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">Terms</Link></li>
-              <li><Link to="/legal/privacy" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">Privacy</Link></li>
-              <li><a href="mailto:support@moneat.io" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">Contact</a></li>
+              <li>
+                <Link to="/legal/terms" className="text-sm text-slate-500 hover:text-indigo-300 transition-colors">
+                  Terms
+                </Link>
+              </li>
+              <li>
+                <Link to="/legal/privacy" className="text-sm text-slate-500 hover:text-indigo-300 transition-colors">
+                  Privacy
+                </Link>
+              </li>
+              <li>
+                <a
+                  href="mailto:support@moneat.io"
+                  className="text-sm text-slate-500 hover:text-indigo-300 transition-colors"
+                >
+                  Contact
+                </a>
+              </li>
             </ul>
           </div>
 
           <div>
             <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4">Account</h4>
             <ul className="space-y-2.5">
-              <li><Link to="/login" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">Log in</Link></li>
-              <li><Link to="/signup" className="text-sm text-slate-500 hover:text-sky-400 transition-colors">Sign up free</Link></li>
+              <li><Link to="/login" className="text-sm text-slate-500 hover:text-indigo-300 transition-colors">Log in</Link></li>
+              <li><Link to="/signup" className="text-sm text-slate-500 hover:text-indigo-300 transition-colors">Sign up free</Link></li>
             </ul>
             <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 mt-8">Community</h4>
             <div className="flex items-center gap-4">
-              <a href="https://github.com/moneat-io/moneat" target="_blank" rel="noopener noreferrer" aria-label="GitHub" className="text-slate-500 hover:text-sky-400 transition-colors">
+              <a href="https://github.com/moneat-io/moneat" target="_blank" rel="noopener noreferrer" aria-label="GitHub" className="text-slate-500 hover:text-indigo-300 transition-colors">
                 <GithubIcon className="h-5 w-5" />
               </a>
-              <a href="https://discord.com/invite/dTsahnJeyH" target="_blank" rel="noopener noreferrer" aria-label="Discord" className="text-slate-500 hover:text-sky-400 transition-colors">
+              <a href="https://discord.com/invite/dTsahnJeyH" target="_blank" rel="noopener noreferrer" aria-label="Discord" className="text-slate-500 hover:text-indigo-300 transition-colors">
                 <DiscordIcon className="h-5 w-5" />
               </a>
-              <a href="https://x.com/moneat_io" target="_blank" rel="noopener noreferrer" aria-label="X (Twitter)" className="text-slate-500 hover:text-sky-400 transition-colors">
+              <a href="https://x.com/moneat_io" target="_blank" rel="noopener noreferrer" aria-label="X (Twitter)" className="text-slate-500 hover:text-indigo-300 transition-colors">
                 <XIcon className="h-5 w-5" />
               </a>
             </div>
@@ -674,7 +755,7 @@ export function LandingFooter({tone = 'dark'}: LandingToneProps) {
         <div className="pt-8 border-t border-white/[0.06] flex flex-col items-center gap-4 text-center">
           <p className="text-xs text-slate-600">
             Operated by Adrian Elder &middot; 1235 East Blvd, Ste E PMB 2045, Charlotte, NC 28203, USA &middot;{' '}
-            <a href="mailto:support@moneat.io" className="hover:text-sky-400 transition-colors">support@moneat.io</a>
+            <a href="mailto:support@moneat.io" className="hover:text-indigo-300 transition-colors">support@moneat.io</a>
           </p>
           <p className="text-xs text-slate-600">
             &copy; {new Date().getFullYear()} Moneat. All rights reserved.

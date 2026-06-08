@@ -102,6 +102,7 @@ class EntitlementServiceTest {
             logRetentionDays = 30,
             replayRetentionDays = 30,
             llmRetentionDays = 30,
+            apmTraceRetentionDays = 30,
             statusPagesEnabled = true,
             statusPageCustomDomainEnabled = true,
             sessionReplayEnabled = true,

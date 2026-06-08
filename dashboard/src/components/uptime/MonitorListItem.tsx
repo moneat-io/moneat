@@ -62,6 +62,9 @@ export default function MonitorListItem({monitor}: MonitorListItemProps) {
     // Only fetch if monitor is active/up/down (not paused ideally, but user might want to see history)
     enabled: true,
   })
+  const lastHeartbeat = heartbeats.at(-1)
+  const lastCheckAt = monitor.lastCheckAt
+  const hasLastCheckAt = lastCheckAt !== undefined && lastCheckAt !== null
 
   const deleteMutation = useMutation({
     mutationFn: (monitorId: string) => api.deleteUptimeMonitor(monitorId),
@@ -91,14 +94,14 @@ export default function MonitorListItem({monitor}: MonitorListItemProps) {
   })
 
   const statusColor = {
-    up: 'border-l-emerald-500',
-    down: 'border-l-red-500',
-    paused: 'border-l-yellow-500',
-    pending: 'border-l-gray-300',
-  }[monitor.status] || 'border-l-gray-300'
+    up: 'border-l-success-solid',
+    down: 'border-l-danger-solid',
+    paused: 'border-l-warning-solid',
+    pending: 'border-l-border',
+  }[monitor.status] || 'border-l-border'
 
   return (
-    <Card className={cn("hover:shadow-md transition-shadow overflow-hidden border-l-4", statusColor)}>
+    <Card className={cn("overflow-hidden border-l-4", statusColor)}>
       <CardContent className="p-3">
         <div className="flex flex-col gap-3">
           {/* Header Row */}
@@ -126,8 +129,11 @@ export default function MonitorListItem({monitor}: MonitorListItemProps) {
                   {monitor.url || monitor.hostname}
                 </a>
                 <span className="text-xs">•</span>
-                <span className="text-xs" title={formatDateTime(new Date(monitor.lastCheckAt || 0), timezone)}>
-                  Checked {monitor.lastCheckAt ? formatRelativeTime(monitor.lastCheckAt) : 'never'}
+                <span
+                  className="text-xs"
+                  title={hasLastCheckAt ? formatDateTime(lastCheckAt, timezone) : undefined}
+                >
+                  Checked {hasLastCheckAt ? formatRelativeTime(lastCheckAt) : 'never'}
                 </span>
               </div>
             </div>
@@ -162,8 +168,8 @@ export default function MonitorListItem({monitor}: MonitorListItemProps) {
           {/* Actions Row */}
           <div className="flex items-center justify-between pt-1.5 border-t mt-1.5">
             <div className="text-xs text-muted-foreground">
-              {heartbeats.length > 0 ? (
-                <span>Last heartbeat: {formatTime(new Date(heartbeats[heartbeats.length - 1].timestamp), timezone)}</span>
+              {lastHeartbeat ? (
+                <span>Last heartbeat: {formatTime(lastHeartbeat.timestamp, timezone)}</span>
               ) : (
                 <span>No heartbeat data</span>
               )}
@@ -195,7 +201,7 @@ export default function MonitorListItem({monitor}: MonitorListItemProps) {
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-7 px-1.5 text-xs text-red-500 hover:text-red-600 hover:bg-red-50"
+                className="h-7 px-1.5 text-xs text-destructive hover:text-destructive/90"
                 onClick={() => {
                   if (confirm(`Delete monitor "${monitor.name}"?`)) {
                     deleteMutation.mutate(monitor.id)

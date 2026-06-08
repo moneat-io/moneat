@@ -41,6 +41,7 @@ export function useAuth() {
           name: userData.name,
           emailVerified: userData.emailVerified,
           onboardingCompleted: userData.onboardingCompleted,
+          orgId: userData.orgId,
           orgRole: userData.orgRole,
         })
         // Keep session flag in sync

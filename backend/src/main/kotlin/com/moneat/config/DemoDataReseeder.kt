@@ -22,7 +22,7 @@ import mu.KotlinLogging
 private val logger = KotlinLogging.logger {}
 
 /**
- * Periodically re-inserts demo data so that ClickHouse TTL (90-day default)
+ * Periodically re-inserts demo data so that ClickHouse TTL windows
  * does not silently delete the one-time seed migrations (V6/V7/V8/V10/V12).
  *
  * Strategy: delete demo-project rows older than 30 days, then re-insert fresh
@@ -52,6 +52,8 @@ private data class ReseedSnapshot(
     val freshAnalyticsCount: Long,
     val freshLogsCount: Long,
     val freshDatadogCount: Long,
+    val freshFeatureFlagsCount: Long,
+    val freshFeedbackCount: Long,
     val freshK8sCount: Long,
     val freshDbmCount: Long,
     val freshDebuggerLogsCount: Long,
@@ -91,9 +93,11 @@ private data class ReseedSnapshot(
                 freshAnalyticsCount > 0,
                 freshLogsCount > 0,
                 freshDatadogCount > 0,
+                freshFeatureFlagsCount > 0,
+                freshFeedbackCount > 0,
                 freshSecurityCount > 0,
                 freshSyntheticsCount > 0,
-                demoDashboardCount >= 4,
+                demoDashboardCount >= DEMO_DASHBOARD_SEED_COUNT,
             ).all { it }
         return coreDataFresh && hasFreshInfra
     }
@@ -106,6 +110,8 @@ private suspend fun gatherReseedSnapshot(): ReseedSnapshot =
         freshAnalyticsCount = checkFreshAnalyticsDataCount(),
         freshLogsCount = checkFreshLogsCount(),
         freshDatadogCount = checkFreshDatadogCount(),
+        freshFeatureFlagsCount = checkFreshFeatureFlagsCount(),
+        freshFeedbackCount = checkFreshFeedbackCount(),
         freshK8sCount = checkFreshKubernetesDataCount(),
         freshDbmCount = checkFreshDbmDataCount(),
         freshDebuggerLogsCount = checkFreshDebuggerLogsCount(),
@@ -132,6 +138,8 @@ private suspend fun runStaleDemoReseed(snap: ReseedSnapshot) {
     maybeReseedAnalytics(snap.freshAnalyticsCount)
     maybeReseedLogs(snap.freshLogsCount)
     maybeReseedDatadog(snap.freshDatadogCount)
+    maybeReseedFeatureFlags(snap.freshFeatureFlagsCount)
+    maybeReseedFeedback(snap.freshFeedbackCount)
     maybeReseedKubernetes(snap.freshK8sCount)
     maybeReseedDbm(snap.freshDbmCount)
     maybeReseedDebugger(snap.hasFreshDebugger, snap)
@@ -139,6 +147,7 @@ private suspend fun runStaleDemoReseed(snap: ReseedSnapshot) {
     maybeReseedSbom(snap.freshSbomCount)
     maybeReseedDashboards(snap.demoDashboardCount)
     maybeReseedSecurity(snap.freshSecurityCount)
+    seedDemoDetectionRules()
     maybeReseedSynthetics(snap.freshSyntheticsCount)
 
     logger.info { "Demo data reseed complete" }
@@ -152,6 +161,7 @@ private fun logSkippingReseed(s: ReseedSnapshot) {
             "${s.freshLlmCount} recent LLM generations, " +
             "${s.freshAnalyticsCount} recent analytics events, ${s.freshLogsCount} recent logs, " +
             "${s.freshDatadogCount} recent Datadog spans, " +
+            "${s.freshFeatureFlagsCount} recent flag evaluations, ${s.freshFeedbackCount} recent feedback, " +
             "infra (k8s=${s.freshK8sCount} dbm=${s.freshDbmCount} " +
             "debugger_logs=${s.freshDebuggerLogsCount} " +
             "debugger_diag=${s.freshDebuggerDiagCount} ndm_dev=${s.freshNdmDevicesCount} " +
@@ -216,6 +226,29 @@ private suspend fun maybeReseedDatadog(freshDatadogCount: Long) {
     reseedDatadogData()
 }
 
+private suspend fun maybeReseedFeatureFlags(freshFeatureFlagsCount: Long) {
+    if (freshFeatureFlagsCount > 0) {
+        logger.info {
+            "Feature flag demo data is fresh ($freshFeatureFlagsCount recent evaluations), " +
+                "skipping feature flag reseed"
+        }
+        return
+    }
+    logger.info { "Feature flag demo data is stale or missing, reseeding..." }
+    purgeFeatureFlagsDemoData()
+    reseedFeatureFlags()
+}
+
+private suspend fun maybeReseedFeedback(freshFeedbackCount: Long) {
+    if (freshFeedbackCount > 0) {
+        logger.info { "Feedback demo data is fresh ($freshFeedbackCount recent entries), skipping feedback reseed" }
+        return
+    }
+    logger.info { "Feedback demo data is stale or missing, reseeding..." }
+    purgeFeedbackDemoData()
+    reseedFeedback()
+}
+
 private suspend fun maybeReseedKubernetes(freshK8sCount: Long) {
     if (freshK8sCount > 0) {
         logger.info {
@@ -275,7 +308,7 @@ private suspend fun maybeReseedSbom(freshSbomCount: Long) {
 }
 
 private suspend fun maybeReseedDashboards(demoDashboardCount: Long) {
-    if (demoDashboardCount >= 4) {
+    if (demoDashboardCount >= DEMO_DASHBOARD_SEED_COUNT) {
         logger.info { "Demo dashboards are present ($demoDashboardCount), skipping dashboard reseed" }
         return
     }

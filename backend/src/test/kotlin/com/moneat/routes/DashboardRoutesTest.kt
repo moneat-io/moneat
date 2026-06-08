@@ -188,7 +188,7 @@ class DashboardRoutesTest {
         id = id, widgetId = 1L, dashboardId = dashboardId,
         name = "Test Alert", condition = "gt",
         threshold = 90.0, metricIndex = 0,
-        durationSeconds = 60, incidentSeverity = null,
+        durationSeconds = 60, alertPriority = null,
         enabled = true,
         notificationChannels = NotificationChannels(),
         lastTriggeredAt = null, lastValue = null,
@@ -807,6 +807,21 @@ class DashboardRoutesTest {
                     setBody("""{"enabled":false}""")
                 }
             assertEquals(HttpStatusCode.OK, r.status)
+        }
+
+    @Test
+    fun `PUT dashboard alert returns 400 for malformed JSON`() =
+        testApplication {
+            val (userId, _) = seedUserAndOrg()
+            application { installRoutes(this) }
+
+            val r =
+                client.put("/v1/dashboards/1/alerts/1") {
+                    withAuth(token(userId))
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"enabled":""")
+                }
+            assertEquals(HttpStatusCode.BadRequest, r.status)
         }
 
     @Test

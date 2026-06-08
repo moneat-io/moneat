@@ -23,12 +23,17 @@ import com.moneat.mcp.models.McpContext
 import com.moneat.mcp.protocol.InputSchema
 import com.moneat.mcp.protocol.McpResourceRegistry
 import com.moneat.mcp.protocol.McpToolRegistry
+import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.TextContent
 import io.ktor.server.application.ApplicationCall
+import io.ktor.server.application.ApplicationCallPipeline
 import io.ktor.server.application.call
 import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.plugins.ratelimit.rateLimit
 import io.ktor.server.request.header
+import io.ktor.server.request.path
+import io.ktor.server.response.ApplicationSendPipeline
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
@@ -40,9 +45,12 @@ import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
 import io.modelcontextprotocol.kotlin.sdk.server.StreamableHttpServerTransport
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult as SdkCallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.Implementation
+import io.modelcontextprotocol.kotlin.sdk.types.JSONRPCError
+import io.modelcontextprotocol.kotlin.sdk.types.JSONRPCMessage
+import io.modelcontextprotocol.kotlin.sdk.types.McpJson
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult as SdkReadResourceResult
 import io.modelcontextprotocol.kotlin.sdk.types.ServerCapabilities
-import io.modelcontextprotocol.kotlin.sdk.types.TextContent
+import io.modelcontextprotocol.kotlin.sdk.types.TextContent as SdkTextContent
 import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
 import io.modelcontextprotocol.kotlin.sdk.types.ToolAnnotations
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
@@ -50,15 +58,22 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
 import mu.KotlinLogging
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 private val logger = KotlinLogging.logger {}
 
 private const val MCP_SERVER_NAME = "moneat-mcp-server"
 private const val MCP_SERVER_VERSION = "1.0.0"
+private const val MCP_ROUTE_PATH = "/v1/mcp"
 private const val MCP_SESSION_ID_HEADER = "mcp-session-id"
 
 private val sessions = ConcurrentHashMap<String, McpStreamableSession>()
@@ -69,7 +84,9 @@ fun Route.mcpRoutes(
     resourceRegistry: McpResourceRegistry,
 ) {
     rateLimit(RateLimitName("mcp")) {
-        route("/v1/mcp") {
+        route(MCP_ROUTE_PATH) {
+            installMcpJsonResponseTransform()
+
             post {
                 val session = resolveOrCreateSession(call, toolRegistry, resourceRegistry)
                     ?: return@post
@@ -118,6 +135,9 @@ private suspend fun resolveOrCreateSession(
             tokenId = auth.tokenId,
             scopes = auth.scopes,
             sessionId = "pending:${auth.tokenId}",
+            mcpApiKeyId = auth.mcpApiKeyId,
+            allowedTools = auth.allowedTools,
+            allowedResources = auth.allowedResources,
         ),
     )
     val server = createMcpServer({ session.context }, toolRegistry, resourceRegistry)
@@ -187,7 +207,7 @@ private fun createMcpServer(
         ),
     )
 
-    toolRegistry.listTools().forEach { tool ->
+    toolRegistry.listTools(contextProvider().allowedTools).forEach { tool ->
         server.addTool(
             name = tool.name,
             description = tool.description,
@@ -204,14 +224,14 @@ private fun createMcpServer(
             )
             SdkCallToolResult(
                 content = result.content.map { content ->
-                    TextContent(text = content.text ?: "")
+                    SdkTextContent(text = content.text ?: "")
                 },
                 isError = result.isError,
             )
         }
     }
 
-    resourceRegistry.listResources().forEach { resource ->
+    resourceRegistry.listResources(contextProvider().allowedResources).forEach { resource ->
         server.addResource(
             uri = resource.uri,
             name = resource.name,
@@ -236,6 +256,69 @@ private fun createMcpServer(
 
     logger.debug { "Created MCP server" }
     return server
+}
+
+private fun Route.installMcpJsonResponseTransform() {
+    (this as ApplicationCallPipeline).sendPipeline.intercept(ApplicationSendPipeline.Before) {
+        if (call.request.path() != MCP_ROUTE_PATH) return@intercept
+        val responseText = encodeMcpJsonRpcResponse(subject) ?: return@intercept
+        proceedWith(
+            TextContent(
+                text = responseText,
+                contentType = ContentType.Application.Json,
+                status = call.response.status(),
+            )
+        )
+    }
+}
+
+private fun encodeMcpJsonRpcResponse(body: Any): String? =
+    when (body) {
+        is JSONRPCMessage -> encodeMcpJsonRpcMessage(body)
+        is List<*> -> encodeMcpJsonRpcBatchResponse(body)
+        else -> null
+    }
+
+private fun encodeMcpJsonRpcMessage(message: JSONRPCMessage): String =
+    McpJson
+        .parseToJsonElement(McpJson.encodeToString(message))
+        .withoutNullFields()
+        .withJsonRpcNullErrorId(message)
+        .toString()
+
+private fun encodeMcpJsonRpcBatchResponse(body: List<*>): String? {
+    val encodedMessages = body.map { item ->
+        val message = item as? JSONRPCMessage ?: return null
+        encodeMcpJsonRpcMessage(message)
+    }
+    return encodedMessages.joinToString(prefix = "[", postfix = "]")
+}
+
+private fun JsonElement.withoutNullFields(): JsonElement =
+    when (this) {
+        is JsonObject -> buildJsonObject {
+            for ((key, value) in this@withoutNullFields) {
+                if (value !is JsonNull) {
+                    put(key, value.withoutNullFields())
+                }
+            }
+        }
+        is JsonArray -> buildJsonArray {
+            for (value in this@withoutNullFields) {
+                add(value.withoutNullFields())
+            }
+        }
+        else -> this
+    }
+
+private fun JsonElement.withJsonRpcNullErrorId(message: JSONRPCMessage): JsonElement {
+    if (message !is JSONRPCError || message.id != null || this !is JsonObject) return this
+    return buildJsonObject {
+        put("id", JsonNull)
+        for ((key, value) in this@withJsonRpcNullErrorId) {
+            put(key, value)
+        }
+    }
 }
 
 private class McpStreamableSession(

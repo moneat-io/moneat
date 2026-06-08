@@ -16,7 +16,11 @@
 
 package com.moneat.mcp.protocol
 
+import com.moneat.mcp.auth.McpScopes
 import com.moneat.mcp.models.McpContext
+import com.moneat.mcp.resources.WorkflowCatalogResource
+import com.moneat.mcp.resources.WorkflowsOverviewResource
+import com.moneat.mcp.resources.WorkflowsUsageResource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.BeforeEach
@@ -86,11 +90,46 @@ class McpResourceRegistryTest {
     }
 
     @Test
+    fun `workflow resources require workflow read scope`() {
+        val workflowResources = listOf(
+            WorkflowsOverviewResource(),
+            WorkflowsUsageResource(),
+            WorkflowCatalogResource(),
+        )
+
+        workflowResources.forEach { resource ->
+            assertEquals(setOf(McpScopes.WORKFLOW_READ), resource.requiredScopes)
+        }
+    }
+
+    @Test
     fun `readResource returns error for unknown URI`() = runBlocking {
         val result = registry.readResource("test://unknown", testContext)
 
         assertEquals(1, result.contents.size)
         assertTrue(result.contents[0].text!!.contains("Unknown resource"))
+    }
+
+    @Test
+    fun `listResources filters to allowed resources`() {
+        registerNamedResource("test://first")
+        registerNamedResource("test://second")
+
+        val resources = registry.listResources(setOf("test://second"))
+
+        assertEquals(1, resources.size)
+        assertEquals("test://second", resources[0].uri)
+    }
+
+    @Test
+    fun `readResource rejects disabled resource`() = runBlocking {
+        registerNamedResource("test://first")
+        val restrictedContext = testContext.copy(allowedResources = setOf("test://other"))
+
+        val result = registry.readResource("test://first", restrictedContext)
+
+        assertEquals(1, result.contents.size)
+        assertTrue(result.contents[0].text!!.contains("not enabled"))
     }
 
     @Test
@@ -114,6 +153,20 @@ class McpResourceRegistryTest {
 
         assertEquals(1, result.contents.size)
         assertTrue(result.contents[0].text!!.contains("\"orgId\": 1"))
+    }
+
+    private fun registerNamedResource(uri: String) {
+        val resource = object : McpResource {
+            override val uri = uri
+            override val name = "Resource"
+            override val description = "A test resource"
+            override suspend fun read(
+                context: McpContext
+            ): ResourceContent {
+                return ResourceContent(uri = uri, text = "{}")
+            }
+        }
+        registry.register(resource)
     }
 
     @Test

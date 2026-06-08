@@ -44,7 +44,7 @@ export function dashboardsMethods(core: ApiClientCore) {
   const base = core.API_BASE
 
   return {
-    getDashboards: (projectId?: number) => {
+    getDashboards: (projectId?: string | number) => {
       const qs = projectId ? `?projectId=${projectId}` : ''
       return core.request<CustomDashboard[]>(`${base}/dashboards${qs}`)
     },
@@ -113,7 +113,7 @@ export function dashboardsMethods(core: ApiClientCore) {
     executeWidgetQuery: (
       dashboardId: number,
       queryConfig: QueryDsl,
-      projectId: number,
+      projectId: string | number,
       timeRange?: TimeRangeDef,
       variables?: Record<string, string>
     ) =>
@@ -133,7 +133,7 @@ export function dashboardsMethods(core: ApiClientCore) {
     executeBatchQuery: (
       dashboardId: number,
       queries: QueryDsl[],
-      projectId: number,
+      projectId: string | number,
       timeRange?: TimeRangeDef,
       variables?: Record<string, string>
     ) =>

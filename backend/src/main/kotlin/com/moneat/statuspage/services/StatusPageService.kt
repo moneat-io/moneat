@@ -61,7 +61,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import java.security.SecureRandom
-import java.util.*
+import java.util.UUID
 import javax.naming.NamingException
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours

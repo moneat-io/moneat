@@ -155,6 +155,14 @@ class DashboardWidgetRepositoryImpl : DashboardWidgetRepository {
         }
     }
 
+    override fun deleteById(dashboardId: Long, widgetId: Long): Boolean =
+        transaction {
+            DashboardWidgets.deleteWhere {
+                (DashboardWidgets.dashboardId eq dashboardId) and
+                    (DashboardWidgets.id eq widgetId)
+            } > 0
+        }
+
     override fun insert(dashboardId: Long, widget: CreateWidgetRequest, sortOrder: Int, now: Instant): Long =
         transaction {
             DashboardWidgets.insert {

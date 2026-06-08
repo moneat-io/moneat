@@ -32,14 +32,14 @@ import type {DataSourceInfo} from '@/lib/api'
 
 // Icons for built-in data sources
 const BUILTIN_ICONS: Record<string, React.ReactNode> = {
-  events: <Bug className="h-4 w-4 text-red-500" />,
-  spans: <Activity className="h-4 w-4 text-violet-500" />,
-  logs: <FileText className="h-4 w-4 text-blue-500" />,
-  metrics: <Cpu className="h-4 w-4 text-green-500" />,
-  containers: <Box className="h-4 w-4 text-orange-500" />,
-  uptime_heartbeats: <Wifi className="h-4 w-4 text-teal-500" />,
-  llm_generations: <Brain className="h-4 w-4 text-purple-500" />,
-  analytics_events: <BarChart3 className="h-4 w-4 text-cyan-500" />,
+  events: <Bug className="h-4 w-4 text-chart-8" />,
+  spans: <Activity className="h-4 w-4 text-chart-6" />,
+  logs: <FileText className="h-4 w-4 text-chart-2" />,
+  metrics: <Cpu className="h-4 w-4 text-chart-4" />,
+  containers: <Box className="h-4 w-4 text-chart-6" />,
+  uptime_heartbeats: <Wifi className="h-4 w-4 text-chart-3" />,
+  llm_generations: <Brain className="h-4 w-4 text-chart-7" />,
+  analytics_events: <BarChart3 className="h-4 w-4 text-chart-9" />,
 }
 
 function getIconForSource(source: DataSourceInfo): React.ReactNode {

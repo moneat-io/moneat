@@ -19,6 +19,14 @@ package com.moneat.mcp.protocol
 import com.moneat.mcp.McpToolRegistrar
 import com.moneat.mcp.auth.McpScopes
 import com.moneat.mcp.models.McpContext
+import com.moneat.mcp.tools.CreateDetectionRuleTool
+import com.moneat.mcp.tools.CreateWorkflowTool
+import com.moneat.mcp.tools.GetFeatureFlagAnalyticsTool
+import com.moneat.mcp.tools.GetFeatureFlagTool
+import com.moneat.mcp.tools.GetWorkflowTool
+import com.moneat.mcp.tools.GetWorkflowWebhookSigningTool
+import com.moneat.mcp.tools.ListSecuritySignalsTool
+import com.moneat.mcp.tools.RunWorkflowTool
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -31,7 +39,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-private const val EXPECTED_CORE_MCP_TOOL_COUNT = 81
+private const val EXPECTED_CORE_MCP_TOOL_COUNT = 147
 
 class McpToolRegistryTest {
 
@@ -48,6 +56,11 @@ class McpToolRegistryTest {
             "project:write",
             "releases:read",
             "releases:write",
+            "workflow:read",
+            "workflow:write",
+            "workflow:run",
+            "security:read",
+            "security:write",
         ),
         sessionId = "test-session"
     )
@@ -168,6 +181,58 @@ class McpToolRegistryTest {
     }
 
     @Test
+    fun `feature flag retrieval and analytics use event read scope`() {
+        val expectedScope = setOf(McpScopes.EVENT_READ)
+
+        assertEquals(expectedScope, McpScopes.requiredScopesFor(GetFeatureFlagTool()))
+        assertEquals(expectedScope, McpScopes.requiredScopesFor(GetFeatureFlagAnalyticsTool()))
+    }
+
+    @Test
+    fun `workflow tools use least privilege workflow scopes`() {
+        assertEquals(setOf(McpScopes.WORKFLOW_READ), McpScopes.requiredScopesFor(GetWorkflowTool()))
+        assertEquals(setOf(McpScopes.WORKFLOW_WRITE), McpScopes.requiredScopesFor(CreateWorkflowTool()))
+        assertEquals(
+            setOf(McpScopes.WORKFLOW_WRITE),
+            McpScopes.requiredScopesFor(GetWorkflowWebhookSigningTool())
+        )
+        assertEquals(setOf(McpScopes.WORKFLOW_RUN), RunWorkflowTool().requiredScopes)
+        assertFalse(GetWorkflowWebhookSigningTool().readOnly)
+    }
+
+    @Test
+    fun `security tools use least privilege security scopes`() {
+        assertEquals(setOf(McpScopes.SECURITY_READ), McpScopes.requiredScopesFor(ListSecuritySignalsTool()))
+        assertEquals(setOf(McpScopes.SECURITY_WRITE), McpScopes.requiredScopesFor(CreateDetectionRuleTool()))
+    }
+
+    @Test
+    fun `listTools filters to allowed tools`() {
+        registerNamedTool("first_tool")
+        registerNamedTool("second_tool")
+
+        val tools = registry.listTools(setOf("second_tool"))
+
+        assertEquals(1, tools.size)
+        assertEquals("second_tool", tools[0].name)
+    }
+
+    @Test
+    fun `callTool rejects disabled tool`() = runBlocking {
+        registerNamedTool("first_tool")
+        val restrictedContext = testContext.copy(allowedTools = setOf("other_tool"))
+
+        val result = registry.callTool(
+            "first_tool",
+            JsonObject(emptyMap()),
+            restrictedContext
+        )
+
+        assertTrue(result.isError)
+        assertTrue(result.content[0].text!!.contains("not enabled"))
+    }
+
+    @Test
     fun `callTool dispatches to registered tool`() = runBlocking {
         val tool = object : McpTool {
             override val name = "echo"
@@ -199,6 +264,22 @@ class McpToolRegistryTest {
 
         assertFalse(result.isError)
         assertEquals("hello", result.content[0].text)
+    }
+
+    private fun registerNamedTool(name: String) {
+        val tool = object : McpTool {
+            override val name = name
+            override val description = "A test tool"
+            override val inputSchema = InputSchema()
+            override val requiredScopes = fakeReadScopes
+            override suspend fun execute(
+                args: JsonObject,
+                context: McpContext
+            ): ToolCallResult {
+                return ToolCallResult(content = listOf(ToolContent(text = "ok")))
+            }
+        }
+        registry.register(tool)
     }
 
     @Test
@@ -292,8 +373,12 @@ class McpToolRegistryTest {
             "pause_uptime_monitor",
             "resume_uptime_monitor",
             "create_dashboard",
+            "create_dashboard_widget",
             "update_dashboard",
+            "update_dashboard_widget",
             "delete_dashboard",
+            "delete_dashboard_widget",
+            "replace_dashboard_widgets",
             "import_dashboard",
             "execute_dashboard_query",
             "create_dashboard_alert",
@@ -312,10 +397,37 @@ class McpToolRegistryTest {
             "create_status_page_incident",
             "update_status_page_incident",
             "post_incident_update",
+            "create_synthetic_test",
+            "update_synthetic_test",
+            "delete_synthetic_test",
+            "run_synthetic_test",
             "update_notification_preferences",
             "create_datasource",
             "execute_datasource_query",
+            "create_feature_flag_environment",
+            "create_feature_flag_sdk_key",
+            "create_feature_flag",
+            "delete_feature_flag",
+            "delete_feature_flag_segment",
+            "revoke_feature_flag_sdk_key",
+            "update_feature_flag",
+            "update_feature_flag_config",
+            "upsert_feature_flag_segment",
             "create_project",
+            "cancel_workflow_run",
+            "create_workflow",
+            "create_workflow_instance",
+            "delete_workflow",
+            "get_workflow_webhook_signing",
+            "publish_workflow",
+            "run_workflow",
+            "unpublish_workflow",
+            "update_workflow",
+            "create_detection_rule",
+            "delete_detection_rule",
+            "install_detection_template",
+            "triage_security_signal",
+            "update_detection_rule",
         )
 
         assertEquals(EXPECTED_CORE_MCP_TOOL_COUNT, toolsByName.size)

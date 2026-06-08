@@ -24,62 +24,70 @@ Copy the configuration below and save it to `/etc/datadog-agent/datadog.yaml` on
 # Increase Docker check timeout (default 5s is too short on loaded hosts)
 docker_query_timeout: 15
 
+# Log Collection
+logs_config:
+  # Host:port only, without scheme or path. Example: api.moneat.io:443
+  logs_dd_url: {{LOGS_HOST_PORT}}
+  logs_no_ssl: false
+
 # Container (contlcycle-intake, contimage-intake, sbom-intake)
 container_lifecycle:
-  dd_url: {{BACKEND_URL}}
+  dd_url: {{BACKEND_HOST}}
 container_image:
-  dd_url: {{BACKEND_URL}}
+  dd_url: {{BACKEND_HOST}}
 sbom:
-  dd_url: {{BACKEND_URL}}
+  dd_url: {{BACKEND_HOST}}
 
 # Network Device Monitoring
 network_devices:
   metadata:
-    dd_url: {{BACKEND_URL}}
+    dd_url: {{BACKEND_HOST}}
   snmp_traps:
     forwarder:
-      dd_url: {{BACKEND_URL}}
+      dd_url: {{BACKEND_HOST}}
   netflow:
     forwarder:
-      dd_url: {{BACKEND_URL}}
+      dd_url: {{BACKEND_HOST}}
 
 # Network Config Management
 network_config_management:
   forwarder:
-    dd_url: {{BACKEND_URL}}
+    dd_url: {{BACKEND_HOST}}
 
 # Network Path
 network_path:
   forwarder:
-    dd_url: {{BACKEND_URL}}
+    dd_url: {{BACKEND_HOST}}
 
 # Synthetics
 synthetics:
   forwarder:
-    dd_url: {{BACKEND_URL}}
+    dd_url: {{BACKEND_HOST}}
 
 # Data Streams
 data_streams:
   forwarder:
-    dd_url: {{BACKEND_URL}}
+    dd_url: {{BACKEND_HOST}}
 
 # Event Management
 event_management:
   forwarder:
-    dd_url: {{BACKEND_URL}}
+    dd_url: {{BACKEND_HOST}}
 
 # Database Monitoring
 database_monitoring:
   metrics:
-    dd_url: {{BACKEND_URL}}
+    dd_url: {{BACKEND_HOST}}
   samples:
-    dd_url: {{BACKEND_URL}}
+    dd_url: {{BACKEND_HOST}}
   activity:
-    dd_url: {{BACKEND_URL}}
+    dd_url: {{BACKEND_HOST}}
 
 # Continuous Profiling - full URL required (agent uses it verbatim, no path appended)
 apm_config:
-  profiling_dd_url: {{INGEST_URL}}/profiling/v1/input
+  profiling_dd_url: {{BACKEND_URL}}/api/v2/profile?api_key=<YOUR_MONEAT_AGENT_KEY>
+  telemetry:
+    dd_url: {{BACKEND_URL}}/dd/telemetry/proxy
 ```
 
 Mount this file when running the agent in Docker:

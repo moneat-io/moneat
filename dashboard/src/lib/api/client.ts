@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { isDemo, setDemoEpoch } from '../demo'
+import { isDemo, setDemoEpoch, syncDemoEpochFromUser } from '../demo'
 
 export const API_BASE = `${import.meta.env.VITE_BACKEND_URL || ''}/v1`
 const AUTH_PAGE_PATHS = new Set([
@@ -144,7 +144,6 @@ export function createApiClientCore(): ApiClientCore {
   async function logout(): Promise<void> {
     globalThis.sessionStorage?.removeItem('impersonate_token')
     globalThis.sessionStorage?.removeItem('authenticated')
-    globalThis.localStorage?.removeItem('selectedProjectId')
     setDemoEpoch(null)
     try {
       const { signal, cleanup } = withRequestTimeoutSignal()
@@ -218,7 +217,7 @@ export function createApiClientCore(): ApiClientCore {
     }
 
     if (response.status === 401) {
-      return handle401Retry(endpoint, options, authRetryCount, request)
+      return handle401Retry<T>(endpoint, options, authRetryCount, request)
     }
 
     if (!response.ok) {
@@ -231,7 +230,7 @@ export function createApiClientCore(): ApiClientCore {
       throw buildErrorFromResponse(response, errorData)
     }
     if (response.status === 204) return undefined as T
-    return response.json()
+    return (await response.json()) as T
   }
 
   async function fetchWithAuth(
@@ -294,9 +293,14 @@ export function createApiClientCore(): ApiClientCore {
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
           globalThis.sessionStorage?.removeItem('authenticated')
+          setDemoEpoch(null)
         }
         return false
       }
+      const user = await response
+        .json()
+        .catch(() => null) as { demoEpochMs?: number | null } | null
+      syncDemoEpochFromUser(user)
       globalThis.sessionStorage?.setItem('authenticated', 'true')
       return true
     } catch {

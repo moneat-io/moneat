@@ -49,11 +49,16 @@ export type TimelineItem = BaseTimelineItem & {
 export interface ReplayTimelinePanelProps {
   readonly items: TimelineItem[]
   readonly currentOffsetMs: number
-  readonly projectId?: number
+  /** Project resource ID for replay links; legacy numeric IDs are accepted during migration. */
+  readonly projectId?: string | number
   readonly onSeek: (offsetMs: number) => void
 }
 
 type FilterValue = 'all' | 'error' | 'transaction' | 'span'
+
+function issueSearch(projectId?: string | number): { projectId: string | undefined } {
+  return { projectId: projectId === undefined ? undefined : String(projectId) }
+}
 
 function formatOffset(offsetMs: number): string {
   if (offsetMs < 0) return '0:00'
@@ -101,39 +106,39 @@ function typeColorClasses(type: TimelineItem['type']) {
   switch (type) {
     case 'error':
       return {
-        border: 'border-l-red-500',
-        bg: 'bg-red-500/8 dark:bg-red-500/10',
-        bgActive: 'bg-red-500/15 dark:bg-red-500/20',
-        text: 'text-red-600 dark:text-red-400',
-        badge: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-        dot: 'bg-red-500',
+        border: 'border-l-danger-solid',
+        bg: 'bg-danger-bg/60 dark:bg-danger-bg',
+        bgActive: 'bg-danger-bg dark:bg-danger-bg',
+        text: 'text-danger-fg',
+        badge: 'bg-danger-bg text-danger-fg',
+        dot: 'bg-danger-solid',
       }
     case 'transaction':
       return {
-        border: 'border-l-blue-500',
-        bg: 'bg-blue-500/8 dark:bg-blue-500/10',
-        bgActive: 'bg-blue-500/15 dark:bg-blue-500/20',
-        text: 'text-blue-600 dark:text-blue-400',
-        badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-        dot: 'bg-blue-500',
+        border: 'border-l-chart-2',
+        bg: 'bg-chart-2/[0.08] dark:bg-chart-2/10',
+        bgActive: 'bg-chart-2/15 dark:bg-chart-2/20',
+        text: 'text-chart-2',
+        badge: 'bg-chart-2/15 text-chart-2',
+        dot: 'bg-chart-2',
       }
     case 'span':
       return {
-        border: 'border-l-emerald-500',
-        bg: 'bg-emerald-500/8 dark:bg-emerald-500/10',
-        bgActive: 'bg-emerald-500/15 dark:bg-emerald-500/20',
-        text: 'text-emerald-600 dark:text-emerald-400',
-        badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
-        dot: 'bg-emerald-500',
+        border: 'border-l-chart-4',
+        bg: 'bg-chart-4/[0.08] dark:bg-chart-4/10',
+        bgActive: 'bg-chart-4/15 dark:bg-chart-4/20',
+        text: 'text-chart-4',
+        badge: 'bg-chart-4/15 text-chart-4',
+        dot: 'bg-chart-4',
       }
     default:
       return {
-        border: 'border-l-slate-400',
-        bg: 'bg-slate-500/8 dark:bg-slate-500/10',
-        bgActive: 'bg-slate-500/15 dark:bg-slate-500/20',
-        text: 'text-slate-500 dark:text-slate-400',
-        badge: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
-        dot: 'bg-slate-400',
+        border: 'border-l-border',
+        bg: 'bg-muted/40 dark:bg-muted/40',
+        bgActive: 'bg-muted dark:bg-muted',
+        text: 'text-muted-foreground',
+        badge: 'bg-muted text-muted-foreground',
+        dot: 'bg-muted-foreground/70',
       }
   }
 }
@@ -156,14 +161,14 @@ function TypeIcon({ type, className }: { readonly type: TimelineItem['type']; re
 function CategoryIcon({ category, className }: { readonly category?: string; readonly className?: string }) {
   const cat = (category ?? '').toLowerCase()
   if (cat.includes('http') || cat.includes('network'))
-    return <Network className={cn('h-3.5 w-3.5 text-blue-500', className)} />
+    return <Network className={cn('h-3.5 w-3.5 text-chart-2', className)} />
   if (cat.includes('navigation') || cat.includes('nav'))
-    return <Navigation className={cn('h-3.5 w-3.5 text-indigo-500', className)} />
+    return <Navigation className={cn('h-3.5 w-3.5 text-chart-10', className)} />
   if (cat.includes('ui.click') || cat.includes('touch') || cat.includes('gesture'))
-    return <MousePointerClick className={cn('h-3.5 w-3.5 text-pink-500', className)} />
+    return <MousePointerClick className={cn('h-3.5 w-3.5 text-chart-7', className)} />
   if (cat.includes('ui'))
-    return <Activity className={cn('h-3.5 w-3.5 text-amber-500', className)} />
-  return <Tag className={cn('h-3.5 w-3.5 text-slate-400', className)} />
+    return <Activity className={cn('h-3.5 w-3.5 text-chart-5', className)} />
+  return <Tag className={cn('h-3.5 w-3.5 text-muted-foreground', className)} />
 }
 
 /* ── Does this item have fetchable trace data? ── */
@@ -199,7 +204,13 @@ function serializeValue(value: unknown): string {
   return String(value ?? '')
 }
 
-function BreadcrumbDetailPanel({ item }: { readonly item: TimelineItem }) {
+function BreadcrumbDetailPanel({
+  item,
+  projectId,
+}: {
+  readonly item: TimelineItem
+  readonly projectId?: string | number
+}) {
   const { timezone } = useTimezone()
   const colors = typeColorClasses(item.type)
   const data = item.data ?? {}
@@ -277,7 +288,8 @@ function BreadcrumbDetailPanel({ item }: { readonly item: TimelineItem }) {
             <Link
               to="/issues/$issueId"
               params={{ issueId: item.issueId }}
-              className="inline-flex items-center gap-1 text-[11px] font-medium text-red-600 dark:text-red-400 hover:underline"
+              search={issueSearch(projectId)}
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-danger-fg hover:underline"
             >
               View Issue <ExternalLink className="h-3 w-3" />
             </Link>
@@ -295,7 +307,7 @@ function WaterfallPanel({
   projectId,
 }: {
   readonly item: TimelineItem
-  readonly projectId?: number
+  readonly projectId?: string | number
 }) {
   const colors = typeColorClasses(item.type)
 
@@ -350,18 +362,19 @@ function WaterfallPanel({
             <Link
               to="/issues/$issueId"
               params={{ issueId: item.issueId }}
-              className="inline-flex items-center gap-1 text-[11px] font-medium text-red-600 dark:text-red-400 hover:underline"
+              search={issueSearch(projectId)}
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-danger-fg hover:underline"
             >
               View Issue <ExternalLink className="h-3 w-3" />
             </Link>
           )}
-          {item.eventId && item.type === 'transaction' && (
+          {item.traceId && item.type === 'transaction' && (
             <Link
-              to="/performance/$transactionId"
-              params={{ transactionId: item.eventId }}
-              className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline"
+              to="/performance/traces/$traceId"
+              params={{ traceId: item.traceId }}
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-chart-2 hover:underline"
             >
-              Full Transaction <ExternalLink className="h-3 w-3" />
+              Full Trace <ExternalLink className="h-3 w-3" />
             </Link>
           )}
         </div>
@@ -398,12 +411,12 @@ function ExpandedItemPanel({
   projectId,
 }: {
   readonly item: TimelineItem
-  readonly projectId?: number
+  readonly projectId?: string | number
 }) {
   if (canFetchSpans(item)) {
     return <WaterfallPanel item={item} projectId={projectId} />
   }
-  return <BreadcrumbDetailPanel item={item} />
+  return <BreadcrumbDetailPanel item={item} projectId={projectId} />
 }
 
 /* ── Main component ── */
@@ -458,7 +471,7 @@ export function ReplayTimelinePanel({ items, currentOffsetMs, projectId, onSeek 
   }, [onSeek])
 
   return (
-    <div className="h-full min-h-0 rounded-lg border bg-card shadow-sm">
+    <div className="h-full min-h-0 rounded-lg border bg-card">
       <Tabs
         value={tab}
         onValueChange={(v) => setTab(v as FilterValue)}
@@ -467,24 +480,24 @@ export function ReplayTimelinePanel({ items, currentOffsetMs, projectId, onSeek 
         {/* Colored tab bar */}
         <div className="px-2 pt-2">
           <TabsList className="w-full grid grid-cols-4 h-9 gap-1 p-1 bg-muted/50">
-            <TabsTrigger value="all" className="text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            <TabsTrigger value="all" className="text-xs data-[state=active]:bg-background">
               All <span className="ml-1 text-[10px] font-mono text-muted-foreground">{items.length}</span>
             </TabsTrigger>
-            <TabsTrigger value="error" className="text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-red-600 dark:data-[state=active]:text-red-400">
+            <TabsTrigger value="error" className="text-xs data-[state=active]:bg-background data-[state=active]:text-danger-fg">
               <span className="flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-red-500" />Errors
+                <span className="h-1.5 w-1.5 rounded-full bg-danger-solid" />Errors
               </span>
               <span className="ml-1 text-[10px] font-mono">{errorItems.length}</span>
             </TabsTrigger>
-            <TabsTrigger value="transaction" className="text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-blue-600 dark:data-[state=active]:text-blue-400">
+            <TabsTrigger value="transaction" className="text-xs data-[state=active]:bg-background data-[state=active]:text-chart-2">
               <span className="flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />Txns
+                <span className="h-1.5 w-1.5 rounded-full bg-chart-2" />Txns
               </span>
               <span className="ml-1 text-[10px] font-mono">{transactionItems.length}</span>
             </TabsTrigger>
-            <TabsTrigger value="span" className="text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-emerald-600 dark:data-[state=active]:text-emerald-400">
+            <TabsTrigger value="span" className="text-xs data-[state=active]:bg-background data-[state=active]:text-chart-4">
               <span className="flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />Spans
+                <span className="h-1.5 w-1.5 rounded-full bg-chart-4" />Spans
               </span>
               <span className="ml-1 text-[10px] font-mono">{spanItems.length}</span>
             </TabsTrigger>
@@ -542,7 +555,7 @@ interface TimelineListProps {
   readonly items: TimelineItem[]
   readonly activeIndex: number
   readonly expandedId: string | null
-  readonly projectId?: number
+  readonly projectId?: string | number
   readonly onItemClick: (item: TimelineItem) => void
 }
 
@@ -635,20 +648,21 @@ const TimelineList = React.forwardRef<HTMLDivElement, TimelineListProps>(functio
                     <Link
                       to="/issues/$issueId"
                       params={{ issueId: item.issueId }}
+                      search={issueSearch(projectId)}
                       onClick={(e) => e.stopPropagation()}
-                      className="shrink-0 p-1.5 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors"
+                      className="shrink-0 p-1.5 rounded-md hover:bg-danger-bg text-danger-fg transition-colors"
                       aria-label="View issue"
                     >
                       <ExternalLink className="h-3.5 w-3.5" />
                     </Link>
                   )}
-                  {item.eventId && !item.issueId && item.type === 'transaction' && (
+                  {item.traceId && !item.issueId && item.type === 'transaction' && (
                     <Link
-                      to="/performance/$transactionId"
-                      params={{ transactionId: item.eventId }}
+                      to="/performance/traces/$traceId"
+                      params={{ traceId: item.traceId }}
                       onClick={(e) => e.stopPropagation()}
-                      className="shrink-0 p-1.5 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-500 transition-colors"
-                      aria-label="View transaction"
+                      className="shrink-0 p-1.5 rounded-md hover:bg-chart-2/15 text-chart-2 transition-colors"
+                      aria-label="View trace"
                     >
                       <ExternalLink className="h-3.5 w-3.5" />
                     </Link>

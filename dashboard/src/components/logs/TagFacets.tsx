@@ -20,7 +20,7 @@ import {api} from '@/lib/api'
 import {cn} from '@/lib/utils'
 import {Checkbox} from '@/components/ui/checkbox'
 import {ChevronRight, Minus, Tag} from 'lucide-react'
-import type {FacetFilter} from './LogSearchBar'
+import type {FacetFilter} from '@/lib/filters/types'
 
 import type {LogFilterOptionWithCount} from '@/lib/api'
 
@@ -135,7 +135,7 @@ function FacetSection({
                 className={cn(
                   'group flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-accent/50',
                   state === 'include' && 'bg-primary/5',
-                  state === 'exclude' && 'bg-red-500/5'
+                  state === 'exclude' && 'bg-danger-bg/50'
                 )}
               >
                 <Checkbox
@@ -143,7 +143,7 @@ function FacetSection({
                   onCheckedChange={() => toggleFilter(item.value)}
                   className={cn(
                     'h-3.5 w-3.5',
-                    state === 'exclude' && 'border-red-500 data-[state=checked]:bg-red-500'
+                    state === 'exclude' && 'border-danger-solid data-[state=checked]:bg-danger-solid'
                   )}
                 />
                 <button
@@ -169,8 +169,8 @@ function FacetSection({
                   className={cn(
                     'shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100',
                     state === 'exclude'
-                      ? 'text-red-500 opacity-100'
-                      : 'text-muted-foreground hover:text-red-500'
+                      ? 'text-danger-fg opacity-100'
+                      : 'text-muted-foreground hover:text-danger-fg'
                   )}
                 >
                   <Minus className="h-3 w-3" />
@@ -258,7 +258,7 @@ function TagKeySection({
         <ChevronRight
           className={cn('h-3 w-3 shrink-0 text-muted-foreground transition-transform', expanded && 'rotate-90')}
         />
-        <Tag className="h-3 w-3 shrink-0 text-indigo-500/70" />
+        <Tag className="h-3 w-3 shrink-0 text-primary/70" />
         <span className="flex-1 truncate font-mono text-xs">{tagKey}</span>
         {activeCount > 0 && (
           <span className="rounded-full bg-primary/15 px-1.5 text-[10px] font-medium text-primary">
@@ -280,7 +280,7 @@ function TagKeySection({
                   className={cn(
                     'group flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-accent/50',
                     state === 'include' && 'bg-primary/5',
-                    state === 'exclude' && 'bg-red-500/5'
+                    state === 'exclude' && 'bg-danger-bg/50'
                   )}
                 >
                   <Checkbox
@@ -306,8 +306,8 @@ function TagKeySection({
                     className={cn(
                       'shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100',
                       state === 'exclude'
-                        ? 'text-red-500 opacity-100'
-                        : 'text-muted-foreground hover:text-red-500'
+                        ? 'text-danger-fg opacity-100'
+                        : 'text-muted-foreground hover:text-danger-fg'
                     )}
                   >
                     <Minus className="h-3 w-3" />
@@ -355,7 +355,7 @@ export function TagFacets({
           values={availableServices}
           facetFilters={facetFilters}
           onFacetFiltersChange={onFacetFiltersChange}
-          color="bg-violet-500"
+          color="bg-primary"
         />
 
         <FacetSection
@@ -364,7 +364,7 @@ export function TagFacets({
           values={availableEnvironments}
           facetFilters={facetFilters}
           onFacetFiltersChange={onFacetFiltersChange}
-          color="bg-emerald-500"
+          color="bg-success-solid"
         />
 
         {availableTagKeys.length > 0 && (

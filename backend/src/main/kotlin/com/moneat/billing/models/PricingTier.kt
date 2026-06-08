@@ -27,6 +27,7 @@ enum class PricingTier(
     val monthlyLlmEventLimit: Long,
     val monthlyGbBytes: Long, // GB limit in bytes
     val retentionDays: Int,
+    val apmTraceRetentionDays: Int = retentionDays,
     val maxProjects: Int?,
     val maxSystems: Int,
     val monitorIntervalSeconds: Int

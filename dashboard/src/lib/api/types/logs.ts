@@ -101,6 +101,33 @@ export interface CreateOtlpApiKeyResponse {
   createdAt: string
 }
 
+export interface OtlpObservedService {
+  id: number
+  mappingId?: number | null
+  serviceNamespace: string
+  serviceName: string
+  projectId?: number | null
+  projectResourceId?: string | null
+  projectName?: string | null
+  seenLogs: boolean
+  seenTraces: boolean
+  seenMetrics: boolean
+  seenFeedback: boolean
+  lastEnvironment?: string | null
+  firstSeenAt: string
+  lastSeenAt: string
+}
+
+export interface OtlpServiceMapping {
+  id: number
+  serviceNamespace: string
+  serviceName: string
+  projectId: number
+  projectResourceId: string
+  projectName: string
+  updatedAt: string
+}
+
 /** @deprecated Use CreateOtlpApiKeyResponse instead */
 export type CreateLogApiKeyResponse = CreateOtlpApiKeyResponse
 
@@ -139,6 +166,187 @@ export interface UpdateLogIndexRequest {
 export interface LogIndexTestResult {
   match_count: number
   total_count: number
+}
+
+export interface LogIndexUsage {
+  index_name: string
+  bytes_today: number
+  count_today: number
+  quota_gb?: number | null
+  retention_days?: number | null
+}
+
+export interface LogPipelineStep {
+  type: 'drop' | 'redact' | 'remap' | 'enrich' | 'parse'
+  enabled: boolean
+  condition?: string
+  source_field?: string
+  target_field?: string
+  pattern?: string
+  replacement?: string
+  value?: string
+  tags?: Record<string, string>
+}
+
+export interface LogPipeline {
+  id: number
+  name: string
+  description: string
+  steps: LogPipelineStep[]
+  priority: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateLogPipelineRequest {
+  name: string
+  description?: string
+  steps?: LogPipelineStep[]
+  priority?: number
+  is_active?: boolean
+}
+
+export type UpdateLogPipelineRequest = Partial<CreateLogPipelineRequest>
+
+export interface LogPipelinePreviewEntry {
+  level?: string
+  message?: string
+  body?: string
+  service?: string
+  environment?: string
+  host?: string
+  tags?: Record<string, string>
+  resource_attributes?: Record<string, string>
+}
+
+export interface LogPipelinePreviewResult {
+  before: LogPipelinePreviewEntry
+  after?: LogPipelinePreviewEntry | null
+  dropped: boolean
+}
+
+export interface LogSavedViewState {
+  query: string
+  levels: string[]
+  facets: Record<string, string>
+  time_preset: string
+  from?: string | null
+  to?: string | null
+  visualization: string
+  group_by?: string | null
+  top_field?: string | null
+}
+
+export interface LogSavedView {
+  id: number
+  name: string
+  state: LogSavedViewState
+  is_shared: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateLogSavedViewRequest {
+  name: string
+  state: LogSavedViewState
+  is_shared?: boolean
+}
+
+export interface UpdateLogSavedViewRequest {
+  name?: string
+  state?: LogSavedViewState
+  is_shared?: boolean
+}
+
+export interface LogMetricRule {
+  id: number
+  name: string
+  query: string
+  levels: string[]
+  group_by?: string | null
+  interval: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateLogMetricRuleRequest {
+  name: string
+  query?: string
+  levels?: string[]
+  group_by?: string | null
+  interval?: string
+  is_active?: boolean
+}
+
+export type UpdateLogMetricRuleRequest = Partial<CreateLogMetricRuleRequest>
+
+export interface LogMonitorDraftRequest {
+  name: string
+  query?: string
+  levels?: string[]
+  group_by?: string | null
+  condition?: '>' | '<' | '>=' | '<=' | '=='
+  threshold: number
+  warning_threshold?: number | null
+  duration_seconds?: number
+  dashboard_id?: number | null
+  widget_id?: number | null
+}
+
+export interface LogMonitorDraft {
+  name: string
+  query: string
+  levels: string[]
+  group_by?: string | null
+  condition: string
+  threshold: number
+  warning_threshold?: number | null
+  dashboard_alert_created: boolean
+  dashboard_alert_id?: number | null
+}
+
+export type LogMonitorCondition = '>' | '>=' | '<' | '<=' | '=='
+
+/** A standalone log monitor: a saved query + threshold the backend evaluates on
+ * a schedule and raises alerts from, independent of any dashboard widget. */
+export interface LogMonitor {
+  id: number
+  name: string
+  query: string
+  levels: string[]
+  group_by?: string | null
+  condition: LogMonitorCondition
+  threshold: number
+  warning_threshold?: number | null
+  /** Evaluation window in minutes: counts matching logs over this trailing span. */
+  window_minutes: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateLogMonitorRequest {
+  name: string
+  query?: string
+  levels?: string[]
+  group_by?: string | null
+  condition?: LogMonitorCondition
+  threshold: number
+  warning_threshold?: number | null
+  window_minutes?: number
+}
+
+export type UpdateLogMonitorRequest = Partial<CreateLogMonitorRequest> & {
+  is_active?: boolean
+}
+
+export interface LogPermissions {
+  can_manage: boolean
+  can_live_tail: boolean
+  can_create_metrics: boolean
+  can_create_monitors: boolean
 }
 
 export interface RawLogResponse {

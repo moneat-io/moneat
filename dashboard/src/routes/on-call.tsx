@@ -17,6 +17,7 @@
 import {createFileRoute, Link, Outlet, useRouterState} from '@tanstack/react-router'
 import {Bell, Calendar, ListChecks, AlertTriangle, Shield} from 'lucide-react'
 import {cn} from '@/lib/utils'
+import {PageHeader} from '@/components/ui/page-header'
 
 export const Route = createFileRoute('/on-call')({
   component: OnCallLayout,
@@ -26,8 +27,8 @@ const tabs = [
   {id: 'overview', label: 'Overview', href: '/on-call', icon: Bell},
   {id: 'schedules', label: 'Schedules', href: '/on-call/schedules', icon: Calendar},
   {id: 'escalation-policies', label: 'Escalation Policies', href: '/on-call/escalation-policies', icon: ListChecks},
-  {id: 'alerts', label: 'Alerts', href: '/on-call/incidents', icon: AlertTriangle},
-  {id: 'incidents', label: 'Incidents', href: '/on-call/declared-incidents', icon: Shield},
+  {id: 'alerts', label: 'Alerts', href: '/on-call/alerts', icon: AlertTriangle},
+  {id: 'incidents', label: 'Incidents', href: '/on-call/incidents', icon: Shield},
 ]
 
 function OnCallLayout() {
@@ -35,18 +36,12 @@ function OnCallLayout() {
   const currentPath = router.location.pathname
 
   return (
-    <div className="p-4 space-y-4">
-      <div className="flex items-center gap-2.5">
-        <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500/80 to-violet-500/80 shadow-md shadow-blue-500/10 shrink-0">
-          <Shield className="h-4 w-4 text-white" />
-        </div>
-        <div className="min-w-0">
-          <h1 className="text-xl font-bold">On-Call Management</h1>
-          <p className="text-muted-foreground text-xs">
-            Manage schedules, escalation policies, and incidents
-          </p>
-        </div>
-      </div>
+    <div className="px-6 py-4 space-y-4">
+      <PageHeader
+        icon={Shield}
+        title="On-call management"
+        description="Manage schedules, escalation policies, alerts, and incidents"
+      />
 
       {/* Tab Navigation */}
       <div className="border-b">
@@ -56,19 +51,19 @@ function OnCallLayout() {
               ? currentPath === '/on-call'
               : currentPath.startsWith(tab.href)
             const Icon = tab.icon
-            
+
             return (
               <Link
                 key={tab.id}
                 to={tab.href}
                 className={cn(
-                  'flex items-center gap-1.5 px-2.5 py-2 border-b-2 transition-all font-medium text-xs rounded-t-md',
+                  'flex items-center gap-1.5 px-3 py-2 border-b-2 transition-colors font-medium text-sm -mb-px whitespace-nowrap',
                   isActive
-                    ? 'border-primary text-foreground bg-muted/50'
-                    : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                    ? 'border-primary text-foreground'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
                 )}
               >
-                <Icon className="h-3 w-3" />
+                <Icon className="h-3.5 w-3.5" />
                 {tab.label}
               </Link>
             )

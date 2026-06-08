@@ -8,9 +8,11 @@ import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.enterprise.sso.support.EnterpriseTestDatabaseHelper
 import com.moneat.enterprise.sso.support.MockOidcDiscoveryServer
 import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.OrgInvitations
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.SsoConfigurations
 import com.moneat.shared.models.Subscriptions
+import com.moneat.shared.models.UserSsoLinks
 import com.moneat.shared.models.Users
 import com.moneat.sso.SsoForbiddenException
 import com.moneat.sso.models.SsoConfigRequest
@@ -19,10 +21,12 @@ import io.ktor.server.plugins.BadRequestException
 import kotlinx.coroutines.runBlocking
 import kotlin.time.Clock
 import kotlin.time.Instant
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -65,6 +69,8 @@ class SsoServiceTest {
             Memberships,
             Subscriptions,
             SsoConfigurations,
+            UserSsoLinks,
+            OrgInvitations,
         )
     }
 
@@ -148,6 +154,44 @@ class SsoServiceTest {
                 it[Memberships.role] = "member"
             }
         }
+    }
+
+    private fun insertPendingInvitation(
+        orgId: Int,
+        email: String,
+        invitedBy: Int,
+        role: String = "member",
+    ) {
+        transaction {
+            OrgInvitations.insert {
+                it[OrgInvitations.organization_id] = orgId
+                it[OrgInvitations.email] = email
+                it[OrgInvitations.role] = role
+                it[OrgInvitations.invited_by] = invitedBy
+                it[OrgInvitations.token] = "invite-$email"
+                it[OrgInvitations.status] = "pending"
+                it[OrgInvitations.expires_at] = System.currentTimeMillis() + 86_400_000
+                it[OrgInvitations.created_at] = Clock.System.now()
+            }
+        }
+    }
+
+    private fun markDomainVerified(orgId: Int) {
+        transaction {
+            SsoConfigurations.update({ SsoConfigurations.organizationId eq orgId }) {
+                it[SsoConfigurations.emailDomainVerified] = true
+                it[SsoConfigurations.emailDomainVerifiedAt] = Clock.System.now()
+            }
+        }
+    }
+
+    private class DnsVerifiedSsoService(
+        private val verified: Boolean = true,
+    ) : SsoService() {
+        override fun verifyDnsTxtRecord(
+            domain: String,
+            expectedToken: String,
+        ): Boolean = verified
     }
 
     private fun insertActiveTeamSubscription(orgId: Int, tierId: Int) {
@@ -254,11 +298,61 @@ class SsoServiceTest {
                 emailDomain = "corp.example",
             ),
         )
+        markDomainVerified(orgId)
         val response = initSso("alice@corp.example", null)
         assertEquals("oidc", response.providerType)
         assertTrue(response.redirectUrl.contains("/protocol/openid-connect/auth"))
         assertTrue(response.redirectUrl.contains("client_id=client-id"))
         assertNotNull(response.state)
+    }
+
+    @Test
+    fun `initSso rejects unverified matching email domain`() = withOidcDiscoveryServer { issuerUrl ->
+        val (orgId, ownerId) = seedOrgReadyForSsoConfigure()
+        service.configureSso(
+            orgId,
+            ownerId,
+            SsoConfigRequest(
+                providerType = "oidc",
+                isEnabled = true,
+                oidcIssuerUrl = issuerUrl,
+                oidcClientId = "client-id",
+                oidcClientSecret = "client-secret",
+                emailDomain = "unverified.example",
+            ),
+        )
+        val ex = assertFailsWith<IllegalArgumentException> {
+            initSso("alice@unverified.example", null)
+        }
+        assertEquals("SSO is not configured for this email domain or organization", ex.message)
+    }
+
+    @Test
+    fun `initSso reports helpful error when OIDC discovery is not JSON`() {
+        MockOidcDiscoveryServer("<!DOCTYPE html><html lang=\"en\"></html>").use { server ->
+            withSelfHosted {
+                val (orgId, ownerId) = seedOrgReadyForSsoConfigure()
+                service.configureSso(
+                    orgId,
+                    ownerId,
+                    SsoConfigRequest(
+                        providerType = "oidc",
+                        isEnabled = true,
+                        oidcIssuerUrl = server.baseUrl,
+                        oidcClientId = "client-id",
+                        oidcClientSecret = "client-secret",
+                        emailDomain = "html.example",
+                    ),
+                )
+                markDomainVerified(orgId)
+
+                val ex = assertFailsWith<IllegalArgumentException> {
+                    initSso("alice@html.example", null)
+                }
+                assertTrue(ex.message!!.contains("OIDC discovery failed"))
+                assertTrue(ex.message!!.contains("Authentik"))
+            }
+        }
     }
 
     @Test
@@ -348,6 +442,25 @@ class SsoServiceTest {
     }
 
     @Test
+    fun `configureSso rejects public email provider domains`() {
+        val (orgId, ownerId) = seedOrgReadyForSsoConfigure()
+        val ex = assertFailsWith<BadRequestException> {
+            service.configureSso(
+                orgId,
+                ownerId,
+                SsoConfigRequest(
+                    providerType = "oidc",
+                    oidcIssuerUrl = OIDC_ISSUER,
+                    oidcClientId = "c",
+                    oidcClientSecret = "s",
+                    emailDomain = "gmail.com",
+                ),
+            )
+        }
+        assertEquals("SSO email domain must be an organization-owned domain", ex.message)
+    }
+
+    @Test
     fun `configureSso rejects incomplete SAML configuration`() {
         val (orgId, ownerId) = seedOrgReadyForSsoConfigure()
         val ex = assertFailsWith<BadRequestException> {
@@ -386,12 +499,98 @@ class SsoServiceTest {
         assertEquals("oidc", saved.providerType)
         assertEquals(OIDC_ISSUER, saved.oidcIssuerUrl)
         assertTrue(saved.hasClientSecret)
+        assertFalse(saved.emailDomainVerified)
+        assertEquals("_moneat-sso.persist.example", saved.emailDomainVerificationRecordName)
+        assertNotNull(saved.emailDomainVerificationToken)
 
         val loaded = service.getSsoConfig(orgId)
         assertNotNull(loaded)
         assertEquals("persist-client", loaded.oidcClientId)
         assertTrue(loaded.hasClientSecret)
+        assertFalse(loaded.emailDomainVerified)
+        assertEquals("_moneat-sso.persist.example", loaded.emailDomainVerificationRecordName)
+        assertNotNull(loaded.emailDomainVerificationToken)
         assertFalse(loaded.requireSso)
+    }
+
+    @Test
+    fun `verifyEmailDomain marks configuration verified when DNS token matches`() {
+        val (orgId, ownerId) = seedOrgReadyForSsoConfigure()
+        val dnsService = DnsVerifiedSsoService()
+        dnsService.configureSso(
+            orgId,
+            ownerId,
+            SsoConfigRequest(
+                providerType = "oidc",
+                oidcIssuerUrl = OIDC_ISSUER,
+                oidcClientId = "verify-client",
+                oidcClientSecret = "verify-secret",
+                emailDomain = "verify.example",
+            ),
+        )
+
+        val verified = dnsService.verifyEmailDomain(orgId, ownerId)
+
+        assertTrue(verified.emailDomainVerified)
+        assertEquals("_moneat-sso.verify.example", verified.emailDomainVerificationRecordName)
+        assertNotNull(verified.emailDomainVerificationToken)
+    }
+
+    @Test
+    fun `verifyEmailDomain rejects missing DNS token`() {
+        val (orgId, ownerId) = seedOrgReadyForSsoConfigure()
+        val dnsService = DnsVerifiedSsoService(verified = false)
+        dnsService.configureSso(
+            orgId,
+            ownerId,
+            SsoConfigRequest(
+                providerType = "oidc",
+                oidcIssuerUrl = OIDC_ISSUER,
+                oidcClientId = "verify-client",
+                oidcClientSecret = "verify-secret",
+                emailDomain = "missing.example",
+            ),
+        )
+
+        val ex = assertFailsWith<BadRequestException> {
+            dnsService.verifyEmailDomain(orgId, ownerId)
+        }
+
+        assertEquals("DNS TXT record was not found for this SSO email domain", ex.message)
+    }
+
+    @Test
+    fun `configureSso resets domain verification when domain changes`() {
+        val (orgId, ownerId) = seedOrgReadyForSsoConfigure()
+        val dnsService = DnsVerifiedSsoService()
+        val first = dnsService.configureSso(
+            orgId,
+            ownerId,
+            SsoConfigRequest(
+                providerType = "oidc",
+                oidcIssuerUrl = OIDC_ISSUER,
+                oidcClientId = "reset-client",
+                oidcClientSecret = "reset-secret",
+                emailDomain = "first.example",
+            ),
+        )
+        dnsService.verifyEmailDomain(orgId, ownerId)
+
+        val second = dnsService.configureSso(
+            orgId,
+            ownerId,
+            SsoConfigRequest(
+                providerType = "oidc",
+                oidcIssuerUrl = OIDC_ISSUER,
+                oidcClientId = "reset-client",
+                oidcClientSecret = "reset-secret",
+                emailDomain = "second.example",
+            ),
+        )
+
+        assertFalse(second.emailDomainVerified)
+        assertEquals("_moneat-sso.second.example", second.emailDomainVerificationRecordName)
+        assertTrue(first.emailDomainVerificationToken != second.emailDomainVerificationToken)
     }
 
     @Test
@@ -526,6 +725,7 @@ class SsoServiceTest {
                 emailDomain = "drop.example",
             ),
         )
+        markDomainVerified(orgId)
         val state = initSso("u@drop.example", null).state!!
         transaction {
             SsoConfigurations.deleteWhere { SsoConfigurations.organizationId eq orgId }
@@ -534,6 +734,97 @@ class SsoServiceTest {
             handleOidcCallback("dummy-code", state)
         }
         assertEquals("SSO configuration not found", ex.message)
+    }
+
+    @Test
+    fun `findOrCreateSsoUser rejects existing user without membership or invitation`() {
+        val (orgId, ownerId) = seedOrgReadyForSsoConfigure()
+        service.configureSso(
+            orgId,
+            ownerId,
+            SsoConfigRequest(
+                providerType = "oidc",
+                oidcIssuerUrl = OIDC_ISSUER,
+                oidcClientId = "link-client",
+                oidcClientSecret = "link-secret",
+                emailDomain = "link.example",
+            ),
+        )
+        markDomainVerified(orgId)
+        val configId = transaction {
+            SsoConfigurations
+                .selectAll()
+                .where { SsoConfigurations.organizationId eq orgId }
+                .first()[SsoConfigurations.id]
+        }
+        insertUser("target@link.example")
+
+        val ex = assertFailsWith<IllegalArgumentException> {
+            service.findOrCreateSsoUser(
+                email = "target@link.example",
+                name = "Target",
+                externalId = "external-target",
+                ssoConfigId = configId,
+                organizationId = orgId,
+            )
+        }
+
+        assertEquals("SSO account linking requires an existing membership or invitation", ex.message)
+    }
+
+    @Test
+    fun `findOrCreateSsoUser links invited existing user and accepts invitation`() {
+        val (orgId, ownerId) = seedOrgReadyForSsoConfigure()
+        service.configureSso(
+            orgId,
+            ownerId,
+            SsoConfigRequest(
+                providerType = "oidc",
+                oidcIssuerUrl = OIDC_ISSUER,
+                oidcClientId = "invite-client",
+                oidcClientSecret = "invite-secret",
+                emailDomain = "invite.example",
+            ),
+        )
+        markDomainVerified(orgId)
+        val configId = transaction {
+            SsoConfigurations
+                .selectAll()
+                .where { SsoConfigurations.organizationId eq orgId }
+                .first()[SsoConfigurations.id]
+        }
+        val existingUserId = insertUser("target@invite.example")
+        insertPendingInvitation(orgId, "target@invite.example", ownerId, role = "admin")
+
+        val (_, email, _) = service.findOrCreateSsoUser(
+            email = "target@invite.example",
+            name = "Target",
+            externalId = "external-invite",
+            ssoConfigId = configId,
+            organizationId = orgId,
+        )
+
+        assertEquals("target@invite.example", email)
+        transaction {
+            val membership = Memberships
+                .selectAll()
+                .where {
+                    (Memberships.user_id eq existingUserId) and
+                        (Memberships.organization_id eq orgId)
+                }.first()
+            assertEquals("admin", membership[Memberships.role])
+            val invitation = OrgInvitations
+                .selectAll()
+                .where { OrgInvitations.email eq "target@invite.example" }
+                .first()
+            assertEquals("accepted", invitation[OrgInvitations.status])
+            assertNotNull(
+                UserSsoLinks
+                    .selectAll()
+                    .where { UserSsoLinks.externalId eq "external-invite" }
+                    .firstOrNull(),
+            )
+        }
     }
 
     // ──── getSamlMetadata ────

@@ -17,6 +17,7 @@
 export interface Replay {
   replayId: string
   projectId: number
+  projectResourceId: string
   startedAt: string
   finishedAt: string
   durationMs: number
@@ -44,6 +45,11 @@ export interface ReplayRecordingResponse {
   events: unknown[]
 }
 
+export interface EventIssueLink {
+  issueId: string
+  projectResourceId: string
+}
+
 export interface Feedback {
   feedbackId: string
   message: string
@@ -58,6 +64,12 @@ export interface Feedback {
   user?: { id?: string; email?: string; username?: string }
   associatedEventId?: string | null
   replayId?: string | null
+  sourceType: string
+  sourceName: string
+  sourceEventName: string
+  traceId: string
+  spanId: string
+  resourceAttributes: Record<string, string>
 }
 
 export interface FeedbackDetail extends Feedback {

@@ -88,7 +88,8 @@ export interface DashboardWidgetAlertNotificationChannels {
 
 export type DashboardAlertCondition = '>' | '<' | '>=' | '<=' | '=='
 
-export type IncidentSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | null
+export type AlertPriority = 'P0' | 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | null
+export type DashboardAlertLevel = 'WARNING' | 'ERROR' | null
 
 export interface DashboardWidgetAlert {
   id: number
@@ -97,12 +98,14 @@ export interface DashboardWidgetAlert {
   name: string
   condition: DashboardAlertCondition
   threshold: number
+  warning_threshold: number | null
   metric_index: number
   duration_seconds: number
-  incident_severity: IncidentSeverity
+  alert_priority: AlertPriority
   enabled: boolean
   notification_channels: DashboardWidgetAlertNotificationChannels
   last_triggered_at: string | null
+  last_triggered_level: DashboardAlertLevel
   last_value: number | null
   created_at: string
   updated_at: string
@@ -113,9 +116,10 @@ export interface CreateDashboardAlertRequest {
   name: string
   condition: DashboardAlertCondition
   threshold: number
+  warning_threshold?: number | null
   metric_index?: number
   duration_seconds?: number
-  incident_severity?: IncidentSeverity
+  alert_priority?: AlertPriority
   enabled?: boolean
   notification_channels?: DashboardWidgetAlertNotificationChannels
 }
@@ -124,9 +128,10 @@ export interface UpdateDashboardAlertRequest {
   name?: string
   condition?: DashboardAlertCondition
   threshold?: number
+  warning_threshold?: number | null
   metric_index?: number
   duration_seconds?: number
-  incident_severity?: IncidentSeverity
+  alert_priority?: AlertPriority
   enabled?: boolean
   notification_channels?: DashboardWidgetAlertNotificationChannels
 }
@@ -215,6 +220,7 @@ export interface SearchResponse {
 
 export interface SearchProjectResponse {
   id: number
+  resourceId: string
   name: string
 }
 

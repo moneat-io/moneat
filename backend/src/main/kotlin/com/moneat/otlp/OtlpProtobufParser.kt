@@ -56,9 +56,9 @@ object OtlpProtobufParser {
         val attrs = attributesToMap(resource.attributesList)
         return ResourceContext(
             attributes = attrs,
+            serviceNamespace = attrs["service.namespace"] ?: "",
             serviceName = attrs["service.name"] ?: "",
-            environment = attrs["deployment.environment"]
-                ?: attrs["service.environment"] ?: "",
+            environment = OtlpParsingUtils.extractDeploymentEnvironment(attrs),
             hostName = attrs["host.name"] ?: "",
             serviceVersion = attrs["service.version"] ?: "",
         )

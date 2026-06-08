@@ -23,6 +23,7 @@ import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.datetime.date
 import org.jetbrains.exposed.v1.datetime.timestamp
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import kotlin.uuid.Uuid
 
 class JsonbColumnType : ColumnType<String>() {
     private fun isH2(): Boolean =
@@ -191,8 +192,25 @@ object SidebarPreferenceEvents : Table("sidebar_preference_events") {
     override val primaryKey = PrimaryKey(id)
 }
 
+object InfrastructureMapSavedViews : Table("infrastructure_map_saved_views") {
+    val id = integer("id").autoIncrement()
+    val organization_id = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
+    val user_id = integer("user_id").references(Users.id, onDelete = ReferenceOption.CASCADE)
+    val name = varchar("name", 48)
+    val name_key = varchar("name_key", 48)
+    val resource_kind = varchar("resource_kind", 16)
+    val view_state = jsonb("view_state")
+    val created_at = timestamp("created_at")
+    val updated_at = timestamp("updated_at")
+    init {
+        uniqueIndex(organization_id, user_id, name_key)
+    }
+    override val primaryKey = PrimaryKey(id)
+}
+
 object Projects : Table("projects") {
     val id = long("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val organization_id = integer("organization_id")
     val name = varchar("name", 255)
     val slug = varchar("slug", 255)
@@ -223,6 +241,40 @@ object OtlpApiKeys : Table("otlp_api_keys") {
     override val primaryKey = PrimaryKey(id)
 }
 
+private const val OTEL_SERVICE_FIELD_MAX_LENGTH = 255
+
+object OtelServiceProjectMappings : Table("otel_service_project_mappings") {
+    val id = integer("id").autoIncrement()
+    val organization_id = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
+    val service_namespace = varchar("service_namespace", OTEL_SERVICE_FIELD_MAX_LENGTH).default("")
+    val service_name = varchar("service_name", OTEL_SERVICE_FIELD_MAX_LENGTH)
+    val project_id = long("project_id").references(Projects.id, onDelete = ReferenceOption.CASCADE)
+    val created_at = timestamp("created_at")
+    val updated_at = timestamp("updated_at")
+    init {
+        uniqueIndex(organization_id, service_namespace, service_name)
+    }
+    override val primaryKey = PrimaryKey(id)
+}
+
+object OtelObservedServices : Table("otel_observed_services") {
+    val id = integer("id").autoIncrement()
+    val organization_id = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
+    val service_namespace = varchar("service_namespace", OTEL_SERVICE_FIELD_MAX_LENGTH).default("")
+    val service_name = varchar("service_name", OTEL_SERVICE_FIELD_MAX_LENGTH)
+    val first_seen_at = timestamp("first_seen_at")
+    val last_seen_at = timestamp("last_seen_at")
+    val seen_logs = bool("seen_logs").default(false)
+    val seen_traces = bool("seen_traces").default(false)
+    val seen_metrics = bool("seen_metrics").default(false)
+    val seen_feedback = bool("seen_feedback").default(false)
+    val last_environment = varchar("last_environment", OTEL_SERVICE_FIELD_MAX_LENGTH).nullable()
+    init {
+        uniqueIndex(organization_id, service_namespace, service_name)
+    }
+    override val primaryKey = PrimaryKey(id)
+}
+
 object LogIndexes : Table("log_indexes") {
     val id = integer("id").autoIncrement()
     val organizationId = integer("organization_id").references(Organizations.id)
@@ -238,6 +290,65 @@ object LogIndexes : Table("log_indexes") {
     override val primaryKey = PrimaryKey(id)
 }
 
+object LogPipelines : Table("log_pipelines") {
+    val id = integer("id").autoIncrement()
+    val organizationId = integer("organization_id").references(Organizations.id)
+    val name = varchar("name", 255)
+    val description = text("description").default("")
+    val stepsJson = text("steps_json").default("[]")
+    val priority = integer("priority").default(0)
+    val isActive = bool("is_active").default(true)
+    val createdBy = integer("created_by").references(Users.id).nullable()
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
+object LogSavedViews : Table("log_saved_views") {
+    val id = integer("id").autoIncrement()
+    val organizationId = integer("organization_id").references(Organizations.id)
+    val name = varchar("name", 255)
+    val viewStateJson = text("view_state_json")
+    val isShared = bool("is_shared").default(true)
+    val createdBy = integer("created_by").references(Users.id).nullable()
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
+object LogMetricRules : Table("log_metric_rules") {
+    val id = integer("id").autoIncrement()
+    val organizationId = integer("organization_id").references(Organizations.id)
+    val name = varchar("name", 255)
+    val query = text("query").default("")
+    val levelsJson = text("levels_json").default("[]")
+    val groupBy = varchar("group_by", 128).nullable()
+    val interval = varchar("interval", 16).default("5m")
+    val isActive = bool("is_active").default(true)
+    val createdBy = integer("created_by").references(Users.id).nullable()
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
+object LogMonitors : Table("log_monitors") {
+    val id = integer("id").autoIncrement()
+    val organizationId = integer("organization_id").references(Organizations.id)
+    val name = varchar("name", 255)
+    val query = text("query").default("")
+    val levelsJson = text("levels_json").default("[]")
+    val groupBy = varchar("group_by", 128).nullable()
+    val condition = varchar("condition", 8).default(">")
+    val threshold = double("threshold")
+    val warningThreshold = double("warning_threshold").nullable()
+    val windowMinutes = integer("window_minutes").default(5)
+    val isActive = bool("is_active").default(true)
+    val createdBy = integer("created_by").references(Users.id).nullable()
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
 object AgentApiKeys : Table("agent_api_keys") {
     val id = integer("id").autoIncrement()
     val organization_id = integer("organization_id").references(Organizations.id)
@@ -248,6 +359,26 @@ object AgentApiKeys : Table("agent_api_keys") {
     val created_by = integer("created_by").references(Users.id).nullable()
     val created_at = timestamp("created_at")
     val last_used_at = timestamp("last_used_at").nullable()
+    val is_active = bool("is_active").default(true)
+    override val primaryKey = PrimaryKey(id)
+}
+
+object McpApiKeys : Table("mcp_api_keys") {
+    val id = integer("id").autoIncrement()
+    val organization_id = integer("organization_id")
+        .references(Organizations.id, onDelete = ReferenceOption.CASCADE)
+    val name = varchar("name", 255)
+    val key_hash = varchar("key_hash", 255).uniqueIndex()
+    val key_prefix = varchar("key_prefix", 12)
+    val enabled_tools = registerColumn<List<String>>("enabled_tools", TextArrayColumnType())
+        .default(emptyList())
+    val enabled_resources = registerColumn<List<String>>("enabled_resources", TextArrayColumnType())
+        .default(emptyList())
+    val created_by = integer("created_by")
+        .references(Users.id, onDelete = ReferenceOption.CASCADE)
+    val created_at = timestamp("created_at")
+    val last_used_at = timestamp("last_used_at").nullable()
+    val expires_at = timestamp("expires_at").nullable()
     val is_active = bool("is_active").default(true)
     override val primaryKey = PrimaryKey(id)
 }
@@ -454,7 +585,7 @@ object HostAlerts : Table("host_alerts") {
     val duration_seconds = integer("duration_seconds")
     val enabled = bool("enabled")
     val last_triggered_at = timestamp("last_triggered_at").nullable()
-    val incident_severity = varchar("incident_severity", 20).nullable()
+    val alert_priority = varchar("alert_priority", 20).nullable()
     val created_at = timestamp("created_at")
     override val primaryKey = PrimaryKey(id)
 }
@@ -482,7 +613,7 @@ object OrganizationAlertTemplates : Table("organization_alert_templates") {
     val threshold = double("threshold")
     val duration_seconds = integer("duration_seconds").default(0)
     val enabled = bool("enabled").default(false)
-    val incident_severity = varchar("incident_severity", 20).nullable()
+    val alert_priority = varchar("alert_priority", 20).nullable()
     val created_at = timestamp("created_at")
     val updated_at = timestamp("updated_at")
     override val primaryKey = PrimaryKey(id)
@@ -538,7 +669,7 @@ object OrgInvitations : Table("org_invitations") {
 
 object IssueStatuses : Table("issue_statuses") {
     val id = integer("id").autoIncrement()
-    val issue_id = varchar("issue_id", 64).uniqueIndex()
+    val issue_id = varchar("issue_id", 64)
     val project_id = long("project_id")
         .references(Projects.id, onDelete = ReferenceOption.CASCADE)
     val status = varchar("status", 32).default("unresolved")
@@ -546,5 +677,8 @@ object IssueStatuses : Table("issue_statuses") {
     val status_detail = jsonb("status_detail").nullable()
     val updated_at = timestamp("updated_at")
     val updated_by = integer("updated_by").references(Users.id).nullable()
+    init {
+        uniqueIndex(issue_id, project_id)
+    }
     override val primaryKey = PrimaryKey(id)
 }

@@ -58,7 +58,8 @@ data class UserResponse(
     val demoEpochMs: Long? = null,
     val sidebarHiddenItems: List<String> = emptyList(),
     val phoneNumber: String? = null,
-    val timezone: String? = null
+    val timezone: String? = null,
+    val orgId: Int? = null
 )
 
 @Serializable
@@ -70,18 +71,22 @@ data class ProjectKeyResponse(
 @Serializable
 data class ProjectResponse(
     val id: Long,
+    val resourceId: String = id.toString(),
     val name: String,
     val slug: String,
     val framework: String?,
     val keys: List<ProjectKeyResponse>,
     val dsn: String, // First key's DSN for backward compatibility
-    val issueCount: Long = 0
+    val issueCount: Long = 0,
+    val serviceId: Long = id,
+    val serviceName: String = slug
 )
 
 @Serializable
 data class IssueResponse(
     val id: String,
     val projectId: Long,
+    val projectResourceId: String = projectId.toString(),
     val title: String,
     val culprit: String,
     val level: String,
@@ -99,6 +104,7 @@ data class IssueResponse(
 data class IssueDetailResponse(
     val id: String,
     val projectId: Long,
+    val projectResourceId: String = projectId.toString(),
     val projectName: String,
     val title: String,
     val culprit: String,
@@ -128,7 +134,10 @@ data class EventResponse(
     val tags: HashMap<String, String> = hashMapOf(),
     val contexts: String,
     val exception: String?,
-    val breadcrumbs: String?
+    val breadcrumbs: String?,
+    val stackTrace: String? = null,
+    val contextsJson: JsonElement? = null,
+    val breadcrumbsJson: JsonElement? = null
 )
 
 @Serializable
@@ -229,10 +238,22 @@ data class TransactionWithSpansResponse(
 data class TraceDetailResponse(
     val traceId: String,
     val projectId: Long,
+    val projectResourceId: String = projectId.toString(),
     val spans: List<SpanResponse>,
     val startTimestamp: Double,
     val endTimestamp: Double,
     val duration: Double
+)
+
+@Serializable
+data class EventTraceResponse(
+    val eventId: String?,
+    val eventType: String?,
+    val projectId: Long,
+    val projectResourceId: String = projectId.toString(),
+    val traceId: String,
+    val transaction: TransactionDetailResponse? = null,
+    val spans: List<SpanResponse> = emptyList()
 )
 
 @Serializable
@@ -442,6 +463,7 @@ data class ReleaseMarker(
 data class ReplayListItem(
     val replayId: String,
     val projectId: Long,
+    val projectResourceId: String = projectId.toString(),
     val startedAt: String,
     val finishedAt: String,
     val durationMs: Double,
@@ -459,6 +481,7 @@ data class ReplayListItem(
 data class ReplayDetailResponse(
     val replayId: String,
     val projectId: Long,
+    val projectResourceId: String = projectId.toString(),
     val startedAt: String,
     val finishedAt: String,
     val durationMs: Double,
@@ -519,7 +542,13 @@ data class FeedbackListItem(
     val platform: String,
     val user: UserInfo?,
     val associatedEventId: String?,
-    val replayId: String?
+    val replayId: String?,
+    val sourceType: String = "sentry",
+    val sourceName: String = "Sentry-compatible SDK",
+    val sourceEventName: String = "feedback",
+    val traceId: String = "",
+    val spanId: String = "",
+    val resourceAttributes: Map<String, String> = emptyMap()
 )
 
 @Serializable
@@ -539,12 +568,24 @@ data class FeedbackDetailResponse(
     val replayId: String?,
     val tags: Map<String, String>,
     val sdkName: String,
-    val sdkVersion: String
+    val sdkVersion: String,
+    val sourceType: String = "sentry",
+    val sourceName: String = "Sentry-compatible SDK",
+    val sourceEventName: String = "feedback",
+    val traceId: String = "",
+    val spanId: String = "",
+    val resourceAttributes: Map<String, String> = emptyMap()
 )
 
 @Serializable
 data class FeedbackUpdateRequest(
     val status: String? = null
+)
+
+@Serializable
+data class EventIssueLinkResponse(
+    val issueId: String,
+    val projectResourceId: String
 )
 
 @Serializable
@@ -594,6 +635,7 @@ data class NotificationPreferencesData(
 @Serializable
 data class ProjectNotificationPreferences(
     val projectId: Long,
+    val projectResourceId: String = projectId.toString(),
     val projectName: String,
     val issueAlerts: Boolean,
     val errorAlerts: Boolean,

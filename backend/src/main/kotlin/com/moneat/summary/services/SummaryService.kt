@@ -683,7 +683,7 @@ class SummaryService(
         if (projectIds.isEmpty()) return emptyList()
         val projectClause = projectIdClause(projectIds)
         val query = """
-            SELECT transaction as name,
+            SELECT transaction_name as name,
                    quantile(0.95)(duration) as p95,
                    count() as cnt
             FROM `$clickhouseDb`.events

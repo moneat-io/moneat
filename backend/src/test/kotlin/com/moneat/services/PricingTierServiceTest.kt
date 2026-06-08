@@ -8,10 +8,16 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
-import org.jetbrains.exposed.v1.core.*
-import org.jetbrains.exposed.v1.jdbc.*
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import kotlin.test.*
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class PricingTierServiceTest {
     private val service = PricingTierService()
@@ -41,6 +47,7 @@ class PricingTierServiceTest {
         retentionDays: Int = 3,
         isCurrent: Boolean = true,
         monthlyPriceCents: Int = 0,
+        apmTraceRetentionDays: Int = retentionDays,
         monthlyInfraMetricSeriesHourLimit: Long = 0,
         infraMetricOverageRateCentsPer100kSeriesHours: Int = 0
     ): Int =
@@ -56,6 +63,7 @@ class PricingTierServiceTest {
                 it[monthly_gb_limit] = 1_073_741_824
                 it[retention_days] = retentionDays
                 it[log_retention_days] = retentionDays
+                it[apm_trace_retention_days] = apmTraceRetentionDays
                 it[status_pages_enabled] = true
                 it[status_page_custom_domain_enabled] = false
                 it[session_replay_enabled] = false
@@ -81,6 +89,30 @@ class PricingTierServiceTest {
                 it[is_current] = isCurrent
             } get PricingTierConfigs.id
         }
+
+    private fun createRequest(
+        retentionDays: Int = 7,
+        apmTraceRetentionDays: Int? = null
+    ): CreateTierVersionRequest =
+        CreateTierVersionRequest(
+            monthlyUnitLimit = 50_000,
+            monthlyErrorLimit = 50_000,
+            monthlyTransactionLimit = 0,
+            monthlyReplayLimit = 0,
+            monthlyFeedbackLimit = 0,
+            monthlyGbLimit = 1_073_741_824,
+            retentionDays = retentionDays,
+            logRetentionDays = retentionDays,
+            apmTraceRetentionDays = apmTraceRetentionDays,
+            maxProjects = 5,
+            maxSystems = 5,
+            monitorIntervalSeconds = 60,
+            monthlyPriceCents = 2900,
+            yearlyPriceCents = 24_900,
+            trialDays = 14,
+            paygEnabled = false,
+            paygRateMicrosPerUnit = 0
+        )
 
     @Test
     fun `getCurrentPlans returns only current tiers`() {
@@ -164,6 +196,140 @@ class PricingTierServiceTest {
         assertEquals(2, created.version)
         assertEquals("PRO", created.tierName)
         assertEquals(50_000, created.monthlyUnitLimit)
+    }
+
+    @Test
+    fun `createTierVersion stores explicit APM trace retention`() {
+        seedTier("PRO", version = 1, retentionDays = 30)
+
+        val created =
+            service.createTierVersion(
+                "PRO",
+                createRequest(retentionDays = 30, apmTraceRetentionDays = 45)
+            )
+
+        assertEquals(45, created.apmTraceRetentionDays)
+    }
+
+    @Test
+    fun `createTierVersion preserves omitted APM trace retention from current tier`() {
+        seedTier("PRO", version = 1, retentionDays = 30, apmTraceRetentionDays = 45)
+
+        val created =
+            service.createTierVersion(
+                "PRO",
+                createRequest(retentionDays = 30)
+            )
+
+        assertEquals(45, created.apmTraceRetentionDays)
+    }
+
+    @Test
+    fun `createTierVersion defaults APM trace retention to retention days without current tier`() {
+        val created =
+            service.createTierVersion(
+                "TEAM",
+                createRequest(retentionDays = 21)
+            )
+
+        assertEquals(21, created.apmTraceRetentionDays)
+    }
+
+    @Test
+    fun `createTierVersion rejects invalid APM trace retention`() {
+        val error =
+            assertFailsWith<IllegalArgumentException> {
+                service.createTierVersion(
+                    "PRO",
+                    createRequest(retentionDays = 30, apmTraceRetentionDays = 0)
+                )
+            }
+
+        assertEquals("APM trace retention days must be between 1 and 90", error.message)
+    }
+
+    @Test
+    fun `createTierVersion treats JavaScript safe unlimited sentinel as unlimited`() {
+        seedTier("FREE", version = 1)
+
+        val safeUnlimitedLimit = 9_007_199_254_740_000L
+        val created =
+            service.createTierVersion(
+                "FREE",
+                CreateTierVersionRequest(
+                    monthlyUnitLimit = safeUnlimitedLimit,
+                    monthlyErrorLimit = safeUnlimitedLimit,
+                    monthlyTransactionLimit = safeUnlimitedLimit,
+                    monthlyReplayLimit = safeUnlimitedLimit,
+                    monthlyFeedbackLimit = safeUnlimitedLimit,
+                    monthlyLlmEventLimit = safeUnlimitedLimit,
+                    monthlyGbLimit = 1_073_741_824,
+                    retentionDays = 30,
+                    logRetentionDays = 30,
+                    replayRetentionDays = 30,
+                    llmRetentionDays = 30,
+                    maxProjects = 1,
+                    maxSystems = 3,
+                    monitorIntervalSeconds = 60,
+                    monthlyPriceCents = 0,
+                    yearlyPriceCents = 0,
+                    trialDays = 0,
+                    paygEnabled = false,
+                    paygRateMicrosPerUnit = 0,
+                    monthlyAnalyticsPageviewLimit = safeUnlimitedLimit
+                )
+            )
+
+        assertEquals(Long.MAX_VALUE, created.monthlyUnitLimit)
+        assertEquals(Long.MAX_VALUE, created.monthlyErrorLimit)
+        assertEquals(Long.MAX_VALUE, created.monthlyTransactionLimit)
+        assertEquals(Long.MAX_VALUE, created.monthlyReplayLimit)
+        assertEquals(Long.MAX_VALUE, created.monthlyFeedbackLimit)
+        assertEquals(Long.MAX_VALUE, created.monthlyLlmEventLimit)
+        assertEquals(Long.MAX_VALUE, created.monthlyAnalyticsPageviewLimit)
+    }
+
+    @Test
+    fun `createTierVersion normalizes fallback and optional unlimited limits`() {
+        seedTier("PRO", version = 1)
+
+        val safeUnlimitedLimit = 9_007_199_254_740_000L
+        val created =
+            service.createTierVersion(
+                "PRO",
+                CreateTierVersionRequest(
+                    monthlyUnitLimit = safeUnlimitedLimit,
+                    monthlyErrorLimit = 0,
+                    monthlyTransactionLimit = 100,
+                    monthlyReplayLimit = -1,
+                    monthlyFeedbackLimit = 200,
+                    monthlyLlmEventLimit = 300,
+                    monthlyGbLimit = 1_073_741_824,
+                    retentionDays = 7,
+                    logRetentionDays = 7,
+                    maxProjects = 5,
+                    maxSystems = 5,
+                    monitorIntervalSeconds = 60,
+                    monthlyPriceCents = 2900,
+                    yearlyPriceCents = 24900,
+                    trialDays = 14,
+                    paygEnabled = false,
+                    paygRateMicrosPerUnit = 0,
+                    monthlyApmSpanLimit = safeUnlimitedLimit,
+                    monthlyCustomMetricLimit = safeUnlimitedLimit,
+                    monthlyInfraMetricSeriesHourLimit = safeUnlimitedLimit
+                )
+            )
+
+        assertEquals(Long.MAX_VALUE, created.monthlyUnitLimit)
+        assertEquals(Long.MAX_VALUE, created.monthlyErrorLimit)
+        assertEquals(100, created.monthlyTransactionLimit)
+        assertEquals(-1, created.monthlyReplayLimit)
+        assertEquals(200, created.monthlyFeedbackLimit)
+        assertEquals(300, created.monthlyLlmEventLimit)
+        assertEquals(Long.MAX_VALUE, created.monthlyApmSpanLimit)
+        assertEquals(Long.MAX_VALUE, created.monthlyCustomMetricLimit)
+        assertEquals(Long.MAX_VALUE, created.monthlyInfraMetricSeriesHourLimit)
     }
 
     @Test

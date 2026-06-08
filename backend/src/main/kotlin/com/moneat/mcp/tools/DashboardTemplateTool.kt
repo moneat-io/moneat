@@ -153,7 +153,7 @@ class ExecuteDashboardQueryTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "project_id" to schemaNumber("Project ID"),
+                "project_id" to schemaProjectId(),
                 "query_config" to schemaObject(
                     "Query DSL config (QueryDsl JSON)"
                 ),
@@ -169,12 +169,9 @@ class ExecuteDashboardQueryTool : McpTool {
     override suspend fun execute(
         args: JsonObject,
         context: McpContext
-    ): ToolCallResult {
-        val projectId = args["project_id"]?.jsonPrimitive
-            ?.content?.toLongOrNull()
-            ?: return errorResult("project_id is required")
+    ): ToolCallResult = withRequiredProjectId(args) { projectId ->
         val queryConfigJson = args["query_config"] as? JsonObject
-            ?: return errorResult("query_config must be an object")
+            ?: return@withRequiredProjectId errorResult("query_config must be an object")
         val retentionDays = args["retention_days"]?.jsonPrimitive
             ?.content?.toIntOrNull() ?: DEFAULT_RETENTION_DAYS
 
@@ -184,12 +181,12 @@ class ExecuteDashboardQueryTool : McpTool {
                 queryConfigJson
             )
         } catch (e: Exception) {
-            return errorResult(
+            return@withRequiredProjectId errorResult(
                 "Invalid query_config: ${e.message}"
             )
         }
 
-        return try {
+        try {
             val results = dashQueryEngine.executeQuery(
                 dsl = dsl,
                 projectId = projectId,

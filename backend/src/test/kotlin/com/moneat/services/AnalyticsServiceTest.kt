@@ -17,6 +17,7 @@
 package com.moneat.services
 
 import com.moneat.analytics.models.AnalyticsFilter
+import com.moneat.analytics.services.AnalyticsQueryScope
 import com.moneat.analytics.services.AnalyticsService
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
@@ -328,6 +329,34 @@ class AnalyticsServiceTest {
     }
 
     @Test
+    fun `getRealtime counts visitors across services as a Redis union`() {
+        mockkObject(RedisConfig)
+        try {
+            val mockCommands = io.mockk.mockk<RedisCommands<String, String>>()
+            every { RedisConfig.sync() } returns mockCommands
+            every {
+                mockCommands.pfcount(
+                    "moneat:analytics:realtime:42",
+                    "moneat:analytics:realtime:43",
+                )
+            } returns 9L
+
+            val result = service.getRealtime(AnalyticsQueryScope.services(listOf(42L, 43L)))
+
+            assertEquals(9L, result.visitors)
+        } finally {
+            unmockkObject(RedisConfig)
+        }
+    }
+
+    @Test
+    fun `getRealtime returns zero for empty service scope`() {
+        val result = service.getRealtime(AnalyticsQueryScope.services(emptyList()))
+
+        assertEquals(0L, result.visitors)
+    }
+
+    @Test
     fun `getRealtime returns zero when Redis throws exception`() {
         mockkObject(RedisConfig)
         try {
@@ -371,17 +400,22 @@ class AnalyticsServiceTest {
             assertEquals("page_load", result.steps[0].name)
             assertEquals(90L, result.steps[0].visitors)
             assertEquals(0.0, result.steps[0].dropoff)
+            assertEquals(100.0, result.steps[0].conversionRate)
             // Step 2: level>=2 => 30+10 = 40
             assertEquals("signup_click", result.steps[1].name)
             assertEquals(40L, result.steps[1].visitors)
             // dropoff = (90-40)/90*100 ≈ 55.56
             assertTrue(result.steps[1].dropoff > 55.0)
             assertTrue(result.steps[1].dropoff < 56.0)
+            assertTrue(result.steps[1].conversionRate > 44.0)
+            assertTrue(result.steps[1].conversionRate < 45.0)
             // Step 3: level>=3 => 10
             assertEquals("signup_complete", result.steps[2].name)
             assertEquals(10L, result.steps[2].visitors)
             // dropoff = (40-10)/40*100 = 75.0
             assertEquals(75.0, result.steps[2].dropoff)
+            assertTrue(result.overallConversion > 11.0)
+            assertTrue(result.overallConversion < 12.0)
         }
     }
 
@@ -398,6 +432,73 @@ class AnalyticsServiceTest {
             assertEquals(2, result.steps.size)
             assertEquals(0L, result.steps[0].visitors)
             assertEquals(0L, result.steps[1].visitors)
+            assertEquals(0.0, result.overallConversion)
+        }
+    }
+
+    @Test
+    fun `getFunnel can group product events by user id and source`() = runBlocking {
+        val queries = mutableListOf<String>()
+        withClickHouseMockServer({ exchange ->
+            queries.add(exchange.requestBodyText())
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
+        }) { _ ->
+
+            service.getFunnel(
+                projectId,
+                dateFrom,
+                dateTo,
+                listOf("signup.completed", "recording.started"),
+                groupBy = "user_id",
+                source = "server"
+            )
+
+            assertTrue(queries.any { it.contains("GROUP BY project_id, user_id") })
+            assertTrue(queries.any { it.contains("source = 'server'") })
+            assertTrue(queries.any { it.contains("user_id != ''") })
+        }
+    }
+
+    @Test
+    fun `getRetention returns weekly cohorts`() = runBlocking {
+        val queries = mutableListOf<String>()
+        withClickHouseMockServer({ exchange ->
+            queries.add(exchange.requestBodyText())
+            val retentionRow = listOf(
+                """"cohort_week":"2026-01-05 00:00:00"""",
+                """"users":10""",
+                """"eligible_1":10""",
+                """"retained_1":4""",
+                """"eligible_7":8""",
+                """"retained_7":6""",
+            ).joinToString(prefix = "{", postfix = "}")
+            exchange.respond(
+                200,
+                retentionRow,
+                contentType = CONTENT_TYPE_TEXT_PLAIN
+            )
+        }) { _ ->
+
+            val result = service.getRetention(
+                projectId,
+                dateFrom,
+                dateTo,
+                "signup.completed",
+                "recording.started",
+                listOf(1, 7),
+            )
+
+            assertEquals("signup.completed", result.startEvent)
+            assertEquals("recording.started", result.returnEvent)
+            assertEquals(1, result.cohorts.size)
+            assertEquals(10L, result.cohorts[0].users)
+            assertEquals(10L, result.cohorts[0].periods[0].eligibleUsers)
+            assertEquals(40.0, result.cohorts[0].periods[0].retentionRate)
+            assertEquals(8L, result.cohorts[0].periods[1].eligibleUsers)
+            assertEquals(75.0, result.cohorts[0].periods[1].retentionRate)
+            assertTrue(queries.any { it.contains("e.source = 'server'") })
+            assertTrue(queries.any { it.contains("eligible_7") })
+            assertTrue(queries.any { it.contains("retained_7") })
         }
     }
 
@@ -435,6 +536,29 @@ class AnalyticsServiceTest {
             service.getEvents(projectId, dateFrom, dateTo, emptyList())
 
             assertTrue(queries.any { it.contains("event_name != 'pageview'") })
+        }
+    }
+
+    @Test
+    fun `getEvents can count product events by user id and source`() = runBlocking {
+        val queries = mutableListOf<String>()
+        withClickHouseMockServer({ exchange ->
+            queries.add(exchange.requestBodyText())
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
+        }) { _ ->
+
+            service.getEvents(
+                projectId,
+                dateFrom,
+                dateTo,
+                emptyList(),
+                groupBy = "user_id",
+                source = "server",
+            )
+
+            assertTrue(queries.any { it.contains("uniq(e.project_id, e.user_id)") })
+            assertTrue(queries.any { it.contains("e.source = 'server'") })
+            assertTrue(queries.any { it.contains("e.user_id != ''") })
         }
     }
 
@@ -613,6 +737,27 @@ class AnalyticsServiceTest {
     }
 
     @Test
+    fun `getOverview scoped query filters by multiple service ids`() = runBlocking {
+        val queries = mutableListOf<String>()
+        withClickHouseMockServer({ exchange ->
+            queries.add(exchange.requestBodyText())
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
+        }) { _ ->
+
+            service.getOverview(
+                AnalyticsQueryScope.services(listOf(projectId, 43)),
+                dateFrom,
+                dateTo,
+                emptyList(),
+                null,
+                null
+            )
+
+            assertTrue(queries.any { it.contains("s.project_id IN (toUInt64(42), toUInt64(43))") })
+        }
+    }
+
+    @Test
     fun `getFunnel query includes windowFunnel`() = runBlocking {
         val queries = mutableListOf<String>()
         withClickHouseMockServer({ exchange ->
@@ -623,6 +768,49 @@ class AnalyticsServiceTest {
             service.getFunnel(projectId, dateFrom, dateTo, listOf("step1", "step2"))
 
             assertTrue(queries.any { it.contains("windowFunnel") })
+        }
+    }
+
+    @Test
+    fun `getFunnel scoped query groups by service and visitor key`() = runBlocking {
+        val queries = mutableListOf<String>()
+        withClickHouseMockServer({ exchange ->
+            queries.add(exchange.requestBodyText())
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
+        }) { _ ->
+
+            service.getFunnel(
+                AnalyticsQueryScope.services(listOf(projectId, 43)),
+                dateFrom,
+                dateTo,
+                listOf("step1", "step2")
+            )
+
+            assertTrue(queries.any { it.contains("project_id IN (toUInt64(42), toUInt64(43))") })
+            assertTrue(queries.any { it.contains("GROUP BY project_id, session_id") })
+        }
+    }
+
+    @Test
+    fun `getRetention scoped query joins return events within the same service`() = runBlocking {
+        val queries = mutableListOf<String>()
+        withClickHouseMockServer({ exchange ->
+            queries.add(exchange.requestBodyText())
+            exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
+        }) { _ ->
+
+            service.getRetention(
+                AnalyticsQueryScope.services(listOf(projectId, 43)),
+                dateFrom,
+                dateTo,
+                "signup.completed",
+                "recording.started",
+                listOf(1, 7)
+            )
+
+            assertTrue(queries.any { it.contains("e.project_id IN (toUInt64(42), toUInt64(43))") })
+            assertTrue(queries.any { it.contains("GROUP BY project_id, user_id") })
+            assertTrue(queries.any { it.contains("ON e.project_id = c.project_id") })
         }
     }
 

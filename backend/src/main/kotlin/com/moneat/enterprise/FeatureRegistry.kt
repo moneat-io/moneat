@@ -16,14 +16,18 @@
 
 package com.moneat.enterprise
 
+import com.moneat.authz.PermissionBridge
 import com.moneat.config.EnvConfig
 import com.moneat.enterprise.license.LicenseInfo
 import com.moneat.enterprise.license.LicenseValidator
-import io.ktor.server.application.*
-import io.ktor.server.routing.*
+import com.moneat.workflows.WorkflowApprovalBridge
+import com.moneat.workflows.WorkflowConnectionVault
+import com.moneat.workflows.WorkflowPremiumConnectorBridge
+import com.moneat.utils.suspendRunCatching
+import io.ktor.server.application.Application
+import io.ktor.server.routing.Route
 import mu.KotlinLogging
 import java.util.ServiceLoader
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -142,6 +146,26 @@ object FeatureRegistry {
     /** Get the OnCallBridge if the on-call enterprise module is loaded. */
     fun getOnCallBridge(): OnCallBridge? {
         return modules.filterIsInstance<OnCallBridge>().firstOrNull()
+    }
+
+    /** Get the workflow connection vault if the licensed workflows module is loaded. */
+    fun getWorkflowConnectionVault(): WorkflowConnectionVault? {
+        return modules.filterIsInstance<WorkflowConnectionVault>().firstOrNull()
+    }
+
+    /** Get the workflow approval bridge if the licensed workflows module is loaded. */
+    fun getWorkflowApprovalBridge(): WorkflowApprovalBridge? {
+        return modules.filterIsInstance<WorkflowApprovalBridge>().firstOrNull()
+    }
+
+    /** Get the workflow premium connector bridge if the licensed workflows module is loaded. */
+    fun getWorkflowPremiumConnectorBridge(): WorkflowPremiumConnectorBridge? {
+        return modules.filterIsInstance<WorkflowPremiumConnectorBridge>().firstOrNull()
+    }
+
+    /** Get the cross-cutting permission bridge if the licensed RBAC module is loaded. */
+    fun getPermissionBridge(): PermissionBridge? {
+        return modules.filterIsInstance<PermissionBridge>().firstOrNull()
     }
 
     // For testing

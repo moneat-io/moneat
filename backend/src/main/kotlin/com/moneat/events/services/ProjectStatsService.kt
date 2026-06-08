@@ -90,22 +90,20 @@ class ProjectStatsService(private val queryHelper: DashboardQueryHelper) {
 
             val totalEventsQuery =
                 """
-            SELECT count() as total
-            FROM `$clickhouseDb`.events
+            SELECT sum(event_count) as total
+            FROM `$clickhouseDb`.event_project_rollup_1h
             WHERE $projectIdClause
-                AND event_type = 'error'
-                AND timestamp >= $nowSql - INTERVAL $hoursBack HOUR
-                AND ${queryHelper.timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
+                AND bucket_start >= $nowSql - INTERVAL $hoursBack HOUR
+                AND ${queryHelper.timestampRetentionClause("bucket_start", retentionDays, demoEpochMs)}
             FORMAT JSONEachRow
                 """.trimIndent()
 
             val totalIssuesQuery =
                 """
-            SELECT count(DISTINCT issue_id) as total
-            FROM `$clickhouseDb`.events
+            SELECT uniqExact(issue_id) as total
+            FROM `$clickhouseDb`.event_issue_rollup_1h
             WHERE $projectIdClause
-                AND event_type = 'error'
-                AND ${queryHelper.timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
+                AND ${queryHelper.timestampRetentionClause("bucket_start", retentionDays, demoEpochMs)}
             FORMAT JSONEachRow
                 """.trimIndent()
 
@@ -137,13 +135,12 @@ class ProjectStatsService(private val queryHelper: DashboardQueryHelper) {
             val eventsTimelineQuery =
                 """
             SELECT 
-                formatDateTime(toStartOfInterval(timestamp, INTERVAL $intervalMinutes MINUTE), '%Y-%m-%dT%H:%i:%SZ', 'UTC') as time,
-                count() as count
-            FROM `$clickhouseDb`.events
+                formatDateTime(toStartOfInterval(bucket_start, INTERVAL $intervalMinutes MINUTE), '%Y-%m-%dT%H:%i:%SZ', 'UTC') as time,
+                sum(event_count) as count
+            FROM `$clickhouseDb`.event_project_rollup_1h
             WHERE $projectIdClause
-                AND event_type = 'error'
-                AND timestamp >= $nowSql - INTERVAL $hoursBack HOUR
-                AND ${queryHelper.timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
+                AND bucket_start >= $nowSql - INTERVAL $hoursBack HOUR
+                AND ${queryHelper.timestampRetentionClause("bucket_start", retentionDays, demoEpochMs)}
             GROUP BY time
             ORDER BY time
             FORMAT JSONEachRow
@@ -151,25 +148,23 @@ class ProjectStatsService(private val queryHelper: DashboardQueryHelper) {
 
             val eventsByLevelQuery =
                 """
-            SELECT level, count() as count
-            FROM `$clickhouseDb`.events
+            SELECT level, sum(event_count) as count
+            FROM `$clickhouseDb`.event_project_rollup_1h
             WHERE $projectIdClause
-                AND event_type = 'error'
-                AND timestamp >= $nowSql - INTERVAL $hoursBack HOUR
-                AND ${queryHelper.timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
+                AND bucket_start >= $nowSql - INTERVAL $hoursBack HOUR
+                AND ${queryHelper.timestampRetentionClause("bucket_start", retentionDays, demoEpochMs)}
             GROUP BY level
             FORMAT JSONEachRow
                 """.trimIndent()
 
             val eventsByPlatformQuery =
                 """
-            SELECT platform, count() as count
-            FROM `$clickhouseDb`.events
+            SELECT platform, sum(event_count) as count
+            FROM `$clickhouseDb`.event_project_rollup_1h
             WHERE $projectIdClause
-                AND event_type = 'error'
-                AND timestamp >= $nowSql - INTERVAL $hoursBack HOUR
+                AND bucket_start >= $nowSql - INTERVAL $hoursBack HOUR
                 AND platform != ''
-                AND ${queryHelper.timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
+                AND ${queryHelper.timestampRetentionClause("bucket_start", retentionDays, demoEpochMs)}
             GROUP BY platform
             ORDER BY count DESC
             LIMIT 10
@@ -178,13 +173,12 @@ class ProjectStatsService(private val queryHelper: DashboardQueryHelper) {
 
             val eventsByBrowserQuery =
                 """
-            SELECT browser_name, count() as count
-            FROM `$clickhouseDb`.events
+            SELECT browser_name, sum(event_count) as count
+            FROM `$clickhouseDb`.event_project_rollup_1h
             WHERE $projectIdClause
-                AND event_type = 'error'
-                AND timestamp >= $nowSql - INTERVAL $hoursBack HOUR
+                AND bucket_start >= $nowSql - INTERVAL $hoursBack HOUR
                 AND browser_name != ''
-                AND ${queryHelper.timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
+                AND ${queryHelper.timestampRetentionClause("bucket_start", retentionDays, demoEpochMs)}
             GROUP BY browser_name
             ORDER BY count DESC
             LIMIT 10
@@ -193,13 +187,12 @@ class ProjectStatsService(private val queryHelper: DashboardQueryHelper) {
 
             val eventsByEnvironmentQuery =
                 """
-            SELECT environment, count() as count
-            FROM `$clickhouseDb`.events
+            SELECT environment, sum(event_count) as count
+            FROM `$clickhouseDb`.event_project_rollup_1h
             WHERE $projectIdClause
-                AND event_type = 'error'
-                AND timestamp >= $nowSql - INTERVAL $hoursBack HOUR
+                AND bucket_start >= $nowSql - INTERVAL $hoursBack HOUR
                 AND environment != ''
-                AND ${queryHelper.timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
+                AND ${queryHelper.timestampRetentionClause("bucket_start", retentionDays, demoEpochMs)}
             GROUP BY environment
             FORMAT JSONEachRow
                 """.trimIndent()
@@ -216,12 +209,11 @@ class ProjectStatsService(private val queryHelper: DashboardQueryHelper) {
 
             val topIssuesQuery =
                 """
-            SELECT issue_id, any(message) as title, count() as count
-            FROM `$clickhouseDb`.events
+            SELECT issue_id, any(title) as title, sum(event_count) as count
+            FROM `$clickhouseDb`.event_issue_rollup_1h
             WHERE $projectIdClause
-                AND timestamp >= $nowSql - INTERVAL $hoursBack HOUR
-                AND event_type = 'error'
-                AND ${queryHelper.timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
+                AND bucket_start >= $nowSql - INTERVAL $hoursBack HOUR
+                AND ${queryHelper.timestampRetentionClause("bucket_start", retentionDays, demoEpochMs)}
             GROUP BY issue_id
             ORDER BY count DESC
             LIMIT 10

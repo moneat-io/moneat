@@ -162,27 +162,39 @@ fun Route.datadogInfraQueryRoutes() {
 
                 val countSql = """
                     SELECT count() as cnt
-                    FROM `$db`.containers
-                    WHERE $where
+                    FROM (
+                        SELECT 1
+                        FROM `$db`.containers_latest_by_host
+                        WHERE $where
+                        GROUP BY organization_id, host_id, host, container_id
+                    )
                     FORMAT JSONEachRow
                 """.trimIndent()
                 val totalCount = executeCount(countSql)
 
                 val dataSql = """
                     SELECT
-                        container_id_hash, host,
-                        container_id, name, image, state,
-                        cpu_percent, mem_usage, mem_limit,
-                        net_rx_bytes, net_tx_bytes,
-                        tags,
+                        toString(cityHash64(host, container_id)) as container_id_hash,
+                        host,
+                        container_id,
+                        argMax(name, timestamp) as name,
+                        argMax(image, timestamp) as image,
+                        argMax(state, timestamp) as state,
+                        argMax(cpu_percent, timestamp) as cpu_percent,
+                        argMax(mem_usage, timestamp) as mem_usage,
+                        argMax(mem_limit, timestamp) as mem_limit,
+                        argMax(net_rx_bytes, timestamp) as net_rx_bytes,
+                        argMax(net_tx_bytes, timestamp) as net_tx_bytes,
+                        argMax(tags, timestamp) as tags,
                         formatDateTime(
-                            timestamp,
+                            max(timestamp),
                             '%Y-%m-%dT%H:%i:%S.000Z',
                             'UTC'
                         ) as ts
-                    FROM `$db`.containers
+                    FROM `$db`.containers_latest_by_host
                     WHERE $where
-                    ORDER BY timestamp DESC
+                    GROUP BY organization_id, host_id, host, container_id
+                    ORDER BY max(timestamp) DESC
                     LIMIT $limit OFFSET $offset
                     FORMAT JSONEachRow
                 """.trimIndent()

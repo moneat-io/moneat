@@ -94,7 +94,7 @@ function KubernetesLayout() {
             {isResourceListPage && (
               <div className="flex items-center gap-2 shrink-0">
                 <div className="flex items-center gap-1.5 text-sm">
-                  <Box className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                  <Box className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                   <span className="font-semibold tabular-nums">{resourceCount}</span>
                   <span className="text-muted-foreground text-xs">{resourceLabel.toLowerCase()}</span>
                 </div>

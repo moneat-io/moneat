@@ -42,6 +42,12 @@ private val TOOL_TIMEOUTS: Map<String, Long> = mapOf(
     "get_log_top_values" to 15_000L,
     "get_log_filters" to 15_000L,
     "summarize_recent_issues" to 20_000L,
+    "list_security_events" to 15_000L,
+    "get_security_event" to 15_000L,
+    "preview_detection_rule" to 15_000L,
+    "get_compliance_summary" to 15_000L,
+    "get_compliance_trends" to 15_000L,
+    "list_compliance_findings" to 15_000L,
 )
 
 /**
@@ -72,16 +78,18 @@ class McpToolRegistry(
         logger.debug { "Registered MCP tool: ${tool.name}" }
     }
 
-    fun listTools(): List<ToolDefinition> {
-        return tools.values.map { tool ->
-            ToolDefinition(
-                name = tool.name,
-                description = tool.description,
-                inputSchema = tool.inputSchema,
-                readOnly = tool.readOnly,
-                requiredScopes = tool.requiredScopes,
-            )
-        }
+    fun listTools(allowedTools: Set<String>? = null): List<ToolDefinition> {
+        return tools.values
+            .filter { tool -> allowedTools?.contains(tool.name) ?: true }
+            .map { tool ->
+                ToolDefinition(
+                    name = tool.name,
+                    description = tool.description,
+                    inputSchema = tool.inputSchema,
+                    readOnly = tool.readOnly,
+                    requiredScopes = tool.requiredScopes,
+                )
+            }
     }
 
     suspend fun callTool(
@@ -94,6 +102,13 @@ class McpToolRegistry(
                 content = listOf(ToolContent(text = "Unknown tool: $name")),
                 isError = true
             )
+
+        if (!context.canUseTool(name)) {
+            return ToolCallResult(
+                content = listOf(ToolContent(text = "Tool is not enabled for this MCP key: $name")),
+                isError = true
+            )
+        }
 
         val timeoutMs = toolTimeouts[name] ?: defaultTimeoutMs
         return try {

@@ -69,6 +69,61 @@ describe('Billing API', () => {
     expect(result).toEqual(mockUsage)
   })
 
+  it('fetches billing usage insights', async () => {
+    const mockInsights = {
+      organizationId: 1,
+      periodStart: '2026-01-01',
+      periodEnd: '2026-01-31',
+      generatedAt: '2026-01-15T12:00:00Z',
+      billingMode: 'cloud',
+      usage: {
+        organizationId: 1,
+        plan: 'PRO',
+        status: 'active',
+        usedUnits: 1000,
+        totalLimitUnits: 10000,
+        withinQuota: true,
+      },
+      dimensions: [
+        {
+          key: 'ingestion',
+          label: 'GB-Billed Ingestion',
+          unit: 'bytes',
+          used: 1073741824,
+          baseLimit: 2147483648,
+          effectiveLimit: 2147483648,
+          percentOfBase: 50,
+          percentOfEffective: 50,
+          overageCentsEstimate: 0,
+          overageRateLabel: '$0.40/GB',
+          forecast: {
+            window: '7d',
+            confidence: 'high',
+            dailyRate: 100,
+            projectedPeriodEndUsage: 2147483648,
+            projectedBaseLimitHitDate: null,
+            projectedEffectiveLimitHitDate: null,
+            projectedOverageCents: 0,
+            riskLevel: 'watch',
+            summary: 'Usage is trending below the limit.',
+          },
+          contributors: [],
+          daily: [],
+        },
+      ],
+      apmSpanDebug: null,
+    }
+
+    server.use(
+      http.get(`${API_BASE}/v1/billing/usage/insights`, () => {
+        return HttpResponse.json(mockInsights)
+      })
+    )
+
+    const result = await api.getBillingUsageInsights()
+    expect(result).toEqual(mockInsights)
+  })
+
   it('fetches APM span usage debug groups', async () => {
     const mockDebug = {
       organizationId: 1,
@@ -146,12 +201,20 @@ describe('Billing API', () => {
     server.use(
       http.post(`${API_BASE}/v1/billing/checkout`, async ({ request }) => {
         const body = (await request.json()) as Record<string, unknown>
-        expect(body.planId).toBe('pro-monthly')
+        expect(body.tierName).toBe('pro')
+        expect(body.billingInterval).toBe('monthly')
+        expect(body.successUrl).toBe('https://app.example.com/settings?checkout=success')
+        expect(body.cancelUrl).toBe('https://app.example.com/settings')
         return HttpResponse.json(mockSession)
       })
     )
 
-    const result = await api.createBillingCheckoutSession({ planId: 'pro-monthly' })
+    const result = await api.createBillingCheckoutSession({
+      tierName: 'pro',
+      billingInterval: 'monthly',
+      successUrl: 'https://app.example.com/settings?checkout=success',
+      cancelUrl: 'https://app.example.com/settings',
+    })
     expect(result).toEqual(mockSession)
   })
 

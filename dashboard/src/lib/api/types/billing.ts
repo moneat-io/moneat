@@ -28,6 +28,7 @@ export interface BillingTierConfig {
   retentionDays: number
   replayRetentionDays: number
   llmRetentionDays: number
+  apmTraceRetentionDays?: number
   statusPagesEnabled: boolean
   statusPageCustomDomainEnabled: boolean
   sessionReplayEnabled: boolean
@@ -96,6 +97,7 @@ export interface BillingUsage {
   logRetentionDays?: number
   replayRetentionDays?: number
   llmRetentionDays?: number
+  apmTraceRetentionDays?: number
   usedUnits: number
   usedErrors: number
   errorLimit: number
@@ -194,6 +196,64 @@ export interface ApmSpanUsageDebugResponse {
   groups: ApmSpanUsageDebugGroup[]
 }
 
+export interface BillingUsageInsightsResponse {
+  organizationId: number
+  periodStart: string
+  periodEnd: string
+  generatedAt: string
+  billingMode: 'cloud' | 'self_hosted'
+  usage: BillingUsage
+  dimensions: BillingInsightDimension[]
+  apmSpanDebug?: ApmSpanUsageDebugResponse | null
+}
+
+export interface BillingInsightDimension {
+  key: string
+  label: string
+  unit: string
+  used: number
+  baseLimit: number
+  effectiveLimit?: number | null
+  percentOfBase: number
+  percentOfEffective?: number | null
+  overageCentsEstimate: number
+  overageRateLabel?: string | null
+  forecast: BillingForecast
+  contributors: BillingContributor[]
+  daily: BillingInsightDailyPoint[]
+}
+
+export interface BillingForecast {
+  window: '7d' | 'period_to_date' | '30d' | 'insufficient_data' | string
+  confidence: 'high' | 'medium' | 'low' | string
+  dailyRate: number
+  projectedPeriodEndUsage: number
+  projectedBaseLimitHitDate?: string | null
+  projectedEffectiveLimitHitDate?: string | null
+  projectedOverageCents: number
+  riskLevel: 'ok' | 'watch' | 'warning' | 'critical' | string
+  summary: string
+}
+
+export interface BillingContributor {
+  key: string
+  label: string
+  kind: string
+  eventType?: string | null
+  projectId?: number | null
+  projectName?: string | null
+  projectSlug?: string | null
+  units: number
+  bytes: number
+  percentage: number
+}
+
+export interface BillingInsightDailyPoint {
+  date: string
+  value: number
+  bytes: number
+}
+
 export interface CheckoutSessionRequest {
   tierName: string
   billingInterval?: string
@@ -244,6 +304,7 @@ export interface CreateTierVersionRequest {
   logRetentionDays?: number | null
   replayRetentionDays?: number | null
   llmRetentionDays?: number | null
+  apmTraceRetentionDays?: number | null
   statusPagesEnabled?: boolean | null
   statusPageCustomDomainEnabled?: boolean | null
   sessionReplayEnabled?: boolean | null

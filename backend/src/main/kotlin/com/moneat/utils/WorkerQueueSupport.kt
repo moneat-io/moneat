@@ -49,12 +49,12 @@ fun pushToDlq(
     workerId: Int,
     workerName: String,
     cause: Throwable,
-) {
+): Boolean {
     logger.error(cause) {
         "$workerName worker $workerId failed, pushing to DLQ"
     }
     OperationalMetrics.recordWorkerProcessingFailure(workerName, workerId, cause)
-    runCatching {
+    return runCatching {
         RedisConfig.sync().rpush(dlqKey, payload)
     }.onSuccess {
         OperationalMetrics.recordDlqPush(workerName, dlqKey, "success")
@@ -63,5 +63,5 @@ fun pushToDlq(
         logger.error(dlqErr) {
             "Failed to write to DLQ for worker $workerId, dlqKey=$dlqKey"
         }
-    }
+    }.isSuccess
 }

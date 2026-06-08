@@ -653,6 +653,7 @@ class CustomDashboardServiceTest {
         } returns listOf(
             mockk {
                 every { projectId } returns 42L
+                every { resourceId } returns "018f4ce4-3f2a-7a67-a32b-0c1848f62b9d"
                 every { name } returns "error-tracker"
             }
         )
@@ -663,6 +664,7 @@ class CustomDashboardServiceTest {
         assertEquals("Error Dashboard", result.dashboards[0].title)
         assertEquals(1, result.projects.size)
         assertEquals(42L, result.projects[0].id)
+        assertEquals("018f4ce4-3f2a-7a67-a32b-0c1848f62b9d", result.projects[0].resourceId)
         assertEquals("error-tracker", result.projects[0].name)
     }
 

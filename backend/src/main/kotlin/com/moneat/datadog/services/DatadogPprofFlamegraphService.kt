@@ -35,6 +35,7 @@ private val logger = KotlinLogging.logger {}
 
 private const val HEX_RADIX = 16
 private const val JFR_MAGIC_LAST_INDEX = 3
+private val THREAD_LABEL_KEYS = listOf("thread name", "thread")
 
 object DatadogPprofFlamegraphService {
 
@@ -56,11 +57,15 @@ object DatadogPprofFlamegraphService {
     )
 
     private data class ValueType(val typeIdx: Long, val unitIdx: Long)
+    private data class Label(val keyIdx: Long, val strIdx: Long)
     private data class Sample(
         val locationIds: List<Long>,
         val locationIdx: List<Long>,
         val values: List<Long>,
+        val labels: List<Label> = emptyList(),
     )
+
+    private data class SampleTypeMeta(val index: Int, val key: String, val unit: String)
     private data class Mapping(
         val id: Long,
         val filenameIdx: Long,
@@ -80,29 +85,65 @@ object DatadogPprofFlamegraphService {
         val filenameIdx: Long,
     )
 
-    fun parseToFrames(data: ByteArray): JsonObject {
+    fun parseToFrames(
+        data: ByteArray,
+        sampleType: String? = null,
+        thread: String? = null,
+    ): JsonObject {
         return runCatching {
             val payload = normalizePayload(data)
             if (hasJfrMagic(payload)) {
                 logger.debug { "Skipping flamegraph parse for JFR payload" }
                 emptyFlamegraph()
             } else {
-                val profile = decodeProfile(payload)
-                val roots = buildFrameTree(profile)
-                buildJsonObject {
-                    put(
-                        "frames",
-                        buildJsonArray {
-                            roots.sortedByDescending { it.value }
-                                .forEach { add(toJson(it)) }
-                        }
-                    )
-                }
+                buildResponse(decodeProfile(payload), sampleType, thread)
             }
         }.onFailure { e ->
             logger.warn(e) { "Failed to parse Datadog pprof payload into flamegraph frames" }
         }.getOrElse {
             emptyFlamegraph()
+        }
+    }
+
+    private fun buildResponse(
+        profile: PprofProfile,
+        requestedType: String?,
+        requestedThread: String?,
+    ): JsonObject {
+        if (profile.samples.isEmpty()) return emptyFlamegraph()
+
+        val types = profile.sampleTypes.mapIndexed { idx, vt ->
+            SampleTypeMeta(
+                index = idx,
+                key = stringAt(profile.strings, vt.typeIdx).ifBlank { "sample$idx" },
+                unit = stringAt(profile.strings, vt.unitIdx),
+            )
+        }
+        val selected = types.firstOrNull { it.key == requestedType }
+            ?: types.getOrNull(resolveValueIndex(profile))
+            ?: types.firstOrNull()
+            ?: return emptyFlamegraph()
+
+        val threadTotals = computeThreadTotals(profile, selected.index)
+        val selectedThread = requestedThread
+            ?.takeIf { it.isNotBlank() && it != "all" && threadTotals.containsKey(it) }
+
+        val roots = buildFrameTree(profile, selected.index, selectedThread)
+        val total = roots.sumOf { it.value }
+
+        return buildJsonObject {
+            put(
+                "frames",
+                buildJsonArray {
+                    roots.sortedByDescending { it.value }.forEach { add(toJson(it)) }
+                },
+            )
+            put("sampleTypes", sampleTypesJson(types))
+            put("threads", threadsJson(threadTotals))
+            put("selectedSampleType", selected.key)
+            if (selectedThread != null) put("selectedThread", selectedThread)
+            put("unit", selected.unit.ifBlank { "samples" })
+            put("totalSamples", total)
         }
     }
 
@@ -128,17 +169,19 @@ object DatadogPprofFlamegraphService {
         }.getOrDefault(false)
     }
 
-    private fun buildFrameTree(profile: PprofProfile): List<MutableFrame> {
+    private fun buildFrameTree(
+        profile: PprofProfile,
+        valueIndex: Int,
+        selectedThread: String?,
+    ): List<MutableFrame> {
         if (profile.samples.isEmpty()) return emptyList()
-        val valueIndex = resolveValueIndex(profile)
         val root = MutableFrame("(root)")
 
         profile.samples.forEach { sample ->
-            val weight = sample.values.getOrNull(valueIndex)
-                ?: sample.values.lastOrNull()
-                ?: return@forEach
-
-            val normalizedWeight = if (weight == Long.MIN_VALUE) Long.MAX_VALUE else kotlin.math.abs(weight)
+            if (selectedThread != null && threadOf(profile, sample) != selectedThread) {
+                return@forEach
+            }
+            val normalizedWeight = sampleWeight(sample, valueIndex)
             if (normalizedWeight == 0L) return@forEach
 
             val names = resolveSampleFrames(profile, sample)
@@ -153,6 +196,64 @@ object DatadogPprofFlamegraphService {
         }
 
         return root.children.values.toList()
+    }
+
+    private fun sampleWeight(sample: Sample, valueIndex: Int): Long {
+        val weight = sample.values.getOrNull(valueIndex)
+            ?: sample.values.lastOrNull()
+            ?: return 0L
+        return if (weight == Long.MIN_VALUE) Long.MAX_VALUE else kotlin.math.abs(weight)
+    }
+
+    private fun computeThreadTotals(profile: PprofProfile, valueIndex: Int): Map<String, Long> {
+        val totals = LinkedHashMap<String, Long>()
+        profile.samples.forEach { sample ->
+            val thread = threadOf(profile, sample) ?: return@forEach
+            val weight = sampleWeight(sample, valueIndex)
+            if (weight == 0L) return@forEach
+            totals.merge(thread, weight, Long::plus)
+        }
+        return totals
+    }
+
+    private fun threadOf(profile: PprofProfile, sample: Sample): String? {
+        for (key in THREAD_LABEL_KEYS) {
+            val label = sample.labels.firstOrNull {
+                stringAt(profile.strings, it.keyIdx) == key
+            }
+            if (label != null) {
+                val value = stringAt(profile.strings, label.strIdx)
+                if (value.isNotBlank()) return value
+            }
+        }
+        return null
+    }
+
+    private fun sampleTypesJson(types: List<SampleTypeMeta>): JsonArray = buildJsonArray {
+        types.forEach { t ->
+            add(
+                buildJsonObject {
+                    put("key", t.key)
+                    put("label", t.key)
+                    put("unit", t.unit.ifBlank { "samples" })
+                },
+            )
+        }
+    }
+
+    private fun threadsJson(threadTotals: Map<String, Long>): JsonArray = buildJsonArray {
+        threadTotals.entries
+            .sortedByDescending { it.value }
+            .take(MAX_THREADS)
+            .forEach { (name, total) ->
+                add(
+                    buildJsonObject {
+                        put("id", name)
+                        put("label", name)
+                        put("samples", total)
+                    },
+                )
+            }
     }
 
     private fun resolveSampleFrames(
@@ -313,6 +414,7 @@ object DatadogPprofFlamegraphService {
         val locationIds = mutableListOf<Long>()
         val locationIdx = mutableListOf<Long>()
         val values = mutableListOf<Long>()
+        val labels = mutableListOf<Label>()
 
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
@@ -321,6 +423,7 @@ object DatadogPprofFlamegraphService {
                 (1 shl FIELD_SHIFT) or 2 -> readPackedUInt64(input.readByteArray(), locationIds)
                 (2 shl FIELD_SHIFT) or 0 -> values += input.readInt64()
                 (2 shl FIELD_SHIFT) or 2 -> readPackedInt64(input.readByteArray(), values)
+                (FIELD_3 shl FIELD_SHIFT) or 2 -> labels += decodeLabel(input.readByteArray())
                 (FIELD_4 shl FIELD_SHIFT) or 0 -> locationIdx += input.readUInt64()
                 (FIELD_4 shl FIELD_SHIFT) or 2 -> readPackedUInt64(input.readByteArray(), locationIdx)
                 else -> input.skipField(tag)
@@ -331,7 +434,23 @@ object DatadogPprofFlamegraphService {
             locationIds = locationIds,
             locationIdx = locationIdx,
             values = values,
+            labels = labels,
         )
+    }
+
+    private fun decodeLabel(bytes: ByteArray): Label {
+        val input = CodedInputStream.newInstance(bytes)
+        var keyIdx = 0L
+        var strIdx = 0L
+        while (!input.isAtEnd) {
+            when (val tag = input.readTag()) {
+                0 -> break
+                (1 shl FIELD_SHIFT) or 0 -> keyIdx = input.readInt64()
+                (2 shl FIELD_SHIFT) or 0 -> strIdx = input.readInt64()
+                else -> input.skipField(tag)
+            }
+        }
+        return Label(keyIdx = keyIdx, strIdx = strIdx)
     }
 
     private fun decodeMapping(bytes: ByteArray): Mapping {
@@ -462,6 +581,10 @@ object DatadogPprofFlamegraphService {
 
     private fun emptyFlamegraph(): JsonObject = buildJsonObject {
         put("frames", JsonArray(emptyList()))
+        put("sampleTypes", JsonArray(emptyList()))
+        put("threads", JsonArray(emptyList()))
+        put("unit", "samples")
+        put("totalSamples", 0L)
     }
 
     private val JFR_MAGIC = byteArrayOf('F'.code.toByte(), 'L'.code.toByte(), 'R'.code.toByte(), 0x00)

@@ -26,6 +26,7 @@ import com.moneat.datadog.models.DdDbmMetadataPayload
 import com.moneat.datadog.models.DdDbmMetricsPayload
 import com.moneat.datadog.models.DdDbmQueryPayload
 import com.moneat.datadog.services.DbmIngestionService
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receiveChannel
 import io.ktor.server.response.respond
@@ -34,8 +35,10 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.utils.io.toByteArray
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
 import mu.KotlinLogging
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json {
@@ -82,9 +85,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmQueries(
         val bytes = DecompressionService.decompress(rawBytes, call.request.headers["Content-Encoding"])
         val body = bytes.decodeToString()
 
-        val payload = json.decodeFromString<DdDbmQueryPayload>(body)
-        if (!reserveDbmQuota(quotaService, organizationId, payload.rows.size, bytes)) return
-        val count = DbmIngestionService.enqueueQueries(organizationId, payload)
+        val payloads = decodeDbmPayloads<DdDbmQueryPayload>(body)
+        if (!reserveDbmQuota(quotaService, organizationId, payloads.sumOf { it.rows.size }, bytes)) return
+        val count = DbmIngestionService.enqueueQueryPayloads(organizationId, payloads)
 
         logger.debug { "Enqueued $count DBM queries for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
@@ -103,9 +106,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmMetrics(
         val bytes = DecompressionService.decompress(rawBytes, call.request.headers["Content-Encoding"])
         val body = bytes.decodeToString()
 
-        val payload = json.decodeFromString<DdDbmMetricsPayload>(body)
-        if (!reserveDbmQuota(quotaService, organizationId, payload.rows.size, bytes)) return
-        val count = DbmIngestionService.enqueueMetrics(organizationId, payload)
+        val payloads = decodeDbmPayloads<DdDbmMetricsPayload>(body)
+        if (!reserveDbmQuota(quotaService, organizationId, payloads.sumOf { it.rows.size }, bytes)) return
+        val count = DbmIngestionService.enqueueMetricPayloads(organizationId, payloads)
 
         logger.debug { "Enqueued $count DBM metrics for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
@@ -124,9 +127,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmActivity(
         val bytes = DecompressionService.decompress(rawBytes, call.request.headers["Content-Encoding"])
         val body = bytes.decodeToString()
 
-        val payload = json.decodeFromString<DdDbmActivityPayload>(body)
-        if (!reserveDbmQuota(quotaService, organizationId, payload.activity.size, bytes)) return
-        val count = DbmIngestionService.enqueueActivity(organizationId, payload)
+        val payloads = decodeDbmPayloads<DdDbmActivityPayload>(body)
+        if (!reserveDbmQuota(quotaService, organizationId, payloads.sumOf { it.activity.size }, bytes)) return
+        val count = DbmIngestionService.enqueueActivityPayloads(organizationId, payloads)
 
         logger.debug { "Enqueued $count DBM activity for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
@@ -145,9 +148,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmMetadata(
         val bytes = DecompressionService.decompress(rawBytes, call.request.headers["Content-Encoding"])
         val body = bytes.decodeToString()
 
-        val payload = json.decodeFromString<DdDbmMetadataPayload>(body)
-        if (!reserveDbmQuota(quotaService, organizationId, 1, bytes)) return
-        val count = DbmIngestionService.enqueueMetadata(organizationId, payload)
+        val payloads = decodeDbmPayloads<DdDbmMetadataPayload>(body)
+        if (!reserveDbmQuota(quotaService, organizationId, payloads.size, bytes)) return
+        val count = DbmIngestionService.enqueueMetadataPayloads(organizationId, payloads)
 
         logger.debug { "Enqueued $count DBM metadata for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
@@ -166,9 +169,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmHealth(
         val bytes = DecompressionService.decompress(rawBytes, call.request.headers["Content-Encoding"])
         val body = bytes.decodeToString()
 
-        val payload = json.decodeFromString<DdDbmHealthPayload>(body)
-        if (!reserveDbmQuota(quotaService, organizationId, 1, bytes)) return
-        val count = DbmIngestionService.enqueueHealth(organizationId, payload)
+        val payloads = decodeDbmPayloads<DdDbmHealthPayload>(body)
+        if (!reserveDbmQuota(quotaService, organizationId, payloads.size, bytes)) return
+        val count = DbmIngestionService.enqueueHealthPayloads(organizationId, payloads)
 
         logger.debug { "Enqueued $count DBM health for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
@@ -192,4 +195,19 @@ private suspend fun io.ktor.server.routing.RoutingContext.reserveDbmQuota(
         eventType = "dd_dbm",
         requestedBytes = bytes.size.toLong(),
     )
+}
+
+private inline fun <reified T> decodeDbmPayloads(body: String): List<T> {
+    return when (val root = json.parseToJsonElement(body)) {
+        is JsonArray -> root.mapNotNull { element ->
+            val objectElement = element as? JsonObject
+            if (objectElement?.isEmpty() == true) {
+                null
+            } else {
+                json.decodeFromJsonElement<T>(element)
+            }
+        }
+        is JsonObject -> listOf(json.decodeFromJsonElement(root))
+        else -> throw IllegalArgumentException("DBM payload must be a JSON object or array")
+    }
 }

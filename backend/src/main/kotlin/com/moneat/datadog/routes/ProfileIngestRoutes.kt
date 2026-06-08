@@ -23,10 +23,13 @@ import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DdProfileEvent
 import com.moneat.datadog.services.DatadogPprofFlamegraphService
 import com.moneat.datadog.services.ProfileIngestionService
+import com.moneat.utils.suspendRunCatching
+import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.PartData
 import io.ktor.http.content.forEachPart
 import io.ktor.server.application.call
+import io.ktor.server.request.contentType
 import io.ktor.server.request.receiveMultipart
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -51,103 +54,128 @@ internal data class ProfileUploadFilePart(
 fun Route.profileIngestRoutes(
     quotaService: BillingQuotaService = BillingQuotaService(),
 ) {
+    route("/api/v2") {
+        // POST /api/v2/profile - current Datadog Agent profiling upload endpoint
+        post("/profile") { handleProfileUpload(quotaService) }
+    }
+
+    route("/dd/api/v2") {
+        post("/profile") { handleProfileUpload(quotaService) }
+    }
+
     route("/dd/profiling/v1") {
         // POST /dd/profiling/v1/input - multipart pprof upload
-        post("/input") {
-            val organizationId = DatadogAuthMiddleware.authenticate(call)
-                ?: return@post
-
-            var event: DdProfileEvent? = null
-            val fileParts = mutableListOf<ProfileUploadFilePart>()
-
-            val multipart = call.receiveMultipart()
-            multipart.forEachPart { part ->
-                val partName = part.name
-                when {
-                    // event can arrive as FormItem or FileItem (when agent sets Content-Type: application/json)
-                    partName == "event" && part is PartData.FormItem -> {
-                        runCatching {
-                            event = json.decodeFromString<DdProfileEvent>(part.value)
-                        }.onFailure { e ->
-                            logger.warn { "Failed to parse profiling event JSON: ${e.message}" }
-                        }
-                    }
-                    partName == "event" && part is PartData.FileItem -> {
-                        runCatching {
-                            val bytes = part.provider().toByteArray()
-                            event = json.decodeFromString<DdProfileEvent>(bytes.decodeToString())
-                        }.onFailure { e ->
-                            logger.warn { "Failed to parse profiling event JSON (file part): ${e.message}" }
-                        }
-                    }
-                    part is PartData.FileItem && partName != "event" -> {
-                        val rawBytes = part.provider().toByteArray()
-                        val bytes = runCatching {
-                            DecompressionService.decompress(
-                                rawBytes,
-                                part.headers["Content-Encoding"]
-                            )
-                        }.getOrElse { e ->
-                            logger.warn { "Failed to decompress profile part: ${e.message}" }
-                            rawBytes
-                        }
-                        val filename = part.originalFileName ?: partName ?: ""
-                        fileParts += ProfileUploadFilePart(
-                            partName = partName,
-                            fileName = filename,
-                            data = bytes,
-                        )
-                    }
-                }
-                part.release()
-            }
-
-            // Filter to parseable profile files (pprof or JFR)
-            val profileParts = fileParts.filter { part ->
-                DatadogPprofFlamegraphService.isSupportedPprof(part.data) ||
-                    DatadogPprofFlamegraphService.isLikelyJfrPayload(part.data) ||
-                    isLikelyPprofName(part.fileName) ||
-                    isLikelyPprofName(part.partName.orEmpty()) ||
-                    isLikelyJfrName(part.fileName) ||
-                    isLikelyJfrName(part.partName.orEmpty())
-            }.ifEmpty { fileParts }
-
-            val selectedProfile = selectProfilePart(profileParts)
-            if (selectedProfile == null) {
-                logger.warn {
-                    "Profile upload rejected for org $organizationId: no parseable profile data (pprof/JFR) " +
-                        "(event=${event != null}, files=${fileParts.size}, " +
-                        "file_names=${fileParts.map { it.fileName }})"
-                }
-                call.respond(
-                    HttpStatusCode.BadRequest,
-                    mapOf("error" to "Missing profile data (pprof/JFR)")
-                )
-                return@post
-            }
-
-            val totalBytes = profileParts.sumOf { it.data.size }.toLong()
-            if (!reserveDatadogQuota(call, quotaService, organizationId, 1, "dd_profile", totalBytes)) {
-                return@post
-            }
-
-            // If event is missing synthesize a minimal one so ingestion still works
-            val resolvedEvent = event ?: DdProfileEvent()
-            val profileType = inferProfileType(selectedProfile)
-
-            val profileId = ProfileIngestionService.ingestProfile(
-                organizationId = organizationId,
-                event = resolvedEvent,
-                fileParts = profileParts.map { it.fileName to it.data },
-                profileType = profileType,
-            )
-
-            call.respond(
-                HttpStatusCode.OK,
-                mapOf("profile_id" to profileId)
-            )
-        }
+        post("/input") { handleProfileUpload(quotaService) }
     }
+
+    route("/profiling/v1") {
+        post("/input") { handleProfileUpload(quotaService) }
+    }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleProfileUpload(
+    quotaService: BillingQuotaService,
+) {
+    val organizationId = DatadogAuthMiddleware.authenticate(call)
+        ?: return
+
+    if (call.request.contentType().withoutParameters() != ContentType.MultiPart.FormData) {
+        call.respond(
+            HttpStatusCode.BadRequest,
+            mapOf("error" to "Multipart profile payload required")
+        )
+        return
+    }
+
+    var event: DdProfileEvent? = null
+    val fileParts = mutableListOf<ProfileUploadFilePart>()
+
+    val multipart = call.receiveMultipart()
+    multipart.forEachPart { part ->
+        val partName = part.name
+        when {
+            // event can arrive as FormItem or FileItem (when agent sets Content-Type: application/json)
+            partName == "event" && part is PartData.FormItem -> {
+                runCatching {
+                    event = json.decodeFromString<DdProfileEvent>(part.value)
+                }.onFailure { e ->
+                    logger.warn { "Failed to parse profiling event JSON: ${e.message}" }
+                }
+            }
+            partName == "event" && part is PartData.FileItem -> {
+                suspendRunCatching {
+                    val bytes = part.provider().toByteArray()
+                    event = json.decodeFromString<DdProfileEvent>(bytes.decodeToString())
+                }.onFailure { e ->
+                    logger.warn { "Failed to parse profiling event JSON (file part): ${e.message}" }
+                }
+            }
+            part is PartData.FileItem && partName != "event" -> {
+                val rawBytes = part.provider().toByteArray()
+                val bytes = runCatching {
+                    DecompressionService.decompress(
+                        rawBytes,
+                        part.headers["Content-Encoding"]
+                    )
+                }.getOrElse { e ->
+                    logger.warn { "Failed to decompress profile part: ${e.message}" }
+                    rawBytes
+                }
+                val filename = part.originalFileName ?: partName ?: ""
+                fileParts += ProfileUploadFilePart(
+                    partName = partName,
+                    fileName = filename,
+                    data = bytes,
+                )
+            }
+        }
+        part.release()
+    }
+
+    // Filter to parseable profile files (pprof or JFR)
+    val profileParts = fileParts.filter { part ->
+        DatadogPprofFlamegraphService.isSupportedPprof(part.data) ||
+            DatadogPprofFlamegraphService.isLikelyJfrPayload(part.data) ||
+            isLikelyPprofName(part.fileName) ||
+            isLikelyPprofName(part.partName.orEmpty()) ||
+            isLikelyJfrName(part.fileName) ||
+            isLikelyJfrName(part.partName.orEmpty())
+    }.ifEmpty { fileParts }
+
+    val selectedProfile = selectProfilePart(profileParts)
+    if (selectedProfile == null) {
+        logger.warn {
+            "Profile upload rejected for org $organizationId: no parseable profile data (pprof/JFR) " +
+                "(event=${event != null}, files=${fileParts.size}, " +
+                "file_names=${fileParts.map { it.fileName }})"
+        }
+        call.respond(
+            HttpStatusCode.BadRequest,
+            mapOf("error" to "Missing profile data (pprof/JFR)")
+        )
+        return
+    }
+
+    val totalBytes = profileParts.sumOf { it.data.size }.toLong()
+    if (!reserveDatadogQuota(call, quotaService, organizationId, 1, "dd_profile", totalBytes)) {
+        return
+    }
+
+    // If event is missing synthesize a minimal one so ingestion still works
+    val resolvedEvent = event ?: DdProfileEvent()
+    val profileType = inferProfileType(selectedProfile)
+
+    val profileId = ProfileIngestionService.ingestProfile(
+        organizationId = organizationId,
+        event = resolvedEvent,
+        fileParts = profileParts.map { it.fileName to it.data },
+        profileType = profileType,
+    )
+
+    call.respond(
+        HttpStatusCode.OK,
+        mapOf("profile_id" to profileId)
+    )
 }
 
 internal fun selectPprofPart(

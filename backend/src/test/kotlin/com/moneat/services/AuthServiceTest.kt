@@ -15,6 +15,8 @@ import com.moneat.shared.models.Users
 import com.moneat.shared.repositories.MembershipRepositoryImpl
 import com.moneat.shared.repositories.OrganizationRepositoryImpl
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.workflows.services.WorkflowService
+import io.mockk.mockk
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -34,7 +36,8 @@ class AuthServiceTest {
     private val authService = AuthService(
         UserRepositoryImpl(),
         MembershipRepositoryImpl(),
-        OrganizationRepositoryImpl()
+        OrganizationRepositoryImpl(),
+        workflowService = mockk<WorkflowService>(relaxed = true),
     )
 
     companion object {

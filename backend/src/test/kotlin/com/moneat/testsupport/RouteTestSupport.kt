@@ -28,6 +28,9 @@ import io.ktor.server.auth.Authentication
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.jwt.jwt
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.plugins.ratelimit.RateLimit
+import io.ktor.server.plugins.ratelimit.RateLimitName
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Shared helpers for route tests to reduce duplication of JWT auth setup.
@@ -65,6 +68,19 @@ object RouteTestSupport {
         }
     }
 
+    fun Application.installApiRouteRateLimits(testRequestKey: String = "test-user") {
+        install(RateLimit) {
+            register(RateLimitName("api")) {
+                requestKey { testRequestKey }
+                rateLimiter(limit = TEST_RATE_LIMIT, refillPeriod = TEST_RATE_LIMIT_REFILL)
+            }
+            register(RateLimitName("contact")) {
+                requestKey { testRequestKey }
+                rateLimiter(limit = TEST_RATE_LIMIT, refillPeriod = TEST_RATE_LIMIT_REFILL)
+            }
+        }
+    }
+
     /**
      * Creates a JWT token using the shared test secret.
      */
@@ -98,4 +114,7 @@ object RouteTestSupport {
     fun HttpRequestBuilder.withAuth(token: String) {
         header(HttpHeaders.Authorization, "Bearer $token")
     }
+
+    private const val TEST_RATE_LIMIT = 1000
+    private val TEST_RATE_LIMIT_REFILL = 1.seconds
 }

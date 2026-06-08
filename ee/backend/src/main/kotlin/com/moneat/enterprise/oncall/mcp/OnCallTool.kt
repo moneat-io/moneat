@@ -9,7 +9,7 @@ import com.moneat.mcp.protocol.InputSchema
 import com.moneat.mcp.protocol.McpTool
 import com.moneat.mcp.protocol.ToolCallResult
 import com.moneat.enterprise.oncall.services.EscalationEngineHolder
-import com.moneat.enterprise.oncall.services.IncidentManagementService
+import com.moneat.enterprise.oncall.services.OnCallAlertService
 import com.moneat.enterprise.oncall.services.OnCallScheduleService
 import com.moneat.mcp.tools.errorResult
 import com.moneat.mcp.tools.jsonResult
@@ -24,9 +24,9 @@ private val scheduleService = OnCallScheduleService()
 private const val DEFAULT_INCIDENT_LIMIT = 50
 private const val MAX_INCIDENT_LIMIT = 200
 
-private fun getIncidentService(): IncidentManagementService? {
+private fun getIncidentService(): OnCallAlertService? {
     val engine = EscalationEngineHolder.instance ?: return null
-    return IncidentManagementService(engine)
+    return OnCallAlertService(engine)
 }
 
 class ListIncidentsTool : McpTool {
@@ -43,7 +43,7 @@ class ListIncidentsTool : McpTool {
                 ),
                 "priority" to schemaEnum(
                     "Filter by priority",
-                    listOf("P1", "P2", "P3", "P4", "P5")
+                    listOf("P0", "P1", "P2", "P3", "P4", "P5")
                 ),
                 "limit" to schemaNumber(
                     "Max results (default 50)"
@@ -63,10 +63,10 @@ class ListIncidentsTool : McpTool {
         val limit = (args["limit"]?.jsonPrimitive?.intOrNull ?: DEFAULT_INCIDENT_LIMIT)
             .coerceIn(1, MAX_INCIDENT_LIMIT)
 
-        val incidents = svc.listIncidents(
+        val incidents = svc.listAlerts(
             organizationId = context.organizationId,
             status = status,
-            priorityLevel = priority,
+            priority = priority,
             limit = limit,
             currentUserId = context.userId
         )
@@ -93,7 +93,7 @@ class GetIncidentTool : McpTool {
             ?: return errorResult("On-call module not initialized")
         val incidentId = args["incident_id"]?.jsonPrimitive?.intOrNull
             ?: return errorResult("incident_id is required")
-        val incident = svc.getIncident(
+        val incident = svc.getAlert(
             incidentId,
             context.userId
         ) ?: return errorResult("Incident not found: $incidentId")

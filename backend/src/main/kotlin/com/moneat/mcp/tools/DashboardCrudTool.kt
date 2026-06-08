@@ -22,9 +22,9 @@ import com.moneat.dashboards.models.UpdateDashboardRequest
 import com.moneat.dashboards.repositories.DashboardFolderRepositoryImpl
 import com.moneat.dashboards.repositories.DashboardRepositoryImpl
 import com.moneat.dashboards.repositories.DashboardWidgetRepositoryImpl
-import com.moneat.events.repositories.ProjectRepositoryImpl
 import com.moneat.dashboards.services.CustomDashboardService
 import com.moneat.dashboards.services.DashboardAlertService
+import com.moneat.events.repositories.ProjectRepositoryImpl
 import com.moneat.mcp.models.McpContext
 import com.moneat.mcp.protocol.InputSchema
 import com.moneat.mcp.protocol.McpTool
@@ -40,11 +40,40 @@ private val dashCrudService = CustomDashboardService(
     ProjectRepositoryImpl { col, _, _ -> col },
 )
 private val dashAlertService = DashboardAlertService()
+private val dashboardAlertConditions = listOf(
+    "gt", "lt", "eq", "gte", "lte", ">", "<", "==", ">=", "<="
+)
+private val dashboardAlertPriorities = listOf(
+    "P0", "P1", "P2", "P3", "P4", "P5", "CRITICAL", "HIGH", "MEDIUM", "LOW"
+)
+
+private fun dashboardAlertCondition(input: String): String = when (input) {
+    "gt" -> ">"
+    "lt" -> "<"
+    "eq" -> "=="
+    "gte" -> ">="
+    "lte" -> "<="
+    ">", "<", "==", ">=", "<=" -> input
+    else -> throw IllegalArgumentException("Unknown dashboard alert condition: $input")
+}
+
+private fun dashboardAlertPriority(input: String?): String? {
+    if (input == null) return null
+    return when (input.uppercase()) {
+        "P0", "CRITICAL" -> "P0"
+        "P1", "HIGH" -> "P1"
+        "P2", "MEDIUM" -> "P2"
+        "P3", "LOW" -> "P3"
+        "P4" -> "P4"
+        "P5" -> "P5"
+        else -> throw IllegalArgumentException("Unknown dashboard alert priority: $input")
+    }
+}
 
 class UpdateDashboardTool : McpTool {
     override val name = "update_dashboard"
     override val description =
-        "Update a dashboard (title, description, widgets)"
+        "Update a dashboard's title and description"
     override val readOnly = false
     override val inputSchema = InputSchema(
         properties = JsonObject(
@@ -128,15 +157,15 @@ class CreateDashboardAlertTool : McpTool {
                 "widget_id" to schemaNumber("Widget ID"),
                 "name" to schemaString("Alert name"),
                 "condition" to schemaEnum(
-                    "Condition", listOf("gt", "lt", "eq")
+                    "Condition", dashboardAlertConditions
                 ),
                 "threshold" to schemaNumber("Threshold value"),
-                "duration_seconds" to schemaNumber(
+                "duration_seconds" to schemaInteger(
                     "Duration before firing"
                 ),
-                "incident_severity" to schemaEnum(
-                    "Severity",
-                    listOf("P1", "P2", "P3", "P4", "P5")
+                "alert_priority" to schemaEnum(
+                    "Alert priority",
+                    dashboardAlertPriorities
                 )
             )
         ),
@@ -175,14 +204,26 @@ class CreateDashboardAlertTool : McpTool {
         } else {
             0
         }
+        val normalizedCondition = try {
+            dashboardAlertCondition(condition)
+        } catch (e: IllegalArgumentException) {
+            return errorResult(e.message ?: "Invalid dashboard alert condition")
+        }
+        val normalizedPriority = try {
+            dashboardAlertPriority(
+                args["alert_priority"]?.jsonPrimitive?.content
+                    ?: args["incident_severity"]?.jsonPrimitive?.content
+            )
+        } catch (e: IllegalArgumentException) {
+            return errorResult(e.message ?: "Invalid dashboard alert priority")
+        }
         val request = CreateDashboardAlertRequest(
             widgetId = widgetId,
             name = name,
-            condition = condition,
+            condition = normalizedCondition,
             threshold = threshold,
             durationSeconds = durationSeconds,
-            incidentSeverity = args["incident_severity"]
-                ?.jsonPrimitive?.content
+            alertPriority = normalizedPriority
         )
         val alert = dashAlertService.createAlert(
             dashboardId = dashId,
@@ -205,9 +246,16 @@ class UpdateDashboardAlertTool : McpTool {
                 "alert_id" to schemaNumber("Alert ID"),
                 "name" to schemaString("Alert name"),
                 "condition" to schemaEnum(
-                    "Condition", listOf("gt", "lt", "eq")
+                    "Condition", dashboardAlertConditions
                 ),
                 "threshold" to schemaNumber("Threshold value"),
+                "duration_seconds" to schemaInteger(
+                    "Duration before firing"
+                ),
+                "alert_priority" to schemaEnum(
+                    "Alert priority",
+                    dashboardAlertPriorities
+                ),
                 "enabled" to schemaBoolean("Enable/disable")
             )
         ),
@@ -234,6 +282,27 @@ class UpdateDashboardAlertTool : McpTool {
         } else {
             null
         }
+        val durationSeconds = if (args.containsKey("duration_seconds")) {
+            args["duration_seconds"]?.jsonPrimitive?.intOrNull
+                ?: return errorResult(
+                    "duration_seconds must be a valid integer"
+                )
+        } else {
+            null
+        }
+        val normalizedCondition = try {
+            condition?.let(::dashboardAlertCondition)
+        } catch (e: IllegalArgumentException) {
+            return errorResult(e.message ?: "Invalid dashboard alert condition")
+        }
+        val alertPriority = try {
+            dashboardAlertPriority(
+                args["alert_priority"]?.jsonPrimitive?.content
+                    ?: args["incident_severity"]?.jsonPrimitive?.content
+            )
+        } catch (e: IllegalArgumentException) {
+            return errorResult(e.message ?: "Invalid dashboard alert priority")
+        }
         val enabled = if (args.containsKey("enabled")) {
             args["enabled"]?.jsonPrimitive?.content
                 ?.toBooleanStrictOrNull()
@@ -243,8 +312,13 @@ class UpdateDashboardAlertTool : McpTool {
         } else {
             null
         }
-        if (name == null && condition == null &&
-            threshold == null && enabled == null
+        if (
+            name == null &&
+            condition == null &&
+            threshold == null &&
+            durationSeconds == null &&
+            alertPriority == null &&
+            enabled == null
         ) {
             return errorResult(
                 "At least one field must be provided to update"
@@ -252,8 +326,10 @@ class UpdateDashboardAlertTool : McpTool {
         }
         val request = UpdateDashboardAlertRequest(
             name = name,
-            condition = condition,
+            condition = normalizedCondition,
             threshold = threshold,
+            durationSeconds = durationSeconds,
+            alertPriority = alertPriority,
             enabled = enabled
         )
         val alert = dashAlertService.updateAlert(

@@ -119,26 +119,26 @@ describe('pricing-display', () => {
     })
   })
 
-  describe('Project limit formatting', () => {
-    it('formats single project correctly', () => {
+  describe('Service limit formatting', () => {
+    it('formats single service correctly', () => {
       const tier = createBaseTier({ maxProjects: 1 })
       const model = buildPricingCardModel(tier, 'monthly')
 
-      expect(model.features).toContain('1 project')
+      expect(model.features).toContain('1 service')
     })
 
-    it('formats multiple projects correctly', () => {
+    it('formats multiple services correctly', () => {
       const tier = createBaseTier({ maxProjects: 10 })
       const model = buildPricingCardModel(tier, 'monthly')
 
-      expect(model.features).toContain('10 projects')
+      expect(model.features).toContain('10 services')
     })
 
-    it('formats unlimited projects when null', () => {
+    it('formats unlimited services when null', () => {
       const tier = createBaseTier({ maxProjects: null })
       const model = buildPricingCardModel(tier, 'monthly')
 
-      expect(model.features).toContain('Unlimited projects')
+      expect(model.features).toContain('Unlimited services')
     })
   })
 
@@ -215,7 +215,7 @@ describe('pricing-display', () => {
       // Included limits come first, then platform features
       expect(model.features[0]).toMatch(/GB ingestion/)
       expect(model.features[1]).toMatch(/day retention/)
-      expect(model.features[2]).toMatch(/project/)
+      expect(model.features[2]).toMatch(/service/)
       expect(model.features[3]).toMatch(/monitor/)
     })
   })

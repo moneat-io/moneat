@@ -81,6 +81,7 @@ interface ApmSpanUsageBreakdownProps {
   readonly error?: unknown
   readonly expanded?: boolean
   readonly onExpandedChange?: (expanded: boolean) => void
+  readonly retentionDays: number
   readonly timezone: string
 }
 
@@ -90,6 +91,7 @@ export function ApmSpanUsageBreakdown({
   error,
   expanded,
   onExpandedChange,
+  retentionDays,
   timezone,
 }: ApmSpanUsageBreakdownProps) {
   const [internalExpanded, setInternalExpanded] = useState(false)
@@ -100,6 +102,9 @@ export function ApmSpanUsageBreakdown({
   return (
     <div className="mt-2 space-y-3">
       <div className="flex flex-wrap items-center justify-end gap-2">
+        <span className="text-xs text-muted-foreground">
+          Sources use retained {retentionDays}d traces.
+        </span>
         <Button
           type="button"
           variant="ghost"
@@ -204,7 +209,7 @@ export function ApmSpanUsageBreakdown({
                       <div className="flex items-center justify-end gap-2">
                         <div className="h-1.5 w-16 rounded-full bg-secondary overflow-hidden">
                           <div
-                            className="h-full rounded-full bg-purple-500"
+                            className="h-full rounded-full bg-primary"
                             style={{width: `${share}%`}}
                           />
                         </div>
@@ -231,7 +236,7 @@ export function ApmSpanUsageBreakdown({
           id="apm-span-source-breakdown"
           className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground"
         >
-          No APM spans stored for this billing period.
+          No APM spans stored for the retained {retentionDays}-day window.
         </div>
       ))}
     </div>

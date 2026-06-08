@@ -30,18 +30,25 @@ import com.moneat.shared.models.Users
 import com.moneat.shared.repositories.MembershipRepositoryImpl
 import com.moneat.shared.repositories.OrganizationRepositoryImpl
 import com.moneat.testsupport.TestDatabaseHelper
-import io.ktor.server.config.*
-import org.jetbrains.exposed.v1.core.*
+import com.moneat.workflows.services.WorkflowService
+import io.ktor.server.config.ApplicationConfig
+import io.mockk.mockk
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import kotlin.test.*
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class AuthServiceLegalConsentTest {
     private val authService = AuthService(
         UserRepositoryImpl(),
         MembershipRepositoryImpl(),
-        OrganizationRepositoryImpl()
+        OrganizationRepositoryImpl(),
+        workflowService = mockk<WorkflowService>(relaxed = true),
     )
     private val appConfig = ApplicationConfig("application.conf")
     private val termsVersion = appConfig.property("legal.termsVersion").getString()

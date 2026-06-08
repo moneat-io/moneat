@@ -25,24 +25,9 @@ export const docsSidebar: SidebarCategory[] = [
       'releases',
       'ai-observability',
       'custom-dashboards',
+      'feature-flags',
       'user-feedback',
       'infrastructure-monitoring',
-      {
-        label: 'Datadog Agent',
-        link: 'datadog-agent',
-        items: [
-          'datadog-agent/agent-setup',
-          'datadog-agent/continuous-profiling',
-          'datadog-agent/log-collection',
-          'datadog-agent/dashboard-import',
-          'datadog-agent/kubernetes',
-          'datadog-agent/database-monitoring',
-          'datadog-agent/debugger',
-          'datadog-agent/network-devices',
-          'datadog-agent/sbom',
-          'datadog-agent/synthetics',
-        ],
-      },
       {
         label: 'Product Analytics',
         link: 'product-analytics',
@@ -61,12 +46,34 @@ export const docsSidebar: SidebarCategory[] = [
   {
     label: 'Reliability',
     collapsed: false,
-    items: ['on-call', 'uptime-monitoring', 'status-pages'],
+    items: ['on-call', 'workflows', 'uptime-monitoring', 'status-pages'],
   },
   {
     label: 'Configuration',
     collapsed: false,
     items: ['sdk-setup', 'integrations', 'sso-authentication', 'api-tokens'],
+  },
+  {
+    label: 'Source Setup',
+    collapsed: false,
+    items: [
+      {
+        label: 'Datadog Agent Compatibility',
+        link: 'datadog-agent',
+        items: [
+          'datadog-agent/agent-setup',
+          'datadog-agent/continuous-profiling',
+          'datadog-agent/log-collection',
+          'datadog-agent/dashboard-import',
+          'datadog-agent/kubernetes',
+          'datadog-agent/database-monitoring',
+          'datadog-agent/debugger',
+          'datadog-agent/network-devices',
+          'datadog-agent/sbom',
+          'datadog-agent/synthetics',
+        ],
+      },
+    ],
   },
   {
     label: 'MCP Server',

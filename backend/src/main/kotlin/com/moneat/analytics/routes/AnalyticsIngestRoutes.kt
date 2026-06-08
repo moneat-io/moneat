@@ -31,6 +31,7 @@ import com.moneat.config.RedisConfig
 import com.moneat.events.services.EventService
 import com.moneat.shared.models.ProjectKeys
 import com.moneat.shared.models.Projects
+import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
@@ -75,6 +76,7 @@ fun Route.analyticsIngestRoutes(
     eventService: EventService = GlobalContext.get().get(),
     quotaService: BillingQuotaService = GlobalContext.get().get(),
     pricingTierService: PricingTierService = GlobalContext.get().get(),
+    projectIdResolver: ProjectIdResolver = ProjectIdResolver(),
     enqueueEvent: (String) -> Unit = { message ->
         RedisConfig.sync().lpush(AnalyticsIngestionWorker.QUEUE_KEY, message)
     },
@@ -116,7 +118,7 @@ fun Route.analyticsIngestRoutes(
     // Project-ID route for API clients
     route("/api/{projectId}/analytics") {
         post("/event") {
-            val projectId = call.parameters["projectId"]?.toLongOrNull()
+            val projectId = call.parameters["projectId"]?.let(projectIdResolver::resolve)
             if (projectId == null) {
                 call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                 return@post

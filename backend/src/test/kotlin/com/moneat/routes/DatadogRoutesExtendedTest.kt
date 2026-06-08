@@ -16,15 +16,22 @@
 
 package com.moneat.routes
 
+import com.google.protobuf.CodedOutputStream
 import com.moneat.billing.models.BillingUsageResponse
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.QuotaReservationResult
 import com.moneat.config.ClickHouseClient
+import com.moneat.datadog.auth.DatadogAuthContext
 import com.moneat.datadog.auth.DatadogAuthMiddleware
+import com.moneat.datadog.decompression.ProcessAgentPayloadDecoder
+import com.moneat.datadog.models.DatadogConnectionsPayload
+import com.moneat.datadog.models.DatadogProcessPayload
 import com.moneat.datadog.models.DdApiKeys
 import com.moneat.datadog.models.DdApmErrorsResponse
 import com.moneat.datadog.models.DdResourceStatsResponse
+import com.moneat.datadog.models.DdServiceLatencyResponse
 import com.moneat.datadog.models.DdServiceMapResponse
+import com.moneat.datadog.models.DdStatsPayload
 import com.moneat.datadog.models.DdTraceListResponse
 import com.moneat.datadog.routes.datadogDogStatsDRoutes
 import com.moneat.datadog.routes.datadogEventRoutes
@@ -39,6 +46,7 @@ import com.moneat.datadog.routes.dbmIngestRoutes
 import com.moneat.datadog.routes.debuggerIngestRoutes
 import com.moneat.datadog.routes.miscIngestRoutes
 import com.moneat.datadog.routes.orchestratorIngestRoutes
+import com.moneat.datadog.routes.profileIngestRoutes
 import com.moneat.datadog.routes.telemetryProxyRoutes
 import com.moneat.datadog.routes.traceDashboardRoutes
 import com.moneat.datadog.routes.traceIngestRoutes
@@ -50,9 +58,15 @@ import com.moneat.datadog.services.DatadogMetricService
 import com.moneat.datadog.services.DatadogService
 import com.moneat.datadog.services.DbmIngestionService
 import com.moneat.datadog.services.DdHostInfo
+import com.moneat.datadog.services.DdResourceStatsQuery
+import com.moneat.datadog.services.DdTraceListQuery
 import com.moneat.datadog.services.DebuggerIngestionService
 import com.moneat.datadog.services.MiscIngestionService
 import com.moneat.datadog.services.OrchestratorIngestionService
+import com.moneat.datadog.services.ProfileIngestionService
+import com.moneat.datadog.services.QueuedConnectionEntry
+import com.moneat.datadog.services.QueuedInfraBatch
+import com.moneat.datadog.services.QueuedProcessEntry
 import com.moneat.datadog.services.QueuedServiceCheckBatch
 import com.moneat.datadog.services.QueuedServiceCheckEntry
 import com.moneat.datadog.services.TelemetryProxyService
@@ -64,14 +78,23 @@ import com.moneat.testsupport.RouteTestSupport
 import com.moneat.testsupport.RouteTestSupport.installJwtAuth
 import com.moneat.testsupport.RouteTestSupport.withAuth
 import com.moneat.testsupport.TestDatabaseHelper
+import io.ktor.client.request.forms.FormBuilder
+import io.ktor.client.request.forms.MultiPartFormDataContent
+import io.ktor.client.request.forms.formData
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
+import io.ktor.client.request.head
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.put
+import io.ktor.client.request.request
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsBytes
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.Headers
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
@@ -82,25 +105,37 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.Runs
+import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.mockkObject
-import io.mockk.unmockkObject
+import io.mockk.unmockkAll
 import io.mockk.verify
+import java.io.ByteArrayOutputStream
+import org.msgpack.core.MessageBufferPacker
+import org.msgpack.core.MessagePack
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import kotlin.test.AfterTest
+import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.BeforeAll
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class DatadogRoutesExtendedTest {
+
+    private data class TraceAliasRequest(
+        val method: HttpMethod,
+        val path: String,
+        val body: String,
+    )
 
     companion object {
         private const val TEST_ORG_ID = 1
@@ -111,7 +146,38 @@ class DatadogRoutesExtendedTest {
         private const val DD_LOGS_PATH = "/dd/api/v2/logs"
         private const val EMPTY_ROWS_JSON = """{"rows":[]}"""
         private const val AGENT_API_KEYS_PATH = "/v1/agent-api-keys"
+        private const val PROCESS_AGENT_HEADER_SIZE = 16
+        private const val PROCESS_AGENT_MESSAGE_V3: Byte = 3
+        private const val PROCESS_AGENT_PROTOBUF_ENCODING: Byte = 0
         private var db: Database? = null
+
+        @JvmStatic
+        @BeforeAll
+        fun installObjectMocks() {
+            mockkObject(
+                DatadogAuthMiddleware,
+                DatadogHostService,
+                DatadogMetricService,
+                DatadogEventService,
+                DatadogLogService,
+                DatadogInfraService,
+                MiscIngestionService,
+                DbmIngestionService,
+                OrchestratorIngestionService,
+                DebuggerIngestionService,
+                TelemetryProxyService,
+                DatadogService,
+                TraceIngestionService,
+                ProfileIngestionService,
+                ClickHouseClient,
+            )
+        }
+
+        @JvmStatic
+        @AfterAll
+        fun removeObjectMocks() {
+            unmockkAll()
+        }
     }
 
     private val allowingQuotaService = mockk<BillingQuotaService> {
@@ -136,31 +202,37 @@ class DatadogRoutesExtendedTest {
         )
         DatadogAuthMiddleware.clearCache()
 
-        mockkObject(DatadogAuthMiddleware)
-        mockkObject(DatadogHostService)
-        mockkObject(DatadogMetricService)
-        mockkObject(DatadogEventService)
-        mockkObject(DatadogLogService)
-        mockkObject(DatadogInfraService)
-        mockkObject(MiscIngestionService)
-        mockkObject(DbmIngestionService)
-        mockkObject(OrchestratorIngestionService)
-        mockkObject(DebuggerIngestionService)
-        mockkObject(TelemetryProxyService)
-        mockkObject(DatadogService)
-        mockkObject(TraceIngestionService)
-        mockkObject(ClickHouseClient)
+        clearMocks(
+            DatadogAuthMiddleware,
+            DatadogHostService,
+            DatadogMetricService,
+            DatadogEventService,
+            DatadogLogService,
+            DatadogInfraService,
+            MiscIngestionService,
+            DbmIngestionService,
+            OrchestratorIngestionService,
+            DebuggerIngestionService,
+            TelemetryProxyService,
+            DatadogService,
+            TraceIngestionService,
+            ProfileIngestionService,
+            ClickHouseClient,
+        )
 
         coEvery {
             DatadogAuthMiddleware.authenticate(any())
         } returns TEST_ORG_ID
+        coEvery {
+            DatadogAuthMiddleware.authenticateContext(any())
+        } returns DatadogAuthContext(TEST_ORG_ID, null)
 
         // Default stubs for ingest services
         every { DatadogHostService.upsertFromMetadata(any(), any()) } just Runs
         every { DatadogHostService.upsertFromIntake(any(), any()) } just Runs
         every { DatadogHostService.touchHostLastSeen(any(), any()) } just Runs
-        coEvery { DatadogMetricService.enqueueMetrics(any(), any()) } returns 1
-        every { DatadogMetricService.mapSketches(any(), any()) } returns
+        coEvery { DatadogMetricService.enqueueMetrics(any(), any(), any()) } returns 1
+        every { DatadogMetricService.mapSketches(any(), any(), any()) } returns
             com.moneat.datadog.services.QueuedSketchBatch(1L, emptyList())
         coEvery { DatadogMetricService.insertSketchBatch(any()) } just Runs
         every { DatadogEventService.mapServiceChecks(any(), any()) } returns
@@ -176,33 +248,22 @@ class DatadogRoutesExtendedTest {
         every { MiscIngestionService.enqueueContainerImage(any(), any()) } just Runs
         every { MiscIngestionService.enqueueSbom(any(), any()) } returns 1
         every { DbmIngestionService.enqueueQueries(any(), any()) } returns 1
+        every { DbmIngestionService.enqueueQueryPayloads(any(), any()) } returns 1
         every { DbmIngestionService.enqueueMetrics(any(), any()) } returns 1
+        every { DbmIngestionService.enqueueMetricPayloads(any(), any()) } returns 1
         every { DbmIngestionService.enqueueActivity(any(), any()) } returns 1
+        every { DbmIngestionService.enqueueActivityPayloads(any(), any()) } returns 1
         every { DbmIngestionService.enqueueMetadata(any(), any()) } returns 1
+        every { DbmIngestionService.enqueueMetadataPayloads(any(), any()) } returns 1
         every { DbmIngestionService.enqueueHealth(any(), any()) } returns 1
+        every { DbmIngestionService.enqueueHealthPayloads(any(), any()) } returns 1
         every { OrchestratorIngestionService.enqueueResources(any(), any()) } returns 1
         every { OrchestratorIngestionService.enqueueManifests(any(), any()) } returns 1
         every { DebuggerIngestionService.enqueueDebuggerLogs(any(), any()) } returns 1
         every { DebuggerIngestionService.enqueueDiagnostics(any(), any()) } returns 1
         every { TelemetryProxyService.acknowledge(any(), any(), any()) } just Runs
-    }
-
-    @AfterTest
-    fun teardown() {
-        unmockkObject(DatadogAuthMiddleware)
-        unmockkObject(DatadogHostService)
-        unmockkObject(DatadogMetricService)
-        unmockkObject(DatadogEventService)
-        unmockkObject(DatadogLogService)
-        unmockkObject(DatadogInfraService)
-        unmockkObject(MiscIngestionService)
-        unmockkObject(DbmIngestionService)
-        unmockkObject(OrchestratorIngestionService)
-        unmockkObject(DebuggerIngestionService)
-        unmockkObject(TelemetryProxyService)
-        unmockkObject(DatadogService)
-        unmockkObject(TraceIngestionService)
-        unmockkObject(ClickHouseClient)
+        coEvery { TraceIngestionService.insertTraceStats(any(), any()) } just Runs
+        coEvery { ProfileIngestionService.ingestProfile(any(), any(), any(), any()) } returns "profile-test"
     }
 
     private fun Application.installAuth() {
@@ -221,6 +282,7 @@ class DatadogRoutesExtendedTest {
             periodStart = "2026-05-01",
             periodEnd = "2026-05-31",
             retentionDays = 30,
+            apmTraceRetentionDays = 30,
             usedUnits = 0,
             usedErrors = 0,
             errorLimit = 0,
@@ -262,6 +324,124 @@ class DatadogRoutesExtendedTest {
             usage = quotaUsage(),
         )
         return quotaService
+    }
+
+    private fun buildProto(block: CodedOutputStream.() -> Unit): ByteArray {
+        val out = ByteArrayOutputStream()
+        val coded = CodedOutputStream.newInstance(out)
+        coded.block()
+        coded.flush()
+        return out.toByteArray()
+    }
+
+    private fun buildProcessAgentMessage(type: Int, body: ByteArray): ByteArray {
+        val header = ByteArray(PROCESS_AGENT_HEADER_SIZE)
+        header[0] = PROCESS_AGENT_MESSAGE_V3
+        header[1] = PROCESS_AGENT_PROTOBUF_ENCODING
+        header[2] = type.toByte()
+        return header + body
+    }
+
+    private fun buildProcessPayload(): ByteArray {
+        val command = buildProto { writeString(1, "/usr/bin/nginx") }
+        val process = buildProto {
+            writeInt32(2, 1234)
+            writeByteArray(4, command)
+        }
+        return buildProto {
+            writeString(2, TEST_HOST)
+            writeByteArray(3, process)
+        }
+    }
+
+    private fun buildDiscoveryPayload(): ByteArray {
+        val command = buildProto { writeString(1, "/usr/bin/java") }
+        val discovery = buildProto {
+            writeInt32(1, 4321)
+            writeByteArray(4, command)
+        }
+        return buildProto {
+            writeString(1, TEST_HOST)
+            writeByteArray(4, discovery)
+        }
+    }
+
+    private fun buildConnectionsPayload(): ByteArray {
+        val localAddr = buildProto {
+            writeString(2, "10.0.0.5")
+            writeInt32(3, 8080)
+        }
+        val remoteAddr = buildProto {
+            writeString(2, "203.0.113.20")
+            writeInt32(3, 443)
+        }
+        val connection = buildProto {
+            writeInt32(1, 1234)
+            writeByteArray(5, localAddr)
+            writeByteArray(6, remoteAddr)
+            writeEnum(10, 0)
+            writeEnum(11, 0)
+            writeUInt64(16, 5000)
+            writeUInt64(17, 10000)
+            writeEnum(19, 2)
+        }
+        return buildProto {
+            writeString(2, TEST_HOST)
+            writeByteArray(3, connection)
+        }
+    }
+
+    private fun assertProcessAgentCollectorResponse(bytes: ByteArray) {
+        val header = ProcessAgentPayloadDecoder.readHeader(bytes)
+        assertNotNull(header)
+        assertEquals(ProcessAgentPayloadDecoder.TYPE_RES_COLLECTOR, header.type)
+        assertEquals(PROCESS_AGENT_PROTOBUF_ENCODING.toInt(), header.encoding)
+    }
+
+    private fun buildStatsMsgpackPayload(): ByteArray {
+        val packer = MessagePack.newDefaultBufferPacker()
+        packer.packMapHeader(2)
+        packer.packString("AgentHostname")
+        packer.packString(TEST_HOST)
+        packer.packString("Stats")
+        packer.packArrayHeader(1)
+        packClientStatsPayload(packer)
+        packer.close()
+        return packer.toByteArray()
+    }
+
+    private fun packClientStatsPayload(packer: MessageBufferPacker) {
+        packer.packMapHeader(1)
+        packer.packString("Stats")
+        packer.packArrayHeader(1)
+        packer.packMapHeader(3)
+        packer.packString("Start")
+        packer.packLong(1700000000000000000L)
+        packer.packString("Duration")
+        packer.packLong(10000000000L)
+        packer.packString("Stats")
+        packer.packArrayHeader(1)
+        packGroupedStats(packer)
+    }
+
+    private fun packGroupedStats(packer: MessageBufferPacker) {
+        packer.packMapHeader(8)
+        packer.packString("Name")
+        packer.packString("web.request")
+        packer.packString("Service")
+        packer.packString("api")
+        packer.packString("Resource")
+        packer.packString("GET /health")
+        packer.packString("Type")
+        packer.packString("web")
+        packer.packString("HTTPStatusCode")
+        packer.packInt(200)
+        packer.packString("Hits")
+        packer.packLong(1)
+        packer.packString("TopLevelHits")
+        packer.packLong(1)
+        packer.packString("Duration")
+        packer.packLong(50000000L)
     }
 
     private fun seedUserAndOrg(): Pair<Int, Int> {
@@ -755,6 +935,22 @@ class DatadogRoutesExtendedTest {
     }
 
     @Test
+    fun `POST unprefixed api v2 logs returns 200`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            routing { datadogLogRoutes(allowingQuotaService) }
+        }
+        val response = client.post("/api/v2/logs") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.Json)
+            setBody(
+                """[{"message":"test log","hostname":"h1","service":"svc","status":"info"}]"""
+            )
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+    }
+
+    @Test
     fun `POST dd api v2 logs returns 400 for bad payload`() =
         testApplication {
             application {
@@ -859,6 +1055,264 @@ class DatadogRoutesExtendedTest {
     }
 
     @Test
+    fun `POST unprefixed api traces returns 429 when quota is exceeded`() = testApplication {
+        val quotaService = rejectingQuotaService()
+        val body = """[[{"trace_id":1,"span_id":2,"name":"web.request"}]]"""
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing { traceIngestRoutes(quotaService) }
+        }
+
+        val response = client.post("/api/v0.2/traces") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }
+
+        assertEquals(HttpStatusCode.TooManyRequests, response.status)
+    }
+
+    @Test
+    fun `POST unprefixed api traces returns 400 for malformed JSON`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            routing { traceIngestRoutes(allowingQuotaService) }
+        }
+
+        val response = client.post("/api/v0.2/traces") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.Json)
+            setBody("{")
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("Unparseable trace payload"))
+    }
+
+    @Test
+    fun `POST unprefixed api traces returns 400 for invalid JSON shape`() = testApplication {
+        val invalidBodies = listOf("{}", "[{}]")
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing { traceIngestRoutes(allowingQuotaService) }
+        }
+
+        invalidBodies.forEach { body ->
+            val response = client.post("/api/v0.2/traces") {
+                header(DD_API_KEY_HEADER, TEST_API_KEY)
+                contentType(ContentType.Application.Json)
+                setBody(body)
+            }
+
+            assertEquals(HttpStatusCode.BadRequest, response.status, body)
+            assertTrue(response.bodyAsText().contains("Unparseable trace payload"), body)
+        }
+    }
+
+    @Test
+    fun `POST unprefixed api trace stats returns 429 when quota is exceeded`() = testApplication {
+        val quotaService = rejectingQuotaService()
+        val body = """
+            {
+              "Stats": [
+                {
+                  "Start": 1700000000000,
+                  "Duration": 10000000000,
+                  "Stats": [
+                    {
+                      "Name": "web.request",
+                      "Service": "api",
+                      "Resource": "GET /health",
+                      "Type": "web",
+                      "Hits": 1
+                    }
+                  ]
+                }
+              ]
+            }
+        """.trimIndent()
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing { traceIngestRoutes(quotaService) }
+        }
+
+        val response = client.post("/api/v0.6/stats") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }
+
+        assertEquals(HttpStatusCode.TooManyRequests, response.status)
+    }
+
+    @Test
+    fun `trace api aliases parse payloads before quota rejection`() = testApplication {
+        val quotaService = rejectingQuotaService()
+        val traceBody = """[[{"trace_id":1,"span_id":2,"name":"web.request"}]]"""
+        val statsBody = """
+            {
+              "Stats": [
+                {
+                  "Start": 1700000000000,
+                  "Duration": 10000000000,
+                  "Stats": [
+                    {
+                      "Name": "web.request",
+                      "Service": "api",
+                      "Resource": "GET /health",
+                      "Type": "web",
+                      "Hits": 1
+                    }
+                  ]
+                }
+              ]
+            }
+        """.trimIndent()
+        val aliases = listOf(
+            TraceAliasRequest(HttpMethod.Post, "/dd/api/v0.2/traces", traceBody),
+            TraceAliasRequest(HttpMethod.Put, "/dd/api/v0.2/traces", traceBody),
+            TraceAliasRequest(HttpMethod.Post, "/dd/api/v0.2/stats", statsBody),
+            TraceAliasRequest(HttpMethod.Put, "/dd/api/v0.2/stats", statsBody),
+            TraceAliasRequest(HttpMethod.Post, "/dd/api/v0.6/stats", statsBody),
+            TraceAliasRequest(HttpMethod.Put, "/dd/api/v0.6/stats", statsBody),
+            TraceAliasRequest(HttpMethod.Put, "/dd/v0.6/stats", statsBody),
+            TraceAliasRequest(HttpMethod.Put, "/api/v0.2/traces", traceBody),
+            TraceAliasRequest(HttpMethod.Put, "/api/v0.2/stats", statsBody),
+            TraceAliasRequest(HttpMethod.Put, "/api/v0.6/stats", statsBody),
+        )
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing { traceIngestRoutes(quotaService) }
+        }
+
+        aliases.forEach { alias ->
+            val response = client.request(alias.path) {
+                method = alias.method
+                header(DD_API_KEY_HEADER, TEST_API_KEY)
+                contentType(ContentType.Application.Json)
+                setBody(alias.body)
+            }
+
+            assertEquals(
+                HttpStatusCode.TooManyRequests,
+                response.status,
+                "${alias.method.value} ${alias.path}",
+            )
+        }
+    }
+
+    @Test
+    fun `POST unprefixed api v0_2 trace stats decodes msgpack and inserts`() = testApplication {
+        val quotaService = mockk<BillingQuotaService>()
+        val body = buildStatsMsgpackPayload()
+        var capturedPayload: DdStatsPayload? = null
+        every { quotaService.isEnforcementEnabled() } returns true
+        every {
+            quotaService.reserveUnits(any(), any(), any(), any())
+        } returns QuotaReservationResult(
+            allowed = true,
+            reason = null,
+            usage = quotaUsage(),
+        )
+        coEvery {
+            TraceIngestionService.insertTraceStats(TEST_ORG_ID, any())
+        } coAnswers {
+            capturedPayload = secondArg()
+        }
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing { traceIngestRoutes(quotaService) }
+        }
+
+        val response = client.post("/api/v0.2/stats") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.parse("application/msgpack"))
+            setBody(body)
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val payload = requireNotNull(capturedPayload)
+        assertEquals(TEST_HOST, payload.hostname)
+        assertEquals(1, payload.stats.single().stats.size)
+        verify {
+            quotaService.reserveUnits(
+                organizationId = TEST_ORG_ID,
+                requestedUnits = 1,
+                eventType = "dd_trace",
+                requestedBytes = body.size.toLong(),
+            )
+        }
+    }
+
+    @Test
+    fun `GET dd trace health returns diagnostic compatibility response`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            routing { traceIngestRoutes(allowingQuotaService) }
+        }
+
+        val response = client.get("/dd/_health")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("ok"))
+    }
+
+    @Test
+    fun `HEAD dd trace health returns diagnostic compatibility response`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            routing { traceIngestRoutes(allowingQuotaService) }
+        }
+
+        val response = client.head("/dd/_health")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+    }
+
+    @Test
+    fun `GET dd support flare returns diagnostic compatibility response`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            routing { traceIngestRoutes(allowingQuotaService) }
+        }
+
+        val response = client.get("/dd/support/flare")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("ok"))
+    }
+
+    @Test
+    fun `HEAD dd support flare returns diagnostic compatibility response`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            routing { traceIngestRoutes(allowingQuotaService) }
+        }
+
+        val response = client.head("/dd/support/flare")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+    }
+
+    @Test
+    fun `POST dd support flare returns diagnostic compatibility response`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            routing { traceIngestRoutes(allowingQuotaService) }
+        }
+
+        val response = client.post("/dd/support/flare")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("agent-diagnostic"))
+    }
+
+    @Test
     fun `POST dd metrics returns 429 before enqueue when quota is exceeded`() = testApplication {
         val quotaService = rejectingQuotaService()
         val body = """{"series":[{"metric":"system.cpu","host":"h1","points":[[1700000000,42.0]]}]}"""
@@ -883,7 +1337,7 @@ class DatadogRoutesExtendedTest {
             )
         }
         verify { DatadogHostService.touchHostLastSeen(TEST_ORG_ID, setOf("h1")) }
-        coVerify(exactly = 0) { DatadogMetricService.enqueueMetrics(any(), any()) }
+        coVerify(exactly = 0) { DatadogMetricService.enqueueMetrics(any(), any(), any()) }
     }
 
     @Test
@@ -967,7 +1421,45 @@ class DatadogRoutesExtendedTest {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("valid"))
+        assertTrue(response.bodyAsText().filterNot(Char::isWhitespace).contains(""""valid":true"""))
+    }
+
+    @Test
+    fun `GET unprefixed api v1 validate returns 200 with orgId`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            routing { datadogValidateRoutes() }
+        }
+        val response = client.get("/api/v1/validate") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().filterNot(Char::isWhitespace).contains(""""valid":true"""))
+    }
+
+    @Test
+    fun `GET dd api v1 validate accepts trailing slash`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            routing { datadogValidateRoutes() }
+        }
+        val response = client.get("/dd/api/v1/validate/") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().filterNot(Char::isWhitespace).contains(""""valid":true"""))
+    }
+
+    @Test
+    fun `HEAD dd api v1 validate returns 200`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            routing { datadogValidateRoutes() }
+        }
+        val response = client.head("/dd/api/v1/validate") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
     }
 
     @Test
@@ -1120,10 +1612,79 @@ class DatadogRoutesExtendedTest {
         assertEquals(HttpStatusCode.Accepted, response.status)
     }
 
+    // ──── ProfileIngestRoutes ────
+
+    @Test
+    fun `POST profile v2 aliases ingest uploaded profile`() = testApplication {
+        val aliases = listOf(
+            "/api/v2/profile",
+            "/dd/api/v2/profile",
+            "/profiling/v1/input",
+            "/dd/profiling/v1/input",
+        )
+        application {
+            install(ContentNegotiation) { json() }
+            routing { profileIngestRoutes(allowingQuotaService) }
+        }
+
+        aliases.forEach { path ->
+            val response = client.post(path) {
+                header(DD_API_KEY_HEADER, TEST_API_KEY)
+                setBody(profileMultipartBody())
+            }
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertTrue(response.bodyAsText().contains("profile-test"))
+        }
+
+        coVerify(exactly = aliases.size) {
+            ProfileIngestionService.ingestProfile(TEST_ORG_ID, any(), any(), "cpu")
+        }
+    }
+
+    @Test
+    fun `POST profile v2 returns 400 for non multipart payload`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            routing { profileIngestRoutes(allowingQuotaService) }
+        }
+
+        val response = client.post("/api/v2/profile") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.Json)
+            setBody("{}")
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("Multipart profile payload required"))
+    }
+
     // ──── DatadogInfraRoutes ────
 
     @Test
-    fun `POST api v1 discovery returns 200`() = testApplication {
+    fun `POST api v1 discovery decodes and enqueues process discovery`() = testApplication {
+        var capturedPayload: DatadogProcessPayload? = null
+        val batch = QueuedInfraBatch(
+            organizationId = TEST_ORG_ID.toLong(),
+            type = "processes",
+            processes = listOf(
+                QueuedProcessEntry(
+                    host = TEST_HOST,
+                    pid = 4321,
+                    name = "java",
+                    command = "/usr/bin/java",
+                    timestampMs = 1700000000000,
+                )
+            ),
+        )
+        every {
+            DatadogInfraService.mapProcesses(TEST_ORG_ID.toLong(), any())
+        } answers {
+            capturedPayload = secondArg()
+            batch
+        }
+        coEvery { DatadogInfraService.enqueueInfra(batch, any()) } returns 1
+
         application {
             install(ContentNegotiation) { json() }
             routing { datadogInfraRoutes(allowingQuotaService) }
@@ -1131,13 +1692,217 @@ class DatadogRoutesExtendedTest {
         val response = client.post("/api/v1/discovery") {
             header(DD_API_KEY_HEADER, TEST_API_KEY)
             contentType(ContentType.Application.OctetStream)
-            setBody(ByteArray(0))
+            setBody(
+                buildProcessAgentMessage(
+                    ProcessAgentPayloadDecoder.TYPE_COLLECTOR_PROC_DISCOVERY,
+                    buildDiscoveryPayload(),
+                )
+            )
         }
-        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals(HttpStatusCode.Accepted, response.status)
+        assertProcessAgentCollectorResponse(response.bodyAsBytes())
+        val payload = requireNotNull(capturedPayload)
+        assertEquals(TEST_HOST, payload.host)
+        assertEquals(4321, payload.processes.single().pid)
+        assertEquals("java", payload.processes.single().name)
     }
 
     @Test
-    fun `POST dd api v1 connections returns 202`() = testApplication {
+    fun `POST unprefixed api v1 collector returns process-agent collector response`() = testApplication {
+        val batch = QueuedInfraBatch(
+            organizationId = TEST_ORG_ID.toLong(),
+            type = "processes",
+            processes = listOf(
+                QueuedProcessEntry(
+                    host = TEST_HOST,
+                    pid = 1234,
+                    name = "nginx",
+                    command = "/usr/bin/nginx",
+                    timestampMs = 1700000000000,
+                )
+            ),
+        )
+        every {
+            DatadogInfraService.mapProcesses(TEST_ORG_ID.toLong(), any())
+        } returns batch
+        coEvery { DatadogInfraService.enqueueInfra(batch, any()) } returns 1
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing { datadogInfraRoutes(allowingQuotaService) }
+        }
+        val response = client.post("/api/v1/collector") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.OctetStream)
+            setBody(
+                buildProcessAgentMessage(
+                    ProcessAgentPayloadDecoder.TYPE_COLLECTOR_PROC,
+                    buildProcessPayload(),
+                )
+            )
+        }
+
+        assertEquals(HttpStatusCode.Accepted, response.status)
+        assertProcessAgentCollectorResponse(response.bodyAsBytes())
+    }
+
+    @Test
+    fun `POST dd api v1 connections decodes and enqueues network connections`() = testApplication {
+        var capturedPayload: DatadogConnectionsPayload? = null
+        val batch = QueuedInfraBatch(
+            organizationId = TEST_ORG_ID.toLong(),
+            type = "connections",
+            connections = listOf(
+                QueuedConnectionEntry(
+                    host = TEST_HOST,
+                    pid = 1234,
+                    localAddr = "10.0.0.5",
+                    localPort = 8080,
+                    remoteAddr = "203.0.113.20",
+                    remotePort = 443,
+                    protocol = "tcp",
+                    family = "IPv4",
+                    direction = "outgoing",
+                    bytesSent = 5000,
+                    bytesRecv = 10000,
+                    timestampMs = 1700000000000,
+                )
+            ),
+        )
+        every {
+            DatadogInfraService.mapConnections(TEST_ORG_ID.toLong(), any())
+        } answers {
+            capturedPayload = secondArg()
+            batch
+        }
+        coEvery { DatadogInfraService.enqueueInfra(batch, any()) } returns 1
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing { datadogInfraRoutes(allowingQuotaService) }
+        }
+        val response = client.post("/dd/api/v1/connections") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.OctetStream)
+            setBody(
+                buildProcessAgentMessage(
+                    ProcessAgentPayloadDecoder.TYPE_COLLECTOR_CONNECTIONS,
+                    buildConnectionsPayload(),
+                )
+            )
+        }
+
+        assertEquals(HttpStatusCode.Accepted, response.status)
+        assertProcessAgentCollectorResponse(response.bodyAsBytes())
+        val payload = checkNotNull(capturedPayload)
+        assertEquals(TEST_HOST, payload.host)
+        val decoded = payload.connections.single()
+        assertEquals(1234, decoded.pid)
+        assertEquals("10.0.0.5", decoded.localAddr)
+        assertEquals(8080, decoded.localPort)
+        assertEquals("203.0.113.20", decoded.remoteAddr)
+        assertEquals(443, decoded.remotePort)
+        assertEquals("tcp", decoded.protocol)
+        assertEquals("outgoing", decoded.direction)
+        assertEquals(5000, decoded.bytesSent)
+        assertEquals(10000, decoded.bytesRecv)
+        coVerify(exactly = 1) { DatadogInfraService.enqueueInfra(batch, any()) }
+    }
+
+    @Test
+    fun `POST unprefixed api v1 collector parses process payload before quota rejection`() = testApplication {
+        val quotaService = rejectingQuotaService()
+        var capturedPayload: DatadogProcessPayload? = null
+        every {
+            DatadogInfraService.mapProcesses(TEST_ORG_ID.toLong(), any())
+        } answers {
+            capturedPayload = secondArg()
+            QueuedInfraBatch(
+                organizationId = TEST_ORG_ID.toLong(),
+                type = "processes",
+                processes = listOf(
+                    QueuedProcessEntry(
+                        host = TEST_HOST,
+                        pid = 1234,
+                        name = "nginx",
+                        command = "/usr/bin/nginx",
+                        timestampMs = 1700000000000,
+                    )
+                ),
+            )
+        }
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing { datadogInfraRoutes(quotaService) }
+        }
+        val response = client.post("/api/v1/collector") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.OctetStream)
+            setBody(
+                buildProcessAgentMessage(
+                    ProcessAgentPayloadDecoder.TYPE_COLLECTOR_PROC,
+                    buildProcessPayload(),
+                )
+            )
+        }
+
+        assertEquals(HttpStatusCode.TooManyRequests, response.status)
+        val payload = checkNotNull(capturedPayload)
+        assertEquals(TEST_HOST, payload.host)
+        val decoded = payload.processes.single()
+        assertEquals(1234, decoded.pid)
+        assertEquals("nginx", decoded.name)
+    }
+
+    @Test
+    fun `POST unprefixed api v1 connections parses payload before quota rejection`() = testApplication {
+        val quotaService = rejectingQuotaService()
+        var capturedPayload: DatadogConnectionsPayload? = null
+        every {
+            DatadogInfraService.mapConnections(TEST_ORG_ID.toLong(), any())
+        } answers {
+            capturedPayload = secondArg()
+            QueuedInfraBatch(
+                organizationId = TEST_ORG_ID.toLong(),
+                type = "connections",
+                connections = listOf(
+                    QueuedConnectionEntry(
+                        host = TEST_HOST,
+                        pid = 1234,
+                        localAddr = "10.0.0.5",
+                        localPort = 8080,
+                        remoteAddr = "203.0.113.20",
+                        remotePort = 443,
+                        timestampMs = 1700000000000,
+                    )
+                ),
+            )
+        }
+
+        application {
+            install(ContentNegotiation) { json() }
+            routing { datadogInfraRoutes(quotaService) }
+        }
+        val response = client.post("/api/v1/connections") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.OctetStream)
+            setBody(
+                buildProcessAgentMessage(
+                    ProcessAgentPayloadDecoder.TYPE_COLLECTOR_CONNECTIONS,
+                    buildConnectionsPayload(),
+                )
+            )
+        }
+
+        assertEquals(HttpStatusCode.TooManyRequests, response.status)
+        val payload = checkNotNull(capturedPayload)
+        assertEquals(TEST_HOST, payload.host)
+        assertEquals("203.0.113.20", payload.connections.single().remoteAddr)
+    }
+
+    @Test
+    fun `POST dd api v1 connections rejects malformed process agent payload`() = testApplication {
         application {
             install(ContentNegotiation) { json() }
             routing { datadogInfraRoutes(allowingQuotaService) }
@@ -1147,7 +1912,8 @@ class DatadogRoutesExtendedTest {
             contentType(ContentType.Application.OctetStream)
             setBody(ByteArray(0))
         }
-        assertEquals(HttpStatusCode.Accepted, response.status)
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
     }
 
     // ──── DbmIngestRoutes ────
@@ -1372,6 +2138,20 @@ class DatadogRoutesExtendedTest {
         assertEquals(HttpStatusCode.Accepted, response.status)
     }
 
+    @Test
+    fun `POST unprefixed apm telemetry returns 202`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            routing { telemetryProxyRoutes() }
+        }
+        val response = client.post("/api/v2/apmtelemetry") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.Json)
+            setBody("""{"payload":"test"}""")
+        }
+        assertEquals(HttpStatusCode.Accepted, response.status)
+    }
+
     // ──── DatadogRoutes (API Key Management) ────
 
     @Test
@@ -1456,7 +2236,7 @@ class DatadogRoutesExtendedTest {
     fun `GET v1 traces resources returns 200`() = testApplication {
         val (userId, orgId) = seedUserAndOrg()
         coEvery {
-            TraceIngestionService.listResourceStats(orgId, null, any(), any())
+            TraceIngestionService.listResourceStats(orgId, any<DdResourceStatsQuery>())
         } returns DdResourceStatsResponse(emptyList(), 0L)
         application {
             installAuth()
@@ -1472,7 +2252,11 @@ class DatadogRoutesExtendedTest {
     fun `GET v1 traces returns 200`() = testApplication {
         val (userId, orgId) = seedUserAndOrg()
         coEvery {
-            TraceIngestionService.listTraces(orgId, null, null, any(), any())
+            TraceIngestionService.listTraces(
+                organizationId = orgId,
+                query = any<DdTraceListQuery>(),
+                parentSpan = any(),
+            )
         } returns DdTraceListResponse(emptyList(), 0L)
         application {
             installAuth()
@@ -1519,7 +2303,7 @@ class DatadogRoutesExtendedTest {
     fun `GET v1 services map returns 200`() = testApplication {
         val (userId, orgId) = seedUserAndOrg()
         coEvery {
-            TraceIngestionService.getServiceMap(orgId)
+            TraceIngestionService.getServiceMap(any(), any(), any(), any(), any())
         } returns DdServiceMapResponse(emptyList())
         application {
             installAuth()
@@ -1532,10 +2316,91 @@ class DatadogRoutesExtendedTest {
     }
 
     @Test
+    fun `GET v1 services map forwards scope filters`() = testApplication {
+        val (userId, orgId) = seedUserAndOrg()
+        coEvery {
+            TraceIngestionService.getServiceMap(orgId, any(), "prod", "otel", any())
+        } returns DdServiceMapResponse(emptyList())
+        application {
+            installAuth()
+            routing { traceDashboardRoutes() }
+        }
+        val response = client.get("/v1/services/map?timeRange=6h&env=prod&source=otel") {
+            withAuth(jwtToken(userId, orgId))
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        coVerify(exactly = 1) {
+            TraceIngestionService.getServiceMap(orgId, any(), "prod", "otel", any())
+        }
+    }
+
+    @Test
+    fun `GET v1 services map rejects oversized scope filter`() = testApplication {
+        val (userId, orgId) = seedUserAndOrg()
+        application {
+            installAuth()
+            routing { traceDashboardRoutes() }
+        }
+        val response = client.get("/v1/services/map?env=${"p".repeat(201)}") {
+            withAuth(jwtToken(userId, orgId))
+        }
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
+    fun `GET v1 services service latency returns percentiles`() = testApplication {
+        val (userId, orgId) = seedUserAndOrg()
+        coEvery {
+            TraceIngestionService.getServiceLatencyPercentiles(orgId, "checkout", any(), "prod", "otel", any())
+        } returns DdServiceLatencyResponse(
+            service = "checkout",
+            p50DurationNs = 1_000L,
+            p90DurationNs = 5_000L,
+            p99DurationNs = 9_000L,
+            sampleCount = 42L,
+        )
+        application {
+            installAuth()
+            routing { traceDashboardRoutes() }
+        }
+        val response = client.get("/v1/services/checkout/latency?timeRange=24h&env=prod&source=otel") {
+            withAuth(jwtToken(userId, orgId))
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("\"sampleCount\":42"))
+    }
+
+    @Test
+    fun `GET v1 services service latency rejects oversized service`() = testApplication {
+        val (userId, orgId) = seedUserAndOrg()
+        application {
+            installAuth()
+            routing { traceDashboardRoutes() }
+        }
+        val response = client.get("/v1/services/${"s".repeat(201)}/latency") {
+            withAuth(jwtToken(userId, orgId))
+        }
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
+    fun `GET v1 services service latency rejects oversized scope filter`() = testApplication {
+        val (userId, orgId) = seedUserAndOrg()
+        application {
+            installAuth()
+            routing { traceDashboardRoutes() }
+        }
+        val response = client.get("/v1/services/checkout/latency?source=${"s".repeat(201)}") {
+            withAuth(jwtToken(userId, orgId))
+        }
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
     fun `GET v1 apm-errors returns 200`() = testApplication {
         val (userId, orgId) = seedUserAndOrg()
         coEvery {
-            TraceIngestionService.getApmErrors(orgId, null, any(), any())
+            TraceIngestionService.getApmErrors(orgId, any(), any(), any(), any(), any())
         } returns DdApmErrorsResponse(emptyList(), 0L)
         application {
             installAuth()
@@ -1545,6 +2410,123 @@ class DatadogRoutesExtendedTest {
             withAuth(jwtToken(userId, orgId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
+    }
+
+    @Test
+    fun `GET v1 apm-errors trims deduplicates and forwards service filters`() = testApplication {
+        val (userId, orgId) = seedUserAndOrg()
+        coEvery {
+            TraceIngestionService.getApmErrors(
+                orgId,
+                listOf("api", "worker"),
+                any(),
+                any(),
+                any(),
+                any(),
+            )
+        } returns DdApmErrorsResponse(emptyList(), 0L)
+        application {
+            installAuth()
+            routing { traceDashboardRoutes() }
+        }
+        val response = client.get("/v1/apm-errors?services=api,%20worker,api&service=ignored") {
+            withAuth(jwtToken(userId, orgId))
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        coVerify(exactly = 1) {
+            TraceIngestionService.getApmErrors(
+                orgId,
+                listOf("api", "worker"),
+                any(),
+                any(),
+                any(),
+                any(),
+            )
+        }
+    }
+
+    @Test
+    fun `GET v1 apm-errors falls back to legacy service when services is empty`() = testApplication {
+        val (userId, orgId) = seedUserAndOrg()
+        coEvery {
+            TraceIngestionService.getApmErrors(
+                orgId,
+                listOf("api"),
+                any(),
+                any(),
+                any(),
+                any(),
+            )
+        } returns DdApmErrorsResponse(emptyList(), 0L)
+        application {
+            installAuth()
+            routing { traceDashboardRoutes() }
+        }
+        val response = client.get("/v1/apm-errors?services=,%20&service=api") {
+            withAuth(jwtToken(userId, orgId))
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        coVerify(exactly = 1) {
+            TraceIngestionService.getApmErrors(
+                orgId,
+                listOf("api"),
+                any(),
+                any(),
+                any(),
+                any(),
+            )
+        }
+    }
+
+    @Test
+    fun `GET v1 apm-errors rejects too many service filters`() = testApplication {
+        val (userId, orgId) = seedUserAndOrg()
+        application {
+            installAuth()
+            routing { traceDashboardRoutes() }
+        }
+        val services = (1..51).joinToString(",") { "service-$it" }
+        val response = client.get("/v1/apm-errors?services=$services") {
+            withAuth(jwtToken(userId, orgId))
+        }
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        coVerify(exactly = 0) {
+            TraceIngestionService.getApmErrors(any(), any(), any(), any(), any(), any())
+        }
+    }
+
+    @Test
+    fun `GET v1 apm-errors rejects too many raw service filters before dedupe`() = testApplication {
+        val (userId, orgId) = seedUserAndOrg()
+        application {
+            installAuth()
+            routing { traceDashboardRoutes() }
+        }
+        val services = (1..51).joinToString(",") { "api" }
+        val response = client.get("/v1/apm-errors?services=$services") {
+            withAuth(jwtToken(userId, orgId))
+        }
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        coVerify(exactly = 0) {
+            TraceIngestionService.getApmErrors(any(), any(), any(), any(), any(), any())
+        }
+    }
+
+    @Test
+    fun `GET v1 apm-errors rejects oversized service filters`() = testApplication {
+        val (userId, orgId) = seedUserAndOrg()
+        application {
+            installAuth()
+            routing { traceDashboardRoutes() }
+        }
+        val serviceName = "a".repeat(201)
+        val response = client.get("/v1/apm-errors?services=$serviceName") {
+            withAuth(jwtToken(userId, orgId))
+        }
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        coVerify(exactly = 0) {
+            TraceIngestionService.getApmErrors(any(), any(), any(), any(), any(), any())
+        }
     }
 
     @Test
@@ -1558,6 +2540,85 @@ class DatadogRoutesExtendedTest {
     }
 
     // ──── Helpers ────
+
+    private fun profileMultipartBody(): MultiPartFormDataContent =
+        MultiPartFormDataContent(
+            formData {
+                appendFile(
+                    name = "event",
+                    fileName = "event.json",
+                    bytes = """{"start":"2026-06-03T03:45:00Z","end":"2026-06-03T03:46:00Z"}"""
+                        .toByteArray(),
+                    contentType = ContentType.Application.Json,
+                )
+                appendFile("chunk_data", "cpu.pprof", buildPprofProfilePayload())
+            }
+        )
+
+    private fun FormBuilder.appendFile(
+        name: String,
+        fileName: String,
+        bytes: ByteArray,
+        contentType: ContentType = ContentType.Application.OctetStream,
+    ) {
+        append(
+            name,
+            bytes,
+            Headers.build {
+                append(
+                    HttpHeaders.ContentDisposition,
+                    "form-data; name=\"$name\"; filename=\"$fileName\""
+                )
+                append(HttpHeaders.ContentType, contentType.toString())
+            }
+        )
+    }
+
+    private fun buildPprofProfilePayload(): ByteArray =
+        buildProto {
+            writeByteArray(
+                1,
+                buildProto {
+                    writeInt64(1, 1)
+                    writeInt64(2, 2)
+                }
+            )
+            writeByteArray(
+                2,
+                buildProto {
+                    writeUInt64(1, 1)
+                    writeInt64(2, 1)
+                }
+            )
+            writeByteArray(
+                4,
+                buildProto {
+                    writeUInt64(1, 1)
+                    writeByteArray(
+                        4,
+                        buildProto {
+                            writeUInt64(1, 1)
+                            writeInt64(2, 1)
+                        }
+                    )
+                }
+            )
+            writeByteArray(
+                5,
+                buildProto {
+                    writeUInt64(1, 1)
+                    writeInt64(2, 3)
+                    writeInt64(3, 3)
+                    writeInt64(4, 4)
+                }
+            )
+            writeString(6, "")
+            writeString(6, "samples")
+            writeString(6, "count")
+            writeString(6, "main")
+            writeString(6, "main.go")
+            writeInt64(14, 1)
+        }
 
     private fun sampleHost(orgId: Int = TEST_ORG_ID) = DdHostInfo(
         id = 42,
@@ -1575,3 +2636,13 @@ class DatadogRoutesExtendedTest {
         isOnline = true,
     )
 }
+
+private fun buildProto(block: CodedOutputStream.() -> Unit): ByteArray {
+    val buffer = ByteArray(PROTO_TEST_BUFFER_SIZE)
+    val output = CodedOutputStream.newInstance(buffer)
+    output.block()
+    output.flush()
+    return buffer.copyOf(output.totalBytesWritten)
+}
+
+private const val PROTO_TEST_BUFFER_SIZE = 512

@@ -18,8 +18,12 @@ import {Link} from '@tanstack/react-router'
 import {isDemo} from '@/lib/demo'
 import {Info} from 'lucide-react'
 
-export function DemoBanner() {
-  if (!isDemo() || localStorage.getItem('screenshot-mode') === 'true') {
+type DemoBannerProps = {
+  isDemoMode?: boolean
+}
+
+export function DemoBanner({isDemoMode = isDemo()}: DemoBannerProps) {
+  if (!isDemoMode || globalThis.localStorage?.getItem('screenshot-mode') === 'true') {
     return null
   }
 

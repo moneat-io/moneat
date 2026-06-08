@@ -17,6 +17,7 @@
 package com.moneat.plugins
 
 import com.moneat.ai.aiChatRoutes
+import com.moneat.apm.routes.apmServiceDashboardRoutes
 import com.moneat.auth.routes.authRoutes
 import com.moneat.auth.routes.authTokenRoutes
 import com.moneat.billing.routes.stripeWebhookRoutes
@@ -29,6 +30,7 @@ import com.moneat.events.routes.apiRoutes
 import com.moneat.events.routes.ingestRoutes
 import com.moneat.events.routes.releaseRoutes
 import com.moneat.events.routes.telemetryIngestRoutes
+import com.moneat.featureflags.routes.featureFlagRoutes
 import com.moneat.incident.routes.incidentProviderRoutes
 import com.moneat.llm.routes.llmIngestRoutes
 import com.moneat.llm.routes.llmRoutes
@@ -41,10 +43,15 @@ import com.moneat.monitoring.OperationalMetrics
 import com.moneat.org.routes.adminRoutes
 import com.moneat.org.routes.orgManagementRoutes
 import com.moneat.otlp.routes.otlpMetricsRoutes
+import com.moneat.otlp.routes.otlpFeedbackRoutes
 import com.moneat.otlp.routes.otlpTraceRoutes
+import com.moneat.security.detection.detectionRuleRoutes
+import com.moneat.security.signals.signalRoutes
+import com.moneat.security.vulnerabilities.vulnerabilityRoutes
 import com.moneat.statuspage.routes.statusPageRoutes
 import com.moneat.summary.routes.summaryRoutes
 import com.moneat.uptime.routes.uptimeRoutes
+import com.moneat.workflows.routes.workflowRoutes
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -208,6 +215,12 @@ fun Application.configureRouting() {
         // Dashboard API endpoints
         apiRoutes()
 
+        // APM service dashboard endpoints are source-neutral and must not depend on vendor modules.
+        apmServiceDashboardRoutes()
+
+        // OpenFeature-compatible feature flag management and OFREP runtime endpoints
+        featureFlagRoutes()
+
         // LLM observability API endpoints
         llmRoutes()
 
@@ -239,6 +252,7 @@ fun Application.configureRouting() {
         rateLimit(RateLimitName("otlp-ingestion")) {
             otlpTraceRoutes()
             otlpMetricsRoutes()
+            otlpFeedbackRoutes()
         }
 
         // Uptime monitoring endpoints
@@ -256,6 +270,31 @@ fun Application.configureRouting() {
         // Organization team management endpoints
         orgManagementRoutes()
 
+        // Workflow automation endpoints
+        rateLimit(RateLimitName("api")) {
+            workflowRoutes()
+        }
+
+        // Security signals triage surface (OSS core)
+        rateLimit(RateLimitName("api")) {
+            signalRoutes()
+        }
+
+        // Detection rules: scheduled, declarative rules over logs → signals (OSS core)
+        rateLimit(RateLimitName("api")) {
+            detectionRuleRoutes()
+        }
+
+        // Vulnerability/SBOM inventory and findings (OSS core)
+        rateLimit(RateLimitName("api")) {
+            vulnerabilityRoutes(includeAgentRoutes = false)
+        }
+
+        // SBOM compatibility ingest is OSS core so direct package inventory works without EE.
+        rateLimit(RateLimitName("datadog-ingestion")) {
+            vulnerabilityRoutes(includeApiRoutes = false)
+        }
+
         routingLogger.info { "Registering enterprise routes..." }
         // Enterprise modules (SSO, On-Call, etc.) — registered via ServiceLoader
         FeatureRegistry.registerRoutes(this)
@@ -265,7 +304,6 @@ fun Application.configureRouting() {
         McpModule.registerRoutes(this)
         routingLogger.info { "MCP routes registered" }
 
-        // AI chat assistant endpoints
         aiChatRoutes()
 
         // Custom dashboard builder endpoints

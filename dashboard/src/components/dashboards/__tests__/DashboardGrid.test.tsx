@@ -24,7 +24,7 @@ type DashboardAlert = {
   widget_id: number
   enabled: boolean
   last_triggered_at: string | null
-  incident_severity: string | null
+  alert_priority: string | null
 }
 
 type MockLayoutItem = {
@@ -157,7 +157,7 @@ describe('DashboardGrid', () => {
       widget_id: 1,
       enabled: true,
       last_triggered_at: '2026-05-24T18:00:00Z',
-      incident_severity: 'CRITICAL',
+      alert_priority: 'P0',
     }]
     const onWidgetClick = vi.fn()
     const onWidgetDelete = vi.fn()

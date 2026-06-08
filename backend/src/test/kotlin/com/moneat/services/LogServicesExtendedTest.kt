@@ -30,6 +30,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -527,7 +528,7 @@ class LogServicesExtendedTest {
 
             assertTrue(result.logs.isEmpty())
             assertFalse(result.hasMore)
-            assertEquals(0L, result.totalCount)
+            assertNull(result.totalCount)
             val allQueries = capturedQueries.joinToString("\n")
             assertTrue(allQueries.contains(SERVICE_EQ_API))
             assertTrue(allQueries.contains("environment = 'prod'"))
@@ -869,6 +870,10 @@ class LogServicesExtendedTest {
         assertEquals("15m", service.autoInterval(0L, 86_400_000L))
         // Exactly 7 days
         assertEquals("1h", service.autoInterval(0L, 604_800_000L))
+        // A slightly stale client "now" should not jump a 7-day dashboard to daily buckets.
+        assertEquals("1h", service.autoInterval(0L, 604_800_000L + 3_600_000L))
+        // Exactly 30 days
+        assertEquals("4h", service.autoInterval(0L, 2_592_000_000L))
     }
 
     // ──── Helper classes ────

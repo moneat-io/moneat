@@ -20,19 +20,20 @@ import com.moneat.config.EnvConfig
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.enterprise.OnCallBridge
 import com.moneat.enterprise.PriorityInfo
-import com.moneat.incident.models.AlertSource
-import com.moneat.incident.models.IncidentEvent
+import com.moneat.alerts.models.AlertSource
+import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.incident.models.IncidentEventLog
 import com.moneat.incident.models.IncidentProviderConfigs
 import com.moneat.incident.models.IncidentRoutingRules
-import com.moneat.incident.models.IncidentSeverity
-import com.moneat.incident.models.IncidentStatus
+import com.moneat.alerts.models.AlertPriority
+import com.moneat.alerts.models.AlertStatus
 import com.moneat.incident.services.IncidentService
 import com.moneat.shared.models.EscalationPolicies
 import com.moneat.shared.models.EscalationPolicyAlertSources
 import com.moneat.shared.models.Organizations
 import com.moneat.testsupport.IncidentTestHelper
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.workflows.services.WorkflowService
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -57,7 +58,8 @@ import kotlin.time.Clock
 class IncidentServiceExtendedTest {
     private var orgId: Int = 0
     private var providerConfigId: Int = 0
-    private val service = IncidentService()
+    private val workflowService: WorkflowService = mockk(relaxed = true)
+    private val service = IncidentService(workflowService)
     private val testProviderType = "test_provider_ext"
 
     companion object {
@@ -104,7 +106,7 @@ class IncidentServiceExtendedTest {
                 it[providerConfigId] = this@IncidentServiceExtendedTest.providerConfigId
                 it[alertSource] = AlertSource.UPTIME_MONITOR.name
                 it[alertType] = null
-                it[incidentSeverity] = "high"
+                it[alertPriority] = "high"
                 it[createdAt] = Clock.System.now()
                 it[updatedAt] = Clock.System.now()
             }
@@ -121,13 +123,13 @@ class IncidentServiceExtendedTest {
 
     private fun makeEvent(
         source: AlertSource = AlertSource.UPTIME_MONITOR,
-        severity: IncidentSeverity = IncidentSeverity.HIGH,
-        status: IncidentStatus = IncidentStatus.FIRING,
+        priority: AlertPriority = AlertPriority.P1,
+        status: AlertStatus = AlertStatus.FIRING,
         dedupKey: String = "dedup-1"
-    ): IncidentEvent = IncidentEvent(
+    ): AlertLifecycleEvent = AlertLifecycleEvent(
         title = "Test Alert",
         description = "Something went wrong",
-        severity = severity,
+        priority = priority,
         status = status,
         source = source,
         deduplicationKey = dedupKey,
@@ -150,7 +152,7 @@ class IncidentServiceExtendedTest {
         assertEquals(1, logs.size)
         assertTrue(logs[0][IncidentEventLog.success])
         assertEquals("inc-123", logs[0][IncidentEventLog.providerIncidentId])
-        assertEquals(IncidentStatus.FIRING.name, logs[0][IncidentEventLog.incidentStatus])
+        assertEquals(AlertStatus.FIRING.name, logs[0][IncidentEventLog.incidentStatus])
     }
 
     @Test
@@ -227,7 +229,7 @@ class IncidentServiceExtendedTest {
                 it[providerConfigId] = unknownConfigId
                 it[alertSource] = AlertSource.UPTIME_MONITOR.name
                 it[alertType] = null
-                it[incidentSeverity] = "high"
+                it[alertPriority] = "high"
                 it[createdAt] = Clock.System.now()
                 it[updatedAt] = Clock.System.now()
             }
@@ -264,7 +266,7 @@ class IncidentServiceExtendedTest {
         val logs = IncidentTestHelper.getEventLogs(orgId)
         assertEquals(1, logs.size)
         assertTrue(logs[0][IncidentEventLog.success])
-        assertEquals(IncidentStatus.RESOLVED.name, logs[0][IncidentEventLog.incidentStatus])
+        assertEquals(AlertStatus.RESOLVED.name, logs[0][IncidentEventLog.incidentStatus])
         assertEquals("resolved-1", logs[0][IncidentEventLog.providerIncidentId])
         assertEquals("Alert Resolved", logs[0][IncidentEventLog.title])
     }
@@ -335,7 +337,7 @@ class IncidentServiceExtendedTest {
         assertEquals(1, logs.size)
         assertTrue(logs[0][IncidentEventLog.success])
         assertEquals(AlertSource.UPTIME_MONITOR.name, logs[0][IncidentEventLog.alertSource])
-        assertEquals(IncidentStatus.RESOLVED.name, logs[0][IncidentEventLog.incidentStatus])
+        assertEquals(AlertStatus.RESOLVED.name, logs[0][IncidentEventLog.incidentStatus])
         assertEquals("auto-resolved-1", logs[0][IncidentEventLog.providerIncidentId])
     }
 
@@ -350,7 +352,7 @@ class IncidentServiceExtendedTest {
                 it[providerConfigId] = this@IncidentServiceExtendedTest.providerConfigId
                 it[alertSource] = AlertSource.ERROR_ALERT.name
                 it[alertType] = null
-                it[incidentSeverity] = "high"
+                it[alertPriority] = "high"
                 it[createdAt] = Clock.System.now()
                 it[updatedAt] = Clock.System.now()
             }
@@ -370,38 +372,38 @@ class IncidentServiceExtendedTest {
         assertFalse(service.isAutoResolvableSource(AlertSource.ERROR_ALERT))
     }
 
-    // ──── resolveIncidentSeverity edge cases ────
+    // ──── resolveAlertPriority edge cases ────
 
     @Test
-    fun `resolveIncidentSeverity returns null when no routing rule exists for source`() {
-        val severity = service.resolveIncidentSeverity(
+    fun `resolveAlertPriority returns null when no routing rule exists for source`() {
+        val severity = service.resolveAlertPriority(
             providerConfigId = providerConfigId,
             alertSource = AlertSource.DASHBOARD_ALERT,
-            monitorSeverityOverride = null
+            monitorPriorityOverride = null
         )
         assertNull(severity)
     }
 
     @Test
-    fun `resolveIncidentSeverity returns all severity levels from override`() {
-        for (level in IncidentSeverity.entries) {
-            val result = service.resolveIncidentSeverity(
+    fun `resolveAlertPriority returns all severity levels from override`() {
+        for (level in AlertPriority.entries) {
+            val result = service.resolveAlertPriority(
                 providerConfigId = providerConfigId,
                 alertSource = AlertSource.UPTIME_MONITOR,
-                monitorSeverityOverride = level.name.lowercase()
+                monitorPriorityOverride = level.name.lowercase()
             )
             assertEquals(level, result)
         }
     }
 
     @Test
-    fun `resolveIncidentSeverity is case insensitive for override`() {
-        val severity = service.resolveIncidentSeverity(
+    fun `resolveAlertPriority is case insensitive for override`() {
+        val severity = service.resolveAlertPriority(
             providerConfigId = providerConfigId,
             alertSource = AlertSource.UPTIME_MONITOR,
-            monitorSeverityOverride = "CrItIcAl"
+            monitorPriorityOverride = "CrItIcAl"
         )
-        assertEquals(IncidentSeverity.CRITICAL, severity)
+        assertEquals(AlertPriority.P0, severity)
     }
 
     // ──── fireAlert with native escalation ────
@@ -421,7 +423,7 @@ class IncidentServiceExtendedTest {
                 escalationPolicyId = any(),
                 title = any(),
                 description = any(),
-                priorityLevel = "P1",
+                priority = "P1",
                 alertSource = any(),
                 deduplicationKey = any(),
                 metadata = any()
@@ -562,7 +564,7 @@ class IncidentServiceExtendedTest {
                 it[providerConfigId] = configId
                 it[alertSource] = AlertSource.UPTIME_MONITOR.name
                 it[alertType] = null
-                it[incidentSeverity] = "high"
+                it[alertPriority] = "high"
                 it[createdAt] = Clock.System.now()
                 it[updatedAt] = Clock.System.now()
             }
@@ -584,11 +586,11 @@ class IncidentServiceExtendedTest {
             sendAlertResult = Result.success("meta-1")
         )
 
-        val eventWithMeta = IncidentEvent(
+        val eventWithMeta = AlertLifecycleEvent(
             title = "Metadata Alert",
             description = "With metadata",
-            severity = IncidentSeverity.CRITICAL,
-            status = IncidentStatus.FIRING,
+            priority = AlertPriority.P0,
+            status = AlertStatus.FIRING,
             source = AlertSource.UPTIME_MONITOR,
             deduplicationKey = "meta-dedup",
             organizationId = orgId,
@@ -604,7 +606,7 @@ class IncidentServiceExtendedTest {
         assertEquals(1, logs.size)
         val metadata = logs[0][IncidentEventLog.metadata]
         assertTrue(metadata != null && metadata.contains("db-primary"))
-        assertEquals("CRITICAL", logs[0][IncidentEventLog.incidentSeverity])
+        assertEquals("P0", logs[0][IncidentEventLog.alertPriority])
         assertEquals("meta-dedup", logs[0][IncidentEventLog.deduplicationKey])
     }
 }

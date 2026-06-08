@@ -17,32 +17,41 @@
 import {createFileRoute, Outlet, redirect, useMatches, useNavigate} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
-import {useProject} from '@/contexts/ProjectContext'
 import {formatRelativeTime} from '@/lib/utils'
 import {useTimezone} from '@/hooks/useTimezone'
-import {formatDate as formatDateUtil} from '@/lib/date-format'
+import {formatDate as formatDateUtil, parseDate} from '@/lib/date-format'
 import {useMemo, useState} from 'react'
-import {Card} from '@/components/ui/card'
+import {ExplorerShell} from '@/components/filters/ExplorerShell'
+import {FacetRail} from '@/components/filters/FacetRail'
 import {Badge} from '@/components/ui/badge'
 import {Input} from '@/components/ui/input'
+import {StatCard} from '@/components/ui/stat-card'
+import {EmptyState} from '@/components/ui/empty-state'
 import {Avatar, AvatarFallback} from '@/components/ui/avatar'
 import {Button} from '@/components/ui/button'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,} from '@/components/ui/tooltip'
 import {
-    AlertCircle,
-    ChevronLeft,
-    ChevronRight,
-    Clock,
-    Globe,
-    Monitor,
-    MousePointerClick,
-    Play,
-    Search,
-    Timer,
-    User,
-    Video,
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Globe,
+  Monitor,
+  MousePointerClick,
+  Play,
+  Search,
+  Timer,
+  User,
+  Video,
 } from 'lucide-react'
+import {
+  facetValues,
+  serviceNamesForQuery,
+  serviceRailSections,
+  serviceScopeKey,
+} from '@/lib/service-facet-scope'
+import type {FacetFilter} from '@/lib/filters/types'
 
 export const Route = createFileRoute('/replays')({
   beforeLoad: async ({ location }) => {
@@ -76,7 +85,7 @@ function formatDuration(ms: number) {
 
 function formatDate(isoString: string, timezone: string) {
   if (!isoString) return 'N/A'
-  const date = new Date(isoString)
+  const date = parseDate(isoString)
   if (isNaN(date.getTime())) return 'Invalid Date'
   return formatDateUtil(date, timezone)
 }
@@ -92,6 +101,8 @@ function getInitials(user?: { id?: string; email?: string; username?: string }):
   return '?'
 }
 
+// Deterministic avatar tint from the categorical chart palette (literal classes
+// so Tailwind emits them); encodes identity, not status.
 function getAvatarColor(user?: { id?: string; email?: string; username?: string }): string {
   const str = user?.username || user?.email || user?.id || ''
   let hash = 0
@@ -99,47 +110,70 @@ function getAvatarColor(user?: { id?: string; email?: string; username?: string 
     hash = str.charCodeAt(i) + ((hash << 5) - hash)
   }
   const colors = [
-    'bg-violet-500/20 text-violet-700 dark:text-violet-300',
-    'bg-blue-500/20 text-blue-700 dark:text-blue-300',
-    'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300',
-    'bg-amber-500/20 text-amber-700 dark:text-amber-300',
-    'bg-rose-500/20 text-rose-700 dark:text-rose-300',
-    'bg-cyan-500/20 text-cyan-700 dark:text-cyan-300',
-    'bg-pink-500/20 text-pink-700 dark:text-pink-300',
-    'bg-orange-500/20 text-orange-700 dark:text-orange-300',
+    'bg-chart-1/20 text-chart-1',
+    'bg-chart-2/20 text-chart-2',
+    'bg-chart-3/20 text-chart-3',
+    'bg-chart-4/20 text-chart-4',
+    'bg-chart-5/20 text-chart-5',
+    'bg-chart-6/20 text-chart-6',
+    'bg-chart-7/20 text-chart-7',
+    'bg-chart-8/20 text-chart-8',
   ]
   return colors[Math.abs(hash) % colors.length]
 }
 
 function getActivityLevel(activity: number): { label: string; color: string; bgColor: string; barColor: string } {
-  if (activity >= 80) return { label: 'High', color: 'text-emerald-700 dark:text-emerald-400', bgColor: 'bg-emerald-500/15 border-emerald-500/30', barColor: 'bg-emerald-500' }
-  if (activity >= 40) return { label: 'Medium', color: 'text-amber-700 dark:text-amber-400', bgColor: 'bg-amber-500/15 border-amber-500/30', barColor: 'bg-amber-500' }
-  if (activity > 0) return { label: 'Low', color: 'text-orange-700 dark:text-orange-400', bgColor: 'bg-orange-500/15 border-orange-500/30', barColor: 'bg-orange-500' }
-  return { label: 'Dead', color: 'text-slate-500 dark:text-slate-400', bgColor: 'bg-slate-500/15 border-slate-500/30', barColor: 'bg-slate-400' }
+  if (activity >= 80) return { label: 'High', color: 'text-success-fg', bgColor: 'bg-success-bg border-success-border', barColor: 'bg-success-solid' }
+  if (activity >= 40) return { label: 'Medium', color: 'text-warning-fg', bgColor: 'bg-warning-bg border-warning-border', barColor: 'bg-warning-solid' }
+  if (activity > 0) return { label: 'Low', color: 'text-warning-fg', bgColor: 'bg-warning-bg border-warning-border', barColor: 'bg-warning-solid' }
+  return { label: 'Dead', color: 'text-muted-foreground', bgColor: 'bg-muted border-border', barColor: 'bg-muted-foreground/70' }
 }
 
 function getDurationColor(ms: number): string {
-  if (ms >= 300000) return 'text-emerald-600 dark:text-emerald-400' // 5+ min - good long session
-  if (ms >= 60000) return 'text-blue-600 dark:text-blue-400' // 1-5 min
-  if (ms >= 10000) return 'text-amber-600 dark:text-amber-400' // 10s-1m
-  return 'text-slate-500 dark:text-slate-400' // very short
+  if (ms >= 300000) return 'text-success-fg' // 5+ min - good long session
+  if (ms >= 60000) return 'text-info-fg' // 1-5 min
+  if (ms >= 10000) return 'text-warning-fg' // 10s-1m
+  return 'text-muted-foreground' // very short
 }
 
 function ReplaysPage() {
   const navigate = useNavigate()
   const { timezone } = useTimezone()
-  const { selectedProjectId } = useProject()
   const [period, setPeriod] = useState<'24h' | '7d' | '30d' | '90d'>('7d')
   const [environment, setEnvironment] = useState('all')
   const [page, setPage] = useState(1)
   const [searchQuery, setSearchQuery] = useState('')
+  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
 
-  const { data: projects } = useQuery({
+  const { data: projects, isLoading: projectsLoading, error: projectsError } = useQuery({
     queryKey: ['projects'],
     queryFn: () => api.getProjects(),
   })
 
-  const projectId = selectedProjectId || projects?.[0]?.id
+  const projectList = projects ?? []
+  const includedServices = useMemo(
+    () => facetValues(facetFilters, 'service', false),
+    [facetFilters]
+  )
+  const excludedServices = useMemo(
+    () => facetValues(facetFilters, 'service', true),
+    [facetFilters]
+  )
+  const hasServiceFilters = includedServices.length > 0 || excludedServices.length > 0
+  const serviceNames = useMemo(
+    () => serviceNamesForQuery(projectList, includedServices, excludedServices),
+    [projectList, includedServices, excludedServices]
+  )
+  const scopeKey = serviceScopeKey(serviceNames, hasServiceFilters)
+  const hasReplayScope = projectList.length > 0 && (!hasServiceFilters || serviceNames.length > 0)
+  const serviceScopeParams = useMemo(() => (
+    serviceNames.length > 0 ? {services: [...serviceNames]} : {}
+  ), [serviceNames])
+  const railSections = useMemo(() => serviceRailSections(projectList), [projectList])
+  const handleFacetFiltersChange = (nextFilters: FacetFilter[]) => {
+    setFacetFilters(nextFilters)
+    setPage(1)
+  }
   const { data: billingUsage } = useQuery({
     queryKey: ['billing-usage'],
     queryFn: () => api.getBillingUsage(),
@@ -161,17 +195,15 @@ function ReplaysPage() {
     : availablePeriods[availablePeriods.length - 1]?.value ?? '7d') as '24h' | '7d' | '30d' | '90d'
 
   const { data: replays = [], isLoading } = useQuery({
-    queryKey: ['replays', projectId, effectivePeriod, environment, page],
-    queryFn: () =>
-      projectId
-        ? api.getReplays(projectId, {
-            page,
-            limit: 25,
-            period: effectivePeriod,
-            environment: environment === 'all' ? undefined : environment,
-          })
-        : [],
-    enabled: !!projectId,
+    queryKey: ['replays', 'organization', scopeKey, effectivePeriod, environment, page, serviceScopeParams],
+    queryFn: () => api.getOrganizationReplays({
+      page,
+      limit: 25,
+      period: effectivePeriod,
+      environment: environment === 'all' ? undefined : environment,
+      ...serviceScopeParams,
+    }),
+    enabled: hasReplayScope,
   })
 
   const stats = useMemo(() => {
@@ -207,91 +239,49 @@ function ReplaysPage() {
     })
   }, [replays, searchQuery])
 
-  if (!projects || projects.length === 0) {
+  if (projectsLoading) {
+    return <div className="p-8 text-sm text-muted-foreground">Loading services...</div>
+  }
+
+  if (projectsError) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 p-6">
-        <Card className="p-12 text-center border-blue-500/20 bg-gradient-to-b from-card to-blue-500/5">
-          <div className="max-w-md mx-auto space-y-4">
-            <div className="flex justify-center">
-              <div className="rounded-full bg-blue-500/10 p-4 ring-2 ring-blue-500/20">
-                <Video className="h-10 w-10 text-blue-600 dark:text-blue-400" />
-              </div>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold mb-2">No projects yet</h3>
-              <p className="text-muted-foreground">
-                Create a project to start capturing session replays.
-              </p>
-            </div>
-          </div>
-        </Card>
+      <div className="p-8 text-destructive">
+        Failed to load services: {projectsError instanceof Error ? projectsError.message : 'Unknown error'}
+      </div>
+    )
+  }
+
+  if (projectList.length === 0) {
+    return (
+      <div className="min-h-screen p-6">
+        <EmptyState
+          icon={Video}
+          title="No services yet"
+          description="Create a service to start capturing session replays."
+        />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-blue-500/5">
-      <div className="container mx-auto px-4 py-4">
-        {/* Header */}
-        <div className="mb-4 flex items-center gap-2.5">
-          <div className="rounded-lg bg-blue-500/15 p-2 ring-1 ring-blue-500/20 shrink-0">
-            <Video className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-xl font-bold">Session Replays</h2>
-            <p className="text-xs text-muted-foreground">Watch real user sessions to understand behavior and debug issues</p>
-          </div>
+    <ExplorerShell
+      title="Session Replays"
+      icon={<Video className="h-4 w-4 text-muted-foreground" />}
+      searchBar={
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Search by user, URL, or browser..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-7 pl-8 text-xs"
+          />
         </div>
-
-        {/* Stats Cards */}
-        {replays.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
-            <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-2.5 transition-all hover:shadow-md hover:border-blue-500/30">
-              <div className="flex items-center gap-1.5 mb-1">
-                <Play className="h-3 w-3 text-blue-500" />
-                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Sessions</span>
-              </div>
-              <div className="text-xl font-bold text-blue-600 dark:text-blue-400">{stats.total}</div>
-            </div>
-            <div className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-2.5 transition-all hover:shadow-md hover:border-rose-500/30">
-              <div className="flex items-center gap-1.5 mb-1">
-                <AlertCircle className="h-3 w-3 text-rose-500" />
-                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Errors</span>
-              </div>
-              <div className="text-xl font-bold text-rose-600 dark:text-rose-400">{stats.totalErrors}</div>
-            </div>
-            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2.5 transition-all hover:shadow-md hover:border-emerald-500/30">
-              <div className="flex items-center gap-1.5 mb-1">
-                <Timer className="h-3 w-3 text-emerald-500" />
-                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Avg Duration</span>
-              </div>
-              <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
-                {formatDuration(stats.avgDuration)}
-              </div>
-            </div>
-            <div className="rounded-lg border border-violet-500/20 bg-violet-500/5 p-2.5 transition-all hover:shadow-md hover:border-violet-500/30">
-              <div className="flex items-center gap-1.5 mb-1">
-                <User className="h-3 w-3 text-violet-500" />
-                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Unique Users</span>
-              </div>
-              <div className="text-xl font-bold text-violet-600 dark:text-violet-400">{stats.uniqueUsers}</div>
-            </div>
-          </div>
-        )}
-
-        {/* Toolbar */}
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by user, URL, or browser..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-          </div>
+      }
+      actions={
+        <>
           <Select value={effectivePeriod} onValueChange={(value) => { setPeriod(value as '24h' | '7d' | '30d' | '90d'); setPage(1) }}>
-            <SelectTrigger className="w-[140px]">
+            <SelectTrigger className="w-[140px] h-7 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -303,7 +293,7 @@ function ReplaysPage() {
             </SelectContent>
           </Select>
           <Select value={environment} onValueChange={(v) => { setEnvironment(v); setPage(1) }}>
-            <SelectTrigger className="w-[160px]">
+            <SelectTrigger className="w-[140px] h-7 text-xs">
               <SelectValue placeholder="Environment" />
             </SelectTrigger>
             <SelectContent>
@@ -313,10 +303,36 @@ function ReplaysPage() {
               <SelectItem value="development">Development</SelectItem>
             </SelectContent>
           </Select>
-        </div>
+        </>
+      }
+      rail={
+        <FacetRail
+          sections={railSections}
+          facetFilters={facetFilters}
+          onFacetFiltersChange={handleFacetFiltersChange}
+          title="Replays"
+        />
+      }
+    >
+      <div className="space-y-3 p-3">
+        {/* Stats Cards */}
+        {replays.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <StatCard label="Sessions" value={stats.total} icon={Play} tone="info" />
+            <StatCard label="Errors" value={stats.totalErrors} icon={AlertCircle} tone="danger" />
+            <StatCard label="Avg Duration" value={formatDuration(stats.avgDuration)} icon={Timer} tone="success" />
+            <StatCard label="Unique Users" value={stats.uniqueUsers} icon={User} tone="accent" />
+          </div>
+        )}
 
         {/* Content */}
-        {isLoading ? (
+        {!hasReplayScope ? (
+          <EmptyState
+            icon={Play}
+            title="No services match filters"
+            description="Adjust the selected services to view session replays."
+          />
+        ) : isLoading ? (
           <div className="space-y-2">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="rounded-xl border border-border/60 bg-card p-4 animate-pulse">
@@ -333,38 +349,17 @@ function ReplaysPage() {
             ))}
           </div>
         ) : !replays.length ? (
-          <Card className="p-12 text-center border-blue-500/20 bg-gradient-to-b from-card to-blue-500/5">
-            <div className="max-w-md mx-auto space-y-4">
-              <div className="flex justify-center">
-                <div className="rounded-full bg-blue-500/10 p-4 ring-2 ring-blue-500/20">
-                  <Play className="h-10 w-10 text-blue-600 dark:text-blue-400" />
-                </div>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold mb-2">No replays yet</h3>
-                <p className="text-muted-foreground">
-                  Session replays are recorded when you enable the Sentry Replay integration in your SDK.
-                  Configure replays in your project setup to start capturing user sessions.
-                </p>
-              </div>
-            </div>
-          </Card>
+          <EmptyState
+            icon={Play}
+            title="No replays yet"
+            description="Session replays are recorded when you enable replay capture in a compatible SDK. Configure replays in your service setup to start capturing user sessions."
+          />
         ) : filteredReplays.length === 0 ? (
-          <Card className="p-12 text-center border-blue-500/20 bg-gradient-to-b from-card to-blue-500/5">
-            <div className="max-w-md mx-auto space-y-4">
-              <div className="flex justify-center">
-                <div className="rounded-full bg-blue-500/10 p-4">
-                  <Search className="h-10 w-10 text-blue-600 dark:text-blue-400" />
-                </div>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold mb-2">No replays match your search</h3>
-                <p className="text-muted-foreground">
-                  Try adjusting your search query or changing the filters.
-                </p>
-              </div>
-            </div>
-          </Card>
+          <EmptyState
+            icon={Search}
+            title="No replays match your search"
+            description="Try adjusting your search query or changing the filters."
+          />
         ) : (
           <TooltipProvider>
             <div className="space-y-2">
@@ -380,23 +375,18 @@ function ReplaysPage() {
                   <div
                     key={replay.replayId}
                     onClick={() => navigate({ to: '/replays/$replayId', params: { replayId: replay.replayId } })}
-                    className={`cursor-pointer rounded-xl border bg-card hover:bg-accent/50 transition-all hover:shadow-md border-l-[3px] ${
-                      hasErrors
-                        ? 'border-l-rose-500 border-border/60 hover:border-rose-500/30'
-                        : 'border-l-blue-500/40 border-border/60 hover:border-blue-500/30'
+                    className={`cursor-pointer rounded-xl border bg-card hover:bg-accent/50 transition-all border-l-[3px] border-border/60 ${
+                      hasErrors ? 'border-l-danger-solid' : 'border-l-primary/50'
                     }`}
                   >
                     <div className="flex items-center gap-3 p-3">
-                      {/* Avatar */}
                       <Avatar className="h-8 w-8 shrink-0">
                         <AvatarFallback className={`text-xs font-semibold ${avatarColor}`}>
                           {initials}
                         </AvatarFallback>
                       </Avatar>
 
-                      {/* Main Content */}
                       <div className="flex-1 min-w-0">
-                        {/* Top row: user + time */}
                         <div className="flex items-center gap-2 mb-1">
                           <span className="font-semibold text-sm truncate">{displayName}</span>
                           <Tooltip>
@@ -410,9 +400,7 @@ function ReplaysPage() {
                           </Tooltip>
                         </div>
 
-                        {/* Bottom row: badges */}
                         <div className="flex flex-wrap items-center gap-2">
-                          {/* Duration */}
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Badge variant="outline" className={`text-xs font-medium gap-1 ${durationColor}`}>
@@ -423,7 +411,6 @@ function ReplaysPage() {
                             <TooltipContent>Session duration</TooltipContent>
                           </Tooltip>
 
-                          {/* Activity */}
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Badge variant="outline" className={`text-xs font-medium gap-1.5 ${activityLevel.bgColor} ${activityLevel.color}`}>
@@ -440,15 +427,13 @@ function ReplaysPage() {
                             <TooltipContent>Activity: {replay.activity}%</TooltipContent>
                           </Tooltip>
 
-                          {/* Errors */}
                           {hasErrors && (
-                            <Badge variant="outline" className="text-xs font-medium gap-1 bg-rose-500/15 border-rose-500/30 text-rose-700 dark:text-rose-400">
+                            <Badge variant="danger" className="text-xs font-medium gap-1">
                               <AlertCircle className="h-3 w-3" />
                               {replay.errorCount} error{replay.errorCount === 1 ? '' : 's'}
                             </Badge>
                           )}
 
-                          {/* URLs */}
                           {replay.urls?.length > 0 && (
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -472,7 +457,6 @@ function ReplaysPage() {
                             </Tooltip>
                           )}
 
-                          {/* Browser / OS */}
                           {(replay.browserName || replay.osName) && (
                             <Badge variant="outline" className="text-xs font-normal gap-1 text-muted-foreground">
                               <Monitor className="h-3 w-3" />
@@ -482,10 +466,9 @@ function ReplaysPage() {
                         </div>
                       </div>
 
-                      {/* Play button hint */}
                       <div className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <div className="rounded-full bg-blue-500/10 p-2 ring-1 ring-blue-500/20">
-                          <Play className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                        <div className="rounded-full bg-[hsl(var(--primary)/0.12)] p-2 ring-1 ring-[hsl(var(--primary)/0.3)]">
+                          <Play className="h-4 w-4 text-primary" />
                         </div>
                       </div>
                     </div>
@@ -498,7 +481,7 @@ function ReplaysPage() {
 
         {/* Pagination */}
         {filteredReplays.length > 0 && (
-          <div className="mt-4 flex items-center justify-between">
+          <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">
               Showing {filteredReplays.length} replay{filteredReplays.length === 1 ? '' : 's'}
               {searchQuery && ' matching your search'}
@@ -532,6 +515,6 @@ function ReplaysPage() {
           </div>
         )}
       </div>
-    </div>
+    </ExplorerShell>
   )
 }

@@ -17,7 +17,7 @@
 import {useMemo, useState} from 'react'
 import {Link} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
-import {api, type HostAlert} from '@/lib/api'
+import {api, type HostAlert, type HostAlertConfig} from '@/lib/api'
 import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {
@@ -44,15 +44,15 @@ interface AlertsTabProps {
 }
 
 const METRIC_OPTIONS = [
-  {value: 'cpu_percent', label: 'CPU Usage (%)', color: 'text-blue-500'},
-  {value: 'mem_percent', label: 'Memory Usage (%)', color: 'text-violet-500'},
-  {value: 'disk_percent', label: 'Disk Usage (%)', color: 'text-amber-500'},
-  {value: 'load_1', label: 'Load Average (1m)', color: 'text-emerald-500'},
-  {value: 'load_5', label: 'Load Average (5m)', color: 'text-emerald-500'},
-  {value: 'load_15', label: 'Load Average (15m)', color: 'text-emerald-500'},
-  {value: 'temp_max', label: 'Max Temperature (°C)', color: 'text-rose-500'},
-  {value: 'gpu_percent', label: 'GPU Usage (%)', color: 'text-teal-500'},
-  {value: 'battery_percent', label: 'Battery Level (%)', color: 'text-yellow-500'},
+  {value: 'cpu_percent', label: 'CPU Usage (%)', color: 'text-chart-1'},
+  {value: 'mem_percent', label: 'Memory Usage (%)', color: 'text-chart-2'},
+  {value: 'disk_percent', label: 'Disk Usage (%)', color: 'text-chart-5'},
+  {value: 'load_1', label: 'Load Average (1m)', color: 'text-chart-4'},
+  {value: 'load_5', label: 'Load Average (5m)', color: 'text-chart-4'},
+  {value: 'load_15', label: 'Load Average (15m)', color: 'text-chart-4'},
+  {value: 'temp_max', label: 'Max Temperature (°C)', color: 'text-chart-8'},
+  {value: 'gpu_percent', label: 'GPU Usage (%)', color: 'text-chart-3'},
+  {value: 'battery_percent', label: 'Battery Level (%)', color: 'text-chart-5'},
 ]
 
 const CONDITION_OPTIONS = [
@@ -63,6 +63,28 @@ const CONDITION_OPTIONS = [
   {value: '==', label: 'Equal to (==)'},
 ]
 
+const hostAlertConfigQueryKey = (hostId: number) => ['host-alert-config', hostId] as const
+
+function replaceAlert(alerts: HostAlert[], updatedAlert: HostAlert): HostAlert[] {
+  return alerts.map((alert) =>
+    alert.id === updatedAlert.id && alert.scope === updatedAlert.scope ? updatedAlert : alert
+  )
+}
+
+function updateAlertConfig(
+  alertConfig: HostAlertConfig | undefined,
+  updatedAlert: HostAlert
+): HostAlertConfig | undefined {
+  if (!alertConfig) return alertConfig
+
+  return {
+    ...alertConfig,
+    globalAlerts: replaceAlert(alertConfig.globalAlerts, updatedAlert),
+    hostAlerts: replaceAlert(alertConfig.hostAlerts, updatedAlert),
+    effectiveAlerts: replaceAlert(alertConfig.effectiveAlerts, updatedAlert),
+  }
+}
+
 export function AlertsTab({hostId}: AlertsTabProps) {
   const queryClient = useQueryClient()
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
@@ -71,7 +93,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
   const [createEnabled, setCreateEnabled] = useState(false)
 
   const {data: alertConfig, isLoading} = useQuery({
-    queryKey: ['host-alert-config', hostId],
+    queryKey: hostAlertConfigQueryKey(hostId),
     queryFn: () => api.getHostAlertConfig(hostId),
     enabled: api.isAuthenticated(),
   })
@@ -87,7 +109,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
   const scopeMutation = useMutation({
     mutationFn: (scope: HostAlertScope) => api.updateHostAlertScope(hostId, scope),
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['host-alert-config', hostId]})
+      queryClient.invalidateQueries({queryKey: hostAlertConfigQueryKey(hostId)})
     },
   })
 
@@ -100,11 +122,11 @@ export function AlertsTab({hostId}: AlertsTabProps) {
         threshold: number
         durationSeconds: number
         enabled: boolean
-        incidentSeverity?: string
+        alertPriority?: string
       }
     }) => api.createHostAlert(hostId, alert, scope),
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['host-alert-config', hostId]})
+      queryClient.invalidateQueries({queryKey: hostAlertConfigQueryKey(hostId)})
       setIsCreateDialogOpen(false)
       setCreateEnabled(false)
     },
@@ -113,8 +135,12 @@ export function AlertsTab({hostId}: AlertsTabProps) {
   const updateMutation = useMutation({
     mutationFn: ({alert, updates}: {alert: HostAlert; updates: Partial<HostAlert>}) =>
       api.updateHostAlert(hostId, alert.id, updates, alert.scope as HostAlertScope),
-    onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['host-alert-config', hostId]})
+    onSuccess: (updatedAlert, {alert, updates}) => {
+      const nextAlert = updatedAlert ?? {...alert, ...updates}
+      queryClient.setQueryData(hostAlertConfigQueryKey(hostId), (current: HostAlertConfig | undefined) =>
+        updateAlertConfig(current, nextAlert)
+      )
+      queryClient.invalidateQueries({queryKey: hostAlertConfigQueryKey(hostId)})
       setIsEditDialogOpen(false)
       setEditingAlert(null)
     },
@@ -123,22 +149,26 @@ export function AlertsTab({hostId}: AlertsTabProps) {
   const deleteMutation = useMutation({
     mutationFn: (alert: HostAlert) => api.deleteHostAlert(hostId, alert.id, alert.scope as HostAlertScope),
     onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['host-alert-config', hostId]})
+      queryClient.invalidateQueries({queryKey: hostAlertConfigQueryKey(hostId)})
     },
   })
 
   const toggleMutation = useMutation({
     mutationFn: ({alert, enabled}: {alert: HostAlert; enabled: boolean}) =>
       api.updateHostAlert(hostId, alert.id, {enabled}, alert.scope as HostAlertScope),
-    onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: ['host-alert-config', hostId]})
+    onSuccess: (updatedAlert, {alert, enabled}) => {
+      const nextAlert = updatedAlert ?? {...alert, enabled}
+      queryClient.setQueryData(hostAlertConfigQueryKey(hostId), (current: HostAlertConfig | undefined) =>
+        updateAlertConfig(current, nextAlert)
+      )
+      queryClient.invalidateQueries({queryKey: hostAlertConfigQueryKey(hostId)})
     },
   })
 
   const handleCreateAlert = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
-    const severity = formData.get('incidentSeverity') as string
+    const priority = formData.get('alertPriority') as string
     const durationMinutes = parseInt(formData.get('durationMinutes') as string) || 0
 
     createMutation.mutate({
@@ -149,7 +179,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
         threshold: parseFloat(formData.get('threshold') as string),
         durationSeconds: durationMinutes * 60,
         enabled: createEnabled,
-        incidentSeverity: severity && severity !== 'none' ? severity : undefined,
+        alertPriority: priority && priority !== 'none' ? priority : undefined,
       },
     })
   }
@@ -159,7 +189,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
     if (!editingAlert) return
 
     const formData = new FormData(e.currentTarget)
-    const severity = formData.get('incidentSeverity') as string
+    const priority = formData.get('alertPriority') as string
     const durationMinutes = parseInt(formData.get('durationMinutes') as string) || 0
     updateMutation.mutate({
       alert: editingAlert,
@@ -168,7 +198,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
         condition: formData.get('condition') as string,
         threshold: parseFloat(formData.get('threshold') as string),
         durationSeconds: durationMinutes * 60,
-        incidentSeverity: severity && severity !== 'none' ? severity : null,
+        alertPriority: priority && priority !== 'none' ? priority : null,
       },
     })
   }
@@ -200,8 +230,8 @@ export function AlertsTab({hostId}: AlertsTabProps) {
         <CardHeader className="py-3 px-4 pb-2">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-amber-500/10 shrink-0">
-                <BellRing className="h-4 w-4 text-amber-500" />
+              <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-warning-bg shrink-0">
+                <BellRing className="h-4 w-4 text-warning-fg" />
               </div>
               <div className="min-w-0">
                 <CardTitle className="text-base">Alert Rules</CardTitle>
@@ -249,7 +279,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                      <Zap className="h-5 w-5 text-amber-500" />
+                      <Zap className="h-5 w-5 text-warning-fg" />
                       Create Alert Rule
                     </DialogTitle>
                     <DialogDescription>
@@ -315,21 +345,23 @@ export function AlertsTab({hostId}: AlertsTabProps) {
                         </p>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="incidentSeverity">Incident Severity</Label>
-                        <Select name="incidentSeverity" defaultValue="">
+                        <Label htmlFor="alertPriority">Alert priority</Label>
+                        <Select name="alertPriority" defaultValue="">
                           <SelectTrigger>
                             <SelectValue placeholder="Use routing rule default" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="none">Use routing rule default</SelectItem>
-                            <SelectItem value="CRITICAL">[P0] Critical</SelectItem>
-                            <SelectItem value="HIGH">[P1] High</SelectItem>
-                            <SelectItem value="MEDIUM">[P2] Medium</SelectItem>
-                            <SelectItem value="LOW">[P3] Low</SelectItem>
+                            <SelectItem value="P0">P0</SelectItem>
+                            <SelectItem value="P1">P1</SelectItem>
+                            <SelectItem value="P2">P2</SelectItem>
+                            <SelectItem value="P3">P3</SelectItem>
+                            <SelectItem value="P4">P4</SelectItem>
+                            <SelectItem value="P5">P5</SelectItem>
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">
-                          Override the default severity when this alert triggers an incident. P0–P2 page on-call 24/7. P3 notifies during business hours only.
+                          Override the default priority when this alert fires. P0-P2 page by default; P3-P5 notify only unless configured otherwise.
                         </p>
                       </div>
                       <div className="flex items-center justify-between rounded-lg border p-3">
@@ -366,13 +398,13 @@ export function AlertsTab({hostId}: AlertsTabProps) {
         </CardHeader>
 
         <CardContent className="pt-0 px-4 pb-4">
-          <div className="mb-4 rounded-md bg-blue-500/10 p-3 text-xs text-blue-500 flex items-start gap-2 border border-blue-500/20">
+          <div className="mb-4 rounded-md bg-info-bg p-3 text-xs text-info-fg flex items-start gap-2 border border-info-border">
             <BellRing className="h-4 w-4 shrink-0 mt-0.5" />
             <div className="space-y-0.5 min-w-0">
               <p className="font-medium">Notification Channels</p>
-              <p className="text-blue-500/80">
+              <p className="text-info-fg/80">
                 Configure which channels (Email, Slack, Discord) receive these alerts in{' '}
-                <Link to="/settings" search={{ tab: 'notifications' }} className="underline hover:text-blue-400">
+                <Link to="/settings" search={{ tab: 'notifications' }} className="underline hover:text-info-fg/90">
                   Settings &gt; Notifications
                 </Link>.
               </p>
@@ -397,6 +429,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
                   }`}
                 >
                   <Switch
+                    aria-label={`${alert.enabled ? 'Disable' : 'Enable'} ${getMetricLabel(alert.metric)} alert`}
                     checked={alert.enabled}
                     onCheckedChange={(enabled) => toggleMutation.mutate({alert, enabled})}
                     disabled={toggleMutation.isPending}
@@ -423,7 +456,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
                     </div>
                     <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                       {alert.lastTriggeredAt ? (
-                        <span className="flex items-center gap-0.5 text-orange-500">
+                        <span className="flex items-center gap-0.5 text-warning-fg">
                           <BellRing className="h-2.5 w-2.5" />
                           Triggered {formatRelativeTime(alert.lastTriggeredAt)}
                         </span>
@@ -467,8 +500,8 @@ export function AlertsTab({hostId}: AlertsTabProps) {
             </div>
           ) : (
             <div className="text-center py-10">
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/10">
-                <Bell className="h-6 w-6 text-amber-500" />
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-warning-bg">
+                <Bell className="h-6 w-6 text-warning-fg" />
               </div>
               <h3 className="text-base font-medium mb-0.5">No rules in this scope</h3>
               <p className="text-muted-foreground text-xs mb-4 max-w-sm mx-auto">
@@ -487,7 +520,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Edit className="h-5 w-5 text-blue-500" />
+              <Edit className="h-5 w-5 text-info-fg" />
               Edit Alert Rule
             </DialogTitle>
             <DialogDescription>Update the alert rule configuration.</DialogDescription>
@@ -550,21 +583,23 @@ export function AlertsTab({hostId}: AlertsTabProps) {
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="edit-incidentSeverity">Incident Severity</Label>
-                  <Select name="incidentSeverity" defaultValue={editingAlert.incidentSeverity || ''}>
+                  <Label htmlFor="edit-alertPriority">Alert priority</Label>
+                  <Select name="alertPriority" defaultValue={editingAlert.alertPriority || ''}>
                     <SelectTrigger>
                       <SelectValue placeholder="Use routing rule default" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Use routing rule default</SelectItem>
-                      <SelectItem value="CRITICAL">[P0] Critical</SelectItem>
-                      <SelectItem value="HIGH">[P1] High</SelectItem>
-                      <SelectItem value="MEDIUM">[P2] Medium</SelectItem>
-                      <SelectItem value="LOW">[P3] Low</SelectItem>
+                      <SelectItem value="P0">P0</SelectItem>
+                      <SelectItem value="P1">P1</SelectItem>
+                      <SelectItem value="P2">P2</SelectItem>
+                      <SelectItem value="P3">P3</SelectItem>
+                      <SelectItem value="P4">P4</SelectItem>
+                      <SelectItem value="P5">P5</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    Override the default severity when this alert triggers an incident. P0–P2 page on-call 24/7. P3 notifies during business hours only.
+                    Override the default priority when this alert fires. P0-P2 page by default; P3-P5 notify only unless configured otherwise.
                   </p>
                 </div>
               </div>

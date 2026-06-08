@@ -17,6 +17,7 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { api } from '@/lib/api'
 import { setDemoEpoch } from '@/lib/demo'
+import { APP_OVERVIEW_SEARCH } from '@/lib/overview-route'
 
 export const Route = createFileRoute('/demo')({
   beforeLoad: async () => {
@@ -35,8 +36,8 @@ export const Route = createFileRoute('/demo')({
       throw redirect({ to: '/login', search: { error: 'demo_failed' } })
     }
     
-    // Redirect to the projects page on success (specific authenticated route)
-    throw redirect({ to: '/projects' })
+    // Redirect to the authenticated overview while leaving plain "/" available as the landing page.
+    throw redirect({ to: '/', search: APP_OVERVIEW_SEARCH, replace: true })
   },
   component: () => {
     // This component should never render due to beforeLoad redirect

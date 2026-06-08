@@ -24,6 +24,7 @@ import com.moneat.events.models.UserResponse
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
+import com.moneat.workflows.services.WorkflowService
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.cio.CIO
@@ -51,7 +52,9 @@ import java.math.BigInteger
 import java.security.KeyFactory
 import java.security.interfaces.RSAPublicKey
 import java.security.spec.RSAPublicKeySpec
-import java.util.*
+import java.util.Base64
+import java.util.Date
+import java.util.UUID
 import com.moneat.utils.HttpConstants.HTTP_SUCCESS_RANGE
 
 private val logger = KotlinLogging.logger {}
@@ -102,14 +105,15 @@ data class OAuthUserData(
     val emailVerified: Boolean
 )
 
-class OAuthService {
+class OAuthService(
+    private val workflowService: WorkflowService = WorkflowService()
+) {
     private val config = ApplicationConfig("application.conf")
     private val jwtSecret = config.property("jwt.secret").getString()
     private val jwtIssuer = config.property("jwt.issuer").getString()
     private val jwtAudience = config.property("jwt.audience").getString()
     private val backendUrl = EnvConfig.get("BACKEND_URL") ?: "https://api.moneat.io"
     private val frontendUrl = EnvConfig.get("FRONTEND_URL")!!
-
     companion object {
         private const val ORG_SLUG_SUFFIX_LENGTH = 8
         private const val ONE_HOUR_MILLIS = 3_600_000L
@@ -478,6 +482,7 @@ class OAuthService {
                     it[name] = "${userData.name ?: userData.email}'s Organization"
                     it[slug] = "org-${UUID.randomUUID().toString().take(ORG_SLUG_SUFFIX_LENGTH)}"
                 }[Organizations.id]
+            workflowService.ensureDefaultWorkflowsForOrganization(orgId)
 
             // Add membership
             Memberships.insert {

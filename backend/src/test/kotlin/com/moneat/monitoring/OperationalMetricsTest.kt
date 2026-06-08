@@ -124,6 +124,70 @@ class OperationalMetricsTest {
     }
 
     @Test
+    fun `renders datadog metric ingest health metrics`() {
+        // ──── Arrange ────
+        OperationalMetrics.registerQueue("DD metric", "moneat:metrics:queue", "primary")
+        OperationalMetrics.registerQueue("DD metric", "moneat:metrics:queue:processing", "processing")
+        OperationalMetrics.registerDlq("DD metric", "moneat:metrics:dlq")
+        OperationalMetrics.recordDatadogMetricPayloadQueued(metricRows = 10)
+        OperationalMetrics.recordDatadogMetricInsert(
+            mode = "combined",
+            status = "success",
+            payloadCount = 2,
+            rowCount = 10,
+            durationSeconds = 0.02,
+        )
+        OperationalMetrics.recordDatadogMetricInsert(
+            mode = "single",
+            status = "failure",
+            payloadCount = 1,
+            rowCount = 4,
+            durationSeconds = 0.03,
+            cause = IllegalStateException("insert failed"),
+        )
+        OperationalMetrics.recordDatadogMetricInsertFallback(
+            payloadCount = 2,
+            rowCount = 10,
+            cause = IllegalArgumentException("fallback"),
+        )
+        OperationalMetrics.recordDatadogMetricPayloadAck("success")
+        OperationalMetrics.recordDatadogMetricPayloadAck("failure")
+        OperationalMetrics.recordDatadogMetricProcessingRecovery(
+            recoveredPayloads = 3,
+            status = "success",
+        )
+        OperationalMetrics.recordDatadogMetricProcessingRecovery(
+            recoveredPayloads = 0,
+            status = "failure",
+            cause = IllegalStateException("recovery failed"),
+        )
+
+        // ──── Act ────
+        val rendered = OperationalMetrics.scrape()
+
+        // ──── Assert ────
+        assertContains(rendered, "moneat_datadog_metric_payloads_queued_total")
+        assertContains(rendered, "moneat_datadog_metric_points_queued_total")
+        assertContains(rendered, "moneat_datadog_metric_insert_chunks_total")
+        assertContains(rendered, "moneat_datadog_metric_insert_duration_seconds_bucket")
+        assertContains(rendered, "moneat_datadog_metric_insert_payloads_count")
+        assertContains(rendered, "moneat_datadog_metric_insert_rows_count")
+        assertContains(rendered, "moneat_datadog_metric_insert_fallbacks_total")
+        assertContains(rendered, "moneat_datadog_metric_fallback_payloads_count")
+        assertContains(rendered, "moneat_datadog_metric_fallback_rows_count")
+        assertContains(rendered, "moneat_datadog_metric_payload_acks_total")
+        assertContains(rendered, "moneat_datadog_metric_processing_recoveries_total")
+        assertContains(rendered, "moneat_datadog_metric_processing_recovered_payloads_count")
+        assertContains(rendered, "queue_type=\"processing\"")
+        assertContains(rendered, "mode=\"combined\"")
+        assertContains(rendered, "mode=\"single\"")
+        assertContains(rendered, "status=\"failure\"")
+        assertContains(rendered, "exception=\"IllegalStateException\"")
+        assertContains(rendered, "exception=\"IllegalArgumentException\"")
+        assertHasApplicationTag(rendered)
+    }
+
+    @Test
     fun `renders background job metrics`() {
         OperationalMetrics.recordBackgroundJobRun("billing-metered-flush", success = true, durationSeconds = 0.05)
         OperationalMetrics.recordBackgroundJobRun(

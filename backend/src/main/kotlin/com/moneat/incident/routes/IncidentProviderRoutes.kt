@@ -16,6 +16,7 @@
 
 package com.moneat.incident.routes
 
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.incident.models.IncidentEventLog
 import com.moneat.incident.models.IncidentProviderConfigs
 import com.moneat.incident.models.IncidentRoutingRules
@@ -37,6 +38,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -223,7 +225,7 @@ fun Route.incidentProviderRoutes() {
                                     id = row[IncidentRoutingRules.id].value,
                                     alertSource = row[IncidentRoutingRules.alertSource],
                                     alertType = row[IncidentRoutingRules.alertType],
-                                    incidentSeverity = row[IncidentRoutingRules.incidentSeverity]
+                                    alertPriority = row[IncidentRoutingRules.alertPriority]
                                 )
                             }
                     }
@@ -451,11 +453,14 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpsertRoutingRul
 
         // Insert new rules
         request.forEach { rule ->
+            val alertPriority =
+                AlertPriority.wireValue(rule.alertPriority ?: rule.legacyIncidentSeverity)
+                    ?: throw BadRequestException("Invalid alert priority")
             IncidentRoutingRules.insert {
                 it[IncidentRoutingRules.providerConfigId] = configId
                 it[IncidentRoutingRules.alertSource] = rule.alertSource
                 it[IncidentRoutingRules.alertType] = rule.alertType
-                it[IncidentRoutingRules.incidentSeverity] = rule.incidentSeverity
+                it[IncidentRoutingRules.alertPriority] = alertPriority
                 it[IncidentRoutingRules.createdAt] = Clock.System.now()
                 it[IncidentRoutingRules.updatedAt] = Clock.System.now()
             }
@@ -509,7 +514,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetEventLog() {
                         id = row[IncidentEventLog.id].value,
                         alertSource = row[IncidentEventLog.alertSource],
                         deduplicationKey = row[IncidentEventLog.deduplicationKey],
-                        incidentSeverity = row[IncidentEventLog.incidentSeverity],
+                        alertPriority = row[IncidentEventLog.alertPriority],
                         incidentStatus = row[IncidentEventLog.incidentStatus],
                         title = row[IncidentEventLog.title],
                         description = row[IncidentEventLog.description],
@@ -556,14 +561,15 @@ data class RoutingRuleResponse(
     val id: Int,
     val alertSource: String,
     val alertType: String?,
-    val incidentSeverity: String
+    val alertPriority: String
 )
 
 @Serializable
 data class UpsertRoutingRuleRequest(
     val alertSource: String,
     val alertType: String? = null,
-    val incidentSeverity: String
+    val alertPriority: String? = null,
+    @SerialName("incidentSeverity") val legacyIncidentSeverity: String? = null
 )
 
 @Serializable
@@ -571,7 +577,7 @@ data class EventLogResponse(
     val id: Int,
     val alertSource: String,
     val deduplicationKey: String,
-    val incidentSeverity: String,
+    val alertPriority: String,
     val incidentStatus: String,
     val title: String,
     val description: String?,

@@ -15,8 +15,14 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {Button} from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {cn} from '@/lib/utils'
-import {RefreshCw} from 'lucide-react'
+import {Check, ChevronDown, RefreshCw} from 'lucide-react'
 
 export type RefreshInterval = null | 1000 | 5000 | 10000 | 30000
 
@@ -34,29 +40,42 @@ interface AutoRefreshToggleProps {
 }
 
 export function AutoRefreshToggle({interval, onIntervalChange}: AutoRefreshToggleProps) {
+  const active = interval !== null
+  const activeLabel = INTERVAL_OPTIONS.find((option) => option.value === interval)?.label ?? 'Off'
+
   return (
-    <div className="flex items-center gap-1.5">
-      <RefreshCw className={cn('h-3.5 w-3.5 text-muted-foreground', interval && 'animate-spin text-emerald-500')} style={interval ? {animationDuration: '2s'} : undefined} />
-      <span className="text-xs text-muted-foreground hidden sm:inline">Refresh</span>
-      <div className="flex items-center rounded-md border bg-card/80">
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          aria-label="Auto-refresh interval"
+          title="Auto-refresh interval"
+          className={cn(
+            'h-[30px] gap-1.5 px-2 font-normal text-xs',
+            active && 'border-primary/40'
+          )}
+        >
+          <RefreshCw
+            className={cn('h-3.5 w-3.5 text-muted-foreground', active && 'animate-spin text-primary')}
+            style={active ? {animationDuration: '2s'} : undefined}
+          />
+          {active && <span className="hidden font-mono @min-[640px]/header:inline">{activeLabel}</span>}
+          <ChevronDown className="h-3 w-3 text-muted-foreground" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-36">
         {INTERVAL_OPTIONS.map((option) => (
-          <Button
+          <DropdownMenuItem
             key={option.label}
-            variant="ghost"
-            size="sm"
             onClick={() => onIntervalChange(option.value)}
-            className={cn(
-              'h-7 rounded-none px-2 text-xs font-mono',
-              'first:rounded-l-md last:rounded-r-md',
-              interval === option.value
-                ? 'bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
+            className="justify-between gap-4 text-xs"
           >
-            {option.label}
-          </Button>
+            <span className="font-mono">{option.label}</span>
+            {interval === option.value && <Check className="h-3.5 w-3.5 text-primary" />}
+          </DropdownMenuItem>
         ))}
-      </div>
-    </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

@@ -16,17 +16,29 @@
 
 import type { ApiClientCore } from '../client'
 import type { Release, ReleaseStats } from '../types'
+import { urlWithQuery } from '../utils'
+import { serviceScopeQuery, type ServiceScopeParams } from './service-scope'
 
 export function releasesMethods(core: ApiClientCore) {
   const base = core.API_BASE
 
   return {
-    getReleases: (projectId: number) =>
+    getReleases: (projectId: string | number) =>
       core.request<Release[]>(`${base}/projects/${projectId}/releases`),
 
-    getReleaseStats: (projectId: number, version: string) =>
+    getOrganizationReleases: (params: ServiceScopeParams = {}) =>
+      core.request<Release[]>(
+        urlWithQuery(`${base}/releases`, serviceScopeQuery(params))
+      ),
+
+    getReleaseStats: (projectId: string | number, version: string) =>
       core.request<ReleaseStats>(
         `${base}/projects/${projectId}/releases/${encodeURIComponent(version)}/stats`
+      ),
+
+    getOrganizationReleaseStats: (version: string, params: ServiceScopeParams = {}) =>
+      core.request<ReleaseStats>(
+        urlWithQuery(`${base}/releases/${encodeURIComponent(version)}/stats`, serviceScopeQuery(params))
       ),
   }
 }

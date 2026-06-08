@@ -227,7 +227,7 @@ class CustomDashboardService(
             mapToResponse(d, loadWidgets(d.id))
         }
         val projects = projectRepository.searchProjectsByName(orgId.toInt(), pattern, limit = 10).map { row ->
-            SearchProjectResponse(id = row.projectId, name = row.name)
+            SearchProjectResponse(id = row.projectId, resourceId = row.resourceId, name = row.name)
         }
         return SearchResponse(dashboards = dashboards, projects = projects)
     }
@@ -318,7 +318,7 @@ class CustomDashboardService(
                     QueryDsl(
                         dataSource = "events",
                         metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count")),
-                        groupBy = listOf(GroupByDef("transaction", GroupByType.FIELD)),
+                        groupBy = listOf(GroupByDef("transaction_name", GroupByType.FIELD)),
                         filters = listOf(FilterDef("level", FilterOp.EQ, "error")),
                         orderBy = OrderByDef("count", "desc"),
                         limit = 10

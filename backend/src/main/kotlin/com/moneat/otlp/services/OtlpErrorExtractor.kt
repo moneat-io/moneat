@@ -37,8 +37,12 @@ data class OtlpExceptionEvent(
     val traceIdHex: String,
     val spanIdHex: String,
     val organizationId: Long,
+    val projectId: Long?,
+    val serviceNamespace: String,
     val service: String,
     val environment: String,
+    val host: String,
+    val serviceVersion: String,
     val exceptionType: String,
     val exceptionMessage: String,
     val stackTrace: String,
@@ -55,10 +59,8 @@ data class OtlpExceptionEvent(
  *
  * These are extracted here so they can be fed into Moneat's error tracking pipeline.
  *
- * Exceptions are org-scoped; persisting them to the project-scoped `events` table requires
- * resolving organization IDs to project IDs (for example via a `service.name` → project
- * mapping table or project-scoped OTLP API keys). Until that exists, callers only extract
- * and log (for example `OtlpTraceIngestionWorker` logs extracted exception counts).
+ * Exceptions are persisted only when the span has already been routed to a project through
+ * OpenTelemetry service mappings.
  */
 object OtlpErrorExtractor {
 
@@ -91,8 +93,12 @@ object OtlpErrorExtractor {
                     traceIdHex = span.traceIdHex,
                     spanIdHex = span.spanIdHex,
                     organizationId = span.organizationId,
+                    projectId = span.projectId,
+                    serviceNamespace = span.serviceNamespace,
                     service = span.service,
                     environment = span.env,
+                    host = span.host,
+                    serviceVersion = span.version,
                     exceptionType = exType,
                     exceptionMessage = exMessage,
                     stackTrace = stackTrace,
@@ -110,8 +116,12 @@ object OtlpErrorExtractor {
                     traceIdHex = span.traceIdHex,
                     spanIdHex = span.spanIdHex,
                     organizationId = span.organizationId,
+                    projectId = span.projectId,
+                    serviceNamespace = span.serviceNamespace,
                     service = span.service,
                     environment = span.env,
+                    host = span.host,
+                    serviceVersion = span.version,
                     exceptionType = "SpanError",
                     exceptionMessage = span.statusMessage.ifEmpty { "Span completed with ERROR status" },
                     stackTrace = "",

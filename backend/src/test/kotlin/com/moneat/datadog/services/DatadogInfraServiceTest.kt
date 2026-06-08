@@ -16,6 +16,7 @@
 
 package com.moneat.datadog.services
 
+import com.moneat.config.ClickHouseClient
 import com.moneat.datadog.models.DatadogConnection
 import com.moneat.datadog.models.DatadogConnectionsPayload
 import com.moneat.datadog.models.DatadogContainer
@@ -23,6 +24,14 @@ import com.moneat.datadog.models.DatadogContainerPayload
 import com.moneat.datadog.models.DatadogProcess
 import com.moneat.datadog.models.DatadogProcessPayload
 import com.moneat.testsupport.TestIpConstants
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.HttpStatusCode
+import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -236,5 +245,88 @@ class DatadogInfraServiceTest {
         assertTrue(
             batch.processes[0].timestampMs in before..after
         )
+    }
+
+    @Test
+    fun `insertInfraBatch writes raw containers and infra rollups`() = runBlocking {
+        val queries = mutableListOf<String>()
+        val response = mockk<HttpResponse>()
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "test_db"
+            every { response.status } returns HttpStatusCode.OK
+            coEvery { ClickHouseClient.execute(capture(queries)) } returns response
+
+            DatadogInfraService.insertInfraBatch(
+                QueuedInfraBatch(
+                    organizationId = 42L,
+                    type = "containers",
+                    containers = listOf(
+                        QueuedContainerEntry(
+                            host = "web-01",
+                            containerId = "abc123",
+                            name = "nginx",
+                            image = "nginx:latest",
+                            cpuPercent = 5.0,
+                            memUsage = 100L,
+                            memLimit = 200L,
+                            tags = mapOf("host_id" to "7"),
+                            timestampMs = 1_700_000_000_000L,
+                        )
+                    )
+                )
+            )
+
+            assertTrue(queries.any { it.contains("INSERT INTO `test_db`.containers ") })
+            assertTrue(queries.any { it.contains("containers_latest_by_host") })
+            assertTrue(queries.any { it.contains("containers_rollup_1m") })
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
+    fun `insertInfraBatch preserves raw container success when rollup setup fails`() = runBlocking {
+        val queries = mutableListOf<String>()
+        val response = mockk<HttpResponse>()
+        var getDatabaseCalls = 0
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } answers {
+                getDatabaseCalls += 1
+                if (getDatabaseCalls == 1) {
+                    "test_db"
+                } else {
+                    throw IllegalStateException("rollup database unavailable")
+                }
+            }
+            every { response.status } returns HttpStatusCode.OK
+            coEvery { ClickHouseClient.execute(capture(queries)) } returns response
+
+            DatadogInfraService.insertInfraBatch(
+                QueuedInfraBatch(
+                    organizationId = 42L,
+                    type = "containers",
+                    containers = listOf(
+                        QueuedContainerEntry(
+                            host = "web-01",
+                            containerId = "abc123",
+                            name = "nginx",
+                            image = "nginx:latest",
+                            cpuPercent = 5.0,
+                            memUsage = 100L,
+                            memLimit = 200L,
+                            tags = mapOf("host_id" to "7"),
+                            timestampMs = 1_700_000_000_000L,
+                        )
+                    )
+                )
+            )
+
+            assertEquals(1, queries.size)
+            assertTrue(queries.single().contains("INSERT INTO `test_db`.containers "))
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
     }
 }

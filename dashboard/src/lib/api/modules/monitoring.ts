@@ -26,6 +26,8 @@ import type {
   DdConnectionListResponse,
   HostAlert,
   HostAlertConfig,
+  AlertEpisode,
+  AlertLifecycleListParams,
   SilencePeriod,
   CreateSilencePeriodRequest,
   SystemMetricsHistory,
@@ -33,7 +35,35 @@ import type {
   RawContainerStats,
   ContainerMetricsHistory,
   CreateDdApiKeyResponse,
+  InfrastructureMapSavedViewsResponse,
+  InfrastructureResourceKind,
+  InfrastructureGroupBy,
+  InfrastructureFillBy,
+  InfrastructureSizeBy,
+  SaveInfrastructureMapViewRequest,
+  SavedInfrastructureMapView,
 } from '../types'
+
+interface RawInfrastructureMapSavedView {
+  id: number | string
+  name: string
+  resourceKind?: InfrastructureResourceKind
+  resource_kind?: InfrastructureResourceKind
+  groupBy?: InfrastructureGroupBy
+  group_by?: InfrastructureGroupBy
+  fillBy?: InfrastructureFillBy
+  fill_by?: InfrastructureFillBy
+  sizeBy?: InfrastructureSizeBy
+  size_by?: InfrastructureSizeBy
+  searchQuery?: string
+  search_query?: string
+  schemaVersion?: number
+  schema_version?: number
+  createdAt?: string
+  created_at?: string
+  updatedAt?: string
+  updated_at?: string
+}
 
 function mapHostAlert(row: Record<string, unknown>): HostAlert {
   const rawScope = ((row.scope as string | undefined) ?? '').toLowerCase()
@@ -46,7 +76,7 @@ function mapHostAlert(row: Record<string, unknown>): HostAlert {
     threshold: row.threshold as number,
     durationSeconds: (row.durationSeconds ?? row.duration_seconds ?? 0) as number,
     enabled: row.enabled === true,
-    incidentSeverity: (row.incidentSeverity ?? row.incident_severity ?? null) as string | null,
+    alertPriority: (row.alertPriority ?? row.alert_priority ?? row.incidentSeverity ?? row.incident_severity ?? null) as string | null,
     lastTriggeredAt: (row.lastTriggeredAt ?? row.last_triggered_at) as number | undefined,
     createdAt: (row.createdAt ?? row.created_at) as number,
   }
@@ -61,6 +91,34 @@ function mapSilencePeriod(row: Record<string, unknown>): SilencePeriod {
     endsAt: (row.ends_at ?? row.endsAt) as number,
     createdBy: (row.created_by ?? row.createdBy) as number,
     createdAt: (row.created_at ?? row.createdAt) as number,
+  }
+}
+
+function mapInfrastructureMapSavedView(
+  row: RawInfrastructureMapSavedView
+): SavedInfrastructureMapView {
+  return {
+    id: String(row.id),
+    name: row.name,
+    resourceKind: row.resourceKind ?? row.resource_kind ?? 'hosts',
+    groupBy: row.groupBy ?? row.group_by ?? 'status',
+    fillBy: row.fillBy ?? row.fill_by ?? 'health',
+    sizeBy: row.sizeBy ?? row.size_by ?? 'uniform',
+    searchQuery: row.searchQuery ?? row.search_query ?? '',
+    schemaVersion: row.schemaVersion ?? row.schema_version ?? 1,
+    createdAt: row.createdAt ?? row.created_at ?? '',
+    updatedAt: row.updatedAt ?? row.updated_at ?? '',
+  }
+}
+
+function savedViewRequestPayload(view: SaveInfrastructureMapViewRequest) {
+  return {
+    name: view.name,
+    resource_kind: view.resourceKind,
+    group_by: view.groupBy,
+    fill_by: view.fillBy,
+    size_by: view.sizeBy,
+    search_query: view.searchQuery,
   }
 }
 
@@ -163,6 +221,32 @@ export function monitoringMethods(core: ApiClientCore) {
       )
     },
 
+    // Infrastructure map saved views
+    getInfrastructureMapSavedViews: async (): Promise<InfrastructureMapSavedViewsResponse> => {
+      const response = await core.request<{views?: RawInfrastructureMapSavedView[]}>(
+        `${base}/infra/map/saved-views`
+      )
+      return {
+        views: (response.views ?? []).map(mapInfrastructureMapSavedView),
+      }
+    },
+
+    saveInfrastructureMapView: async (
+      view: SaveInfrastructureMapViewRequest
+    ): Promise<SavedInfrastructureMapView> => {
+      const response = await core.request<RawInfrastructureMapSavedView>(
+        `${base}/infra/map/saved-views`,
+        {
+          method: 'POST',
+          body: JSON.stringify(savedViewRequestPayload(view)),
+        }
+      )
+      return mapInfrastructureMapSavedView(response)
+    },
+
+    deleteInfrastructureMapSavedView: (viewId: string) =>
+      core.request<void>(`${base}/infra/map/saved-views/${viewId}`, {method: 'DELETE'}),
+
     // Connections
     getConnections: (
       params: {
@@ -258,7 +342,10 @@ export function monitoringMethods(core: ApiClientCore) {
       if (interval) params.append('interval', interval)
       const query = params.toString()
       return core.request<ContainerMetricsHistory>(
-        urlWithQuery(`${base}/monitor/systems/${systemId}/containers/${encodeURIComponent(containerName)}/metrics`, query)
+        urlWithQuery(
+          `${base}/monitor/systems/${systemId}/containers/${encodeURIComponent(containerName)}/metrics`,
+          query
+        )
       )
     },
 
@@ -307,7 +394,7 @@ export function monitoringMethods(core: ApiClientCore) {
         threshold: number
         durationSeconds?: number
         enabled?: boolean
-        incidentSeverity?: string
+        alertPriority?: string
       },
       scope: 'global' | 'host' = 'host'
     ) => {
@@ -324,11 +411,11 @@ export function monitoringMethods(core: ApiClientCore) {
       updates: Partial<HostAlert>,
       scope: 'global' | 'host' = 'host'
     ) => {
-      const payload = await core.request<Record<string, unknown>>(
+      const payload = await core.request<Record<string, unknown> | undefined>(
         `${base}/monitor/hosts/${hostId}/alerts/${alertId}?scope=${scope}`,
         { method: 'PUT', body: JSON.stringify(updates) }
       )
-      return mapHostAlert(payload)
+      return payload === undefined ? undefined : mapHostAlert(payload)
     },
 
     deleteHostAlert: (
@@ -340,6 +427,26 @@ export function monitoringMethods(core: ApiClientCore) {
         `${base}/monitor/hosts/${hostId}/alerts/${alertId}?scope=${scope}`,
         { method: 'DELETE' }
       ),
+
+    // Alert lifecycles
+    getAlertLifecycles: (params: AlertLifecycleListParams = {}) => {
+      const searchParams = new URLSearchParams()
+      if (params.status) searchParams.set('status', params.status)
+      if (params.limit != null) searchParams.set('limit', String(params.limit))
+      const query = searchParams.toString()
+      return core.request<AlertEpisode[]>(urlWithQuery(`${base}/alerts/lifecycles`, query))
+    },
+
+    ignoreAlertLifecycle: (episodeId: number, reason?: string) =>
+      core.request<AlertEpisode>(`${base}/alerts/lifecycles/${episodeId}/ignore`, {
+        method: 'POST',
+        body: JSON.stringify(reason === undefined ? {} : {reason}),
+      }),
+
+    unignoreAlertLifecycle: (episodeId: number) =>
+      core.request<AlertEpisode>(`${base}/alerts/lifecycles/${episodeId}/unignore`, {
+        method: 'POST',
+      }),
 
     // Silence periods
     getSilencePeriods: async () => {

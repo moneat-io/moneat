@@ -16,53 +16,54 @@
 
 package com.moneat.services
 
-import com.moneat.incident.models.AlertSource
+import com.moneat.alerts.models.AlertLifecycleEvent
+import com.moneat.alerts.models.AlertSource
+import com.moneat.alerts.models.AlertStatus
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.incident.services.IncidentService
-import com.moneat.notifications.services.AlertNotificationPreferencesService
-import com.moneat.notifications.services.DiscordService
-import com.moneat.notifications.services.EmailService
-import com.moneat.notifications.services.SlackService
 import com.moneat.shared.services.TaskLock
 import com.moneat.uptime.models.CheckResult
 import com.moneat.uptime.models.UptimeMonitorData
 import com.moneat.uptime.services.UptimeCheckExecutor
 import com.moneat.uptime.services.UptimeScheduler
 import com.moneat.uptime.services.UptimeService
+import com.moneat.workflows.services.WorkflowService
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
+import io.mockk.slot
 import io.mockk.unmockkObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import java.util.UUID
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.reflect.full.callSuspend
 import kotlin.reflect.full.declaredFunctions
 import kotlin.reflect.jvm.isAccessible
 import kotlin.time.Instant
 
+private const val TEST_FRONTEND_BASE_URL = "https://moneat.io"
+
 class UptimeSchedulerTest {
 
     private val uptimeService = mockk<UptimeService>(relaxed = true)
     private val checkExecutor = mockk<UptimeCheckExecutor>(relaxed = true)
-    private val slackService = mockk<SlackService>(relaxed = true)
-    private val discordService = mockk<DiscordService>(relaxed = true)
     private val incidentService = mockk<IncidentService>(relaxed = true)
-    private val emailService = mockk<EmailService>(relaxed = true)
-    private val prefsService =
-        mockk<AlertNotificationPreferencesService>(relaxed = true)
+    private val billingQuotaService = mockk<BillingQuotaService>(relaxed = true)
+    private val workflowService = mockk<WorkflowService>(relaxed = true)
 
     private val scheduler = UptimeScheduler(
         uptimeService = uptimeService,
         checkExecutor = checkExecutor,
-        slackService = slackService,
-        discordService = discordService,
         incidentService = incidentService,
-        emailService = emailService,
-        prefsService = prefsService
+        billingQuotaService = billingQuotaService,
+        workflowService = workflowService,
+        frontendBaseUrl = TEST_FRONTEND_BASE_URL,
     )
 
     @AfterTest
@@ -254,6 +255,38 @@ class UptimeSchedulerTest {
     // ──── Recovery ────
 
     @Test
+    fun `performCheck publishes workflow event when monitor remains down`() =
+        runBlocking {
+            val monitor = testMonitor(status = "down")
+            val eventSlot = slot<AlertLifecycleEvent>()
+
+            every {
+                uptimeService.getMonitorsDueForCheck()
+            } returns listOf(monitor)
+            coEvery {
+                checkExecutor.executeCheck(monitor)
+            } returns CheckResult(
+                status = 0,
+                responseTimeMs = 250,
+                statusCode = 0,
+                message = "Connection refused"
+            )
+
+            callPrivateSuspend("performCheck", monitor.id)
+
+            coVerify(exactly = 1) {
+                workflowService.publishAlertTriggered(capture(eventSlot))
+            }
+            val event = eventSlot.captured
+            assertEquals(AlertStatus.FIRING, event.status)
+            assertEquals(AlertSource.UPTIME_MONITOR, event.source)
+            assertEquals("moneat-uptime-${monitor.id}", event.deduplicationKey)
+            assertEquals(monitor.organizationId, event.organizationId)
+            assertEquals(JsonPrimitive(monitor.id.toString()), event.metadata["monitor_id"])
+            assertEquals(JsonPrimitive("Connection refused"), event.metadata["error_message"])
+        }
+
+    @Test
     fun `notifyStatusChange auto resolves incident when monitor recovers`() =
         runBlocking {
             val monitor = testMonitor(status = "down")
@@ -270,7 +303,10 @@ class UptimeSchedulerTest {
                 incidentService.autoResolveAlert(
                     organizationId = monitor.organizationId,
                     source = AlertSource.UPTIME_MONITOR,
-                    deduplicationKey = "moneat-uptime-${monitor.id}"
+                    deduplicationKey = "moneat-uptime-${monitor.id}",
+                    title = "Uptime Monitor Recovered: Test Monitor",
+                    description = "Monitor 'Test Monitor' (http) is back up.",
+                    moneatUrl = "https://moneat.io/uptime/${monitor.id}",
                 )
             }
         }

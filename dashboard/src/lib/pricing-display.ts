@@ -33,6 +33,7 @@ export interface PricingCardTierInput {
   logRetentionDays?: number
   replayRetentionDays?: number
   llmRetentionDays?: number
+  apmTraceRetentionDays?: number
   maxProjects: number | null
   maxSystems: number
   monitorIntervalSeconds: number
@@ -178,20 +179,23 @@ function buildIncludedLimits(tier: PricingCardTierInput): string[] {
     }
   }
 
-  const retentionParts: string[] = []
   const errRet = tier.retentionDays
   const logRet = tier.logRetentionDays ?? errRet
   const replayRet = tier.replayRetentionDays ?? errRet
   const llmRet = tier.llmRetentionDays ?? errRet
-  const allSame = logRet === errRet && replayRet === errRet && llmRet === errRet
-  if (allSame) {
-    retentionParts.push(`${errRet}-day retention`)
+  const apmRet = tier.apmTraceRetentionDays ?? errRet
+  const coreSame = logRet === errRet && replayRet === errRet && llmRet === errRet
+  if (coreSame && apmRet === errRet) {
+    limits.push(`${errRet}-day retention`)
+  } else if (coreSame) {
+    limits.push(`${errRet}-day core retention, ${apmRet}-day APM traces`)
   } else {
-    retentionParts.push(`${errRet}d errors, ${replayRet}d replays, ${logRet}d logs, ${llmRet}d AI`)
+    limits.push(
+      `${errRet}d errors, ${logRet}d logs, ${replayRet}d replays, ${llmRet}d AI, ${apmRet}d APM traces`
+    )
   }
-  limits.push(retentionParts[0])
 
-  limits.push(tier.maxProjects == null ? 'Unlimited projects' : `${tier.maxProjects} project${tier.maxProjects === 1 ? '' : 's'}`)
+  limits.push(tier.maxProjects == null ? 'Unlimited services' : `${tier.maxProjects} service${tier.maxProjects === 1 ? '' : 's'}`)
   limits.push(`${formatMonitorLimit(tier.maxSystems)} (${tier.monitorIntervalSeconds}s interval)`)
 
   // Analytics limits

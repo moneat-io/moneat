@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1.22
-FROM node:24-alpine AS dashboard-build
+# Build artifacts are architecture-neutral, so keep the build stage on the native runner platform.
+FROM --platform=$BUILDPLATFORM node:24-alpine AS dashboard-build
 WORKDIR /app
 COPY dashboard/package.json dashboard/package-lock.json dashboard/.npmrc ./
 RUN --mount=type=cache,target=/root/.npm \
@@ -25,7 +26,7 @@ ENV VITE_DD_CLIENT_TOKEN=$VITE_DD_CLIENT_TOKEN
 ENV VITE_DD_PROXY_URL=$VITE_DD_PROXY_URL
 ENV VITE_DD_SERVICE=$VITE_DD_SERVICE
 ENV VITE_DD_ENV=$VITE_DD_ENV
-RUN npx vite build
+RUN npm run build
 
 FROM nginx:alpine
 COPY --from=dashboard-build /app/dist /usr/share/nginx/html

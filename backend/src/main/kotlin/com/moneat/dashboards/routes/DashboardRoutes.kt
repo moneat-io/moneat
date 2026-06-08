@@ -48,13 +48,17 @@ import com.moneat.dashboards.translation.GrafanaTranslator
 import com.moneat.plugins.getDemoEpochMs
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Projects
+import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.utils.ErrorResponse
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
+import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.request.receive
+import io.ktor.server.request.receiveText
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
@@ -64,18 +68,17 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
 
-private const val QUERY_PREVIEW_LENGTH = 80
 private const val DEFAULT_RETENTION_DAYS = 90
 private const val MAX_QUERIES_PER_REQUEST = 10
 
@@ -122,36 +125,15 @@ private fun getDashboardScope(dashboardId: Long, orgId: Long): DashboardScope? {
     }
 }
 
-private fun resolvePrometheusDataSource(
-    dsl: QueryDsl,
-    orgId: Long,
-    dataSourceService: CustomDataSourceService,
-): QueryDsl {
-    if (dsl.dataSource != "__prometheus") return dsl
-    val sources = dataSourceService.listDataSources(orgId)
-    val promSource = sources.firstOrNull { it.sourceType.equals("prometheus", ignoreCase = true) }
-    if (promSource == null) {
-        logger.warn {
-            val sourcesList = sources.map { "${it.id}:${it.sourceType}" }
-            val shortQuery = dsl.rawQuery?.take(QUERY_PREVIEW_LENGTH) ?: ""
-            "No Prometheus datasource found for org $orgId (${sources.size} sources: $sourcesList), " +
-                "cannot resolve __prometheus for rawQuery=$shortQuery"
-        }
-        return dsl
-    }
-    val rawQueryPreview = dsl.rawQuery?.take(QUERY_PREVIEW_LENGTH)
-    logger.debug { "Resolved __prometheus -> custom:${promSource.id} for rawQuery=$rawQueryPreview" }
-    return dsl.copy(dataSource = "custom:${promSource.id}")
-}
-
 private suspend fun io.ktor.server.routing.RoutingContext.handleListDashboards(
     dashboardService: CustomDashboardService,
+    projectIdResolver: ProjectIdResolver,
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = getOrgIdForUser(userId)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
-    val projectId = call.request.queryParameters["projectId"]?.toLongOrNull()
+    val projectId = call.request.queryParameters["projectId"]?.let(projectIdResolver::resolve)
     val dashboards = dashboardService.listDashboards(orgId, projectId, userId)
     call.respond(dashboards)
 }
@@ -302,6 +284,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDashboardQuery(
     retentionPolicyService: RetentionPolicyService,
     dataSourceService: CustomDataSourceService,
     dataSourceExecutor: CustomDataSourceExecutor,
+    projectIdResolver: ProjectIdResolver,
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
@@ -320,7 +303,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDashboardQuery(
     val projectId: Long = if (isDemoUser) {
         -1L // Queries against all 3 demo projects via ClickHouseQueryUtils.projectIdClause
     } else {
-        call.request.queryParameters["projectId"]?.toLongOrNull()
+        call.request.queryParameters["projectId"]?.let(projectIdResolver::resolve)
             ?: return call.respond(
                 HttpStatusCode.BadRequest, ErrorResponse("projectId query parameter required")
             )
@@ -345,7 +328,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDashboardQuery(
     } else {
         request.queryConfig
     }
-    val effectiveQuery = resolvePrometheusDataSource(
+    val effectiveQuery = queryEngine.resolvePrometheusDataSource(
         queryEngine.applyVariables(withTimeRange, request.variables),
         orgId,
         dataSourceService
@@ -377,7 +360,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDashboardQuery(
             )
             call.respond(results)
         } else {
-            val results = queryEngine.executeQuery(effectiveQuery, projectId, demoEpochMs, retentionDays)
+            val results = queryEngine.executeQuery(effectiveQuery, projectId, demoEpochMs, retentionDays, orgId)
             call.respond(results)
         }
     } catch (e: IllegalArgumentException) {
@@ -396,7 +379,7 @@ private suspend fun executeSingleQuery(
     dataSourceExecutor: CustomDataSourceExecutor,
 ): List<Map<String, kotlinx.serialization.json.JsonElement>>? {
     if (!queryEngine.isCustomDataSource(effectiveQuery.dataSource)) {
-        return queryEngine.executeQuery(effectiveQuery, projectId, demoEpochMs, retentionDays)
+        return queryEngine.executeQuery(effectiveQuery, projectId, demoEpochMs, retentionDays, orgId)
     }
     val sourceId = queryEngine.parseCustomDataSourceId(effectiveQuery.dataSource) ?: return null
     val source = dataSourceService.getDataSource(sourceId, orgId) ?: return null
@@ -414,6 +397,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleBatchDashboardQu
     retentionPolicyService: RetentionPolicyService,
     dataSourceService: CustomDataSourceService,
     dataSourceExecutor: CustomDataSourceExecutor,
+    projectIdResolver: ProjectIdResolver,
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
@@ -431,7 +415,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleBatchDashboardQu
     val projectId: Long = if (isDemoUser) {
         -1L
     } else {
-        call.request.queryParameters["projectId"]?.toLongOrNull()
+        call.request.queryParameters["projectId"]?.let(projectIdResolver::resolve)
             ?: return call.respond(
                 HttpStatusCode.BadRequest, ErrorResponse("projectId query parameter required")
             )
@@ -465,7 +449,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleBatchDashboardQu
         } else {
             query
         }
-        val effectiveQuery = resolvePrometheusDataSource(
+        val effectiveQuery = queryEngine.resolvePrometheusDataSource(
             queryEngine.applyVariables(withTimeRange, request.variables),
             orgId,
             dataSourceService
@@ -675,13 +659,24 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateAlert(
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
     val alertId = call.parameters["alertId"]?.toLongOrNull()
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
-    val request = call.receive<UpdateDashboardAlertRequest>()
+    val request = receiveUpdateAlertRequest()
     try {
         val updated = dashboardAlertService.updateAlert(alertId, id, orgId, request)
             ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
         call.respond(updated)
     } catch (e: IllegalArgumentException) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message ?: "Invalid request"))
+    }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.receiveUpdateAlertRequest(): UpdateDashboardAlertRequest {
+    val body = call.receiveText()
+    return suspendRunCatching {
+        val request = json.decodeFromString<UpdateDashboardAlertRequest>(body)
+        val hasWarningThreshold = json.parseToJsonElement(body).jsonObject.containsKey("warning_threshold")
+        request.copy(warningThresholdProvided = hasWarningThreshold)
+    }.getOrElse { e ->
+        throw BadRequestException("Invalid alert update payload", e)
     }
 }
 
@@ -889,6 +884,7 @@ fun Route.customDashboardRoutes(
     dashboardService: CustomDashboardService = GlobalContext.get().get(),
     queryEngine: DashboardQueryEngine = GlobalContext.get().get(),
     retentionPolicyService: RetentionPolicyService = GlobalContext.get().get(),
+    projectIdResolver: ProjectIdResolver = ProjectIdResolver(),
     translators: DashboardTranslators = DashboardTranslators(),
     dataSourceService: CustomDataSourceService = GlobalContext.get().get(),
     dataSourceExecutor: CustomDataSourceExecutor = GlobalContext.get().get(),
@@ -896,7 +892,7 @@ fun Route.customDashboardRoutes(
 ) {
     route("/v1/dashboards") {
         authenticate(AUTH_JWT) {
-            get { handleListDashboards(dashboardService) }
+            get { handleListDashboards(dashboardService, projectIdResolver) }
             post { handleCreateDashboard(dashboardService) }
             route("/folders") {
                 get { handleListFolders(dashboardService) }
@@ -910,10 +906,22 @@ fun Route.customDashboardRoutes(
             put("/{id}") { handleUpdateDashboard(dashboardService) }
             delete("/{id}") { handleDeleteDashboard(dashboardService) }
             post("/{id}/query") {
-                handleDashboardQuery(queryEngine, retentionPolicyService, dataSourceService, dataSourceExecutor)
+                handleDashboardQuery(
+                    queryEngine,
+                    retentionPolicyService,
+                    dataSourceService,
+                    dataSourceExecutor,
+                    projectIdResolver
+                )
             }
             post("/{id}/query/batch") {
-                handleBatchDashboardQuery(queryEngine, retentionPolicyService, dataSourceService, dataSourceExecutor)
+                handleBatchDashboardQuery(
+                    queryEngine,
+                    retentionPolicyService,
+                    dataSourceService,
+                    dataSourceExecutor,
+                    projectIdResolver
+                )
             }
             post("/{id}/variables/resolve") {
                 handleVariablesResolve(dashboardService, dataSourceService, dataSourceExecutor)

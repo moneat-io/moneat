@@ -16,7 +16,7 @@
 
 package com.moneat.services.incident
 
-import com.moneat.incident.models.IncidentEvent
+import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.incident.models.ProviderConfig
 import com.moneat.incident.services.IncidentProvider
 import com.moneat.incident.services.IncidentProviderRegistry
@@ -32,7 +32,7 @@ class IncidentProviderRegistryTest {
                 override val providerType: String = "test-provider-${System.nanoTime()}"
 
                 override suspend fun sendAlert(
-                    event: IncidentEvent,
+                    event: AlertLifecycleEvent,
                     config: ProviderConfig
                 ): Result<String> {
                     return Result.success("ok")

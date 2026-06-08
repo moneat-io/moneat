@@ -18,6 +18,7 @@ import type { ApiClientCore } from '../client'
 import type {
   ApmSpanUsageDebugResponse,
   BillingPlansResponse,
+  BillingUsageInsightsResponse,
   BillingUsage,
   CheckoutSessionRequest,
   CheckoutSessionResponse,
@@ -38,6 +39,9 @@ export function billingMethods(core: ApiClientCore) {
 
     getBillingUsage: () =>
       core.request<BillingUsage>(`${base}/billing/usage`),
+
+    getBillingUsageInsights: () =>
+      core.request<BillingUsageInsightsResponse>(`${base}/billing/usage/insights`),
 
     getBillingApmSpanUsageDebug: (limit = 20) => {
       const numericLimit = Number(limit)

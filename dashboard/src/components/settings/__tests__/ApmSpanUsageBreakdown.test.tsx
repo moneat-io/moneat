@@ -62,11 +62,13 @@ describe('ApmSpanUsageBreakdown', () => {
         debug={apmSpanDebugResponse}
         error={undefined}
         isLoading={false}
+        retentionDays={30}
         timezone="UTC"
       />
     )
 
     expect(screen.queryByText('checkout-api')).not.toBeInTheDocument()
+    expect(screen.getByText('Sources use retained 30d traces.')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', {name: /show sources/i}))
 
@@ -91,6 +93,7 @@ describe('ApmSpanUsageBreakdown', () => {
         debug={undefined}
         error={undefined}
         isLoading
+        retentionDays={30}
         timezone="UTC"
       />
     )
@@ -103,6 +106,7 @@ describe('ApmSpanUsageBreakdown', () => {
         debug={undefined}
         error={new Error('failed')}
         isLoading={false}
+        retentionDays={30}
         timezone="UTC"
       />
     )
@@ -113,9 +117,10 @@ describe('ApmSpanUsageBreakdown', () => {
         debug={{...apmSpanDebugResponse, groups: []}}
         error={undefined}
         isLoading={false}
+        retentionDays={30}
         timezone="UTC"
       />
     )
-    expect(screen.getByText('No APM spans stored for this billing period.')).toBeInTheDocument()
+    expect(screen.getByText('No APM spans stored for the retained 30-day window.')).toBeInTheDocument()
   })
 })

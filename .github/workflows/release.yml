@@ -63,6 +63,10 @@ jobs:
         working-directory: dashboard
         run: npm run lint
 
+      - name: Run TypeScript typecheck
+        working-directory: dashboard
+        run: npm run typecheck
+
       - name: Run frontend tests
         working-directory: dashboard
         run: npm run test
@@ -173,16 +177,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Generate changelog for prerelease
+      - name: Skip GitHub Release for prerelease
         if: ${{ contains(github.ref_name, '-') }}
-        uses: orhun/git-cliff-action@07dda386992489f0a6151dee53f3a137713644de
-        with:
-          config: cliff.toml
-          args: --current --strip header
-        env:
-          OUTPUT: CHANGES.md
-          GITHUB_REPO: ${{ github.repository }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Prerelease tag ${{ github.ref_name }} will build images but will not publish a GitHub Release."
 
       - name: Get previous stable tag
         if: ${{ !contains(github.ref_name, '-') }}
@@ -211,11 +209,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create GitHub Release
+        if: ${{ !contains(github.ref_name, '-') }}
         uses: softprops/action-gh-release@e798e6a1ede8d07b74ac4cdac6bdfa4cc1653907
         with:
           body_path: CHANGES.md
           draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: false
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

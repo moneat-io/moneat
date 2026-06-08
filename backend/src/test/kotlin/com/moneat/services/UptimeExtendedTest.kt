@@ -17,10 +17,6 @@
 package com.moneat.services
 
 import com.moneat.incident.services.IncidentService
-import com.moneat.notifications.services.AlertNotificationPreferencesService
-import com.moneat.notifications.services.DiscordService
-import com.moneat.notifications.services.EmailService
-import com.moneat.notifications.services.SlackService
 import com.moneat.shared.services.TaskLock
 import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.respond
@@ -126,6 +122,20 @@ class UptimeExtendedTest {
     private fun bypassSsrf() {
         mockkObject(UrlValidator)
         every { UrlValidator.validateExternalUrl(any()) } returns Unit
+    }
+
+    private suspend fun <T> withSelfHosted(value: String, block: suspend () -> T): T {
+        val previous = System.getProperty("SELF_HOSTED")
+        System.setProperty("SELF_HOSTED", value)
+        return try {
+            block()
+        } finally {
+            if (previous == null) {
+                System.clearProperty("SELF_HOSTED")
+            } else {
+                System.setProperty("SELF_HOSTED", previous)
+            }
+        }
     }
 
     // ──── Push & unknown types ────
@@ -502,26 +512,30 @@ class UptimeExtendedTest {
 
     @Test
     fun `tcp check succeeds connecting to local server`() = runBlocking {
-        ServerSocket(0).use { serverSocket ->
-            val port = serverSocket.localPort
-            val result = executor.executeCheck(
-                monitor(MonitorParams(type = "tcp", hostname = LOCALHOST, port = port))
-            )
-            assertEquals(1, result.status)
-            assertTrue(result.message.contains("TCP connection successful"))
-            assertTrue(result.responseTimeMs >= 0)
+        withSelfHosted("true") {
+            ServerSocket(0).use { serverSocket ->
+                val port = serverSocket.localPort
+                val result = executor.executeCheck(
+                    monitor(MonitorParams(type = "tcp", hostname = LOCALHOST, port = port))
+                )
+                assertEquals(1, result.status)
+                assertTrue(result.message.contains("TCP connection successful"))
+                assertTrue(result.responseTimeMs >= 0)
+            }
         }
     }
 
     @Test
     fun `tcp check fails on unreachable port`() = runBlocking {
-        // Use a port from a closed server socket
-        val port = ServerSocket(0).use { it.localPort }
-        val result = executor.executeCheck(
-            monitor(MonitorParams(type = "tcp", hostname = LOCALHOST, port = port, timeoutSeconds = 2))
-        )
-        assertEquals(0, result.status)
-        assertTrue(result.message.contains("TCP connection failed"))
+        withSelfHosted("true") {
+            // Use a port from a closed server socket
+            val port = ServerSocket(0).use { it.localPort }
+            val result = executor.executeCheck(
+                monitor(MonitorParams(type = "tcp", hostname = LOCALHOST, port = port, timeoutSeconds = 2))
+            )
+            assertEquals(0, result.status)
+            assertTrue(result.message.contains("TCP connection failed"))
+        }
     }
 
     @Test
@@ -627,10 +641,10 @@ class UptimeExtendedTest {
     @Test
     fun `database check fails with invalid connection string`() = runBlocking {
         val result = executor.executeCheck(
-            monitor(MonitorParams(type = "database", dbConnectionString = "jdbc:invalid://nope"))
+            monitor(MonitorParams(type = "database", dbConnectionString = "jdbc:invalid:nope"))
         )
         assertEquals(0, result.status)
-        assertTrue(result.message.contains("Database check failed"))
+        assertTrue(result.message.contains("Blocked"))
     }
 
     @Test
@@ -657,12 +671,14 @@ class UptimeExtendedTest {
 
     @Test
     fun `ping check reports result for localhost`() = runBlocking {
-        val result = executor.executeCheck(
-            monitor(MonitorParams(type = "ping", hostname = LOCALHOST, timeoutSeconds = 5))
-        )
-        // localhost may or may not be reachable depending on OS permissions
-        assertTrue(result.status == 0 || result.status == 1)
-        assertTrue(result.responseTimeMs >= 0)
+        withSelfHosted("true") {
+            val result = executor.executeCheck(
+                monitor(MonitorParams(type = "ping", hostname = LOCALHOST, timeoutSeconds = 5))
+            )
+            // localhost may or may not be reachable depending on OS permissions
+            assertTrue(result.status == 0 || result.status == 1)
+            assertTrue(result.responseTimeMs >= 0)
+        }
     }
 
     // ──── DNS check edge cases ────
@@ -702,11 +718,7 @@ class UptimeExtendedTest {
     fun `scheduler retries on failure and succeeds on second attempt`() = runBlocking {
         val uptimeService = mockk<UptimeService>(relaxed = true)
         val checkExecutor = mockk<UptimeCheckExecutor>(relaxed = true)
-        val slackService = mockk<SlackService>(relaxed = true)
-        val discordService = mockk<DiscordService>(relaxed = true)
         val incidentService = mockk<IncidentService>(relaxed = true)
-        val emailService = mockk<EmailService>(relaxed = true)
-        val prefsService = mockk<AlertNotificationPreferencesService>(relaxed = true)
 
         val monitorData = UptimeMonitorData(
             id = UUID.randomUUID(),
@@ -744,11 +756,8 @@ class UptimeExtendedTest {
         val scheduler = UptimeScheduler(
             uptimeService = uptimeService,
             checkExecutor = checkExecutor,
-            slackService = slackService,
-            discordService = discordService,
             incidentService = incidentService,
-            emailService = emailService,
-            prefsService = prefsService
+            frontendBaseUrl = "https://moneat.io",
         )
 
         scheduler.start()
@@ -798,11 +807,8 @@ class UptimeExtendedTest {
         val scheduler = UptimeScheduler(
             uptimeService = uptimeService,
             checkExecutor = checkExecutor,
-            slackService = mockk(relaxed = true),
-            discordService = mockk(relaxed = true),
             incidentService = mockk(relaxed = true),
-            emailService = mockk(relaxed = true),
-            prefsService = mockk(relaxed = true)
+            frontendBaseUrl = "https://moneat.io",
         )
 
         scheduler.start()

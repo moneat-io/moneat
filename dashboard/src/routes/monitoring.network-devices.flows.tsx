@@ -10,7 +10,8 @@ import {createFileRoute} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {Badge} from '@/components/ui/badge'
-import {Card, CardContent} from '@/components/ui/card'
+import {SectionCard} from '@/components/ui/section-card'
+import {EmptyState} from '@/components/ui/empty-state'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Input} from '@/components/ui/input'
 import {ArrowRightLeft, Loader2, Search} from 'lucide-react'
@@ -66,17 +67,11 @@ function NdmFlows() {
 
   if (flows.length === 0) {
     return (
-      <Card className="border-dashed">
-        <CardContent className="py-16 text-center">
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500/10 to-blue-500/10">
-            <ArrowRightLeft className="h-8 w-8 text-cyan-500" />
-          </div>
-          <h3 className="text-lg font-semibold mb-2">No flow data</h3>
-          <p className="text-muted-foreground max-w-sm mx-auto">
-            Network flow data will appear here once collected by the agent.
-          </p>
-        </CardContent>
-      </Card>
+      <EmptyState
+        icon={ArrowRightLeft}
+        title="No flow data"
+        description="Network flow data will appear here once collected by the agent."
+      />
     )
   }
 
@@ -84,7 +79,7 @@ function NdmFlows() {
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-1.5 text-sm">
-          <ArrowRightLeft className="h-3.5 w-3.5 text-cyan-500" />
+          <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="font-semibold tabular-nums">{flows.length}</span>
           <span className="text-muted-foreground text-xs">flows</span>
         </div>
@@ -101,13 +96,13 @@ function NdmFlows() {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <p className="font-medium">No flows match your search</p>
-          <p className="text-sm mt-1">Try adjusting your search query.</p>
-        </div>
+        <EmptyState
+          icon={Search}
+          title="No flows match your search"
+          description="Try adjusting your search query."
+        />
       ) : (
-        <Card className="overflow-hidden border-border/60 shadow-sm">
-          <CardContent className="p-0">
+        <SectionCard title="Flows" icon={ArrowRightLeft} iconTone="info" count={filtered.length} flushBody>
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent bg-muted/30">
@@ -129,15 +124,14 @@ function NdmFlows() {
                       {Number(f.bytes ?? 0).toLocaleString()}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="text-xs">{f.flowType}</Badge>
+                      <Badge variant="neutral" size="sm">{f.flowType}</Badge>
                     </TableCell>
                     <TableCell className="text-right pr-4 text-xs text-muted-foreground">{f.sampledAt}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
+        </SectionCard>
       )}
     </div>
   )

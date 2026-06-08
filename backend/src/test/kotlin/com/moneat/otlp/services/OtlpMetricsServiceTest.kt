@@ -17,7 +17,12 @@
 package com.moneat.otlp.services
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.shared.services.UsageTrackingService
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.HttpStatusCode
+import io.mockk.coEvery
 import io.mockk.every
+import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import io.opentelemetry.proto.collector.metrics.v1.ExportMetricsServiceRequest
@@ -35,12 +40,17 @@ import io.opentelemetry.proto.metrics.v1.Sum
 import io.opentelemetry.proto.metrics.v1.Summary
 import io.opentelemetry.proto.metrics.v1.SummaryDataPoint
 import io.opentelemetry.proto.resource.v1.Resource
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -596,6 +606,104 @@ class OtlpMetricsServiceTest {
         assertEquals(TEST_ENV, decoded.metrics[0].tags["env"])
     }
 
+    @Test
+    fun `insertBatch writes raw metrics and infra rollups for host metrics`() = runBlocking {
+        val queries = mutableListOf<String>()
+        val response = mockk<HttpResponse>()
+        every { response.status } returns HttpStatusCode.OK
+        coEvery { ClickHouseClient.execute(capture(queries)) } returns response
+
+        val localService = OtlpMetricsService(mockk<UsageTrackingService>(relaxed = true))
+        localService.insertBatch(
+            QueuedOtlpMetricsBatch(
+                organizationId = 42L,
+                metrics = listOf(
+                    OtlpMetricInsert(
+                        organizationId = 42L,
+                        metricName = "system.mem.used",
+                        metricType = "gauge",
+                        description = "memory used",
+                        unit = "bytes",
+                        timestampMs = TEST_TIMESTAMP_MS_PRIMARY,
+                        value = 2048.0,
+                        isMonotonic = 0,
+                        aggregationTemporality = "",
+                        histCount = 0,
+                        histSum = null,
+                        histMin = null,
+                        histMax = null,
+                        histBucketCounts = emptyList(),
+                        histExplicitBounds = emptyList(),
+                        tags = emptyMap(),
+                        resourceAttributes = mapOf("host_id" to "7"),
+                        service = TEST_SVC,
+                        env = TEST_ENV,
+                        host = TEST_HOST,
+                    )
+                )
+            )
+        )
+
+        assertTrue(queries.any { it.contains("INSERT INTO `test_db`.metrics ") })
+        assertTrue(queries.any { it.contains("metrics_latest_by_host") })
+        assertTrue(queries.any { it.contains("metrics_rollup_1m") })
+    }
+
+    @Test
+    fun `insertBatch writes raw metrics as JSONEachRow with UTC millis and JSON maps`() = runBlocking {
+        val queries = mutableListOf<String>()
+        val response = mockk<HttpResponse>()
+        every { response.status } returns HttpStatusCode.OK
+        coEvery { ClickHouseClient.execute(capture(queries)) } returns response
+
+        val localService = OtlpMetricsService(mockk<UsageTrackingService>(relaxed = true))
+        localService.insertBatch(
+            QueuedOtlpMetricsBatch(
+                organizationId = 42L,
+                metrics = listOf(
+                    OtlpMetricInsert(
+                        organizationId = 42L,
+                        projectId = 123L,
+                        metricName = "custom.otlp.metric",
+                        metricType = "gauge",
+                        description = "quoted \"metric\"",
+                        unit = "%",
+                        timestampMs = 1_700_000_000_123L,
+                        value = 2048.0,
+                        isMonotonic = 0,
+                        aggregationTemporality = "",
+                        histCount = 0,
+                        histSum = null,
+                        histMin = null,
+                        histMax = null,
+                        histBucketCounts = emptyList(),
+                        histExplicitBounds = emptyList(),
+                        tags = mapOf("odd" to "O'Brien \"prod\"\nline"),
+                        resourceAttributes = mapOf("service.name" to TEST_SVC),
+                        service = TEST_SVC,
+                        env = TEST_ENV,
+                        host = TEST_HOST,
+                    )
+                )
+            )
+        )
+
+        val query = queries.single { it.contains("INSERT INTO `test_db`.metrics ") }
+        assertTrue(query.contains("FORMAT JSONEachRow"))
+        assertFalse(query.contains("VALUES"))
+        assertFalse(query.contains("fromUnixTimestamp64Milli"))
+        assertFalse(query.contains("map("))
+        assertFalse(query.contains("metric_id"))
+
+        val row = jsonRows(query).single()
+        assertEquals("42", row["organization_id"]?.jsonPrimitive?.content)
+        assertEquals("123", row["service_id"]?.jsonPrimitive?.content)
+        assertEquals("123", row["project_id"]?.jsonPrimitive?.content)
+        assertEquals("2023-11-14 22:13:20.123", row["timestamp"]?.jsonPrimitive?.content)
+        assertEquals("O'Brien \"prod\"\nline", row["tags"]?.jsonObject?.get("odd")?.jsonPrimitive?.content)
+        assertEquals(TEST_SVC, row["resource_attributes"]?.jsonObject?.get("service.name")?.jsonPrimitive?.content)
+    }
+
     // ──── PROTOBUF PARSING ────
 
     @Nested
@@ -805,4 +913,11 @@ class OtlpMetricsServiceTest {
             assertTrue(metrics.isEmpty())
         }
     }
+
+    private fun jsonRows(query: String) =
+        query.lineSequence()
+            .map { it.trim() }
+            .filter { it.startsWith("{") }
+            .map { Json.parseToJsonElement(it).jsonObject }
+            .toList()
 }

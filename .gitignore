@@ -6,6 +6,7 @@ build/
 !**/src/test/**/build/
 
 # Java / Kotlin
+/META-INF/
 *.hprof
 *.salive
 

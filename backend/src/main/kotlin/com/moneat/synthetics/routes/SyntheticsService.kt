@@ -16,16 +16,21 @@
 
 package com.moneat.synthetics.routes
 
+import com.moneat.alerts.models.AlertLifecycleEvent
+import com.moneat.alerts.models.AlertPriority
+import com.moneat.alerts.models.AlertSource
+import com.moneat.alerts.models.AlertStatus
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
-import com.moneat.notifications.services.AlertNotificationPreferencesService
-import com.moneat.notifications.services.DiscordService
-import com.moneat.notifications.services.EmailService
-import com.moneat.notifications.services.SlackService
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
+import com.moneat.utils.suspendRunCatching
+import com.moneat.workflows.services.WorkflowService
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -47,18 +52,11 @@ import java.util.UUID
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
-import com.moneat.utils.suspendRunCatching
-import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
-import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
-import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 /** Manages synthetic HTTP checks, variables, execution, and ClickHouse result storage. */
 class SyntheticsService(
-    private val emailService: EmailService = EmailService(),
-    private val slackService: SlackService = SlackService(),
-    private val discordService: DiscordService = DiscordService(),
-    private val prefsService: AlertNotificationPreferencesService = AlertNotificationPreferencesService(),
     private val billingQuotaService: BillingQuotaService = BillingQuotaService(),
+    private val workflowService: WorkflowService = WorkflowService(),
 ) {
     companion object {
         private val logger = KotlinLogging.logger {}
@@ -315,16 +313,24 @@ class SyntheticsService(
             }
         }
 
-        // Alert on transition from passing to failing
+        // Workflow episode gating handles initial notifications and daily reminders.
         if (test.alertOnFailure &&
-            result.status == "failed" &&
-            oldStatus != "failed"
+            result.status == "failed"
         ) {
             suspendRunCatching {
                 sendFailureAlert(test, result)
             }.getOrElse { e ->
                 logger.error(e) {
                     "Failed to send alert for synthetic test ${test.id}"
+                }
+            }
+        }
+        if (test.alertOnFailure && oldStatus == "failed" && result.status == "passed") {
+            suspendRunCatching {
+                sendRecoveryAlert(test)
+            }.getOrElse { e ->
+                logger.error(e) {
+                    "Failed to send recovery alert for synthetic test ${test.id}"
                 }
             }
         }
@@ -364,7 +370,7 @@ class SyntheticsService(
         return lastResult!!
     }
 
-    private fun sendFailureAlert(
+    private suspend fun sendFailureAlert(
         test: SyntheticTestData,
         result: SyntheticCheckResult
     ) {
@@ -380,59 +386,37 @@ class SyntheticsService(
             "https://moneat.io"
         )
 
-        val emailRecipients = prefsService.getUsersWithChannelEnabled(
-            organizationId = test.organizationId,
-            alertSource = "UPTIME_MONITOR",
-            channel = "email"
-        )
-        emailRecipients.forEach { (_, email) ->
-            emailService.sendUptimeAlertEmail(
-                to = email,
-                monitorName = test.name,
-                status = "down",
-                message = message,
-                monitorUrl = "$frontendUrl/synthetics/${test.id}"
+        workflowService.publishAlertTriggered(
+            AlertLifecycleEvent(
+                title = subject,
+                description = message,
+                priority = AlertPriority.P1,
+                status = AlertStatus.FIRING,
+                source = AlertSource.SYNTHETIC_TEST,
+                deduplicationKey = "moneat-synthetic-${test.id}",
+                organizationId = test.organizationId,
+                moneatUrl = "$frontendUrl/synthetics/${test.id}"
             )
-        }
+        )
+    }
 
-        val slackEnabled = prefsService.getUsersWithChannelEnabled(
-            organizationId = test.organizationId,
-            alertSource = "UPTIME_MONITOR",
-            channel = "slack"
-        ).isNotEmpty()
-        if (slackEnabled) {
-            runScope.launch {
-                slackService.sendUptimeAlert(
-                    organizationId = test.organizationId,
-                    monitorName = test.name,
-                    oldStatus = "passing",
-                    newStatus = "failing",
-                    message = message,
-                    monitorId = test.id,
-                    baseUrl = frontendUrl
-                )
-            }
-        }
-
-        val discordEnabled = prefsService.getUsersWithChannelEnabled(
-            organizationId = test.organizationId,
-            alertSource = "UPTIME_MONITOR",
-            channel = "discord"
-        ).isNotEmpty()
-        if (discordEnabled) {
-            runScope.launch {
-                discordService.sendUptimeAlert(
-                    organizationId = test.organizationId,
-                    monitorUrl = test.url ?: test.name,
-                    isDown = true,
-                    statusCode = null,
-                    responseTime = result.durationMs,
-                    errorMessage = result.errorMessage,
-                    monitorId = test.id,
-                    baseUrl = frontendUrl
-                )
-            }
-        }
+    private suspend fun sendRecoveryAlert(test: SyntheticTestData) {
+        val frontendUrl = EnvConfig.get(
+            "FRONTEND_URL",
+            "https://moneat.io"
+        )
+        workflowService.publishAlertTriggered(
+            AlertLifecycleEvent(
+                title = "Synthetic test recovered: ${test.name}",
+                description = "Test '${test.name}' (${test.testType}) passed after previous failures.",
+                priority = AlertPriority.P3,
+                status = AlertStatus.RESOLVED,
+                source = AlertSource.SYNTHETIC_TEST,
+                deduplicationKey = "moneat-synthetic-${test.id}",
+                organizationId = test.organizationId,
+                moneatUrl = "$frontendUrl/synthetics/${test.id}"
+            )
+        )
     }
 
     private suspend fun recordResult(test: SyntheticTestData, result: SyntheticCheckResult) {

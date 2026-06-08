@@ -144,6 +144,74 @@ class EnvironmentValidator {
                 )
             }
         }
+
+        validateWorkflowRuntimeConfig(errors)
+    }
+
+    private fun validateWorkflowRuntimeConfig(errors: MutableList<String>) {
+        val workflowsEnabledRaw = getConfigValue("WORKFLOWS_ENABLED")
+        if (workflowsEnabledRaw == null) {
+            validateEnabledWorkflowRuntimeConfig(errors)
+            return
+        }
+
+        val workflowsEnabled = workflowsEnabledRaw.toBooleanStrictOrNull()
+        if (workflowsEnabled == null) {
+            errors.add("REQUIRED: WORKFLOWS_ENABLED must be either 'true' or 'false' when set.")
+            return
+        }
+
+        if (workflowsEnabled) {
+            validateEnabledWorkflowRuntimeConfig(errors)
+        }
+    }
+
+    private fun validateEnabledWorkflowRuntimeConfig(errors: MutableList<String>) {
+        validateRequired("TEMPORAL_TARGET", "workflows are enabled", errors)
+        validateRequired("TEMPORAL_NAMESPACE", "workflows are enabled", errors)
+        validateWorkflowSecret("WORKFLOWS_CONNECTION_KEK", errors)
+        validateWorkflowSecret("WORKFLOWS_SIGNING_KEY", errors)
+        validateWorkflowSecret("WORKFLOWS_TEMPORAL_PAYLOAD_KEY", errors)
+        validateWorkflowSecretsDistinct(errors)
+    }
+
+    private fun validateWorkflowSecret(
+        envVar: String,
+        errors: MutableList<String>
+    ) {
+        val value = getConfigValue(envVar)
+        if (value.isNullOrBlank()) {
+            errors.add("REQUIRED: $envVar is not set, but it's required because workflows are enabled.")
+        } else if (value.length < MIN_JWT_SECRET_LENGTH) {
+            errors.add("REQUIRED: $envVar must be at least $MIN_JWT_SECRET_LENGTH characters for security.")
+        }
+    }
+
+    private fun validateWorkflowSecretsDistinct(errors: MutableList<String>) {
+        val keys =
+            listOf(
+                "JWT_SECRET",
+                "DATA_SOURCE_ENCRYPTION_KEY",
+                "WORKFLOWS_CONNECTION_KEK",
+                "WORKFLOWS_SIGNING_KEY",
+                "WORKFLOWS_TEMPORAL_PAYLOAD_KEY"
+            )
+        val values =
+            keys.mapNotNull { key ->
+                getConfigValue(key)
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { value -> key to value }
+            }
+        values
+            .groupBy { it.second }
+            .filterValues { entries -> entries.size > 1 }
+            .values
+            .forEach { duplicates ->
+                errors.add(
+                    "REQUIRED: Workflow secrets must be distinct; reused by " +
+                        duplicates.joinToString(", ") { it.first } + "."
+                )
+            }
     }
 
     private fun validateRequired(

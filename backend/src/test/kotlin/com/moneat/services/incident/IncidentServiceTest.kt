@@ -16,10 +16,10 @@
 
 package com.moneat.services.incident
 
-import com.moneat.incident.models.AlertSource
+import com.moneat.alerts.models.AlertSource
 import com.moneat.incident.models.IncidentProviderConfigs
 import com.moneat.incident.models.IncidentRoutingRules
-import com.moneat.incident.models.IncidentSeverity
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.incident.services.IncidentService
 import com.moneat.shared.models.Organizations
 import com.moneat.testsupport.TestDatabaseHelper
@@ -77,7 +77,7 @@ class IncidentServiceTest {
                 it[IncidentRoutingRules.providerConfigId] = this@IncidentServiceTest.providerConfigId
                 it[alertSource] = AlertSource.HOST_ALERT.name
                 it[alertType] = null
-                it[incidentSeverity] = "medium"
+                it[alertPriority] = "medium"
                 it[createdAt] = Clock.System.now()
                 it[updatedAt] = Clock.System.now()
             }
@@ -85,42 +85,42 @@ class IncidentServiceTest {
     }
 
     @Test
-    fun `resolveIncidentSeverity prefers monitor override over routing rule`() {
+    fun `resolveAlertPriority prefers monitor override over routing rule`() {
         val service = IncidentService()
 
         val severity =
-            service.resolveIncidentSeverity(
+            service.resolveAlertPriority(
                 providerConfigId = providerConfigId,
                 alertSource = AlertSource.HOST_ALERT,
-                monitorSeverityOverride = "critical"
+                monitorPriorityOverride = "critical"
             )
 
-        assertEquals(IncidentSeverity.CRITICAL, severity)
+        assertEquals(AlertPriority.P0, severity)
     }
 
     @Test
-    fun `resolveIncidentSeverity falls back to routing rule when override is absent`() {
+    fun `resolveAlertPriority falls back to routing rule when override is absent`() {
         val service = IncidentService()
 
         val severity =
-            service.resolveIncidentSeverity(
+            service.resolveAlertPriority(
                 providerConfigId = providerConfigId,
                 alertSource = AlertSource.HOST_ALERT,
-                monitorSeverityOverride = null
+                monitorPriorityOverride = null
             )
 
-        assertEquals(IncidentSeverity.MEDIUM, severity)
+        assertEquals(AlertPriority.P2, severity)
     }
 
     @Test
-    fun `resolveIncidentSeverity returns null for invalid override string`() {
+    fun `resolveAlertPriority returns null for invalid override string`() {
         val service = IncidentService()
 
         val severity =
-            service.resolveIncidentSeverity(
+            service.resolveAlertPriority(
                 providerConfigId = providerConfigId,
                 alertSource = AlertSource.HOST_ALERT,
-                monitorSeverityOverride = "not-a-severity"
+                monitorPriorityOverride = "not-a-priority"
             )
 
         assertNull(severity)

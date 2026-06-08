@@ -17,9 +17,12 @@
 package com.moneat.services
 
 import com.moneat.notifications.services.SlackService
+import com.moneat.notifications.services.encodeSlackIssueIdPathSegment
 import com.moneat.shared.models.OrganizationIntegrations
 import com.moneat.shared.models.Organizations
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.workflows.models.WorkflowPreviewField
+import com.moneat.workflows.models.WorkflowStepPreview
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -27,6 +30,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.UUID
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Clock
@@ -80,6 +84,24 @@ class SlackServiceBuildersTest {
         }
     }
 
+    private fun workflowPreview(): WorkflowStepPreview =
+        WorkflowStepPreview(
+            step = "notification.slack",
+            channel = "slack",
+            title = "[P1] Worker failures detected",
+            body = "Worker failures crossed the threshold",
+            textBody = "[P1] Worker failures detected",
+            color = "#E01E5A",
+            fields = listOf(
+                WorkflowPreviewField("Status", "Firing"),
+                WorkflowPreviewField("Priority", "[P1]"),
+                WorkflowPreviewField("Dashboard", "Moneat Backend System Health")
+            ),
+            ctaLabel = "View",
+            ctaUrl = "$BASE_URL/dashboards/13",
+            fallbackText = "[P1] Worker failures detected"
+        )
+
     // ── No-config path tests ────────────────────────────────────────────
 
     @Test
@@ -113,6 +135,24 @@ class SlackServiceBuildersTest {
                     baseUrl = BASE_URL
                 )
             )
+        }
+
+    @Test
+    fun `sendWorkflowAlertMessage returns false when no integration configured`() =
+        runBlocking {
+            val orgId = seedOrg()
+            assertFalse(slackService.sendWorkflowAlertMessage(orgId, workflowPreview()))
+        }
+
+    @Test
+    fun `sendWorkflowAlertMessage builds rich alert blocks with configured integration`() =
+        runBlocking {
+            val orgId = seedOrg("Alert Org Workflow")
+            seedSlackIntegration(orgId)
+
+            val result = slackService.sendWorkflowAlertMessage(orgId, workflowPreview())
+
+            assertFalse(result)
         }
 
     @Test
@@ -167,7 +207,7 @@ class SlackServiceBuildersTest {
         }
 
     @Test
-    fun `sendErrorAlert returns false when no integration configured`() =
+    fun `sendErrorAlert accepts opaque issue IDs when no integration configured`() =
         runBlocking {
             val orgId = seedOrg()
             assertFalse(
@@ -177,11 +217,19 @@ class SlackServiceBuildersTest {
                     issueTitle = "NullPointerException",
                     level = "error",
                     culprit = "com.moneat.Main",
-                    issueId = 100L,
+                    issueId = "a1b2c3d4e5f6abc0",
                     baseUrl = BASE_URL
                 )
             )
         }
+
+    @Test
+    fun `issue ID path segment encoding preserves opaque IDs in Slack URLs`() {
+        assertEquals(
+            "a%2Fb%3Fc%23d%7Ce%3Ef%20g%2Bh",
+            encodeSlackIssueIdPathSegment("a/b?c#d|e>f g+h")
+        )
+    }
 
     @Test
     fun `testConnection returns not configured when no integration`() =
@@ -367,7 +415,7 @@ class SlackServiceBuildersTest {
                 issueTitle = "NullPointerException in UserService",
                 level = "error",
                 culprit = "com.moneat.services.UserService.getUser",
-                issueId = 500L,
+                issueId = "500",
                 baseUrl = BASE_URL,
                 occurrenceCount = 15,
                 environment = "production",
@@ -388,7 +436,7 @@ class SlackServiceBuildersTest {
                 issueTitle = "Deprecated API usage",
                 level = "warning",
                 culprit = null,
-                issueId = 501L,
+                issueId = "501",
                 baseUrl = BASE_URL
             )
             assertFalse(result)
@@ -405,7 +453,7 @@ class SlackServiceBuildersTest {
                 issueTitle = "Feature flag evaluated",
                 level = "info",
                 culprit = "flags.ts:evaluate",
-                issueId = 502L,
+                issueId = "502",
                 baseUrl = BASE_URL,
                 environment = "staging"
             )
@@ -423,7 +471,7 @@ class SlackServiceBuildersTest {
                 issueTitle = "Unrecognized event type",
                 level = "debug",
                 culprit = null,
-                issueId = 503L,
+                issueId = "503",
                 baseUrl = BASE_URL,
                 occurrenceCount = 1,
                 timestamp = "2024-06-15T12:00:00Z"
@@ -442,7 +490,7 @@ class SlackServiceBuildersTest {
                 issueTitle = "TimeoutException",
                 level = "error",
                 culprit = null,
-                issueId = 504L,
+                issueId = "504",
                 baseUrl = BASE_URL
             )
             assertFalse(result)
@@ -531,7 +579,7 @@ class SlackServiceBuildersTest {
                     issueTitle = "Error",
                     level = "error",
                     culprit = null,
-                    issueId = 1L,
+                    issueId = "1",
                     baseUrl = BASE_URL
                 )
             )

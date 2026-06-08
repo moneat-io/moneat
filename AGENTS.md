@@ -137,6 +137,15 @@ To avoid Sonar/ESLint code smells in `dashboard/`:
 
 ## Key Conventions
 
+### Testing Guidelines
+
+- ❌ **Do not call production private methods from new or touched tests** — avoid reflection helpers like
+  `getDeclaredMethod`, `declaredFunctions`, `isAccessible = true`, or equivalent access hacks for behavior coverage.
+- ✅ **Test observable behavior through public APIs, routes, or service methods** whenever practical.
+- ✅ **Extract complex private logic into a small collaborator** with an explicit `internal` or public API when direct
+  unit coverage is warranted.
+- ✅ **Test-local private helper methods are fine** — the rule is about reaching into production internals.
+
 ### Warnings and lint fixes (suppress rarely)
 
 **CRITICAL:** When asked to fix a compiler warning, linter finding, or static analysis issue (Detekt, ESLint, Sonar, Kotlin compiler, etc.):
@@ -200,6 +209,9 @@ To avoid Sonar code smells and keep code consistent:
 
 - **Keep cognitive complexity low (≤15)** – extract helper functions when logic gets nested:
   - Use `runCatching { }.getOrNull()` only in non-suspending, synchronous helpers (e.g., parsing/mapping functions). **Avoid in suspending/coroutine contexts**: `runCatching` swallows all `Throwable`s including `CancellationException`, which can break coroutine cancellation. In suspend functions, use `suspendRunCatching` from `com.moneat.utils` instead — it rethrows `CancellationException` automatically and composes with the `Result` API (`getOrElse`, `getOrNull`, `getOrDefault`, `onFailure`). Keep the manual `catch (e: CancellationException) { throw e }` pattern only when `Result` doesn't compose cleanly (e.g. the catch block mutates state and then rethrows).
+  - In Ktor route handlers, `coroutineScope`, `async`, workers, and other coroutine paths, wrap failures with
+    `suspendRunCatching { ... }` whenever the guarded call may suspend. Reserve plain `runCatching` for synchronous
+    parsing/formatting helpers.
   - Extract complex parsing or mapping into private functions
   - Prefer early returns over nested conditionals
 

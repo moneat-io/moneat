@@ -22,7 +22,8 @@ import {CommandPalette} from '../components/CommandPalette'
 import {CommandPaletteProvider} from '../contexts/CommandPaletteProvider'
 import {Toaster} from '../components/ui/toaster'
 import {api} from '../lib/api'
-import {setDemoEpoch} from '../lib/demo'
+import {isDemo} from '../lib/demo'
+import {APP_OVERVIEW_SEARCH, isPublicLandingRoute} from '../lib/overview-route'
 import {DemoBanner} from '../components/demo/DemoBanner'
 import {AiFloatingPanel} from '../components/AiFloatingPanel'
 import {AiSplitPanel} from '../components/AiSplitPanel'
@@ -61,20 +62,30 @@ const STATIC_TITLES: Record<string, string> = {
   '/security-sbom': 'SBOM Security',
   '/pricing': 'Pricing',
   '/pricing-calculator': 'Pricing Calculator',
+  '/compare': 'Compare Moneat 2026',
+  '/datadog-alternative': 'Datadog Alternative 2026',
+  '/sentry-alternative': 'Sentry Alternative 2026',
+  '/better-stack-alternative': 'Better Stack Alternative 2026',
+  '/signoz-alternative': 'SigNoz Alternative 2026',
   '/docs': 'Documentation',
   '/blog': 'Blog',
-  '/projects': 'Projects',
+  '/projects': 'Sources / Ingestion',
   '/feedback': 'Feedback',
-  '/performance': 'Performance',
+  '/performance': 'Traces',
+  '/performance/traces': 'Traces',
+  '/performance/service-map': 'Service Map',
   '/releases': 'Releases',
   '/replays': 'Session Replays',
   '/logs': 'Logs',
+  '/usage-insights': 'Usage Insights',
   '/monitoring': 'Infrastructure Monitoring',
   '/monitoring/hosts': 'Hosts',
+  '/monitoring/map': 'Map Explorer',
   '/monitoring/containers': 'Containers',
   '/monitoring/processes': 'Processes',
   '/monitoring/network': 'Network Connections',
   '/monitoring/events': 'Events',
+  '/monitoring/service-map': 'Map Explorer',
   '/on-call': 'On-Call Management',
   '/settings': 'Settings & Billing',
   '/admin': 'Admin Overview',
@@ -84,6 +95,7 @@ const STATIC_TITLES: Record<string, string> = {
   '/admin/billing': 'Admin Billing',
   '/admin/emails': 'Admin Emails',
   '/admin/infrastructure': 'Admin Infrastructure',
+  '/workflows/connections': 'Workflow Connections',
 }
 
 // Feature/marketing page routes (shared between public route gating and sidebar visibility)
@@ -103,6 +115,11 @@ const FEATURE_ROUTES = [
   '/custom-dashboards',
   '/security-sbom',
   '/pricing',
+  '/compare',
+  '/datadog-alternative',
+  '/sentry-alternative',
+  '/better-stack-alternative',
+  '/signoz-alternative',
 ] as const
 
 // Public routes that don't require authentication or verification checks
@@ -136,18 +153,24 @@ function formatEntityId(rawValue: string): string {
   return decoded
 }
 
-function getDocumentTitle(pathname: string, isAuthenticated: boolean): string {
+function getDocumentTitle(pathname: string, isPublicLandingPage: boolean): string {
   const normalizedPath = normalizePath(pathname)
 
-  if (!isAuthenticated && normalizedPath === '/') {
+  if (isPublicLandingPage && normalizedPath === '/') {
     return 'Moneat | Error, Performance, and Replay Monitoring'
   }
 
+  const staticTitle = STATIC_TITLES[normalizedPath]
+  if (staticTitle) {
+    return `${staticTitle} | Moneat`
+  }
+
   const dynamicMatchers: Array<[RegExp, (matches: RegExpMatchArray) => string]> = [
-    [/^\/projects\/([^/]+)\/settings$/, (match) => `Project ${formatEntityId(match[1])} Settings`],
-    [/^\/projects\/([^/]+)$/, (match) => `Project ${formatEntityId(match[1])}`],
+    [/^\/projects\/([^/]+)\/settings$/, (match) => `Service ${formatEntityId(match[1])} Settings`],
+    [/^\/projects\/([^/]+)$/, (match) => `Sources / Ingestion ${formatEntityId(match[1])}`],
     [/^\/issues\/([^/]+)$/, (match) => `Issue ${formatEntityId(match[1])}`],
     [/^\/feedback\/([^/]+)$/, (match) => `Feedback ${formatEntityId(match[1])}`],
+    [/^\/performance\/traces\/([^/]+)$/, (match) => `Trace ${formatEntityId(match[1])}`],
     [/^\/performance\/([^/]+)$/, (match) => `Transaction ${formatEntityId(match[1])}`],
     [/^\/releases\/([^/]+)$/, (match) => `Release ${formatEntityId(match[1])}`],
     [/^\/replays\/([^/]+)$/, (match) => `Replay ${formatEntityId(match[1])}`],
@@ -156,15 +179,10 @@ function getDocumentTitle(pathname: string, isAuthenticated: boolean): string {
   ]
 
   for (const [pattern, toTitle] of dynamicMatchers) {
-    const matches = normalizedPath.match(pattern)
+    const matches = pattern.exec(normalizedPath)
     if (matches) {
       return `${toTitle(matches)} | Moneat`
     }
-  }
-
-  const staticTitle = STATIC_TITLES[normalizedPath]
-  if (staticTitle) {
-    return `${staticTitle} | Moneat`
   }
 
   return 'Moneat | Error, Performance, and Replay Monitoring'
@@ -209,7 +227,8 @@ function NotFoundPage() {
       <div className="flex items-center gap-4">
         <Link
           to="/"
-          className="px-5 py-2.5 text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 rounded-lg shadow-md shadow-sky-500/25 transition-colors"
+          search={APP_OVERVIEW_SEARCH}
+          className="px-5 py-2.5 text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 rounded-lg transition-colors"
         >
           Go to overview
         </Link>
@@ -246,22 +265,26 @@ function RootComponent() {
     return () => observer.disconnect()
   }, [])
 
-  const { data: user } = useQuery({
+  const { data: user, isFetching: isUserFetching } = useQuery({
     queryKey: ['currentUser'],
     queryFn: () => api.getCurrentUser(),
     enabled: isAuthenticated,
   })
+  const demoEpochMs = user?.demoEpochMs ?? null
+  const showDemoBanner = demoEpochMs !== null && !isUserFetching && isDemo()
+  const isLandingPage = isPublicLandingRoute(currentPath, router.location.search)
+  const isPublicRoute = (
+    isLandingPage ||
+    PUBLIC_ROUTES.has(currentPath) ||
+    currentPath.startsWith('/s/') ||
+    currentPath.startsWith('/auth/') ||
+    currentPath.startsWith('/legal/') ||
+    currentPath.startsWith('/docs')
+  )
 
-  // Initialize demo mode when user data is loaded
   useEffect(() => {
-    if (user?.demoEpochMs) {
-      setDemoEpoch(user.demoEpochMs)
-    }
-  }, [user?.demoEpochMs])
-
-  useEffect(() => {
-    document.title = getDocumentTitle(currentPath, isAuthenticated)
-  }, [currentPath, isAuthenticated])
+    document.title = getDocumentTitle(currentPath, isLandingPage)
+  }, [currentPath, isLandingPage])
 
   // Centralized authentication and user status check
   useEffect(() => {
@@ -269,7 +292,7 @@ function RootComponent() {
 
     async function checkUserStatus() {
       // Skip check on public routes and status pages
-      if (PUBLIC_ROUTES.has(currentPath) || currentPath.startsWith('/s/') || currentPath.startsWith('/auth/') || currentPath.startsWith('/legal/') || currentPath.startsWith('/docs')) {
+      if (isPublicRoute) {
         setOnboardingChecked(true)
         setAuthCheckComplete(true)
         return
@@ -295,19 +318,11 @@ function RootComponent() {
     return () => {
       cancelled = true
     }
-  }, [isAuthenticated, currentPath, navigate])
+  }, [isAuthenticated, isPublicRoute])
 
   useEffect(() => {
     if (!isAuthenticated || !user) return
-    if (
-      PUBLIC_ROUTES.has(currentPath) ||
-      currentPath.startsWith('/s/') ||
-      currentPath.startsWith('/auth/') ||
-      currentPath.startsWith('/legal/') ||
-      currentPath.startsWith('/docs')
-    ) {
-      return
-    }
+    if (isPublicRoute) return
 
     if (!user.emailVerified && currentPath !== '/verify-email-required') {
       navigate({ to: '/verify-email-required' })
@@ -317,18 +332,24 @@ function RootComponent() {
     if (!user.onboardingCompleted && currentPath !== '/onboarding') {
       navigate({ to: '/onboarding' })
     }
-  }, [currentPath, isAuthenticated, navigate, user])
+  }, [currentPath, isAuthenticated, isPublicRoute, navigate, user])
   
-  // Don't show sidebar on auth pages, landing page (when logged out), or public status pages
-  const isAuthPage = ['/login', '/signup', '/verify-email', '/verify-email-required', '/forgot-password', '/reset-password', '/onboarding'].includes(currentPath)
-  const isLandingPage = currentPath === '/' && !isAuthenticated
+  // Don't show sidebar on auth pages, landing page, or public status pages
+  const isAuthPage = [
+    '/login',
+    '/signup',
+    '/verify-email',
+    '/verify-email-required',
+    '/forgot-password',
+    '/reset-password',
+    '/onboarding',
+  ].includes(currentPath)
   const isPublicStatusPage = currentPath.startsWith('/s/')
   const isFeaturePage = (FEATURE_ROUTES as readonly string[]).includes(currentPath)
   const showSidebar = isAuthenticated && !isAuthPage && !isLandingPage && !isPublicStatusPage && !isFeaturePage
   const sidebarWidth = isSidebarExpanded ? SIDEBAR_EXPANDED_WIDTH : SIDEBAR_COLLAPSED_WIDTH
 
   // Show loading state while checking auth and onboarding
-  const isPublicRoute = PUBLIC_ROUTES.has(currentPath) || currentPath.startsWith('/s/') || currentPath.startsWith('/auth/') || currentPath.startsWith('/legal/') || currentPath.startsWith('/docs')
   if (!authCheckComplete && !isPublicRoute) {
     return null
   }
@@ -343,7 +364,7 @@ function RootComponent() {
         <CommandPaletteProvider>
           {/* Fixed header: optional demo banner */}
           <div ref={headerRef} className="fixed top-0 left-0 right-0 z-50 w-full">
-            <DemoBanner />
+            <DemoBanner isDemoMode={showDemoBanner} />
           </div>
           <Sidebar
             isExpanded={isSidebarExpanded}
@@ -360,7 +381,7 @@ function RootComponent() {
           className="transition-[margin-left] duration-300"
           style={{ marginLeft: 0 }}
         >
-          <DemoBanner />
+          {isAuthenticated && !isPublicRoute && <DemoBanner isDemoMode={showDemoBanner} />}
           <Outlet />
         </div>
       )}

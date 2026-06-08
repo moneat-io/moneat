@@ -78,6 +78,7 @@ export interface TransactionWithSpans {
 export interface TraceDetail {
   traceId: string
   projectId: number
+  projectResourceId: string
   spans: Span[]
   startTimestamp: number
   endTimestamp: number

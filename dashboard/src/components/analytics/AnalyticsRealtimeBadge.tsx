@@ -1,10 +1,10 @@
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 
-export function AnalyticsRealtimeBadge({projectId}: {projectId: number}) {
+export function AnalyticsRealtimeBadge({serviceId}: {serviceId: string | number}) {
   const {data} = useQuery({
-    queryKey: ['analytics-realtime', projectId],
-    queryFn: () => api.getAnalyticsRealtime(projectId),
+    queryKey: ['analytics-realtime', serviceId],
+    queryFn: () => api.getAnalyticsRealtime(serviceId),
     refetchInterval: 30_000,
   })
 
@@ -13,8 +13,8 @@ export function AnalyticsRealtimeBadge({projectId}: {projectId: number}) {
   return (
     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
       <span className="relative flex h-2 w-2">
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success-solid opacity-75" />
+        <span className="relative inline-flex rounded-full h-2 w-2 bg-success-solid" />
       </span>
       {data.currentVisitors} current visitor{data.currentVisitors !== 1 ? 's' : ''}
     </div>

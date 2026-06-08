@@ -60,6 +60,7 @@ private const val MAX_RETENTION_DAYS = 90
 private const val MAX_TRIAL_DAYS = 60
 private const val MAX_ANALYTICS_RETENTION_DAYS = 3650
 private const val DEFAULT_TRIAL_DAYS_NON_FREE = 14
+private const val JS_SAFE_UNLIMITED_QUOTA_LIMIT = 9_007_199_254_740_000L
 
 class PricingTierService {
     private data class DefaultFeatureFlags(
@@ -205,12 +206,25 @@ class PricingTierService {
     ): PricingTierConfigResponse {
         val canonicalName = tierName.uppercase()
         validateCreateTierRequest(request)
+        val monthlyUnitLimitFallback = normalizeUnlimitedQuotaLimit(request.monthlyUnitLimit)
         val monthlyErrorLimit =
-            if (request.monthlyErrorLimit > 0) request.monthlyErrorLimit else request.monthlyUnitLimit
-        val monthlyTransactionLimit = request.monthlyTransactionLimit
-        val monthlyReplayLimit = request.monthlyReplayLimit
-        val monthlyFeedbackLimit = request.monthlyFeedbackLimit
-        val monthlyUnitLimit = monthlyErrorLimit + monthlyTransactionLimit + monthlyReplayLimit + monthlyFeedbackLimit
+            if (request.monthlyErrorLimit > 0) {
+                normalizeUnlimitedQuotaLimit(request.monthlyErrorLimit)
+            } else {
+                monthlyUnitLimitFallback
+            }
+        val monthlyTransactionLimit = normalizeUnlimitedQuotaLimit(request.monthlyTransactionLimit)
+        val monthlyReplayLimit =
+            if (request.monthlyReplayLimit < 0) {
+                request.monthlyReplayLimit
+            } else {
+                normalizeUnlimitedQuotaLimit(request.monthlyReplayLimit)
+            }
+        val monthlyFeedbackLimit = normalizeUnlimitedQuotaLimit(request.monthlyFeedbackLimit)
+        val monthlyLlmEventLimit = normalizeUnlimitedQuotaLimit(request.monthlyLlmEventLimit)
+        val monthlyUnitLimit = totalMonthlyUnitLimit(
+            listOf(monthlyErrorLimit, monthlyTransactionLimit, monthlyReplayLimit, monthlyFeedbackLimit)
+        )
         return transaction {
             val current =
                 PricingTierConfigs
@@ -235,6 +249,12 @@ class PricingTierService {
                 request.replayRetentionDays ?: currentConfig?.replayRetentionDays ?: request.retentionDays
             val resolvedLlmRetentionDays =
                 request.llmRetentionDays ?: currentConfig?.llmRetentionDays ?: request.retentionDays
+            val resolvedApmTraceRetentionDays =
+                when {
+                    request.apmTraceRetentionDays != null -> request.apmTraceRetentionDays
+                    currentConfig != null -> currentConfig.apmTraceRetentionDays
+                    else -> request.retentionDays
+                }
             val resolvedErrorOverageRateCentsPer1k =
                 request.errorOverageRateCentsPer1k ?: currentConfig?.errorOverageRateCentsPer1k ?: 0
             val resolvedReplayOverageRateCentsPerGb =
@@ -252,22 +272,25 @@ class PricingTierService {
                     ?: currentConfig?.analyticsRetentionDays
                     ?: DEFAULT_ANALYTICS_RETENTION_DAYS
             val resolvedMonthlyAnalyticsPageviewLimit =
-                request.monthlyAnalyticsPageviewLimit ?: currentConfig?.monthlyAnalyticsPageviewLimit ?: 0
+                request.monthlyAnalyticsPageviewLimit?.let(::normalizeUnlimitedQuotaLimit)
+                    ?: currentConfig?.monthlyAnalyticsPageviewLimit ?: 0
             val resolvedAnalyticsPageviewOverageRateCentsPer100k =
                 request.analyticsPageviewOverageRateCentsPer100k
                     ?: currentConfig?.analyticsPageviewOverageRateCentsPer100k ?: 0
-            val resolvedMonthlyApmSpanLimit = request.monthlyApmSpanLimit
+            val resolvedMonthlyApmSpanLimit = request.monthlyApmSpanLimit?.let(::normalizeUnlimitedQuotaLimit)
                 ?: currentConfig?.monthlyApmSpanLimit ?: 0
             val resolvedApmSpanOverageRateCentsPer1m = request.apmSpanOverageRateCentsPer1m
                 ?: currentConfig?.apmSpanOverageRateCentsPer1m ?: 0
-            val resolvedMonthlyCustomMetricLimit = request.monthlyCustomMetricLimit
-                ?: currentConfig?.monthlyCustomMetricLimit ?: 0
+            val resolvedMonthlyCustomMetricLimit =
+                request.monthlyCustomMetricLimit?.let(::normalizeUnlimitedQuotaLimit)
+                    ?: currentConfig?.monthlyCustomMetricLimit ?: 0
             val resolvedCustomMetricOverageRateCentsPer100k =
                 request.customMetricOverageRateCentsPer100k
                     ?: currentConfig?.customMetricOverageRateCentsPer100k ?: 0
             val resolvedMonthlyInfraMetricSeriesHourLimit =
                 when {
-                    request.monthlyInfraMetricSeriesHourLimit != null -> request.monthlyInfraMetricSeriesHourLimit
+                    request.monthlyInfraMetricSeriesHourLimit != null ->
+                        normalizeUnlimitedQuotaLimit(request.monthlyInfraMetricSeriesHourLimit)
                     currentConfig != null -> currentConfig.monthlyInfraMetricSeriesHourLimit
                     else -> fallbackConfig.monthlyInfraMetricSeriesHourLimit
                 }
@@ -354,12 +377,13 @@ class PricingTierService {
                     it[monthly_transaction_limit] = monthlyTransactionLimit
                     it[monthly_replay_limit] = monthlyReplayLimit
                     it[monthly_feedback_limit] = monthlyFeedbackLimit
-                    it[monthly_llm_event_limit] = request.monthlyLlmEventLimit
+                    it[monthly_llm_event_limit] = monthlyLlmEventLimit
                     it[monthly_gb_limit] = resolvedMonthlyGbLimit
                     it[retention_days] = request.retentionDays
                     it[log_retention_days] = resolvedLogRetentionDays
                     it[replay_retention_days] = resolvedReplayRetentionDays
                     it[llm_retention_days] = resolvedLlmRetentionDays
+                    it[apm_trace_retention_days] = resolvedApmTraceRetentionDays
                     it[status_pages_enabled] = resolvedStatusPagesEnabled
                     it[status_page_custom_domain_enabled] = resolvedStatusPageCustomDomainEnabled
                     it[session_replay_enabled] = resolvedSessionReplayEnabled
@@ -420,71 +444,81 @@ class PricingTierService {
         }
     }
 
+    private fun normalizeUnlimitedQuotaLimit(limit: Long): Long {
+        return if (limit >= JS_SAFE_UNLIMITED_QUOTA_LIMIT) Long.MAX_VALUE else limit
+    }
+
+    private fun totalMonthlyUnitLimit(limits: List<Long>): Long {
+        if (limits.any { it < 0 || it == Long.MAX_VALUE }) return Long.MAX_VALUE
+        return limits.fold(0L) { total, limit ->
+            if (Long.MAX_VALUE - total < limit) Long.MAX_VALUE else total + limit
+        }
+    }
+
     private fun validateCreateTierRequest(request: CreateTierVersionRequest) {
         require(request.retentionDays in 1..MAX_RETENTION_DAYS) { "Retention days must be between 1 and 90" }
-        if (request.logRetentionDays != null) {
-            require(request.logRetentionDays in 1..MAX_RETENTION_DAYS) { "Log retention days must be between 1 and 90" }
-        }
+        validateOptionalRetentionDays(request.logRetentionDays, "Log retention days")
         require(request.monthlyUnitLimit >= 0) { "Monthly unit limit must be non-negative" }
         require(request.monthlyErrorLimit >= 0) { "Monthly error limit must be non-negative" }
         require(request.monthlyTransactionLimit >= 0) { "Monthly transaction limit must be non-negative" }
         require(request.monthlyReplayLimit >= -1) { "Monthly replay limit must be -1 (unlimited) or non-negative" }
         require(request.monthlyFeedbackLimit >= 0) { "Monthly feedback limit must be non-negative" }
         require(request.monthlyLlmEventLimit >= 0) { "Monthly LLM event limit must be non-negative" }
-        if (request.replayRetentionDays != null) {
-            require(request.replayRetentionDays in 1..MAX_RETENTION_DAYS) {
-                "Replay retention days must be between 1 and 90"
-            }
-        }
-        if (request.llmRetentionDays != null) {
-            require(request.llmRetentionDays in 1..MAX_RETENTION_DAYS) { "LLM retention days must be between 1 and 90" }
-        }
-        if (request.monthlyGbLimit != null) {
-            require(request.monthlyGbLimit >= 0) { "Monthly GB limit must be non-negative" }
-        }
-        if (request.yearlyPriceCents != null) {
-            require(request.yearlyPriceCents >= 0) { "Yearly price cannot be negative" }
-        }
-        if (request.trialDays != null) {
-            require(request.trialDays in 0..MAX_TRIAL_DAYS) { "Trial days must be between 0 and 60" }
-        }
-        if (request.overageRateCentsPerGb != null) {
-            require(request.overageRateCentsPerGb >= 0) { "Overage rate cannot be negative" }
-        }
-        if (request.errorOverageRateCentsPer1k != null) {
-            require(request.errorOverageRateCentsPer1k >= 0) { "Error overage rate cannot be negative" }
-        }
-        if (request.replayOverageRateCentsPerGb != null) {
-            require(request.replayOverageRateCentsPerGb >= 0) { "Replay overage rate cannot be negative" }
-        }
-        if (request.llmOverageRateCentsPer1k != null) {
-            require(request.llmOverageRateCentsPer1k >= 0) { "LLM overage rate cannot be negative" }
-        }
-        if (request.analyticsRetentionDays != null) {
-            require(request.analyticsRetentionDays in 1..MAX_ANALYTICS_RETENTION_DAYS) {
-                "Analytics retention days must be between 1 and 3650"
-            }
-        }
-        if (request.monthlyAnalyticsPageviewLimit != null) {
-            require(
-                request.monthlyAnalyticsPageviewLimit >= 0
-            ) { "Monthly analytics pageview limit must be non-negative" }
-        }
-        if (request.analyticsPageviewOverageRateCentsPer100k != null) {
-            require(
-                request.analyticsPageviewOverageRateCentsPer100k >= 0
-            ) { "Analytics pageview overage rate cannot be negative" }
-        }
-        if (request.monthlyInfraMetricSeriesHourLimit != null) {
-            require(request.monthlyInfraMetricSeriesHourLimit >= 0) {
-                "Monthly infrastructure metric limit must be non-negative"
-            }
-        }
-        if (request.infraMetricOverageRateCentsPer100kSeriesHours != null) {
-            require(request.infraMetricOverageRateCentsPer100kSeriesHours >= 0) {
-                "Infrastructure metric overage rate cannot be negative"
-            }
-        }
+        validateOptionalRetentionDays(request.replayRetentionDays, "Replay retention days")
+        validateOptionalRetentionDays(request.llmRetentionDays, "LLM retention days")
+        validateOptionalRetentionDays(request.apmTraceRetentionDays, "APM trace retention days")
+        validateOptionalNonNegative(request.monthlyGbLimit, "Monthly GB limit must be non-negative")
+        validateOptionalNonNegative(request.yearlyPriceCents, "Yearly price cannot be negative")
+        validateOptionalTrialDays(request.trialDays)
+        validateOptionalNonNegative(request.overageRateCentsPerGb, "Overage rate cannot be negative")
+        validateOptionalNonNegative(request.errorOverageRateCentsPer1k, "Error overage rate cannot be negative")
+        validateOptionalNonNegative(request.replayOverageRateCentsPerGb, "Replay overage rate cannot be negative")
+        validateOptionalNonNegative(request.llmOverageRateCentsPer1k, "LLM overage rate cannot be negative")
+        validateOptionalRetentionDays(
+            request.analyticsRetentionDays,
+            "Analytics retention days",
+            MAX_ANALYTICS_RETENTION_DAYS
+        )
+        validateOptionalNonNegative(
+            request.monthlyAnalyticsPageviewLimit,
+            "Monthly analytics pageview limit must be non-negative"
+        )
+        validateOptionalNonNegative(
+            request.analyticsPageviewOverageRateCentsPer100k,
+            "Analytics pageview overage rate cannot be negative"
+        )
+        validateOptionalNonNegative(
+            request.monthlyInfraMetricSeriesHourLimit,
+            "Monthly infrastructure metric limit must be non-negative"
+        )
+        validateOptionalNonNegative(
+            request.infraMetricOverageRateCentsPer100kSeriesHours,
+            "Infrastructure metric overage rate cannot be negative"
+        )
+    }
+
+    private fun validateOptionalRetentionDays(
+        value: Int?,
+        label: String,
+        maxDays: Int = MAX_RETENTION_DAYS
+    ) {
+        if (value == null) return
+        require(value in 1..maxDays) { "$label must be between 1 and $maxDays" }
+    }
+
+    private fun validateOptionalTrialDays(value: Int?) {
+        if (value == null) return
+        require(value in 0..MAX_TRIAL_DAYS) { "Trial days must be between 0 and 60" }
+    }
+
+    private fun validateOptionalNonNegative(value: Int?, message: String) {
+        if (value == null) return
+        require(value >= 0) { message }
+    }
+
+    private fun validateOptionalNonNegative(value: Long?, message: String) {
+        if (value == null) return
+        require(value >= 0) { message }
     }
 
     fun migrateSubscribers(

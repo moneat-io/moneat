@@ -20,7 +20,35 @@
  * instead of the actual current time.
  */
 
+type DemoEpochSource = {
+  demoEpochMs?: number | null
+}
+
 let demoEpochMs: number | null = null;
+
+function readStoredDemoEpoch(): number | null {
+  const stored = globalThis.sessionStorage?.getItem('demoEpochMs') ?? null;
+  if (stored === null) return null;
+
+  const storedEpochMs = Number(stored);
+  if (!Number.isFinite(storedEpochMs)) {
+    setDemoEpoch(null);
+    return null;
+  }
+
+  return storedEpochMs;
+}
+
+function getActiveDemoEpoch(): number | null {
+  if (demoEpochMs !== null) return demoEpochMs;
+
+  const storedEpochMs = readStoredDemoEpoch();
+  if (storedEpochMs !== null) {
+    demoEpochMs = storedEpochMs;
+  }
+
+  return storedEpochMs;
+}
 
 /**
  * Set the demo epoch. Call this after demo login or when loading user data.
@@ -28,24 +56,24 @@ let demoEpochMs: number | null = null;
 export function setDemoEpoch(ms: number | null) {
   demoEpochMs = ms;
   if (ms !== null) {
-    sessionStorage.setItem('demoEpochMs', String(ms));
+    globalThis.sessionStorage?.setItem('demoEpochMs', String(ms));
   } else {
-    sessionStorage.removeItem('demoEpochMs');
+    globalThis.sessionStorage?.removeItem('demoEpochMs');
   }
+}
+
+/**
+ * Sync local demo state from the authenticated user response.
+ */
+export function syncDemoEpochFromUser(user: DemoEpochSource | null | undefined) {
+  setDemoEpoch(user?.demoEpochMs ?? null);
 }
 
 /**
  * Check if currently in demo mode.
  */
 export function isDemo(): boolean {
-  if (demoEpochMs !== null) return true;
-  // Recover from sessionStorage if module state was lost (e.g. HMR)
-  const stored = sessionStorage.getItem('demoEpochMs');
-  if (stored) {
-    demoEpochMs = Number(stored);
-    return true;
-  }
-  return false;
+  return getActiveDemoEpoch() !== null;
 }
 
 /**
@@ -53,13 +81,9 @@ export function isDemo(): boolean {
  * In demo mode, returns the demo epoch; otherwise returns actual current time.
  */
 export function getNow(): number {
-  if (demoEpochMs !== null) return demoEpochMs;
-  // Recover from sessionStorage if needed
-  const stored = sessionStorage.getItem('demoEpochMs');
-  if (stored) {
-    demoEpochMs = Number(stored);
-    return demoEpochMs;
-  }
+  const activeDemoEpoch = getActiveDemoEpoch();
+  if (activeDemoEpoch !== null) return activeDemoEpoch;
+
   return Date.now();
 }
 
@@ -75,5 +99,5 @@ export function getNowDate(): Date {
  * Get the demo epoch timestamp (for debugging/display).
  */
 export function getDemoEpochMs(): number | null {
-  return demoEpochMs;
+  return getActiveDemoEpoch();
 }

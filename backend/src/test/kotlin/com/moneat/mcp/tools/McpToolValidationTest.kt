@@ -16,16 +16,42 @@
 
 package com.moneat.mcp.tools
 
+import com.moneat.billing.models.PricingTierConfigs
+import com.moneat.config.ClickHouseClient
 import com.moneat.mcp.models.McpContext
 import com.moneat.mcp.protocol.McpTool
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Projects
+import com.moneat.shared.models.Subscriptions
+import com.moneat.testsupport.MockHttpServer
+import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.testsupport.requestBodyText
+import com.moneat.testsupport.respond
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonPrimitive
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class McpToolValidationTest {
+    companion object {
+        private const val CONTENT_TYPE_TEXT_PLAIN = "text/plain"
+        private const val EVENT_ID = "01234567-89ab-cdef-0123-456789abcdef"
+        private const val TRACE_ID = "trace-1"
+        private var db: Database? = null
+    }
+
     private val context = McpContext(
         organizationId = 1,
         userId = 2,
@@ -33,6 +59,34 @@ class McpToolValidationTest {
         scopes = setOf("project:write"),
         sessionId = "validation-test",
     )
+
+    @BeforeEach
+    fun setupDatabase() {
+        db = db ?: Database.connect(
+            url = "jdbc:h2:mem:moneat_mcp_tool_validation;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+            driver = "org.h2.Driver",
+        )
+        TransactionManager.defaultDatabase = db
+        TestDatabaseHelper.resetSchema(
+            Organizations,
+            Projects,
+            Subscriptions,
+            PricingTierConfigs,
+        )
+        transaction {
+            Organizations.insert {
+                it[id] = 1
+                it[name] = "Test Org"
+                it[slug] = "test-org"
+            }
+            Projects.insert {
+                it[id] = 1
+                it[organization_id] = 1
+                it[name] = "Test Project"
+                it[slug] = "test-project"
+            }
+        }
+    }
 
     @Test
     fun `tools return validation errors before calling services`() = runBlocking {
@@ -46,6 +100,110 @@ class McpToolValidationTest {
                 errorText.contains(case.expectedError),
                 "${case.name} expected '${case.expectedError}' but got '$errorText'"
             )
+        }
+    }
+
+    @Test
+    fun `getTrace tool reports not found for invalid event id`() = runBlocking {
+        val result = GetTraceTool().execute(obj("event_id" to "not-a-uuid"), context)
+
+        assertTrue(result.isError)
+        assertTrue(result.content.first().text.orEmpty().contains("Trace not found"))
+    }
+
+    @Test
+    fun `getTrace tool returns trace by event id`() = runBlocking {
+        MockHttpServer { exchange ->
+            val query = exchange.requestBodyText()
+            when {
+                query.contains("event_type,") -> {
+                    exchange.respond(
+                        200,
+                        """{"event_id":"$EVENT_ID","event_type":"error","project_id":1,"trace_id":"$TRACE_ID"}""",
+                        CONTENT_TYPE_TEXT_PLAIN
+                    )
+                }
+
+                query.contains("FROM `test`.apm_spans") && query.contains("trace_id_hex = '$TRACE_ID'") -> {
+                    exchange.respond(200, spanRow(), CONTENT_TYPE_TEXT_PLAIN)
+                }
+
+                else -> exchange.respond(200, "", CONTENT_TYPE_TEXT_PLAIN)
+            }
+        }.use { server ->
+            ClickHouseClient.close()
+            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+
+            val result = GetTraceTool().execute(obj("event_id" to EVENT_ID), context)
+
+            assertFalse(result.isError)
+            assertTrue(result.content.first().text.orEmpty().contains("TrimFrameWorker"))
+        }
+    }
+
+    @Test
+    fun `getTrace tool returns trace by trace id and project id`() = runBlocking {
+        MockHttpServer { exchange ->
+            val query = exchange.requestBodyText()
+            if (query.contains("FROM `test`.apm_spans") && query.contains("trace_id_hex = '$TRACE_ID'")) {
+                exchange.respond(200, spanRow(), CONTENT_TYPE_TEXT_PLAIN)
+            } else {
+                exchange.respond(200, "", CONTENT_TYPE_TEXT_PLAIN)
+            }
+        }.use { server ->
+            ClickHouseClient.close()
+            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+
+            val result = GetTraceTool().execute(
+                obj("trace_id" to TRACE_ID, "project_id" to 1),
+                context
+            )
+
+            assertFalse(result.isError)
+            assertTrue(result.content.first().text.orEmpty().contains(TRACE_ID))
+        }
+    }
+
+    @Test
+    fun `project id schemas accept resource IDs and legacy numeric IDs`() {
+        val projectIdSchema = projectIdInputSchema().properties["project_id"] as JsonObject
+        val typeValues = projectIdSchema["type"] as JsonArray
+
+        assertEquals(
+            listOf("string", "number"),
+            typeValues.jsonArray.map { it.jsonPrimitive.content }
+        )
+    }
+
+    @Test
+    fun `getIssueTransactions tool returns correlated transaction rows`() = runBlocking {
+        MockHttpServer { exchange ->
+            val query = exchange.requestBodyText()
+            when {
+                query.contains("FROM `test`.issues") && query.contains("WHERE issue_id = 'issue-1'") -> {
+                    exchange.respond(200, """{"project_id":1}""", CONTENT_TYPE_TEXT_PLAIN)
+                }
+
+                query.contains("event_type = 'transaction'") && query.contains("issue_id = 'issue-1'") -> {
+                    exchange.respond(
+                        200,
+                        """{"event_id":"txn-1","name":"ProjectWorkChain","op":"project.workchain",""" +
+                            """"duration":1250.0,"event_ts":"2026-02-03T00:00:00.000Z",""" +
+                            """"status":"internal_error","trace_id":"$TRACE_ID"}""",
+                        CONTENT_TYPE_TEXT_PLAIN
+                    )
+                }
+
+                else -> exchange.respond(200, "", CONTENT_TYPE_TEXT_PLAIN)
+            }
+        }.use { server ->
+            ClickHouseClient.close()
+            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+
+            val result = GetIssueTransactionsTool().execute(obj("issue_id" to "issue-1"), context)
+
+            assertFalse(result.isError)
+            assertTrue(result.content.first().text.orEmpty().contains("txn-1"))
         }
     }
 
@@ -115,6 +273,48 @@ class McpToolValidationTest {
             case("update_dashboard_id", UpdateDashboardTool(), obj(), "dashboard_id is required"),
             case("update_dashboard_fields", UpdateDashboardTool(), obj("dashboard_id" to 1), "At least one"),
             case("delete_dashboard_id", DeleteDashboardTool(), obj(), "dashboard_id is required"),
+            case(
+                "create_dashboard_widget_type",
+                CreateDashboardWidgetTool(),
+                obj("dashboard_id" to 1),
+                "widget_type is required",
+            ),
+            case(
+                "create_dashboard_widget_unknown_type",
+                CreateDashboardWidgetTool(),
+                obj("dashboard_id" to 1, "widget_type" to "bad"),
+                "Unknown widget_type",
+            ),
+            case(
+                "update_dashboard_widget_id",
+                UpdateDashboardWidgetTool(),
+                obj("dashboard_id" to 1),
+                "widget_id is required",
+            ),
+            case(
+                "update_dashboard_widget_fields",
+                UpdateDashboardWidgetTool(),
+                obj("dashboard_id" to 1, "widget_id" to 2),
+                "At least one widget field",
+            ),
+            case(
+                "delete_dashboard_widget_id",
+                DeleteDashboardWidgetTool(),
+                obj("dashboard_id" to 1),
+                "widget_id is required",
+            ),
+            case(
+                "preview_dashboard_widget_query_config",
+                PreviewDashboardWidgetQueryTool(),
+                obj("dashboard_id" to 1),
+                "query_config must be an object",
+            ),
+            case(
+                "replace_dashboard_widgets_expected",
+                ReplaceDashboardWidgetsTool(),
+                obj("dashboard_id" to 1, "widgets" to emptyList<String>()),
+                "expected_widget_count is required",
+            ),
             case(
                 "create_dashboard_alert_widget",
                 CreateDashboardAlertTool(),
@@ -223,6 +423,27 @@ class McpToolValidationTest {
             ),
             case("create_uptime_name", CreateUptimeMonitorTool(), obj(), "name is required"),
             case("create_uptime_url", CreateUptimeMonitorTool(), obj("name" to "API"), "url is required"),
+            case("get_synthetic_id", GetSyntheticTestTool(), obj(), "synthetic_test_id is required"),
+            case("update_synthetic_id", UpdateSyntheticTestTool(), obj(), "synthetic_test_id is required"),
+            case("delete_synthetic_id", DeleteSyntheticTestTool(), obj(), "synthetic_test_id is required"),
+            case("run_synthetic_id", RunSyntheticTestTool(), obj(), "synthetic_test_id is required"),
+            case("synthetic_summary_id", GetSyntheticTestSummaryTool(), obj(), "synthetic_test_id is required"),
+            case("list_transactions_project_id", ListTransactionsTool(), obj(), "project_id is required"),
+            case("get_trace_lookup", GetTraceTool(), obj(), "event_id or trace_id is required"),
+            case(
+                "get_trace_project_id",
+                GetTraceTool(),
+                obj("trace_id" to TRACE_ID),
+                "project_id is required when trace_id is used without event_id",
+            ),
+            case("transaction_stats_project_id", GetTransactionStatsTool(), obj(), "project_id is required"),
+            case("list_issues_project_id", ListIssuesTool(), obj(), "project_id is required"),
+            case("list_releases_project_id", ListReleasesTool(), obj(), "project_id is required"),
+            case("release_stats_project_id", GetReleaseStatsTool(), obj(), "project_id is required"),
+            case("get_project_project_id", GetProjectTool(), obj(), "project_id is required"),
+            case("get_project_stats_project_id", GetProjectStatsTool(), obj(), "project_id is required"),
+            case("list_feedback_project_id", ListFeedbackTool(), obj(), "project_id is required"),
+            case("execute_dashboard_query_project_id", ExecuteDashboardQueryTool(), obj(), "project_id is required"),
             case("create_datasource_name", CreateDataSourceTool(), obj(), "name is required"),
             case(
                 "create_datasource_type",
@@ -262,6 +483,105 @@ class McpToolValidationTest {
                 obj("alert_source" to "host_alert", "email_enabled" to "yes"),
                 "email_enabled must be a boolean",
             ),
+            case("create_feature_flag_key", CreateFeatureFlagTool(), obj(), "key is required"),
+            case(
+                "create_feature_flag_environment_key",
+                CreateFeatureFlagEnvironmentTool(),
+                obj(),
+                "key is required",
+            ),
+            case("get_feature_flag_key", GetFeatureFlagTool(), obj(), "flag_key is required"),
+            case(
+                "get_feature_flag_analytics_hours",
+                GetFeatureFlagAnalyticsTool(),
+                obj("hours" to 0),
+                "hours must be greater than 0",
+            ),
+            case("update_feature_flag_key", UpdateFeatureFlagTool(), obj(), "flag_key is required"),
+            case("delete_feature_flag_key", DeleteFeatureFlagTool(), obj(), "flag_key is required"),
+            case(
+                "update_feature_flag_config_key",
+                UpdateFeatureFlagConfigTool(),
+                obj(),
+                "flag_key is required",
+            ),
+            case(
+                "update_feature_flag_config_environment",
+                UpdateFeatureFlagConfigTool(),
+                obj("flag_key" to "checkout.enabled"),
+                "environment is required",
+            ),
+            case(
+                "upsert_feature_flag_segment_key",
+                UpsertFeatureFlagSegmentTool(),
+                obj(),
+                "key is required",
+            ),
+            case(
+                "delete_feature_flag_segment_key",
+                DeleteFeatureFlagSegmentTool(),
+                obj(),
+                "segment_key is required",
+            ),
+            case(
+                "create_feature_flag_sdk_key_environment",
+                CreateFeatureFlagSdkKeyTool(),
+                obj(),
+                "environment_key is required",
+            ),
+            case(
+                "create_feature_flag_sdk_key_type",
+                CreateFeatureFlagSdkKeyTool(),
+                obj("environment_key" to "production", "name" to "Server"),
+                "key_type must be one of",
+            ),
+            case(
+                "revoke_feature_flag_sdk_key_id",
+                RevokeFeatureFlagSdkKeyTool(),
+                obj(),
+                "sdk_key_id is required",
+            ),
+            case(
+                "create_feature_flag_value_type",
+                CreateFeatureFlagTool(),
+                obj("key" to "checkout.enabled", "name" to "Checkout Enabled"),
+                "value_type must be one of",
+            ),
+            case(
+                "create_feature_flag_variants",
+                CreateFeatureFlagTool(),
+                obj(
+                    "key" to "checkout.enabled",
+                    "name" to "Checkout Enabled",
+                    "value_type" to "BOOLEAN",
+                ),
+                "variants is required",
+            ),
+            case(
+                "create_feature_flag_variants_format",
+                CreateFeatureFlagTool(),
+                obj(
+                    "key" to "checkout.enabled",
+                    "name" to "Checkout Enabled",
+                    "value_type" to "BOOLEAN",
+                    "variants" to "bad",
+                    "client_visible" to "yes",
+                ),
+                "variants must be an array",
+            ),
+            case("create_workflow_name", CreateWorkflowTool(), obj(), "name is required"),
+            case("update_workflow_id", UpdateWorkflowTool(), obj(), "workflow_id is required"),
+            case("delete_workflow_id", DeleteWorkflowTool(), obj(), "workflow_id is required"),
+            case("publish_workflow_id", PublishWorkflowTool(), obj(), "workflow_id is required"),
+            case("run_workflow_id", RunWorkflowTool(), obj(), "workflow_id is required"),
+            case(
+                "cancel_workflow_run_id",
+                CancelWorkflowRunTool(),
+                obj("workflow_id" to 1),
+                "run_id is required",
+            ),
+            case("list_workflow_runs_id", ListWorkflowRunsTool(), obj(), "workflow_id is required"),
+            case("get_workflow_blueprint_key", GetWorkflowBlueprintTool(), obj(), "key is required"),
         )
     }
 
@@ -280,6 +600,12 @@ class McpToolValidationTest {
         is Number -> JsonPrimitive(value)
         else -> JsonPrimitive(value.toString())
     }
+
+    private fun spanRow(): String =
+        """{"span_id":"s1","parent_span_id":"","trace_id":"$TRACE_ID",""" +
+            """"meta":{"sentry.project_id":"1"},"op":"worker",""" +
+            """"description":"TrimFrameWorker","start_ns":"1000000000",""" +
+            """"duration_ns":"500000000","error":1}"""
 
     private data class ValidationCase(
         val name: String,

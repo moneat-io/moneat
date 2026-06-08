@@ -49,6 +49,7 @@ class ReleaseStatsServiceTest {
     @BeforeTest
     fun setup() {
         coEvery { retentionPolicyService.getRetentionDaysForProject(any()) } returns 30
+        coEvery { retentionPolicyService.getRetentionDaysForOrganization(any()) } returns 30
         queryHelper = DashboardQueryHelper(retentionPolicyService, pricingTierService)
         service = ReleaseStatsService(queryHelper)
     }
@@ -75,8 +76,15 @@ class ReleaseStatsServiceTest {
                 else -> {
                     exchange.respond(
                         200,
-                        """{"version":"1.0.0","first_seen":"2026-01-01T00:00:00.000Z","last_seen":"2026-01-02T00:00:00.000Z","event_count":10,"user_count":5}
-                        """.trimIndent(),
+                        """
+                        {
+                          "version":"1.0.0",
+                          "first_seen":"2026-01-01T00:00:00.000Z",
+                          "last_seen":"2026-01-02T00:00:00.000Z",
+                          "event_count":10,
+                          "user_count":5
+                        }
+                        """.trimIndent().replace("\n", ""),
                         contentType = TEXT_PLAIN
                     )
                 }
@@ -111,14 +119,71 @@ class ReleaseStatsServiceTest {
     }
 
     @Test
-    fun `getReleaseStats returns detailed release stats`() = runBlocking {
+    fun `getReleasesForServices scopes release queries to service ids`() = runBlocking {
+        val queries = java.util.Collections.synchronizedList(mutableListOf<String>())
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
+            queries += query
+            when {
+                query.contains("first_release") && query.contains("GROUP BY first_release") ->
+                    exchange.respond(200, """{"version":"1.0.0","total":1}""", contentType = TEXT_PLAIN)
+
+                query.contains(COUNT_IF_ERRORS_0) && query.contains("sessions") ->
+                    exchange.respond(200, """{"version":"1.0.0","rate":99.0}""", contentType = TEXT_PLAIN)
+
+                else ->
+                    exchange.respond(
+                        200,
+                        """
+                        {
+                          "version":"1.0.0",
+                          "first_seen":"2026-01-01T00:00:00.000Z",
+                          "last_seen":"2026-01-02T00:00:00.000Z",
+                          "event_count":4,
+                          "user_count":2
+                        }
+                        """.trimIndent().replace("\n", ""),
+                        contentType = TEXT_PLAIN
+                    )
+            }
+        }.use { server ->
+            ClickHouseClient.close()
+            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+
+            val releases = service.getReleasesForServices(organizationId = 1, serviceIds = listOf(1L, 2L))
+
+            assertEquals(1, releases.size)
+            assertTrue(queries.any { it.contains("project_id IN (1, 2)") })
+            assertTrue(queries.any { it.contains("apm_spans") && it.contains("service_id IN (1, 2)") })
+            assertTrue(queries.any { it.contains("source IN ('datadog', 'otlp')") })
+        }
+    }
+
+    @Test
+    fun `getReleaseStatsForServices returns null for empty service scope`() = runBlocking {
+        val stats = service.getReleaseStatsForServices(organizationId = 1, serviceIds = emptyList(), version = "1.0.0")
+
+        assertNull(stats)
+    }
+
+    @Test
+    fun `getReleaseStats returns detailed release stats`() = runBlocking {
+        val queries = java.util.Collections.synchronizedList(mutableListOf<String>())
+        MockHttpServer { exchange ->
+            val query = exchange.requestBodyText()
+            queries += query
             when {
                 query.contains("count() as total") && query.contains("first_release") -> {
                     exchange.respond(
                         200,
                         """{"total":3}""",
+                        contentType = TEXT_PLAIN
+                    )
+                }
+                query.contains("GROUP BY user_id") && query.contains("sessions") -> {
+                    exchange.respond(
+                        200,
+                        """{"rate":87.5}""",
                         contentType = TEXT_PLAIN
                     )
                 }
@@ -154,8 +219,14 @@ class ReleaseStatsServiceTest {
                 else -> {
                     exchange.respond(
                         200,
-                        """{"first_seen":"2026-01-01T00:00:00.000Z","last_seen":"2026-01-02T00:00:00.000Z","total_events":20,"user_count":8}
-                        """.trimIndent(),
+                        """
+                        {
+                          "first_seen":"2026-01-01T00:00:00.000Z",
+                          "last_seen":"2026-01-02T00:00:00.000Z",
+                          "total_events":20,
+                          "user_count":8
+                        }
+                        """.trimIndent().replace("\n", ""),
                         contentType = TEXT_PLAIN
                     )
                 }
@@ -172,10 +243,12 @@ class ReleaseStatsServiceTest {
             assertEquals(8L, stats.userCount)
             assertEquals(3L, stats.newIssues)
             assertEquals(95.0, stats.crashFreeSessionRate)
-            assertNull(stats.crashFreeUserRate)
+            assertEquals(87.5, stats.crashFreeUserRate)
             assertTrue(stats.eventsTimeline.isNotEmpty())
             assertTrue(stats.eventsByLevel.isNotEmpty())
             assertTrue(stats.topIssues.isNotEmpty())
+            assertTrue(queries.any { it.contains("apm_spans") && it.contains("version = '1.0.0'") })
+            assertTrue(queries.any { it.contains("source IN ('datadog', 'otlp')") })
         }
     }
 
@@ -197,6 +270,13 @@ class ReleaseStatsServiceTest {
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
             when {
+                query.contains("GROUP BY user_id") && query.contains("sessions") -> {
+                    exchange.respond(
+                        200,
+                        """{"rate":"nan"}""",
+                        contentType = TEXT_PLAIN
+                    )
+                }
                 query.contains(COUNT_IF_ERRORS_0) && query.contains("sessions") -> {
                     exchange.respond(
                         200,
@@ -223,8 +303,14 @@ class ReleaseStatsServiceTest {
                 else -> {
                     exchange.respond(
                         200,
-                        """{"first_seen":"2026-01-01T00:00:00.000Z","last_seen":"2026-01-02T00:00:00.000Z","total_events":5,"user_count":2}
-                        """.trimIndent(),
+                        """
+                        {
+                          "first_seen":"2026-01-01T00:00:00.000Z",
+                          "last_seen":"2026-01-02T00:00:00.000Z",
+                          "total_events":5,
+                          "user_count":2
+                        }
+                        """.trimIndent().replace("\n", ""),
                         contentType = TEXT_PLAIN
                     )
                 }
@@ -235,6 +321,7 @@ class ReleaseStatsServiceTest {
             val stats = service.getReleaseStats(1L, "1.0.0")
             assertNotNull(stats)
             assertNull(stats.crashFreeSessionRate)
+            assertNull(stats.crashFreeUserRate)
         }
     }
 }

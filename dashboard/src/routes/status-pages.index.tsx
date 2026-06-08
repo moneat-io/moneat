@@ -177,15 +177,15 @@ function StatusPagesListPage() {
               </Button>
               <div className="grid grid-cols-3 gap-2 max-w-md w-full">
                 <div className="flex flex-col items-center text-center gap-1 p-2 rounded-lg bg-muted/30">
-                  <Activity className="h-4 w-4 text-blue-500" />
+                  <Activity className="h-4 w-4 text-info-fg" />
                   <span className="text-[11px] font-medium">Real-time Status</span>
                 </div>
                 <div className="flex flex-col items-center text-center gap-1 p-2 rounded-lg bg-muted/30">
-                  <AlertTriangle className="h-4 w-4 text-orange-500" />
+                  <AlertTriangle className="h-4 w-4 text-warning-fg" />
                   <span className="text-[11px] font-medium">Incident Updates</span>
                 </div>
                 <div className="flex flex-col items-center text-center gap-1 p-2 rounded-lg bg-muted/30">
-                  <Sparkles className="h-4 w-4 text-purple-500" />
+                  <Sparkles className="h-4 w-4 text-primary" />
                   <span className="text-[11px] font-medium">Custom Branding</span>
                 </div>
               </div>
@@ -196,7 +196,7 @@ function StatusPagesListPage() {
             {statusPages.map((page) => (
               <Card
                 key={page.id}
-                className="group hover:shadow-lg transition-all duration-200 cursor-pointer overflow-hidden"
+                className="group transition-all duration-200 cursor-pointer overflow-hidden"
                 onClick={() => navigate({to: '/status-pages/$pageId', params: {pageId: page.id}})}
               >
                 {/* Color Bar */}
@@ -221,8 +221,8 @@ function StatusPagesListPage() {
                       </CardDescription>
                     </div>
                     <Badge
-                      variant={page.isPublic ? 'default' : 'secondary'}
-                      className={`shrink-0 gap-0.5 text-[10px] px-1.5 py-0 ${page.isPublic ? 'bg-emerald-500/90 hover:bg-emerald-600 text-white' : ''}`}
+                      variant={page.isPublic ? 'success' : 'neutral'}
+                      className="shrink-0 gap-0.5 text-[10px] px-1.5 py-0"
                     >
                       {page.isPublic ? (
                         <><Unlock className="h-2.5 w-2.5" /> Public</>
@@ -250,7 +250,7 @@ function StatusPagesListPage() {
                       }}
                     >
                       {copiedSlug === page.slug ? (
-                        <Check className="h-3 w-3 text-green-600" />
+                        <Check className="h-3 w-3 text-success-fg" />
                       ) : (
                         <Copy className="h-3 w-3" />
                       )}
@@ -259,7 +259,7 @@ function StatusPagesListPage() {
 
                   {/* Meta info */}
                   <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                    <span>Created {formatDate(new Date(page.createdAt), timezone)}</span>
+                    <span>Created {formatDate(page.createdAt, timezone)}</span>
                   </div>
                 </CardContent>
 

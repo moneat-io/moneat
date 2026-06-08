@@ -18,6 +18,7 @@ package com.moneat.analytics
 
 import com.moneat.analytics.routes.analyticsIngestRoutes
 import com.moneat.analytics.routes.analyticsRoutes
+import com.moneat.analytics.routes.analyticsServerIngestRoutes
 import com.moneat.analytics.services.AnalyticsIngestionWorker
 import com.moneat.enterprise.EnterpriseModule
 import io.ktor.server.application.Application
@@ -38,6 +39,7 @@ class AnalyticsModule : EnterpriseModule {
     override fun registerRoutes(route: Route) {
         route.apply {
             analyticsIngestRoutes()
+            analyticsServerIngestRoutes()
             analyticsRoutes()
         }
     }

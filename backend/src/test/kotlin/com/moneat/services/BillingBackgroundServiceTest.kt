@@ -20,12 +20,15 @@ import com.moneat.billing.models.OrgUsageCounters
 import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.billing.models.QuotaNotificationsSent
 import com.moneat.billing.services.BillingBackgroundService
+import com.moneat.notifications.services.EmailService
 import com.moneat.shared.models.EmailsSent
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
@@ -198,6 +201,27 @@ class BillingBackgroundServiceTest {
             assertEquals(2, types.size)
             assertTrue("base_100" in types)
             assertTrue("payg_80" in types)
+        }
+    }
+
+    @Test
+    fun `failed quota notification send releases idempotency marker`() {
+        val emailService = mockk<EmailService>()
+        every {
+            emailService.sendBillingThresholdAlertEmail(any(), any(), any())
+        } throws IllegalStateException("smtp unavailable")
+
+        val service = BillingBackgroundService(emailService = emailService)
+        invokeQuotaNotificationPass(service)
+
+        transaction {
+            val types =
+                QuotaNotificationsSent
+                    .selectAll()
+                    .where { QuotaNotificationsSent.organization_id eq testOrgId }
+                    .map { it[QuotaNotificationsSent.notification_type] }
+
+            assertTrue(types.isEmpty(), "Notification marker should be released when every send fails")
         }
     }
 

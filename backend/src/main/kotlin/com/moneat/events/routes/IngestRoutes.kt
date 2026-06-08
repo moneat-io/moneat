@@ -20,13 +20,17 @@ import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.QuotaReservationResult
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.decompression.DecompressionService
+import com.moneat.events.models.EnvelopeItem
 import com.moneat.events.models.SentryEnvelope
+import com.moneat.events.models.isFeedbackEventPayload
 import com.moneat.events.services.EventService
 import com.moneat.events.services.IngestionWorker
 import com.moneat.logs.models.LogIngestEntry
 import com.moneat.logs.services.LogService
+import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.utils.DetailedErrorResponse
 import com.moneat.utils.ErrorResponse
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.header
@@ -40,12 +44,13 @@ import io.ktor.server.routing.route
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import org.koin.core.context.GlobalContext
-import com.moneat.utils.suspendRunCatching
 import java.security.MessageDigest
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
 private const val SHA256_HEX_PREFIX_CHARS = 16
+private const val PROJECT_ID_DSN_SEGMENT_PATTERN =
+    "([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9]+)"
 
 private fun sha256HexPrefix(bytes: ByteArray, maxHexChars: Int): String {
     val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
@@ -56,6 +61,7 @@ fun Route.ingestRoutes(
     eventService: EventService = GlobalContext.get().get(),
     quotaService: BillingQuotaService = GlobalContext.get().get(),
     logService: LogService = GlobalContext.get().get(),
+    projectIdResolver: ProjectIdResolver = ProjectIdResolver(),
     enqueueEnvelope: (queueKey: String, message: String) -> Unit = { queueKey, message ->
         RedisConfig.sync().lpush(queueKey, message)
     },
@@ -74,7 +80,7 @@ fun Route.ingestRoutes(
                 call.application.environment.config
                     .property("ingest.queueKey")
                     .getString()
-            val projectId = call.parameters["projectId"]?.toLongOrNull()
+            val projectId = call.parameters["projectId"]?.let(projectIdResolver::resolve)
             if (projectId == null) {
                 call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                 return@post
@@ -121,13 +127,13 @@ fun Route.ingestRoutes(
                     }
                     val groupedReservations =
                         envelope.items
-                            .groupingBy { mapEnvelopeItemTypeToQuotaType(it.type) }
+                            .groupingBy { mapEnvelopeItemToQuotaType(it) }
                             .eachCount()
 
                     // Calculate bytes per type for GB quota tracking
                     val groupedBytes =
                         envelope.items
-                            .groupBy { mapEnvelopeItemTypeToQuotaType(it.type) }
+                            .groupBy { mapEnvelopeItemToQuotaType(it) }
                             .mapValues { (_, items) ->
                                 items.sumOf { item ->
                                     (item.payloadBytes?.size ?: item.payload.toByteArray(Charsets.UTF_8).size).toLong()
@@ -160,7 +166,7 @@ fun Route.ingestRoutes(
 
         // Structured logs endpoint
         post("/logs/") {
-            val projectId = call.parameters["projectId"]?.toLongOrNull()
+            val projectId = call.parameters["projectId"]?.let(projectIdResolver::resolve)
             if (projectId == null) {
                 call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                 return@post
@@ -238,7 +244,7 @@ fun Route.ingestRoutes(
 
         // Legacy store endpoint
         post("/store/") {
-            val projectId = call.parameters["projectId"]?.toLongOrNull()
+            val projectId = call.parameters["projectId"]?.let(projectIdResolver::resolve)
             if (projectId == null) {
                 call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                 return@post
@@ -269,7 +275,8 @@ fun Route.ingestRoutes(
                         return@post
                     }
                     val bodyBytes = body.toByteArray(Charsets.UTF_8).size.toLong()
-                    val reservation = reserveSingleQuota(orgId, 1, "error", bodyBytes)
+                    val quotaType = mapEnvelopeItemToQuotaType(EnvelopeItem("event", body))
+                    val reservation = reserveSingleQuota(orgId, 1, quotaType, bodyBytes)
                     if (!reservation.allowed) {
                         call.respond(
                             HttpStatusCode.TooManyRequests,
@@ -315,16 +322,23 @@ fun extractPublicKey(
 fun extractPublicKeyFromDsn(dsnLikeHeader: String?): String? {
     if (dsnLikeHeader.isNullOrBlank()) return null
     val cleaned = dsnLikeHeader.removePrefix("DSN ").trim()
-    val regex = "https?://([a-zA-Z0-9_-]+)@[^/]+/[0-9]+".toRegex(RegexOption.IGNORE_CASE)
+    val regex = "https?://([a-zA-Z0-9_-]+)@[^/]+/$PROJECT_ID_DSN_SEGMENT_PATTERN(?:[/?#]|$)"
+        .toRegex(RegexOption.IGNORE_CASE)
     return regex.find(cleaned)?.groupValues?.getOrNull(1)
 }
 
 internal fun mapEnvelopeItemTypeToQuotaType(itemType: String): String {
     return when (itemType) {
         "transaction" -> "transaction"
+        "session", "sessions" -> "session"
         "replay_event", "replay_recording", "replay_video" -> "replay"
         "feedback", "user_report" -> "feedback"
         "llm_generation" -> "llm"
         else -> "error"
     }
+}
+
+internal fun mapEnvelopeItemToQuotaType(item: EnvelopeItem): String {
+    if (item.isFeedbackEventPayload()) return "feedback"
+    return mapEnvelopeItemTypeToQuotaType(item.type)
 }

@@ -1,19 +1,35 @@
 package com.moneat.services
 
 import com.moneat.auth.services.AccountDeletionService
+import com.moneat.config.ClickHouseClient
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrgInvitations
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.RefreshTokens
 import com.moneat.shared.models.Subscriptions
+import com.moneat.shared.models.UsageRecords
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.testsupport.requestBodyText
+import com.moneat.testsupport.respond
+import com.moneat.testsupport.withClickHouseMockServer
 import io.mockk.mockk
-import org.jetbrains.exposed.v1.core.*
-import org.jetbrains.exposed.v1.jdbc.*
+import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.update
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import kotlin.test.*
+import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlin.time.Clock
 
 class AccountDeletionServiceTest {
@@ -44,8 +60,14 @@ class AccountDeletionServiceTest {
             Projects,
             RefreshTokens,
             Subscriptions,
+            UsageRecords,
             OrgInvitations
         )
+    }
+
+    @AfterTest
+    fun closeClickHouse() {
+        ClickHouseClient.close()
     }
 
     private fun seedUser(
@@ -91,6 +113,18 @@ class AccountDeletionServiceTest {
             it[plan] = "pro"
         }
     }
+
+    private fun seedProject(
+        orgId: Int,
+        name: String = "delete-service"
+    ): Long =
+        transaction {
+            Projects.insert {
+                it[organization_id] = orgId
+                it[Projects.name] = name
+                it[slug] = name
+            } get Projects.id
+        }
 
     // ──── validateUserDeletion ────
 
@@ -233,5 +267,36 @@ class AccountDeletionServiceTest {
 
         val result = service.validateOrganizationDeletion(orgId, userId)
         assertTrue(result.canDelete)
+    }
+
+    @Test
+    fun `deleteOrganization deletes ClickHouse service data by compatible id column`() = runBlocking {
+        val userId = seedUser()
+        val orgId = seedOrg("Delete Service Org")
+        val projectId = seedProject(orgId)
+        seedMembership(userId, orgId, "owner")
+        val queries = CopyOnWriteArrayList<String>()
+
+        withClickHouseMockServer(
+            { exchange ->
+                queries += exchange.requestBodyText()
+                exchange.respond(200, "")
+            }
+        ) {
+            assertTrue(service.deleteOrganization(orgId, userId))
+        }
+
+        assertTrue(
+            queries.any { it == "ALTER TABLE events DELETE WHERE service_id IN ($projectId)" },
+            "events should delete by service_id"
+        )
+        assertTrue(
+            queries.any { it == "ALTER TABLE llm_generations DELETE WHERE service_id IN ($projectId)" },
+            "llm_generations should delete by service_id"
+        )
+        assertTrue(
+            queries.any { it == "ALTER TABLE llm_generations_hourly_mv DELETE WHERE project_id IN ($projectId)" },
+            "llm_generations_hourly_mv should keep deprecated project_id"
+        )
     }
 }

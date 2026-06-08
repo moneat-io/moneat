@@ -16,16 +16,25 @@
 
 package com.moneat.mcp.tools
 
+import com.moneat.mcp.protocol.InputSchema
 import com.moneat.mcp.protocol.ToolCallResult
 import com.moneat.mcp.protocol.ToolContent
+import com.moneat.shared.services.ProjectIdResolver
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 
 val toolJson = Json {
     encodeDefaults = true
     ignoreUnknownKeys = true
     prettyPrint = true
 }
+
+private val projectIdResolver = ProjectIdResolver()
 
 fun textResult(text: String): ToolCallResult {
     return ToolCallResult(content = listOf(ToolContent(text = text)))
@@ -42,3 +51,29 @@ inline fun <reified T> jsonResult(data: T): ToolCallResult {
     val text = toolJson.encodeToString(data)
     return ToolCallResult(content = listOf(ToolContent(text = text)))
 }
+
+fun JsonObject.projectIdArg(name: String = "project_id"): Long? =
+    this[name]?.jsonPrimitive?.contentOrNull?.let(projectIdResolver::resolve)
+
+suspend fun withRequiredProjectId(
+    args: JsonObject,
+    block: suspend (Long) -> ToolCallResult,
+): ToolCallResult {
+    val projectId = args.projectIdArg() ?: return errorResult("project_id is required")
+    return block(projectId)
+}
+
+fun schemaProjectId(description: String = "Project resource ID or legacy numeric project ID"): JsonObject = JsonObject(
+    mapOf(
+        "type" to JsonArray(listOf(JsonPrimitive("string"), JsonPrimitive("number"))),
+        "description" to JsonPrimitive(description)
+    )
+)
+
+fun projectIdInputSchema(description: String = "Project resource ID or legacy numeric project ID"): InputSchema =
+    InputSchema(
+        properties = JsonObject(
+            mapOf("project_id" to schemaProjectId(description))
+        ),
+        required = listOf("project_id")
+    )

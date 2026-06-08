@@ -26,15 +26,16 @@ import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Releases
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
+import com.moneat.shared.services.TraceFinalizerBackgroundService
 import com.moneat.statuspage.models.StatusPageIncidentUpdates
 import com.moneat.statuspage.models.StatusPageIncidents
 import com.moneat.statuspage.models.StatusPageMonitors
 import com.moneat.statuspage.models.StatusPages
 import com.moneat.testsupport.TestIpConstants
 import com.moneat.uptime.models.UptimeMonitors
-import io.ktor.client.statement.*
-import io.ktor.http.*
-import org.jetbrains.exposed.v1.core.*
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.isSuccess
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -43,7 +44,7 @@ import org.jetbrains.exposed.v1.jdbc.update
 import org.mindrot.jbcrypt.BCrypt
 import java.time.Instant
 import java.time.temporal.ChronoUnit
-import java.util.*
+import java.util.UUID
 import kotlin.random.Random
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
@@ -1316,10 +1317,11 @@ object DemoDataSeeder {
         val issueQuery =
             """
             INSERT INTO `$db`.issues (
-                issue_id, project_id, fingerprint, title, culprit, level,
+                issue_id, service_id, project_id, fingerprint, title, culprit, level,
                 first_seen, last_seen, event_count, user_count, status
             ) VALUES (
                 '$issueId',
+                $projectId,
                 $projectId,
                 '${UUID.randomUUID().toString().replace("-", "")}',
                 '${template.title.replace("'", "''")}',
@@ -1446,12 +1448,13 @@ object DemoDataSeeder {
             val eventQuery =
                 """
                 INSERT INTO `$db`.events (
-                    event_id, project_id, issue_id, timestamp, received_at, event_type,
+                    event_id, service_id, project_id, issue_id, timestamp, received_at, event_type,
                     platform, level, message, exception_type, exception_value,
                     stack_trace, environment, release, user_id, user_email, user_username, user_ip_address,
                     device_model, os_name, os_version, breadcrumbs, contexts, tags, sdk_name, sdk_version, request
                 ) VALUES (
                     '$eventId',
+                    $projectId,
                     $projectId,
                     '$issueId',
                     toDateTime64(${timestamp.epochSecond}, 3, 'UTC'),
@@ -1785,13 +1788,14 @@ object DemoDataSeeder {
                 val eventQuery =
                     """
                     INSERT INTO `$db`.events (
-                        event_id, project_id, timestamp, received_at, event_type,
+                        event_id, service_id, project_id, timestamp, received_at, event_type,
                         level, platform, environment, release, 
                         transaction_name, transaction_op, duration_ms,
                         user_id, user_email, device_model, os_name, os_version,
                         browser_name, browser_version, message
                     ) VALUES (
                         '$eventId',
+                        $androidProjectId,
                         $androidProjectId,
                         toDateTime64(${timestamp.epochSecond}, 3, 'UTC'),
                         toDateTime64(${timestamp.epochSecond}, 3, 'UTC'),
@@ -1957,13 +1961,14 @@ object DemoDataSeeder {
                 val replayQuery =
                     """
                     INSERT INTO `$db`.replay_events (
-                        replay_id, project_id, segment_id, timestamp, replay_start_timestamp,
+                        replay_id, service_id, project_id, segment_id, timestamp, replay_start_timestamp,
                         urls, error_ids, trace_ids, environment, release, platform,
                         user_id, user_email, user_username, user_ip_address,
                         sdk_name, sdk_version, browser_name, browser_version,
                         os_name, os_version, device_name, device_family, activity, tags
                     ) VALUES (
                         '$replayId',
+                        $androidProjectId,
                         $androidProjectId,
                         $segmentId,
                         toDateTime64(${segmentTime.epochSecond}, 3, 'UTC'),
@@ -2135,13 +2140,14 @@ object DemoDataSeeder {
             val feedbackQuery =
                 """
                 INSERT INTO `$db`.user_feedback (
-                    feedback_id, project_id, timestamp, received_at,
+                    feedback_id, service_id, project_id, timestamp, received_at,
                     message, contact_email, name, url,
                     associated_event_id, replay_id, environment, release,
                     platform, user_id, user_email, user_username, user_ip_address,
                     sdk_name, sdk_version, tags, status, updated_at
                 ) VALUES (
                     '$feedbackId',
+                    $androidProjectId,
                     $androidProjectId,
                     toDateTime64(${timestamp.epochSecond}, 3, 'UTC'),
                     toDateTime64(${timestamp.epochSecond}, 3, 'UTC'),
@@ -3528,6 +3534,10 @@ object DemoDataSeeder {
             ) VALUES ${spanRows.joinToString(",\n")}
             """.trimIndent()
         ClickHouseClient.execute(spanBatch)
+        // Finalize the freshly seeded (now-frozen) spans into apm_traces_final so the traces UI has
+        // data immediately, without waiting for the scheduled finalizer. Spans in the live window are
+        // served directly from apm_trace_summaries by the dashboard read.
+        TraceFinalizerBackgroundService.fromConfig().finalizeNow()
         println("✅ Seeded $traceCount traces (${spanRows.size} spans)")
 
         // ── Profiles ──
@@ -3908,14 +3918,14 @@ object DemoDataSeeder {
 
             val clickhouseQueries =
                 listOf(
-                    "ALTER TABLE issues DELETE WHERE project_id IN ($projectIdList)",
-                    "ALTER TABLE events DELETE WHERE project_id IN ($projectIdList)",
-                    "ALTER TABLE logs DELETE WHERE project_id IN ($projectIdList)",
-                    "ALTER TABLE user_feedback DELETE WHERE project_id IN ($projectIdList)",
-                    "ALTER TABLE replay_events DELETE WHERE project_id IN ($projectIdList)",
-                    "ALTER TABLE replay_segments DELETE WHERE project_id IN ($projectIdList)",
-                    "ALTER TABLE sessions DELETE WHERE project_id IN ($projectIdList)",
-                    "ALTER TABLE spans DELETE WHERE project_id IN ($projectIdList)"
+                    "ALTER TABLE issues DELETE WHERE service_id IN ($projectIdList)",
+                    "ALTER TABLE events DELETE WHERE service_id IN ($projectIdList)",
+                    "ALTER TABLE logs DELETE WHERE service_id IN ($projectIdList)",
+                    "ALTER TABLE user_feedback DELETE WHERE service_id IN ($projectIdList)",
+                    "ALTER TABLE replay_events DELETE WHERE service_id IN ($projectIdList)",
+                    "ALTER TABLE replay_segments DELETE WHERE service_id IN ($projectIdList)",
+                    "ALTER TABLE sessions DELETE WHERE service_id IN ($projectIdList)",
+                    "ALTER TABLE spans DELETE WHERE service_id IN ($projectIdList)"
                 )
 
             for (query in clickhouseQueries) {
@@ -3930,14 +3940,18 @@ object DemoDataSeeder {
         println("Deleting Datadog agent ClickHouse data...")
         val ddClickhouseQueries =
             listOf(
-                "ALTER TABLE apm_spans DELETE WHERE toInt64(organization_id) = $orgId",
-                "ALTER TABLE trace_stats DELETE WHERE toInt64(organization_id) = $orgId",
-                "ALTER TABLE profiles DELETE WHERE toInt64(organization_id) = $orgId",
-                "ALTER TABLE infra_events DELETE WHERE toInt64(organization_id) = $orgId",
-                "ALTER TABLE service_checks DELETE WHERE toInt64(organization_id) = $orgId",
-                "ALTER TABLE processes DELETE WHERE toInt64(organization_id) = $orgId",
-                "ALTER TABLE containers DELETE WHERE toInt64(organization_id) = $orgId",
-                "ALTER TABLE network_connections DELETE WHERE toInt64(organization_id) = $orgId",
+                datadogDeleteQuery("apm_spans", orgId),
+                datadogDeleteQuery("apm_trace_summaries", orgId),
+                datadogDeleteQuery("apm_traces_final", orgId),
+                datadogDeleteQuery("apm_error_groups_hourly", orgId),
+                datadogDeleteQuery("apm_resource_stats_hourly", orgId),
+                datadogDeleteQuery("trace_stats", orgId),
+                datadogDeleteQuery("profiles", orgId),
+                datadogDeleteQuery("infra_events", orgId),
+                datadogDeleteQuery("service_checks", orgId),
+                datadogDeleteQuery("processes", orgId),
+                datadogDeleteQuery("containers", orgId),
+                datadogDeleteQuery("network_connections", orgId),
             )
 
         for (query in ddClickhouseQueries) {
@@ -3948,6 +3962,9 @@ object DemoDataSeeder {
             }
         }
     }
+
+    private fun datadogDeleteQuery(table: String, orgId: Int): String =
+        "ALTER TABLE $table DELETE WHERE toInt64(organization_id) = $orgId SETTINGS mutations_sync = 2"
 
     suspend fun deleteDemoData() {
         println("🗑️  Deleting existing demo data...")

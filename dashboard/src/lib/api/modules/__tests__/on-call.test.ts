@@ -43,12 +43,12 @@ describe('onCallMethods', () => {
 
   describe('updatePriorities', () => {
     it('sends PUT with request body', async () => {
-      const request = { priorities: [{ level: 'P1', label: 'Critical', color: '#ff0000' }] }
+      const request = { priorities: [{ priority: 'P1', isPageable: true, label: 'Critical' }] }
       const mock = [{ id: 1, level: 'P1', label: 'Critical', color: '#ff0000' }]
       server.use(
         http.put(`${API_BASE}/priorities`, async ({ request: req }) => {
           const body = await req.json() as Record<string, unknown>
-          expect(body.priorities).toBeDefined()
+          expect(body).toEqual(request)
           return HttpResponse.json(mock)
         })
       )
@@ -72,11 +72,21 @@ describe('onCallMethods', () => {
 
   describe('updateBusinessHours', () => {
     it('sends PUT with business hours config', async () => {
-      const request = { timezone: 'US/Eastern', startHour: 8, endHour: 18, workDays: [1, 2, 3, 4, 5] }
+      const request = {
+        timezone: 'US/Eastern',
+        enabled: true,
+        windows: [
+          {dayOfWeek: 1, startTime: '08:00', endTime: '18:00'},
+          {dayOfWeek: 2, startTime: '08:00', endTime: '18:00'},
+          {dayOfWeek: 3, startTime: '08:00', endTime: '18:00'},
+          {dayOfWeek: 4, startTime: '08:00', endTime: '18:00'},
+          {dayOfWeek: 5, startTime: '08:00', endTime: '18:00'},
+        ],
+      }
       server.use(
         http.put(`${API_BASE}/business-hours`, async ({ request: req }) => {
           const body = await req.json() as Record<string, unknown>
-          expect(body.timezone).toBe('US/Eastern')
+          expect(body).toEqual(request)
           return HttpResponse.json(request)
         })
       )
@@ -267,7 +277,7 @@ describe('onCallMethods', () => {
     it('fetches incidents without filters', async () => {
       const mock = [{ id: 1, title: 'Server Down', status: 'TRIGGERED' }]
       server.use(
-        http.get(`${API_BASE}/incidents`, () => HttpResponse.json(mock))
+        http.get(`${API_BASE}/on-call/alerts`, () => HttpResponse.json(mock))
       )
       const result = await api.getIncidents()
       expect(result).toEqual(mock)
@@ -276,7 +286,7 @@ describe('onCallMethods', () => {
     it('fetches incidents with filters', async () => {
       const mock = [{ id: 2, title: 'High CPU', status: 'ACKNOWLEDGED' }]
       server.use(
-        http.get(`${API_BASE}/incidents`, ({ request }) => {
+        http.get(`${API_BASE}/on-call/alerts`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('status')).toBe('ACKNOWLEDGED')
           expect(url.searchParams.get('priority')).toBe('P1')
@@ -287,9 +297,29 @@ describe('onCallMethods', () => {
       )
       const result = await api.getIncidents({
         status: 'ACKNOWLEDGED',
-        priorityLevel: 'P1',
+        priority: 'P1',
         fromDate: '2025-01-01',
         toDate: '2025-01-31',
+      })
+      expect(result).toEqual(mock)
+    })
+
+    it('fetches incidents with multiple statuses', async () => {
+      const mock = [
+        { id: 1, title: 'Server Down', status: 'TRIGGERED' },
+        { id: 2, title: 'High CPU', status: 'ACKNOWLEDGED' },
+      ]
+      server.use(
+        http.get(`${API_BASE}/on-call/alerts`, ({ request }) => {
+          const url = new URL(request.url)
+          expect(url.searchParams.getAll('status')).toEqual(['TRIGGERED', 'ACKNOWLEDGED'])
+          expect(url.searchParams.get('priority')).toBe('P0')
+          return HttpResponse.json(mock)
+        })
+      )
+      const result = await api.getIncidents({
+        status: ['TRIGGERED', 'ACKNOWLEDGED'],
+        priority: 'P0',
       })
       expect(result).toEqual(mock)
     })
@@ -299,7 +329,7 @@ describe('onCallMethods', () => {
     it('fetches single incident', async () => {
       const mock = { id: 1, title: 'Server Down', status: 'TRIGGERED', timeline: [] }
       server.use(
-        http.get(`${API_BASE}/incidents/1`, () => HttpResponse.json(mock))
+        http.get(`${API_BASE}/on-call/alerts/1`, () => HttpResponse.json(mock))
       )
       const result = await api.getIncident(1)
       expect(result).toEqual(mock)
@@ -310,7 +340,7 @@ describe('onCallMethods', () => {
     it('fetches incident timeline', async () => {
       const mock = [{ type: 'TRIGGERED', timestamp: '2025-01-01T00:00:00Z' }]
       server.use(
-        http.get(`${API_BASE}/incidents/1/timeline`, () => HttpResponse.json(mock))
+        http.get(`${API_BASE}/on-call/alerts/1/timeline`, () => HttpResponse.json(mock))
       )
       const result = await api.getIncidentTimeline(1)
       expect(result).toEqual(mock)
@@ -321,7 +351,7 @@ describe('onCallMethods', () => {
     it('sends POST to acknowledge', async () => {
       const mock = { id: 1, status: 'ACKNOWLEDGED' }
       server.use(
-        http.post(`${API_BASE}/incidents/1/acknowledge`, () =>
+        http.post(`${API_BASE}/on-call/alerts/1/acknowledge`, () =>
           HttpResponse.json(mock)
         )
       )
@@ -334,7 +364,7 @@ describe('onCallMethods', () => {
     it('sends POST to resolve', async () => {
       const mock = { id: 1, status: 'RESOLVED' }
       server.use(
-        http.post(`${API_BASE}/incidents/1/resolve`, () =>
+        http.post(`${API_BASE}/on-call/alerts/1/resolve`, () =>
           HttpResponse.json(mock)
         )
       )
@@ -347,7 +377,7 @@ describe('onCallMethods', () => {
     it('sends POST with toUserId', async () => {
       const mock = { id: 1, assignedTo: 50 }
       server.use(
-        http.post(`${API_BASE}/incidents/1/reassign`, async ({ request }) => {
+        http.post(`${API_BASE}/on-call/alerts/1/reassign`, async ({ request }) => {
           const body = await request.json() as Record<string, unknown>
           expect(body.toUserId).toBe(50)
           return HttpResponse.json(mock)
@@ -362,7 +392,7 @@ describe('onCallMethods', () => {
     it('sends POST with note body', async () => {
       const mock = { type: 'NOTE', content: 'Investigating' }
       server.use(
-        http.post(`${API_BASE}/incidents/1/notes`, async ({ request }) => {
+        http.post(`${API_BASE}/on-call/alerts/1/notes`, async ({ request }) => {
           const body = await request.json() as Record<string, unknown>
           expect(body.note).toBe('Investigating')
           return HttpResponse.json(mock)
@@ -376,7 +406,7 @@ describe('onCallMethods', () => {
   describe('viewIncident', () => {
     it('sends POST to mark incident as viewed', async () => {
       server.use(
-        http.post(`${API_BASE}/incidents/1/view`, () =>
+        http.post(`${API_BASE}/on-call/alerts/1/view`, () =>
           new HttpResponse(null, { status: 204 })
         )
       )
@@ -387,7 +417,7 @@ describe('onCallMethods', () => {
   describe('markUnavailable', () => {
     it('sends POST to mark unavailable', async () => {
       server.use(
-        http.post(`${API_BASE}/incidents/1/unavailable`, () =>
+        http.post(`${API_BASE}/on-call/alerts/1/unavailable`, () =>
           new HttpResponse(null, { status: 204 })
         )
       )
@@ -429,13 +459,13 @@ describe('onCallMethods', () => {
 
   describe('declareIncident', () => {
     it('sends POST to declare incident from alert', async () => {
-      const data = { title: 'Outage', description: 'Full outage', priorityLevel: 'P1' }
+      const data = { title: 'Outage', description: 'Full outage', severity: 'SEV-1' }
       const mock = { id: 42 }
       server.use(
-        http.post(`${API_BASE}/incidents/10/declare`, async ({ request }) => {
+        http.post(`${API_BASE}/on-call/alerts/10/declare-incident`, async ({ request }) => {
           const body = await request.json() as Record<string, unknown>
           expect(body.title).toBe('Outage')
-          expect(body.priorityLevel).toBe('P1')
+          expect(body.severity).toBe('SEV-1')
           return HttpResponse.json(mock)
         })
       )
@@ -450,7 +480,7 @@ describe('onCallMethods', () => {
     it('fetches on-call incidents without filters', async () => {
       const mock = [{ id: 1, title: 'Alert fired' }]
       server.use(
-        http.get(`${API_BASE}/on-call-incidents`, () => HttpResponse.json(mock))
+        http.get(`${API_BASE}/on-call/incidents`, () => HttpResponse.json(mock))
       )
       const result = await api.getOnCallIncidents()
       expect(result).toEqual(mock)
@@ -459,14 +489,14 @@ describe('onCallMethods', () => {
     it('fetches on-call incidents with filters', async () => {
       const mock = [{ id: 2, title: 'Disk full' }]
       server.use(
-        http.get(`${API_BASE}/on-call-incidents`, ({ request }) => {
+        http.get(`${API_BASE}/on-call/incidents`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('status')).toBe('TRIGGERED')
-          expect(url.searchParams.get('priorityLevel')).toBe('P2')
+          expect(url.searchParams.get('severity')).toBe('SEV-2')
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.getOnCallIncidents({ status: 'TRIGGERED', priorityLevel: 'P2' })
+      const result = await api.getOnCallIncidents({ status: 'TRIGGERED', severity: 'SEV-2' })
       expect(result).toEqual(mock)
     })
   })
@@ -475,7 +505,7 @@ describe('onCallMethods', () => {
     it('fetches single on-call incident', async () => {
       const mock = { id: 5, title: 'Memory leak', status: 'TRIGGERED' }
       server.use(
-        http.get(`${API_BASE}/on-call-incidents/5`, () => HttpResponse.json(mock))
+        http.get(`${API_BASE}/on-call/incidents/5`, () => HttpResponse.json(mock))
       )
       const result = await api.getOnCallIncident(5)
       expect(result).toEqual(mock)
@@ -483,14 +513,16 @@ describe('onCallMethods', () => {
   })
 
   describe('resolveOnCallIncident', () => {
-    it('sends POST to resolve on-call incident', async () => {
+    it('sends POST with optional note to resolve on-call incident', async () => {
       const mock = { id: 5, status: 'RESOLVED' }
       server.use(
-        http.post(`${API_BASE}/on-call-incidents/5/resolve`, () =>
-          HttpResponse.json(mock)
-        )
+        http.post(`${API_BASE}/on-call/incidents/5/resolve`, async ({ request }) => {
+          const body = await request.json() as Record<string, unknown>
+          expect(body.note).toBe('Restarted workers')
+          return HttpResponse.json(mock)
+        })
       )
-      const result = await api.resolveOnCallIncident(5)
+      const result = await api.resolveOnCallIncident(5, 'Restarted workers')
       expect(result).toEqual(mock)
     })
   })
@@ -499,7 +531,7 @@ describe('onCallMethods', () => {
     it('fetches on-call incident timeline', async () => {
       const mock = [{ type: 'ESCALATED', timestamp: '2025-06-01T12:00:00Z' }]
       server.use(
-        http.get(`${API_BASE}/on-call-incidents/5/timeline`, () =>
+        http.get(`${API_BASE}/on-call/incidents/5/timeline`, () =>
           HttpResponse.json(mock)
         )
       )
@@ -512,7 +544,7 @@ describe('onCallMethods', () => {
     it('sends POST with note', async () => {
       const mock = { message: 'Note added' }
       server.use(
-        http.post(`${API_BASE}/on-call-incidents/5/notes`, async ({ request }) => {
+        http.post(`${API_BASE}/on-call/incidents/5/notes`, async ({ request }) => {
           const body = await request.json() as Record<string, unknown>
           expect(body.note).toBe('Looking into it')
           return HttpResponse.json(mock)

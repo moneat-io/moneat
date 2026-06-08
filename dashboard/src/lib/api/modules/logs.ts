@@ -24,6 +24,8 @@ import type {
   LogAggregateResponse,
   LogTopResponse,
   CreateOtlpApiKeyResponse,
+  OtlpObservedService,
+  OtlpServiceMapping,
   RawLogResponse,
   RawLogFilterResponse,
   RawLogAggregateResponse,
@@ -60,6 +62,45 @@ function mapRawLogResponse(response: RawLogResponse): LogQueryResponse {
     hasMore: response.hasMore ?? response.has_more ?? false,
     totalCount: response.totalCount ?? response.total_count ?? null,
   }
+}
+
+function mapOtlpObservedService(service: Record<string, unknown>): OtlpObservedService {
+  return {
+    id: service.id as number,
+    mappingId: (service.mappingId ?? service.mapping_id) as number | null | undefined,
+    serviceNamespace: (service.serviceNamespace ?? service.service_namespace ?? '') as string,
+    serviceName: (service.serviceName ?? service.service_name ?? '') as string,
+    projectId: (service.projectId ?? service.project_id) as number | null | undefined,
+    projectResourceId: (service.projectResourceId ?? service.project_resource_id) as string | null | undefined,
+    projectName: (service.projectName ?? service.project_name) as string | null | undefined,
+    seenLogs: (service.seenLogs ?? service.seen_logs ?? false) as boolean,
+    seenTraces: (service.seenTraces ?? service.seen_traces ?? false) as boolean,
+    seenMetrics: (service.seenMetrics ?? service.seen_metrics ?? false) as boolean,
+    seenFeedback: (service.seenFeedback ?? service.seen_feedback ?? false) as boolean,
+    lastEnvironment: (service.lastEnvironment ?? service.last_environment) as string | null | undefined,
+    firstSeenAt: (service.firstSeenAt ?? service.first_seen_at) as string,
+    lastSeenAt: (service.lastSeenAt ?? service.last_seen_at) as string,
+  }
+}
+
+function mapOtlpServiceMapping(mapping: Record<string, unknown>): OtlpServiceMapping {
+  return {
+    id: mapping.id as number,
+    serviceNamespace: (mapping.serviceNamespace ?? mapping.service_namespace ?? '') as string,
+    serviceName: (mapping.serviceName ?? mapping.service_name ?? '') as string,
+    projectId: (mapping.projectId ?? mapping.project_id) as number,
+    projectResourceId: (mapping.projectResourceId ?? mapping.project_resource_id) as string,
+    projectName: (mapping.projectName ?? mapping.project_name ?? '') as string,
+    updatedAt: (mapping.updatedAt ?? mapping.updated_at) as string,
+  }
+}
+
+function projectMappingField(projectId: string | number): {project_id: number} | {project_resource_id: string} {
+  const projectIdValue = String(projectId)
+  if (typeof projectId === 'number' || /^\d+$/.test(projectIdValue)) {
+    return {project_id: Number(projectIdValue)}
+  }
+  return {project_resource_id: projectIdValue}
 }
 
 function buildLogFilterParams(options: {
@@ -116,6 +157,7 @@ export function logsMethods(core: ApiClientCore) {
         from?: string
         to?: string
         tags?: Record<string, string>
+        traceId?: string
         excludeService?: string
         excludeEnvironment?: string
         excludeContainerName?: string
@@ -126,6 +168,7 @@ export function logsMethods(core: ApiClientCore) {
       if (options.cursor) params.set('cursor', options.cursor)
       params.set('limit', String(options.limit ?? 100))
       if (options.containerName) params.set('containerName', options.containerName)
+      if (options.traceId) params.set('traceId', options.traceId)
       const response = await core.request<RawLogResponse>(`${base}/logs?${params.toString()}`)
       return mapRawLogResponse(response)
     },
@@ -211,6 +254,34 @@ export function logsMethods(core: ApiClientCore) {
     deleteOtlpApiKey: (id: number) =>
       core.request<void>(`${base}/logs/api-keys/${id}`, { method: 'DELETE' }),
 
+    getOtlpObservedServices: async (): Promise<{ services: OtlpObservedService[] }> => {
+      const response = await core.request<{ services: Record<string, unknown>[] }>(
+        `${base}/otlp/services`
+      )
+      const services = (response.services ?? []).map(mapOtlpObservedService)
+      return { services }
+    },
+
+    upsertOtlpServiceMapping: async (
+      serviceName: string,
+      projectId: string | number,
+      serviceNamespace = ''
+    ): Promise<OtlpServiceMapping> => {
+      const projectField = projectMappingField(projectId)
+      const response = await core.request<Record<string, unknown>>(`${base}/otlp/service-mappings`, {
+        method: 'POST',
+        body: JSON.stringify({
+          service_name: serviceName,
+          service_namespace: serviceNamespace,
+          ...projectField,
+        }),
+      })
+      return mapOtlpServiceMapping(response)
+    },
+
+    deleteOtlpServiceMapping: (id: number) =>
+      core.request<void>(`${base}/otlp/service-mappings/${id}`, { method: 'DELETE' }),
+
     // Backward-compat aliases
     get getLogApiKeys() { return this.getOtlpApiKeys },
     get createLogApiKey() { return this.createOtlpApiKey },
@@ -236,16 +307,19 @@ export function logsMethods(core: ApiClientCore) {
         levels?: string[]
         service?: string
         environment?: string
+        containerName?: string
+        tags?: Record<string, string>
+        excludeService?: string
+        excludeEnvironment?: string
+        excludeContainerName?: string
+        excludeTags?: Record<string, string>
       } = {}
     ) => {
-      const params = new URLSearchParams()
-      if (options.query) params.set('q', options.query)
-      if (options.levels && options.levels.length > 0) {
-        options.levels.forEach((level) => { params.append('level', level) })
-      }
-      if (options.service) params.set('service', options.service)
-      if (options.environment) params.set('environment', options.environment)
-      return new EventSource(`${base}/logs/tail?${params.toString()}`, { withCredentials: true })
+      const params = buildLogFilterParams(options)
+      if (options.containerName) params.set('containerName', options.containerName)
+      return new globalThis.EventSource(urlWithQuery(`${base}/logs/tail`, params.toString()), {
+        withCredentials: true,
+      })
     },
 
     getLogAggregate: async (

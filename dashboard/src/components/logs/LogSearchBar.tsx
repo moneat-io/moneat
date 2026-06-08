@@ -18,6 +18,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {cn} from '@/lib/utils'
+import {logLevelBadgeClass} from '@/lib/severity'
 import {ChevronDown, Clock, ListFilter, Search, X} from 'lucide-react'
 import {DateTimePicker} from '@/components/ui/datetime-picker'
 import {format} from 'date-fns'
@@ -50,20 +51,12 @@ const TIME_PRESETS: TimeRangePreset[] = [
 
 const LEVEL_OPTIONS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal']
 
-const levelActiveColors: Record<string, string> = {
-  trace: 'bg-zinc-500/30 text-zinc-700 dark:text-zinc-200 border-zinc-500/50 ring-1 ring-zinc-500/20',
-  debug: 'bg-teal-500/30 text-teal-700 dark:text-teal-100 border-teal-500/50 ring-1 ring-teal-500/20',
-  info: 'bg-indigo-500/30 text-indigo-700 dark:text-indigo-100 border-indigo-500/50 ring-1 ring-indigo-500/20',
-  warn: 'bg-amber-500/30 text-amber-700 dark:text-amber-200 border-amber-500/50 ring-1 ring-amber-500/20',
-  error: 'bg-red-500/30 text-red-700 dark:text-red-200 border-red-500/50 ring-1 ring-red-500/20',
-  fatal: 'bg-rose-500/40 text-rose-700 dark:text-rose-200 border-rose-500/50 ring-1 ring-rose-500/20',
-}
-
+// Active level chips reuse the shared soft-badge classes (@/lib/severity).
 const facetChipColors: Record<string, string> = {
-  service: 'bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30',
-  environment: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
-  host: 'bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30',
-  source: 'bg-pink-500/15 text-pink-700 dark:text-pink-300 border-pink-500/30',
+  service: 'bg-[hsl(var(--primary)/0.12)] text-primary border-[hsl(var(--primary)/0.3)]',
+  environment: 'bg-success-bg text-success-fg border-success-border',
+  host: 'bg-[hsl(var(--chart-6)/0.15)] text-[hsl(var(--chart-6))] border-[hsl(var(--chart-6)/0.3)]',
+  source: 'bg-[hsl(var(--chart-7)/0.15)] text-[hsl(var(--chart-7))] border-[hsl(var(--chart-7)/0.3)]',
 }
 
 const BUILT_IN_FACETS = ['service', 'environment', 'env', 'level', 'host', 'source']
@@ -367,7 +360,7 @@ export function LogSearchBar({
             {query && (
               <Badge
                 variant="secondary"
-                className="gap-1 font-mono text-xs bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/20 cursor-pointer hover:bg-blue-500/20"
+                className="gap-1 font-mono text-xs bg-info-bg text-info-fg border border-info-border cursor-pointer hover:opacity-80"
                 onClick={() => {
                   setInputValue(query)
                   onQueryChange('')
@@ -381,7 +374,7 @@ export function LogSearchBar({
                     e.stopPropagation()
                     clearQuery()
                   }}
-                  className="ml-0.5 rounded-full hover:bg-blue-500/30"
+                  className="ml-0.5 rounded-full hover:bg-info-border"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -396,7 +389,7 @@ export function LogSearchBar({
                 className={cn(
                   'gap-1 font-mono text-xs cursor-pointer hover:opacity-80',
                   filter.exclude && 'line-through opacity-75',
-                  facetChipColors[filter.key] || 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20'
+                  facetChipColors[filter.key] || 'bg-info-bg text-info-fg border-info-border'
                 )}
                 onClick={() => {
                   const token = `${filter.exclude ? '-' : ''}${filter.key}:${filter.value}`
@@ -458,7 +451,7 @@ export function LogSearchBar({
           {showSuggestions && suggestions.length > 0 && (
             <div
               ref={suggestionsRef}
-              className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border bg-popover p-1 shadow-lg"
+              className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border bg-popover p-1"
             >
               {suggestions.map((suggestion, index) => (
                 <button
@@ -511,7 +504,7 @@ export function LogSearchBar({
           </Button>
 
           {showLevelDropdown && (
-            <div className="absolute right-0 top-full z-50 mt-1 w-[200px] rounded-lg border bg-popover p-1 shadow-lg">
+            <div className="absolute right-0 top-full z-50 mt-1 w-[200px] rounded-lg border bg-popover p-1">
               {LEVEL_OPTIONS.map((level) => {
                 const active = levels.includes(level)
                 return (
@@ -522,7 +515,7 @@ export function LogSearchBar({
                     className={cn(
                       'flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-sm transition-colors',
                       active
-                        ? levelActiveColors[level]
+                        ? cn(logLevelBadgeClass(level), 'border')
                         : 'hover:bg-accent/50'
                     )}
                   >
@@ -562,7 +555,7 @@ export function LogSearchBar({
             </Button>
 
           {showTimeDropdown && (
-            <div className="absolute right-0 top-full z-50 mt-1 w-[260px] rounded-lg border bg-popover p-1 shadow-lg">
+            <div className="absolute right-0 top-full z-50 mt-1 w-[260px] rounded-lg border bg-popover p-1">
               {TIME_PRESETS.map((preset) => (
                 <button
                   key={preset.value}

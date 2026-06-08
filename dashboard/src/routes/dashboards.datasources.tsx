@@ -24,6 +24,11 @@ import {
 } from '@/lib/api'
 import {Plus, Database, Trash2, Power, PowerOff, FlaskConical, Check, X, Pencil, Link2} from 'lucide-react'
 import {Button} from '@/components/ui/button'
+import {Badge} from '@/components/ui/badge'
+import {PageHeader} from '@/components/ui/page-header'
+import {SectionCard} from '@/components/ui/section-card'
+import {EmptyState} from '@/components/ui/empty-state'
+import {StatusDot} from '@/components/ui/status-dot'
 import {useState, useCallback} from 'react'
 import {DataSourceTypePicker} from '@/components/dashboards/DataSourceTypePicker'
 import {DATA_SOURCE_TYPES} from '@/components/dashboards/DataSourceTypes'
@@ -242,22 +247,20 @@ function DataSourcesPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-4 p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-xl font-bold">Custom Data Sources</h1>
-          <p className="text-muted-foreground text-xs mt-0.5">
-            Connect external databases and metrics sources to your dashboards
-          </p>
-        </div>
-        <Button size="sm" onClick={() => setShowForm(true)} disabled={showForm} className="gap-1.5 shrink-0">
-          <Plus className="h-3.5 w-3.5" />
-          Add Data Source
-        </Button>
-      </div>
+      <PageHeader
+        icon={Database}
+        title="Custom Data Sources"
+        description="Connect external databases and metrics sources to your dashboards"
+        actions={
+          <Button size="sm" onClick={() => setShowForm(true)} disabled={showForm} className="gap-1.5 shrink-0">
+            <Plus className="h-3.5 w-3.5" />
+            Add Data Source
+          </Button>
+        }
+      />
 
       {showForm && (
-        <div className="rounded-lg border p-6">
-          <h2 className="mb-4 text-lg font-semibold">{editingId ? 'Edit' : 'New'} Data Source</h2>
+        <SectionCard title={`${editingId ? 'Edit' : 'New'} Data Source`} icon={Database}>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -303,14 +306,14 @@ function DataSourcesPage() {
                 <div className="bg-muted inline-flex rounded-md p-0.5">
                   <button
                     type="button"
-                    className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${connectionMode === 'fields' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                    className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${connectionMode === 'fields' ? 'bg-background' : 'text-muted-foreground hover:text-foreground'}`}
                     onClick={() => setConnectionMode('fields')}
                   >
                     Fields
                   </button>
                   <button
                     type="button"
-                    className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${connectionMode === 'url' ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                    className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${connectionMode === 'url' ? 'bg-background' : 'text-muted-foreground hover:text-foreground'}`}
                     onClick={() => setConnectionMode('url')}
                   >
                     <Link2 className="mr-1 inline h-3 w-3" />
@@ -589,7 +592,7 @@ function DataSourcesPage() {
 
             {testResult && (
               <div
-                className={`rounded-md p-3 text-sm ${testResult.success ? 'bg-green-500/10 text-green-600' : 'bg-red-500/10 text-red-600'}`}
+                className={`rounded-md border p-3 text-sm ${testResult.success ? 'bg-success-bg text-success-fg border-success-border' : 'bg-danger-bg text-danger-fg border-danger-border'}`}
               >
                 <div className="flex items-center gap-2">
                   {testResult.success ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
@@ -645,29 +648,27 @@ function DataSourcesPage() {
               </Button>
             </div>
           </form>
-        </div>
+        </SectionCard>
       )}
 
       {isLoading ? (
         <div className="text-muted-foreground py-12 text-center">Loading data sources...</div>
       ) : !dataSources?.length ? (
-        <div className="rounded-lg border border-dashed py-12 text-center">
-          <Database className="text-muted-foreground mx-auto mb-3 h-12 w-12" />
-          <h3 className="text-lg font-medium">No custom data sources</h3>
-          <p className="text-muted-foreground text-sm">
-            Add a PostgreSQL or Prometheus data source to query from your dashboards.
-          </p>
-        </div>
+        <EmptyState
+          icon={Database}
+          title="No custom data sources"
+          description="Add a PostgreSQL or Prometheus data source to query from your dashboards."
+        />
       ) : (
         <div className="space-y-3">
           {dataSources.map((ds) => (
             <div
               key={ds.id}
-              className="flex items-center justify-between rounded-lg border p-4"
+              className="flex items-center justify-between rounded-lg border p-4 hover:bg-accent/40 transition-colors"
             >
               <div className="flex items-center gap-3">
                 <div
-                  className={`flex items-center justify-center rounded-md p-2 ${ds.enabled ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}
+                  className={`flex items-center justify-center rounded-md p-2 ${ds.enabled ? 'bg-[hsl(var(--primary)/0.12)] text-primary' : 'bg-muted text-muted-foreground'}`}
                 >
                   {DATA_SOURCE_TYPES.find((t) => t.value === ds.source_type)?.logo || (
                     <Database className="h-5 w-5" />
@@ -675,15 +676,14 @@ function DataSourcesPage() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
+                    <StatusDot tone={ds.enabled ? 'success' : 'neutral'} size="sm" />
                     <span className="font-medium">{ds.name}</span>
-                    <span className="bg-muted rounded px-1.5 py-0.5 text-xs">{ds.source_type}</span>
+                    <Badge variant="neutral" size="sm">{ds.source_type}</Badge>
                     {!ds.enabled && (
-                      <span className="rounded bg-yellow-500/10 px-1.5 py-0.5 text-xs text-yellow-600">
-                        Disabled
-                      </span>
+                      <Badge variant="warning" size="sm">Disabled</Badge>
                     )}
                   </div>
-                  <div className="text-muted-foreground text-sm">
+                  <div className="text-muted-foreground text-sm font-mono">
                     {ds.host}:{ds.port}
                     {ds.database_name && ` / ${ds.database_name}`}
                   </div>

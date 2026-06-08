@@ -18,7 +18,12 @@ package com.moneat.otlp.services
 
 import com.google.protobuf.ByteString
 import com.moneat.config.ClickHouseClient
+import com.moneat.shared.services.UsageTrackingService
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.HttpStatusCode
+import io.mockk.coEvery
 import io.mockk.every
+import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import io.opentelemetry.proto.collector.trace.v1.ExportTraceServiceRequest
@@ -30,6 +35,7 @@ import io.opentelemetry.proto.trace.v1.ResourceSpans
 import io.opentelemetry.proto.trace.v1.ScopeSpans
 import io.opentelemetry.proto.trace.v1.Span
 import io.opentelemetry.proto.trace.v1.Status
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -454,6 +460,80 @@ class OtlpTraceServiceTest {
         assertEquals(MY_SVC, decoded.spans[0].service)
         assertEquals("SERVER", decoded.spans[0].kind)
         assertEquals(mapOf("key" to "value"), decoded.spans[0].meta)
+    }
+
+    @Test
+    fun `insertBatch writes service map rollups`() = runBlocking {
+        val capturedSql = mutableListOf<String>()
+        coEvery { ClickHouseClient.execute(any()) } coAnswers {
+            capturedSql.add(firstArg())
+            val response = mockk<HttpResponse>()
+            every { response.status } returns HttpStatusCode.OK
+            response
+        }
+        val usageTracking = mockk<UsageTrackingService>(relaxed = true)
+        val insertService = OtlpTraceService(usageTracking)
+
+        insertService.insertBatch(
+            QueuedOtlpTraceBatch(
+                organizationId = 42L,
+                spans = listOf(
+                    OtlpSpanInsert(
+                        traceIdHex = "0af7651916cd43dd8448eb211c80319c",
+                        spanIdHex = "0000000000000001",
+                        parentIdHex = "",
+                        organizationId = 42L,
+                        name = "GET /api/users",
+                        service = "api",
+                        resource = "GET /api/users",
+                        kind = "SERVER",
+                        startNanos = 1700000000000000000L,
+                        durationNanos = 50000000L,
+                        error = 0,
+                        statusCode = 1,
+                        statusMessage = "OK",
+                        meta = emptyMap(),
+                        resourceAttributes = emptyMap(),
+                        host = "web-01",
+                        env = "prod",
+                        version = "1.0",
+                        scopeName = TRACE_OTEL_SCOPE_NAME,
+                        scopeVersion = TRACE_OTEL_SCOPE_VERSION,
+                        events = "[]",
+                        links = "[]",
+                    ),
+                    OtlpSpanInsert(
+                        traceIdHex = "0af7651916cd43dd8448eb211c80319c",
+                        spanIdHex = "0000000000000002",
+                        parentIdHex = "0000000000000001",
+                        organizationId = 42L,
+                        name = "SELECT users",
+                        service = "postgres",
+                        resource = "SELECT users",
+                        kind = "CLIENT",
+                        startNanos = 1700000000010000000L,
+                        durationNanos = 10000000L,
+                        error = 1,
+                        statusCode = 2,
+                        statusMessage = "ERROR",
+                        meta = emptyMap(),
+                        resourceAttributes = emptyMap(),
+                        host = "web-01",
+                        env = "prod",
+                        version = "1.0",
+                        scopeName = TRACE_OTEL_SCOPE_NAME,
+                        scopeVersion = TRACE_OTEL_SCOPE_VERSION,
+                        events = "[]",
+                        links = "[]",
+                    ),
+                ),
+            )
+        )
+
+        assertTrue(capturedSql.any { it.contains("INSERT INTO `test_db`.apm_spans") })
+        assertTrue(capturedSql.any { it.contains("INSERT INTO `test_db`.apm_service_stats_hourly") })
+        assertTrue(capturedSql.any { it.contains("INSERT INTO `test_db`.apm_service_edges_hourly") })
+        assertTrue(capturedSql.any { it.contains("'api'") && it.contains("'postgres'") })
     }
 
     // ──── PROTOBUF PARSING ────

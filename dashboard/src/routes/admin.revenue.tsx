@@ -41,11 +41,13 @@ function AdminRevenuePage() {
     ([a], [b]) => planOrder.indexOf(a.toLowerCase()) - planOrder.indexOf(b.toLowerCase())
   )
 
+  // Categorical plan colors from the shared chart palette (literal classes so
+  // Tailwind emits them); these encode plan tier, not status.
   const planBarColors: Record<string, string> = {
-    free: 'bg-zinc-400 dark:bg-zinc-500',
-    pro: 'bg-blue-500',
-    team: 'bg-violet-500',
-    business: 'bg-amber-500',
+    free: 'bg-muted-foreground/60',
+    pro: 'bg-chart-1',
+    team: 'bg-chart-4',
+    business: 'bg-chart-5',
   }
 
   const avgRevenuePerPaidUser = totalSubscribers > 0
@@ -66,32 +68,32 @@ function AdminRevenuePage() {
           value={`$${data.mrr.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
           subtitle={`$${(data.mrr * 12).toLocaleString(undefined, { maximumFractionDigits: 0 })} ARR`}
           icon={DollarSign}
-          iconColor="text-emerald-600 dark:text-emerald-400"
-          iconBg="bg-emerald-100 dark:bg-emerald-950"
+          iconColor="text-success-fg"
+          iconBg="bg-success-bg"
         />
         <MetricCard
           title="Total Subscribers"
           value={totalSubscribers}
           subtitle={`${totalSubscribers - (data.subscriptionsByPlan['free'] || 0)} paid`}
           icon={Users}
-          iconColor="text-blue-600 dark:text-blue-400"
-          iconBg="bg-blue-100 dark:bg-blue-950"
+          iconColor="text-chart-1"
+          iconBg="bg-chart-1/15"
         />
         <MetricCard
           title="Avg Revenue / Paid User"
           value={`$${avgRevenuePerPaidUser.toFixed(2)}`}
           subtitle="per month"
           icon={Wallet}
-          iconColor="text-violet-600 dark:text-violet-400"
-          iconBg="bg-violet-100 dark:bg-violet-950"
+          iconColor="text-chart-4"
+          iconBg="bg-chart-4/15"
         />
         <MetricCard
           title="Churn (30 days)"
           value={data.churnLast30Days}
           subtitle={totalSubscribers > 0 ? `${((data.churnLast30Days / totalSubscribers) * 100).toFixed(1)}% churn rate` : undefined}
           icon={TrendingDown}
-          iconColor="text-red-600 dark:text-red-400"
-          iconBg="bg-red-100 dark:bg-red-950"
+          iconColor="text-danger-fg"
+          iconBg="bg-danger-bg"
         />
       </div>
 
@@ -161,7 +163,7 @@ function AdminRevenuePage() {
                             <div className="text-xs text-muted-foreground">cost per org</div>
                           </div>
                           {price > 0 && (
-                            <div className={`text-right ${margin >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                            <div className={`text-right ${margin >= 0 ? 'text-success-fg' : 'text-danger-fg'}`}>
                               <div className="text-xs font-medium flex items-center gap-0.5">
                                 {margin >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
                                 {Math.abs(margin).toFixed(0)}% margin

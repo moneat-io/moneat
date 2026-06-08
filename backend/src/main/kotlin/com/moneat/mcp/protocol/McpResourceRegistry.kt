@@ -52,16 +52,18 @@ class McpResourceRegistry {
         logger.debug { "Registered MCP resource: ${resource.uri}" }
     }
 
-    fun listResources(): List<ResourceDefinition> {
-        return resources.values.map { resource ->
-            ResourceDefinition(
-                uri = resource.uri,
-                name = resource.name,
-                description = resource.description,
-                mimeType = resource.mimeType,
-                requiredScopes = resource.requiredScopes,
-            )
-        }
+    fun listResources(allowedResources: Set<String>? = null): List<ResourceDefinition> {
+        return resources.values
+            .filter { resource -> allowedResources?.contains(resource.uri) ?: true }
+            .map { resource ->
+                ResourceDefinition(
+                    uri = resource.uri,
+                    name = resource.name,
+                    description = resource.description,
+                    mimeType = resource.mimeType,
+                    requiredScopes = resource.requiredScopes,
+                )
+            }
     }
 
     suspend fun readResource(
@@ -80,6 +82,18 @@ class McpResourceRegistry {
                     )
                 )
             }
+
+        if (!context.canUseResource(uri)) {
+            val errorJson = JsonObject(mapOf("error" to JsonPrimitive("Resource is not enabled: $uri")))
+            return ResourceReadResult(
+                contents = listOf(
+                    ResourceContent(
+                        uri = uri,
+                        text = errorJson.toString()
+                    )
+                )
+            )
+        }
 
         return try {
             McpAuthorization.requireScopes(context, resource.requiredScopes)

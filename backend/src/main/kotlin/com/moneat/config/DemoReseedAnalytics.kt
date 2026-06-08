@@ -27,7 +27,7 @@ internal suspend fun checkFreshAnalyticsDataCount(): Long {
         """
         SELECT count() as cnt
         FROM analytics_events
-        WHERE project_id IN ($P1, $P2, $P3)
+        WHERE service_id IN ($P1, $P2, $P3)
             AND timestamp >= now() - INTERVAL 7 DAY
         """.trimIndent()
     return suspendRunCatching {
@@ -46,7 +46,7 @@ internal suspend fun checkFreshAnalyticsDataCount(): Long {
 internal suspend fun purgeAnalyticsDemoData() {
     suspendRunCatching {
         requireClickHouse2xx(
-            ClickHouseClient.execute("ALTER TABLE analytics_events DELETE WHERE project_id IN ($P1, $P2, $P3)"),
+            ClickHouseClient.execute("ALTER TABLE analytics_events DELETE WHERE service_id IN ($P1, $P2, $P3)"),
             "Purge analytics_events"
         )
     }.onFailure { logger.warn { "Purge analytics_events failed (non-fatal): ${it.message}" } }
@@ -54,7 +54,7 @@ internal suspend fun purgeAnalyticsDemoData() {
     suspendRunCatching {
         requireClickHouse2xx(
             ClickHouseClient.execute(
-                "ALTER TABLE analytics_sessions_hourly DELETE WHERE project_id IN ($P1, $P2, $P3)"
+                "ALTER TABLE analytics_sessions_hourly DELETE WHERE service_id IN ($P1, $P2, $P3)"
             ),
             "Purge analytics_sessions_hourly"
         )
@@ -65,6 +65,7 @@ internal suspend fun reseedAnalyticsEvents() {
         """
         INSERT INTO analytics_events (
             event_id,
+            service_id,
             project_id,
             session_id,
             event_name,
@@ -86,6 +87,11 @@ internal suspend fun reseedAnalyticsEvents() {
         )
         SELECT
             generateUUIDv4() AS event_id,
+            CASE intDiv(number, 5) % 3
+                WHEN 0 THEN $P1
+                WHEN 1 THEN $P2
+                ELSE $P3
+            END AS service_id,
             CASE intDiv(number, 5) % 3
                 WHEN 0 THEN $P1
                 WHEN 1 THEN $P2

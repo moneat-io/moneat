@@ -10,6 +10,7 @@ import {useQuery} from '@tanstack/react-query'
 import {api, type DdEventResponse} from '@/lib/api'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Badge} from '@/components/ui/badge'
+import {StatusDot, type StatusTone} from '@/components/ui/status-dot'
 import {Card, CardContent} from '@/components/ui/card'
 import {Input} from '@/components/ui/input'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
@@ -48,31 +49,33 @@ function alertIcon(alertType: string) {
   }
 }
 
-function alertBadgeClasses(alertType: string): string {
+type AlertBadgeVariant = 'danger' | 'warning' | 'success' | 'info' | 'neutral'
+
+function alertBadgeVariant(alertType: string): AlertBadgeVariant {
   switch (alertType) {
     case 'error':
-      return 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/20'
+      return 'danger'
     case 'warning':
-      return 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-300 border-yellow-500/20'
+      return 'warning'
     case 'success':
-      return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
+      return 'success'
     case 'info':
-      return 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/20'
+      return 'info'
     default:
-      return 'bg-muted text-muted-foreground border-border'
+      return 'neutral'
   }
 }
 
 function alertAccentColor(alertType: string): string {
   switch (alertType) {
     case 'error':
-      return 'border-l-red-500'
+      return 'border-l-danger-solid'
     case 'warning':
-      return 'border-l-yellow-500'
+      return 'border-l-warning-solid'
     case 'success':
-      return 'border-l-emerald-500'
+      return 'border-l-success-solid'
     case 'info':
-      return 'border-l-blue-500'
+      return 'border-l-info-solid'
     default:
       return 'border-l-muted-foreground'
   }
@@ -89,18 +92,18 @@ function priorityLabel(priority: string): string {
   }
 }
 
-function filterDot(alertType: AlertFilter): string {
+function filterTone(alertType: AlertFilter): StatusTone {
   switch (alertType) {
     case 'error':
-      return 'bg-red-500'
+      return 'danger'
     case 'warning':
-      return 'bg-yellow-500'
+      return 'warning'
     case 'info':
-      return 'bg-blue-500'
+      return 'info'
     case 'success':
-      return 'bg-emerald-500'
+      return 'success'
     default:
-      return 'bg-violet-500'
+      return 'neutral'
   }
 }
 
@@ -158,31 +161,31 @@ export function EventStream() {
         {!isLoading && events.length > 0 && (
           <div className="flex items-center gap-3 text-sm flex-wrap">
             <div className="flex items-center gap-1.5">
-              <Zap className="h-3.5 w-3.5 text-violet-500" />
+              <Zap className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="font-semibold tabular-nums">{events.length}</span>
               <span className="text-muted-foreground text-xs">events</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <AlertCircle className="h-3.5 w-3.5 text-red-500" />
+              <AlertCircle className="h-3.5 w-3.5 text-danger-fg" />
               <span className="font-semibold tabular-nums">{errorCount}</span>
               <span className="text-muted-foreground text-xs">errors</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <AlertTriangle className="h-3.5 w-3.5 text-yellow-500" />
+              <AlertTriangle className="h-3.5 w-3.5 text-warning-fg" />
               <span className="font-semibold tabular-nums">{warningCount}</span>
               <span className="text-muted-foreground text-xs">warnings</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <Server className="h-3.5 w-3.5 text-emerald-500" />
+              <Server className="h-3.5 w-3.5 text-chart-2" />
               <span className="font-semibold tabular-nums">{uniqueHosts}</span>
               <span className="text-muted-foreground text-xs">{uniqueHosts === 1 ? 'host' : 'hosts'}</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <Tag className="h-3.5 w-3.5 text-sky-500" />
+              <Tag className="h-3.5 w-3.5 text-chart-3" />
               <span className="font-semibold tabular-nums">{uniqueSources}</span>
               <span className="text-muted-foreground text-xs">{uniqueSources === 1 ? 'source' : 'sources'}</span>
             </div>
@@ -208,11 +211,11 @@ export function EventStream() {
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                 alertTypeFilter === f
-                  ? 'bg-secondary text-secondary-foreground shadow-sm'
+                  ? 'bg-secondary text-secondary-foreground'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
               )}
             >
-              <div className={cn('h-1.5 w-1.5 rounded-full', filterDot(f))} />
+              <StatusDot tone={filterTone(f)} size="sm" />
               <span className="capitalize">{f}</span>
               <span className="ml-0.5 text-[10px] text-muted-foreground">{filterCounts[f]}</span>
             </button>
@@ -230,8 +233,8 @@ export function EventStream() {
       ) : events.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="py-16 text-center">
-            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500/10 to-sky-500/10">
-              <Zap className="h-10 w-10 text-violet-500" />
+            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+              <Zap className="h-10 w-10" />
             </div>
             <h3 className="text-xl font-semibold mb-2">No events found</h3>
             <p className="text-muted-foreground mb-2 max-w-sm mx-auto">
@@ -245,7 +248,7 @@ export function EventStream() {
           <p className="text-sm mt-1">Try adjusting your search or alert type filter.</p>
         </div>
       ) : (
-        <Card className="overflow-hidden border-border/60 shadow-sm">
+        <Card className="overflow-hidden border-border/60">
           <CardContent className="p-0">
             <Table className="min-w-[800px]">
               <TableHeader>
@@ -347,8 +350,8 @@ export function EventStream() {
 
                       <TableCell>
                         <Badge
-                          variant="secondary"
-                          className={cn('text-[11px] gap-1.5 font-medium', alertBadgeClasses(event.alertType))}
+                          variant={alertBadgeVariant(event.alertType)}
+                          className="text-[11px] gap-1.5 font-medium"
                         >
                           {alertIcon(event.alertType)}
                           {event.alertType}

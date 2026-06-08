@@ -22,13 +22,25 @@ import com.moneat.datadog.models.DdSpan
 import com.moneat.datadog.models.DdStatsBucket
 import com.moneat.datadog.models.DdStatsEntry
 import com.moneat.datadog.models.DdStatsPayload
+import com.moneat.datadog.services.DdApmQueryTimeRange
+import com.moneat.datadog.services.DdApmQueryTimeUnit
+import com.moneat.datadog.services.DdResourceStatsQuery
+import com.moneat.datadog.services.DdTraceListQuery
 import com.moneat.datadog.services.TraceIngestionService
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.OtelServiceProjectMappings
+import com.moneat.shared.models.Projects
+import com.moneat.testsupport.TestDatabaseHelper
+import io.sentry.ISpan
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.msgpack.core.MessagePack
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -52,6 +64,13 @@ class TraceIngestionServiceCoverageTest {
 
     @BeforeTest
     fun setup() {
+        val db = Database.connect(
+            url = "jdbc:h2:mem:moneat_trace_ingestion_coverage;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+            driver = "org.h2.Driver",
+        )
+        TransactionManager.defaultDatabase = db
+        TestDatabaseHelper.resetSchema(Organizations, Projects, OtelServiceProjectMappings)
+
         mockkObject(ClickHouseClient)
         every { ClickHouseClient.getDatabase() } returns "test_db"
     }
@@ -289,6 +308,14 @@ class TraceIngestionServiceCoverageTest {
                     duration = 500000000L, error = 0,
                     meta = mapOf("env" to "prod", "http.method" to "GET"),
                     metrics = mapOf("_dd.measured" to 1.0)
+                ),
+                DdSpan(
+                    traceId = 1u, spanId = 11u, parentId = 10u,
+                    name = "db.query", service = "postgres", resource = "SELECT 1",
+                    type = "sql", start = 1700000000100000000L,
+                    duration = 250000000L, error = 1,
+                    meta = mapOf("env" to "prod"),
+                    metrics = emptyMap()
                 )
             )
         )
@@ -305,6 +332,9 @@ class TraceIngestionServiceCoverageTest {
         val sql = capturedSql.first()
         assertTrue(sql.contains("INSERT INTO"))
         assertTrue(sql.contains("apm_spans"))
+        assertTrue(capturedSql.any { it.contains("apm_service_stats_hourly") })
+        assertTrue(capturedSql.any { it.contains("apm_service_edges_hourly") })
+        assertTrue(capturedSql.any { it.contains("'api'") && it.contains("'postgres'") })
     }
 
     @Test
@@ -390,10 +420,7 @@ class TraceIngestionServiceCoverageTest {
 
         val result = TraceIngestionService.listTraces(
             organizationId = 1,
-            service = null,
-            env = null,
-            limit = 10,
-            offset = 0
+            query = DdTraceListQuery(limit = 10, offset = 0)
         )
 
         assertEquals(0, result.totalCount)
@@ -416,10 +443,14 @@ class TraceIngestionServiceCoverageTest {
 
         val result = TraceIngestionService.listTraces(
             organizationId = 1,
-            service = "api",
-            env = "prod",
-            limit = 10,
-            offset = 0
+            query = DdTraceListQuery(
+                service = "api",
+                env = "prod",
+                source = "datadog",
+                status = "ok",
+                limit = 10,
+                offset = 0,
+            )
         )
 
         assertEquals(1, result.totalCount)
@@ -429,6 +460,83 @@ class TraceIngestionServiceCoverageTest {
         assertEquals("GET /", result.traces[0].rootResource)
         assertEquals(5, result.traces[0].spanCount)
         assertFalse(result.traces[0].hasError)
+    }
+
+    @Test
+    fun `listTraces applies services list to server side query`() = runBlocking {
+        val capturedQueries = mutableListOf<String>()
+        coEvery { ClickHouseClient.executeWithFormat(any(), any()) } coAnswers {
+            capturedQueries.add(firstArg())
+            if (secondArg<String>() == "TabSeparated") {
+                "0"
+            } else {
+                ""
+            }
+        }
+
+        TraceIngestionService.listTraces(
+            organizationId = 1,
+            query = DdTraceListQuery(
+                services = listOf("api", "worker"),
+                limit = 10,
+                offset = 0,
+            )
+        )
+
+        assertTrue(capturedQueries.any { it.contains("root_service IN ('api', 'worker')") })
+    }
+
+    @Test
+    fun `listTraces applies search to server side query`() = runBlocking {
+        val capturedQueries = mutableListOf<String>()
+        coEvery { ClickHouseClient.executeWithFormat(any(), any()) } coAnswers {
+            capturedQueries.add(firstArg())
+            if (secondArg<String>() == "TabSeparated") {
+                "0"
+            } else {
+                ""
+            }
+        }
+
+        TraceIngestionService.listTraces(
+            organizationId = 1,
+            query = DdTraceListQuery(
+                limit = 10,
+                offset = 0,
+                search = "checkout's",
+            )
+        )
+
+        assertTrue(capturedQueries.any { it.contains("positionCaseInsensitive(trace_id_canonical") })
+        assertTrue(capturedQueries.any { it.contains("positionCaseInsensitive(root_resource") })
+        assertTrue(capturedQueries.any { it.contains("checkout\\'s") })
+    }
+
+    @Test
+    fun `APM overview reads finalized table for closed buckets and summaries for the live window`() = runBlocking {
+        val capturedQueries = mutableListOf<String>()
+        coEvery { ClickHouseClient.executeWithFormat(any(), any()) } coAnswers {
+            capturedQueries.add(firstArg())
+            if (secondArg<String>() == "TabSeparated") "0" else ""
+        }
+
+        TraceIngestionService.getApmOverview(
+            organizationId = 1,
+            query = DdTraceListQuery(limit = 10, offset = 0),
+        )
+
+        // Hybrid read: finalized one-row-per-trace records from apm_traces_final (read plainly, NOT with
+        // the slow FINAL) UNION the still-filling recent buckets aggregated live from apm_trace_summaries.
+        assertTrue(capturedQueries.isNotEmpty())
+        assertTrue(capturedQueries.all { it.contains("apm_traces_final") })
+        // Never the slow FINAL.
+        assertFalse(capturedQueries.any { it.contains("apm_traces_final FINAL") })
+        // Current-window reads are hybrid: finalized (no FINAL) UNION the live summaries window. The
+        // previous-comparison window is entirely finalized, so it has neither UNION nor summaries.
+        assertTrue(capturedQueries.any { it.contains("UNION ALL") && it.contains("apm_trace_summaries") })
+        assertTrue(capturedQueries.any { it.contains("trace_bucket < toStartOfHour(now() - INTERVAL 2 HOUR)") })
+        assertTrue(capturedQueries.any { it.contains("bucket_start >= toStartOfHour(now() - INTERVAL 2 HOUR)") })
+        assertTrue(capturedQueries.any { it.contains("SELECT 'operation' as facet_type") })
     }
 
     // ===================== getTraceDetail =====================
@@ -474,13 +582,16 @@ class TraceIngestionServiceCoverageTest {
 
         val result = TraceIngestionService.getServiceMap(1)
         assertTrue(result.services.isEmpty())
+        assertTrue(result.edges.isEmpty())
     }
 
     @Test
     fun `getServiceMap returns services with relationships`() = runBlocking {
         var callCount = 0
+        val capturedQueries = mutableListOf<String>()
         coEvery { ClickHouseClient.executeWithFormat(any(), any()) } coAnswers {
             callCount++
+            capturedQueries.add(firstArg())
             if (callCount == 1) {
                 """
                 {"service":"web","span_count":100,"error_count":5,"avg_duration_ns":500000.0}
@@ -488,7 +599,7 @@ class TraceIngestionServiceCoverageTest {
                 """.trimIndent()
             } else {
                 """
-                {"from_service":"web","to_service":"db"}
+                {"from_service":"web","to_service":"db","call_count":42,"error_count":2,"avg_duration_ns":300000.0}
                 """.trimIndent()
             }
         }
@@ -498,6 +609,88 @@ class TraceIngestionServiceCoverageTest {
         assertEquals("web", result.services[0].service)
         assertEquals(listOf("db"), result.services[0].callsTo)
         assertTrue(result.services[1].callsTo.isEmpty())
+        assertEquals(1, result.edges.size)
+        assertEquals("web", result.edges[0].fromService)
+        assertEquals("db", result.edges[0].toService)
+        assertEquals(42L, result.edges[0].callCount)
+        assertEquals(2L, result.edges[0].errorCount)
+        assertEquals(300000.0, result.edges[0].avgDurationNs, 0.001)
+        assertTrue(capturedQueries.any { it.contains("apm_service_stats_hourly") })
+        assertTrue(capturedQueries.any { it.contains("apm_service_edges_hourly") })
+        assertTrue(capturedQueries.none { it.contains("INNER JOIN") })
+        assertTrue(capturedQueries.none { it.contains("FROM `test_db`.apm_spans") })
+    }
+
+    @Test
+    fun `getServiceMap passes explicit Sentry span to ClickHouse queries`() = runBlocking {
+        val span = mockk<ISpan>(relaxed = true)
+        coEvery { ClickHouseClient.executeWithFormat(any(), any(), span) } returns ""
+
+        TraceIngestionService.getServiceMap(1, parentSpan = span)
+
+        coVerify(exactly = 2) {
+            ClickHouseClient.executeWithFormat(any(), any(), span)
+        }
+    }
+
+    @Test
+    fun `getServiceMap applies env and source filters`() = runBlocking {
+        val capturedQueries = mutableListOf<String>()
+        coEvery { ClickHouseClient.executeWithFormat(any(), any()) } coAnswers {
+            capturedQueries.add(firstArg())
+            ""
+        }
+
+        TraceIngestionService.getServiceMap(
+            1,
+            DdApmQueryTimeRange(6, DdApmQueryTimeUnit.HOUR),
+            env = "prod",
+            source = "otel",
+        )
+
+        assertTrue(capturedQueries.isNotEmpty())
+        assertTrue(capturedQueries.all { it.contains("env = 'prod'") })
+        assertTrue(capturedQueries.all { it.contains("source = 'otel'") })
+        assertTrue(capturedQueries.all { it.contains("INTERVAL 6 HOUR") })
+    }
+
+    @Test
+    fun `getServiceLatencyPercentiles parses percentile row`() = runBlocking {
+        val capturedQueries = mutableListOf<String>()
+        coEvery { ClickHouseClient.executeWithFormat(any(), any()) } coAnswers {
+            capturedQueries.add(firstArg())
+            """{"p50_duration_ns":1000,"p90_duration_ns":5000,"p99_duration_ns":9000,"sample_count":420}"""
+        }
+
+        val result = TraceIngestionService.getServiceLatencyPercentiles(
+            1,
+            "web",
+            DdApmQueryTimeRange(6, DdApmQueryTimeUnit.HOUR),
+            env = "prod",
+            source = "otlp",
+        )
+
+        assertEquals("web", result.service)
+        assertEquals(1000L, result.p50DurationNs)
+        assertEquals(5000L, result.p90DurationNs)
+        assertEquals(9000L, result.p99DurationNs)
+        assertEquals(420L, result.sampleCount)
+        assertTrue(capturedQueries.single().contains("apm_traces_final"))
+        assertTrue(capturedQueries.single().contains("apm_trace_summaries"))
+        assertTrue(capturedQueries.single().contains("root_service = 'web'"))
+        assertTrue(capturedQueries.single().contains("env = 'prod'"))
+        assertTrue(capturedQueries.single().contains("source = 'otlp'"))
+        assertTrue(capturedQueries.single().contains("INTERVAL 6 HOUR"))
+    }
+
+    @Test
+    fun `getServiceLatencyPercentiles returns zeros for blank response`() = runBlocking {
+        coEvery { ClickHouseClient.executeWithFormat(any(), any()) } returns ""
+
+        val result = TraceIngestionService.getServiceLatencyPercentiles(1, "web")
+
+        assertEquals(0L, result.p50DurationNs)
+        assertEquals(0L, result.sampleCount)
     }
 
     // ===================== getApmErrors =====================
@@ -509,7 +702,7 @@ class TraceIngestionServiceCoverageTest {
 
         val result = TraceIngestionService.getApmErrors(
             organizationId = 1,
-            service = null,
+            services = emptyList(),
             limit = 10,
             offset = 0
         )
@@ -523,7 +716,10 @@ class TraceIngestionServiceCoverageTest {
         coEvery { ClickHouseClient.executeWithFormat(any(), match { it == "TabSeparated" }) } returns "2"
         coEvery {
             ClickHouseClient.executeWithFormat(
-                any(),
+                match {
+                    it.contains("GROUP BY service, resource, error_message, error_type") &&
+                        it.contains("LIMIT")
+                },
                 match {
                     it == ""
                 }
@@ -532,10 +728,24 @@ class TraceIngestionServiceCoverageTest {
             {"service":"api","resource":"POST /data","error_msg":"timeout","error_type":"TimeoutError","error_count":15,"last_seen":"2024-01-15 10:00:00","sample_trace_id":"trace-1"}
             {"service":"api","resource":"GET /users","error_msg":"not found","error_type":"NotFoundError","error_count":3,"last_seen":"2024-01-15 09:00:00","sample_trace_id":"trace-2"}
         """.trimIndent()
+        coEvery {
+            ClickHouseClient.executeWithFormat(
+                match {
+                    it.contains("GROUP BY service") &&
+                        !it.contains("GROUP BY service, resource, error_message, error_type")
+                },
+                match {
+                    it == ""
+                }
+            )
+        } returns """
+            {"service":"api","error_count":18}
+            {"service":"worker","error_count":4}
+        """.trimIndent()
 
         val result = TraceIngestionService.getApmErrors(
             organizationId = 1,
-            service = "api",
+            services = listOf("api"),
             limit = 10,
             offset = 0
         )
@@ -545,6 +755,10 @@ class TraceIngestionServiceCoverageTest {
         assertEquals("timeout", result.errors[0].errorMessage)
         assertEquals("TimeoutError", result.errors[0].errorType)
         assertEquals(15L, result.errors[0].count)
+        assertEquals(2, result.serviceFacets.size)
+        assertEquals("api", result.serviceFacets[0].service)
+        assertEquals(18L, result.serviceFacets[0].count)
+        assertEquals("worker", result.serviceFacets[1].service)
     }
 
     // ===================== listResourceStats =====================
@@ -595,6 +809,117 @@ class TraceIngestionServiceCoverageTest {
         assertEquals(10L, res.totalErrors)
         assertEquals(0.1, res.errorRate)
         assertEquals(1000000000L, res.avgDurationNs)
+    }
+
+    @Test
+    fun `listResourceStats filters erroring resources after grouping all matching traces`() = runBlocking {
+        val capturedQueries = mutableListOf<String>()
+        coEvery { ClickHouseClient.executeWithFormat(any(), any()) } coAnswers {
+            val query = firstArg<String>()
+            capturedQueries.add(query)
+            if (secondArg<String>() == "TabSeparated") {
+                "1"
+            } else {
+                "{" +
+                    "\"service\":\"api\"," +
+                    "\"resource\":\"POST /checkout\"," +
+                    "\"name\":\"web.request\"," +
+                    "\"type\":\"\"," +
+                    "\"total_hits\":20," +
+                    "\"total_errors\":5," +
+                    "\"avg_duration_ns\":300000000," +
+                    "\"error_rate\":0.25" +
+                    "}"
+            }
+        }
+
+        val result = TraceIngestionService.listResourceStats(
+            organizationId = 1,
+            query = DdResourceStatsQuery(
+                service = "api",
+                env = "production",
+                source = "otlp",
+                status = "error",
+                search = "checkout",
+                limit = 10,
+                offset = 0,
+            )
+        )
+
+        assertEquals(1, result.totalCount)
+        assertEquals("POST /checkout", result.resources.first().resource)
+        assertEquals(20L, result.resources.first().totalHits)
+        assertEquals(5L, result.resources.first().totalErrors)
+        assertEquals(0.25, result.resources.first().errorRate)
+        assertTrue(capturedQueries.all { it.contains("apm_traces_final") })
+        assertTrue(capturedQueries.any { it.contains("root_service = 'api'") })
+        assertTrue(capturedQueries.any { it.contains("env = 'production'") })
+        assertTrue(capturedQueries.any { it.contains("source = 'otlp'") })
+        assertTrue(capturedQueries.any { it.contains("HAVING total_errors > 0") })
+        assertFalse(capturedQueries.any { it.contains("has_error = 1") })
+        assertTrue(capturedQueries.any { it.contains("positionCaseInsensitive(root_resource, 'checkout')") })
+    }
+
+    @Test
+    fun `APM dashboard list queries use requested time range filters`() = runBlocking {
+        val capturedQueries = mutableListOf<String>()
+        val timeRange = DdApmQueryTimeRange(90, DdApmQueryTimeUnit.DAY)
+        coEvery { ClickHouseClient.executeWithFormat(any(), any()) } coAnswers {
+            capturedQueries.add(firstArg())
+            if (secondArg<String>() == "TabSeparated") {
+                "0"
+            } else {
+                ""
+            }
+        }
+
+        TraceIngestionService.listTraces(
+            organizationId = 1,
+            query = DdTraceListQuery(
+                limit = 10,
+                offset = 0,
+                timeRange = timeRange,
+            )
+        )
+        TraceIngestionService.getApmErrors(
+            organizationId = 1,
+            services = emptyList(),
+            limit = 10,
+            offset = 0,
+            timeRange = timeRange
+        )
+        TraceIngestionService.listResourceStats(
+            organizationId = 1,
+            service = null,
+            limit = 10,
+            offset = 0,
+            timeRange = timeRange
+        )
+
+        val traceQueries = capturedQueries.filter { it.contains("apm_traces_final") }
+        val errorQueries = capturedQueries.filter { it.contains("apm_error_groups_hourly") }
+        val resourceQueries = capturedQueries.filter { it.contains("apm_resource_stats_hourly") }
+        assertEquals(2, traceQueries.size)
+        assertEquals(3, errorQueries.size)
+        assertEquals(2, resourceQueries.size)
+        // Finalized per-trace reads filter on trace_bucket; the hourly rollups still filter bucket_start.
+        assertTrue(traceQueries.all { it.contains("trace_bucket >= toStartOfHour(now() - INTERVAL 90 DAY)") })
+        assertTrue(
+            (errorQueries + resourceQueries)
+                .all { it.contains("bucket_start >= toStartOfHour(now() - INTERVAL 90 DAY)") }
+        )
+        assertTrue(capturedQueries.none { it.contains("FROM `test_db`.apm_spans") })
+        assertTrue(capturedQueries.none { it.contains("FROM `test_db`.trace_stats") })
+
+        val apmErrorsDataQuery = errorQueries.first { it.contains("sumMerge(error_count_state)") }
+        assertTrue(apmErrorsDataQuery.contains("GROUP BY service, resource, error_message, error_type"))
+        assertTrue(
+            errorQueries.any {
+                it.contains("GROUP BY service") &&
+                    !it.contains("GROUP BY service, resource, error_message, error_type")
+            }
+        )
+        assertFalse(capturedQueries.any { it.contains("concat(") })
     }
 
     // ===================== Helper: MessagePack trace packing =====================

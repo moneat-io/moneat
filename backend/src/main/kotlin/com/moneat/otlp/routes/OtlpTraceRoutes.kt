@@ -22,6 +22,10 @@ import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.otlp.OtlpAuth
 import com.moneat.otlp.calculateBillableBytes
 import com.moneat.otlp.services.OtlpApiKeyService
+import com.moneat.otlp.services.OtlpServiceDescriptor
+import com.moneat.otlp.services.OtlpServiceRoutingService
+import com.moneat.otlp.services.OtlpSignalType
+import com.moneat.otlp.services.OtlpSpanInsert
 import com.moneat.otlp.services.OtlpTraceService
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpHeaders
@@ -44,15 +48,28 @@ fun Route.otlpTraceRoutes(
     traceService: OtlpTraceService = OtlpTraceService(),
     quotaService: BillingQuotaService = GlobalContext.get().get(),
     otlpApiKeyService: OtlpApiKeyService = GlobalContext.get().get(),
+    otlpServiceRoutingService: OtlpServiceRoutingService = GlobalContext.get().get(),
 ) {
     route("/v1") {
         // Standard OTLP path
         post("/traces") {
-            handleOtlpTraceIngest(call, traceService, quotaService, otlpApiKeyService)
+            handleOtlpTraceIngest(
+                call,
+                traceService,
+                quotaService,
+                otlpApiKeyService,
+                otlpServiceRoutingService
+            )
         }
         // Moneat convention (matches /v1/logs/otlp)
         post("/traces/otlp") {
-            handleOtlpTraceIngest(call, traceService, quotaService, otlpApiKeyService)
+            handleOtlpTraceIngest(
+                call,
+                traceService,
+                quotaService,
+                otlpApiKeyService,
+                otlpServiceRoutingService
+            )
         }
     }
 }
@@ -62,6 +79,7 @@ private suspend fun handleOtlpTraceIngest(
     traceService: OtlpTraceService,
     quotaService: BillingQuotaService,
     otlpApiKeyService: OtlpApiKeyService,
+    otlpServiceRoutingService: OtlpServiceRoutingService,
 ) {
     val contentType = call.request.header(HttpHeaders.ContentType) ?: ""
     val isJson = contentType.contains("application/json", ignoreCase = true)
@@ -125,10 +143,30 @@ private suspend fun handleOtlpTraceIngest(
         .propertyOrNull("otlp.tracesQueueKey")
         ?.getString()
         ?: DEFAULT_QUEUE_KEY
+    val routedSpans = routeTraceSpans(organizationId, parsedSpans, otlpServiceRoutingService)
     val accepted = traceService.enqueueTraces(
         organizationId.toLong(),
-        parsedSpans,
+        routedSpans,
         queueKey
     )
     call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted))
+}
+
+private fun routeTraceSpans(
+    organizationId: Int,
+    spans: List<OtlpSpanInsert>,
+    routingService: OtlpServiceRoutingService,
+): List<OtlpSpanInsert> {
+    val descriptors = spans.map { span ->
+        OtlpServiceDescriptor(
+            serviceNamespace = span.serviceNamespace,
+            serviceName = span.service,
+            environment = span.env,
+        )
+    }
+    val projectIds = routingService.resolveProjectIds(organizationId, descriptors, OtlpSignalType.TRACES)
+    return spans.map { span ->
+        val identity = routingService.normalizeIdentity(span.serviceNamespace, span.service)
+        span.copy(projectId = identity?.let { projectIds[it] })
+    }
 }

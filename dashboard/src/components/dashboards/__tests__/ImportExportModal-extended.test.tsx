@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import React from 'react'
 import {describe, it, expect, vi, beforeEach} from 'vitest'
 import {screen, fireEvent, waitFor} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {api} from '@/lib/api'
+import type {CustomDashboard, CustomDataSourceResponse} from '@/lib/api'
 import {ImportExportModal} from '../ImportExportModal'
 import {renderWithQueryClient, clearAuthStorage} from '@/test/utils'
 
@@ -38,13 +38,46 @@ vi.mock('@/lib/api', () => ({
 const mockedApi = vi.mocked(api)
 
 const IMPORT_PLACEHOLDER = '{"title": "My Dashboard", "widgets": [...]}'
+const DATADOG_IMPORT_PLACEHOLDER = '{"title": "My Dashboard", "layout_type": "ordered", "widgets": [...]}'
+
+const makeDashboard = (id: number): CustomDashboard => ({
+  id,
+  org_id: 1,
+  title: 'Imported dashboard',
+  description: null,
+  layout_type: 'grid',
+  is_default: false,
+  created_by: 1,
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
+  widgets: [],
+})
+
+const makeDataSource = (
+  overrides: Partial<CustomDataSourceResponse> = {}
+): CustomDataSourceResponse => ({
+  id: 7,
+  org_id: 1,
+  name: 'My Redis',
+  source_type: 'redis',
+  description: '',
+  host: '',
+  port: 6379,
+  extra_config: {},
+  enabled: true,
+  created_by: 1,
+  created_at: '',
+  updated_at: '',
+  has_credentials: false,
+  ...overrides,
+})
 
 function setImportJson(json: string) {
   const textarea = screen.getByPlaceholderText(IMPORT_PLACEHOLDER)
   fireEvent.change(textarea, {target: {value: json}})
 }
 
-function renderImportModal(props: {onOpenChange?: ReturnType<typeof vi.fn>} = {}) {
+function renderImportModal(props: {onOpenChange?: (open: boolean) => void} = {}) {
   const onOpenChange = props.onOpenChange ?? vi.fn()
   return renderWithQueryClient(
     <ImportExportModal open={true} onOpenChange={onOpenChange} mode="import" />
@@ -66,7 +99,7 @@ beforeEach(() => {
   clearAuthStorage()
   vi.clearAllMocks()
   mockedApi.importDashboard.mockResolvedValue({
-    dashboard: {id: 42},
+    dashboard: makeDashboard(42),
     warnings: [],
   })
   mockedApi.exportDashboard.mockResolvedValue({title: 'Test', widgets: []})
@@ -94,7 +127,7 @@ describe('ImportExportModal – extended branch coverage', () => {
   describe('import – warnings displayed', () => {
     it('shows warnings and View Dashboard button when import returns warnings', async () => {
       mockedApi.importDashboard.mockResolvedValue({
-        dashboard: {id: 99},
+        dashboard: makeDashboard(99),
         warnings: ['Unsupported panel type: heatmap', 'Unknown variable: $region'],
       })
       renderImportModal()
@@ -112,7 +145,7 @@ describe('ImportExportModal – extended branch coverage', () => {
 
     it('navigates when clicking View Dashboard button after import with warnings', async () => {
       mockedApi.importDashboard.mockResolvedValue({
-        dashboard: {id: 99},
+        dashboard: makeDashboard(99),
         warnings: ['Some warning'],
       })
       const onOpenChange = vi.fn()
@@ -135,7 +168,7 @@ describe('ImportExportModal – extended branch coverage', () => {
   describe('import – post-success UI state', () => {
     it('hides Import button and shows Close after successful import', async () => {
       mockedApi.importDashboard.mockResolvedValue({
-        dashboard: {id: 10},
+        dashboard: makeDashboard(10),
         warnings: ['warn'],
       })
       renderImportModal()
@@ -259,11 +292,42 @@ describe('ImportExportModal – extended branch coverage', () => {
     })
   })
 
+  // ──── Import: Datadog format skips Grafana datasource mapper ────
+  describe('import – Datadog format', () => {
+    it('imports Datadog JSON directly with datadog format', async () => {
+      const user = userEvent.setup()
+      const json = JSON.stringify({
+        title: 'Datadog dashboard',
+        layout_type: 'ordered',
+        widgets: [
+          {
+            definition: {
+              type: 'timeseries',
+              requests: [{q: 'avg:system.cpu.user{host:web01}'}],
+            },
+          },
+        ],
+      })
+      renderImportModal()
+
+      await user.click(screen.getByText('Datadog'))
+      fireEvent.change(screen.getByPlaceholderText(DATADOG_IMPORT_PLACEHOLDER), {
+        target: {value: json},
+      })
+      await user.click(screen.getByText('Import'))
+
+      await waitFor(() => {
+        expect(mockedApi.importDashboard).toHaveBeenCalledWith('datadog', json)
+      })
+      expect(screen.queryByText('Map Data Sources')).not.toBeInTheDocument()
+    })
+  })
+
   // ──── Import: auto-mapping with single matching custom datasource ────
   describe('import – auto-mapping', () => {
     it('auto-maps when exactly one custom datasource matches the expected type', async () => {
       mockedApi.listCustomDataSources.mockResolvedValue([
-        {id: 7, org_id: 1, name: 'My Redis', source_type: 'redis', description: '', host: '', port: 6379, created_at: '', updated_at: ''},
+        makeDataSource(),
       ])
       const json = JSON.stringify({
         __inputs: [{name: 'DS_REDIS', type: 'datasource', pluginId: 'redis-datasource'}],
@@ -349,6 +413,21 @@ describe('ImportExportModal – extended branch coverage', () => {
 
       await waitFor(() => {
         expect(mockedApi.exportDashboard).toHaveBeenCalledWith(3, 'grafana')
+      })
+    })
+
+    it('calls exportDashboard with datadog format', async () => {
+      mockedApi.exportDashboard.mockResolvedValue({title: 'Datadog Export'})
+
+      globalThis.URL.createObjectURL = vi.fn().mockReturnValue('blob:mock')
+      globalThis.URL.revokeObjectURL = vi.fn()
+
+      renderExportModal({dashboardId: 4})
+
+      await userEvent.setup().click(screen.getByText('Export as Datadog JSON'))
+
+      await waitFor(() => {
+        expect(mockedApi.exportDashboard).toHaveBeenCalledWith(4, 'datadog')
       })
     })
   })

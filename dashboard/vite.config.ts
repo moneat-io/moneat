@@ -36,6 +36,34 @@ import {fileURLToPath} from 'url'
 import type { ProxyOptions } from 'vite'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const DEV_PROXY_TARGET = 'http://localhost:8080'
+const DEV_PROXY_ALLOWED_ORIGIN = 'http://localhost:3000'
+
+function createBackendProxyOptions({rewriteOrigin = true, passCookies = true} = {}): ProxyOptions {
+  return {
+    target: DEV_PROXY_TARGET,
+    changeOrigin: true,
+    secure: false,
+    cookieDomainRewrite: 'localhost',
+    configure: (proxy) => {
+      if (rewriteOrigin) {
+        proxy.on('proxyReq', (proxyReq) => {
+          proxyReq.setHeader('Origin', DEV_PROXY_ALLOWED_ORIGIN)
+        })
+      }
+
+      if (passCookies) {
+        proxy.on('proxyRes', (proxyRes, _req, res) => {
+          // Ensure cookies are passed through from backend to frontend
+          const cookies = proxyRes.headers['set-cookie']
+          if (cookies) {
+            res.setHeader('set-cookie', cookies)
+          }
+        })
+      }
+    },
+  }
+}
 
 export default defineConfig({
   plugins: [
@@ -78,56 +106,10 @@ export default defineConfig({
     allowedHosts: true,
     port: 3000,
     proxy: {
-      '/v1': {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
-        secure: false,
-        cookieDomainRewrite: 'localhost',
-        configure: (proxy) => {
-          proxy.on('proxyRes', (proxyRes, _req, res) => {
-            // Ensure cookies are passed through from backend to frontend
-            const cookies = proxyRes.headers['set-cookie']
-            if (cookies) {
-              res.setHeader('set-cookie', cookies)
-            }
-          })
-        }
-      } as ProxyOptions,
-      '/auth': {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
-        secure: false,
-        cookieDomainRewrite: 'localhost',
-        configure: (proxy) => {
-          proxy.on('proxyRes', (proxyRes, _req, res) => {
-            // Ensure cookies are passed through from backend to frontend
-            const cookies = proxyRes.headers['set-cookie']
-            if (cookies) {
-              res.setHeader('set-cookie', cookies)
-            }
-          })
-        }
-      } as ProxyOptions,
-      '/features': {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
-        secure: false,
-      } as ProxyOptions,
-      '/api': {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
-        secure: false,
-        cookieDomainRewrite: 'localhost',
-        configure: (proxy) => {
-          proxy.on('proxyRes', (proxyRes, _req, res) => {
-            // Ensure cookies are passed through from backend to frontend
-            const cookies = proxyRes.headers['set-cookie']
-            if (cookies) {
-              res.setHeader('set-cookie', cookies)
-            }
-          })
-        }
-      } as ProxyOptions
+      '/v1': createBackendProxyOptions(),
+      '/auth': createBackendProxyOptions(),
+      '/features': createBackendProxyOptions({passCookies: false}),
+      '/api': createBackendProxyOptions(),
     }
   }
 })

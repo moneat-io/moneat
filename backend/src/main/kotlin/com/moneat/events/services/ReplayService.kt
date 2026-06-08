@@ -23,8 +23,10 @@ import com.moneat.events.models.ReplayRecordingResponse
 import com.moneat.events.models.ReplayTimelineItem
 import com.moneat.events.models.ReplayTimelineResponse
 import com.moneat.shared.models.Projects
+import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_RANGE
 import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.json.JsonArray
@@ -46,12 +48,22 @@ import org.msgpack.core.MessageUnpacker
 import org.msgpack.value.ValueType
 import java.time.Instant
 import java.util.Base64
-import com.moneat.utils.HttpConstants.HTTP_SUCCESS_RANGE
 
 private val logger = KotlinLogging.logger {}
 
+private data class ReplayListQuery(
+    val scope: ServiceQueryScope,
+    val retentionDays: Int,
+    val page: Int,
+    val limit: Int,
+    val environment: String?,
+    val period: String,
+    val demoEpochMs: Long?
+)
+
 class ReplayService(
-    private val queryHelper: DashboardQueryHelper
+    private val queryHelper: DashboardQueryHelper,
+    private val projectIdResolver: ProjectIdResolver = ProjectIdResolver(),
 ) {
     private val clickhouseDb: String get() = queryHelper.clickhouseDb
     private val json get() = queryHelper.json
@@ -92,15 +104,20 @@ class ReplayService(
         return arr.mapNotNull { it.jsonPrimitive.contentOrNull }
     }
 
+    private fun projectResourceId(projectId: Long): String =
+        projectIdResolver.resourceIdFor(projectId) ?: projectId.toString()
+
     private fun buildReplayListItemFromJson(
         obj: JsonObject,
         projectId: Long,
         errorCount: Int
     ): ReplayListItem? {
         val replayId = obj["replay_id"]?.jsonPrimitive?.content ?: return null
+        val objProjectId = obj["project_id"]?.jsonPrimitive?.long ?: projectId
         return ReplayListItem(
             replayId = replayId,
-            projectId = obj["project_id"]?.jsonPrimitive?.long ?: projectId,
+            projectId = objProjectId,
+            projectResourceId = projectResourceId(objProjectId),
             startedAt = obj["started_at"]?.jsonPrimitive?.content ?: "",
             finishedAt = obj["finished_at"]?.jsonPrimitive?.content ?: "",
             durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
@@ -448,25 +465,59 @@ class ReplayService(
         environment: String? = null,
         period: String = "7d",
         demoEpochMs: Long? = null
-    ): List<ReplayListItem> {
-        val offset = (page - 1) * limit
-        val retentionDays = queryHelper.getProjectRetentionDays(projectId)
-        val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
+    ): List<ReplayListItem> =
+        getReplays(
+            ReplayListQuery(
+                scope = ServiceQueryScope.service(projectId),
+                retentionDays = queryHelper.getProjectRetentionDays(projectId),
+                page = page,
+                limit = limit,
+                environment = environment,
+                period = period,
+                demoEpochMs = demoEpochMs
+            )
+        )
 
-        val nowMs = demoEpochMs ?: System.currentTimeMillis()
+    suspend fun getReplaysForServices(
+        organizationId: Int,
+        serviceIds: List<Long>,
+        page: Int = 1,
+        limit: Int = 25,
+        environment: String? = null,
+        period: String = "7d",
+        demoEpochMs: Long? = null
+    ): List<ReplayListItem> =
+        getReplays(
+            ReplayListQuery(
+                scope = ServiceQueryScope.services(serviceIds),
+                retentionDays = queryHelper.getOrganizationRetentionDays(organizationId),
+                page = page,
+                limit = limit,
+                environment = environment,
+                period = period,
+                demoEpochMs = demoEpochMs
+            )
+        )
+
+    private suspend fun getReplays(queryOptions: ReplayListQuery): List<ReplayListItem> {
+        if (queryOptions.scope.serviceIds.isEmpty()) return emptyList()
+        val offset = (queryOptions.page - 1) * queryOptions.limit
+        val projectIdClause = queryOptions.scope.projectIdClause()
+
+        val nowMs = queryOptions.demoEpochMs ?: System.currentTimeMillis()
         val periodMs =
-            when (period) {
+            when (queryOptions.period) {
                 "24h" -> PERIOD_24H_MS
                 "30d" -> PERIOD_30D_MS
                 "90d" -> PERIOD_90D_MS
                 else -> PERIOD_7D_MS
             }
         val periodStartMs = nowMs - periodMs
-        val retentionStartMs = nowMs - (retentionDays * MILLIS_PER_DAY)
+        val retentionStartMs = nowMs - (queryOptions.retentionDays * MILLIS_PER_DAY)
 
         val envClause =
-            if (environment != null && environment.isNotBlank()) {
-                "AND environment = '${escapeSql(environment)}'"
+            if (queryOptions.environment != null && queryOptions.environment.isNotBlank()) {
+                "AND environment = '${escapeSql(queryOptions.environment)}'"
             } else {
                 ""
             }
@@ -498,7 +549,7 @@ class ReplayService(
                 $envClause
             GROUP BY replay_id, project_id
             ORDER BY max(timestamp) DESC
-            LIMIT $limit OFFSET $offset
+            LIMIT ${queryOptions.limit} OFFSET $offset
             FORMAT JSONEachRow
             """.trimIndent()
 
@@ -508,27 +559,29 @@ class ReplayService(
                 suspendRunCatching {
                     val startedMs = obj["started_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
                     val finishedMs = obj["finished_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
+                    val rowProjectId =
+                        obj["project_id"]?.jsonPrimitive?.long ?: queryOptions.scope.serviceIds.firstOrNull()
                     val rawErrorCount = obj["error_count"]?.jsonPrimitive?.intOrNull ?: 0
                     val fallbackErrorCount =
-                        if (rawErrorCount == 0 && startedMs != null && finishedMs != null) {
+                        if (rawErrorCount == 0 && startedMs != null && finishedMs != null && rowProjectId != null) {
                             getReplayWindowErrorCount(
-                                projectId,
+                                rowProjectId,
                                 startedMs,
                                 finishedMs,
                                 obj["user_id"]?.jsonPrimitive?.contentOrNull,
-                                retentionDays
+                                queryOptions.retentionDays
                             )
                         } else {
                             0
                         }
-                    buildReplayListItemFromJson(obj, projectId, maxOf(rawErrorCount, fallbackErrorCount))
+                    buildReplayListItemFromJson(obj, rowProjectId ?: 0L, maxOf(rawErrorCount, fallbackErrorCount))
                 }.getOrElse { e ->
                     logger.error(e) { "Failed to parse replay list row" }
                     null
                 }
             }
         }.getOrElse { e ->
-            logger.error(e) { "Failed to fetch replays for project $projectId" }
+            logger.error(e) { "Failed to fetch replays for services ${queryOptions.scope.cacheKeyPart()}" }
             emptyList()
         }
     }
@@ -579,6 +632,7 @@ class ReplayService(
         return ReplayDetailResponse(
             replayId = replayId,
             projectId = objProjectId,
+            projectResourceId = projectResourceId(objProjectId),
             startedAt = obj["started_at"]?.jsonPrimitive?.content ?: "",
             finishedAt = obj["finished_at"]?.jsonPrimitive?.content ?: "",
             durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,

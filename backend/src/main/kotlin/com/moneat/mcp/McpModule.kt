@@ -24,9 +24,16 @@ import com.moneat.mcp.resources.AlertSilencesResource
 import com.moneat.mcp.resources.HostsStatusResource
 import com.moneat.mcp.resources.InfrastructureHealthResource
 import com.moneat.mcp.resources.OrgOverviewResource
+import com.moneat.mcp.resources.OpenSecuritySignalsResource
 import com.moneat.mcp.resources.ProjectsListResource
+import com.moneat.mcp.resources.SecurityDetectionCoverageResource
+import com.moneat.mcp.resources.SecuritySummaryResource
 import com.moneat.mcp.resources.StatusPagesResource
 import com.moneat.mcp.resources.UptimeSummaryResource
+import com.moneat.mcp.resources.WorkflowCatalogResource
+import com.moneat.mcp.resources.WorkflowsOverviewResource
+import com.moneat.mcp.resources.WorkflowsUsageResource
+import com.moneat.mcp.routes.mcpApiKeyRoutes
 import com.moneat.mcp.routes.mcpRoutes
 import io.ktor.server.routing.Route
 import mu.KotlinLogging
@@ -62,11 +69,18 @@ object McpModule {
             registry.register(UptimeSummaryResource())
             registry.register(StatusPagesResource())
             registry.register(InfrastructureHealthResource())
+            registry.register(WorkflowsOverviewResource())
+            registry.register(WorkflowsUsageResource())
+            registry.register(WorkflowCatalogResource())
+            registry.register(SecuritySummaryResource())
+            registry.register(OpenSecuritySignalsResource())
+            registry.register(SecurityDetectionCoverageResource())
             logger.info { "Registered ${registry.listResources().size} MCP resources" }
         }
     }
 
     fun registerRoutes(route: Route) {
+        route.mcpApiKeyRoutes(toolRegistry, resourceRegistry)
         route.mcpRoutes(toolRegistry, resourceRegistry)
     }
 }

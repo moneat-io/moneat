@@ -18,13 +18,15 @@ import {Card, CardContent} from '@/components/ui/card'
 import {LucideIcon} from 'lucide-react'
 import {cn} from '@/lib/utils'
 
+// Accent presets map onto the shared status language (style guide); "cyan" uses
+// a categorical chart hue for visual distinction without implying a status.
 const ACCENT_STYLES = {
-  blue: { bar: 'bg-blue-500', icon: 'bg-blue-500/15 text-blue-600 dark:text-blue-400', text: 'text-blue-600 dark:text-blue-400' },
-  amber: { bar: 'bg-amber-500', icon: 'bg-amber-500/15 text-amber-600 dark:text-amber-400', text: 'text-amber-600 dark:text-amber-400' },
-  emerald: { bar: 'bg-emerald-500', icon: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400', text: 'text-emerald-600 dark:text-emerald-400' },
-  violet: { bar: 'bg-violet-500', icon: 'bg-violet-500/15 text-violet-600 dark:text-violet-400', text: 'text-violet-600 dark:text-violet-400' },
-  rose: { bar: 'bg-rose-500', icon: 'bg-rose-500/15 text-rose-600 dark:text-rose-400', text: 'text-rose-600 dark:text-rose-400' },
-  cyan: { bar: 'bg-cyan-500', icon: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400', text: 'text-cyan-600 dark:text-cyan-400' },
+  blue: { bar: 'bg-info-solid', icon: 'bg-info-bg text-info-fg', text: 'text-info-fg' },
+  amber: { bar: 'bg-warning-solid', icon: 'bg-warning-bg text-warning-fg', text: 'text-warning-fg' },
+  emerald: { bar: 'bg-success-solid', icon: 'bg-success-bg text-success-fg', text: 'text-success-fg' },
+  violet: { bar: 'bg-primary', icon: 'bg-[hsl(var(--primary)/0.12)] text-primary', text: 'text-primary' },
+  rose: { bar: 'bg-danger-solid', icon: 'bg-danger-bg text-danger-fg', text: 'text-danger-fg' },
+  cyan: { bar: 'bg-chart-3', icon: 'bg-chart-3/15 text-chart-3', text: 'text-chart-3' },
 } satisfies Record<string, { bar: string; icon: string; text: string }>
 
 export type StatsCardAccent = keyof typeof ACCENT_STYLES
@@ -88,12 +90,12 @@ export function StatsCard({ title, value, icon: Icon, trend, subtitle, accent, v
           </div>
           <div className="min-w-0 flex-1">
             <p className={cn('font-medium text-muted-foreground truncate', compact ? 'text-[11px]' : 'text-xs')}>{title}</p>
-            <p className={cn('font-bold leading-tight', compact ? 'text-base' : 'text-lg', valueColor)}>{value}</p>
+            <p className={cn('font-semibold leading-tight tabular-nums', compact ? 'text-base' : 'text-lg', valueColor)}>{value}</p>
             {subtitle && (
               <p className={cn('text-muted-foreground truncate', compact ? 'text-[10px]' : 'text-[11px]')}>{subtitle}</p>
             )}
             {trend && (
-              <p className={`text-[11px] ${trend.positive ? 'text-emerald-600' : 'text-rose-600'}`}>
+              <p className={`text-[11px] tabular-nums ${trend.positive ? 'text-success-fg' : 'text-danger-fg'}`}>
                 {trend.positive ? '↑' : '↓'} {Math.abs(trend.value)}%
               </p>
             )}

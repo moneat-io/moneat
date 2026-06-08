@@ -20,6 +20,8 @@ import {api} from '@/lib/api'
 import type {ApmResourceStatsItem} from '@/lib/api'
 import {Badge} from '@/components/ui/badge'
 import {Input} from '@/components/ui/input'
+import {PageHeader} from '@/components/ui/page-header'
+import {EmptyState} from '@/components/ui/empty-state'
 import {
   Table,
   TableBody,
@@ -37,17 +39,17 @@ export const Route = createFileRoute('/traces')({
 })
 
 const serviceColors: Record<string, {bg: string; text: string; border: string; dot: string}> = {
-  redis: {bg: 'bg-red-500/10', text: 'text-red-400', border: 'border-red-500/20', dot: 'bg-red-500'},
-  postgresql: {bg: 'bg-blue-500/10', text: 'text-blue-400', border: 'border-blue-500/20', dot: 'bg-blue-500'},
-  kafka: {bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/20', dot: 'bg-emerald-500'},
-  elasticsearch: {bg: 'bg-amber-500/10', text: 'text-amber-400', border: 'border-amber-500/20', dot: 'bg-amber-500'},
-  mongodb: {bg: 'bg-green-500/10', text: 'text-green-400', border: 'border-green-500/20', dot: 'bg-green-500'},
+  redis: {bg: 'bg-chart-8/15', text: 'text-chart-8', border: 'border-chart-8/30', dot: 'bg-chart-8'},
+  postgresql: {bg: 'bg-chart-2/15', text: 'text-chart-2', border: 'border-chart-2/30', dot: 'bg-chart-2'},
+  kafka: {bg: 'bg-chart-3/15', text: 'text-chart-3', border: 'border-chart-3/30', dot: 'bg-chart-3'},
+  elasticsearch: {bg: 'bg-chart-5/15', text: 'text-chart-5', border: 'border-chart-5/30', dot: 'bg-chart-5'},
+  mongodb: {bg: 'bg-chart-4/15', text: 'text-chart-4', border: 'border-chart-4/30', dot: 'bg-chart-4'},
 }
 
 function getServiceColor(service: string) {
   const key = Object.keys(serviceColors).find(k => service.toLowerCase().includes(k))
   if (key) return serviceColors[key]
-  return {bg: 'bg-violet-500/10', text: 'text-violet-400', border: 'border-violet-500/20', dot: 'bg-violet-500'}
+  return {bg: 'bg-chart-9/15', text: 'text-chart-9', border: 'border-chart-9/30', dot: 'bg-chart-9'}
 }
 
 function formatDuration(ns: number) {
@@ -69,7 +71,7 @@ function ErrorRateBadge({rate}: {rate: number}) {
   return (
     <span className={cn(
       'text-sm font-semibold tabular-nums flex items-center gap-1',
-      rate >= 0.1 ? 'text-red-400' : rate >= 0.01 ? 'text-amber-400' : 'text-muted-foreground',
+      rate >= 0.1 ? 'text-danger-fg' : rate >= 0.01 ? 'text-warning-fg' : 'text-muted-foreground',
     )}>
       {rate >= 0.01 && <AlertCircle className="h-3 w-3" />}
       {pct}%
@@ -80,7 +82,7 @@ function ErrorRateBadge({rate}: {rate: number}) {
 function Traces() {
   const [serviceFilter, setServiceFilter] = useState('')
 
-  const {data, isLoading, isError, error} = useQuery({
+  const {data, isLoading, isError} = useQuery({
     queryKey: ['apm-resource-stats'],
     queryFn: () => api.getApmResourceStats({limit: 200}),
     refetchInterval: 60000,
@@ -103,28 +105,22 @@ function Traces() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 shadow-lg shadow-violet-500/20">
-            <Activity className="h-5 w-5 text-white" />
+      <PageHeader
+        title="APM Traces"
+        description="Resource performance aggregated from trace stats"
+        icon={Activity}
+        actions={
+          <div className="relative w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              placeholder="Filter by service..."
+              value={serviceFilter}
+              onChange={e => setServiceFilter(e.target.value)}
+              className="pl-9 h-9"
+            />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">APM Traces</h1>
-            <p className="text-sm text-muted-foreground">
-              Resource performance aggregated from trace stats
-            </p>
-          </div>
-        </div>
-        <div className="relative w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input
-            placeholder="Filter by service..."
-            value={serviceFilter}
-            onChange={e => setServiceFilter(e.target.value)}
-            className="pl-9 h-9"
-          />
-        </div>
-      </div>
+        }
+      />
 
       {/* Service chips */}
       {services.length > 1 && (
@@ -165,15 +161,14 @@ function Traces() {
       {/* Table */}
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
-          <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-violet-500" />
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-primary" />
         </div>
       ) : isError ? (
-        <div className="flex flex-col items-center justify-center py-20 border border-dashed rounded-xl">
-          <h3 className="text-base font-semibold mb-1">Failed to load trace stats</h3>
-          <p className="text-sm text-muted-foreground text-center max-w-sm">
-            {error instanceof Error ? error.message : 'An unexpected error occurred.'}
-          </p>
-        </div>
+        <EmptyState
+          icon={AlertCircle}
+          title="Couldn't load trace stats"
+          description="Something went wrong while loading trace stats. Try refreshing in a moment."
+        />
       ) : filtered.length > 0 ? (
         <div className="rounded-xl border overflow-hidden">
           <Table>
@@ -218,8 +213,8 @@ function Traces() {
                     <TableCell className="text-right">
                       <span className={cn(
                         'text-sm tabular-nums font-semibold',
-                        r.avgDurationNs > 500_000_000 ? 'text-red-400'
-                          : r.avgDurationNs > 100_000_000 ? 'text-amber-400'
+                        r.avgDurationNs > 500_000_000 ? 'text-danger-fg'
+                          : r.avgDurationNs > 100_000_000 ? 'text-warning-fg'
                           : 'text-foreground',
                       )}>
                         {r.avgDurationNs > 0 ? formatDuration(r.avgDurationNs) : '—'}
@@ -235,17 +230,15 @@ function Traces() {
           </Table>
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-20 border border-dashed rounded-xl">
-          <div className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-muted/60 mb-4">
-            <Inbox className="h-7 w-7 text-muted-foreground" />
-          </div>
-          <h3 className="text-base font-semibold mb-1">No trace stats found</h3>
-          <p className="text-sm text-muted-foreground text-center max-w-sm">
-            {serviceFilter
+        <EmptyState
+          icon={Inbox}
+          title="No trace stats found"
+          description={
+            serviceFilter
               ? 'No resources match your current filter.'
-              : 'No APM trace stats have been recorded yet. Make sure your tracing agent is sending stats.'}
-          </p>
-        </div>
+              : 'No APM trace stats have been recorded yet. Make sure your tracing agent is sending stats.'
+          }
+        />
       )}
 
       {/* Footer */}

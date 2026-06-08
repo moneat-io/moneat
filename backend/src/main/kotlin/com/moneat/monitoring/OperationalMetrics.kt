@@ -19,6 +19,7 @@ package com.moneat.monitoring
 import com.moneat.config.RedisConfig
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.DistributionSummary
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.Tag
 import io.micrometer.core.instrument.Timer
@@ -159,6 +160,87 @@ object OperationalMetrics {
         ).increment()
     }
 
+    fun recordDatadogMetricPayloadQueued(metricRows: Int) {
+        counter(
+            DD_METRIC_PAYLOADS_QUEUED,
+            "Datadog metric payloads queued for background insertion.",
+            emptyList()
+        ).increment()
+        counter(
+            DD_METRIC_POINTS_QUEUED,
+            "Datadog metric points queued for background insertion.",
+            emptyList()
+        ).increment(metricRows.coerceAtLeast(0).toDouble())
+    }
+
+    fun recordDatadogMetricInsert(
+        mode: String,
+        status: String,
+        payloadCount: Int,
+        rowCount: Int,
+        durationSeconds: Double,
+        cause: Throwable? = null,
+    ) {
+        val normalizedMode = mode.normalizedLabelValue()
+        val normalizedStatus = status.normalizedLabelValue()
+        val exception = cause?.metricExceptionName() ?: "none"
+        val insertTags = tags(
+            "mode" to normalizedMode,
+            "status" to normalizedStatus,
+            "exception" to exception
+        )
+
+        counter(
+            DD_METRIC_INSERT_CHUNKS,
+            "Datadog metric ClickHouse insert chunks by mode and result.",
+            insertTags
+        ).increment()
+        datadogMetricInsertTimer(insertTags).record(durationSeconds.toNanos(), TimeUnit.NANOSECONDS)
+        datadogMetricInsertSummary(DD_METRIC_INSERT_PAYLOADS, "payloads", insertTags)
+            .record(payloadCount.coerceAtLeast(0).toDouble())
+        datadogMetricInsertSummary(DD_METRIC_INSERT_ROWS, "rows", insertTags)
+            .record(rowCount.coerceAtLeast(0).toDouble())
+    }
+
+    fun recordDatadogMetricInsertFallback(
+        payloadCount: Int,
+        rowCount: Int,
+        cause: Throwable?,
+    ) {
+        val fallbackTags = tags("exception" to (cause?.metricExceptionName() ?: "none"))
+        counter(
+            DD_METRIC_INSERT_FALLBACKS,
+            "Datadog metric chunks that fell back from combined insert to per-payload insert.",
+            fallbackTags
+        ).increment()
+        datadogMetricInsertSummary(DD_METRIC_FALLBACK_PAYLOADS, "payloads", fallbackTags)
+            .record(payloadCount.coerceAtLeast(0).toDouble())
+        datadogMetricInsertSummary(DD_METRIC_FALLBACK_ROWS, "rows", fallbackTags)
+            .record(rowCount.coerceAtLeast(0).toDouble())
+    }
+
+    fun recordDatadogMetricPayloadAck(status: String) {
+        counter(
+            DD_METRIC_PAYLOAD_ACKS,
+            "Datadog metric processing queue acknowledgement attempts by result.",
+            tags("status" to status.normalizedLabelValue())
+        ).increment()
+    }
+
+    fun recordDatadogMetricProcessingRecovery(recoveredPayloads: Int, status: String, cause: Throwable? = null) {
+        val recoveryTags = tags(
+            "status" to status.normalizedLabelValue(),
+            "exception" to (cause?.metricExceptionName() ?: "none")
+        )
+        counter(
+            DD_METRIC_PROCESSING_RECOVERIES,
+            "Datadog metric processing queue recovery attempts by result.",
+            recoveryTags
+        ).increment()
+        datadogMetricInsertSummary(DD_METRIC_PROCESSING_RECOVERED_PAYLOADS, "payloads", recoveryTags)
+            .record(recoveredPayloads.coerceAtLeast(0).toDouble())
+    }
+
     fun recordClickHouseRequest(operation: String, status: String, durationSeconds: Double) {
         val tags = tags(
             "operation" to operation.normalizedLabelValue(),
@@ -185,6 +267,17 @@ object OperationalMetrics {
                 )
             ).increment()
         }
+    }
+
+    fun recordClickHouseQueryError(operation: String, code: String) {
+        counter(
+            CLICKHOUSE_QUERY_ERRORS,
+            "ClickHouse query responses that returned a ClickHouse error body.",
+            tags(
+                "operation" to operation.normalizedLabelValue(),
+                "code" to code.normalizedLabelValue()
+            )
+        ).increment()
     }
 
     fun recordDependencyHealth(
@@ -274,6 +367,30 @@ object OperationalMetrics {
         ).increment()
     }
 
+    fun recordWorkflowExecutionStarted(trigger: String) {
+        workflowExecutionCounter(trigger, "started").increment()
+    }
+
+    fun recordWorkflowExecutionCompleted(
+        trigger: String,
+        durationSeconds: Double
+    ) {
+        workflowExecutionCounter(trigger, "completed").increment()
+        workflowExecutionDurationTimer(trigger).record(durationSeconds.toNanos(), TimeUnit.NANOSECONDS)
+    }
+
+    fun recordWorkflowExecutionFailed(trigger: String) {
+        workflowExecutionCounter(trigger, "failed").increment()
+    }
+
+    fun recordWorkflowRateLimited(trigger: String) {
+        counter(
+            WORKFLOW_RATE_LIMITED,
+            "Workflow runs skipped because the per-workflow rate limit was reached.",
+            tags("trigger" to trigger.normalizedLabelValue())
+        ).increment()
+    }
+
     fun scrape(): String = registry.scrape()
 
     internal fun resetForTest() {
@@ -302,6 +419,34 @@ object OperationalMetrics {
     private fun counter(name: String, description: String, tags: Iterable<Tag>): Counter =
         Counter.builder(name)
             .description(description)
+            .tags(tags)
+            .register(registry)
+
+    @Suppress("MagicNumber")
+    private fun datadogMetricInsertTimer(tags: Iterable<Tag>): Timer =
+        Timer.builder(DD_METRIC_INSERT_DURATION)
+            .description("Datadog metric ClickHouse insert duration by insert mode and result.")
+            .serviceLevelObjectives(
+                Duration.ofMillis(5),
+                Duration.ofMillis(10),
+                Duration.ofMillis(25),
+                Duration.ofMillis(50),
+                Duration.ofMillis(100),
+                Duration.ofMillis(250),
+                Duration.ofMillis(500),
+                Duration.ofSeconds(1),
+                Duration.ofMillis(2500),
+                Duration.ofSeconds(5),
+                Duration.ofSeconds(10),
+                Duration.ofSeconds(30)
+            )
+            .tags(tags)
+            .register(registry)
+
+    private fun datadogMetricInsertSummary(name: String, unit: String, tags: Iterable<Tag>): DistributionSummary =
+        DistributionSummary.builder(name)
+            .description("Datadog metric insert batch $unit by insert mode and result.")
+            .baseUnit(unit)
             .tags(tags)
             .register(registry)
 
@@ -434,6 +579,38 @@ object OperationalMetrics {
             .tags(tags)
             .register(registry)
 
+    private fun workflowExecutionCounter(
+        trigger: String,
+        status: String
+    ): Counter =
+        counter(
+            WORKFLOW_EXECUTIONS,
+            "Workflow executions by trigger and lifecycle status.",
+            tags(
+                "trigger" to trigger.normalizedLabelValue(),
+                "status" to status
+            )
+        )
+
+    @Suppress("MagicNumber")
+    private fun workflowExecutionDurationTimer(trigger: String): Timer =
+        Timer.builder(WORKFLOW_EXECUTION_DURATION)
+            .description("Workflow execution duration from run creation to completion, by trigger.")
+            .serviceLevelObjectives(
+                Duration.ofMillis(50),
+                Duration.ofMillis(250),
+                Duration.ofMillis(500),
+                Duration.ofSeconds(1),
+                Duration.ofSeconds(5),
+                Duration.ofSeconds(15),
+                Duration.ofSeconds(30),
+                Duration.ofSeconds(60),
+                Duration.ofMinutes(5),
+                Duration.ofMinutes(15)
+            )
+            .tags(tags("trigger" to trigger.normalizedLabelValue()))
+            .register(registry)
+
     private fun readQueueDepth(queueKey: String): Double {
         if (!RedisConfig.isConnected()) return Double.NaN
         return runCatching { RedisConfig.sync().llen(queueKey).toDouble() }
@@ -483,9 +660,23 @@ object OperationalMetrics {
     private const val WORKER_DLQ_PUSHES = "moneat_worker_dlq_pushes"
     private const val WORKER_DLQ_DEPTH = "moneat_worker_dlq_depth"
     private const val WORKER_QUEUE_DEPTH = "moneat_worker_queue_depth"
+    private const val DD_METRIC_PAYLOADS_QUEUED = "moneat_datadog_metric_payloads_queued"
+    private const val DD_METRIC_POINTS_QUEUED = "moneat_datadog_metric_points_queued"
+    private const val DD_METRIC_INSERT_CHUNKS = "moneat_datadog_metric_insert_chunks"
+    private const val DD_METRIC_INSERT_DURATION = "moneat_datadog_metric_insert_duration"
+    private const val DD_METRIC_INSERT_PAYLOADS = "moneat_datadog_metric_insert_payloads"
+    private const val DD_METRIC_INSERT_ROWS = "moneat_datadog_metric_insert_rows"
+    private const val DD_METRIC_INSERT_FALLBACKS = "moneat_datadog_metric_insert_fallbacks"
+    private const val DD_METRIC_FALLBACK_PAYLOADS = "moneat_datadog_metric_fallback_payloads"
+    private const val DD_METRIC_FALLBACK_ROWS = "moneat_datadog_metric_fallback_rows"
+    private const val DD_METRIC_PAYLOAD_ACKS = "moneat_datadog_metric_payload_acks"
+    private const val DD_METRIC_PROCESSING_RECOVERIES = "moneat_datadog_metric_processing_recoveries"
+    private const val DD_METRIC_PROCESSING_RECOVERED_PAYLOADS =
+        "moneat_datadog_metric_processing_recovered_payloads"
     private const val CLICKHOUSE_REQUESTS = "moneat_clickhouse_requests"
     private const val CLICKHOUSE_REQUEST_TIMEOUTS = "moneat_clickhouse_request_timeouts"
     private const val CLICKHOUSE_REQUEST_DURATION = "moneat_clickhouse_request_duration"
+    private const val CLICKHOUSE_QUERY_ERRORS = "moneat_clickhouse_query_errors"
     private const val DEPENDENCY_HEALTH = "moneat_dependency_health"
     private const val DEPENDENCY_LAST_SUCCESS_TIMESTAMP_SECONDS = "moneat_dependency_last_success_timestamp_seconds"
     private const val DEPENDENCY_HEALTH_CHECKS = "moneat_dependency_health_checks"
@@ -495,6 +686,9 @@ object OperationalMetrics {
     private const val BACKGROUND_JOB_LAST_SUCCESS_TIMESTAMP_SECONDS =
         "moneat_background_job_last_success_timestamp_seconds"
     private const val DATASOURCE_QUERY_FAILURES = "moneat_datasource_query_failures"
+    private const val WORKFLOW_EXECUTIONS = "moneat_workflow_executions"
+    private const val WORKFLOW_EXECUTION_DURATION = "moneat_workflow_execution_duration"
+    private const val WORKFLOW_RATE_LIMITED = "moneat_workflow_rate_limited"
     private const val NANOS_PER_SECOND = 1_000_000_000
     private const val MILLIS_PER_SECOND = 1_000
     private const val HEALTHY_VALUE = 1L

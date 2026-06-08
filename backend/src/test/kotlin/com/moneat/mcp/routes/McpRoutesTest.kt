@@ -16,6 +16,8 @@
 
 package com.moneat.mcp.routes
 
+import com.auth0.jwt.JWT
+import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.auth.services.AuthTokenService
 import com.moneat.mcp.McpModule
 import com.moneat.mcp.auth.McpScopes
@@ -45,12 +47,20 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.install
+import io.ktor.server.auth.Authentication
+import io.ktor.server.auth.jwt.JWTPrincipal
+import io.ktor.server.auth.jwt.jwt
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.ratelimit.RateLimit
 import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
@@ -58,6 +68,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
@@ -97,6 +108,34 @@ class McpRoutesTest {
     }
 
     @Test
+    fun `POST v1 mcp initialize response omits optional null fields`() = testApplication {
+        setupApp()
+
+        val response = client.post("/v1/mcp") {
+            mcpHeaders()
+            setBody(initializeRequest())
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val responseBody = response.bodyAsText()
+        val body = Json.parseToJsonElement(responseBody).jsonObject
+        val result = body.getValue("result").jsonObject
+        val capabilities = result.getValue("capabilities").jsonObject
+        val serverInfo = result.getValue("serverInfo").jsonObject
+
+        assertFalse("_meta" in result, responseBody)
+        assertFalse("instructions" in result, responseBody)
+        assertFalse("prompts" in capabilities, responseBody)
+        assertFalse("logging" in capabilities, responseBody)
+        assertFalse("completions" in capabilities, responseBody)
+        assertFalse("experimental" in capabilities, responseBody)
+        assertFalse("extensions" in capabilities, responseBody)
+        assertFalse("title" in serverInfo, responseBody)
+        assertFalse("websiteUrl" in serverInfo, responseBody)
+        assertFalse("icons" in serverInfo, responseBody)
+    }
+
+    @Test
     fun `POST v1 mcp lists tools`() = testApplication {
         setupApp()
         val sessionId = initializeSession()
@@ -110,6 +149,31 @@ class McpRoutesTest {
         assertEquals(HttpStatusCode.OK, response.status)
         val body = response.bodyAsText()
         assertTrue(body.contains("authorized_read"), body)
+    }
+
+    @Test
+    fun `POST v1 mcp handles batched json rpc requests`() = testApplication {
+        setupApp()
+        val sessionId = initializeSession()
+
+        val response = client.post("/v1/mcp") {
+            mcpHeaders()
+            header("mcp-session-id", sessionId)
+            setBody(
+                """
+                [
+                  {"jsonrpc":"2.0","id":2,"method":"tools/list"},
+                  {"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"moneat://test-resource"}}
+                ]
+                """.trimIndent()
+            )
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = Json.parseToJsonElement(response.bodyAsText()).jsonArray
+        assertEquals(2, body.size)
+        assertTrue(body.anyJsonObjectContains("authorized_read"))
+        assertTrue(body.anyJsonObjectContains("resource ok"))
     }
 
     @Test
@@ -162,6 +226,21 @@ class McpRoutesTest {
 
         assertEquals(HttpStatusCode.Unauthorized, response.status)
         assertTrue(response.bodyAsText().contains("Invalid or missing bearer token"))
+    }
+
+    @Test
+    fun `POST v1 mcp parse error keeps null json rpc id`() = testApplication {
+        setupApp()
+
+        val response = client.post("/v1/mcp") {
+            mcpHeaders()
+            setBody("{")
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        assertEquals(JsonNull, body["id"])
+        assertTrue("error" in body)
     }
 
     @Test
@@ -271,6 +350,17 @@ class McpRoutesTest {
                     rateLimiter(limit = 100, refillPeriod = 1.seconds)
                 }
             }
+            install(Authentication) {
+                jwt("auth-jwt") {
+                    verifier(
+                        JWT.require(Algorithm.HMAC256("test-secret"))
+                            .withIssuer("moneat")
+                            .withAudience("moneat-users")
+                            .build()
+                    )
+                    validate { JWTPrincipal(it.payload) }
+                }
+            }
             routing {
                 McpModule.registerRoutes(this)
             }
@@ -333,6 +423,9 @@ class McpRoutesTest {
             .token ?: error("Generated token was missing")
     }
 }
+
+private fun JsonArray.anyJsonObjectContains(value: String): Boolean =
+    any { element -> element.toString().contains(value) }
 
 private class AuthorizedReadTool : McpTool {
     override val name: String = "authorized_read"

@@ -32,7 +32,6 @@ import {
   type ChatSnapshot,
 } from '@/lib/ai-chat-history'
 import {confirmAiAction, streamAiAssistant, type AssistantStreamEvent} from '@/lib/mcp-chat'
-import {useProject} from '@/contexts/ProjectContext'
 
 const EXPIRY_MS = 60 * 60 * 1000 // 1 hour
 
@@ -58,8 +57,6 @@ function loadInitialPanelOrientation(): AiPanelOrientation {
 }
 
 export function CommandPaletteProvider({children}: {readonly children: ReactNode}) {
-  const {selectedProjectId} = useProject()
-
   // Dialog open state
   const [open, setOpen] = useState(false)
 
@@ -320,7 +317,6 @@ export function CommandPaletteProvider({children}: {readonly children: ReactNode
           conversationId,
           handleAssistantEvent,
           controller.signal,
-          selectedProjectId,
         )
       } catch (error) {
         const isAbort =
@@ -337,7 +333,7 @@ export function CommandPaletteProvider({children}: {readonly children: ReactNode
         setIsStreaming(false)
       }
     },
-    [isStreaming, isConfirming, conversationId, selectedProjectId, handleAssistantEvent, registerConnectionCleanup],
+    [isStreaming, isConfirming, conversationId, handleAssistantEvent, registerConnectionCleanup],
   )
 
   const handleConfirm = useCallback(
@@ -415,4 +411,3 @@ export function CommandPaletteProvider({children}: {readonly children: ReactNode
     </CommandPaletteContext.Provider>
   )
 }
-

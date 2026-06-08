@@ -193,12 +193,19 @@ class MonitorServiceExtendedTest {
     }
 
     @Test
-    fun `getLatestMetrics uses FREE retention when null returned`() = runBlocking {
+    fun `getLatestMetrics constrains latest query to recent metric names`() = runBlocking {
         every { hostRepo.getById(1) } returns testHost
-        coEvery { retentionPolicyService.getRetentionDaysForHost(1) } returns null
-        coEvery { hostRepo.executeClickHouseQuery(any()) } returns ""
+        val queries = mutableListOf<String>()
+        coEvery { hostRepo.executeClickHouseQuery(any()) } coAnswers {
+            queries.add(firstArg())
+            ""
+        }
 
         assertNull(service.getLatestMetrics(1))
+        val query = queries.single()
+        assertTrue(query.contains("metric_name IN ("))
+        assertTrue(query.contains("system.cpu.percent"))
+        assertTrue(query.contains("timestamp >= now64(3) - INTERVAL 6 HOUR"))
     }
 
     // ──── getLatestMetricsForHosts ────
@@ -211,13 +218,20 @@ class MonitorServiceExtendedTest {
 
     @Test
     fun `getLatestMetricsForHosts returns null map for blank response`() = runBlocking {
-        coEvery { retentionPolicyService.getRetentionDaysForOrganization(10) } returns 3
-        coEvery { hostRepo.executeClickHouseQuery(any()) } returns ""
+        val queries = mutableListOf<String>()
+        coEvery { hostRepo.executeClickHouseQuery(any()) } coAnswers {
+            queries.add(firstArg())
+            ""
+        }
 
         val result = service.getLatestMetricsForHosts(listOf(1, 2), 10)
         assertEquals(2, result.size)
         assertNull(result[1])
         assertNull(result[2])
+        val query = queries.single()
+        assertTrue(query.contains("metric_name IN ("))
+        assertTrue(query.contains("system.cpu.percent"))
+        assertTrue(query.contains("timestamp >= now64(3) - INTERVAL 6 HOUR"))
     }
 
     @Test
@@ -345,7 +359,10 @@ class MonitorServiceExtendedTest {
         // Host 1 has one container, Host 2 returns blank (no containers)
         coEvery {
             hostRepo.executeClickHouseQuery(
-                match { it.contains("'1'") }
+                match { query ->
+                    query.contains("containers_latest_by_host") &&
+                        query.contains("host_id = 1")
+                }
             )
         } returns """
             {
@@ -355,7 +372,14 @@ class MonitorServiceExtendedTest {
                 ]
             }
         """.trimIndent()
-        coEvery { hostRepo.executeClickHouseQuery(match { it.contains("'2'") }) } returns ""
+        coEvery {
+            hostRepo.executeClickHouseQuery(
+                match { query ->
+                    query.contains("containers_latest_by_host") &&
+                        query.contains("host_id = 2")
+                }
+            )
+        } returns ""
 
         val result = service.getLatestContainersForOrganizations(listOf(10))
         assertEquals(1, result.size)
@@ -392,7 +416,7 @@ class MonitorServiceExtendedTest {
         coEvery { retentionPolicyService.getRetentionDaysForHost(1) } returns 7
 
         val nowEpoch = Clock.System.now().epochSeconds
-        // 30-minute range => interval should be 10
+        // 30-minute range is served from the 1-minute rollup table.
         coEvery { hostRepo.executeClickHouseQuery(any()) } returns DATA_EMPTY_JSON
 
         val result = service.getHistoricalMetrics(
@@ -401,7 +425,7 @@ class MonitorServiceExtendedTest {
             nowEpoch,
             null
         )
-        assertEquals(10, result.intervalSeconds)
+        assertEquals(60, result.intervalSeconds)
         assertTrue(result.dataPoints.isEmpty())
     }
 

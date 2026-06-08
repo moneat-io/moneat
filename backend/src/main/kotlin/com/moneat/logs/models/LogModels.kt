@@ -30,9 +30,11 @@ data class LogIngestEntry(
     val message: String? = null,
     val body: String? = null,
     val service: String? = null,
+    @SerialName("service_namespace") val serviceNamespace: String? = null,
     val environment: String? = null,
     val host: String? = null,
     val source: String? = null,
+    @SerialName("project_id") val projectId: Long? = null,
     @SerialName("container_name") val containerName: String? = null,
     @SerialName("container_id") val containerId: String? = null,
     @SerialName("container_image") val containerImage: String? = null,
@@ -89,9 +91,11 @@ data class QueuedLogEntry(
     val message: String,
     val body: String,
     val service: String,
+    @SerialName("service_namespace") val serviceNamespace: String = "",
     val environment: String,
     val host: String,
     val source: String,
+    @SerialName("project_id") val projectId: Long? = null,
     @SerialName("container_name") val containerName: String,
     @SerialName("container_id") val containerId: String,
     @SerialName("container_image") val containerImage: String,
@@ -160,6 +164,7 @@ data class LogQueryRequest(
     val systemId: String? = null,
     val hostId: Int? = null,
     val containerName: String? = null,
+    val traceId: String? = null,
     val excludeService: String? = null,
     val excludeEnvironment: String? = null,
     val excludeContainerName: String? = null,
@@ -170,7 +175,13 @@ data class LogTailFilters(
     val query: String? = null,
     val levels: Set<String> = emptySet(),
     val service: String? = null,
-    val environment: String? = null
+    val environment: String? = null,
+    @SerialName("container_name") val containerName: String? = null,
+    val tags: Map<String, String> = emptyMap(),
+    @SerialName("exclude_service") val excludeService: String? = null,
+    @SerialName("exclude_environment") val excludeEnvironment: String? = null,
+    @SerialName("exclude_container_name") val excludeContainerName: String? = null,
+    @SerialName("exclude_tags") val excludeTags: Map<String, String> = emptyMap()
 )
 
 @Serializable
@@ -253,4 +264,220 @@ data class UpdateLogIndexRequest(
 data class LogIndexTestResponse(
     @SerialName("match_count") val matchCount: Long,
     @SerialName("total_count") val totalCount: Long
+)
+
+@Serializable
+data class LogIndexUsageResponse(
+    @SerialName("index_name") val indexName: String,
+    @SerialName("bytes_today") val bytesToday: Long,
+    @SerialName("count_today") val countToday: Long,
+    @SerialName("quota_gb") val quotaGb: Float? = null,
+    @SerialName("retention_days") val retentionDays: Int? = null
+)
+
+@Serializable
+data class LogPipelineStep(
+    val type: String,
+    val enabled: Boolean = true,
+    val condition: String = "",
+    @SerialName("source_field") val sourceField: String = "",
+    @SerialName("target_field") val targetField: String = "",
+    val pattern: String = "",
+    val replacement: String = "",
+    val value: String = "",
+    val tags: Map<String, String> = emptyMap()
+)
+
+@Serializable
+data class LogPipelineResponse(
+    val id: Int,
+    val name: String,
+    val description: String = "",
+    val steps: List<LogPipelineStep> = emptyList(),
+    val priority: Int,
+    @SerialName("is_active") val isActive: Boolean,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("updated_at") val updatedAt: String
+)
+
+@Serializable
+data class CreateLogPipelineRequest(
+    val name: String,
+    val description: String = "",
+    val steps: List<LogPipelineStep> = emptyList(),
+    val priority: Int = 0,
+    @SerialName("is_active") val isActive: Boolean = true
+)
+
+@Serializable
+data class UpdateLogPipelineRequest(
+    val name: String? = null,
+    val description: String? = null,
+    val steps: List<LogPipelineStep>? = null,
+    val priority: Int? = null,
+    @SerialName("is_active") val isActive: Boolean? = null
+)
+
+@Serializable
+data class LogPipelinePreviewEntry(
+    val level: String = "info",
+    val message: String = "",
+    val body: String = "",
+    val service: String = "",
+    val environment: String = "",
+    val host: String = "",
+    val tags: Map<String, String> = emptyMap(),
+    @SerialName("resource_attributes") val resourceAttributes: Map<String, String> = emptyMap()
+)
+
+@Serializable
+data class LogPipelinePreviewRequest(
+    val steps: List<LogPipelineStep> = emptyList(),
+    @SerialName("sample_logs") val sampleLogs: List<LogPipelinePreviewEntry> = emptyList()
+)
+
+@Serializable
+data class LogPipelinePreviewResult(
+    val before: LogPipelinePreviewEntry,
+    val after: LogPipelinePreviewEntry? = null,
+    val dropped: Boolean = false
+)
+
+@Serializable
+data class LogSavedViewState(
+    val query: String = "",
+    val levels: List<String> = emptyList(),
+    val facets: Map<String, String> = emptyMap(),
+    @SerialName("time_preset") val timePreset: String = "1h",
+    val from: String? = null,
+    val to: String? = null,
+    val visualization: String = "timeline",
+    @SerialName("group_by") val groupBy: String? = null,
+    @SerialName("top_field") val topField: String? = null
+)
+
+@Serializable
+data class LogSavedViewResponse(
+    val id: Int,
+    val name: String,
+    val state: LogSavedViewState,
+    @SerialName("is_shared") val isShared: Boolean,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("updated_at") val updatedAt: String
+)
+
+@Serializable
+data class CreateLogSavedViewRequest(
+    val name: String,
+    val state: LogSavedViewState,
+    @SerialName("is_shared") val isShared: Boolean = true
+)
+
+@Serializable
+data class UpdateLogSavedViewRequest(
+    val name: String? = null,
+    val state: LogSavedViewState? = null,
+    @SerialName("is_shared") val isShared: Boolean? = null
+)
+
+@Serializable
+data class LogMetricRuleResponse(
+    val id: Int,
+    val name: String,
+    val query: String = "",
+    val levels: List<String> = emptyList(),
+    @SerialName("group_by") val groupBy: String? = null,
+    val interval: String = "5m",
+    @SerialName("is_active") val isActive: Boolean,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("updated_at") val updatedAt: String
+)
+
+@Serializable
+data class CreateLogMetricRuleRequest(
+    val name: String,
+    val query: String = "",
+    val levels: List<String> = emptyList(),
+    @SerialName("group_by") val groupBy: String? = null,
+    val interval: String = "5m",
+    @SerialName("is_active") val isActive: Boolean = true
+)
+
+@Serializable
+data class UpdateLogMetricRuleRequest(
+    val name: String? = null,
+    val query: String? = null,
+    val levels: List<String>? = null,
+    @SerialName("group_by") val groupBy: String? = null,
+    val interval: String? = null,
+    @SerialName("is_active") val isActive: Boolean? = null
+)
+
+@Serializable
+data class LogMonitorResponse(
+    val id: Int,
+    val name: String,
+    val query: String = "",
+    val levels: List<String> = emptyList(),
+    @SerialName("group_by") val groupBy: String? = null,
+    val condition: String = ">",
+    val threshold: Double,
+    @SerialName("warning_threshold") val warningThreshold: Double? = null,
+    @SerialName("window_minutes") val windowMinutes: Int,
+    @SerialName("is_active") val isActive: Boolean,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("updated_at") val updatedAt: String
+)
+
+@Serializable
+data class CreateLogMonitorRequest(
+    val name: String,
+    val query: String = "",
+    val levels: List<String> = emptyList(),
+    @SerialName("group_by") val groupBy: String? = null,
+    val condition: String = ">",
+    val threshold: Double,
+    @SerialName("warning_threshold") val warningThreshold: Double? = null,
+    @SerialName("window_minutes") val windowMinutes: Int = 5,
+    @SerialName("is_active") val isActive: Boolean = true
+)
+
+@Serializable
+data class UpdateLogMonitorRequest(
+    val name: String? = null,
+    val query: String? = null,
+    val levels: List<String>? = null,
+    @SerialName("group_by") val groupBy: String? = null,
+    val condition: String? = null,
+    val threshold: Double? = null,
+    @SerialName("warning_threshold") val warningThreshold: Double? = null,
+    @SerialName("window_minutes") val windowMinutes: Int? = null,
+    @SerialName("is_active") val isActive: Boolean? = null
+)
+
+@Serializable
+data class LogMonitorDraftRequest(
+    val name: String,
+    val query: String = "",
+    val levels: List<String> = emptyList(),
+    @SerialName("group_by") val groupBy: String? = null,
+    val condition: String = ">",
+    val threshold: Double,
+    @SerialName("warning_threshold") val warningThreshold: Double? = null,
+    @SerialName("duration_seconds") val durationSeconds: Int = 0,
+    @SerialName("dashboard_id") val dashboardId: Long? = null,
+    @SerialName("widget_id") val widgetId: Long? = null
+)
+
+@Serializable
+data class LogMonitorDraftResponse(
+    val name: String,
+    val query: String,
+    val levels: List<String> = emptyList(),
+    @SerialName("group_by") val groupBy: String? = null,
+    val condition: String,
+    val threshold: Double,
+    @SerialName("warning_threshold") val warningThreshold: Double? = null,
+    @SerialName("dashboard_alert_created") val dashboardAlertCreated: Boolean = false,
+    @SerialName("dashboard_alert_id") val dashboardAlertId: Long? = null
 )

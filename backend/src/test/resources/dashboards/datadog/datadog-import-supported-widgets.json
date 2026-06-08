@@ -1,0 +1,282 @@
+{
+  "title": "Datadog Import Coverage",
+  "description": "Synthetic fixture covering Datadog integration dashboard widget shapes.",
+  "layout_type": "ordered",
+  "template_variables": [
+    {
+      "name": "env",
+      "prefix": "env",
+      "default": "production",
+      "available_values": ["production", "staging"]
+    },
+    {
+      "name": "host",
+      "prefix": "host",
+      "default": "*",
+      "available_values": []
+    }
+  ],
+  "widgets": [
+    {
+      "definition": {
+        "type": "group",
+        "title": "Core widgets",
+        "widgets": [
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "CPU",
+              "requests": [{"q": "avg:system.cpu.user{host:$host}"}]
+            },
+            "layout": {"x": 0, "y": 0, "width": 6, "height": 3}
+          },
+          {
+            "definition": {
+              "type": "query_value",
+              "title": "Errors",
+              "requests": [{"q": "count:events{*}"}]
+            },
+            "layout": {"x": 6, "y": 0, "width": 3, "height": 3}
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Top hosts",
+              "requests": [{"q": "sum:system.load.1{*} by {host}"}]
+            },
+            "layout": {"x": 0, "y": 3, "width": 4, "height": 3}
+          },
+          {
+            "definition": {
+              "type": "note",
+              "content": "Review imported Datadog dashboard widgets."
+            },
+            "layout": {"x": 4, "y": 3, "width": 4, "height": 3}
+          },
+          {
+            "definition": {
+              "type": "sunburst",
+              "title": "Services",
+              "requests": [{"q": "sum:trace.latency{*} by {service}"}]
+            },
+            "layout": {"x": 8, "y": 3, "width": 4, "height": 3}
+          },
+          {
+            "definition": {
+              "type": "query_table",
+              "title": "Queries",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "name": "query1",
+                      "data_source": "metrics",
+                      "query": "sum:postgresql.connections{host:$host} by {host}"
+                    }
+                  ],
+                  "formulas": [{"formula": "query1", "alias": "connections"}]
+                }
+              ]
+            },
+            "layout": {"x": 0, "y": 6, "width": 6, "height": 3}
+          },
+          {
+            "definition": {
+              "type": "image",
+              "url": "https://example.com/datadog.png"
+            },
+            "layout": {"x": 6, "y": 6, "width": 3, "height": 3}
+          },
+          {
+            "definition": {
+              "type": "heatmap",
+              "title": "Latency heatmap",
+              "requests": [{"q": "p95:trace.latency{service:api}"}]
+            },
+            "layout": {"x": 9, "y": 6, "width": 3, "height": 3}
+          },
+          {
+            "definition": {
+              "type": "distribution",
+              "title": "Durations",
+              "requests": [{"q": "avg:trace.latency{*}"}]
+            },
+            "layout": {"x": 0, "y": 9, "width": 4, "height": 3}
+          },
+          {
+            "definition": {
+              "type": "free_text",
+              "text": "Free text content",
+              "content": "Free text content"
+            },
+            "layout": {"x": 4, "y": 9, "width": 4, "height": 3}
+          }
+        ]
+      },
+      "layout": {"x": 0, "y": 0, "width": 12, "height": 12}
+    },
+    {
+      "definition": {
+        "type": "list_stream",
+        "title": "List stream",
+        "query": "service:api status:error"
+      },
+      "layout": {"x": 0, "y": 12, "width": 6, "height": 4}
+    },
+    {
+      "definition": {
+        "type": "geomap",
+        "title": "Regions",
+        "requests": [{"q": "avg:system.cpu.user{host IN (web01, web02)} by {host}"}]
+      },
+      "layout": {"x": 6, "y": 12, "width": 6, "height": 4}
+    },
+    {
+      "definition": {
+        "type": "check_status",
+        "title": "Checks",
+        "query": "check:postgres.can_connect"
+      },
+      "layout": {"x": 0, "y": 16, "width": 3, "height": 3}
+    },
+    {
+      "definition": {
+        "type": "manage_status",
+        "title": "Monitors",
+        "query": "status:error"
+      },
+      "layout": {"x": 3, "y": 16, "width": 3, "height": 3}
+    },
+    {
+      "definition": {
+        "type": "bar_chart",
+        "title": "Bars",
+        "requests": [{"q": "sum:system.load.1{*} by {host}"}]
+      },
+      "layout": {"x": 6, "y": 16, "width": 3, "height": 3}
+    },
+    {
+      "definition": {
+        "type": "log_stream",
+        "title": "Logs",
+        "query": "service:api error"
+      },
+      "layout": {"x": 9, "y": 16, "width": 3, "height": 3}
+    },
+    {
+      "definition": {
+        "type": "treemap",
+        "title": "Treemap",
+        "requests": [{"q": "sum:container.cpu.usage{*} by {host}"}]
+      },
+      "layout": {"x": 0, "y": 19, "width": 3, "height": 3}
+    },
+    {
+      "definition": {
+        "type": "change",
+        "title": "Change",
+        "requests": [{"q": "avg:system.cpu.user{host:$host}"}]
+      },
+      "layout": {"x": 3, "y": 19, "width": 3, "height": 3}
+    },
+    {
+      "definition": {
+        "type": "hostmap",
+        "title": "Host map",
+        "requests": [{"q": "avg:system.cpu.user{*} by {host}"}]
+      },
+      "layout": {"x": 6, "y": 19, "width": 3, "height": 3}
+    },
+    {
+      "definition": {
+        "type": "event_stream",
+        "title": "Events",
+        "query": "source:deploy"
+      },
+      "layout": {"x": 9, "y": 19, "width": 3, "height": 3}
+    },
+    {
+      "definition": {
+        "type": "wildcard",
+        "title": "Wildcard",
+        "content": "Wildcard Datadog widget"
+      },
+      "layout": {"x": 0, "y": 22, "width": 3, "height": 3}
+    },
+    {
+      "definition": {
+        "type": "event_timeline",
+        "title": "Timeline",
+        "query": "source:deploy"
+      },
+      "layout": {"x": 3, "y": 22, "width": 3, "height": 3}
+    },
+    {
+      "definition": {
+        "type": "flame_graph",
+        "title": "Flame graph",
+        "query": "service:api env:production"
+      },
+      "layout": {"x": 6, "y": 22, "width": 3, "height": 3}
+    },
+    {
+      "definition": {
+        "type": "cloud_cost_summary",
+        "title": "Cost",
+        "requests": [{"q": "sum:aws.cost.amortized{*}"}]
+      },
+      "layout": {"x": 9, "y": 22, "width": 3, "height": 3}
+    },
+    {
+      "definition": {
+        "type": "topology_map",
+        "title": "Topology",
+        "query": "service:api"
+      },
+      "layout": {"x": 0, "y": 25, "width": 3, "height": 3}
+    },
+    {
+      "definition": {
+        "type": "sankey",
+        "title": "Sankey",
+        "requests": [{"q": "sum:trace.latency{*} by {service}"}]
+      },
+      "layout": {"x": 3, "y": 25, "width": 3, "height": 3}
+    },
+    {
+      "definition": {
+        "type": "iframe",
+        "title": "Status iframe",
+        "url": "https://status.example.com"
+      },
+      "layout": {"x": 6, "y": 25, "width": 3, "height": 3}
+    },
+    {
+      "definition": {
+        "type": "scatterplot",
+        "title": "CPU request scatter",
+        "requests": [
+          {
+            "queries": [
+              {
+                "name": "query1",
+                "query": "sum:kubernetes.cpu.usage.total{host:$host}"
+              },
+              {
+                "name": "query2",
+                "query": "sum:kubernetes.cpu.requests{host:$host}"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "query1 / query2 * 100",
+                "alias": "usage percent"
+              }
+            ]
+          }
+        ]
+      },
+      "layout": {"x": 9, "y": 25, "width": 3, "height": 3}
+    }
+  ]
+}

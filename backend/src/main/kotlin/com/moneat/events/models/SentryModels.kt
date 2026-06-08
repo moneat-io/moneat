@@ -38,7 +38,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import java.time.format.DateTimeParseException
-import java.util.*
+import java.util.UUID
 
 private const val NANOS_PER_SECOND = 1_000_000_000.0
 
@@ -65,7 +65,7 @@ data class SentryEnvelope(
             // Known Sentry item types that indicate an item header line
             val knownItemTypes =
                 setOf(
-                    "event", "transaction", "session", "attachment",
+                    "event", "transaction", "session", "sessions", "attachment",
                     "replay_event", "replay_recording", "replay_video",
                     "feedback", "check_in", "statsd", "metric_buckets",
                     "profile", "client_report", "user_report"
@@ -248,9 +248,20 @@ data class EnvelopeItem(
     val headers: JsonObject? = null
 )
 
+internal fun EnvelopeItem.isFeedbackEventPayload(): Boolean {
+    if (type != "event") return false
+    return payloadEventType() == "feedback"
+}
+
+private fun EnvelopeItem.payloadEventType(): String? =
+    runCatching {
+        Json.parseToJsonElement(payload).jsonObject["type"]?.jsonPrimitive?.contentOrNull
+    }.getOrNull()
+
 @Serializable
 data class SentryEvent(
     @SerialName("event_id") val eventId: String? = null,
+    val type: String? = null,
     @Serializable(with = FlexibleTimestampSerializer::class)
     val timestamp: Double? = null,
     val level: String? = null,
@@ -465,6 +476,44 @@ data class UserInfo(
 )
 
 @Serializable
+data class SentrySession(
+    @SerialName("sid") val sessionId: String? = null,
+    @SerialName("did") val distinctId: String? = null,
+    @Serializable(with = FlexibleTimestampSerializer::class)
+    val started: Double? = null,
+    @Serializable(with = FlexibleTimestampSerializer::class)
+    val timestamp: Double? = null,
+    val duration: Double? = null,
+    val status: String? = null,
+    val errors: Int? = null,
+    val attrs: SentrySessionAttrs? = null
+)
+
+@Serializable
+data class SentrySessionAttrs(
+    val release: String? = null,
+    val environment: String? = null
+)
+
+@Serializable
+data class SentrySessionAggregatesPayload(
+    val aggregates: List<SentrySessionAggregate> = emptyList()
+)
+
+@Serializable
+data class SentrySessionAggregate(
+    @Serializable(with = FlexibleTimestampSerializer::class)
+    val started: Double? = null,
+    val exited: Int = 0,
+    val errored: Int = 0,
+    val crashed: Int = 0,
+    val abnormal: Int = 0,
+    val ok: Int = 0,
+    @SerialName("did") val distinctId: String? = null,
+    val attrs: SentrySessionAttrs? = null
+)
+
+@Serializable
 data class SentryReplayEvent(
     @SerialName("replay_id") val replayId: String? = null,
     @SerialName("segment_id") val segmentId: Int? = null,
@@ -494,6 +543,7 @@ data class SentryFeedback(
     val level: String? = null,
     val environment: String? = null,
     val release: String? = null,
+    @Serializable(with = SentryMessageSerializer::class)
     val message: String? = null,
     val comments: String? = null,
     @SerialName("contact_email") val contactEmail: String? = null,

@@ -36,6 +36,44 @@ export interface DdProcessListResponse {
   totalCount: number
 }
 
+export type InfrastructureResourceKind = 'hosts' | 'containers'
+export type InfrastructureGroupBy =
+  | 'status'
+  | 'host'
+  | 'platform'
+  | 'os'
+  | 'agent'
+  | 'image'
+  | 'tag:env'
+  | 'tag:service'
+  | 'tag:region'
+export type InfrastructureFillBy = 'health' | 'cpu' | 'memory' | 'network' | 'lastSeen'
+export type InfrastructureSizeBy = 'uniform' | 'cpu' | 'memory' | 'network'
+
+export interface InfrastructureMapViewState {
+  resourceKind: InfrastructureResourceKind
+  groupBy: InfrastructureGroupBy
+  fillBy: InfrastructureFillBy
+  sizeBy: InfrastructureSizeBy
+  searchQuery: string
+}
+
+export interface SavedInfrastructureMapView extends InfrastructureMapViewState {
+  id: string
+  name: string
+  createdAt: string
+  updatedAt: string
+  schemaVersion: number
+}
+
+export interface InfrastructureMapSavedViewsResponse {
+  views: SavedInfrastructureMapView[]
+}
+
+export interface SaveInfrastructureMapViewRequest extends InfrastructureMapViewState {
+  name: string
+}
+
 export interface DdContainerResponse {
   id: string
   host: string
@@ -48,6 +86,7 @@ export interface DdContainerResponse {
   memLimit: number
   netRxBytes: number
   netTxBytes: number
+  source?: string | null
   tags: Record<string, string>
   timestamp: string
 }

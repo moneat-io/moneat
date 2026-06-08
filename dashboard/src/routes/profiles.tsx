@@ -8,7 +8,6 @@
 
 import {createFileRoute, Outlet, redirect} from '@tanstack/react-router'
 import {api} from '@/lib/api'
-import {BetaBanner} from '@/components/BetaBanner'
 
 export const Route = createFileRoute('/profiles')({
   beforeLoad: async () => {
@@ -21,9 +20,6 @@ export const Route = createFileRoute('/profiles')({
 
 function ProfilesLayout() {
   return (
-    <>
-      <BetaBanner pageKey="profiles" />
-      <Outlet />
-    </>
+    <Outlet />
   )
 }

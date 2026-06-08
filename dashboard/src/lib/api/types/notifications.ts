@@ -23,6 +23,7 @@ export interface NotificationPreference {
 
 export interface ProjectNotificationPreference extends NotificationPreference {
   projectId: number
+  projectResourceId: string
   projectName: string
 }
 
@@ -35,6 +36,7 @@ export type AlertSource =
   | 'HOST_ALERT'
   | 'HOST_DOWN'
   | 'UPTIME_MONITOR'
+  | 'SYNTHETIC_TEST'
   | 'ERROR_ALERT'
   | 'DASHBOARD_ALERT'
 
