@@ -16,8 +16,9 @@
 
 import type {ComponentType, ReactNode} from 'react'
 import type {LucideIcon} from 'lucide-react'
+import {Link} from '@tanstack/react-router'
 import {cn} from '@/lib/utils'
-import type {Tone} from './overviewMockData'
+import type {Tone} from './overviewData'
 import {toneBgSolid} from './overviewTone'
 
 interface OverviewPanelProps {
@@ -70,17 +71,17 @@ export function OverviewPanel({
 }
 
 /** A compact "View all" style text link used in panel headers. */
-export function PanelLink({children, className}: {children: ReactNode; className?: string}) {
+export function PanelLink({to, children, className}: {to: string; children: ReactNode; className?: string}) {
   return (
-    <button
-      type="button"
+    <Link
+      to={to}
       className={cn(
         'inline-flex items-center gap-0.5 text-[11px] font-medium text-primary hover:underline',
         className,
       )}
     >
       {children}
-    </button>
+    </Link>
   )
 }
 

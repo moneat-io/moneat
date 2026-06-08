@@ -17,7 +17,7 @@
 import type {CustomDashboard, DashboardWidget} from '@/lib/api'
 import {OVERVIEW_WIDGETS} from './overviewWidgetTypes'
 
-/** Reserved id for the (mock) default overview dashboard. */
+/** Reserved id for the local default overview dashboard. */
 export const OVERVIEW_DASHBOARD_ID = 0
 
 interface WidgetSpec {
@@ -43,15 +43,15 @@ const DEFAULT_SPECS: WidgetSpec[] = [
   {type: 'service_health', x: 0, y: 3, w: 8, h: 10},
   {type: 'triage', x: 8, y: 3, w: 4, h: 17},
   {type: 'telemetry', x: 0, y: 13, w: 8, h: 7},
-  {type: 'infra_summary', x: 0, y: 20, w: 3, h: 7},
-  {type: 'uptime_summary', x: 3, y: 20, w: 3, h: 7},
-  {type: 'deploys', x: 6, y: 20, w: 3, h: 7},
-  {type: 'activity', x: 9, y: 20, w: 3, h: 7},
+  {type: 'infra_summary', x: 0, y: 20, w: 3, h: 5},
+  {type: 'uptime_summary', x: 3, y: 20, w: 3, h: 5},
+  {type: 'deploys', x: 6, y: 20, w: 3, h: 5},
+  {type: 'activity', x: 9, y: 20, w: 3, h: 5},
 ]
 
 export function buildDefaultOverviewWidgets(): DashboardWidget[] {
   return DEFAULT_SPECS.map((spec, index) => ({
-    // Negative ids are stable local keys for the mock layout (no backend ids yet).
+    // Negative ids are stable local keys for the default overview layout.
     id: -(index + 1),
     dashboard_id: OVERVIEW_DASHBOARD_ID,
     title: OVERVIEW_WIDGETS[spec.type]?.label ?? spec.type,

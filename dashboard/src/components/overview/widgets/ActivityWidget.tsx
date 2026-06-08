@@ -17,7 +17,7 @@
 import type {ComponentType} from 'react'
 import {Clock, Flag, MessageSquare, PlayCircle, Rocket, Siren, Workflow} from 'lucide-react'
 import {cn} from '@/lib/utils'
-import {useActivity, type ActivityKind} from '../overviewMockData'
+import {useActivity, type ActivityKind} from '../overviewData'
 import {OverviewPanel, PanelLink} from '../OverviewPanel'
 
 const KIND: Record<ActivityKind, {icon: ComponentType<{className?: string}>; cls: string}> = {
@@ -37,7 +37,7 @@ export function ActivityWidget() {
       testId="widget-activity"
       title="Activity"
       icon={Clock}
-      actions={<PanelLink>View log</PanelLink>}
+      actions={<PanelLink to="/events">View log</PanelLink>}
     >
       <div>
         {items.map((it, i) => {

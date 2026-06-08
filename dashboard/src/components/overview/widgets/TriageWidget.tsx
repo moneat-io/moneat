@@ -20,7 +20,7 @@ import {cn} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {StatusDot} from '@/components/ui/status-dot'
 import {levelBadgeVariant} from '@/lib/severity'
-import {useTriage} from '../overviewMockData'
+import {useTriage} from '../overviewData'
 import {OverviewPanel, PanelLink} from '../OverviewPanel'
 
 function borderForLevel(level: 'fatal' | 'error' | 'warn' | 'info'): string {
@@ -95,7 +95,7 @@ export function TriageWidget() {
       title="Needs attention"
       icon={ListChecks}
       count={total}
-      actions={<PanelLink>Acknowledge all</PanelLink>}
+      actions={<PanelLink to="/on-call/incidents">View all</PanelLink>}
       flush
     >
       <TriageSection icon={Siren} label="Active incidents" count={t.incidents.length}>

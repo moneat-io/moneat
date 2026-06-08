@@ -18,7 +18,7 @@ import {ArrowUpRight, Server} from 'lucide-react'
 import {cn} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {StatusDot} from '@/components/ui/status-dot'
-import {useServiceHealth, type ServiceRow, type Tone} from '../overviewMockData'
+import {useServiceHealth, type ServiceRow, type Tone} from '../overviewData'
 import {MiniBar, OverviewPanel, PanelLink, Sparkline} from '../OverviewPanel'
 import {toneDot, toneText} from '../overviewTone'
 
@@ -122,7 +122,7 @@ export function ServiceHealthWidget() {
               {degraded} degraded
             </Badge>
           )}
-          <PanelLink>
+          <PanelLink to="/services">
             View all
             <ArrowUpRight className="h-3 w-3" />
           </PanelLink>

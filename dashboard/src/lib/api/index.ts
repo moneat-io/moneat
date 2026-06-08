@@ -51,6 +51,7 @@ import { featureFlagsMethods } from './modules/feature-flags'
 import { mcpMethods } from './modules/mcp'
 import { securityMethods } from './modules/security'
 import { rbacMethods } from './modules/rbac'
+import { overviewMethods } from './modules/overview'
 
 const core = createApiClientCore()
 
@@ -92,6 +93,7 @@ export const api = {
   ...mcpMethods(core),
   ...securityMethods(core),
   ...rbacMethods(core),
+  ...overviewMethods(core),
 }
 
 export { formatErrorForLogging } from './utils'

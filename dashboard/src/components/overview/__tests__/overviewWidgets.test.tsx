@@ -14,8 +14,11 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {describe, expect, it} from 'vitest'
+import {describe, expect, it, vi} from 'vitest'
 import {fireEvent, render, screen} from '@testing-library/react'
+import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
+import type {ReactElement, ReactNode} from 'react'
+import {OverviewDataProvider} from '../OverviewDataProvider'
 import {SystemStatusWidget} from '../widgets/SystemStatusWidget'
 import {KpiWidget} from '../widgets/KpiWidget'
 import {ServiceHealthWidget} from '../widgets/ServiceHealthWidget'
@@ -25,10 +28,24 @@ import {InfraSummaryWidget} from '../widgets/InfraSummaryWidget'
 import {UptimeSummaryWidget} from '../widgets/UptimeSummaryWidget'
 import {DeploysWidget} from '../widgets/DeploysWidget'
 import {ActivityWidget} from '../widgets/ActivityWidget'
+import {overviewTestData} from './overviewTestData'
+
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({children, to}: {children: ReactNode; to?: string}) => <a href={to}>{children}</a>,
+}))
+
+function renderWithOverview(ui: ReactElement) {
+  const queryClient = new QueryClient({defaultOptions: {queries: {retry: false}}})
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <OverviewDataProvider data={overviewTestData}>{ui}</OverviewDataProvider>
+    </QueryClientProvider>,
+  )
+}
 
 describe('SystemStatusWidget', () => {
   it('renders the triage line and actions', () => {
-    render(<SystemStatusWidget />)
+    renderWithOverview(<SystemStatusWidget />)
     expect(screen.getByTestId('widget-system_status')).toBeInTheDocument()
     expect(screen.getByText('Action needed')).toBeInTheDocument()
     expect(screen.getByText('View incident')).toBeInTheDocument()
@@ -37,21 +54,21 @@ describe('SystemStatusWidget', () => {
 
 describe('KpiWidget', () => {
   it('renders the first KPI by default', () => {
-    render(<KpiWidget />)
+    renderWithOverview(<KpiWidget />)
     expect(screen.getByTestId('widget-kpi')).toBeInTheDocument()
     expect(screen.getByText('Errors · 24h')).toBeInTheDocument()
     expect(screen.getByText('48.3k')).toBeInTheDocument()
   })
   it('selects a KPI by display_config.kpiId', () => {
-    render(<KpiWidget displayConfig={{kpiId: 'latency'}} />)
+    renderWithOverview(<KpiWidget displayConfig={{kpiId: 'latency'}} />)
     expect(screen.getByText('p95 latency')).toBeInTheDocument()
     expect(screen.getByText('412')).toBeInTheDocument()
   })
 })
 
 describe('ServiceHealthWidget', () => {
-  it('renders services from mock data', () => {
-    render(<ServiceHealthWidget />)
+  it('renders service rows', () => {
+    renderWithOverview(<ServiceHealthWidget />)
     expect(screen.getByTestId('widget-service_health')).toBeInTheDocument()
     expect(screen.getByText('checkout-api')).toBeInTheDocument()
     expect(screen.getByText('View all')).toBeInTheDocument()
@@ -60,7 +77,7 @@ describe('ServiceHealthWidget', () => {
 
 describe('TelemetryWidget', () => {
   it('switches series tabs', () => {
-    render(<TelemetryWidget />)
+    renderWithOverview(<TelemetryWidget />)
     expect(screen.getByTestId('widget-telemetry')).toBeInTheDocument()
     expect(screen.getByText('error rate')).toBeInTheDocument()
     fireEvent.click(screen.getByText('Logs'))
@@ -70,7 +87,7 @@ describe('TelemetryWidget', () => {
 
 describe('TriageWidget', () => {
   it('renders the needs-attention sections', () => {
-    render(<TriageWidget />)
+    renderWithOverview(<TriageWidget />)
     expect(screen.getByTestId('widget-triage')).toBeInTheDocument()
     expect(screen.getByText('Needs attention')).toBeInTheDocument()
     expect(screen.getByText('Elevated 5xx on checkout-api')).toBeInTheDocument()
@@ -79,7 +96,7 @@ describe('TriageWidget', () => {
 
 describe('InfraSummaryWidget', () => {
   it('renders resource gauges', () => {
-    render(<InfraSummaryWidget />)
+    renderWithOverview(<InfraSummaryWidget />)
     expect(screen.getByTestId('widget-infra_summary')).toBeInTheDocument()
     expect(screen.getByText('Infrastructure')).toBeInTheDocument()
     expect(screen.getByText('82%')).toBeInTheDocument()
@@ -88,7 +105,7 @@ describe('InfraSummaryWidget', () => {
 
 describe('UptimeSummaryWidget', () => {
   it('renders monitor heartbeats', () => {
-    render(<UptimeSummaryWidget />)
+    renderWithOverview(<UptimeSummaryWidget />)
     expect(screen.getByTestId('widget-uptime_summary')).toBeInTheDocument()
     expect(screen.getByText('checkout flow')).toBeInTheDocument()
     expect(screen.getByText('DOWN')).toBeInTheDocument()
@@ -97,7 +114,7 @@ describe('UptimeSummaryWidget', () => {
 
 describe('DeploysWidget', () => {
   it('renders recent deploys', () => {
-    render(<DeploysWidget />)
+    renderWithOverview(<DeploysWidget />)
     expect(screen.getByTestId('widget-deploys')).toBeInTheDocument()
     expect(screen.getByText('v2.4.1')).toBeInTheDocument()
     expect(screen.getByText('regressing')).toBeInTheDocument()
@@ -106,7 +123,7 @@ describe('DeploysWidget', () => {
 
 describe('ActivityWidget', () => {
   it('renders the activity feed', () => {
-    render(<ActivityWidget />)
+    renderWithOverview(<ActivityWidget />)
     expect(screen.getByTestId('widget-activity')).toBeInTheDocument()
     expect(screen.getByText('Alert 5xx>2% triggered INC-204')).toBeInTheDocument()
   })

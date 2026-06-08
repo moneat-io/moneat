@@ -17,7 +17,7 @@
 import {Rocket} from 'lucide-react'
 import {Badge, type BadgeProps} from '@/components/ui/badge'
 import {StatusDot} from '@/components/ui/status-dot'
-import {useDeploys, type Tone} from '../overviewMockData'
+import {useDeploys, type Tone} from '../overviewData'
 import {OverviewPanel, PanelLink} from '../OverviewPanel'
 import {toneDot} from '../overviewTone'
 
@@ -43,7 +43,7 @@ export function DeploysWidget() {
       title="Deploys"
       icon={Rocket}
       count="last 24h"
-      actions={<PanelLink>Releases</PanelLink>}
+      actions={<PanelLink to="/releases">Releases</PanelLink>}
     >
       <div>
         {rows.map((r, i) => (

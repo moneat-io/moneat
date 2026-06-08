@@ -16,9 +16,19 @@
 
 import type {ReactNode} from 'react'
 import {fireEvent, render, screen} from '@testing-library/react'
-import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest'
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest'
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
+import {api} from '@/lib/api'
 import {OverviewDashboard} from '../OverviewDashboard'
+import {overviewTestData} from './overviewTestData'
+
+const LAYOUT_STORAGE_KEY = 'moneat.overview.layout.v3'
+
+vi.mock('@/lib/api', () => ({
+  api: {
+    getOverview: vi.fn(),
+  },
+}))
 
 vi.mock('react-grid-layout/legacy', () => ({
   Responsive: ({children, className}: {children: ReactNode; className?: string}) => (
@@ -26,6 +36,10 @@ vi.mock('react-grid-layout/legacy', () => ({
       {children}
     </div>
   ),
+}))
+
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({children, to}: {children: ReactNode; to?: string}) => <a href={to}>{children}</a>,
 }))
 
 beforeAll(() => {
@@ -47,22 +61,27 @@ function renderDashboard() {
 
 describe('OverviewDashboard', () => {
   beforeEach(() => {
-    localStorage.clear()
+    globalThis.localStorage.clear()
+    vi.mocked(api.getOverview).mockResolvedValue(overviewTestData)
   })
 
-  it('renders the header and all default widgets', () => {
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('renders the header and all default widgets', async () => {
     renderDashboard()
 
     expect(screen.getByText('Overview')).toBeInTheDocument()
-    expect(screen.getByText('Customize')).toBeInTheDocument()
-    expect(screen.getByText('Action needed')).toBeInTheDocument()
+    expect(screen.getByRole('button', {name: /Customize overview/})).toBeInTheDocument()
+    expect(await screen.findByText('Action needed')).toBeInTheDocument()
     expect(screen.getByText('Service health')).toBeInTheDocument()
   })
 
   it('enters edit mode and shows edit controls', () => {
     renderDashboard()
 
-    fireEvent.click(screen.getByText('Customize'))
+    fireEvent.click(screen.getByRole('button', {name: /Customize overview/}))
     expect(screen.getByText('Done')).toBeInTheDocument()
     expect(screen.getByText('Reset')).toBeInTheDocument()
     expect(screen.getByText('Add widget')).toBeInTheDocument()
@@ -71,16 +90,16 @@ describe('OverviewDashboard', () => {
   it('opens the add widget dialog', () => {
     renderDashboard()
 
-    fireEvent.click(screen.getByText('Customize'))
+    fireEvent.click(screen.getByRole('button', {name: /Customize overview/}))
     fireEvent.click(screen.getByRole('button', {name: /Add widget/}))
     expect(screen.getByText('Choose a widget to add to your overview.')).toBeInTheDocument()
   })
 
-  it('deletes a widget and resets to defaults', () => {
+  it('deletes a widget and resets to defaults', async () => {
     renderDashboard()
 
-    fireEvent.click(screen.getByText('Customize'))
-    expect(screen.getByText('Action needed')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', {name: /Customize overview/}))
+    expect(await screen.findByText('Action needed')).toBeInTheDocument()
 
     fireEvent.click(screen.getByText('Reset'))
     expect(screen.getByText('Action needed')).toBeInTheDocument()
@@ -89,21 +108,21 @@ describe('OverviewDashboard', () => {
   it('persists layout to localStorage', () => {
     renderDashboard()
 
-    fireEvent.click(screen.getByText('Customize'))
+    fireEvent.click(screen.getByRole('button', {name: /Customize overview/}))
     fireEvent.click(screen.getByText('Reset'))
 
-    const stored = localStorage.getItem('moneat.overview.layout.v1')
+    const stored = globalThis.localStorage.getItem(LAYOUT_STORAGE_KEY)
     expect(stored).not.toBeNull()
     const parsed = JSON.parse(stored!)
     expect(parsed).toHaveLength(14)
   })
 
-  it('loads layout from localStorage on mount', () => {
+  it('loads layout from localStorage on mount', async () => {
     const singleWidget = [{
       id: -1,
       dashboard_id: 0,
-      title: 'System status',
-      widget_type: 'system_status',
+      title: 'Activity',
+      widget_type: 'activity',
       grid_x: 0,
       grid_y: 0,
       grid_w: 12,
@@ -112,10 +131,11 @@ describe('OverviewDashboard', () => {
       display_config: {},
       sort_order: 0,
     }]
-    localStorage.setItem('moneat.overview.layout.v1', JSON.stringify(singleWidget))
+    globalThis.localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(singleWidget))
 
     renderDashboard()
 
-    expect(screen.getByText('Action needed')).toBeInTheDocument()
+    expect(await screen.findByTestId('widget-activity')).toBeInTheDocument()
+    expect(screen.queryByText('Service health')).not.toBeInTheDocument()
   })
 })

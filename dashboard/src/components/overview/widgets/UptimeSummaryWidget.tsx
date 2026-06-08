@@ -17,7 +17,7 @@
 import {Activity, Zap} from 'lucide-react'
 import {cn} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
-import {useUptimeSummary} from '../overviewMockData'
+import {useUptimeSummary} from '../overviewData'
 import {OverviewPanel, PanelLink} from '../OverviewPanel'
 
 function barClass(state: 'up' | 'warn' | 'down'): string {
@@ -40,7 +40,7 @@ export function UptimeSummaryWidget() {
       title="Uptime & Synthetics"
       icon={Activity}
       count={d.upLabel}
-      actions={<PanelLink>All</PanelLink>}
+      actions={<PanelLink to="/uptime">All</PanelLink>}
     >
       <div className="space-y-1">
         {d.monitors.map((m) => (

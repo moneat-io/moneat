@@ -23,7 +23,7 @@ import {buildDefaultOverviewWidgets, OVERVIEW_DASHBOARD_ID} from './defaultOverv
 import {OVERVIEW_WIDGETS} from './overviewWidgetTypes'
 import {OverviewDataProvider} from './OverviewDataProvider'
 
-const STORAGE_KEY = 'moneat.overview.layout.v2'
+const STORAGE_KEY = 'moneat.overview.layout.v3'
 
 function loadWidgets(): DashboardWidget[] {
   try {

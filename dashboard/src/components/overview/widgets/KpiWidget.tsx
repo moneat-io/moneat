@@ -17,7 +17,7 @@
 import {ArrowDown, ArrowUp} from 'lucide-react'
 import {cn} from '@/lib/utils'
 import {StatusDot} from '@/components/ui/status-dot'
-import {useKpis} from '../overviewMockData'
+import {useKpis} from '../overviewData'
 import {Sparkline} from '../OverviewPanel'
 import {toneDot, toneText} from '../overviewTone'
 

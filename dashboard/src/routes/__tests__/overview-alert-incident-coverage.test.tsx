@@ -44,6 +44,7 @@ const {
     getOnCallIncidentTimeline: vi.fn(),
     resolveOnCallIncident: vi.fn(),
     addOnCallIncidentNote: vi.fn(),
+    getOverview: vi.fn(),
   },
   mockEnterpriseFeatures: {
     current: {enterprise: true, modules: ['oncall'], selfHost: false},
@@ -124,6 +125,8 @@ import {Route as AlertsRoute} from '../on-call.alerts'
 import {Route as IncidentDetailRoute} from '../on-call.incidents.$incidentId'
 import {Route as IncidentsRoute} from '../on-call.incidents'
 import {Route as OnCallOverviewRoute} from '../on-call.index'
+import {overviewTestData} from '../../components/overview/__tests__/overviewTestData'
+import type {OverviewResponse} from '@/lib/api/types'
 
 const project = {
   id: 1,
@@ -336,6 +339,30 @@ const feedback = {
   platform: 'javascript',
 }
 
+const emptyOverviewData: OverviewResponse = {
+  systemStatus: {
+    state: 'Healthy',
+    severity: 'good',
+    counts: {incidents: 0, alerts: 0, degraded: 0, hostsOffline: 0},
+    ai: {summary: 'No active incidents, firing alerts, degraded services, or offline hosts.'},
+  },
+  kpis: [],
+  serviceHealth: [],
+  telemetry: {
+    errors: [],
+    latency: [],
+    throughput: [],
+    logs: [],
+    deployAtPct: 0,
+    deployLabel: 'No deploys',
+  },
+  triage: {incidents: [], alerts: [], issues: [], security: []},
+  infra: {gauges: [], containers: 0, pods: 0, upLabel: '0/0 up'},
+  uptime: {monitors: [], upLabel: '0/0 up', statusPages: '0 status pages'},
+  deploys: [],
+  activity: [],
+}
+
 function clickLastText(text: string) {
   const matches = screen.getAllByText(text)
   fireEvent.click(matches[matches.length - 1])
@@ -414,14 +441,15 @@ describe('overview alert and incident dashboard', () => {
     mockApi.getOnCallIncidentTimeline.mockResolvedValue(declaredIncidentTimeline)
     mockApi.resolveOnCallIncident.mockResolvedValue({...declaredIncident, status: 'RESOLVED'})
     mockApi.addOnCallIncidentNote.mockResolvedValue(declaredIncidentTimeline[0])
+    mockApi.getOverview.mockResolvedValue(overviewTestData)
   })
 
   it('renders the overview dashboard with widget content', async () => {
     renderRoute(OverviewRoute)
 
     expect(await screen.findByText('Overview')).toBeInTheDocument()
-    expect(screen.getByText('Action needed')).toBeInTheDocument()
-    expect(screen.getByText('Customize')).toBeInTheDocument()
+    expect(await screen.findByText('Action needed')).toBeInTheDocument()
+    expect(screen.getByRole('button', {name: /Customize overview/})).toBeInTheDocument()
   })
 
   it('renders the on-call overview with alert priorities', async () => {
@@ -438,22 +466,20 @@ describe('overview alert and incident dashboard', () => {
   })
 
   it('renders the overview dashboard regardless of empty API state', async () => {
-    mockApi.getOrganizationIssues.mockResolvedValue([])
-    mockApi.getIncidents.mockResolvedValue([])
-    mockApi.getUptimeMonitors.mockResolvedValue([])
-    mockApi.getMonitorHosts.mockResolvedValue([])
+    mockApi.getOverview.mockResolvedValue(emptyOverviewData)
 
     renderRoute(OverviewRoute)
 
     expect(await screen.findByText('Overview')).toBeInTheDocument()
-    expect(screen.getByText('Action needed')).toBeInTheDocument()
+    await waitFor(() => expect(mockApi.getOverview).toHaveBeenCalled())
+    expect(screen.getByText('Healthy')).toBeInTheDocument()
   })
 
-  it('renders service health and triage content from mock data', async () => {
+  it('renders service health and triage content from overview API data', async () => {
     renderRoute(OverviewRoute)
 
     expect(await screen.findByText('Overview')).toBeInTheDocument()
-    expect(screen.getByText('Elevated 5xx on checkout-api')).toBeInTheDocument()
+    expect(await screen.findByText('Elevated 5xx on checkout-api')).toBeInTheDocument()
     expect(screen.getByText('Service health')).toBeInTheDocument()
   })
 
@@ -557,7 +583,7 @@ describe('overview alert and incident dashboard', () => {
     renderRoute(OverviewRoute)
 
     expect(await screen.findByText('Overview')).toBeInTheDocument()
-    expect(screen.getByText('Action needed')).toBeInTheDocument()
+    expect(await screen.findByText('Action needed')).toBeInTheDocument()
   })
 
   it('renders the alert list route with P-priority alerts', async () => {

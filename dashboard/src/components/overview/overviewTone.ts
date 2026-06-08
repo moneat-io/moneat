@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import type {StatusTone} from '@/components/ui/status-dot'
-import type {Tone} from './overviewMockData'
+import type {Tone} from './overviewData'
 
 // Tone -> design-system class maps. The mockup's --scale-good/warn/bad collapse
 // onto the app's shared status language (success / warning / danger / neutral).

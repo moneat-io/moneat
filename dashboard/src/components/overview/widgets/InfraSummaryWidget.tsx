@@ -17,7 +17,7 @@
 import {Boxes} from 'lucide-react'
 import {Badge} from '@/components/ui/badge'
 import {StatusDot} from '@/components/ui/status-dot'
-import {useInfraSummary} from '../overviewMockData'
+import {useInfraSummary} from '../overviewData'
 import {MiniBar, OverviewPanel, PanelLink} from '../OverviewPanel'
 
 /** Infrastructure resource gauges + container/pod counts. */
@@ -29,7 +29,7 @@ export function InfraSummaryWidget() {
       title="Infrastructure"
       icon={Boxes}
       count={d.upLabel}
-      actions={<PanelLink>Map</PanelLink>}
+      actions={<PanelLink to="/monitoring">Map</PanelLink>}
     >
       <div className="space-y-1.5">
         {d.gauges.map((g) => (

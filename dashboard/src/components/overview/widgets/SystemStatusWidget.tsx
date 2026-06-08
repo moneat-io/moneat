@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {AlertTriangle} from 'lucide-react'
+import {AlertTriangle, CheckCircle} from 'lucide-react'
 import {cn} from '@/lib/utils'
 import {Button} from '@/components/ui/button'
-import {useSystemStatus} from '../overviewMockData'
+import {useSystemStatus} from '../overviewData'
 import {toneBgSolid, toneBorder, toneSoftBg, toneText} from '../overviewTone'
 
 /** Hero status bar — the triage line + AI summary at the top of the overview. */
@@ -39,7 +39,7 @@ export function SystemStatusWidget() {
             toneBorder[sev],
           )}
         >
-          <AlertTriangle className="h-3.5 w-3.5" />
+          {sev === 'good' ? <CheckCircle className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <div className="flex flex-wrap items-center gap-2">
@@ -63,9 +63,11 @@ export function SystemStatusWidget() {
             </span>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <Button size="sm" className="h-6 px-2 text-[11px]">View incident</Button>
-        </div>
+        {sev !== 'good' && (
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Button size="sm" className="h-6 px-2 text-[11px]">View incident</Button>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -26,7 +26,7 @@ import {
 } from 'recharts'
 import {LineChart as LineChartIcon} from 'lucide-react'
 import {cn} from '@/lib/utils'
-import {useTelemetry, type TelemetrySeriesKey} from '../overviewMockData'
+import {useTelemetry, type TelemetrySeriesKey} from '../overviewData'
 import {OverviewPanel} from '../OverviewPanel'
 
 interface TabDef {
