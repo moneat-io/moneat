@@ -66,6 +66,7 @@ import kotlin.time.Clock
 import com.moneat.utils.suspendRunCatching
 
 private val logger = LoggerFactory.getLogger("IntegrationRoutes")
+private const val NO_ORGANIZATION_FOUND = "No organization found"
 
 @Serializable
 data class OrganizationIntegrationResponse(
@@ -230,7 +231,7 @@ private fun validateAndDecodeState(state: String): Pair<Int, Int>? {
 private suspend fun ApplicationCall.integrationOrgIdOrRespond(): Int? {
     val orgId = principal<JWTPrincipal>()?.currentOrgIdOrNull()
     if (orgId == null) {
-        respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+        respond(HttpStatusCode.NotFound, MessageResponse(NO_ORGANIZATION_FOUND))
     }
     return orgId
 }
@@ -256,7 +257,7 @@ fun Route.integrationRoutes() {
                 val organizationId = principal.currentOrgIdOrNull()
 
                 if (organizationId == null) {
-                    return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+                    return@get call.respond(HttpStatusCode.NotFound, MessageResponse(NO_ORGANIZATION_FOUND))
                 }
 
                 val integrations =
@@ -294,7 +295,7 @@ fun Route.integrationRoutes() {
                 val organizationId = principal.currentOrgIdOrNull()
 
                 if (organizationId == null) {
-                    return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+                    return@get call.respond(HttpStatusCode.NotFound, MessageResponse(NO_ORGANIZATION_FOUND))
                 }
 
                 entitlementService.unavailableFeatureMessage(
@@ -469,7 +470,7 @@ fun Route.integrationRoutes() {
                 val organizationId = principal.currentOrgIdOrNull()
 
                 if (organizationId == null) {
-                    return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+                    return@get call.respond(HttpStatusCode.NotFound, MessageResponse(NO_ORGANIZATION_FOUND))
                 }
 
                 entitlementService.unavailableFeatureMessage(

@@ -41,6 +41,8 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import org.koin.core.context.GlobalContext
 
+private const val INVALID_TOKEN_ERROR = "Invalid token"
+
 fun Route.orgManagementRoutes(
     membershipService: OrgMembershipService = GlobalContext.get().get(),
     invitationService: OrgInvitationService = GlobalContext.get().get(),
@@ -53,7 +55,7 @@ fun Route.orgManagementRoutes(
                 val userId = principal.payload.getClaim("userId").asInt()
                 val orgId = principal.currentOrgIdOrNull() ?: return@get call.respond(
                     HttpStatusCode.Unauthorized,
-                    ErrorResponse("Invalid token")
+                    ErrorResponse(INVALID_TOKEN_ERROR)
                 )
 
                 membershipService.requireRole(orgId, userId, OrgRole.MEMBER)
@@ -70,7 +72,7 @@ fun Route.orgManagementRoutes(
                 val requestingUserId = principal.payload.getClaim("userId").asInt()
                 val orgId = principal.currentOrgIdOrNull() ?: return@put call.respond(
                     HttpStatusCode.Unauthorized,
-                    ErrorResponse("Invalid token")
+                    ErrorResponse(INVALID_TOKEN_ERROR)
                 )
                 val targetUserId =
                     call.parameters["userId"]?.toIntOrNull()
@@ -88,7 +90,7 @@ fun Route.orgManagementRoutes(
                 val requestingUserId = principal.payload.getClaim("userId").asInt()
                 val orgId = principal.currentOrgIdOrNull() ?: return@delete call.respond(
                     HttpStatusCode.Unauthorized,
-                    ErrorResponse("Invalid token")
+                    ErrorResponse(INVALID_TOKEN_ERROR)
                 )
                 val targetUserId =
                     call.parameters["userId"]?.toIntOrNull()
@@ -104,7 +106,7 @@ fun Route.orgManagementRoutes(
                 val userId = principal.payload.getClaim("userId").asInt()
                 val orgId = principal.currentOrgIdOrNull() ?: return@post call.respond(
                     HttpStatusCode.Unauthorized,
-                    ErrorResponse("Invalid token")
+                    ErrorResponse(INVALID_TOKEN_ERROR)
                 )
 
                 membershipService.requireRole(orgId, userId, OrgRole.ADMIN)
@@ -120,7 +122,7 @@ fun Route.orgManagementRoutes(
                 val userId = principal.payload.getClaim("userId").asInt()
                 val orgId = principal.currentOrgIdOrNull() ?: return@post call.respond(
                     HttpStatusCode.Unauthorized,
-                    ErrorResponse("Invalid token")
+                    ErrorResponse(INVALID_TOKEN_ERROR)
                 )
 
                 val request = call.receive<BulkInviteRequest>()
@@ -135,7 +137,7 @@ fun Route.orgManagementRoutes(
                 val userId = principal.payload.getClaim("userId").asInt()
                 val orgId = principal.currentOrgIdOrNull() ?: return@get call.respond(
                     HttpStatusCode.Unauthorized,
-                    ErrorResponse("Invalid token")
+                    ErrorResponse(INVALID_TOKEN_ERROR)
                 )
 
                 membershipService.requireRole(orgId, userId, OrgRole.ADMIN)
