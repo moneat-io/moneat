@@ -56,7 +56,7 @@ class CloudSourceRoutesTest {
         const val AWS_ACCOUNT_ID = "123456789012"
         const val AWS_ROLE_NAME = "MoneatIntegrationRole"
         const val EXTERNAL_ID = "mnt-ext-test"
-        const val AWS_PRINCIPAL_ARN = "arn:aws:iam::499432741914:root"
+        const val AWS_PRINCIPAL_ARN = "arn:aws:iam::499432741914:role/MoneatCloudSource"
         const val TRUST_POLICY_LABEL = "Trust policy"
         const val SNIPPET_LANGUAGE_JSON = "json"
         const val STATUS_HEALTHY = "healthy"

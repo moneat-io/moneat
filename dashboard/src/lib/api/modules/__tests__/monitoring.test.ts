@@ -475,7 +475,7 @@ describe('Monitoring API module', () => {
           return HttpResponse.json({
             provider: 'aws',
             externalId: 'mnt-ext-test',
-            principal: 'arn:aws:iam::499432741914:root',
+            principal: 'arn:aws:iam::499432741914:role/MoneatCloudSource',
             snippetLabel: 'Trust policy',
             snippetLanguage: 'json',
             snippet: '{}',

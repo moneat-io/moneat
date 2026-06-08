@@ -60,6 +60,7 @@ private const val CLOUD_EXTERNAL_ID_HASH_LENGTH = 24
 private const val HEX_BYTE_MASK = 0xff
 private const val CLICKHOUSE_ERROR_PREVIEW_LENGTH = 300
 private const val CLOUD_SOURCE_DISPLAY_NAME_MAX_LENGTH = 120
+private const val AWS_PRINCIPAL_PLACEHOLDER = "arn:aws:iam::<moneat-account-id>:role/<moneat-role-name>"
 
 private val cloudSourceSnippetJson = Json {
     prettyPrint = true
@@ -435,7 +436,7 @@ class CloudSourceService(
     }
 
     private fun awsPreview(externalId: String): CloudSourceSetupPreview {
-        val principal = identityConfig.awsPrincipalArn ?: "arn:aws:iam::<moneat-account-id>:root"
+        val principal = identityConfig.awsPrincipalArn ?: AWS_PRINCIPAL_PLACEHOLDER
         val externalIdConditionKey = listOf("sts", "ExternalId").joinToString(":")
         val snippet = cloudSourceSnippetJson.encodeToString(
             buildJsonObject {

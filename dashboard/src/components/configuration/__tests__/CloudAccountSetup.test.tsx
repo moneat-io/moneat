@@ -30,7 +30,7 @@ describe('CloudAccountSetup', () => {
     mockApi.getCloudSourceSetupPreview.mockResolvedValue({
       provider: 'aws',
       externalId: 'mnt-ext-test',
-      principal: 'arn:aws:iam::499432741914:root',
+      principal: 'arn:aws:iam::499432741914:role/MoneatCloudSource',
       snippetLabel: 'Trust policy',
       snippetLanguage: 'json',
       snippet: `{"Condition":{"StringEquals":{"${EXTERNAL_ID_CONDITION_KEY}":"mnt-ext-test"}}}`,
@@ -58,7 +58,7 @@ describe('CloudAccountSetup', () => {
     renderWithQueryClient(<CloudAccountSetup />)
 
     expect(await screen.findByText('mnt-ext-test')).toBeInTheDocument()
-    expect(screen.getByText('arn:aws:iam::499432741914:root')).toBeInTheDocument()
+    expect(screen.getByText('arn:aws:iam::499432741914:role/MoneatCloudSource')).toBeInTheDocument()
     expect(screen.queryByText('Logs')).not.toBeInTheDocument()
   })
 

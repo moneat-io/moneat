@@ -55,7 +55,7 @@ class CloudSourceServiceTest {
         const val AZURE_PROVIDER = "azure"
         const val AWS_ACCOUNT_ID = "123456789012"
         const val AWS_ROLE_NAME = "MoneatIntegrationRole"
-        const val AWS_PRINCIPAL_ARN = "arn:aws:iam::499432741914:root"
+        const val AWS_PRINCIPAL_ARN = "arn:aws:iam::499432741914:role/MoneatCloudSource"
         const val GCP_PROJECT_ID = "moneat-prod"
         const val GCP_SERVICE_ACCOUNT = "moneat-cloud@moneat.iam.gserviceaccount.com"
         const val AZURE_TENANT_ID = "00000000-0000-0000-0000-000000000002"
@@ -135,9 +135,12 @@ class CloudSourceServiceTest {
             identityConfig = CloudSourceIdentityConfig()
         )
 
+        val aws = fallbackService.setupPreview(organizationId = TEST_ORGANIZATION_ID, provider = AWS_PROVIDER)
         val gcp = fallbackService.setupPreview(organizationId = TEST_ORGANIZATION_ID, provider = " GCP ")
         val azure = fallbackService.setupPreview(organizationId = TEST_ORGANIZATION_ID, provider = AZURE_PROVIDER)
 
+        assertEquals(AWS_PROVIDER, aws.provider)
+        assertTrue(aws.principal.contains(":role/"))
         assertEquals(GCP_PROVIDER, gcp.provider)
         assertTrue(gcp.principal.contains("<moneat-project>"))
         assertTrue(gcp.snippet.contains("gcloud projects add-iam-policy-binding"))
