@@ -23,6 +23,7 @@ import com.moneat.config.EnvConfig
 import com.moneat.config.RedisConfig
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.OrgInvitations
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.SsoConfigurations
 import com.moneat.shared.models.UserSsoLinks
@@ -56,6 +57,8 @@ import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.greater
+import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -66,6 +69,7 @@ import java.security.GeneralSecurityException
 import java.security.SecureRandom
 import java.util.Base64
 import java.util.Date
+import java.util.Hashtable
 import java.util.concurrent.ConcurrentHashMap
 import javax.crypto.Cipher
 import javax.crypto.Mac
@@ -73,6 +77,8 @@ import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
+import javax.naming.NamingException
+import javax.naming.directory.InitialDirContext
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Clock
 
@@ -85,6 +91,42 @@ private const val OIDC_DISCOVERY_ERROR =
     "OIDC discovery failed. Use the provider issuer URL from its openid-configuration document. " +
         "For Authentik this looks like https://auth.example.com/application/o/<application-slug>/, " +
         "not just the Authentik domain."
+private const val SSO_DNS_RECORD_PREFIX = "_moneat-sso"
+private const val SSO_DNS_RECORD_VALUE_PREFIX = "moneat-sso="
+private const val JNDI_DNS_FACTORY_KEY = "java.naming.factory.initial"
+private const val JNDI_DNS_FACTORY_VALUE = "com.sun.jndi.dns.DnsContextFactory"
+private const val JNDI_DNS_TIMEOUT_KEY = "com.sun.jndi.dns.timeout.initial"
+private const val JNDI_DNS_TIMEOUT_MS = "2000"
+private const val JNDI_DNS_RETRIES_KEY = "com.sun.jndi.dns.timeout.retries"
+private const val JNDI_DNS_RETRIES = "1"
+private const val DOMAIN_VERIFICATION_TOKEN_BYTES = 32
+private const val MAX_DOMAIN_LENGTH = 253
+private const val MAX_DOMAIN_LABEL_LENGTH = 63
+private val IPV4_DOMAIN_PATTERN = Regex("""^\d{1,3}(\.\d{1,3}){3}$""")
+private val DOMAIN_LABEL_PATTERN = Regex("""^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$""")
+private val PUBLIC_EMAIL_DOMAINS =
+    setOf(
+        "gmail.com",
+        "googlemail.com",
+        "outlook.com",
+        "hotmail.com",
+        "live.com",
+        "msn.com",
+        "yahoo.com",
+        "icloud.com",
+        "me.com",
+        "mac.com",
+        "proton.me",
+        "protonmail.com",
+        "aol.com",
+        "gmx.com",
+        "mail.com",
+        "zoho.com",
+        "yandex.com",
+        "qq.com",
+        "163.com",
+        "126.com",
+    )
 
 @Serializable
 data class SsoStateData(
@@ -142,13 +184,7 @@ open class SsoService {
             transaction {
                 val ssoConfig =
                     if (email != null) {
-                        val domain = normalizeDomain(email.substringAfter("@"))
-                        SsoConfigurations
-                            .selectAll()
-                            .where {
-                                (SsoConfigurations.emailDomain eq domain) and
-                                    (SsoConfigurations.isEnabled eq true)
-                            }.firstOrNull()
+                        findEnabledVerifiedConfigForDomain(domainFromEmail(email))
                     } else {
                         val org =
                             Organizations
@@ -290,6 +326,10 @@ open class SsoService {
                 ?: throw IllegalArgumentException(
                     "No email found in ID token"
                 )
+        val emailVerified = idToken.jwtClaimsSet.getBooleanClaim("email_verified") == true
+        require(emailVerified) {
+            "OIDC email claim is not verified"
+        }
         val name = idToken.jwtClaimsSet.getStringClaim("name")
             ?: email.substringBefore("@")
         val externalId = idToken.jwtClaimsSet.subject
@@ -314,6 +354,11 @@ open class SsoService {
         val clientSecret: String,
         val ssoConfigId: Int,
         val organizationId: Int,
+    )
+
+    private data class DomainVerificationPending(
+        val domain: String,
+        val token: String,
     )
 
     private sealed class PendingSsoInit {
@@ -348,12 +393,20 @@ open class SsoService {
             throw SsoForbiddenException("Only organization owners can configure SSO")
         }
         validateSsoConfigRequest(providerType, request)
+        val normalizedEmailDomain = request.emailDomain?.let { validateAndNormalizeEmailDomain(it) }
 
         return transaction {
             val spEntityId = "$baseUrl/auth/sso/saml/metadata"
             val encryptedSecret = request.oidcClientSecret?.let { encryptSecret(it) }
             val effectiveRequireSso = request.requireSso && FeatureRegistry.hasModule("SAML")
-            persistSsoConfig(organizationId, request, spEntityId, encryptedSecret, effectiveRequireSso)
+            persistSsoConfig(
+                organizationId = organizationId,
+                request = request,
+                normalizedEmailDomain = normalizedEmailDomain,
+                spEntityId = spEntityId,
+                encryptedSecret = encryptedSecret,
+                effectiveRequireSso = effectiveRequireSso,
+            )
             getSsoConfig(organizationId)
                 ?: throw IllegalStateException("Failed to retrieve SSO config after save")
         }
@@ -414,6 +467,7 @@ open class SsoService {
     private fun persistSsoConfig(
         organizationId: Int,
         request: SsoConfigRequest,
+        normalizedEmailDomain: String?,
         spEntityId: String,
         encryptedSecret: String?,
         effectiveRequireSso: Boolean,
@@ -421,6 +475,14 @@ open class SsoService {
         val existing = SsoConfigurations.selectAll()
             .where { SsoConfigurations.organizationId eq organizationId }
             .firstOrNull()
+        val existingDomain = existing?.get(SsoConfigurations.emailDomain)
+        val domainChanged = existingDomain != normalizedEmailDomain
+        val verificationToken = when {
+            normalizedEmailDomain == null -> null
+            domainChanged -> generateVerificationToken()
+            existing == null -> generateVerificationToken()
+            else -> existing[SsoConfigurations.emailDomainVerificationToken]
+        }
 
         if (existing != null) {
             SsoConfigurations.update({ SsoConfigurations.organizationId eq organizationId }) {
@@ -433,7 +495,13 @@ open class SsoService {
                 it[SsoConfigurations.oidcIssuerUrl] = request.oidcIssuerUrl
                 it[SsoConfigurations.oidcClientId] = request.oidcClientId
                 encryptedSecret?.let { secret -> it[SsoConfigurations.oidcClientSecret] = secret }
-                it[SsoConfigurations.emailDomain] = request.emailDomain?.let { d -> normalizeDomain(d) }
+                it[SsoConfigurations.emailDomain] = normalizedEmailDomain
+                it[SsoConfigurations.emailDomainVerificationToken] = verificationToken
+                if (domainChanged) {
+                    it[SsoConfigurations.emailDomainVerified] = false
+                    it[SsoConfigurations.emailDomainVerifiedAt] = null
+                    it[SsoConfigurations.emailDomainVerifiedBy] = null
+                }
                 it[SsoConfigurations.requireSso] = effectiveRequireSso
                 it[SsoConfigurations.updatedAt] = Clock.System.now()
             }
@@ -449,7 +517,11 @@ open class SsoService {
                 it[SsoConfigurations.oidcIssuerUrl] = request.oidcIssuerUrl
                 it[SsoConfigurations.oidcClientId] = request.oidcClientId
                 it[SsoConfigurations.oidcClientSecret] = encryptedSecret
-                it[SsoConfigurations.emailDomain] = request.emailDomain?.let { d -> normalizeDomain(d) }
+                it[SsoConfigurations.emailDomain] = normalizedEmailDomain
+                it[SsoConfigurations.emailDomainVerified] = false
+                it[SsoConfigurations.emailDomainVerificationToken] = verificationToken
+                it[SsoConfigurations.emailDomainVerifiedAt] = null
+                it[SsoConfigurations.emailDomainVerifiedBy] = null
                 it[SsoConfigurations.requireSso] = effectiveRequireSso
             }
         }
@@ -462,6 +534,8 @@ open class SsoService {
                 .where { SsoConfigurations.organizationId eq organizationId }
                 .firstOrNull()
                 ?.let { row ->
+                    val token = ensureDomainVerificationToken(row)
+                    val emailDomain = row[SsoConfigurations.emailDomain]
                     SsoConfigResponse(
                         id = row[SsoConfigurations.id],
                         organizationId = row[SsoConfigurations.organizationId],
@@ -474,13 +548,54 @@ open class SsoService {
                         oidcIssuerUrl = row[SsoConfigurations.oidcIssuerUrl],
                         oidcClientId = row[SsoConfigurations.oidcClientId],
                         hasClientSecret = row[SsoConfigurations.oidcClientSecret] != null,
-                        emailDomain = row[SsoConfigurations.emailDomain],
+                        emailDomain = emailDomain,
+                        emailDomainVerified = row[SsoConfigurations.emailDomainVerified],
+                        emailDomainVerificationRecordName = emailDomain?.let { domainVerificationRecordName(it) },
+                        emailDomainVerificationToken = token,
                         requireSso = row[SsoConfigurations.requireSso],
                         createdAt = row[SsoConfigurations.createdAt].toString(),
                         updatedAt = row[SsoConfigurations.updatedAt].toString(),
                     )
                 }
         }
+
+    fun verifyEmailDomain(
+        organizationId: Int,
+        userId: Int,
+    ): SsoConfigResponse {
+        if (!isOrganizationOwner(organizationId, userId)) {
+            throw SsoForbiddenException("Only organization owners can verify SSO domains")
+        }
+
+        val pending = transaction {
+            val config = SsoConfigurations
+                .selectAll()
+                .where { SsoConfigurations.organizationId eq organizationId }
+                .firstOrNull()
+                ?: throw BadRequestException("SSO is not configured")
+            val domain = config[SsoConfigurations.emailDomain]
+                ?: throw BadRequestException("SSO email domain is not configured")
+            val token = ensureDomainVerificationToken(config)
+                ?: throw BadRequestException("SSO email domain is not configured")
+            DomainVerificationPending(domain, token)
+        }
+
+        if (!verifyDnsTxtRecord(pending.domain, pending.token)) {
+            throw BadRequestException("DNS TXT record was not found for this SSO email domain")
+        }
+
+        return transaction {
+            ensureVerifiedDomainIsUnique(organizationId, pending.domain)
+            SsoConfigurations.update({ SsoConfigurations.organizationId eq organizationId }) {
+                it[SsoConfigurations.emailDomainVerified] = true
+                it[SsoConfigurations.emailDomainVerifiedAt] = Clock.System.now()
+                it[SsoConfigurations.emailDomainVerifiedBy] = userId
+                it[SsoConfigurations.updatedAt] = Clock.System.now()
+            }
+            getSsoConfig(organizationId)
+                ?: throw IllegalStateException("Failed to retrieve SSO config after domain verification")
+        }
+    }
 
     fun deleteSsoConfig(
         organizationId: Int,
@@ -508,6 +623,7 @@ open class SsoService {
                 .selectAll()
                 .where {
                     (SsoConfigurations.emailDomain eq domain) and
+                        (SsoConfigurations.emailDomainVerified eq true) and
                         (SsoConfigurations.isEnabled eq true) and
                         (SsoConfigurations.requireSso eq true)
                 }.firstOrNull() != null
@@ -768,6 +884,7 @@ open class SsoService {
         ssoConfigId: Int,
         organizationId: Int,
     ): Int {
+        ensureSsoEmailDomainAllowsNewLink(normalizedEmail, ssoConfigId)
         val existingUser =
             Users
                 .selectAll()
@@ -776,14 +893,20 @@ open class SsoService {
 
         return if (existingUser != null) {
             val uid = existingUser[Users.id]
+            val invitationRole = pendingInvitationRole(normalizedEmail, organizationId)
+            require(isOrganizationMember(uid, organizationId) || invitationRole != null) {
+                "SSO account linking requires an existing membership or invitation"
+            }
             UserSsoLinks.insert {
                 it[UserSsoLinks.userId] = uid
                 it[UserSsoLinks.ssoConfigurationId] = ssoConfigId
                 it[UserSsoLinks.externalId] = externalId
             }
-            addToOrgIfNeeded(uid, organizationId)
+            addToOrgIfNeeded(uid, organizationId, invitationRole)
+            acceptPendingInvitation(normalizedEmail, organizationId)
             uid
         } else {
+            val invitationRole = pendingInvitationRole(normalizedEmail, organizationId)
             val uid =
                 Users.insert {
                     it[Users.email] = normalizedEmail
@@ -800,27 +923,186 @@ open class SsoService {
             Memberships.insert {
                 it[user_id] = uid
                 it[organization_id] = organizationId
-                it[role] = "member"
+                it[role] = invitationRole ?: "member"
             }
+            acceptPendingInvitation(normalizedEmail, organizationId)
             uid
         }
     }
 
-    private fun addToOrgIfNeeded(userId: Int, organizationId: Int) {
+    private fun addToOrgIfNeeded(
+        userId: Int,
+        organizationId: Int,
+        invitationRole: String?,
+    ) {
         val isMember =
-            Memberships
-                .selectAll()
-                .where {
-                    (Memberships.user_id eq userId) and
-                        (Memberships.organization_id eq organizationId)
-                }.firstOrNull() != null
+            isOrganizationMember(userId, organizationId)
 
         if (!isMember) {
             Memberships.insert {
                 it[user_id] = userId
                 it[organization_id] = organizationId
-                it[role] = "member"
+                it[role] = invitationRole ?: "member"
             }
+        }
+    }
+
+    private fun findEnabledVerifiedConfigForDomain(domain: String): ResultRow? {
+        val configs = SsoConfigurations
+            .selectAll()
+            .where {
+                (SsoConfigurations.emailDomain eq domain) and
+                    (SsoConfigurations.emailDomainVerified eq true) and
+                    (SsoConfigurations.isEnabled eq true)
+            }.toList()
+        require(configs.size <= 1) {
+            "SSO is not configured for this email domain or organization"
+        }
+        return configs.firstOrNull()
+    }
+
+    private fun ensureSsoEmailDomainAllowsNewLink(
+        normalizedEmail: String,
+        ssoConfigId: Int,
+    ) {
+        val domain = domainFromEmail(normalizedEmail)
+        val config = SsoConfigurations
+            .selectAll()
+            .where { SsoConfigurations.id eq ssoConfigId }
+            .firstOrNull()
+            ?: throw IllegalArgumentException("SSO configuration not found")
+        val configuredDomain = config[SsoConfigurations.emailDomain]
+        require(configuredDomain == domain && config[SsoConfigurations.emailDomainVerified]) {
+            "SSO email domain is not verified"
+        }
+    }
+
+    private fun isOrganizationMember(
+        userId: Int,
+        organizationId: Int,
+    ): Boolean =
+        Memberships
+            .selectAll()
+            .where {
+                (Memberships.user_id eq userId) and
+                    (Memberships.organization_id eq organizationId)
+            }.firstOrNull() != null
+
+    private fun pendingInvitationRole(
+        normalizedEmail: String,
+        organizationId: Int,
+    ): String? =
+        OrgInvitations
+            .selectAll()
+            .where {
+                (OrgInvitations.organization_id eq organizationId) and
+                    (OrgInvitations.email eq normalizedEmail) and
+                    (OrgInvitations.status eq "pending") and
+                    (OrgInvitations.expires_at greater System.currentTimeMillis())
+            }.firstOrNull()
+            ?.get(OrgInvitations.role)
+
+    private fun acceptPendingInvitation(
+        normalizedEmail: String,
+        organizationId: Int,
+    ) {
+        OrgInvitations.update({
+            (OrgInvitations.organization_id eq organizationId) and
+                (OrgInvitations.email eq normalizedEmail) and
+                (OrgInvitations.status eq "pending") and
+                (OrgInvitations.expires_at greater System.currentTimeMillis())
+        }) {
+            it[OrgInvitations.status] = "accepted"
+        }
+    }
+
+    private fun ensureVerifiedDomainIsUnique(
+        organizationId: Int,
+        domain: String,
+    ) {
+        val existing = SsoConfigurations
+            .selectAll()
+            .where {
+                (SsoConfigurations.organizationId neq organizationId) and
+                    (SsoConfigurations.emailDomain eq domain) and
+                    (SsoConfigurations.emailDomainVerified eq true)
+            }.firstOrNull()
+        if (existing != null) {
+            throw BadRequestException("SSO email domain is already verified")
+        }
+    }
+
+    private fun ensureDomainVerificationToken(row: ResultRow): String? {
+        if (row[SsoConfigurations.emailDomain] == null) return null
+        val existingToken = row[SsoConfigurations.emailDomainVerificationToken]
+        if (existingToken != null) return existingToken
+
+        val token = generateVerificationToken()
+        SsoConfigurations.update({ SsoConfigurations.id eq row[SsoConfigurations.id] }) {
+            it[SsoConfigurations.emailDomainVerificationToken] = token
+            it[SsoConfigurations.updatedAt] = Clock.System.now()
+        }
+        return token
+    }
+
+    private fun generateVerificationToken(): String {
+        val bytes = ByteArray(DOMAIN_VERIFICATION_TOKEN_BYTES)
+        secureRandom.nextBytes(bytes)
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
+
+    private fun validateAndNormalizeEmailDomain(rawDomain: String): String {
+        val domain = normalizeDomain(rawDomain)
+        when {
+            domain.isBlank() -> throw BadRequestException("SSO email domain is required")
+            domain.length > MAX_DOMAIN_LENGTH -> throw BadRequestException("SSO email domain is too long")
+            !domain.contains(".") -> throw BadRequestException("SSO email domain must be a registrable domain")
+            domain.contains(":") -> throw BadRequestException("SSO email domain must not be an IP address")
+            IPV4_DOMAIN_PATTERN.matches(domain) -> {
+                throw BadRequestException("SSO email domain must not be an IP address")
+            }
+            domain in PUBLIC_EMAIL_DOMAINS -> {
+                throw BadRequestException("SSO email domain must be an organization-owned domain")
+            }
+        }
+        val labels = domain.split(".")
+        if (labels.any { label -> !isValidDomainLabel(label) }) {
+            throw BadRequestException("SSO email domain is invalid")
+        }
+        return domain
+    }
+
+    private fun isValidDomainLabel(label: String): Boolean =
+        label.length <= MAX_DOMAIN_LABEL_LENGTH && DOMAIN_LABEL_PATTERN.matches(label)
+
+    private fun domainVerificationRecordName(domain: String): String =
+        "$SSO_DNS_RECORD_PREFIX.$domain"
+
+    private fun dnsLookupEnvironment(): Hashtable<String, String> =
+        Hashtable<String, String>().apply {
+            this[JNDI_DNS_FACTORY_KEY] = JNDI_DNS_FACTORY_VALUE
+            this[JNDI_DNS_TIMEOUT_KEY] = JNDI_DNS_TIMEOUT_MS
+            this[JNDI_DNS_RETRIES_KEY] = JNDI_DNS_RETRIES
+        }
+
+    open fun verifyDnsTxtRecord(
+        domain: String,
+        expectedToken: String,
+    ): Boolean {
+        return try {
+            val expectedValue = "$SSO_DNS_RECORD_VALUE_PREFIX$expectedToken"
+            val attrs = InitialDirContext(dnsLookupEnvironment()).getAttributes(
+                "dns:/${domainVerificationRecordName(domain)}",
+                arrayOf("TXT"),
+            )
+            val txtRecords = attrs["TXT"] ?: return false
+            val records = (0 until txtRecords.size()).map { index ->
+                txtRecords[index].toString().trim('"')
+            }
+            records.any { record -> record == expectedValue }
+        } catch (e: NamingException) {
+            logger.warn(e) { "Failed to verify SSO DNS TXT record for $domain" }
+            false
         }
     }
 
@@ -904,5 +1186,14 @@ open class SsoService {
         private const val BITS_PER_BYTE = 8
 
         fun normalizeDomain(domain: String): String = domain.trim().lowercase()
+
+        fun domainFromEmail(email: String): String {
+            val normalizedEmail = email.trim().lowercase()
+            val atIndex = normalizedEmail.lastIndexOf("@")
+            require(atIndex > 0 && atIndex < normalizedEmail.lastIndex) {
+                "Invalid email address"
+            }
+            return normalizeDomain(normalizedEmail.substring(atIndex + 1))
+        }
     }
 }

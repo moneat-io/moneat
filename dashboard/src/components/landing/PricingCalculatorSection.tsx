@@ -402,10 +402,12 @@ export function PricingCalculatorSection({standalone = false}: {readonly standal
 
   const tiers: PricingCardTierInput[] = useMemo(
     () =>
-      billingPlans?.plans.map((p) => ({
-        ...p.tier,
-        trialDays: p.trialDays ?? p.tier.trialDays,
-      })) ?? [],
+      billingPlans?.plans
+        .filter((p) => p.tier.tierName !== 'BUSINESS')
+        .map((p) => ({
+          ...p.tier,
+          trialDays: p.trialDays ?? p.tier.trialDays,
+        })) ?? [],
     [billingPlans],
   )
 

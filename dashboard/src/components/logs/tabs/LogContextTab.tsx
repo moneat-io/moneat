@@ -19,6 +19,7 @@ import {api} from '@/lib/api'
 import type {LogEntry} from '@/lib/api'
 import {LogTable} from '@/components/logs/LogTable'
 import {Loader2} from 'lucide-react'
+import {parseDate} from '@/lib/date-format'
 
 const CONTEXT_WINDOW_MINUTES = 5
 
@@ -28,9 +29,14 @@ interface LogContextTabProps {
 }
 
 export function LogContextTab({log, active}: LogContextTabProps) {
-  const logTime = new Date(log.timestamp).getTime()
-  const from = new Date(logTime - CONTEXT_WINDOW_MINUTES * 60_000).toISOString()
-  const to = new Date(logTime + CONTEXT_WINDOW_MINUTES * 60_000).toISOString()
+  const logTime = parseDate(log.timestamp).getTime()
+  const hasValidLogTime = Number.isFinite(logTime)
+  const from = hasValidLogTime
+    ? new Date(logTime - CONTEXT_WINDOW_MINUTES * 60_000).toISOString()
+    : undefined
+  const to = hasValidLogTime
+    ? new Date(logTime + CONTEXT_WINDOW_MINUTES * 60_000).toISOString()
+    : undefined
 
   const {data, error, isError, isLoading} = useQuery({
     queryKey: ['logDetailContext', log.logId, log.service, log.timestamp],
@@ -40,10 +46,19 @@ export function LogContextTab({log, active}: LogContextTabProps) {
       service: log.service || undefined,
       limit: 100,
     }),
-    enabled: active,
+    enabled: active && hasValidLogTime,
     staleTime: 30 * 1000,
     retry: false,
   })
+
+  if (!hasValidLogTime) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
+        <p className="text-sm">Could not load surrounding logs</p>
+        <p className="max-w-md text-center text-xs">Invalid timestamp on selected log</p>
+      </div>
+    )
+  }
 
   if (isLoading) {
     return (

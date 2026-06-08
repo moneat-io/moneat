@@ -20,8 +20,11 @@ import type {
   ApmOverviewResponse,
   ApmTraceListResponse,
   ApmTraceDetailResponse,
+  ApmServiceCatalogResponse,
+  ApmServiceDetail,
   ApmServiceMapResponse,
   ApmServiceLatency,
+  ApmResourceDetail,
   ApmErrorsResponse,
   ApmResourceStatsResponse,
   ApmStatusFilter,
@@ -154,6 +157,43 @@ export function apmMethods(core: ApiClientCore) {
           normalizeSpan(s as unknown as Record<string, unknown>)
         ) as unknown as ApmTraceDetailResponse['spans'],
       }
+    },
+
+    getApmServices: (
+      params: Omit<ApmListParams, 'service' | 'services' | 'status' | 'operation'> = {}
+    ) => {
+      const searchParams = new URLSearchParams()
+      appendApmListParams(searchParams, params)
+      const qs = searchParams.toString()
+      return core.request<ApmServiceCatalogResponse>(urlWithQuery(`${base}/services`, qs))
+    },
+
+    getApmServiceDetail: (
+      service: string,
+      params: Omit<ApmListParams, 'service' | 'services' | 'status' | 'operation' | 'limit' | 'offset'> = {}
+    ) => {
+      const searchParams = new URLSearchParams()
+      appendApmListParams(searchParams, params)
+      const qs = searchParams.toString()
+      return core.request<ApmServiceDetail>(
+        urlWithQuery(`${base}/services/${encodeURIComponent(service)}`, qs)
+      )
+    },
+
+    getApmResourceDetail: (
+      service: string,
+      resource: string,
+      params: Omit<ApmListParams, 'service' | 'services' | 'status' | 'operation' | 'limit' | 'offset'> = {}
+    ) => {
+      const searchParams = new URLSearchParams()
+      appendApmListParams(searchParams, params)
+      const qs = searchParams.toString()
+      return core.request<ApmResourceDetail>(
+        urlWithQuery(
+          `${base}/services/${encodeURIComponent(service)}/resources/${encodeURIComponent(resource)}`,
+          qs,
+        )
+      )
     },
 
     getApmServiceMap: (params: ApmServiceMapParams = {}) => {

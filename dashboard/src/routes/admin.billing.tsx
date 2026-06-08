@@ -2077,8 +2077,8 @@ function AdminBillingPage() {
                       <TableCell className="text-xs text-muted-foreground">
                         {sub.currentPeriodStart && sub.currentPeriodEnd ? (
                           <>
-                            {formatDate(new Date(sub.currentPeriodStart), timezone)} &ndash;{' '}
-                            {formatDate(new Date(sub.currentPeriodEnd), timezone)}
+                            {formatDate(sub.currentPeriodStart, timezone)} &ndash;{' '}
+                            {formatDate(sub.currentPeriodEnd, timezone)}
                           </>
                         ) : (
                           '—'

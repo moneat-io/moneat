@@ -17,17 +17,20 @@
 package com.moneat.ai
 
 import com.moneat.config.EnvConfig
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.plugins.contentnegotiation.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
+import com.moneat.utils.suspendRunCatching
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
-import io.ktor.serialization.kotlinx.json.*
+import io.ktor.http.contentType
+import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 

@@ -85,6 +85,18 @@ function getInitials(name?: string, email?: string): string {
   return '?'
 }
 
+function feedbackUrlLabel(value: string): string {
+  try {
+    const parsed = new URL(value)
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return value.slice(parsed.protocol.length + '//'.length)
+    }
+  } catch {
+    return value
+  }
+  return value
+}
+
 // Deterministic avatar tint from the categorical chart palette (literal classes
 // so Tailwind emits them); encodes identity, not status.
 function getAvatarColor(name?: string, email?: string): string {
@@ -416,7 +428,7 @@ function FeedbackListItem({
                 <TooltipTrigger asChild>
                   <Badge variant="outline" size="sm" className="font-normal gap-0.5 max-w-[180px] truncate">
                     <Globe className="h-2.5 w-2.5 shrink-0" />
-                    <span className="truncate">{feedback.url.replace(/^https?:\/\//, '')}</span>
+                    <span className="truncate">{feedbackUrlLabel(feedback.url)}</span>
                   </Badge>
                 </TooltipTrigger>
                 <TooltipContent>{feedback.url}</TooltipContent>

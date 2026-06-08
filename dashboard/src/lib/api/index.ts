@@ -31,6 +31,7 @@ import { replaysMethods } from './modules/replays'
 import { feedbackMethods } from './modules/feedback'
 import { authTokensMethods } from './modules/auth-tokens'
 import { billingMethods } from './modules/billing'
+import { contactMethods } from './modules/contact'
 import { adminMethods } from './modules/admin'
 import { notificationsMethods } from './modules/notifications'
 import { uptimeMethods } from './modules/uptime'
@@ -71,6 +72,7 @@ export const api = {
   ...feedbackMethods(core),
   ...authTokensMethods(core),
   ...billingMethods(core),
+  ...contactMethods(core),
   ...adminMethods(core),
   ...notificationsMethods(core),
   ...uptimeMethods(core),

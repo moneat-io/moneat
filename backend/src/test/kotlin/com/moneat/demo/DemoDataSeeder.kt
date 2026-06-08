@@ -33,9 +33,9 @@ import com.moneat.statuspage.models.StatusPageMonitors
 import com.moneat.statuspage.models.StatusPages
 import com.moneat.testsupport.TestIpConstants
 import com.moneat.uptime.models.UptimeMonitors
-import io.ktor.client.statement.*
-import io.ktor.http.*
-import org.jetbrains.exposed.v1.core.*
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.isSuccess
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -44,7 +44,7 @@ import org.jetbrains.exposed.v1.jdbc.update
 import org.mindrot.jbcrypt.BCrypt
 import java.time.Instant
 import java.time.temporal.ChronoUnit
-import java.util.*
+import java.util.UUID
 import kotlin.random.Random
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days

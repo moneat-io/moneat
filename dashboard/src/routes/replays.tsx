@@ -19,7 +19,7 @@ import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {formatRelativeTime} from '@/lib/utils'
 import {useTimezone} from '@/hooks/useTimezone'
-import {formatDate as formatDateUtil} from '@/lib/date-format'
+import {formatDate as formatDateUtil, parseDate} from '@/lib/date-format'
 import {useMemo, useState} from 'react'
 import {FacetRail} from '@/components/filters/FacetRail'
 import {Badge} from '@/components/ui/badge'
@@ -85,7 +85,7 @@ function formatDuration(ms: number) {
 
 function formatDate(isoString: string, timezone: string) {
   if (!isoString) return 'N/A'
-  const date = new Date(isoString)
+  const date = parseDate(isoString)
   if (isNaN(date.getTime())) return 'Invalid Date'
   return formatDateUtil(date, timezone)
 }

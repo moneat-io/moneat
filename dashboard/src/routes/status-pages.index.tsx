@@ -259,7 +259,7 @@ function StatusPagesListPage() {
 
                   {/* Meta info */}
                   <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                    <span>Created {formatDate(new Date(page.createdAt), timezone)}</span>
+                    <span>Created {formatDate(page.createdAt, timezone)}</span>
                   </div>
                 </CardContent>
 

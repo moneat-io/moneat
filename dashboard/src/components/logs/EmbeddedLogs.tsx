@@ -188,7 +188,7 @@ export function EmbeddedLogs({
               {centerTimestamp ? (
                 <>
                   Logs ±{contextMinutes}min around{' '}
-                  {formatDateTime(new Date(centerTimestamp), timezone)}
+                  {formatDateTime(centerTimestamp, timezone)}
                 </>
               ) : (
                 'Logs'

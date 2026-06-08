@@ -113,7 +113,7 @@ function UptimeHistoryBar({
               />
             </TooltipTrigger>
             <TooltipContent side="top" className="text-xs">
-              <p className="font-medium">{formatMonthDay(new Date(point.date), timezone)}</p>
+              <p className="font-medium">{formatMonthDay(point.date, timezone)}</p>
               <p className={`tabular-nums ${getTooltipUptimeColor(point.uptime)}`}>
                 {point.uptime.toFixed(2)}% uptime
               </p>

@@ -19,10 +19,10 @@ package com.moneat.events.routes
 import com.moneat.alerts.models.SuppressAlertEpisodeRequest
 import com.moneat.alerts.services.AlertEpisodeService
 import com.moneat.auth.routes.accountDeletionRoutes
-import com.moneat.auth.services.Quadruple
 import com.moneat.billing.routes.billingRoutes
 import com.moneat.billing.routes.publicBillingRoutes
 import com.moneat.billing.services.PricingTierService
+import com.moneat.contact.routes.contactRoutes
 import com.moneat.events.models.AddTargetRequest
 import com.moneat.events.models.AlertNotificationPreferencesResponse
 import com.moneat.events.models.CreateProjectRequest
@@ -109,7 +109,7 @@ private data class ServiceReadContext(
 )
 
 @Suppress("kotlin:S3776")
-fun Route.apiRoutes() {
+fun Route.apiRoutes(includePublicContactRoutes: Boolean = true) {
     val koin = GlobalContext.get()
     val alertEpisodeService = koin.get<AlertEpisodeService>()
     val dashboardService = koin.get<DashboardService>()
@@ -119,6 +119,13 @@ fun Route.apiRoutes() {
     route("/v1") {
         // Public billing plans endpoint
         publicBillingRoutes()
+
+        if (includePublicContactRoutes) {
+            // Public Enterprise sales-contact form (IP rate-limited; each request can send email)
+            rateLimit(RateLimitName("contact")) {
+                contactRoutes()
+            }
+        }
     }
 
     authenticate("auth-jwt") {
@@ -152,52 +159,46 @@ fun Route.apiRoutes() {
                     val userId = principal!!.payload.getClaim("userId").asInt()
                     val demoEpochMs = call.getDemoEpochMs()
 
-                    val (user, orgSlug, orgRole, sidebarHiddenItems) =
+                    val userResponse =
                         transaction {
-                            val userRow =
-                                Users.selectAll().where { Users.id eq userId }.firstOrNull()
-                                    ?: return@transaction Quadruple(null, null, null, emptyList())
-
-                            val membership =
-                                Memberships
+                            val userRow = Users.selectAll().where { Users.id eq userId }.firstOrNull()
+                                ?: return@transaction null
+                            val membership = Memberships
+                                .selectAll()
+                                .where { Memberships.user_id eq userId }
+                                .firstOrNull()
+                            val orgId = membership?.get(Memberships.organization_id)
+                            val orgSlug = orgId?.let { id ->
+                                Organizations
                                     .selectAll()
-                                    .where { Memberships.user_id eq userId }
+                                    .where { Organizations.id eq id }
                                     .firstOrNull()
-
-                            val slug =
-                                membership?.let { m ->
-                                    Organizations
-                                        .selectAll()
-                                        .where { Organizations.id eq m[Memberships.organization_id] }
-                                        .firstOrNull()
-                                        ?.get(Organizations.slug)
-                                }
-
-                            val role = membership?.get(Memberships.role)
+                                    ?.get(Organizations.slug)
+                            }
+                            val orgRole = membership?.get(Memberships.role)
                             val hiddenItems = membership?.get(Memberships.sidebar_hidden_items) ?: emptyList()
 
-                            Quadruple(userRow, slug, role, hiddenItems)
+                            UserResponse(
+                                id = userRow[Users.id],
+                                email = userRow[Users.email],
+                                name = userRow[Users.name],
+                                emailVerified = userRow[Users.email_verified],
+                                onboardingCompleted = userRow[Users.onboarding_completed],
+                                isAdmin = userRow[Users.is_admin],
+                                organizationSlug = orgSlug,
+                                orgRole = orgRole,
+                                demoEpochMs = demoEpochMs,
+                                sidebarHiddenItems = hiddenItems,
+                                phoneNumber = userRow[Users.phone_number],
+                                timezone = userRow[Users.timezone],
+                                orgId = orgId
+                            )
                         }
 
-                    if (user == null) {
+                    if (userResponse == null) {
                         call.respond(HttpStatusCode.NotFound, ErrorResponse("User not found"))
                     } else {
-                        call.respond(
-                            UserResponse(
-                                user[Users.id],
-                                user[Users.email],
-                                user[Users.name],
-                                user[Users.email_verified],
-                                user[Users.onboarding_completed],
-                                user[Users.is_admin],
-                                orgSlug,
-                                orgRole,
-                                demoEpochMs,
-                                sidebarHiddenItems,
-                                user[Users.phone_number],
-                                user[Users.timezone]
-                            )
-                        )
+                        call.respond(userResponse)
                     }
                 }
 

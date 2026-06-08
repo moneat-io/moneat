@@ -273,6 +273,72 @@ describe('APM API', () => {
     })
   })
 
+  // ──── getApmServices ────
+
+  it('fetches APM services with scope params', async () => {
+    const mockResponse = {
+      services: [{name: 'checkout-api', status: 'healthy'}],
+      summary: {total: 1, alerting: 0, degraded: 0},
+    }
+
+    server.use(
+      http.get(`${API_BASE}/v1/services`, ({ request }) => {
+        const url = new URL(request.url)
+        expect(url.searchParams.get('timeRange')).toBe('6h')
+        expect(url.searchParams.get('env')).toBe('production')
+        expect(url.searchParams.get('source')).toBe('otlp')
+        expect(url.searchParams.get('search')).toBe('checkout')
+        expect(url.searchParams.get('limit')).toBe('100')
+        return HttpResponse.json(mockResponse)
+      })
+    )
+
+    const result = await api.getApmServices({
+      timeRange: '6h',
+      env: 'production',
+      source: 'otlp',
+      search: 'checkout',
+      limit: 100,
+    })
+    expect(result).toEqual(mockResponse)
+  })
+
+  it('fetches an APM service detail', async () => {
+    const mockResponse = {name: 'checkout-api', resources: []}
+
+    server.use(
+      http.get(`${API_BASE}/v1/services/checkout-api`, ({ request }) => {
+        const url = new URL(request.url)
+        expect(url.searchParams.get('timeRange')).toBe('24h')
+        expect(url.searchParams.get('env')).toBe('production')
+        return HttpResponse.json(mockResponse)
+      })
+    )
+
+    const result = await api.getApmServiceDetail('checkout-api', {
+      timeRange: '24h',
+      env: 'production',
+    })
+    expect(result).toEqual(mockResponse)
+  })
+
+  it('fetches an APM resource detail', async () => {
+    const mockResponse = {serviceName: 'checkout-api', method: 'POST', path: '/checkout/pay'}
+
+    server.use(
+      http.get(`${API_BASE}/v1/services/checkout-api/resources/post-checkout-pay`, ({ request }) => {
+        const url = new URL(request.url)
+        expect(url.searchParams.get('timeRange')).toBe('1h')
+        return HttpResponse.json(mockResponse)
+      })
+    )
+
+    const result = await api.getApmResourceDetail('checkout-api', 'post-checkout-pay', {
+      timeRange: '1h',
+    })
+    expect(result).toEqual(mockResponse)
+  })
+
   // ──── getApmServiceMap ────
 
   it('fetches APM service map', async () => {

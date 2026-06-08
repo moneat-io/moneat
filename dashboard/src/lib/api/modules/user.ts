@@ -29,6 +29,7 @@ type CurrentUserResponse = {
   emailVerified: boolean
   onboardingCompleted: boolean
   isAdmin?: boolean
+  orgId?: number
   organizationSlug?: string
   orgRole?: string
   demoEpochMs?: number | null

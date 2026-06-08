@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useId} from 'react'
+import {useEffect, useId, useRef} from 'react'
 import {Link} from '@tanstack/react-router'
 import {
   Activity,
@@ -232,45 +232,353 @@ const Accent = ({children}: {readonly children: React.ReactNode}) => (
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Hero — centered, outcome-first, with one large readable product surface.
+// The hero visual is a live service map: telemetry sources (Datadog Agent,
+// Sentry SDK, OTLP) feed a service topology with packets flowing along the
+// edges. Geometry and packet timing are deterministic so the prerendered HTML
+// matches client hydration, and SMIL pauses under prefers-reduced-motion.
 // ─────────────────────────────────────────────────────────────────────────────
-function HeroDashboard() {
-  const signals: Array<[string, string, string]> = [
-    ['Errors', '12 open', 'bg-rose-400'],
-    ['Traces', '184ms p95', 'bg-cyan-400'],
-    ['Uptime', '99.98%', 'bg-emerald-400'],
-  ]
+type ServiceNode = {
+  readonly key: string
+  readonly x: number
+  readonly y: number
+  readonly label: string
+  readonly sub: string
+  readonly warn?: boolean
+}
+type TelemetrySource = {
+  readonly key: string
+  readonly x: number
+  readonly y: number
+  readonly label: string
+  readonly color: string
+}
+type Packet = {
+  readonly r: number
+  readonly color: string
+  readonly dur: number
+  readonly begin: number
+}
+
+// Map canvas + card geometry, in SVG user units.
+const MAP_W = 1120
+const MAP_H = 560
+const NODE_W = 128
+const NODE_H = 46
+const SRC_W = 152
+const SRC_H = 36
+
+const TELEMETRY_SOURCES: readonly TelemetrySource[] = [
+  {key: 'ddog', x: 96, y: 140, label: 'Datadog Agent', color: '#818cf8'},
+  {key: 'sentry', x: 96, y: 255, label: 'Sentry SDK', color: '#a78bfa'},
+  {key: 'otlp', x: 96, y: 370, label: 'OTLP', color: '#22d3ee'},
+]
+
+const SERVICE_NODES: readonly ServiceNode[] = [
+  {key: 'lb', x: 322, y: 255, label: 'edge-lb', sub: '12.4k rps'},
+  {key: 'web', x: 506, y: 150, label: 'web', sub: '38ms'},
+  {key: 'api', x: 506, y: 400, label: 'api', sub: '184ms'},
+  {key: 'auth', x: 716, y: 96, label: 'auth', sub: '22ms'},
+  {key: 'ord', x: 716, y: 236, label: 'orders', sub: '96ms'},
+  {key: 'pay', x: 716, y: 376, label: 'payments', sub: '512ms p95', warn: true},
+  {key: 'cache', x: 716, y: 498, label: 'redis', sub: '0.4ms'},
+  {key: 'pg', x: 952, y: 170, label: 'postgres', sub: '14ms'},
+  {key: 'kafka', x: 952, y: 322, label: 'kafka', sub: '1.1k/s'},
+  {key: 'wrk', x: 952, y: 474, label: 'workers ×12', sub: 'healthy'},
+]
+
+// [from, to, hot?] — hot edges flag the degraded payments path.
+const SERVICE_EDGES: readonly (readonly [string, string, boolean?])[] = [
+  ['lb', 'web'],
+  ['lb', 'api'],
+  ['web', 'auth'],
+  ['web', 'ord'],
+  ['api', 'ord'],
+  ['api', 'pay', true],
+  ['api', 'cache'],
+  ['auth', 'pg'],
+  ['ord', 'pg'],
+  ['ord', 'kafka'],
+  ['pay', 'pg', true],
+  ['kafka', 'wrk'],
+]
+
+const nodeByKey = new Map(SERVICE_NODES.map((n) => [n.key, n] as const))
+function requireNode(key: string): ServiceNode {
+  const node = nodeByKey.get(key)
+  if (!node) throw new Error(`HeroServiceMap: unknown node "${key}"`)
+  return node
+}
+
+// Deterministic [0,1) hash so prerender (Node) and hydration (browser) agree;
+// rounding the derived timings to 2 decimals keeps them stable across JS engines.
+function hash01(seed: number): number {
+  const x = Math.sin(seed * 127.1 + 311.7) * 43758.5453
+  return x - Math.floor(x)
+}
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t
+const round2 = (n: number) => Math.round(n * 100) / 100
+
+function buildPackets(seed: number, count: number, r: number, color: string, durMin: number, durMax: number): Packet[] {
+  const packets: Packet[] = []
+  for (let p = 0; p < count; p++) {
+    const dur = round2(lerp(durMin, durMax, hash01(seed * 7 + p * 13 + 1)))
+    // Negative begin offsets stagger packets along the wire from first paint.
+    const begin = round2(-dur * hash01(seed * 7 + p * 13 + 101))
+    packets.push({r, color, dur, begin})
+  }
+  return packets
+}
+
+type Pt = readonly [number, number]
+const rightAnchor = (n: ServiceNode): Pt => [n.x + NODE_W / 2, n.y]
+const leftAnchor = (n: ServiceNode): Pt => [n.x - NODE_W / 2, n.y]
+const topAnchor = (n: ServiceNode): Pt => [n.x, n.y - NODE_H / 2]
+const bottomAnchor = (n: ServiceNode): Pt => [n.x, n.y + NODE_H / 2]
+
+function horizCurve(x1: number, y1: number, x2: number, y2: number): string {
+  const k = Math.max(46, (x2 - x1) * 0.5)
+  return `M${x1} ${y1} C ${x1 + k} ${y1}, ${x2 - k} ${y2}, ${x2} ${y2}`
+}
+function edgePath(a: ServiceNode, b: ServiceNode): string {
+  // Near-vertical pairs route top→bottom; everything else flows left→right.
+  if (Math.abs(b.x - a.x) < 40) {
+    const [x1, y1] = bottomAnchor(a)
+    const [x2, y2] = topAnchor(b)
+    const k = Math.abs(y2 - y1) * 0.4
+    return `M${x1} ${y1} C ${x1} ${y1 + k}, ${x2} ${y2 - k}, ${x2} ${y2}`
+  }
+  const [x1, y1] = rightAnchor(a)
+  const [x2, y2] = leftAnchor(b)
+  return horizCurve(x1, y1, x2, y2)
+}
+
+const SOURCE_WIRES = TELEMETRY_SOURCES.map((s, i) => {
+  const lb = requireNode('lb')
+  return {
+    key: s.key,
+    color: s.color,
+    d: horizCurve(s.x + SRC_W / 2, s.y, lb.x - NODE_W / 2, lb.y),
+    packets: buildPackets(i, 2, 3.1, s.color, 2.3, 3.4),
+  }
+})
+
+const EDGE_WIRES = SERVICE_EDGES.map(([from, to, hot], i) => ({
+  key: `${from}-${to}`,
+  hot: Boolean(hot),
+  d: edgePath(requireNode(from), requireNode(to)),
+  packets: hot
+    ? buildPackets(100 + i, 3, 3.4, '#fbbf24', 2.6, 3.9)
+    : buildPackets(100 + i, 2, 3, '#34e3ff', 2.6, 3.9),
+}))
+
+// A tight radial mask bleeds the map into the hero background instead of a hard card edge.
+const MAP_MASK: React.CSSProperties = {
+  maskImage: 'radial-gradient(125% 96% at 50% 42%, #000 58%, transparent 100%)',
+  WebkitMaskImage: 'radial-gradient(125% 96% at 50% 42%, #000 58%, transparent 100%)',
+}
+
+const HERO_MAP_FLOOR_GLOW =
+  'pointer-events-none absolute inset-x-[14%] bottom-[-22px] z-0 h-14 ' +
+  'bg-[radial-gradient(closest-side,rgba(99,102,241,0.34),transparent)] blur-[15px]'
+const HERO_MAP_AMBIENT_GLOW =
+  'pointer-events-none absolute [inset:-8%_-4%] ' +
+  'bg-[radial-gradient(closest-side,rgba(124,92,246,0.2),rgba(34,211,238,0.05)_62%,transparent)] blur-[10px]'
+const HERO_MAP_HUD =
+  'absolute bottom-[18px] left-[18px] z-[8] hidden min-w-[190px] rounded-[10px] border border-white/10 ' +
+  'bg-[#0a0b12]/85 px-3.5 py-3 shadow-[0_18px_40px_-22px_rgba(2,6,23,0.9)] backdrop-blur md:block'
+
+const HUD_ROWS: readonly {readonly label: string; readonly value: string; readonly dot: string}[] = [
+  {label: 'Throughput', value: '1,284 rps', dot: '#22d3ee'},
+  {label: 'p95 latency', value: '184 ms', dot: '#6366f1'},
+  {label: 'Degraded', value: '1 service', dot: '#f59e0b'},
+]
+
+function PacketDot({pathId, packet}: {readonly pathId: string; readonly packet: Packet}) {
   return (
-    <div className="relative mx-auto mt-16 max-w-5xl">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -inset-x-10 -bottom-12 top-8 bg-[radial-gradient(closest-side,rgba(124,92,246,0.32),rgba(34,211,238,0.06)_60%,transparent)] blur-2xl"
-      />
-      <WindowFrame title="moneat · api-prod" live className="relative">
-        <div className="grid gap-3">
-          <div className="flex items-center justify-between">
-            <span className="font-brandmono text-[11px] uppercase tracking-[0.12em] text-slate-500">Service health</span>
-            <span className="font-brandmono text-[11px] text-slate-500">last 24h</span>
-          </div>
-          <SignalChart heightClass="h-40 sm:h-48" />
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-            <StatTile label="p95 latency" value="184ms" accent />
-            <StatTile label="uptime" value="99.98%" />
-            <StatTile label="open errors" value="12" />
-            <StatTile label="throughput" value="1.2k/s" />
-          </div>
-          <div className="grid gap-px overflow-hidden rounded-md border border-white/[0.07] sm:grid-cols-3">
-            {signals.map(([label, value, dot]) => (
-              <div key={label} className="flex items-center justify-between gap-3 bg-white/[0.02] px-3 py-2.5">
-                <span className="flex items-center gap-2 text-sm text-slate-400">
-                  <span className={cn('size-2 rounded-full', dot)} />
-                  {label}
-                </span>
-                <span className="font-brandmono text-sm text-slate-100">{value}</span>
-              </div>
+    <circle r={packet.r} fill={packet.color}>
+      <animateMotion dur={`${packet.dur}s`} begin={`${packet.begin}s`} repeatCount="indefinite">
+        <mpath xlinkHref={`#${pathId}`} href={`#${pathId}`} />
+      </animateMotion>
+    </circle>
+  )
+}
+
+function HeroServiceMap() {
+  const uid = useId()
+  const svgRef = useRef<SVGSVGElement>(null)
+  // useId returns colon-wrapped ids; strip colons so they're clean fragment refs.
+  const wireId = (kind: string, key: string) => `${uid}-${kind}-${key}`.replaceAll(':', '')
+
+  // SMIL has no prefers-reduced-motion hook, so pause it on the client after mount.
+  // This leaves the prerendered markup untouched, so hydration still matches.
+  useEffect(() => {
+    const svg = svgRef.current
+    if (svg && globalThis.window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      svg.pauseAnimations()
+    }
+  }, [])
+
+  return (
+    <div className="relative mx-auto mt-16 max-w-[1100px]">
+      {/* floor glow — bleeds below the map's lower edge */}
+      <div aria-hidden className={HERO_MAP_FLOOR_GLOW} />
+      <div className="relative overflow-visible" style={MAP_MASK}>
+        {/* ambient glow behind the topology */}
+        <div aria-hidden className={HERO_MAP_AMBIENT_GLOW} />
+        <svg
+          ref={svgRef}
+          viewBox={`0 0 ${MAP_W} ${MAP_H}`}
+          className="relative block h-auto w-full font-brandmono"
+          aria-label="Live service map: Datadog, Sentry, and OTLP telemetry flowing into one platform"
+        >
+          <defs>
+            {SOURCE_WIRES.map((w) => (
+              <path key={w.key} id={wireId('s', w.key)} d={w.d} />
             ))}
-          </div>
+            {EDGE_WIRES.map((w) => (
+              <path key={w.key} id={wireId('e', w.key)} d={w.d} />
+            ))}
+          </defs>
+
+          {/* source → load-balancer wires */}
+          <g>
+            {SOURCE_WIRES.map((w) => (
+              <path key={w.key} d={w.d} fill="none" stroke={w.color} strokeOpacity={0.24} strokeWidth={1.5} />
+            ))}
+          </g>
+          {/* service-to-service wires */}
+          <g>
+            {EDGE_WIRES.map((w) => (
+              <path
+                key={w.key}
+                d={w.d}
+                fill="none"
+                stroke={w.hot ? 'rgba(245,158,11,0.32)' : 'rgba(148,163,184,0.18)'}
+                strokeWidth={1.5}
+              />
+            ))}
+          </g>
+          {/* flowing packets — painted under the node cards */}
+          <g>
+            {SOURCE_WIRES.map((w) =>
+              w.packets.map((packet, pi) => (
+                <PacketDot key={`${w.key}-${pi}`} pathId={wireId('s', w.key)} packet={packet} />
+              )),
+            )}
+            {EDGE_WIRES.map((w) =>
+              w.packets.map((packet, pi) => (
+                <PacketDot key={`${w.key}-${pi}`} pathId={wireId('e', w.key)} packet={packet} />
+              )),
+            )}
+          </g>
+
+          {/* telemetry source pills */}
+          {TELEMETRY_SOURCES.map((s) => {
+            const x = s.x - SRC_W / 2
+            const y = s.y - SRC_H / 2
+            return (
+              <g key={s.key}>
+                <rect
+                  x={x}
+                  y={y}
+                  width={SRC_W}
+                  height={SRC_H}
+                  rx={SRC_H / 2}
+                  fill="#0e111b"
+                  stroke="rgba(255,255,255,0.1)"
+                  strokeWidth={1}
+                />
+                <circle cx={x + 17} cy={s.y} r={4} fill={s.color}>
+                  <animate attributeName="opacity" values="1;.45;1" dur="2.6s" repeatCount="indefinite" />
+                </circle>
+                <text x={x + 30} y={s.y + 4} fontSize={11.5} fill="#c7d2e0">
+                  {s.label}
+                </text>
+                <path
+                  d={`M${x + SRC_W - 14} ${s.y - 4} l5 4 l-5 4`}
+                  fill="none"
+                  stroke={s.color}
+                  strokeWidth={1.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </g>
+            )
+          })}
+
+          {/* service nodes */}
+          {SERVICE_NODES.map((n, i) => {
+            const x = n.x - NODE_W / 2
+            const y = n.y - NODE_H / 2
+            const dotColor = n.warn ? '#f59e0b' : '#34d399'
+            const pulse = round2(lerp(2.4, 3.6, hash01(i * 9 + 3)))
+            return (
+              <g key={n.key}>
+                {n.warn ? (
+                  <circle
+                    cx={n.x}
+                    cy={n.y}
+                    r={NODE_W / 2 - 2}
+                    fill="none"
+                    stroke="rgba(245,158,11,0.5)"
+                    strokeWidth={1.2}
+                  >
+                    <animate
+                      attributeName="r"
+                      values={`${NODE_W / 2 - 2};${NODE_W / 2 + 14}`}
+                      dur="2.4s"
+                      repeatCount="indefinite"
+                    />
+                    <animate attributeName="opacity" values=".55;0" dur="2.4s" repeatCount="indefinite" />
+                  </circle>
+                ) : null}
+                <rect
+                  x={x}
+                  y={y}
+                  width={NODE_W}
+                  height={NODE_H}
+                  rx={10}
+                  fill="#0c0e16"
+                  stroke={n.warn ? 'rgba(245,158,11,0.55)' : 'rgba(255,255,255,0.1)'}
+                  strokeWidth={1}
+                />
+                <circle cx={x + 15} cy={n.y} r={3.6} fill={dotColor}>
+                  {n.warn ? null : (
+                    <animate
+                      attributeName="opacity"
+                      values="1;.4;1"
+                      dur={`${pulse}s`}
+                      repeatCount="indefinite"
+                    />
+                  )}
+                </circle>
+                <text x={x + 28} y={n.y - 2} fontSize={13} fontWeight={500} fill="#e2e8f0">
+                  {n.label}
+                </text>
+                <text x={x + 28} y={n.y + 13} fontSize={10} fill={n.warn ? '#f59e0b' : '#64748b'}>
+                  {n.sub}
+                </text>
+              </g>
+            )
+          })}
+        </svg>
+      </div>
+
+      {/* HUD — cluster summary, hidden on narrow viewports (as in the demo) */}
+      <div className={HERO_MAP_HUD}>
+        <div className="mb-2 font-brandmono text-[9.5px] uppercase tracking-[0.14em] text-slate-500">
+          cluster · last 60s
         </div>
-      </WindowFrame>
+        {HUD_ROWS.map((row) => (
+          <div key={row.label} className="flex items-center justify-between gap-4 py-[3px]">
+            <span className="inline-flex items-center gap-2 text-xs text-slate-400">
+              <span className="size-[7px] rounded-full" style={{background: row.dot}} />
+              {row.label}
+            </span>
+            <span className="font-brandmono text-xs text-slate-100">{row.value}</span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -322,7 +630,7 @@ function Hero() {
         <p className="mt-4 font-brandmono text-xs text-slate-500">No credit card · No signup for the demo</p>
       </div>
 
-      <HeroDashboard />
+      <HeroServiceMap />
     </section>
   )
 }
@@ -807,11 +1115,11 @@ const pricingTiers: Array<{
     highlight: false,
   },
   {
-    name: 'Business',
-    price: '$199',
-    cadence: '/mo',
-    blurb: 'Enterprises with custom requirements',
-    points: ['Custom retention', 'SLA guarantee', 'Everything in Team'],
+    name: 'Enterprise',
+    price: 'Custom',
+    cadence: '',
+    blurb: 'Scale, compliance, and a dedicated partner',
+    points: ['Volume discounts', 'Dedicated support & SLA', 'Everything in Team'],
     highlight: false,
   },
 ]

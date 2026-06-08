@@ -45,6 +45,7 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.RouteTestSupport
+import com.moneat.testsupport.RouteTestSupport.installApiRouteRateLimits
 import com.moneat.testsupport.RouteTestSupport.installJwtAuth
 import com.moneat.testsupport.RouteTestSupport.withAuth
 import com.moneat.testsupport.TestDatabaseHelper
@@ -61,9 +62,6 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.application.Application
-import io.ktor.server.application.install
-import io.ktor.server.plugins.ratelimit.RateLimit
-import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
@@ -74,6 +72,9 @@ import io.mockk.mockk
 import io.mockk.runs
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -87,7 +88,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.seconds
 
 class EventRoutesExtendedTest {
     companion object {
@@ -147,13 +147,8 @@ class EventRoutesExtendedTest {
 
     private fun Application.installTestApp() {
         installJwtAuth()
-        install(RateLimit) {
-            register(RateLimitName("api")) {
-                requestKey { "test-user" }
-                rateLimiter(limit = 1000, refillPeriod = 1.seconds)
-            }
-        }
-        routing { apiRoutes() }
+        installApiRouteRateLimits("test-user")
+        routing { apiRoutes(includePublicContactRoutes = false) }
     }
 
     private fun token(userId: Int): String =
@@ -1044,14 +1039,17 @@ class EventRoutesExtendedTest {
 
     @Test
     fun `GET user returns 200 with user data`() = testApplication {
-        val (userId, _) = seedUserWithProject()
+        val seeded = seedUserProject()
 
         application { installTestApp() }
         val response = client.get("/v1/user") {
-            withAuth(token(userId))
+            withAuth(token(seeded.userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains("email"))
+        val body = response.bodyAsText()
+        assertTrue(body.contains("email"))
+        val userJson = Json.parseToJsonElement(body).jsonObject
+        assertEquals(seeded.orgId, userJson["orgId"]?.jsonPrimitive?.int, "Response should include orgId: $body")
     }
 
     @Test

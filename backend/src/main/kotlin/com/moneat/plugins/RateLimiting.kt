@@ -108,6 +108,8 @@ private const val TELEMETRY_RATE_LIMIT = 10
 private const val TELEMETRY_REFILL_SECONDS = 60
 private const val MCP_RATE_LIMIT = 60
 private const val MCP_REFILL_SECONDS = 60
+private const val CONTACT_RATE_LIMIT = 5
+private const val CONTACT_REFILL_SECONDS = 3600
 private const val BITS_PER_BYTE = 8
 private const val BYTE_MASK = 0xFF
 private const val BEARER_PREFIX = "Bearer "
@@ -223,6 +225,11 @@ fun Application.configureRateLimiting() {
                 token?.let { "token:${hashRateLimitKey(it)}" } ?: call.request.clientIp()
             }
             rateLimiter(limit = MCP_RATE_LIMIT, refillPeriod = MCP_REFILL_SECONDS.seconds)
+        }
+        // Public sales-contact form — strict IP bucket since each request can send an email.
+        register(RateLimitName("contact")) {
+            requestKey { call -> call.request.clientIp() }
+            rateLimiter(limit = CONTACT_RATE_LIMIT, refillPeriod = CONTACT_REFILL_SECONDS.seconds)
         }
     }
 }

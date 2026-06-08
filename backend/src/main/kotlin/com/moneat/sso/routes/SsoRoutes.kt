@@ -118,6 +118,11 @@ fun Route.ssoRoutes() {
                 call.handleDeleteSsoConfig(ctx, ssoService)
             }
 
+            post("/config/domain/verify") {
+                val ctx = call.requireSsoAuth() ?: return@post
+                call.handleVerifySsoDomain(ctx, ssoService)
+            }
+
             post("/check-required") {
                 call.handleCheckSsoRequired(ssoService)
             }
@@ -230,6 +235,17 @@ private suspend fun ApplicationCall.respondSsoConfigFailure(e: Throwable) {
             logger.error { "Configure SSO error: ${e.limitedStackTrace()}" }
             respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to configure SSO"))
         }
+    }
+}
+
+private suspend fun ApplicationCall.handleVerifySsoDomain(
+    ctx: SsoAuthContext,
+    ssoService: SsoService,
+) {
+    suspendRunCatching {
+        respond(ssoService.verifyEmailDomain(ctx.orgId, ctx.userId))
+    }.onFailure { e ->
+        respondSsoConfigFailure(e)
     }
 }
 

@@ -16,7 +16,8 @@
 
 package com.moneat.utils
 
-import kotlinx.serialization.json.*
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse

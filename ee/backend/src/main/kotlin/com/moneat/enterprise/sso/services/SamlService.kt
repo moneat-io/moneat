@@ -43,11 +43,12 @@ class SamlService {
         return transaction {
             val ssoConfig =
                 if (email != null) {
-                    val domain = SsoService.normalizeDomain(email.substringAfter("@"))
+                    val domain = SsoService.domainFromEmail(email)
                     SsoConfigurations
                         .selectAll()
                         .where {
                             (SsoConfigurations.emailDomain eq domain) and
+                                (SsoConfigurations.emailDomainVerified eq true) and
                                 (SsoConfigurations.isEnabled eq true) and
                                 (SsoConfigurations.providerType eq "saml")
                         }.firstOrNull()

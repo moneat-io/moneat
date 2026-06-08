@@ -20,7 +20,7 @@ import {useCallback, useMemo, useRef, useState} from 'react'
 import {api} from '@/lib/api'
 import {formatRelativeTime} from '@/lib/utils'
 import {useTimezone} from '@/hooks/useTimezone'
-import {formatDateTime as formatDateTimeUtil} from '@/lib/date-format'
+import {formatDateTime as formatDateTimeUtil, parseDate} from '@/lib/date-format'
 import {ReplayPlayer, type ReplayPlayerHandle} from '@/components/ReplayPlayer'
 import {MobileReplayViewer, type MobileReplayViewerHandle, type ReplayStatusBarContext} from '@/components/MobileReplayViewer'
 import {ReplayTimelinePanel} from '@/components/ReplayTimelinePanel'
@@ -62,7 +62,7 @@ function formatDuration(ms: number) {
 
 function formatDate(isoString: string, timezone: string) {
   if (!isoString) return 'N/A'
-  const date = new Date(isoString)
+  const date = parseDate(isoString)
   if (isNaN(date.getTime())) return 'Invalid Date'
   return formatDateTimeUtil(date, timezone)
 }
@@ -498,7 +498,7 @@ function ReplayDetailPage() {
 
       let normalizedOffset = Math.max(0, rawOffset)
       if (mobileCompressedTimeMapper) {
-        const absoluteMs = Date.parse(item.timestamp)
+        const absoluteMs = parseDate(item.timestamp).getTime()
         if (Number.isFinite(absoluteMs)) {
           normalizedOffset = mobileCompressedTimeMapper(absoluteMs)
         }

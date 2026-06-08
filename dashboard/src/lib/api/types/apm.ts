@@ -201,3 +201,235 @@ export interface ApmResourceStatsResponse {
   resources: ApmResourceStatsItem[]
   totalCount: number
 }
+
+export type ApmServiceType = 'web' | 'worker' | 'db' | 'cache'
+export type ApmServiceStatus = 'alerting' | 'degraded' | 'healthy'
+export type ApmSeverity = 'good' | 'warn' | 'bad'
+export type ApmStatusTone = 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'accent'
+
+export interface ApmEnvPill {
+  label: string
+  chart: number
+}
+
+export interface ApmCatalogSummary {
+  total: number
+  alerting: number
+  degraded: number
+}
+
+export interface ApmServiceCatalogRow {
+  name: string
+  type: ApmServiceType
+  status: ApmServiceStatus
+  env: ApmEnvPill[]
+  rps: number
+  spark: number[]
+  p95Ms: number
+  p99Ms: number
+  errorRateLabel: string
+  errorBarPct: number
+  errorLevel: ApmSeverity
+  apdex: string
+  apdexTone: ApmStatusTone
+  lastDeploy: string
+  team: string
+  language?: string
+  sources: string[]
+}
+
+export interface ApmServiceCatalogResponse {
+  services: ApmServiceCatalogRow[]
+  summary: ApmCatalogSummary
+}
+
+export interface ApmStatDeltaSpec {
+  value: string
+  direction: 'up' | 'down' | 'flat'
+  tone?: ApmStatusTone
+}
+
+export interface ApmKpiSpec {
+  label: string
+  value: string
+  valueTone?: ApmStatusTone
+  delta?: ApmStatDeltaSpec
+}
+
+export interface ApmServiceLatencyPoint {
+  t: string
+  p50: number
+  p90: number
+  p95: number
+  p99: number
+}
+
+export interface ApmThroughputPoint {
+  t: string
+  rps: number
+  errors?: number
+}
+
+export interface ApmGaugeRow {
+  label: string
+  valueText: string
+  pct: number
+  level: ApmSeverity
+}
+
+export interface ApmErrorBar {
+  h: number
+  level: 'warn' | 'bad'
+}
+
+export interface ApmServiceResourceRow {
+  slug: string
+  method: string
+  name: string
+  rps: number
+  p50Ms: number
+  p95Ms: number
+  p99Ms: number
+  errorRateLabel: string
+  errorBarPct: number
+  errorLevel: ApmSeverity
+  timePct: number
+  status: ApmServiceStatus
+}
+
+export interface ApmDependencyRow {
+  name: string
+  type: ApmServiceType
+  tone: ApmStatusTone
+  rps: string
+  p95: string
+  err: string
+  errWarn?: boolean
+}
+
+export interface ApmDeploymentRow {
+  version: string
+  when: string
+  initials: string
+  rps: string
+  errorRate: string
+  p95: string
+  status: ApmServiceStatus | 'retired'
+  current?: boolean
+  trendBad?: boolean
+}
+
+export interface ApmPodRow {
+  pod: string
+  node: string
+  cpu: number
+  mem: string
+  restarts: number
+  tone: ApmStatusTone
+  state: string
+}
+
+export type ApmErrorSeverity = 'fatal' | 'error' | 'warn'
+
+export interface ApmServiceErrorRow {
+  severity: ApmErrorSeverity
+  title: string
+  sub: string
+  chips: string[]
+  events: string
+  users?: string
+  unhandled?: boolean
+}
+
+export interface ApmServiceTraceRow {
+  time: string
+  traceId: string
+  resource?: string | null
+  method?: string | null
+  httpStatus: number
+  durationMs: number
+  spans?: number | null
+  bucket?: string | null
+}
+
+export interface ApmServiceDetail {
+  name: string
+  type: ApmServiceType
+  status: ApmServiceStatus
+  runtime: string
+  team: string
+  version: string
+  deployedAgo: string
+  sources: string[]
+  kpis: ApmKpiSpec[]
+  latency: ApmServiceLatencyPoint[]
+  latencyThresholdMs: number
+  latencyThresholdLabel: string
+  deployAt: string
+  throughput: ApmThroughputPoint[]
+  errorBars: ApmErrorBar[]
+  p95ByResource: ApmGaugeRow[]
+  resources: ApmServiceResourceRow[]
+  upstream: ApmDependencyRow[]
+  downstream: ApmDependencyRow[]
+  depInsight: string
+  deployments: ApmDeploymentRow[]
+  podMemory: ApmGaugeRow[]
+  pods: ApmPodRow[]
+  errors: ApmServiceErrorRow[]
+  traces: ApmServiceTraceRow[]
+}
+
+export interface ApmDistBar {
+  h: number
+  band: ApmSeverity
+}
+
+export interface ApmDistMarker {
+  label: string
+  left: number
+  p99?: boolean
+}
+
+export type ApmWaterfallTone = 'root' | 'app' | 'db' | 'cache' | 'http' | 'error'
+
+export interface ApmWaterfallRow {
+  op: string
+  desc: string
+  left: number
+  width: number
+  label: string
+  tone: ApmWaterfallTone
+  indent?: number
+  selected?: boolean
+}
+
+export interface ApmResourceExemplar {
+  traceId: string
+  httpStatus: number
+  durationLabel: string
+  rows: ApmWaterfallRow[]
+}
+
+export interface ApmResourceDetail {
+  serviceName: string
+  method: string
+  path: string
+  status: ApmServiceStatus
+  kind: string
+  topDependency: string
+  kpis: ApmKpiSpec[]
+  latency: ApmServiceLatencyPoint[]
+  latencyThresholdMs: number
+  latencyThresholdLabel: string
+  deployAt: string
+  throughput: ApmThroughputPoint[]
+  distribution: ApmDistBar[]
+  distMarkers: ApmDistMarker[]
+  distAxis: string[]
+  whereTimeSpent: ApmGaugeRow[]
+  whereInsight: string
+  exemplar: ApmResourceExemplar
+  slowTraces: ApmServiceTraceRow[]
+  errors: ApmServiceErrorRow[]
+}

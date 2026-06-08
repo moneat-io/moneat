@@ -187,8 +187,10 @@ function SettingsPage() {
   const hasAdvancedRbacModule = hasEnterpriseModule(features, 'advanced_rbac')
   const canManageTeam = user?.orgRole === 'admin' || user?.orgRole === 'owner'
   const canViewRbacTab = canManageTeam && hasAdvancedRbacModule
+  const organizationId = user?.orgId
   const canViewSsoTab =
-    isSelfHosted || (!isSelfHosted && (tier === 'TEAM' || tier === 'BUSINESS'))
+    organizationId !== undefined &&
+    (isSelfHosted || (!isSelfHosted && (tier === 'TEAM' || tier === 'BUSINESS')))
   const canConfigureSso = user?.orgRole === 'owner' && canViewSsoTab
   
   return (
@@ -346,7 +348,11 @@ function SettingsPage() {
             </TabsContent>
             {canViewSsoTab && (
               <TabsContent value="sso" className="space-y-4 mt-0">
-                <SsoTab hasSamlModule={hasSamlModule} canConfigure={canConfigureSso} />
+                <SsoTab
+                  organizationId={organizationId}
+                  hasSamlModule={hasSamlModule}
+                  canConfigure={canConfigureSso}
+                />
               </TabsContent>
             )}
             <TabsContent value="account" className="space-y-4 mt-0">

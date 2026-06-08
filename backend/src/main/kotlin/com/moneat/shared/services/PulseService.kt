@@ -36,7 +36,7 @@ import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.lang.management.ManagementFactory
-import java.util.*
+import java.util.UUID
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 

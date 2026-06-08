@@ -110,6 +110,7 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
 
 detekt {
     config.setFrom(files("$projectDir/detekt.yml"))
+    baseline = file("$projectDir/detekt-baseline.xml")
     buildUponDefaultConfig = true
     parallel = true
     source.setFrom(files("src/main/kotlin", "src/test/kotlin"))
