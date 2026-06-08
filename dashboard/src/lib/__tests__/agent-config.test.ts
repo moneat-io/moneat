@@ -118,11 +118,14 @@ describe('buildHelmValues / buildHostInstall', () => {
     expect(values).toContain('portEnabled: true')
   })
 
-  it('embeds the key in the host install script', () => {
-    const script = buildHostInstall('key-host')
+  it('uses package managers for host install', () => {
+    const script = buildHostInstall()
 
-    expect(script).toContain('DD_API_KEY="key-host"')
-    expect(script).toContain('install_script_agent7.sh')
+    expect(script).toContain('sudo apt-get install -y datadog-agent')
+    expect(script).toContain('sudo yum install -y datadog-agent')
+    expect(script).not.toContain('key-host')
+    expect(script).not.toContain('install_script_agent7.sh')
+    expect(script).not.toContain('curl ')
     expect(script).not.toContain('bash -c "$(curl')
   })
 })
@@ -157,7 +160,7 @@ describe('buildAgentArtifacts', () => {
     const host = buildAgentArtifacts('host', DEFAULT_AGENT_CAPABILITIES, 'k')
     expect(host.config.label).toBe('datadog.yaml')
     expect(host.config.code).toContain('api_key: k')
-    expect(host.install.code).toContain('install_script_agent7.sh')
+    expect(host.install.code).toContain('sudo apt-get install -y datadog-agent')
 
     const docker = buildAgentArtifacts('docker', DEFAULT_AGENT_CAPABILITIES, 'k')
     expect(docker.install.label).toBe('Run')

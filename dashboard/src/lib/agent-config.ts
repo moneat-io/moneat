@@ -318,15 +318,20 @@ docker compose up -d`
 
 // ─── Linux host package install ──────────────────────────────────────────────
 
-export function buildHostInstall(apiKey: string | null | undefined): string {
-  const key = resolveKey(apiKey)
+export function buildHostInstall(): string {
   return String.raw`# 1. Install the Datadog-compatible agent (v7)
-curl -fsSL https://install.datadoghq.com/scripts/install_script_agent7.sh \
-  -o /tmp/moneat-agent-install.sh
-chmod 700 /tmp/moneat-agent-install.sh
-${API_KEY_ENV_VAR}="${key}" DD_INSTALL_ONLY=true \
-  sudo -E /tmp/moneat-agent-install.sh
-rm -f /tmp/moneat-agent-install.sh
+# Requires the Datadog agent package repository to be configured.
+if command -v apt-get >/dev/null 2>&1; then
+  sudo apt-get update
+  sudo apt-get install -y datadog-agent
+elif command -v dnf >/dev/null 2>&1; then
+  sudo dnf install -y datadog-agent
+elif command -v yum >/dev/null 2>&1; then
+  sudo yum install -y datadog-agent
+else
+  echo "Install datadog-agent v7 with your OS package manager, then continue."
+  exit 1
+fi
 
 # 2. Save the config from the datadog.yaml tab to:
 #    /etc/datadog-agent/datadog.yaml
@@ -413,7 +418,7 @@ export function buildAgentArtifacts(
           id: 'install',
           label: 'Install',
           language: 'bash',
-          code: buildHostInstall(apiKey),
+          code: buildHostInstall(),
           note: 'Run on each host to install and start the agent.',
         },
       }
