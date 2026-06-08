@@ -1,0 +1,4810 @@
+{
+    "id": "078-14191-elasticsearch-overview",
+    "title": "Elasticsearch Exporter Quickstart and Dashboard",
+    "description": "Prebuilt Moneat dashboard for Elasticsearch Exporter Quickstart and Dashboard telemetry.",
+    "category": "infrastructure",
+    "tags": [
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 71,
+    "variable_count": 5,
+    "quality": "partial",
+    "warnings": [
+        "Panel 31: couldn't parse PromQL '1-(elasticsearch_filesystem_data_available_bytes{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}/elasticsearch_filesystem_data_size_bytes{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"})', stored as rawQuery"
+    ],
+    "dashboard": {
+        "title": "Elasticsearch Exporter Quickstart and Dashboard",
+        "description": "Prebuilt Moneat dashboard for Elasticsearch Exporter Quickstart and Dashboard telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "datasource",
+                "label": null,
+                "type": "custom",
+                "query": "prometheus",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "job",
+                "label": null,
+                "type": "query",
+                "query": "label_values(elasticsearch_cluster_health_status, job)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "cluster",
+                "label": "",
+                "type": "query",
+                "query": "label_values(elasticsearch_indices_docs{job=\"$job\"},cluster)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "name",
+                "label": "",
+                "type": "query",
+                "query": "label_values(elasticsearch_indices_docs{job=\"$job\", cluster=\"$cluster\", name!=\"\"},name)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "instance",
+                "label": "",
+                "type": "query",
+                "query": "label_values(elasticsearch_indices_docs{job=\"$job\", cluster=\"$cluster\", name!=\"\"},instance)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            }
+        ],
+        "widgets": [
+            {
+                "title": "KPI",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "Cluster health",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 1,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "color",
+                                "op": "eq",
+                                "value": "red",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_cluster_health_status{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",color=\"red\"}==1 or (elasticsearch_cluster_health_status{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",color=\"green\"}==1)+4 or (elasticsearch_cluster_health_status{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",color=\"yellow\"}==1)+22",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 1
+            },
+            {
+                "title": "Tripped for breakers",
+                "widget_type": "stat",
+                "grid_x": 2,
+                "grid_y": 1,
+                "grid_w": 1,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "count(elasticsearch_breakers_tripped{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}>0)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 2
+            },
+            {
+                "title": "CPU usage Avg.",
+                "widget_type": "stat",
+                "grid_x": 3,
+                "grid_y": 1,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum (elasticsearch_process_cpu_percent{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"} ) / count (elasticsearch_process_cpu_percent{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"} )",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 3
+            },
+            {
+                "title": "JVM memory used Avg.",
+                "widget_type": "stat",
+                "grid_x": 5,
+                "grid_y": 1,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum (elasticsearch_jvm_memory_used_bytes{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}) / sum (elasticsearch_jvm_memory_max_bytes{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}) * 100",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 4
+            },
+            {
+                "title": "Nodes",
+                "widget_type": "stat",
+                "grid_x": 7,
+                "grid_y": 1,
+                "grid_w": 1,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_cluster_health_number_of_nodes{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 5
+            },
+            {
+                "title": "Data nodes",
+                "widget_type": "stat",
+                "grid_x": 8,
+                "grid_y": 1,
+                "grid_w": 1,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_cluster_health_number_of_data_nodes{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 6
+            },
+            {
+                "title": "Pending tasks",
+                "widget_type": "stat",
+                "grid_x": 9,
+                "grid_y": 1,
+                "grid_w": 1,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_cluster_health_number_of_pending_tasks{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 7
+            },
+            {
+                "title": "Open file descriptors per cluster",
+                "widget_type": "stat",
+                "grid_x": 10,
+                "grid_y": 1,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum (elasticsearch_process_open_files_count{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 8
+            },
+            {
+                "title": "Shards",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 4,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 9
+            },
+            {
+                "title": "Active primary shards",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 5,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_cluster_health_active_primary_shards{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 10
+            },
+            {
+                "title": "Active shards",
+                "widget_type": "stat",
+                "grid_x": 2,
+                "grid_y": 5,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_cluster_health_active_shards{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 11
+            },
+            {
+                "title": "Initializing shards",
+                "widget_type": "stat",
+                "grid_x": 4,
+                "grid_y": 5,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_cluster_health_initializing_shards{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 12
+            },
+            {
+                "title": "Relocating shards",
+                "widget_type": "stat",
+                "grid_x": 6,
+                "grid_y": 5,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_cluster_health_relocating_shards{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 13
+            },
+            {
+                "title": "Delayed shards",
+                "widget_type": "stat",
+                "grid_x": 8,
+                "grid_y": 5,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_cluster_health_delayed_unassigned_shards{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\"} ",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 14
+            },
+            {
+                "title": "Unassigned shards",
+                "widget_type": "stat",
+                "grid_x": 10,
+                "grid_y": 5,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_cluster_health_unassigned_shards{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\"} ",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 15
+            },
+            {
+                "title": "JVM Garbage Collection",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 8,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 16
+            },
+            {
+                "title": "GC count",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 9,
+                "grid_w": 6,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}} - {{gc}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(elasticsearch_jvm_gc_collection_seconds_count{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 17
+            },
+            {
+                "title": "GC time",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 9,
+                "grid_w": 6,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}} - {{gc}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(elasticsearch_jvm_gc_collection_seconds_sum{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 18
+            },
+            {
+                "title": "Translog",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 9,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 19
+            },
+            {
+                "title": "Total translog operations",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 10,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(elasticsearch_indices_translog_operations{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 20
+            },
+            {
+                "title": "Total translog size in bytes",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 10,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(elasticsearch_indices_translog_size_in_bytes{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 21
+            },
+            {
+                "title": "Breakers",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 10,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 22
+            },
+            {
+                "title": "Tripped for breakers",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 11,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: {{breaker}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_breakers_tripped{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 23
+            },
+            {
+                "title": "Estimated size in bytes of breaker",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 18,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: {{breaker}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_breakers_estimated_size_bytes{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: limit for {{breaker}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_breakers_limit_size_bytes{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 24
+            },
+            {
+                "title": "CPU and Memory",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 11,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 25
+            },
+            {
+                "title": "Load average",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 12,
+                "grid_w": 6,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "load1: {{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_os_load1{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "load5: {{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_os_load5{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "load15: {{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_os_load15{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 26
+            },
+            {
+                "title": "CPU usage",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 12,
+                "grid_w": 6,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "{{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_process_cpu_percent{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 27
+            },
+            {
+                "title": "JVM memory usage",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 23,
+                "grid_w": 6,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "{{name}} used: {{area}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_jvm_memory_used_bytes{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "{{name}} max: {{area}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_jvm_memory_max_bytes{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "{{name}} peak used pool: {{pool}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_jvm_memory_pool_peak_used_bytes{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}",
+                        "ref_id": "D"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 28
+            },
+            {
+                "title": "JVM memory committed",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 23,
+                "grid_w": 6,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "{{name}} committed: {{area}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_jvm_memory_committed_bytes{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "{{name}} max: {{area}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_jvm_memory_max_bytes{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 29
+            },
+            {
+                "title": "Disk and Network",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 34,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 30
+            },
+            {
+                "title": "Disk usage",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 7,
+                "grid_w": 6,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: {{path}}"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "1-(elasticsearch_filesystem_data_available_bytes{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}/elasticsearch_filesystem_data_size_bytes{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 31
+            },
+            {
+                "title": "Network usage",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 7,
+                "grid_w": 6,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: sent "
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(elasticsearch_transport_tx_size_bytes_total{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "D"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: received"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "-irate(elasticsearch_transport_rx_size_bytes_total{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 32
+            },
+            {
+                "title": "Documents",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 35,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 33
+            },
+            {
+                "title": "Documents count on node",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 36,
+                "grid_w": 6,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_indices_docs{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 34
+            },
+            {
+                "title": "Documents indexed rate",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 36,
+                "grid_w": 6,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(elasticsearch_indices_indexing_index_total{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 35
+            },
+            {
+                "title": "Documents deleted rate",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 47,
+                "grid_w": 4,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(elasticsearch_indices_docs_deleted{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 36
+            },
+            {
+                "title": "Documents merged rate",
+                "widget_type": "timeseries",
+                "grid_x": 4,
+                "grid_y": 47,
+                "grid_w": 4,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(elasticsearch_indices_merges_docs_total{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 37
+            },
+            {
+                "title": "Documents merged bytes",
+                "widget_type": "timeseries",
+                "grid_x": 8,
+                "grid_y": 47,
+                "grid_w": 4,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(elasticsearch_indices_merges_total_size_bytes_total{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 38
+            },
+            {
+                "title": "Times",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 58,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 39
+            },
+            {
+                "title": "Query time",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 9,
+                "grid_w": 6,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(elasticsearch_indices_search_query_time_seconds{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval]) ",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 40
+            },
+            {
+                "title": "Indexing time",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 9,
+                "grid_w": 6,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(elasticsearch_indices_indexing_index_time_seconds_total{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 41
+            },
+            {
+                "title": "Merging time",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 20,
+                "grid_w": 6,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(elasticsearch_indices_merges_total_time_seconds_total{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 42
+            },
+            {
+                "title": "Throttle time for index store",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 20,
+                "grid_w": 6,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(elasticsearch_indices_store_throttle_time_seconds_total{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 43
+            },
+            {
+                "title": "Total Operations stats",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 59,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 44
+            },
+            {
+                "title": "Total Operations  rate",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 10,
+                "grid_w": 12,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: indexing"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(elasticsearch_indices_indexing_index_total{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: query"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(elasticsearch_indices_search_query_total{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: fetch"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(elasticsearch_indices_search_fetch_total{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: merges"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(elasticsearch_indices_merges_total{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "D"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: refresh"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(elasticsearch_indices_refresh_total{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "E"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: flush"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(elasticsearch_indices_flush_total{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "F"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: get_exists"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(elasticsearch_indices_get_exists_total{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "G"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: get_missing"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(elasticsearch_indices_get_missing_total{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "H"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: get"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(elasticsearch_indices_get_tota{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "I"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: indexing_delete"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(elasticsearch_indices_indexing_delete_total{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "J"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 45
+            },
+            {
+                "title": "Total Operations time",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 21,
+                "grid_w": 12,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: indexing"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(elasticsearch_indices_indexing_index_time_seconds_total{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: query"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(elasticsearch_indices_search_query_time_seconds{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: fetch"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(elasticsearch_indices_search_fetch_time_seconds{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: merges"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(elasticsearch_indices_merges_total_time_seconds_total{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "D"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: refresh"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(elasticsearch_indices_refresh_time_seconds_total{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "E"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: flush"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(elasticsearch_indices_flush_time_seconds{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "F"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: get_exists"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(elasticsearch_indices_get_exists_time_seconds{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "G"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: get_time"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(elasticsearch_indices_get_time_seconds{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "H"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: get_missing"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(elasticsearch_indices_get_missing_time_seconds{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "I"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: indexing_delete"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(elasticsearch_indices_indexing_delete_time_seconds_total{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "J"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: get"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(elasticsearch_indices_get_time_seconds{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "K"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 46
+            },
+            {
+                "title": "Thread Pool",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 60,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 47
+            },
+            {
+                "title": "Thread Pool operations rejected",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 11,
+                "grid_w": 3,
+                "grid_h": 12,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: {{ type }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(elasticsearch_thread_pool_rejected_count{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 48
+            },
+            {
+                "title": "Thread Pool operations queued",
+                "widget_type": "timeseries",
+                "grid_x": 3,
+                "grid_y": 11,
+                "grid_w": 3,
+                "grid_h": 12,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: {{ type }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_thread_pool_active_count{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 49
+            },
+            {
+                "title": "Thread Pool threads active",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 11,
+                "grid_w": 3,
+                "grid_h": 12,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: {{ type }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_thread_pool_active_count{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 50
+            },
+            {
+                "title": "Thread Pool operations completed",
+                "widget_type": "timeseries",
+                "grid_x": 9,
+                "grid_y": 11,
+                "grid_w": 3,
+                "grid_h": 12,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}: {{ type }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(elasticsearch_thread_pool_completed_count{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 51
+            },
+            {
+                "title": "Caches",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 61,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 52
+            },
+            {
+                "title": "Field data memory size",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 12,
+                "grid_w": 6,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "{{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_indices_fielddata_memory_size_bytes{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 53
+            },
+            {
+                "title": "Field data evictions",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 12,
+                "grid_w": 6,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(elasticsearch_indices_fielddata_evictions{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 54
+            },
+            {
+                "title": "Query cache size",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 23,
+                "grid_w": 4,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "{{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_indices_query_cache_memory_size_bytes{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 55
+            },
+            {
+                "title": "Query cache evictions",
+                "widget_type": "timeseries",
+                "grid_x": 4,
+                "grid_y": 23,
+                "grid_w": 4,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(elasticsearch_indices_query_cache_evictions{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 56
+            },
+            {
+                "title": "Evictions from filter cache",
+                "widget_type": "timeseries",
+                "grid_x": 8,
+                "grid_y": 23,
+                "grid_w": 4,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(elasticsearch_indices_filter_cache_evictions{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}[$__rate_interval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 57
+            },
+            {
+                "title": "Segments",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 62,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 58
+            },
+            {
+                "title": "Count of index segments",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 13,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_indices_segments_count{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 59
+            },
+            {
+                "title": "Current memory size of segments in bytes",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 20,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "{{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_indices_segments_memory_bytes{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 60
+            },
+            {
+                "title": "Indices: Count of documents and Total size",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 63,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 61
+            },
+            {
+                "title": "Count of documents with only primary shards",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 14,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{index}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_indices_docs_primary{job=\"$job\",instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 62
+            },
+            {
+                "title": "Total size of stored index data in bytes with only primary shards on all nodes",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 21,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{index}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_indices_store_size_bytes_primary{job=\"$job\",instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 63
+            },
+            {
+                "title": "Total size of stored index data in bytes with all shards on all nodes",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 28,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{index}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_indices_store_size_bytes_total{job=\"$job\",instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 64
+            },
+            {
+                "title": "Indices: Doc values",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 64,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 65
+            },
+            {
+                "title": "Doc values with only primary shards on all nodes in bytes",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 129,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "{{index}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_indices_segment_doc_values_memory_bytes_primary{job=\"$job\",instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 66
+            },
+            {
+                "title": "Doc values with all shards on all nodes in bytes",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 136,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "{{index}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_indices_segment_doc_values_memory_bytes_total{job=\"$job\",instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 67
+            },
+            {
+                "title": "Indices: Fields",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 65,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 68
+            },
+            {
+                "title": "Size of fields with only primary shards on all nodes in bytes",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 16,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "{{index}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_indices_segment_fields_memory_bytes_primary{job=\"$job\",instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 69
+            },
+            {
+                "title": "Size of fields with all shards on all nodes in bytes",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 23,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "{{index}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "elasticsearch_indices_segment_fields_memory_bytes_total{job=\"$job\",instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 70
+            }
+        ]
+    }
+}

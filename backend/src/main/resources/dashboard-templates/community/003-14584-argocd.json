@@ -1,0 +1,2397 @@
+{
+    "id": "003-14584-argocd",
+    "title": "ArgoCD",
+    "description": "Prebuilt Moneat dashboard for ArgoCD telemetry.",
+    "category": "infrastructure",
+    "tags": [
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 50,
+    "variable_count": 7,
+    "quality": "partial",
+    "warnings": [],
+    "dashboard": {
+        "title": "ArgoCD",
+        "description": "Prebuilt Moneat dashboard for ArgoCD telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "datasource",
+                "label": null,
+                "type": "custom",
+                "query": "prometheus",
+                "default_value": "Prometheus",
+                "current": "Prometheus",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "namespace",
+                "label": null,
+                "type": "query",
+                "query": "label_values(kube_pod_info, namespace)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "interval",
+                "label": null,
+                "type": "custom",
+                "query": "1m,5m,10m,30m,1h,2h,4h,8h",
+                "default_value": "$__auto_interval_interval",
+                "current": "$__auto_interval_interval",
+                "options": [
+                    "$__auto_interval_interval",
+                    "1m",
+                    "5m",
+                    "10m",
+                    "30m",
+                    "1h",
+                    "2h",
+                    "4h",
+                    "8h"
+                ],
+                "datasource": null
+            },
+            {
+                "name": "grouping",
+                "label": null,
+                "type": "custom",
+                "query": "namespace,name,project",
+                "default_value": "namespace",
+                "current": "namespace",
+                "options": [
+                    "namespace",
+                    "name",
+                    "project"
+                ],
+                "datasource": null
+            },
+            {
+                "name": "cluster",
+                "label": null,
+                "type": "query",
+                "query": "label_values(argocd_cluster_info, server)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "health_status",
+                "label": null,
+                "type": "custom",
+                "query": "Healthy,Progressing,Suspended,Missing,Degraded,Unknown",
+                "default_value": "$__all",
+                "current": "$__all",
+                "options": [
+                    "Healthy",
+                    "Progressing",
+                    "Suspended",
+                    "Missing",
+                    "Degraded",
+                    "Unknown"
+                ],
+                "datasource": null
+            },
+            {
+                "name": "sync_status",
+                "label": null,
+                "type": "custom",
+                "query": "Synced,OutOfSync,Unknown",
+                "default_value": "$__all",
+                "current": "$__all",
+                "options": [
+                    "Synced",
+                    "OutOfSync",
+                    "Unknown"
+                ],
+                "datasource": null
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Overview",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": null,
+                "widget_type": "text",
+                "grid_x": 0,
+                "grid_y": 1,
+                "grid_w": 1,
+                "grid_h": 4,
+                "query_configs": [
+                    {
+                        "dataSource": "events",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": null,
+                        "ref_id": null
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 1
+            },
+            {
+                "title": "Uptime",
+                "widget_type": "stat",
+                "grid_x": 1,
+                "grid_y": 1,
+                "grid_w": 1,
+                "grid_h": 4,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "max",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "argocd-server-metrics",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "time() - max(process_start_time_seconds{job=\"argocd-server-metrics\",namespace=~\"$namespace\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "dtdurations",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "horizontal"
+                },
+                "sort_order": 2
+            },
+            {
+                "title": "Clusters",
+                "widget_type": "stat",
+                "grid_x": 2,
+                "grid_y": 1,
+                "grid_w": 2,
+                "grid_h": 4,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "count(count by (server) (argocd_cluster_info{namespace=~\"$namespace\"}))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "horizontal"
+                },
+                "sort_order": 3
+            },
+            {
+                "title": "Applications",
+                "widget_type": "stat",
+                "grid_x": 4,
+                "grid_y": 1,
+                "grid_w": 1,
+                "grid_h": 4,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "dest_server",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "health_status",
+                                "op": "like",
+                                "value": "$health_status",
+                                "values": null
+                            },
+                            {
+                                "field": "sync_status",
+                                "op": "like",
+                                "value": "$sync_status",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(argocd_app_info{namespace=~\"$namespace\",dest_server=~\"$cluster\",health_status=~\"$health_status\",sync_status=~\"$sync_status\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "horizontal"
+                },
+                "sort_order": 4
+            },
+            {
+                "title": "Repositories",
+                "widget_type": "stat",
+                "grid_x": 5,
+                "grid_y": 1,
+                "grid_w": 2,
+                "grid_h": 4,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "count(count by (repo) (argocd_app_info{namespace=~\"$namespace\"}))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "horizontal"
+                },
+                "sort_order": 5
+            },
+            {
+                "title": "Operations",
+                "widget_type": "gauge",
+                "grid_x": 7,
+                "grid_y": 1,
+                "grid_w": 1,
+                "grid_h": 4,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "dest_server",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "operation",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(argocd_app_info{namespace=~\"$namespace\",dest_server=~\"$cluster\",operation!=\"\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "gaugeMin": "0",
+                    "gaugeMax": "100",
+                    "orientation": "horizontal"
+                },
+                "sort_order": 6
+            },
+            {
+                "title": "Applications",
+                "widget_type": "timeseries",
+                "grid_x": 8,
+                "grid_y": 1,
+                "grid_w": 4,
+                "grid_h": 4,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{namespace}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "dest_server",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "health_status",
+                                "op": "like",
+                                "value": "$health_status",
+                                "values": null
+                            },
+                            {
+                                "field": "sync_status",
+                                "op": "like",
+                                "value": "$sync_status",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(argocd_app_info{namespace=~\"$namespace\",dest_server=~\"$cluster\",health_status=~\"$health_status\",sync_status=~\"$sync_status\"}) by (namespace)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 7
+            },
+            {
+                "title": "Application Status",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 5,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 8
+            },
+            {
+                "title": "Health Status",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 6,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{health_status}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "dest_server",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "health_status",
+                                "op": "like",
+                                "value": "$health_status",
+                                "values": null
+                            },
+                            {
+                                "field": "sync_status",
+                                "op": "like",
+                                "value": "$sync_status",
+                                "values": null
+                            },
+                            {
+                                "field": "health_status",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(argocd_app_info{namespace=~\"$namespace\",dest_server=~\"$cluster\",health_status=~\"$health_status\",sync_status=~\"$sync_status\",health_status!=\"\"}) by (health_status)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 9
+            },
+            {
+                "title": "Sync Status",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 6,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{sync_status}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "dest_server",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "health_status",
+                                "op": "like",
+                                "value": "$health_status",
+                                "values": null
+                            },
+                            {
+                                "field": "sync_status",
+                                "op": "like",
+                                "value": "$sync_status",
+                                "values": null
+                            },
+                            {
+                                "field": "health_status",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(argocd_app_info{namespace=~\"$namespace\",dest_server=~\"$cluster\",health_status=~\"$health_status\",sync_status=~\"$sync_status\",health_status!=\"\"}) by (sync_status)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 10
+            },
+            {
+                "title": "Sync Stats",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 6,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 11
+            },
+            {
+                "title": "Sync Activity",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 3,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{$grouping}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "dest_server",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(round(increase(argocd_app_sync_total{namespace=~\"$namespace\",dest_server=~\"$cluster\"}[$interval]))) by ($grouping)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 12
+            },
+            {
+                "title": "Sync Failures",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 9,
+                "grid_w": 12,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{phase}}: {{$grouping}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "phase",
+                                "op": "like",
+                                "value": "Error|Failed",
+                                "values": null
+                            },
+                            {
+                                "field": "dest_server",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(round(increase(argocd_app_sync_total{namespace=~\"$namespace\",phase=~\"Error|Failed\",dest_server=~\"$cluster\"}[$interval]))) by ($grouping, phase)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 13
+            },
+            {
+                "title": "Controller Stats",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 7,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 14
+            },
+            {
+                "title": "Reconciliation Activity",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 12,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{$grouping}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "dest_server",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(argocd_app_reconcile_count{namespace=~\"$namespace\",dest_server=~\"$cluster\"}[$interval])) by ($grouping)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 15
+            },
+            {
+                "title": "Reconciliation Performance",
+                "widget_type": "heatmap",
+                "grid_x": 0,
+                "grid_y": 18,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{le}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(argocd_app_reconcile_bucket{namespace=~\"$namespace\"}[$interval])) by (le)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 16
+            },
+            {
+                "title": "K8s API Activity",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 25,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{verb}} {{resource_kind}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "server",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(argocd_app_k8s_request_total{namespace=~\"$namespace\",server=~\"$cluster\"}[$interval])) by (verb, resource_kind)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 17
+            },
+            {
+                "title": "Workqueue Depth",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 31,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "app_.*",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(workqueue_depth{namespace=~\"$namespace\",name=~\"app_.*\"}) by (name)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 18
+            },
+            {
+                "title": "Pending kubectl run",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 31,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{command}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(argocd_kubectl_exec_pending{namespace=~\"$namespace\"}) by (command)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 19
+            },
+            {
+                "title": "Controller Telemetry",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 8,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 20
+            },
+            {
+                "title": "Memory Usage",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 26,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "{{namespace}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "argocd-metrics",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "go_memstats_heap_alloc_bytes{job=\"argocd-metrics\",namespace=~\"$namespace\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 21
+            },
+            {
+                "title": "CPU Usage",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 33,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "{{namespace}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "argocd-metrics",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(process_cpu_seconds_total{job=\"argocd-metrics\",namespace=~\"$namespace\"}[1m])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 22
+            },
+            {
+                "title": "Goroutines",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 40,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{namespace}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "argocd-metrics",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "go_goroutines{job=\"argocd-metrics\",namespace=~\"$namespace\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 23
+            },
+            {
+                "title": "Cluster Stats",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 9,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 24
+            },
+            {
+                "title": "Resource Objects Count",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 27,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{server}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "server",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(argocd_cluster_api_resource_objects{namespace=~\"$namespace\",server=~\"$cluster\"}) by (server)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 25
+            },
+            {
+                "title": "API Resources Count",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 34,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{server}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "server",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "  sum(argocd_cluster_api_resources{namespace=~\"$namespace\",server=~\"$cluster\"}) by (server)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 26
+            },
+            {
+                "title": "Cluster Events Count",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 40,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{server}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "server",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(argocd_cluster_events_total{namespace=~\"$namespace\",server=~\"$cluster\"}[$interval])) by (server)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 27
+            },
+            {
+                "title": "Repo Server Stats",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 10,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 28
+            },
+            {
+                "title": "Git Requests (ls-remote)",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 7,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{namespace}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "request_type",
+                                "op": "eq",
+                                "value": "ls-remote",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(argocd_git_request_total{request_type=\"ls-remote\", namespace=~\"$namespace\"}[10m])) by (namespace)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 29
+            },
+            {
+                "title": "Git Requests (checkout)",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 7,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{namespace}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "request_type",
+                                "op": "eq",
+                                "value": "fetch",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(argocd_git_request_total{request_type=\"fetch\", namespace=~\"$namespace\"}[10m])) by (namespace)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 30
+            },
+            {
+                "title": "Git Fetch Performance",
+                "widget_type": "heatmap",
+                "grid_x": 0,
+                "grid_y": 15,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": "{{le}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "request_type",
+                                "op": "eq",
+                                "value": "fetch",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(argocd_git_request_duration_seconds_bucket{request_type=\"fetch\", namespace=~\"$namespace\"}[$interval])) by (le)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 31
+            },
+            {
+                "title": "Git Ls-Remote Performance",
+                "widget_type": "heatmap",
+                "grid_x": 6,
+                "grid_y": 15,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": "{{le}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "request_type",
+                                "op": "eq",
+                                "value": "ls-remote",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(argocd_git_request_duration_seconds_bucket{request_type=\"ls-remote\", namespace=~\"$namespace\"}[$interval])) by (le)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 32
+            },
+            {
+                "title": "Memory Used",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 23,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "{{pod}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "argocd-repo-server",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "go_memstats_heap_alloc_bytes{job=\"argocd-repo-server\",namespace=~\"$namespace\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 33
+            },
+            {
+                "title": "Goroutines",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 31,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{pod}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "argocd-repo-server",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "go_goroutines{job=\"argocd-repo-server\",namespace=~\"$namespace\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 34
+            },
+            {
+                "title": "Server Stats",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 11,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 35
+            },
+            {
+                "title": "Memory Used",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 89,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "{{pod}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "argocd-server-metrics",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "go_memstats_heap_alloc_bytes{job=\"argocd-server-metrics\",namespace=~\"$namespace\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 36
+            },
+            {
+                "title": "Goroutines",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 97,
+                "grid_w": 12,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{pod}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "argocd-server-metrics",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "go_goroutines{job=\"argocd-server-metrics\",namespace=~\"$namespace\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 37
+            },
+            {
+                "title": "GC Time Quantiles",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 106,
+                "grid_w": 12,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": "{{pod}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "argocd-server-metrics",
+                                "values": null
+                            },
+                            {
+                                "field": "quantile",
+                                "op": "eq",
+                                "value": "1",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "go_gc_duration_seconds{job=\"argocd-server-metrics\", quantile=\"1\", namespace=~\"$namespace\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 38
+            },
+            {
+                "title": "",
+                "widget_type": "text",
+                "grid_x": 0,
+                "grid_y": 115,
+                "grid_w": 12,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "events",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": null,
+                        "ref_id": null
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 39
+            },
+            {
+                "title": "ApplicationService Requests",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 117,
+                "grid_w": 6,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{grpc_code}},{{grpc_method}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "argocd-server-metrics",
+                                "values": null
+                            },
+                            {
+                                "field": "grpc_service",
+                                "op": "eq",
+                                "value": "application.ApplicationService",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(grpc_server_handled_total{job=\"argocd-server-metrics\",grpc_service=\"application.ApplicationService\",namespace=~\"$namespace\"}[$interval])) by (grpc_code, grpc_method)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 40
+            },
+            {
+                "title": "ClusterService Requests",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 117,
+                "grid_w": 6,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{grpc_code}},{{grpc_method}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "argocd-server-metrics",
+                                "values": null
+                            },
+                            {
+                                "field": "grpc_service",
+                                "op": "eq",
+                                "value": "cluster.ClusterService",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(grpc_server_handled_total{job=\"argocd-server-metrics\",grpc_service=\"cluster.ClusterService\",namespace=~\"$namespace\"}[$interval])) by (grpc_code, grpc_method)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 41
+            },
+            {
+                "title": "ProjectService Requests",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 126,
+                "grid_w": 6,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{grpc_code}},{{grpc_method}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "argocd-server-metrics",
+                                "values": null
+                            },
+                            {
+                                "field": "grpc_service",
+                                "op": "eq",
+                                "value": "project.ProjectService",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(grpc_server_handled_total{job=\"argocd-server-metrics\",grpc_service=\"project.ProjectService\",namespace=~\"$namespace\"}[$interval])) by (grpc_code, grpc_method)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 42
+            },
+            {
+                "title": "RepositoryService Requests",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 126,
+                "grid_w": 6,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{grpc_code}},{{grpc_method}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "argocd-server-metrics",
+                                "values": null
+                            },
+                            {
+                                "field": "grpc_service",
+                                "op": "eq",
+                                "value": "repository.RepositoryService",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(grpc_server_handled_total{job=\"argocd-server-metrics\",grpc_service=\"repository.RepositoryService\",namespace=~\"$namespace\"}[$interval])) by (grpc_code, grpc_method)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 43
+            },
+            {
+                "title": "SessionService Requests",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 135,
+                "grid_w": 6,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{grpc_code}},{{grpc_method}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "argocd-server-metrics",
+                                "values": null
+                            },
+                            {
+                                "field": "grpc_service",
+                                "op": "eq",
+                                "value": "session.SessionService",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(grpc_server_handled_total{job=\"argocd-server-metrics\",grpc_service=\"session.SessionService\",namespace=~\"$namespace\"}[$interval])) by (grpc_code, grpc_method)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 44
+            },
+            {
+                "title": "VersionService Requests",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 135,
+                "grid_w": 6,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{grpc_code}},{{grpc_method}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "argocd-server-metrics",
+                                "values": null
+                            },
+                            {
+                                "field": "grpc_service",
+                                "op": "eq",
+                                "value": "version.VersionService",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(grpc_server_handled_total{job=\"argocd-server-metrics\",grpc_service=\"version.VersionService\",namespace=~\"$namespace\"}[$interval])) by (grpc_code, grpc_method)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 45
+            },
+            {
+                "title": "AccountService Requests",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 144,
+                "grid_w": 6,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{grpc_code}},{{grpc_method}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "argocd-server-metrics",
+                                "values": null
+                            },
+                            {
+                                "field": "grpc_service",
+                                "op": "eq",
+                                "value": "account.AccountService",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(grpc_server_handled_total{job=\"argocd-server-metrics\",grpc_service=\"account.AccountService\",namespace=~\"$namespace\"}[$interval])) by (grpc_code, grpc_method)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 46
+            },
+            {
+                "title": "SettingsService Requests",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 144,
+                "grid_w": 6,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{grpc_code}},{{grpc_method}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "argocd-server-metrics",
+                                "values": null
+                            },
+                            {
+                                "field": "grpc_service",
+                                "op": "eq",
+                                "value": "settings.SettingsService",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(grpc_server_handled_total{job=\"argocd-server-metrics\",grpc_service=\"settings.SettingsService\",namespace=~\"$namespace\"}[$interval])) by (grpc_code, grpc_method)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 47
+            },
+            {
+                "title": "Redis Stats",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 12,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 48
+            },
+            {
+                "title": "Requests by result",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 9,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(argocd_redis_request_total{namespace=~\"$namespace\"}[$interval])) by (failed)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 49
+            }
+        ]
+    }
+}

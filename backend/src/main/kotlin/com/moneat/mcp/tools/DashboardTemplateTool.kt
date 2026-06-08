@@ -25,6 +25,7 @@ import com.moneat.dashboards.repositories.DashboardWidgetRepositoryImpl
 import com.moneat.events.repositories.ProjectRepositoryImpl
 import com.moneat.dashboards.services.CustomDashboardService
 import com.moneat.dashboards.services.DashboardQueryEngine
+import com.moneat.dashboards.services.DashboardTemplateCatalogService
 import com.moneat.dashboards.translation.DataDogTranslator
 import com.moneat.dashboards.translation.GrafanaTranslator
 import com.moneat.mcp.models.McpContext
@@ -41,6 +42,7 @@ private val templateDashService = CustomDashboardService(
     DashboardWidgetRepositoryImpl(),
     ProjectRepositoryImpl { col, _, _ -> col },
 )
+private val dashboardTemplateCatalogService = DashboardTemplateCatalogService()
 private val dashQueryEngine = DashboardQueryEngine()
 private val dataDogTranslator = DataDogTranslator()
 private val grafanaTranslator = GrafanaTranslator()
@@ -58,8 +60,7 @@ class GetDashboardTemplatesTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val templates =
-            templateDashService.getDefaultDashboardTemplates()
+        val templates = dashboardTemplateCatalogService.listTemplates()
         return jsonResult(templates)
     }
 }

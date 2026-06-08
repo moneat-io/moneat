@@ -1,0 +1,389 @@
+{
+    "id": "039-593-aws-lambda",
+    "title": "AWS Lambda",
+    "description": "Prebuilt Moneat dashboard for AWS Lambda telemetry.",
+    "category": "cloud",
+    "tags": [
+        "Cloud",
+        "CloudWatch"
+    ],
+    "required_sources": [
+        "CloudWatch"
+    ],
+    "widget_count": 6,
+    "variable_count": 4,
+    "quality": "partial",
+    "warnings": [],
+    "dashboard": {
+        "title": "AWS Lambda",
+        "description": "Prebuilt Moneat dashboard for AWS Lambda telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "datasource",
+                "label": "Datasource",
+                "type": "custom",
+                "query": "cloudwatch",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "agg",
+                "label": "Aggregation",
+                "type": "custom",
+                "query": "1s,5s,10s,30s,1m,5m,15m,1h,6h,1d,7d,30d",
+                "default_value": "$__auto",
+                "current": "$__auto",
+                "options": [
+                    "1s",
+                    "5s",
+                    "10s",
+                    "30s",
+                    "1m",
+                    "5m",
+                    "15m",
+                    "1h",
+                    "6h",
+                    "1d",
+                    "7d",
+                    "30d"
+                ],
+                "datasource": null
+            },
+            {
+                "name": "region",
+                "label": "Region",
+                "type": "query",
+                "query": "regions()",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__cloudwatch"
+            },
+            {
+                "name": "functionname",
+                "label": "FunctionName",
+                "type": "query",
+                "query": "dimension_values($region,AWS/Lambda,Duration,FunctionName)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__cloudwatch"
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Duration",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/Lambda\",\"MetricName\":\"Duration\",\"Period\":\"$agg\",\"Dimensions\":[{\"Name\":\"FunctionName\",\"Value\":\"$functionname\"}]}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/Lambda\",\"MetricName\":\"Duration\",\"Period\":\"$agg\",\"Dimensions\":[{\"Name\":\"FunctionName\",\"Value\":\"$functionname\"}]}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "ms",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "bars",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.1",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "Invocations",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 7,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/Lambda\",\"MetricName\":\"Invocations\",\"Period\":\"$agg\",\"Dimensions\":[{\"Name\":\"FunctionName\",\"Value\":\"$functionname\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "bars",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.1",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 1
+            },
+            {
+                "title": "Errors",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 14,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/Lambda\",\"MetricName\":\"Errors\",\"Period\":\"$agg\",\"Dimensions\":[{\"Name\":\"FunctionName\",\"Value\":\"$functionname\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "bars",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.1",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 2
+            },
+            {
+                "title": "Throttles",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 21,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/Lambda\",\"MetricName\":\"Throttles\",\"Period\":\"$agg\",\"Dimensions\":[{\"Name\":\"FunctionName\",\"Value\":\"$functionname\"}]}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/Lambda\",\"MetricName\":\"Dead Letter Error\",\"Period\":\"$agg\",\"Dimensions\":[{\"Name\":\"FunctionName\",\"Value\":\"$functionname\"}]}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "bars",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.1",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 3
+            },
+            {
+                "title": "Global Concurrent Executions",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 28,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/Lambda\",\"MetricName\":\"ConcurrentExecutions\",\"Period\":\"$agg\",\"Dimensions\":[]}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/Lambda\",\"MetricName\":\"UnreservedConcurrentExecutions\",\"Period\":\"$agg\",\"Dimensions\":[]}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.1",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 4
+            },
+            {
+                "title": "Documentation",
+                "widget_type": "text",
+                "grid_x": 0,
+                "grid_y": 35,
+                "grid_w": 12,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "events",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": null,
+                        "ref_id": null
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 5
+            }
+        ]
+    }
+}

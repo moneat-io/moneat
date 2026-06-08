@@ -1,0 +1,666 @@
+{
+    "id": "063-17175-spring-boot-observability",
+    "title": "Spring Boot Observability",
+    "description": "Prebuilt Moneat dashboard for Spring Boot Observability telemetry.",
+    "category": "applications",
+    "tags": [
+        "Applications",
+        "Loki",
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Loki",
+        "Prometheus"
+    ],
+    "widget_count": 11,
+    "variable_count": 2,
+    "quality": "partial",
+    "warnings": [
+        "Panel 10: couldn't parse PromQL '{compose_service=~\"app-.*\"} | pattern `<date> <time> <_>=<trace_id> <_>=<span_id> <_>=<trace_flags> <type> <_> --- <msg>` | line_format \"{{.compose_service}}\\t{{.type}}\\ttrace_id={{.trace_id}}\\t{{.msg}}\" |= \"$log_keyword\"', stored as rawQuery"
+    ],
+    "dashboard": {
+        "title": "Spring Boot Observability",
+        "description": "Prebuilt Moneat dashboard for Spring Boot Observability telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "app_name",
+                "label": "Application Name",
+                "type": "query",
+                "query": "label_values(application)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "log_keyword",
+                "label": "Log Query",
+                "type": "textbox",
+                "query": "",
+                "default_value": "",
+                "current": "",
+                "options": [
+                    ""
+                ],
+                "datasource": null
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Total Requests",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 2,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$app_name",
+                                "values": null
+                            },
+                            {
+                                "field": "uri",
+                                "op": "neq",
+                                "value": "/actuator/prometheus",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(http_server_requests_seconds_count{application=\"$app_name\", uri!=\"/actuator/prometheus\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "Requests Count",
+                "widget_type": "stat",
+                "grid_x": 2,
+                "grid_y": 0,
+                "grid_w": 4,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{method}} {{uri}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$app_name",
+                                "values": null
+                            },
+                            {
+                                "field": "uri",
+                                "op": "neq",
+                                "value": "/actuator/prometheus",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by(uri) (http_server_requests_seconds_count{application=\"$app_name\", uri!=\"/actuator/prometheus\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 1
+            },
+            {
+                "title": "Requests Average Duration",
+                "widget_type": "bargauge",
+                "grid_x": 6,
+                "grid_y": 0,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{method}} {{uri}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$app_name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by(uri)(http_server_requests_seconds_sum{application=\"$app_name\"}) / sum by(uri)(http_server_requests_seconds_count{application=\"$app_name\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "s",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "horizontal",
+                    "displayMode": "lcd"
+                },
+                "sort_order": 2
+            },
+            {
+                "title": "Total Exceptions",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 6,
+                "grid_w": 2,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$app_name",
+                                "values": null
+                            },
+                            {
+                                "field": "outcome",
+                                "op": "eq",
+                                "value": "SERVER_ERROR",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(http_server_requests_seconds_count{application=\"$app_name\", outcome=\"SERVER_ERROR\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 3
+            },
+            {
+                "title": "Percent of 2xx Requests",
+                "widget_type": "timeseries",
+                "grid_x": 2,
+                "grid_y": 6,
+                "grid_w": 5,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{path}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$app_name",
+                                "values": null
+                            },
+                            {
+                                "field": "status",
+                                "op": "like",
+                                "value": "2.*",
+                                "values": null
+                            },
+                            {
+                                "field": "uri",
+                                "op": "neq",
+                                "value": "/actuator/prometheus",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by(uri) (http_server_requests_seconds_count{application=\"$app_name\", status=~\"2.*\", uri!=\"/actuator/prometheus\"}) / sum by(uri) (http_server_requests_seconds_count{application=\"$app_name\", uri!=\"/actuator/prometheus\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percentunit",
+                    "thresholds": "[{\"value\":0,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 4
+            },
+            {
+                "title": "Percent of 5xx Requests",
+                "widget_type": "timeseries",
+                "grid_x": 7,
+                "grid_y": 6,
+                "grid_w": 5,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{uri}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$app_name",
+                                "values": null
+                            },
+                            {
+                                "field": "status",
+                                "op": "like",
+                                "value": "5.*",
+                                "values": null
+                            },
+                            {
+                                "field": "uri",
+                                "op": "neq",
+                                "value": "/actuator/prometheus",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by(uri) (http_server_requests_seconds_count{application=\"$app_name\", status=~\"5.*\", uri!=\"/actuator/prometheus\"}) / sum by(uri) (http_server_requests_seconds_count{application=\"$app_name\", uri!=\"/actuator/prometheus\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percentunit",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 5
+            },
+            {
+                "title": "PR 99 Requests Duration",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 13,
+                "grid_w": 4,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{uri}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$app_name",
+                                "values": null
+                            },
+                            {
+                                "field": "uri",
+                                "op": "neq",
+                                "value": "/actuator/prometheus",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "histogram_quantile(.99,sum(rate(http_server_requests_seconds_bucket{application=\"$app_name\", uri!=\"/actuator/prometheus\"}[1m])) by(uri, le))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "s",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 6
+            },
+            {
+                "title": "PR 95 Requests Duration",
+                "widget_type": "timeseries",
+                "grid_x": 4,
+                "grid_y": 13,
+                "grid_w": 4,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{uri}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$app_name",
+                                "values": null
+                            },
+                            {
+                                "field": "uri",
+                                "op": "neq",
+                                "value": "/actuator/prometheus",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "histogram_quantile(.95,sum(rate(http_server_requests_seconds_bucket{application=\"$app_name\", uri!=\"/actuator/prometheus\"}[1m])) by(uri, le))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "s",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 7
+            },
+            {
+                "title": "Request Per Sec",
+                "widget_type": "timeseries",
+                "grid_x": 8,
+                "grid_y": 13,
+                "grid_w": 4,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{uri}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$app_name",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by(uri)(rate(http_server_requests_seconds_count{application=\"$app_name\"}[1m]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "reqps",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 8
+            },
+            {
+                "title": "Log Type Rate",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 21,
+                "grid_w": 3,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__loki",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{type}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "compose_service",
+                                "op": "like",
+                                "value": "app-.*",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by(type) (rate({compose_service=~\"app-.*\"} | pattern `<date> <time> <_>=<trace_id> <_>=<span_id> <_>=<trace_flags> <type> <_> --- <msg>` | type != \"\" |= \"$log_keyword\" [1m]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "bars",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "normal",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 9
+            },
+            {
+                "title": "Log of All Spring Boot Apps",
+                "widget_type": "table",
+                "grid_x": 3,
+                "grid_y": 21,
+                "grid_w": 9,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__loki",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{compose_service=~\"app-.*\"} | pattern `<date> <time> <_>=<trace_id> <_>=<span_id> <_>=<trace_flags> <type> <_> --- <msg>` | line_format \"{{.compose_service}}\\t{{.type}}\\ttrace_id={{.trace_id}}\\t{{.msg}}\" |= \"$log_keyword\"",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 10
+            }
+        ]
+    }
+}

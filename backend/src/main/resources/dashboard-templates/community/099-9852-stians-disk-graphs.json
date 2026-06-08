@@ -1,0 +1,1172 @@
+{
+    "id": "099-9852-stians-disk-graphs",
+    "title": "node-exporter disk graphs",
+    "description": "Prebuilt Moneat dashboard for node-exporter disk graphs telemetry.",
+    "category": "infrastructure",
+    "tags": [
+        "Infrastructure",
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 15,
+    "variable_count": 5,
+    "quality": "ready",
+    "warnings": [],
+    "dashboard": {
+        "title": "node-exporter disk graphs",
+        "description": "Prebuilt Moneat dashboard for node-exporter disk graphs telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "DataSource",
+                "label": "Prometheus",
+                "type": "custom",
+                "query": "prometheus",
+                "default_value": "prometheus",
+                "current": "prometheus",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "Node",
+                "label": null,
+                "type": "query",
+                "query": "label_values(node_time_seconds, instance)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "CPU",
+                "label": null,
+                "type": "query",
+                "query": "label_values(node_cpu_seconds_total, cpu)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "Disk",
+                "label": null,
+                "type": "query",
+                "query": "label_values(node_disk_write_time_seconds_total, device)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "RateInterval",
+                "label": null,
+                "type": "custom",
+                "query": "20s,1m,5m",
+                "default_value": "1m",
+                "current": "1m",
+                "options": [
+                    "$__auto_interval_RateInterval",
+                    "20s",
+                    "1m",
+                    "5m"
+                ],
+                "datasource": null
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Memory",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "Memory",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 1,
+                "grid_w": 4,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "Memory active {{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$Node",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "node_memory_Active_bytes{instance=~\"$Node\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "Memory buffers {{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$Node",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "node_memory_Buffers_bytes{instance=~\"$Node\"}",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "Memory cached {{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$Node",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "node_memory_Cached_bytes{instance=~\"$Node\"}",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "Total memory {{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$Node",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "node_memory_MemTotal_bytes{instance=~\"$Node\"}",
+                        "ref_id": "D"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 1
+            },
+            {
+                "title": "Memory write cache",
+                "widget_type": "timeseries",
+                "grid_x": 4,
+                "grid_y": 1,
+                "grid_w": 4,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "Dirty bytes {{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$Node",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "node_memory_Dirty_bytes{instance=~\"$Node\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "Writeback bytes {{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$Node",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "node_memory_Writeback_bytes{instance=~\"$Node\"}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 2
+            },
+            {
+                "title": "OOM killed procs",
+                "widget_type": "timeseries",
+                "grid_x": 8,
+                "grid_y": 1,
+                "grid_w": 4,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$Node",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(node_vmstat_oom_kill{instance=~\"$Node\"}[$RateInterval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 3
+            },
+            {
+                "title": "Disk",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 7,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 4
+            },
+            {
+                "title": "IO Wait per core",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 8,
+                "grid_w": 6,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "{{ instance }} CPU {{ cpu }}/{{ mode }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cpu",
+                                "op": "like",
+                                "value": "$CPU",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$Node",
+                                "values": null
+                            },
+                            {
+                                "field": "mode",
+                                "op": "eq",
+                                "value": "iowait",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(node_cpu_seconds_total{cpu=~\"$CPU\", instance=~\"$Node\", mode=\"iowait\"}[$RateInterval])",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "Min"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cpu",
+                                "op": "like",
+                                "value": "$CPU",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$Node",
+                                "values": null
+                            },
+                            {
+                                "field": "mode",
+                                "op": "eq",
+                                "value": "iowait",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "min(rate(node_cpu_seconds_total{cpu=~\"$CPU\", instance=~\"$Node\", mode=\"iowait\"}[$RateInterval]))",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "Avg"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cpu",
+                                "op": "like",
+                                "value": "$CPU",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$Node",
+                                "values": null
+                            },
+                            {
+                                "field": "mode",
+                                "op": "eq",
+                                "value": "iowait",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "avg(rate(node_cpu_seconds_total{cpu=~\"$CPU\", instance=~\"$Node\", mode=\"iowait\"}[$RateInterval]))",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "Max"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cpu",
+                                "op": "like",
+                                "value": "$CPU",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$Node",
+                                "values": null
+                            },
+                            {
+                                "field": "mode",
+                                "op": "eq",
+                                "value": "iowait",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "max(rate(node_cpu_seconds_total{cpu=~\"$CPU\", instance=~\"$Node\", mode=\"iowait\"}[$RateInterval]))",
+                        "ref_id": "D"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 5
+            },
+            {
+                "title": "Disk active time",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 8,
+                "grid_w": 6,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "disk_used",
+                                "alias": "{{ instance }} {{ device }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$Node",
+                                "values": null
+                            },
+                            {
+                                "field": "device",
+                                "op": "neq",
+                                "value": "sr0",
+                                "values": null
+                            },
+                            {
+                                "field": "device",
+                                "op": "like",
+                                "value": "$Disk",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(node_disk_io_time_seconds_total{instance=~\"$Node\", device!=\"sr0\", device=~\"$Disk\"}[$RateInterval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 6
+            },
+            {
+                "title": "Disk IO",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 13,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "disk_used",
+                                "alias": "Weighted IO time {{ device }} {{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$Node",
+                                "values": null
+                            },
+                            {
+                                "field": "device",
+                                "op": "neq",
+                                "value": "sr0",
+                                "values": null
+                            },
+                            {
+                                "field": "device",
+                                "op": "like",
+                                "value": "$Disk",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(node_disk_io_time_weighted_seconds_total{instance=~\"$Node\", device!=\"sr0\", device=~\"$Disk\"}[$RateInterval])",
+                        "ref_id": "D"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "disk_used",
+                                "alias": "Write time {{ device }} {{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$Node",
+                                "values": null
+                            },
+                            {
+                                "field": "device",
+                                "op": "neq",
+                                "value": "sr0",
+                                "values": null
+                            },
+                            {
+                                "field": "device",
+                                "op": "like",
+                                "value": "$Disk",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(node_disk_write_time_seconds_total{instance=~\"$Node\", device!=\"sr0\", device=~\"$Disk\"}[$RateInterval])",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "disk_used",
+                                "alias": "Read time {{ device }} {{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$Node",
+                                "values": null
+                            },
+                            {
+                                "field": "device",
+                                "op": "neq",
+                                "value": "sr0",
+                                "values": null
+                            },
+                            {
+                                "field": "device",
+                                "op": "like",
+                                "value": "$Disk",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(node_disk_read_time_seconds_total{instance=~\"$Node\", device!=\"sr0\", device=~\"$Disk\"}[$RateInterval])",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 7
+            },
+            {
+                "title": "IOPS",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 13,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "disk_used",
+                                "alias": "{{ instance }} {{ device }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$Node",
+                                "values": null
+                            },
+                            {
+                                "field": "device",
+                                "op": "neq",
+                                "value": "sr0",
+                                "values": null
+                            },
+                            {
+                                "field": "device",
+                                "op": "like",
+                                "value": "$Disk",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(node_disk_writes_completed_total{instance=~\"$Node\", device!=\"sr0\", device=~\"$Disk\"}[$RateInterval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 8
+            },
+            {
+                "title": "Write bandwidth",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 19,
+                "grid_w": 4,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "disk_used",
+                                "alias": "{{ instance }} {{ device }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$Node",
+                                "values": null
+                            },
+                            {
+                                "field": "device",
+                                "op": "neq",
+                                "value": "sr0",
+                                "values": null
+                            },
+                            {
+                                "field": "device",
+                                "op": "like",
+                                "value": "$Disk",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": " rate(node_disk_written_bytes_total{instance=~\"$Node\", device!=\"sr0\", device=~\"$Disk\"}[$RateInterval]) ",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 9
+            },
+            {
+                "title": "Write size",
+                "widget_type": "timeseries",
+                "grid_x": 4,
+                "grid_y": 19,
+                "grid_w": 4,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "disk_used",
+                                "alias": "{{ instance }} {{ device }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$Node",
+                                "values": null
+                            },
+                            {
+                                "field": "device",
+                                "op": "neq",
+                                "value": "sr0",
+                                "values": null
+                            },
+                            {
+                                "field": "device",
+                                "op": "like",
+                                "value": "$Disk",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(node_disk_written_bytes_total{instance=~\"$Node\", device!=\"sr0\", device=~\"$Disk\"}[$RateInterval]) / rate(node_disk_writes_completed_total{instance=~\"$Node\", device!=\"sr0\", device=~\"$Disk\"}[$RateInterval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 10
+            },
+            {
+                "title": "Write latency",
+                "widget_type": "timeseries",
+                "grid_x": 8,
+                "grid_y": 19,
+                "grid_w": 4,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "disk_used",
+                                "alias": "{{ instance }} {{ device }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$Node",
+                                "values": null
+                            },
+                            {
+                                "field": "device",
+                                "op": "neq",
+                                "value": "sr0",
+                                "values": null
+                            },
+                            {
+                                "field": "device",
+                                "op": "like",
+                                "value": "$Disk",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(node_disk_write_time_seconds_total{instance=~\"$Node\", device!=\"sr0\", device=~\"$Disk\"}[$RateInterval]) /  rate(node_disk_writes_completed_total{instance=~\"$Node\", device!=\"sr0\", device=~\"$Disk\"}[$RateInterval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 11
+            },
+            {
+                "title": "Read bandwidth",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 25,
+                "grid_w": 4,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "disk_used",
+                                "alias": "{{ instance }} {{ device }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$Node",
+                                "values": null
+                            },
+                            {
+                                "field": "device",
+                                "op": "neq",
+                                "value": "sr0",
+                                "values": null
+                            },
+                            {
+                                "field": "device",
+                                "op": "like",
+                                "value": "$Disk",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": " rate(node_disk_read_bytes_total{instance=~\"$Node\", device!=\"sr0\", device=~\"$Disk\"}[$RateInterval]) ",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 12
+            },
+            {
+                "title": "Read size",
+                "widget_type": "timeseries",
+                "grid_x": 4,
+                "grid_y": 25,
+                "grid_w": 4,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "disk_used",
+                                "alias": "{{ instance }} {{ device }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$Node",
+                                "values": null
+                            },
+                            {
+                                "field": "device",
+                                "op": "neq",
+                                "value": "sr0",
+                                "values": null
+                            },
+                            {
+                                "field": "device",
+                                "op": "like",
+                                "value": "$Disk",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(node_disk_read_bytes_total{instance=~\"$Node\", device!=\"sr0\", device=~\"$Disk\"}[$RateInterval]) / rate(node_disk_reads_completed_total{instance=~\"$Node\", device!=\"sr0\", device=~\"$Disk\"}[$RateInterval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 13
+            },
+            {
+                "title": "Read latency",
+                "widget_type": "timeseries",
+                "grid_x": 8,
+                "grid_y": 25,
+                "grid_w": 4,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "disk_used",
+                                "alias": "{{ instance }} {{ device }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$Node",
+                                "values": null
+                            },
+                            {
+                                "field": "device",
+                                "op": "neq",
+                                "value": "sr0",
+                                "values": null
+                            },
+                            {
+                                "field": "device",
+                                "op": "like",
+                                "value": "$Disk",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(node_disk_read_time_seconds_total{instance=~\"$Node\", device!=\"sr0\", device=~\"$Disk\"}[$RateInterval]) /  rate(node_disk_reads_completed_total{instance=~\"$Node\", device!=\"sr0\", device=~\"$Disk\"}[$RateInterval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 14
+            }
+        ]
+    }
+}

@@ -1,0 +1,382 @@
+{
+    "id": "016-11340-rabbitmq-quorum-queues-raft",
+    "title": "RabbitMQ-Quorum-Queues-Raft",
+    "description": "Prebuilt Moneat dashboard for RabbitMQ-Quorum-Queues-Raft telemetry.",
+    "category": "infrastructure",
+    "tags": [
+        "Messaging",
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 5,
+    "variable_count": 4,
+    "quality": "ready",
+    "warnings": [],
+    "dashboard": {
+        "title": "RabbitMQ-Quorum-Queues-Raft",
+        "description": "Prebuilt Moneat dashboard for RabbitMQ-Quorum-Queues-Raft telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "DS_PROMETHEUS",
+                "label": "datasource",
+                "type": "custom",
+                "query": "prometheus",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "namespace",
+                "label": "Namespace",
+                "type": "query",
+                "query": "label_values(rabbitmq_identity_info, namespace)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "endpoint",
+                "label": "endpoint",
+                "type": "query",
+                "query": "label_values(rabbitmq_identity_info{namespace=\"$namespace\", rabbitmq_cluster=\"$rabbitmq_cluster\", rabbitmq_endpoint!=\"memory-breakdown\"},rabbitmq_endpoint)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "rabbitmq_cluster",
+                "label": "RabbitMQ Cluster",
+                "type": "query",
+                "query": "label_values(rabbitmq_identity_info{namespace=\"$namespace\"}, rabbitmq_cluster)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Log entries committed / s",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 6,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{rabbitmq_node}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(rabbitmq_raft_log_commit_index[60s]) * on(instance, job) group_left(rabbitmq_cluster, rabbitmq_node) rabbitmq_identity_info{rabbitmq_cluster=\"$rabbitmq_cluster\", namespace=\"$namespace\",rabbitmq_endpoint=\"$endpoint\"}) by(rabbitmq_node)",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "__auto"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(rabbitmq_raft_commit_index[60s]) * on(instance, job) group_left(rabbitmq_cluster, rabbitmq_node) rabbitmq_identity_info{rabbitmq_cluster=\"$rabbitmq_cluster\", namespace=\"$namespace\",rabbitmq_endpoint=\"$endpoint\"}) by(rabbitmq_node)",
+                        "ref_id": "RabbitMQ 4.2+"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "Log entry commit latency",
+                "widget_type": "heatmap",
+                "grid_x": 6,
+                "grid_y": 0,
+                "grid_w": 6,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rabbitmq_raft_commit_latency_seconds * on(instance, job) group_left(rabbitmq_cluster, rabbitmq_node) rabbitmq_identity_info{rabbitmq_cluster=\"$rabbitmq_cluster\", namespace=\"$namespace\",rabbitmq_endpoint=\"$endpoint\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "scaleType": "linear"
+                },
+                "sort_order": 1
+            },
+            {
+                "title": "Uncommitted log entries",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 9,
+                "grid_w": 6,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{rabbitmq_node}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  (rabbitmq_raft_log_last_written_index * on(instance, job) group_left(rabbitmq_cluster, rabbitmq_node) rabbitmq_identity_info{rabbitmq_cluster=\"$rabbitmq_cluster\", namespace=\"$namespace\",rabbitmq_endpoint=\"$endpoint\"}) -\n  (rabbitmq_raft_log_commit_index * on(instance, job) group_left(rabbitmq_cluster, rabbitmq_node) rabbitmq_identity_info{rabbitmq_cluster=\"$rabbitmq_cluster\", namespace=\"$namespace\",rabbitmq_endpoint=\"$endpoint\"})\n) by(rabbitmq_node)",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "__auto"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  (rabbitmq_raft_last_written_index * on(instance, job) group_left(rabbitmq_cluster, rabbitmq_node) rabbitmq_identity_info{rabbitmq_cluster=\"$rabbitmq_cluster\", namespace=\"$namespace\",rabbitmq_endpoint=\"$endpoint\"}) -\n  (rabbitmq_raft_commit_index * on(instance, job) group_left(rabbitmq_cluster, rabbitmq_node) rabbitmq_identity_info{rabbitmq_cluster=\"$rabbitmq_cluster\", namespace=\"$namespace\",rabbitmq_endpoint=\"$endpoint\"})\n) by(rabbitmq_node)",
+                        "ref_id": "RabbitMQ 4.2+"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table"
+                },
+                "sort_order": 2
+            },
+            {
+                "title": "Leader elections / s",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 9,
+                "grid_w": 6,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{rabbitmq_node}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(rabbitmq_raft_term[60s]) * on(instance, job) group_left(rabbitmq_cluster, rabbitmq_node) rabbitmq_identity_info{rabbitmq_cluster=\"$rabbitmq_cluster\", namespace=\"$namespace\",rabbitmq_endpoint=\"$endpoint\"}) by(rabbitmq_node)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"transparent\"},{\"value\":3,\"color\":\"orange\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 3
+            },
+            {
+                "title": "Raft members with >5k entries in the log",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 18,
+                "grid_w": 12,
+                "grid_h": 12,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{rabbitmq_node}} {{queue}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  (rabbitmq_raft_log_last_written_index * on(instance, job) group_left(rabbitmq_cluster, rabbitmq_node) rabbitmq_identity_info{rabbitmq_cluster=\"$rabbitmq_cluster\", namespace=\"$namespace\",rabbitmq_endpoint=\"$endpoint\"}) - \n  (rabbitmq_raft_log_snapshot_index * on(instance) group_left(rabbitmq_cluster, rabbitmq_node) rabbitmq_identity_info{rabbitmq_cluster=\"$rabbitmq_cluster\", namespace=\"$namespace\",rabbitmq_endpoint=\"$endpoint\"})\n) by(queue, rabbitmq_node)",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "__auto"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  (rabbitmq_raft_last_written_index * on(instance, job) group_left(rabbitmq_cluster, rabbitmq_node) rabbitmq_identity_info{rabbitmq_cluster=\"$rabbitmq_cluster\", namespace=\"$namespace\",rabbitmq_endpoint=\"$endpoint\"}) - \n  (rabbitmq_raft_snapshot_index * on(instance) group_left(rabbitmq_cluster, rabbitmq_node) rabbitmq_identity_info{rabbitmq_cluster=\"$rabbitmq_cluster\", namespace=\"$namespace\",rabbitmq_endpoint=\"$endpoint\"})\n) by(queue, rabbitmq_node)",
+                        "ref_id": "RabbitMQ 4.2+"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":5000,\"color\":\"orange\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 4
+            }
+        ]
+    }
+}

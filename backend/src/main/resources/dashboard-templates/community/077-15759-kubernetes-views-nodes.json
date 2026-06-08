@@ -1,0 +1,2879 @@
+{
+    "id": "077-15759-kubernetes-views-nodes",
+    "title": "Kubernetes / Views / Nodes",
+    "description": "Prebuilt Moneat dashboard for Kubernetes / Views / Nodes telemetry.",
+    "category": "kubernetes",
+    "tags": [
+        "Infrastructure",
+        "Kubernetes",
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 41,
+    "variable_count": 5,
+    "quality": "partial",
+    "warnings": [
+        "Panel 33: couldn't parse PromQL '100 - ((node_filesystem_avail_bytes{instance=\"$instance\", cluster=\"$cluster\"} * 100) / node_filesystem_size_bytes{instance=\"$instance\", cluster=\"$cluster\"})', stored as rawQuery",
+        "Panel 34: couldn't parse PromQL '100 - (node_filesystem_files_free{instance=\"$instance\", cluster=\"$cluster\"} / node_filesystem_files{instance=\"$instance\", cluster=\"$cluster\"} * 100)', stored as rawQuery"
+    ],
+    "dashboard": {
+        "title": "Kubernetes / Views / Nodes",
+        "description": "Prebuilt Moneat dashboard for Kubernetes / Views / Nodes telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "datasource",
+                "label": null,
+                "type": "custom",
+                "query": "prometheus",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "cluster",
+                "label": null,
+                "type": "query",
+                "query": "label_values(kube_node_info,cluster)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "resolution",
+                "label": null,
+                "type": "custom",
+                "query": "1s, 15s, 30s, 1m, 3m, 5m",
+                "default_value": "30s",
+                "current": "30s",
+                "options": [
+                    "1s",
+                    "15s",
+                    "30s",
+                    "1m",
+                    "3m",
+                    "5m"
+                ],
+                "datasource": null
+            },
+            {
+                "name": "node",
+                "label": null,
+                "type": "query",
+                "query": "label_values(kube_node_info{cluster=\"$cluster\"}, node)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "instance",
+                "label": null,
+                "type": "query",
+                "query": "label_values(node_uname_info{nodename=~\"(?i:($node)(\\\\.[a-z0-9.-]+)?)\", cluster=\"$cluster\"}, instance)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Overview",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "CPU  Usage",
+                "widget_type": "gauge",
+                "grid_x": 0,
+                "grid_y": 1,
+                "grid_w": 2,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "mode",
+                                "op": "not_like",
+                                "value": "idle|iowait|steal",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "avg(sum by (cpu) (rate(node_cpu_seconds_total{mode!~\"idle|iowait|steal\", instance=\"$instance\", cluster=\"$cluster\"}[$__rate_interval])))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percentunit",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":50,\"color\":\"orange\"},{\"value\":70,\"color\":\"red\"}]",
+                    "gaugeMin": "0",
+                    "gaugeMax": "1",
+                    "orientation": "auto"
+                },
+                "sort_order": 1
+            },
+            {
+                "title": "RAM Usage",
+                "widget_type": "gauge",
+                "grid_x": 2,
+                "grid_y": 1,
+                "grid_w": 2,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(node_memory_MemTotal_bytes{instance=\"$instance\", cluster=\"$cluster\"} - node_memory_MemAvailable_bytes{instance=\"$instance\", cluster=\"$cluster\"}) / sum(node_memory_MemTotal_bytes{instance=\"$instance\", cluster=\"$cluster\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percentunit",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":50,\"color\":\"orange\"},{\"value\":70,\"color\":\"red\"}]",
+                    "gaugeMin": "0",
+                    "gaugeMax": "1",
+                    "orientation": "auto"
+                },
+                "sort_order": 2
+            },
+            {
+                "title": "Pods on node",
+                "widget_type": "stat",
+                "grid_x": 4,
+                "grid_y": 1,
+                "grid_w": 2,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "node",
+                                "op": "eq",
+                                "value": "$node",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_pod_info{node=\"$node\", cluster=\"$cluster\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"blue\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 3
+            },
+            {
+                "title": "List of pods on node ($node)",
+                "widget_type": "table",
+                "grid_x": 6,
+                "grid_y": 1,
+                "grid_w": 6,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "node",
+                                "op": "eq",
+                                "value": "$node",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "kube_pod_info{node=\"$node\", cluster=\"$cluster\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]"
+                },
+                "sort_order": 4
+            },
+            {
+                "title": "CPU Used",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 9,
+                "grid_w": 1,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "mode",
+                                "op": "not_like",
+                                "value": "idle|iowait|steal",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(node_cpu_seconds_total{mode!~\"idle|iowait|steal\", instance=\"$instance\", cluster=\"$cluster\"}[$__rate_interval]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "decimals": "3",
+                    "thresholds": "[{\"value\":0,\"color\":\"rgb(255, 255, 255)\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 5
+            },
+            {
+                "title": "CPU Total",
+                "widget_type": "stat",
+                "grid_x": 1,
+                "grid_y": 9,
+                "grid_w": 1,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "cpu_percent",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "node",
+                                "op": "eq",
+                                "value": "$node",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(machine_cpu_cores{node=\"$node\", cluster=\"$cluster\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"rgb(255, 255, 255)\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 6
+            },
+            {
+                "title": "RAM Used",
+                "widget_type": "stat",
+                "grid_x": 2,
+                "grid_y": 9,
+                "grid_w": 1,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(node_memory_MemTotal_bytes{instance=\"$instance\", cluster=\"$cluster\"} - node_memory_MemAvailable_bytes{instance=\"$instance\", cluster=\"$cluster\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "bytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"rgb(255, 255, 255)\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 7
+            },
+            {
+                "title": "RAM Total",
+                "widget_type": "stat",
+                "grid_x": 3,
+                "grid_y": 9,
+                "grid_w": 1,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "node",
+                                "op": "eq",
+                                "value": "$node",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(machine_memory_bytes{node=\"$node\", cluster=\"$cluster\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "bytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"rgb(255, 255, 255)\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 8
+            },
+            {
+                "title": "uptime",
+                "widget_type": "stat",
+                "grid_x": 4,
+                "grid_y": 9,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(node_time_seconds{instance=\"$instance\", cluster=\"$cluster\"} - node_boot_time_seconds{instance=\"$instance\", cluster=\"$cluster\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "s",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":25228800,\"color\":\"#EAB839\"},{\"value\":31536000,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 9
+            },
+            {
+                "title": "Resources",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 12,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 10
+            },
+            {
+                "title": "CPU Usage",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 13,
+                "grid_w": 6,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "{{ mode }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "avg(rate(node_cpu_seconds_total{instance=\"$instance\", cluster=\"$cluster\"}[$__rate_interval]) * 100) by (mode)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMax": "100"
+                },
+                "sort_order": 11
+            },
+            {
+                "title": "Memory Usage",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 13,
+                "grid_w": 6,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "RAM Used"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "node_memory_MemTotal_bytes{instance=\"$instance\", cluster=\"$cluster\"} - node_memory_MemFree_bytes{instance=\"$instance\", cluster=\"$cluster\"} - (node_memory_Cached_bytes{instance=\"$instance\", cluster=\"$cluster\"} + node_memory_Buffers_bytes{instance=\"$instance\", cluster=\"$cluster\"})",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "RAM Total"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "node_memory_MemTotal_bytes{instance=\"$instance\", cluster=\"$cluster\"}",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "RAM Cache"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "node_memory_Cached_bytes{instance=\"$instance\", cluster=\"$cluster\"}",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "RAM Buffer"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "node_memory_Buffers_bytes{instance=\"$instance\", cluster=\"$cluster\"}",
+                        "ref_id": "D"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "RAM Free"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "node_memory_MemFree_bytes{instance=\"$instance\", cluster=\"$cluster\"}",
+                        "ref_id": "E"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "SWAP Used"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "node_memory_SwapTotal_bytes{instance=\"$instance\", cluster=\"$cluster\"} - node_memory_SwapFree_bytes{instance=\"$instance\", cluster=\"$cluster\"}",
+                        "ref_id": "F"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "SWAP Total"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "node_memory_SwapTotal_bytes{instance=\"$instance\", cluster=\"$cluster\"}",
+                        "ref_id": "G"
+                    }
+                ],
+                "display_config": {
+                    "unit": "bytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "list"
+                },
+                "sort_order": 12
+            },
+            {
+                "title": "CPU usage by Pod",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 22,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "{{ pod }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "node",
+                                "op": "eq",
+                                "value": "$node",
+                                "values": null
+                            },
+                            {
+                                "field": "image",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(container_cpu_usage_seconds_total{node=\"$node\", image!=\"\", cluster=\"$cluster\"}[$__rate_interval])) by (pod)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 13
+            },
+            {
+                "title": "Memory usage by Pod",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 22,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": "{{ pod }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "node",
+                                "op": "eq",
+                                "value": "$node",
+                                "values": null
+                            },
+                            {
+                                "field": "image",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(container_memory_working_set_bytes{node=\"$node\", image!=\"\", cluster=\"$cluster\"}) by (pod)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "bytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 14
+            },
+            {
+                "title": "Number of CPU Core Throttled",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 30,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "Nb of cpu core throttles"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(node_cpu_core_throttles_total{instance=\"$instance\", cluster=\"$cluster\"}[$__rate_interval]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 15
+            },
+            {
+                "title": "System",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 38,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 16
+            },
+            {
+                "title": "System Load",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 39,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "1m"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "node_load1{instance=\"$instance\", cluster=\"$cluster\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "5m"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "node_load5{instance=\"$instance\", cluster=\"$cluster\"}",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "15m"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "node_load15{instance=\"$instance\", cluster=\"$cluster\"}",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 17
+            },
+            {
+                "title": "Context Switches & Interrupts",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 39,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Context switches"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(node_context_switches_total{instance=\"$instance\", cluster=\"$cluster\"}[$__rate_interval])",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Interrupts"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(node_intr_total{instance=\"$instance\", cluster=\"$cluster\"}[$__rate_interval])",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 18
+            },
+            {
+                "title": "File Descriptors",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 47,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Maximum file descriptors"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "node_filefd_maximum{instance=\"$instance\", cluster=\"$cluster\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Allocated file descriptors"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "node_filefd_allocated{instance=\"$instance\", cluster=\"$cluster\"}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 19
+            },
+            {
+                "title": "Time Sync",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 47,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Estimated error in seconds"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "node_timex_estimated_error_seconds{instance=\"$instance\", cluster=\"$cluster\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Maximum error in seconds"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "node_timex_maxerror_seconds{instance=\"$instance\", cluster=\"$cluster\"}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "s",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 20
+            },
+            {
+                "title": "Network",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 55,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 21
+            },
+            {
+                "title": "Network usage (bytes/s)",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 56,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_recv_bytes",
+                                "alias": "In"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(node_network_receive_bytes_total{instance=\"$instance\", cluster=\"$cluster\"}[$__rate_interval]))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_sent_bytes",
+                                "alias": "Out"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "- sum(rate(node_network_transmit_bytes_total{instance=\"$instance\", cluster=\"$cluster\"}[$__rate_interval]))",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "binBps",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 22
+            },
+            {
+                "title": "Network errors",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 56,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_recv_bytes",
+                                "alias": "In"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(node_network_receive_errs_total{instance=\"$instance\", cluster=\"$cluster\"}[$__rate_interval]))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_sent_bytes",
+                                "alias": "Out"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "- sum(rate(node_network_transmit_errs_total{instance=\"$instance\", cluster=\"$cluster\"}[$__rate_interval]))",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 23
+            },
+            {
+                "title": "Network usage (packet/s)",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 64,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_recv_bytes",
+                                "alias": "In"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(node_network_receive_packets_total{instance=\"$instance\", cluster=\"$cluster\"}[$__rate_interval]))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_sent_bytes",
+                                "alias": "Out"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "- sum(rate(node_network_transmit_packets_total{instance=\"$instance\", cluster=\"$cluster\"}[$__rate_interval]))",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "pps",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 24
+            },
+            {
+                "title": "Network total drops",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 64,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_recv_bytes",
+                                "alias": "In"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(node_network_receive_drop_total{instance=\"$instance\", cluster=\"$cluster\"}[$__rate_interval]))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_sent_bytes",
+                                "alias": "Out"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "- sum(rate(node_network_transmit_drop_total{instance=\"$instance\", cluster=\"$cluster\"}[$__rate_interval]))",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 25
+            },
+            {
+                "title": "TCP Currently Established",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 72,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "TCP Currently Established"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "node_netstat_Tcp_CurrEstab{instance=\"$instance\", cluster=\"$cluster\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 26
+            },
+            {
+                "title": "NF Conntrack",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 72,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "NF Conntrack entries"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "node_nf_conntrack_entries{instance=\"$instance\", cluster=\"$cluster\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "NF Conntrack limit"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "node_nf_conntrack_entries_limit{instance=\"$instance\", cluster=\"$cluster\"}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 27
+            },
+            {
+                "title": "Kubernetes Storage",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 80,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 28
+            },
+            {
+                "title": "Persistent Volumes - Usage in %",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 81,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "max",
+                                "field": null,
+                                "alias": "{{ namespace }} - {{ persistentvolumeclaim }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "node",
+                                "op": "eq",
+                                "value": "$node",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "max(kubelet_volume_stats_used_bytes{node=\"$node\", cluster=\"$cluster\"}) by (persistentvolumeclaim, namespace) / max(kubelet_volume_stats_capacity_bytes{node=\"$node\", cluster=\"$cluster\"}) by (persistentvolumeclaim, namespace)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percentunit",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "list"
+                },
+                "sort_order": 29
+            },
+            {
+                "title": "Persistent Volumes - Usage in GB",
+                "widget_type": "table",
+                "grid_x": 6,
+                "grid_y": 81,
+                "grid_w": 6,
+                "grid_h": 12,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "max",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "node",
+                                "op": "eq",
+                                "value": "$node",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "max(kubelet_volume_stats_used_bytes{node=\"$node\", cluster=\"$cluster\"}) by (persistentvolumeclaim, namespace)",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "max",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "node",
+                                "op": "eq",
+                                "value": "$node",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "max(kubelet_volume_stats_capacity_bytes{node=\"$node\", cluster=\"$cluster\"}) by (persistentvolumeclaim, namespace)",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "bytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "fieldRenames": "{\"Value #A (lastNotNull)\":\"Used\",\"Value #B (lastNotNull)\":\"Total\",\"persistentvolumeclaim\":\"Persistent Volume Claim\"}"
+                },
+                "sort_order": 30
+            },
+            {
+                "title": "Persistent Volumes - Inodes",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 89,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{ persistentvolumeclaim }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "node",
+                                "op": "eq",
+                                "value": "$node",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kubelet_volume_stats_inodes_used{node=\"$node\", cluster=\"$cluster\"}) by (persistentvolumeclaim) / sum(kubelet_volume_stats_inodes{node=\"$node\", cluster=\"$cluster\"}) by (persistentvolumeclaim) * 100",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 31
+            },
+            {
+                "title": "Node Storage",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 97,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 32
+            },
+            {
+                "title": "FS usage in %",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 98,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ mountpoint }}"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "100 - ((node_filesystem_avail_bytes{instance=\"$instance\", cluster=\"$cluster\"} * 100) / node_filesystem_size_bytes{instance=\"$instance\", cluster=\"$cluster\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "list"
+                },
+                "sort_order": 33
+            },
+            {
+                "title": "FS inode usage in %",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 98,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ mountpoint }}"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "100 - (node_filesystem_files_free{instance=\"$instance\", cluster=\"$cluster\"} / node_filesystem_files{instance=\"$instance\", cluster=\"$cluster\"} * 100)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "list"
+                },
+                "sort_order": 34
+            },
+            {
+                "title": "Reads by disk (bytes)",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 106,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "disk_used",
+                                "alias": "{{device}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(node_disk_read_bytes_total{instance=\"$instance\", cluster=\"$cluster\"}[$__rate_interval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "bytes",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "list"
+                },
+                "sort_order": 35
+            },
+            {
+                "title": "Writes by disk (bytes)",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 106,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "disk_used",
+                                "alias": "{{device}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(node_disk_written_bytes_total{instance=\"$instance\", cluster=\"$cluster\"}[$__rate_interval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "bytes",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "list"
+                },
+                "sort_order": 36
+            },
+            {
+                "title": "Completed reads by disk",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 114,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "disk_used",
+                                "alias": "{{device}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(node_disk_reads_completed_total{instance=\"$instance\", cluster=\"$cluster\"}[$__rate_interval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "read/s",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "list"
+                },
+                "sort_order": 37
+            },
+            {
+                "title": "Completed writes by disk",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 114,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "disk_used",
+                                "alias": "{{device}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(node_disk_writes_completed_total{instance=\"$instance\", cluster=\"$cluster\"}[$__rate_interval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "write/s",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "list"
+                },
+                "sort_order": 38
+            },
+            {
+                "title": "Disk(s) io/s",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 122,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "disk_used",
+                                "alias": "{{device}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(node_disk_io_now{instance=\"$instance\", cluster=\"$cluster\"}[$__rate_interval]) ",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "io/s",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "list"
+                },
+                "sort_order": 39
+            },
+            {
+                "title": "FS - Device Errors",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 122,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{ mountpoint }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(node_filesystem_device_error{instance=\"$instance\", cluster=\"$cluster\"}) by (mountpoint)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "list"
+                },
+                "sort_order": 40
+            }
+        ]
+    }
+}

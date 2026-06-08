@@ -1,0 +1,2560 @@
+{
+    "id": "085-16277-ethereum-metrics-exporter-single",
+    "title": "Ethereum Metrics Exporter (Single)",
+    "description": "Prebuilt Moneat dashboard for Ethereum Metrics Exporter (Single) telemetry.",
+    "category": "infrastructure",
+    "tags": [
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 42,
+    "variable_count": 1,
+    "quality": "ready",
+    "warnings": [],
+    "dashboard": {
+        "title": "Ethereum Metrics Exporter (Single)",
+        "description": "Prebuilt Moneat dashboard for Ethereum Metrics Exporter (Single) telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "instance",
+                "label": null,
+                "type": "query",
+                "query": "label_values(eth_con_beacon_slot, instance)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Overview",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "Execution Client",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 1,
+                "grid_w": 4,
+                "grid_h": 4,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "max",
+                                "field": null,
+                                "alias": "{{ version }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "max by (version)(eth_exe_web3_client_version{instance=~\"$instance\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 1
+            },
+            {
+                "title": "Consensus Config",
+                "widget_type": "stat",
+                "grid_x": 4,
+                "grid_y": 1,
+                "grid_w": 5,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ name }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_con_spec_config_name{instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 2
+            },
+            {
+                "title": "Consensus Fork",
+                "widget_type": "stat",
+                "grid_x": 9,
+                "grid_y": 1,
+                "grid_w": 3,
+                "grid_h": 4,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ fork }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_con_fork_current{instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 3
+            },
+            {
+                "title": "Consensus Client",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 5,
+                "grid_w": 4,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "max",
+                                "field": null,
+                                "alias": "{{ version }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "max by (version)(eth_con_node_version{instance=~\"$instance\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 4
+            },
+            {
+                "title": "Execution Chain ID",
+                "widget_type": "stat",
+                "grid_x": 9,
+                "grid_y": 5,
+                "grid_w": 1,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_exe_chain_id{instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 5
+            },
+            {
+                "title": "Execution Network ID",
+                "widget_type": "stat",
+                "grid_x": 10,
+                "grid_y": 5,
+                "grid_w": 2,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_exe_network_id{instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 6
+            },
+            {
+                "title": "Consensus Preset",
+                "widget_type": "stat",
+                "grid_x": 4,
+                "grid_y": 6,
+                "grid_w": 5,
+                "grid_h": 4,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ preset }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_con_spec_preset_base{instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 7
+            },
+            {
+                "title": "Consensus Layer",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 10,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 8
+            },
+            {
+                "title": "Sync Status",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 11,
+                "grid_w": 2,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_con_sync_is_syncing{instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":0,\"color\":\"green\"},{\"value\":1,\"color\":\"#EAB839\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 9
+            },
+            {
+                "title": "Sync Percent",
+                "widget_type": "timeseries",
+                "grid_x": 2,
+                "grid_y": 11,
+                "grid_w": 3,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_con_sync_percentage{instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 10
+            },
+            {
+                "title": "Slots",
+                "widget_type": "timeseries",
+                "grid_x": 5,
+                "grid_y": 11,
+                "grid_w": 3,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ block_id }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "slot",
+                                "op": "neq",
+                                "value": "genesis",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "\n    eth_con_beacon_slot{instance=~\"$instance\", slot!=\"genesis\"}\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 11
+            },
+            {
+                "title": "Epochs",
+                "widget_type": "timeseries",
+                "grid_x": 8,
+                "grid_y": 11,
+                "grid_w": 2,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ checkpoint }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "state_id",
+                                "op": "eq",
+                                "value": "head",
+                                "values": null
+                            },
+                            {
+                                "field": "checkpoint",
+                                "op": "neq",
+                                "value": "previous_justified",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_con_beacon_finality_checkpoint_epochs{instance=~\"$instance\", state_id=\"head\", checkpoint!=\"previous_justified\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 12
+            },
+            {
+                "title": "Epoch distances",
+                "widget_type": "timeseries",
+                "grid_x": 10,
+                "grid_y": 11,
+                "grid_w": 2,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Justified -> Finalized"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "checkpoint",
+                                "op": "eq",
+                                "value": "justified",
+                                "values": null
+                            },
+                            {
+                                "field": "state_id",
+                                "op": "eq",
+                                "value": "head",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (instance)(\n    eth_con_beacon_finality_checkpoint_epochs{instance=~\"$instance\", checkpoint=\"justified\", state_id=\"head\"}\n)\n-\nsum by (instance)(\n    eth_con_beacon_finality_checkpoint_epochs{instance=~\"$instance\", checkpoint=\"finalized\", state_id=\"head\"}\n)",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Justified -> Previous Justified"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "checkpoint",
+                                "op": "eq",
+                                "value": "justified",
+                                "values": null
+                            },
+                            {
+                                "field": "state_id",
+                                "op": "eq",
+                                "value": "head",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (instance)(\n    eth_con_beacon_finality_checkpoint_epochs{instance=~\"$instance\", checkpoint=\"justified\", state_id=\"head\"}\n)\n-\nsum by (instance)(\n    eth_con_beacon_finality_checkpoint_epochs{instance=~\"$instance\", checkpoint=\"previous_justified\", state_id=\"head\"}\n)",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "Epochs",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 13
+            },
+            {
+                "title": "Sync Distance",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 17,
+                "grid_w": 1,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_con_sync_distance{instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "slots",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 14
+            },
+            {
+                "title": "Sync rate",
+                "widget_type": "timeseries",
+                "grid_x": 1,
+                "grid_y": 17,
+                "grid_w": 2,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(eth_con_sync_percentage{instance=~\"$instance\"}[1m])) by (instance)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 15
+            },
+            {
+                "title": "Reorgs",
+                "widget_type": "timeseries",
+                "grid_x": 3,
+                "grid_y": 17,
+                "grid_w": 2,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (instance)(increase(eth_con_beacon_reorg_count{instance=~\"$instance\"}[1m]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 16
+            },
+            {
+                "title": "Slot distances",
+                "widget_type": "timeseries",
+                "grid_x": 5,
+                "grid_y": 17,
+                "grid_w": 3,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Head -> Finalized"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "block_id",
+                                "op": "eq",
+                                "value": "head",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (instance)(\n    eth_con_beacon_slot{instance=~\"$instance\", block_id=\"head\"}\n)\n-\nsum by (instance) (\n    eth_con_beacon_slot{instance=~\"$instance\", block_id=\"finalized\"}\n) ",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Head -> Justified"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (instance)(\n    eth_con_beacon_slot{instance=~\"$instance\", block_id=\"head\"}\n)\n-\nsum by (instance) (\n    eth_con_beacon_slot{instance=~\"$instance\", block_id=\"justified\"}\n) != 0",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Justified -> Finalized"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (instance)(\n    eth_con_beacon_slot{instance=~\"$instance\", block_id=\"justified\"}\n)\n-\nsum by (instance) (\n    eth_con_beacon_slot{instance=~\"$instance\", block_id=\"finalized\"}\n) != 0",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {
+                    "unit": "Slots",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 17
+            },
+            {
+                "title": "Counts Per Block (at head)",
+                "widget_type": "timeseries",
+                "grid_x": 8,
+                "grid_y": 17,
+                "grid_w": 2,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Transactions"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "block_id",
+                                "op": "eq",
+                                "value": "head",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_con_beacon_transactions{instance=~\"$instance\", block_id=\"head\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Proposer Slashings"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "block_id",
+                                "op": "eq",
+                                "value": "head",
+                                "values": null
+                            },
+                            {
+                                "field": "type",
+                                "op": "eq",
+                                "value": "proposer",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_con_beacon_slashings{instance=~\"$instance\", block_id=\"head\", type=\"proposer\"}",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Attester Slashings"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "block_id",
+                                "op": "eq",
+                                "value": "head",
+                                "values": null
+                            },
+                            {
+                                "field": "type",
+                                "op": "eq",
+                                "value": "attester",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_con_beacon_slashings{instance=~\"$instance\", block_id=\"head\", type=\"attester\"}",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Attestations"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "block_id",
+                                "op": "eq",
+                                "value": "head",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_con_beacon_attestations{instance=~\"$instance\",block_id=\"head\"}",
+                        "ref_id": "D"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Deposits"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "block_id",
+                                "op": "eq",
+                                "value": "head",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_con_beacon_deposits{instance=~\"$instance\",block_id=\"head\"}",
+                        "ref_id": "E"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Voluntary Exits"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "block_id",
+                                "op": "eq",
+                                "value": "head",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_con_beacon_voluntary_exits{instance=~\"$instance\",block_id=\"head\"}",
+                        "ref_id": "F"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 18
+            },
+            {
+                "title": "Events (per min)",
+                "widget_type": "timeseries",
+                "grid_x": 10,
+                "grid_y": 17,
+                "grid_w": 2,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{ event }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (event)(increase(eth_con_event_count{instance=~\"$instance\"}[1m]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "log",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 19
+            },
+            {
+                "title": "Proposer delay",
+                "widget_type": "heatmap",
+                "grid_x": 0,
+                "grid_y": 23,
+                "grid_w": 3,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "avg(increase(eth_con_beacon_proposer_delay_bucket{instance=~\"$instance\"}[1m])) by (le)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "scaleType": "linear"
+                },
+                "sort_order": 20
+            },
+            {
+                "title": "Withdrawals",
+                "widget_type": "timeseries",
+                "grid_x": 3,
+                "grid_y": 23,
+                "grid_w": 2,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Index Max"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "block_id",
+                                "op": "eq",
+                                "value": "head",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(eth_con_beacon_withdrawals_index_max{instance=~\"$instance\", block_id=\"head\"}) by (instance)",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Index Min"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "block_id",
+                                "op": "eq",
+                                "value": "head",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(eth_con_beacon_withdrawals_index_min{instance=~\"$instance\", block_id=\"head\"}) by (instance)",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Per Block"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "block_id",
+                                "op": "eq",
+                                "value": "head",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(eth_con_beacon_withdrawals{instance=~\"$instance\", block_id=\"head\"}) by (instance)",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 21
+            },
+            {
+                "title": "Withdrawal Amounts",
+                "widget_type": "timeseries",
+                "grid_x": 5,
+                "grid_y": 23,
+                "grid_w": 3,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "block_id",
+                                "op": "eq",
+                                "value": "head",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(eth_con_beacon_withdrawals_amount_gwei{instance=~\"$instance\", block_id=\"head\"}[1m])) by (instance)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "gwei",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 22
+            },
+            {
+                "title": "Peers (stacked)",
+                "widget_type": "timeseries",
+                "grid_x": 8,
+                "grid_y": 23,
+                "grid_w": 2,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "__auto"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "state",
+                                "op": "eq",
+                                "value": "connected",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (direction)(eth_con_peers{instance=~\"$instance\", state=\"connected\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "normal",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 23
+            },
+            {
+                "title": "Fork Epochs",
+                "widget_type": "timeseries",
+                "grid_x": 10,
+                "grid_y": 23,
+                "grid_w": 2,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ fork }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "fork",
+                                "op": "neq",
+                                "value": "SHARDING",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_con_fork_epoch{instance=~\"$instance\", fork!=\"SHARDING\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 24
+            },
+            {
+                "title": "Execution Layer",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 30,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 25
+            },
+            {
+                "title": "Sync Status",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 31,
+                "grid_w": 2,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_exe_sync_is_syncing{instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":0,\"color\":\"green\"},{\"value\":1,\"color\":\"#EAB839\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 26
+            },
+            {
+                "title": "Sync Percent",
+                "widget_type": "timeseries",
+                "grid_x": 2,
+                "grid_y": 31,
+                "grid_w": 3,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_exe_sync_percentage{instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 27
+            },
+            {
+                "title": "Block Height",
+                "widget_type": "timeseries",
+                "grid_x": 5,
+                "grid_y": 31,
+                "grid_w": 2,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_exe_block_most_recent_number{instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 28
+            },
+            {
+                "title": "Peers",
+                "widget_type": "timeseries",
+                "grid_x": 7,
+                "grid_y": 31,
+                "grid_w": 3,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_exe_net_peer_count{instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 29
+            },
+            {
+                "title": "Total Difficulty (trillions)",
+                "widget_type": "timeseries",
+                "grid_x": 10,
+                "grid_y": 31,
+                "grid_w": 2,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (instance)(\n    eth_exe_block_head_total_difficulty_trillions{instance=~\"$instance\"}\n)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 30
+            },
+            {
+                "title": "Sync Distance",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 37,
+                "grid_w": 2,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_exe_sync_highest_block{instance=~\"$instance\"} - eth_exe_sync_current_block{instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "blocks",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 31
+            },
+            {
+                "title": "Sync rate",
+                "widget_type": "timeseries",
+                "grid_x": 2,
+                "grid_y": 37,
+                "grid_w": 3,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (instance)(rate(eth_exe_sync_percentage{instance=~\"$instance\"}[1m]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 32
+            },
+            {
+                "title": "Suggested Gas Price",
+                "widget_type": "timeseries",
+                "grid_x": 5,
+                "grid_y": 37,
+                "grid_w": 2,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_exe_gas_price_gwei{instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "Gwei",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 33
+            },
+            {
+                "title": "Gas Used ",
+                "widget_type": "timeseries",
+                "grid_x": 7,
+                "grid_y": 37,
+                "grid_w": 5,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (instance)(\n    eth_exe_block_head_gas_used{instance=~\"$instance\"}\n)\n/\nsum by (instance)( \n    eth_exe_block_head_gas_limit{instance=~\"$instance\"} \n)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percentunit",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 34
+            },
+            {
+                "title": "Transactions per block",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 43,
+                "grid_w": 2,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (instance)(\n    increase(\n        eth_exe_block_head_transactions_in_block{instance=~\"$instance\"}[1m]\n    )\n)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 35
+            },
+            {
+                "title": "Block size",
+                "widget_type": "timeseries",
+                "grid_x": 2,
+                "grid_y": 43,
+                "grid_w": 3,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_exe_block_head_block_size_bytes{instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "bytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 36
+            },
+            {
+                "title": "Transaction Pool",
+                "widget_type": "timeseries",
+                "grid_x": 5,
+                "grid_y": 43,
+                "grid_w": 2,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ status }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_exe_txpool_transactions{instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 37
+            },
+            {
+                "title": "Gas used",
+                "widget_type": "timeseries",
+                "grid_x": 7,
+                "grid_y": 43,
+                "grid_w": 3,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_exe_block_head_gas_used{instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 38
+            },
+            {
+                "title": "Gas limit",
+                "widget_type": "timeseries",
+                "grid_x": 10,
+                "grid_y": 43,
+                "grid_w": 2,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "eth_exe_block_head_gas_limit{instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 39
+            },
+            {
+                "title": "Consensus Spec",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 49,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 40
+            },
+            {
+                "title": "Consensus Spec",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 50,
+                "grid_w": 12,
+                "grid_h": 12,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{ spec }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "__name__",
+                                "op": "like",
+                                "value": "eth_con_spec.*",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (spec)(\n    label_replace(\n        {__name__=~\"eth_con_spec.*\", instance=~\"$instance\"},\n        \"spec\",\n        \"$1\",\n        \"__name__\",\n        \"eth_con_spec_(.*)\"\n    )\n)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]"
+                },
+                "sort_order": 41
+            }
+        ]
+    }
+}

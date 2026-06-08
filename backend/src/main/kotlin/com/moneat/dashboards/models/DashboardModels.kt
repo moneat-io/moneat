@@ -276,3 +276,43 @@ data class DashboardImportResult(
     val warnings: List<String> = emptyList(),
     val variables: List<DashboardVariable> = emptyList()
 )
+
+@Serializable
+data class DashboardTemplateCatalog(
+    val templates: List<DashboardTemplateSummary> = emptyList()
+)
+
+@Serializable
+data class DashboardTemplateSummary(
+    val id: String,
+    val title: String,
+    val description: String? = null,
+    val category: String = "community",
+    val tags: List<String> = emptyList(),
+    @SerialName("required_sources") val requiredSources: List<String> = emptyList(),
+    @SerialName("widget_count") val widgetCount: Int = 0,
+    @SerialName("variable_count") val variableCount: Int = 0,
+    val quality: String = "ready",
+    @SerialName("resource_path") val resourcePath: String
+)
+
+@Serializable
+data class DashboardTemplateDetail(
+    val id: String,
+    val title: String,
+    val description: String? = null,
+    val category: String = "community",
+    val tags: List<String> = emptyList(),
+    @SerialName("required_sources") val requiredSources: List<String> = emptyList(),
+    @SerialName("widget_count") val widgetCount: Int = 0,
+    @SerialName("variable_count") val variableCount: Int = 0,
+    val quality: String = "ready",
+    val warnings: List<String> = emptyList(),
+    val dashboard: CreateDashboardRequest
+)
+
+@Serializable
+data class InstantiateDashboardTemplateRequest(
+    @SerialName("project_id") val projectId: Long? = null,
+    @SerialName("folder_id") val folderId: Long? = null
+)

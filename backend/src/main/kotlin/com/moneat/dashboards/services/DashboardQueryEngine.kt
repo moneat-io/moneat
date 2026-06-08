@@ -94,6 +94,17 @@ class DashboardQueryEngine {
         private const val DATETIME64_MILLIS_PRECISION = 3
         private const val QUERY_PREVIEW_LENGTH = 80
         private const val LOGS_TABLE_NAME = "logs"
+        private val TEMPLATE_DATA_SOURCE_MARKERS = mapOf(
+            "__prometheus" to "prometheus",
+            "__cloudwatch" to "cloudwatch",
+            "__elasticsearch" to "elasticsearch",
+            "__graphite" to "graphite",
+            "__influxdb" to "influxdb",
+            "__loki" to "loki",
+            "__postgresql" to "postgresql",
+            "__postgres" to "postgresql",
+            "__redis" to "redis"
+        )
 
         fun resolveTimeInterval(from: String, to: String): String {
             val rangeMs = parseRelativeTime(to) - parseRelativeTime(from)
@@ -168,29 +179,37 @@ class DashboardQueryEngine {
         )
     }
 
-    fun resolvePrometheusDataSource(
+    fun resolveTemplateDataSource(
         dsl: QueryDsl,
         orgId: Long,
         dataSourceService: CustomDataSourceService,
     ): QueryDsl {
-        if (dsl.dataSource != "__prometheus") return dsl
+        val sourceType = TEMPLATE_DATA_SOURCE_MARKERS[dsl.dataSource] ?: return dsl
         val sources = dataSourceService.listDataSources(orgId)
-        val promSource = sources.firstOrNull {
-            it.enabled && it.sourceType.equals("prometheus", ignoreCase = true)
+        val matchingSource = sources.firstOrNull {
+            it.enabled && it.sourceType.equals(sourceType, ignoreCase = true)
         }
-        if (promSource == null) {
+        if (matchingSource == null) {
             logger.warn {
                 val sourcesList = sources.map { "${it.id}:${it.sourceType}" }
                 val shortQuery = dsl.rawQuery?.take(QUERY_PREVIEW_LENGTH) ?: ""
-                "No enabled Prometheus datasource found for org $orgId (${sources.size} sources: $sourcesList), " +
-                    "cannot resolve __prometheus for rawQuery=$shortQuery"
+                "No enabled $sourceType datasource found for org $orgId (${sources.size} sources: $sourcesList), " +
+                    "cannot resolve ${dsl.dataSource} for rawQuery=$shortQuery"
             }
             return dsl
         }
         val rawQueryPreview = dsl.rawQuery?.take(QUERY_PREVIEW_LENGTH)
-        logger.debug { "Resolved __prometheus -> custom:${promSource.id} for rawQuery=$rawQueryPreview" }
-        return dsl.copy(dataSource = "custom:${promSource.id}")
+        logger.debug {
+            "Resolved ${dsl.dataSource} -> custom:${matchingSource.id} for rawQuery=$rawQueryPreview"
+        }
+        return dsl.copy(dataSource = "custom:${matchingSource.id}")
     }
+
+    fun resolvePrometheusDataSource(
+        dsl: QueryDsl,
+        orgId: Long,
+        dataSourceService: CustomDataSourceService,
+    ): QueryDsl = resolveTemplateDataSource(dsl, orgId, dataSourceService)
 
     fun buildQuery(
         dsl: QueryDsl,

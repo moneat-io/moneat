@@ -43,6 +43,24 @@ tasks.shadowJar {
     }
 }
 
+val dashboardTemplateSourceDir =
+    providers.gradleProperty("dashboardTemplateSource")
+        .orElse(providers.environmentVariable("DASHBOARD_TEMPLATE_SOURCE_DIR"))
+        .orElse("/Users/aelder/Projects/moneat-internal/grafana-dashboards")
+
+tasks.register<JavaExec>("convertDashboardTemplates") {
+    group = "dashboard"
+    description = "Converts community dashboard JSON into Moneat dashboard template resources."
+    dependsOn(tasks.named("testClasses"))
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.moneat.dashboards.tools.DashboardTemplateConverterKt")
+    args(
+        dashboardTemplateSourceDir.get(),
+        layout.projectDirectory.dir("src/main/resources/dashboard-templates").asFile.absolutePath,
+        layout.buildDirectory.file("reports/dashboard-template-conversion.json").get().asFile.absolutePath
+    )
+}
+
 repositories {
     mavenCentral()
 }

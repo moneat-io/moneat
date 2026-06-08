@@ -64,15 +64,20 @@ class GrafanaTranslator : DashboardTranslator {
     private val widgetTypeMap = mapOf(
         "timeseries" to "timeseries",
         "barchart" to "bar",
+        "grafana-piechart-panel" to "donut",
         "piechart" to "donut",
         "stat" to "stat",
+        "singlestat" to "stat",
         "table" to "table",
+        "table-old" to "table",
         "heatmap" to "heatmap",
         "text" to "text",
         "gauge" to "gauge",
         "bargauge" to "bargauge",
         "graph" to "timeseries",
-        "logs" to "table"
+        "logs" to "table",
+        "status-history" to "status",
+        "alertlist" to "text"
     )
 
     private val reverseWidgetTypeMap = mapOf(
@@ -460,18 +465,49 @@ class GrafanaTranslator : DashboardTranslator {
         inputsMap: Map<String, String> = emptyMap()
     ): String? = when (ds) {
         is JsonPrimitive if ds.isString -> {
-            val ref = ds.content
-            // Resolve ${DS_...} template variable references via __inputs
-            val varMatch = Regex("""\$\{(\w+)\}""").matchEntire(ref)
-            if (varMatch != null) {
-                inputsMap[varMatch.groupValues[1]] ?: ref
+            grafanaDatasourceToMoneatMarker(resolveDatasourceRef(ds.content, inputsMap))
+        }
+        is JsonObject -> {
+            val type = ds["type"]?.jsonPrimitive?.contentOrNull
+            if (type?.startsWith("custom:") == true) {
+                type
             } else {
-                ref
+                type?.let(::grafanaDatasourceToMoneatMarker)
             }
         }
-        is JsonObject if ds["type"]?.jsonPrimitive?.contentOrNull?.startsWith("custom:") == true ->
-            ds["type"]?.jsonPrimitive?.content
         else -> null
+    }
+
+    private fun resolveDatasourceRef(ref: String, inputsMap: Map<String, String>): String {
+        val trimmed = ref.trim()
+        // Resolve ${DS_...} template variable references via __inputs
+        val varMatch = Regex("""\$\{(\w+)\}""").matchEntire(trimmed)
+        return if (varMatch != null) {
+            inputsMap[varMatch.groupValues[1]] ?: trimmed
+        } else {
+            trimmed
+        }
+    }
+
+    private fun grafanaDatasourceToMoneatMarker(value: String): String? {
+        if (value.startsWith("custom:")) return value
+        if (value.startsWith("$")) return null
+        val normalized = value.lowercase()
+            .removePrefix("grafana-")
+            .removeSuffix("-datasource")
+            .replace("_", "-")
+        return when (normalized) {
+            "datasource", "grafana" -> null
+            "prometheus" -> "__prometheus"
+            "cloudwatch" -> "__cloudwatch"
+            "elasticsearch" -> "__elasticsearch"
+            "graphite" -> "__graphite"
+            "influxdb", "influx" -> "__influxdb"
+            "loki" -> "__loki"
+            "postgres", "postgresql" -> "__postgresql"
+            "redis" -> "__redis"
+            else -> value
+        }
     }
 
     private fun parseTarget(
@@ -527,7 +563,7 @@ class GrafanaTranslator : DashboardTranslator {
         if (esMetrics == null && esBucketAggs == null) return null
         val esQuery = translateGrafanaElasticsearchTarget(target)
         return QueryDsl(
-            dataSource = "events",
+            dataSource = "__elasticsearch",
             metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
             rawQuery = esQuery
         )
@@ -553,7 +589,7 @@ class GrafanaTranslator : DashboardTranslator {
         val redisCommand = target["command"]?.jsonPrimitive?.contentOrNull ?: return null
         val rawCmd = translateGrafanaRedisCommand(redisCommand, target)
         return QueryDsl(
-            dataSource = "events",
+            dataSource = "__redis",
             metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
             rawQuery = rawCmd
         )
@@ -563,7 +599,7 @@ class GrafanaTranslator : DashboardTranslator {
         if (target["measurement"]?.jsonPrimitive?.contentOrNull == null) return null
         val fluxFilter = translateGrafanaInfluxTarget(target)
         return QueryDsl(
-            dataSource = "events",
+            dataSource = "__influxdb",
             metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
             rawQuery = fluxFilter
         )
@@ -574,7 +610,7 @@ class GrafanaTranslator : DashboardTranslator {
         if (!target.containsKey("metricName")) return null
         val cwJson = translateGrafanaCloudWatchTarget(target)
         return QueryDsl(
-            dataSource = "events",
+            dataSource = "__cloudwatch",
             metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
             rawQuery = cwJson
         )
@@ -584,7 +620,7 @@ class GrafanaTranslator : DashboardTranslator {
         val graphiteTarget = target["target"]?.jsonPrimitive?.contentOrNull
         if (graphiteTarget.isNullOrBlank()) return null
         return QueryDsl(
-            dataSource = "events",
+            dataSource = "__graphite",
             metrics = listOf(MetricDef(AggFunction.COUNT, alias = legendFormat ?: "count")),
             rawQuery = graphiteTarget
         )
@@ -985,10 +1021,11 @@ class GrafanaTranslator : DashboardTranslator {
     internal fun parseGrafanaVariables(json: JsonObject): List<DashboardVariable> {
         val templating = json["templating"]?.jsonObject ?: return emptyList()
         val list = templating["list"]?.jsonArray ?: return emptyList()
+        val inputsMap = parseInputsMap(json)
 
         return list.mapNotNull { element ->
             suspendRunCatching {
-                parseSingleGrafanaVariable(element.jsonObject)
+                parseSingleGrafanaVariable(element.jsonObject, inputsMap)
             }.getOrElse { e ->
                 logger.warn { "Failed to parse Grafana variable: ${e.message}" }
                 null
@@ -996,7 +1033,10 @@ class GrafanaTranslator : DashboardTranslator {
         }
     }
 
-    private fun parseSingleGrafanaVariable(varObj: JsonObject): DashboardVariable? {
+    private fun parseSingleGrafanaVariable(
+        varObj: JsonObject,
+        inputsMap: Map<String, String>
+    ): DashboardVariable? {
         val name = varObj["name"]?.jsonPrimitive?.contentOrNull ?: return null
         val type = varObj["type"]?.jsonPrimitive?.contentOrNull ?: "custom"
         val label = varObj["label"]?.jsonPrimitive?.contentOrNull
@@ -1005,7 +1045,7 @@ class GrafanaTranslator : DashboardTranslator {
         val options = varObj["options"]?.jsonArray?.mapNotNull { opt ->
             opt.jsonObject["value"]?.jsonPrimitive?.contentOrNull
         } ?: emptyList()
-        val datasource = varObj["datasource"]?.let(::grafanaVariableDatasourceFromJson)
+        val datasource = varObj["datasource"]?.let { grafanaVariableDatasourceFromJson(it, inputsMap) }
 
         val supportedTypes = setOf("query", "custom", "textbox", "constant")
         return DashboardVariable(
@@ -1031,9 +1071,15 @@ class GrafanaTranslator : DashboardTranslator {
         else -> null
     }
 
-    private fun grafanaVariableDatasourceFromJson(ds: JsonElement): String? = when (ds) {
-        is JsonPrimitive -> ds.contentOrNull
-        is JsonObject -> ds["type"]?.jsonPrimitive?.contentOrNull
+    private fun grafanaVariableDatasourceFromJson(
+        ds: JsonElement,
+        inputsMap: Map<String, String>
+    ): String? = when (ds) {
+        is JsonPrimitive -> ds.contentOrNull?.let { datasourceRef ->
+            val resolved = resolveDatasourceRef(datasourceRef, inputsMap)
+            grafanaDatasourceToMoneatMarker(resolved)
+        }
+        is JsonObject -> ds["type"]?.jsonPrimitive?.contentOrNull?.let { grafanaDatasourceToMoneatMarker(it) }
         else -> null
     }
 

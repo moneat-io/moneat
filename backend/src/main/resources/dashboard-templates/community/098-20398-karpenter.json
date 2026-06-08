@@ -1,0 +1,1824 @@
+{
+    "id": "098-20398-karpenter",
+    "title": "Karpenter",
+    "description": "Prebuilt Moneat dashboard for Karpenter telemetry.",
+    "category": "infrastructure",
+    "tags": [
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 30,
+    "variable_count": 9,
+    "quality": "partial",
+    "warnings": [
+        "Panel 19: couldn't parse PromQL '((karpenter_nodes_total_daemon_requests{resource_type=\"cpu\",arch=~\"$arch\",capacity_type=~\"$capacity_type\",instance_type=~\"$instance_type\",nodepool=~\"$nodepool\",zone=~\"$zone\"} or karpenter_nodes_allocatable*0) + \n(karpenter_nodes_total_pod_requests{resource_type=\"cpu\",arch=~\"$arch\",capacity_type=~\"$capacity_type\",instance_type=~\"$instance_type\",nodepool=~\"$nodepool\",zone=~\"$zone\"} or karpenter_nodes_allocatable*0)) / \nkarpenter_nodes_allocatable{resource_type=\"cpu\",arch=~\"$arch\",capacity_type=~\"$capacity_type\",instance_type=~\"$instance_type\",nodepool=~\"$nodepool\",zone=~\"$zone\"}', stored as rawQuery",
+        "Panel 19: couldn't parse PromQL '((karpenter_nodes_total_daemon_requests{resource_type=\"memory\",arch=~\"$arch\",capacity_type=~\"$capacity_type\",instance_type=~\"$instance_type\",nodepool=~\"$nodepool\",zone=~\"$zone\"} or karpenter_nodes_allocatable*0) + \n(karpenter_nodes_total_pod_requests{resource_type=\"memory\",arch=~\"$arch\",capacity_type=~\"$capacity_type\",instance_type=~\"$instance_type\",nodepool=~\"$nodepool\",zone=~\"$zone\"} or karpenter_nodes_allocatable*0)) / \nkarpenter_nodes_allocatable{resource_type=\"memory\",arch=~\"$arch\",capacity_type=~\"$capacity_type\",instance_type=~\"$instance_type\",nodepool=~\"$nodepool\",zone=~\"$zone\"}', stored as rawQuery"
+    ],
+    "dashboard": {
+        "title": "Karpenter",
+        "description": "Prebuilt Moneat dashboard for Karpenter telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "datasource",
+                "label": null,
+                "type": "custom",
+                "query": "prometheus",
+                "default_value": "prometheus",
+                "current": "prometheus",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "nodepool",
+                "label": null,
+                "type": "query",
+                "query": "label_values(karpenter_nodepools_limit,nodepool)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "application",
+                "label": null,
+                "type": "query",
+                "query": "query_result(kube_deployment_created OR kube_statefulset_created)",
+                "default_value": "$__all",
+                "current": "$__all",
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "zone",
+                "label": null,
+                "type": "query",
+                "query": "label_values(karpenter_nodes_allocatable,zone)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "arch",
+                "label": null,
+                "type": "query",
+                "query": "label_values(karpenter_nodes_allocatable,arch)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "capacity_type",
+                "label": null,
+                "type": "query",
+                "query": "label_values(karpenter_nodes_allocatable,capacity_type)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "instance_type",
+                "label": null,
+                "type": "query",
+                "query": "label_values(karpenter_nodes_allocatable,instance_type)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "distribution_filter",
+                "label": null,
+                "type": "custom",
+                "query": "arch,capacity_type,instance_type,namespace,node,nodepool,zone",
+                "default_value": "nodepool",
+                "current": "nodepool",
+                "options": [
+                    "arch",
+                    "capacity_type",
+                    "instance_type",
+                    "namespace",
+                    "node",
+                    "nodepool",
+                    "zone"
+                ],
+                "datasource": null
+            },
+            {
+                "name": "query0",
+                "label": null,
+                "type": "query",
+                "query": "",
+                "default_value": "",
+                "current": "",
+                "options": [],
+                "datasource": "__prometheus"
+            }
+        ],
+        "widgets": [
+            {
+                "title": null,
+                "widget_type": "text",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "events",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": null,
+                        "ref_id": null
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 0
+            },
+            {
+                "title": "Summary",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 3,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 1
+            },
+            {
+                "title": "Cluster CPU Requests",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 4,
+                "grid_w": 2,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{node_name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "nodepool",
+                                "op": "like",
+                                "value": "$nodepool",
+                                "values": null
+                            },
+                            {
+                                "field": "resource_type",
+                                "op": "eq",
+                                "value": "cpu",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(karpenter_nodes_total_pod_requests{nodepool=~\"$nodepool\",resource_type=\"cpu\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"semi-dark-blue\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 2
+            },
+            {
+                "title": "Cluster Memory Requests",
+                "widget_type": "stat",
+                "grid_x": 2,
+                "grid_y": 4,
+                "grid_w": 2,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{node_name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "nodepool",
+                                "op": "like",
+                                "value": "$nodepool",
+                                "values": null
+                            },
+                            {
+                                "field": "resource_type",
+                                "op": "eq",
+                                "value": "memory",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(karpenter_nodes_total_pod_requests{nodepool=~\"$nodepool\",resource_type=\"memory\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "bytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 3
+            },
+            {
+                "title": "Node  Distribution by AZ",
+                "widget_type": "donut",
+                "grid_x": 4,
+                "grid_y": 4,
+                "grid_w": 2,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "__auto"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "nodepool",
+                                "op": "like",
+                                "value": "$nodepool",
+                                "values": null
+                            },
+                            {
+                                "field": "resource_type",
+                                "op": "eq",
+                                "value": "pods",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "count(karpenter_nodes_total_pod_requests{nodepool=~\"$nodepool\",resource_type=\"pods\"}) by (zone)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 4
+            },
+            {
+                "title": "Node  Distribution by Nodepool",
+                "widget_type": "donut",
+                "grid_x": 6,
+                "grid_y": 4,
+                "grid_w": 2,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "__auto"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "nodepool",
+                                "op": "like",
+                                "value": "$nodepool",
+                                "values": null
+                            },
+                            {
+                                "field": "resource_type",
+                                "op": "eq",
+                                "value": "pods",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "count(karpenter_nodes_total_pod_requests{nodepool=~\"$nodepool\",resource_type=\"pods\"}) by (nodepool)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 5
+            },
+            {
+                "title": "Pod  Distribution by Aviability Zone",
+                "widget_type": "donut",
+                "grid_x": 8,
+                "grid_y": 4,
+                "grid_w": 2,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "nodepool",
+                                "op": "like",
+                                "value": "$nodepool",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(karpenter_pods_state{nodepool=~\"$nodepool\"}) by (zone)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 6
+            },
+            {
+                "title": "Pod  Distribution by Nodepool",
+                "widget_type": "donut",
+                "grid_x": 10,
+                "grid_y": 4,
+                "grid_w": 2,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "nodepool",
+                                "op": "like",
+                                "value": "$nodepool",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(karpenter_pods_state{nodepool=~\"$nodepool\"}) by (nodepool)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 7
+            },
+            {
+                "title": "Cluster CPU Allocation",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 9,
+                "grid_w": 2,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{node_name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "nodepool",
+                                "op": "like",
+                                "value": "$nodepool",
+                                "values": null
+                            },
+                            {
+                                "field": "resource_type",
+                                "op": "eq",
+                                "value": "cpu",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(karpenter_nodes_total_pod_requests{nodepool=~\"$nodepool\",resource_type=\"cpu\"}) / sum(karpenter_nodes_allocatable{nodepool=~\"$nodepool\", resource_type=\"cpu\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percentunit",
+                    "thresholds": "[{\"value\":0,\"color\":\"semi-dark-blue\"}]",
+                    "gaugeMin": "0",
+                    "gaugeMax": "1",
+                    "orientation": "auto"
+                },
+                "sort_order": 8
+            },
+            {
+                "title": "Cluster Memory Allocation",
+                "widget_type": "stat",
+                "grid_x": 2,
+                "grid_y": 9,
+                "grid_w": 2,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{node_name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "nodepool",
+                                "op": "like",
+                                "value": "$nodepool",
+                                "values": null
+                            },
+                            {
+                                "field": "resource_type",
+                                "op": "eq",
+                                "value": "memory",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(karpenter_nodes_total_pod_requests{nodepool=~\"$nodepool\",resource_type=\"memory\"}) / sum(karpenter_nodes_allocatable{nodepool=~\"$nodepool\", resource_type=\"memory\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percentunit",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "gaugeMin": "0",
+                    "gaugeMax": "1",
+                    "orientation": "auto"
+                },
+                "sort_order": 9
+            },
+            {
+                "title": "Total number of Nodes",
+                "widget_type": "stat",
+                "grid_x": 4,
+                "grid_y": 9,
+                "grid_w": 2,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "__auto"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "nodepool",
+                                "op": "like",
+                                "value": "$nodepool",
+                                "values": null
+                            },
+                            {
+                                "field": "resource_type",
+                                "op": "eq",
+                                "value": "pods",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "count(karpenter_nodes_allocatable{nodepool=~\"$nodepool\",resource_type=\"pods\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"semi-dark-purple\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 10
+            },
+            {
+                "title": "Spot Node Percentage",
+                "widget_type": "stat",
+                "grid_x": 6,
+                "grid_y": 9,
+                "grid_w": 2,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "__auto"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "capacity_type",
+                                "op": "eq",
+                                "value": "spot",
+                                "values": null
+                            },
+                            {
+                                "field": "instance_type",
+                                "op": "like",
+                                "value": "$instance_type",
+                                "values": null
+                            },
+                            {
+                                "field": "nodepool",
+                                "op": "like",
+                                "value": "$nodepool",
+                                "values": null
+                            },
+                            {
+                                "field": "zone",
+                                "op": "like",
+                                "value": "$zone",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(count(karpenter_nodes_allocatable{capacity_type=\"spot\",instance_type=~\"$instance_type\",nodepool=~\"$nodepool\",zone=~\"$zone\"}) or vector(0)) / count(karpenter_nodes_allocatable{instance_type=~\"$instance_type\",nodepool=~\"$nodepool\",zone=~\"$zone\"})*100",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 11
+            },
+            {
+                "title": "Total number of pods",
+                "widget_type": "stat",
+                "grid_x": 8,
+                "grid_y": 9,
+                "grid_w": 4,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "__auto"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "nodepool",
+                                "op": "like",
+                                "value": "$nodepool",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(karpenter_pods_state{nodepool=~\"$nodepool\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"semi-dark-purple\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 12
+            },
+            {
+                "title": "Cluster",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 14,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 13
+            },
+            {
+                "title": "Nodepool usage percentage of limit",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 15,
+                "grid_w": 3,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{nodepool}}-{{resource_type}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "karpenter_nodepools_usage{nodepool=~\"${nodepool}\", resource_type=~\"memory|cpu\"} / karpenter_nodepools_limit{nodepool=~\"${nodepool}\",resource_type=~\"memory|cpu\"} * 100",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":70,\"color\":\"#EAB839\"},{\"value\":90,\"color\":\"dark-red\"},{\"value\":100,\"color\":\"#6ED0E0\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 14
+            },
+            {
+                "title": "Cluster CPU",
+                "widget_type": "timeseries",
+                "grid_x": 3,
+                "grid_y": 15,
+                "grid_w": 3,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Allocatable"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "nodepool",
+                                "op": "like",
+                                "value": "$nodepool",
+                                "values": null
+                            },
+                            {
+                                "field": "resource_type",
+                                "op": "eq",
+                                "value": "cpu",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(karpenter_nodes_allocatable{nodepool=~\"$nodepool\", resource_type=\"cpu\"})",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Requested"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "nodepool",
+                                "op": "like",
+                                "value": "$nodepool",
+                                "values": null
+                            },
+                            {
+                                "field": "resource_type",
+                                "op": "eq",
+                                "value": "cpu",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(karpenter_nodes_total_pod_requests{nodepool=~\"$nodepool\",resource_type=\"cpu\"})",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 15
+            },
+            {
+                "title": "Cluster Memory",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 15,
+                "grid_w": 3,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Allocatable"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "nodepool",
+                                "op": "like",
+                                "value": "$nodepool",
+                                "values": null
+                            },
+                            {
+                                "field": "resource_type",
+                                "op": "eq",
+                                "value": "memory",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(karpenter_nodes_allocatable{nodepool=~\"$nodepool\", resource_type=\"memory\"})",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Requested"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "nodepool",
+                                "op": "like",
+                                "value": "$nodepool",
+                                "values": null
+                            },
+                            {
+                                "field": "resource_type",
+                                "op": "eq",
+                                "value": "memory",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(karpenter_nodes_total_pod_requests{nodepool=~\"$nodepool\",resource_type=\"memory\"})",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "bytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 16
+            },
+            {
+                "title": "Total number of errors returned from CloudProvider calls.",
+                "widget_type": "timeseries",
+                "grid_x": 9,
+                "grid_y": 15,
+                "grid_w": 3,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{controller}}-{{error}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "controller",
+                                "op": "not_like",
+                                "value": "node.termination|nodeclaim.termination",
+                                "values": null
+                            },
+                            {
+                                "field": "error",
+                                "op": "neq",
+                                "value": "NodeClaimNotFoundError",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "karpenter_cloudprovider_errors_total{controller!~\"node.termination|nodeclaim.termination\", error!=\"NodeClaimNotFoundError\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 17
+            },
+            {
+                "title": "Nodes",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 22,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 18
+            },
+            {
+                "title": "Node Summary",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 23,
+                "grid_w": 12,
+                "grid_h": 10,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "CPU Utilization"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "((karpenter_nodes_total_daemon_requests{resource_type=\"cpu\",arch=~\"$arch\",capacity_type=~\"$capacity_type\",instance_type=~\"$instance_type\",nodepool=~\"$nodepool\",zone=~\"$zone\"} or karpenter_nodes_allocatable*0) + \n(karpenter_nodes_total_pod_requests{resource_type=\"cpu\",arch=~\"$arch\",capacity_type=~\"$capacity_type\",instance_type=~\"$instance_type\",nodepool=~\"$nodepool\",zone=~\"$zone\"} or karpenter_nodes_allocatable*0)) / \nkarpenter_nodes_allocatable{resource_type=\"cpu\",arch=~\"$arch\",capacity_type=~\"$capacity_type\",instance_type=~\"$instance_type\",nodepool=~\"$nodepool\",zone=~\"$zone\"}",
+                        "ref_id": "CPU Utilization"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Memory Utilization"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "((karpenter_nodes_total_daemon_requests{resource_type=\"memory\",arch=~\"$arch\",capacity_type=~\"$capacity_type\",instance_type=~\"$instance_type\",nodepool=~\"$nodepool\",zone=~\"$zone\"} or karpenter_nodes_allocatable*0) + \n(karpenter_nodes_total_pod_requests{resource_type=\"memory\",arch=~\"$arch\",capacity_type=~\"$capacity_type\",instance_type=~\"$instance_type\",nodepool=~\"$nodepool\",zone=~\"$zone\"} or karpenter_nodes_allocatable*0)) / \nkarpenter_nodes_allocatable{resource_type=\"memory\",arch=~\"$arch\",capacity_type=~\"$capacity_type\",instance_type=~\"$instance_type\",nodepool=~\"$nodepool\",zone=~\"$zone\"}",
+                        "ref_id": "Memory Utilization"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Memory Utilization"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "resource_type",
+                                "op": "eq",
+                                "value": "pods",
+                                "values": null
+                            },
+                            {
+                                "field": "arch",
+                                "op": "like",
+                                "value": "$arch",
+                                "values": null
+                            },
+                            {
+                                "field": "capacity_type",
+                                "op": "like",
+                                "value": "$capacity_type",
+                                "values": null
+                            },
+                            {
+                                "field": "instance_type",
+                                "op": "like",
+                                "value": "$instance_type",
+                                "values": null
+                            },
+                            {
+                                "field": "nodepool",
+                                "op": "like",
+                                "value": "$nodepool",
+                                "values": null
+                            },
+                            {
+                                "field": "zone",
+                                "op": "like",
+                                "value": "$zone",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "karpenter_nodes_total_daemon_requests{resource_type=\"pods\",arch=~\"$arch\",capacity_type=~\"$capacity_type\",instance_type=~\"$instance_type\",nodepool=~\"$nodepool\",zone=~\"$zone\"} + \nkarpenter_nodes_total_pod_requests{resource_type=\"pods\",arch=~\"$arch\",capacity_type=~\"$capacity_type\",instance_type=~\"$instance_type\",nodepool=~\"$nodepool\",zone=~\"$zone\"}",
+                        "ref_id": "Pod Count"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Uptime"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "label_replace(\n    sum by (node)(node_time_seconds) - sum by (node)(node_boot_time_seconds),\n    \"node_name\", \"$1\", \"node\", \"(.+)\"\n)",
+                        "ref_id": "Uptime"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "fieldRenames": "{\"Value\":\"CPU Utilization\",\"Value #CPU Utilization\":\"CPU Allocation\",\"Value #Memory Utilization\":\"Memory Allocation\",\"Value #Pod Count\":\"Pods\",\"Value #Uptime\":\"Uptime\",\"arch\":\"Architecture\",\"arch 1\":\"Arch\",\"capacity_type\":\"Capacity Type\",\"capacity_type 1\":\"Capacity Type\",\"instance 1\":\"Instance\",\"instance_network_bandwidth 1\":\"Network Bandwidth\",\"instance_type\":\"Instance Type\",\"instance_type 1\":\"Instance Type\",\"node_name\":\"Node Name\",\"nodepool 1\":\"Nodepool\",\"zone 1\":\"Zone\"}"
+                },
+                "sort_order": 19
+            },
+            {
+                "title": "Node Activity",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 33,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "created-\"{{nodepool}}\"-{{reason}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "nodepool",
+                                "op": "like",
+                                "value": "$nodepool",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "increase(karpenter_nodeclaims_created_total{nodepool=~\"$nodepool\"}[5m])",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "terminated-\"{{nodepool}}\"-{{reason}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "nodepool",
+                                "op": "like",
+                                "value": "$nodepool",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "- increase(karpenter_nodeclaims_terminated_total{nodepool=~\"$nodepool\"}[5m])",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "decimals": "0",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 20
+            },
+            {
+                "title": "Node AZ Distribution",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 33,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "__auto"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "nodepool",
+                                "op": "like",
+                                "value": "$nodepool",
+                                "values": null
+                            },
+                            {
+                                "field": "resource_type",
+                                "op": "eq",
+                                "value": "pods",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "count(karpenter_nodes_total_pod_requests{nodepool=~\"$nodepool\",resource_type=\"pods\"}) by (zone)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "decimals": "0",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.25",
+                    "stackMode": "normal",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 21
+            },
+            {
+                "title": "Node CPU Reservation",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 41,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{node_name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "nodepool",
+                                "op": "like",
+                                "value": "$nodepool",
+                                "values": null
+                            },
+                            {
+                                "field": "resource_type",
+                                "op": "eq",
+                                "value": "cpu",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "karpenter_nodes_total_pod_requests{nodepool=~\"$nodepool\",resource_type=\"cpu\"} / karpenter_nodes_allocatable{nodepool=~\"$nodepool\",resource_type=\"cpu\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percentunit",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMin": "0",
+                    "gaugeMax": "1"
+                },
+                "sort_order": 22
+            },
+            {
+                "title": "Node Memory Reservation",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 41,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{node_name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "nodepool",
+                                "op": "like",
+                                "value": "$nodepool",
+                                "values": null
+                            },
+                            {
+                                "field": "resource_type",
+                                "op": "eq",
+                                "value": "memory",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "karpenter_nodes_total_pod_requests{nodepool=~\"$nodepool\",resource_type=\"memory\"} / karpenter_nodes_allocatable{nodepool=~\"$nodepool\", resource_type=\"memory\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percentunit",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMin": "0",
+                    "gaugeMax": "1"
+                },
+                "sort_order": 23
+            },
+            {
+                "title": "Interruption Messages",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 49,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{message_type}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "idelta(karpenter_interruption_received_messages_total[1m])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "decimals": "0",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 24
+            },
+            {
+                "title": "Deleted Interruption Messages",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 49,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Number of messages deleted"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(idelta(karpenter_interruption_deleted_messages_total[1m]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "decimals": "0",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 25
+            },
+            {
+                "title": "Pods by Application",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 57,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 26
+            },
+            {
+                "title": "Total Number of Pods",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 58,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "nodepool",
+                                "op": "like",
+                                "value": "$nodepool",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$application.*",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(karpenter_pods_state{nodepool=~\"$nodepool\", name=~\"$application.*\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "decimals": "0",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 27
+            },
+            {
+                "title": "Pod  Distribution by Availability zone",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 58,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "nodepool",
+                                "op": "like",
+                                "value": "$nodepool",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$application.*",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(karpenter_pods_state{nodepool=~\"$nodepool\",name=~\"$application.*\"}) by (zone)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "decimals": "0",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.25",
+                    "stackMode": "normal",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 28
+            },
+            {
+                "title": "Pod Skew By  Availability zone",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 66,
+                "grid_w": 12,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{name}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "nodepool",
+                                "op": "like",
+                                "value": "$nodepool",
+                                "values": null
+                            },
+                            {
+                                "field": "name",
+                                "op": "like",
+                                "value": "$application.*",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "max(sum(karpenter_pods_state{nodepool=~\"$nodepool\", name=~\"$application.*\"}) by (zone)) - min(sum(karpenter_pods_state{nodepool=~\"$nodepool\", name=~\"$application.*\"}) by (zone))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "decimals": "0",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.25",
+                    "stackMode": "normal",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 29
+            }
+        ]
+    }
+}

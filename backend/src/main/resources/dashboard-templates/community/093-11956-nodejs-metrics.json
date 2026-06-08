@@ -1,0 +1,1160 @@
+{
+    "id": "093-11956-nodejs-metrics",
+    "title": "Nodejs Metrics",
+    "description": "Prebuilt Moneat dashboard for Nodejs Metrics telemetry.",
+    "category": "applications",
+    "tags": [
+        "Applications",
+        "Infrastructure",
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 18,
+    "variable_count": 5,
+    "quality": "partial",
+    "warnings": [
+        "Panel 4: couldn't parse PromQL '(process_start_time_seconds{service=~\"$service\", stack=~\"$stack\"})*1000', stored as rawQuery"
+    ],
+    "dashboard": {
+        "title": "Nodejs Metrics",
+        "description": "Prebuilt Moneat dashboard for Nodejs Metrics telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "interval",
+                "label": "Interval",
+                "type": "custom",
+                "query": "10s,30s,1m,5m,10m,30m,1h,6h,12h,1d,7d,14d,30d",
+                "default_value": "1m",
+                "current": "1m",
+                "options": [
+                    "$__auto_interval_interval",
+                    "10s",
+                    "30s",
+                    "1m",
+                    "5m",
+                    "10m",
+                    "30m",
+                    "1h",
+                    "6h",
+                    "12h",
+                    "1d",
+                    "7d",
+                    "14d",
+                    "30d"
+                ],
+                "datasource": null
+            },
+            {
+                "name": "group",
+                "label": "Group",
+                "type": "query",
+                "query": "label_values(nodejs_active_handles, group)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "stack",
+                "label": "Stack",
+                "type": "query",
+                "query": "label_values(nodejs_active_handles{group=\"$group\"},stack)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "service",
+                "label": "Service",
+                "type": "query",
+                "query": "label_values(nodejs_active_handles,service)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "host",
+                "label": "Host",
+                "type": "query",
+                "query": "label_values(nodejs_active_handles{stack=\"$stack\",service=\"$service\"},host)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            }
+        ],
+        "widgets": [
+            {
+                "title": "$service Nodejs Version",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 2,
+                "grid_h": 2,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{version}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$service",
+                                "values": null
+                            },
+                            {
+                                "field": "stack",
+                                "op": "like",
+                                "value": "$stack",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "nodejs_version_info{service=~\"$service\", stack=~\"$stack\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 0
+            },
+            {
+                "title": "Active Requests",
+                "widget_type": "timeseries",
+                "grid_x": 2,
+                "grid_y": 0,
+                "grid_w": 4,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{type}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$service",
+                                "values": null
+                            },
+                            {
+                                "field": "stack",
+                                "op": "like",
+                                "value": "$stack",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "nodejs_active_requests{service=~\"$service\", stack=~\"$stack\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Total"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$service",
+                                "values": null
+                            },
+                            {
+                                "field": "stack",
+                                "op": "like",
+                                "value": "$stack",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "nodejs_active_requests_total{service=~\"$service\", stack=~\"$stack\"}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 1
+            },
+            {
+                "title": "Active Handles",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 0,
+                "grid_w": 4,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{service}} {{type}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$service",
+                                "values": null
+                            },
+                            {
+                                "field": "stack",
+                                "op": "like",
+                                "value": "$stack",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "nodejs_active_handles{service=~\"$service\", stack=~\"$stack\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{service}} Total"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$service",
+                                "values": null
+                            },
+                            {
+                                "field": "stack",
+                                "op": "like",
+                                "value": "$stack",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "nodejs_active_handles_total{service=~\"$service\", stack=~\"$stack\"}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 2
+            },
+            {
+                "title": "$service Process Heap",
+                "widget_type": "stat",
+                "grid_x": 10,
+                "grid_y": 0,
+                "grid_w": 2,
+                "grid_h": 2,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "stack",
+                                "op": "like",
+                                "value": "$stack",
+                                "values": null
+                            },
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$service",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "process_heap_bytes{stack=~\"$stack\",service=~\"$service\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 3
+            },
+            {
+                "title": "$service Process start time",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 2,
+                "grid_w": 2,
+                "grid_h": 2,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{service}}"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(process_start_time_seconds{service=~\"$service\", stack=~\"$stack\"})*1000",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 4
+            },
+            {
+                "title": "$service Max file descriptors",
+                "widget_type": "stat",
+                "grid_x": 10,
+                "grid_y": 2,
+                "grid_w": 2,
+                "grid_h": 2,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "stack",
+                                "op": "like",
+                                "value": "$stack",
+                                "values": null
+                            },
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$service",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "process_max_fds{stack=~\"$stack\",service=~\"$service\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 5
+            },
+            {
+                "title": "$service Metrics scrape duration",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 4,
+                "grid_w": 2,
+                "grid_h": 2,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "stack",
+                                "op": "like",
+                                "value": "$stack",
+                                "values": null
+                            },
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$service",
+                                "values": null
+                            },
+                            {
+                                "field": "host",
+                                "op": "like",
+                                "value": "$host",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "scrape_duration_seconds{stack=~\"$stack\",service=~\"$service\", host=~\"$host\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 6
+            },
+            {
+                "title": "$service Open file descriptors",
+                "widget_type": "stat",
+                "grid_x": 10,
+                "grid_y": 4,
+                "grid_w": 2,
+                "grid_h": 2,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "stack",
+                                "op": "like",
+                                "value": "$stack",
+                                "values": null
+                            },
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$service",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "process_open_fds{stack=~\"$stack\",service=~\"$service\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 7
+            },
+            {
+                "title": "% CPU usage",
+                "widget_type": "timeseries",
+                "grid_x": 2,
+                "grid_y": 8,
+                "grid_w": 4,
+                "grid_h": 10,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "{{service}} User"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$service",
+                                "values": null
+                            },
+                            {
+                                "field": "stack",
+                                "op": "like",
+                                "value": "$stack",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(process_cpu_user_seconds_total{service=~\"$service\", stack=~\"$stack\"}[$interval])",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "{{service}} System"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$service",
+                                "values": null
+                            },
+                            {
+                                "field": "stack",
+                                "op": "like",
+                                "value": "$stack",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(process_cpu_system_seconds_total{service=~\"$service\", stack=~\"$stack\"}[$interval])",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "{{service}} Total"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "service",
+                                "op": "eq",
+                                "value": "$service",
+                                "values": null
+                            },
+                            {
+                                "field": "stack",
+                                "op": "like",
+                                "value": "$stack",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(process_cpu_seconds_total{service=\"$service\", stack=~\"$stack\"}[$interval])",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 8
+            },
+            {
+                "title": "Event loop lag",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 8,
+                "grid_w": 4,
+                "grid_h": 10,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{service}} Event Loop Lag"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$service",
+                                "values": null
+                            },
+                            {
+                                "field": "stack",
+                                "op": "like",
+                                "value": "$stack",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "nodejs_eventloop_lag_seconds{service=~\"$service\", stack=~\"$stack\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 9
+            },
+            {
+                "title": "Memory",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 18,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 10
+            },
+            {
+                "title": "External Memory",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 19,
+                "grid_w": 4,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "{{service}} External Memory"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$service",
+                                "values": null
+                            },
+                            {
+                                "field": "stack",
+                                "op": "like",
+                                "value": "$stack",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "nodejs_external_memory_bytes{service=~\"$service\", stack=~\"$stack\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 11
+            },
+            {
+                "title": "Heap size",
+                "widget_type": "timeseries",
+                "grid_x": 4,
+                "grid_y": 19,
+                "grid_w": 4,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{service}} Total"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$service",
+                                "values": null
+                            },
+                            {
+                                "field": "stack",
+                                "op": "like",
+                                "value": "$stack",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "nodejs_heap_size_total_bytes{service=~\"$service\", stack=~\"$stack\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{service}} Used"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$service",
+                                "values": null
+                            },
+                            {
+                                "field": "stack",
+                                "op": "like",
+                                "value": "$stack",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "nodejs_heap_size_used_bytes{service=~\"$service\", stack=~\"$stack\"}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 12
+            },
+            {
+                "title": "Process Memory",
+                "widget_type": "timeseries",
+                "grid_x": 8,
+                "grid_y": 19,
+                "grid_w": 4,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "{{service}} Resident"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$service",
+                                "values": null
+                            },
+                            {
+                                "field": "stack",
+                                "op": "like",
+                                "value": "$stack",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "process_resident_memory_bytes{service=~\"$service\", stack=~\"$stack\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "{{service}} Virtual"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$service",
+                                "values": null
+                            },
+                            {
+                                "field": "stack",
+                                "op": "like",
+                                "value": "$stack",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "process_virtual_memory_bytes{service=~\"$service\", stack=~\"$stack\"}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 13
+            },
+            {
+                "title": "Heap Space Size",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 27,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 14
+            },
+            {
+                "title": "Total",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 28,
+                "grid_w": 4,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{service}} {{space}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$service",
+                                "values": null
+                            },
+                            {
+                                "field": "stack",
+                                "op": "like",
+                                "value": "$stack",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "nodejs_heap_space_size_total_bytes{service=~\"$service\", stack=~\"$stack\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 15
+            },
+            {
+                "title": "Available",
+                "widget_type": "timeseries",
+                "grid_x": 4,
+                "grid_y": 28,
+                "grid_w": 4,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{service}}-{{space}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$service",
+                                "values": null
+                            },
+                            {
+                                "field": "stack",
+                                "op": "like",
+                                "value": "$stack",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "nodejs_heap_space_size_available_bytes{service=~\"$service\", stack=~\"$stack\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 16
+            },
+            {
+                "title": "Used",
+                "widget_type": "timeseries",
+                "grid_x": 8,
+                "grid_y": 28,
+                "grid_w": 4,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{service}} {{space}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$service",
+                                "values": null
+                            },
+                            {
+                                "field": "stack",
+                                "op": "like",
+                                "value": "$stack",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "nodejs_heap_space_size_used_bytes{service=~\"$service\", stack=~\"$stack\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 17
+            }
+        ]
+    }
+}

@@ -1,0 +1,3310 @@
+{
+    "id": "079-15757-kubernetes-views-global",
+    "title": "Kubernetes / Views / Global",
+    "description": "Prebuilt Moneat dashboard for Kubernetes / Views / Global telemetry.",
+    "category": "kubernetes",
+    "tags": [
+        "Kubernetes",
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 30,
+    "variable_count": 4,
+    "quality": "ready",
+    "warnings": [],
+    "dashboard": {
+        "title": "Kubernetes / Views / Global",
+        "description": "Prebuilt Moneat dashboard for Kubernetes / Views / Global telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "datasource",
+                "label": null,
+                "type": "custom",
+                "query": "prometheus",
+                "default_value": "",
+                "current": "",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "cluster",
+                "label": null,
+                "type": "query",
+                "query": "label_values(kube_node_info,cluster)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "resolution",
+                "label": null,
+                "type": "custom",
+                "query": "1s, 15s, 30s, 1m, 3m, 5m",
+                "default_value": "30s",
+                "current": "30s",
+                "options": [
+                    "1s",
+                    "15s",
+                    "30s",
+                    "1m",
+                    "3m",
+                    "5m"
+                ],
+                "datasource": null
+            },
+            {
+                "name": "job",
+                "label": null,
+                "type": "query",
+                "query": "label_values(node_cpu_seconds_total{cluster=\"$cluster\"},job)",
+                "default_value": "",
+                "current": "",
+                "options": [],
+                "datasource": "__prometheus"
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Overview",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "Global CPU  Usage",
+                "widget_type": "bargauge",
+                "grid_x": 0,
+                "grid_y": 1,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "Real Linux"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "mode",
+                                "op": "not_like",
+                                "value": "idle|iowait|steal",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "avg(sum by (instance, cpu) (rate(node_cpu_seconds_total{mode!~\"idle|iowait|steal\", cluster=\"$cluster\", job=\"$job\"}[$__rate_interval])))",
+                        "ref_id": "Real Linux"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "Real Windows"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "mode",
+                                "op": "neq",
+                                "value": "idle",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "avg(sum by (core) (rate(windows_cpu_time_total{mode!=\"idle\", cluster=\"$cluster\"}[$__rate_interval])))",
+                        "ref_id": "Real Windows"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Requests"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "resource",
+                                "op": "eq",
+                                "value": "cpu",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_pod_container_resource_requests{resource=\"cpu\", cluster=\"$cluster\"}) / sum(machine_cpu_cores{cluster=\"$cluster\"})",
+                        "ref_id": "Requests"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Limits"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "resource",
+                                "op": "eq",
+                                "value": "cpu",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_pod_container_resource_limits{resource=\"cpu\", cluster=\"$cluster\"}) / sum(machine_cpu_cores{cluster=\"$cluster\"})",
+                        "ref_id": "Limits"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percentunit",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "gaugeMin": "0",
+                    "gaugeMax": "1",
+                    "orientation": "horizontal",
+                    "displayMode": "lcd"
+                },
+                "sort_order": 1
+            },
+            {
+                "title": "Global RAM Usage",
+                "widget_type": "bargauge",
+                "grid_x": 3,
+                "grid_y": 1,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": "Real Linux"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(node_memory_MemTotal_bytes{cluster=\"$cluster\", job=\"$job\"} - node_memory_MemAvailable_bytes{cluster=\"$cluster\", job=\"$job\"}) / sum(node_memory_MemTotal_bytes{cluster=\"$cluster\", job=\"$job\"})",
+                        "ref_id": "Real Linux"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": "Real Windows"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(windows_memory_available_bytes{cluster=\"$cluster\"} + windows_memory_cache_bytes{cluster=\"$cluster\"}) / sum(windows_os_visible_memory_bytes{cluster=\"$cluster\"})",
+                        "ref_id": "Real Windows"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Requests"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "resource",
+                                "op": "eq",
+                                "value": "memory",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_pod_container_resource_requests{resource=\"memory\", cluster=\"$cluster\"}) / sum(machine_memory_bytes{cluster=\"$cluster\"})",
+                        "ref_id": "Requests"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Limits"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "resource",
+                                "op": "eq",
+                                "value": "memory",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_pod_container_resource_limits{resource=\"memory\", cluster=\"$cluster\"}) / sum(machine_memory_bytes{cluster=\"$cluster\"})",
+                        "ref_id": "Limits"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percentunit",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "gaugeMin": "0",
+                    "gaugeMax": "1",
+                    "orientation": "horizontal",
+                    "displayMode": "lcd"
+                },
+                "sort_order": 2
+            },
+            {
+                "title": "Nodes",
+                "widget_type": "stat",
+                "grid_x": 6,
+                "grid_y": 1,
+                "grid_w": 1,
+                "grid_h": 4,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "count(count by (node) (kube_node_info{cluster=\"$cluster\"}))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"blue\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 3
+            },
+            {
+                "title": "Kubernetes Resource Count",
+                "widget_type": "timeseries",
+                "grid_x": 7,
+                "grid_y": 1,
+                "grid_w": 5,
+                "grid_h": 12,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Namespaces"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_namespace_labels{cluster=\"$cluster\"})",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Running Containers"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_pod_container_status_running{cluster=\"$cluster\"})",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Running Pods"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "phase",
+                                "op": "eq",
+                                "value": "Running",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_pod_status_phase{phase=\"Running\", cluster=\"$cluster\"})",
+                        "ref_id": "O"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Services"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_service_info{cluster=\"$cluster\"})",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Endpoints"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_endpoint_info{cluster=\"$cluster\"})",
+                        "ref_id": "D"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Ingresses"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_ingress_info{cluster=\"$cluster\"})",
+                        "ref_id": "E"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Deployments"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_deployment_labels{cluster=\"$cluster\"})",
+                        "ref_id": "F"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Statefulsets"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_statefulset_labels{cluster=\"$cluster\"})",
+                        "ref_id": "G"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Daemonsets"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_daemonset_labels{cluster=\"$cluster\"})",
+                        "ref_id": "H"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Persistent Volume Claims"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_persistentvolumeclaim_info{cluster=\"$cluster\"})",
+                        "ref_id": "I"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Horizontal Pod Autoscalers"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_hpa_labels{cluster=\"$cluster\"})",
+                        "ref_id": "J"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Configmaps"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_configmap_info{cluster=\"$cluster\"})",
+                        "ref_id": "K"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Secrets"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_secret_info{cluster=\"$cluster\"})",
+                        "ref_id": "L"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Network Policies"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_networkpolicy_labels{cluster=\"$cluster\"})",
+                        "ref_id": "M"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Nodes"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "count(count by (node) (kube_node_info{cluster=\"$cluster\"}))",
+                        "ref_id": "N"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 4
+            },
+            {
+                "title": "Namespaces",
+                "widget_type": "stat",
+                "grid_x": 6,
+                "grid_y": 5,
+                "grid_w": 1,
+                "grid_h": 4,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "count(kube_namespace_created{cluster=\"$cluster\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"blue\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 5
+            },
+            {
+                "title": "CPU Usage",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 9,
+                "grid_w": 3,
+                "grid_h": 4,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "Real Linux"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "mode",
+                                "op": "not_like",
+                                "value": "idle|iowait|steal",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(node_cpu_seconds_total{mode!~\"idle|iowait|steal\", cluster=\"$cluster\", job=\"$job\"}[$__rate_interval]))",
+                        "ref_id": "Real Linux"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "Real Windows"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "mode",
+                                "op": "neq",
+                                "value": "idle",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(windows_cpu_time_total{mode!=\"idle\", cluster=\"$cluster\"}[$__rate_interval]))",
+                        "ref_id": "Real Windows"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Requests"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "resource",
+                                "op": "eq",
+                                "value": "cpu",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_pod_container_resource_requests{resource=\"cpu\", cluster=\"$cluster\"})",
+                        "ref_id": "Requests"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Limits"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "resource",
+                                "op": "eq",
+                                "value": "cpu",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_pod_container_resource_limits{resource=\"cpu\", cluster=\"$cluster\"})",
+                        "ref_id": "Limits"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "cpu_percent",
+                                "alias": "Total"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(machine_cpu_cores{cluster=\"$cluster\"})",
+                        "ref_id": "Total"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"rgb(255, 255, 255)\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 6
+            },
+            {
+                "title": "RAM Usage",
+                "widget_type": "stat",
+                "grid_x": 3,
+                "grid_y": 9,
+                "grid_w": 3,
+                "grid_h": 4,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Real Linux"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(node_memory_MemTotal_bytes{cluster=\"$cluster\", job=\"$job\"} - node_memory_MemAvailable_bytes{cluster=\"$cluster\", job=\"$job\"})",
+                        "ref_id": "Real Linux"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Real Windows"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(windows_os_visible_memory_bytes{cluster=\"$cluster\"} - windows_memory_available_bytes{cluster=\"$cluster\"} - windows_memory_cache_bytes{cluster=\"$cluster\"})",
+                        "ref_id": "Real Windows"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Requests"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "resource",
+                                "op": "eq",
+                                "value": "memory",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_pod_container_resource_requests{resource=\"memory\", cluster=\"$cluster\"})",
+                        "ref_id": "Requests"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Limits"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "resource",
+                                "op": "eq",
+                                "value": "memory",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_pod_container_resource_limits{resource=\"memory\", cluster=\"$cluster\"})",
+                        "ref_id": "Limits"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": "Total"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(machine_memory_bytes{cluster=\"$cluster\"})",
+                        "ref_id": "Total"
+                    }
+                ],
+                "display_config": {
+                    "unit": "bytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"rgb(255, 255, 255)\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 7
+            },
+            {
+                "title": "Running Pods",
+                "widget_type": "stat",
+                "grid_x": 6,
+                "grid_y": 9,
+                "grid_w": 1,
+                "grid_h": 4,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "phase",
+                                "op": "eq",
+                                "value": "Running",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_pod_status_phase{phase=\"Running\", cluster=\"$cluster\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"blue\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 8
+            },
+            {
+                "title": "Resources",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 13,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 9
+            },
+            {
+                "title": "Cluster CPU Utilization",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 14,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "Linux"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "mode",
+                                "op": "not_like",
+                                "value": "idle|iowait|steal",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "avg(sum by (instance, cpu) (rate(node_cpu_seconds_total{mode!~\"idle|iowait|steal\", cluster=\"$cluster\", job=\"$job\"}[$__rate_interval])))",
+                        "ref_id": "Linux"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "Windows"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "mode",
+                                "op": "eq",
+                                "value": "idle",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "1 - avg(rate(windows_cpu_time_total{cluster=\"$cluster\",mode=\"idle\"}[$__rate_interval]))",
+                        "ref_id": "Windows"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percentunit",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.1",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "hidden"
+                },
+                "sort_order": 10
+            },
+            {
+                "title": "Cluster Memory Utilization",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 14,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": "Linux"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(node_memory_MemTotal_bytes{cluster=\"$cluster\", job=\"$job\"} - node_memory_MemAvailable_bytes{cluster=\"$cluster\", job=\"$job\"}) / sum(node_memory_MemTotal_bytes{cluster=\"$cluster\", job=\"$job\"})",
+                        "ref_id": "Linux"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": "Windows"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(windows_os_visible_memory_bytes{cluster=\"$cluster\"} - windows_memory_available_bytes{cluster=\"$cluster\"}) / sum(windows_os_visible_memory_bytes{cluster=\"$cluster\"})",
+                        "ref_id": "Windows"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percentunit",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.1",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "hidden"
+                },
+                "sort_order": 11
+            },
+            {
+                "title": "CPU Utilization by namespace",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 22,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "{{ namespace }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "image",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(container_cpu_usage_seconds_total{image!=\"\", cluster=\"$cluster\"}[$__rate_interval])) by (namespace)\n+ on (namespace)\n(sum(rate(windows_container_cpu_usage_seconds_total{container_id!=\"\", cluster=\"$cluster\"}[$__rate_interval]) * on (container_id) group_left (container, pod, namespace) max by ( container, container_id, pod, namespace) (kube_pod_container_info{container_id!=\"\", cluster=\"$cluster\"}) OR kube_namespace_created{cluster=\"$cluster\"} * 0) by (namespace))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 12
+            },
+            {
+                "title": "Memory Utilization by namespace",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 22,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": "{{ namespace }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "image",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(container_memory_working_set_bytes{image!=\"\", cluster=\"$cluster\"}) by (namespace)\n+ on (namespace)\n(sum(windows_container_memory_usage_commit_bytes{container_id!=\"\", cluster=\"$cluster\"} * on (container_id) group_left (container, pod, namespace) max by ( container, container_id, pod, namespace) (kube_pod_container_info{container_id!=\"\", cluster=\"$cluster\"}) OR kube_namespace_created{cluster=\"$cluster\"} * 0) by (namespace))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "bytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 13
+            },
+            {
+                "title": "CPU Utilization by instance",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 30,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "{{ node }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "mode",
+                                "op": "not_like",
+                                "value": "idle|iowait|steal",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "avg(sum by (instance, cpu) (rate(node_cpu_seconds_total{mode!~\"idle|iowait|steal\", cluster=\"$cluster\", job=\"$job\"}[$__rate_interval]))) by (instance)",
+                        "ref_id": "Linux"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "{{ node }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "mode",
+                                "op": "neq",
+                                "value": "idle",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "avg(sum by (instance,core) (rate(windows_cpu_time_total{mode!=\"idle\", cluster=\"$cluster\"}[$__rate_interval]))) by (instance)",
+                        "ref_id": "Windows"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percentunit",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 14
+            },
+            {
+                "title": "Memory Utilization by instance",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 30,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(node_memory_MemTotal_bytes{cluster=\"$cluster\", job=\"$job\"} - node_memory_MemAvailable_bytes{cluster=\"$cluster\", job=\"$job\"}) by (instance)",
+                        "ref_id": "Linux"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(windows_os_visible_memory_bytes{cluster=\"$cluster\"} - windows_memory_available_bytes{cluster=\"$cluster\"}) by (instance)",
+                        "ref_id": "Windows"
+                    }
+                ],
+                "display_config": {
+                    "unit": "bytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 15
+            },
+            {
+                "title": "CPU Throttled seconds by namespace",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 38,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "{{ namespace }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "image",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(container_cpu_cfs_throttled_seconds_total{image!=\"\", cluster=\"$cluster\"}[$__rate_interval])) by (namespace) > 0",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "s",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 16
+            },
+            {
+                "title": "CPU Core Throttled by instance",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 38,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(node_cpu_core_throttles_total{cluster=\"$cluster\", job=\"$job\"}[$__rate_interval])) by (instance)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 17
+            },
+            {
+                "title": "Kubernetes",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 46,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 18
+            },
+            {
+                "title": "Kubernetes Pods QoS classes",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 47,
+                "grid_w": 6,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{ qos_class }} pods"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_pod_status_qos_class{cluster=\"$cluster\"}) by (qos_class)",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Total pods"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_pod_info{cluster=\"$cluster\"})",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 19
+            },
+            {
+                "title": "Kubernetes Pods Status Reason",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 47,
+                "grid_w": 6,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{ reason }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_pod_status_reason{cluster=\"$cluster\"}) by (reason)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 20
+            },
+            {
+                "title": "OOM Events by namespace",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 56,
+                "grid_w": 6,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ namespace }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(container_oom_events_total{cluster=\"$cluster\"}[$__rate_interval])) by (namespace) > 0",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "points",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 21
+            },
+            {
+                "title": "Container Restarts by namespace",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 56,
+                "grid_w": 6,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ namespace }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(kube_pod_container_status_restarts_total{cluster=\"$cluster\"}[$__rate_interval])) by (namespace) > 0",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "points",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 22
+            },
+            {
+                "title": "Network",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 65,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 23
+            },
+            {
+                "title": "Global Network Utilization by device",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 66,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_recv_bytes",
+                                "alias": "Received : {{ device }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "device",
+                                "op": "not_like",
+                                "value": "(veth|azv|lxc).*",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(node_network_receive_bytes_total{device!~\"(veth|azv|lxc).*\", cluster=\"$cluster\", job=\"$job\"}[$__rate_interval])) by (device)",
+                        "ref_id": "Linux Received"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_sent_bytes",
+                                "alias": "Transmitted : {{ device }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "device",
+                                "op": "not_like",
+                                "value": "(veth|azv|lxc).*",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "- sum(rate(node_network_transmit_bytes_total{device!~\"(veth|azv|lxc).*\", cluster=\"$cluster\", job=\"$job\"}[$__rate_interval])) by (device)",
+                        "ref_id": "Linux Transmitted"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Received : {{ nic }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(windows_net_bytes_received_total{cluster=\"$cluster\"}[$__rate_interval])) by (nic)",
+                        "ref_id": "Windows Received"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Transmitted : {{ device }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "- sum(rate(windows_net_bytes_sent_total{cluster=\"$cluster\"}[$__rate_interval])) by (nic)",
+                        "ref_id": "Windows Transmitted"
+                    }
+                ],
+                "display_config": {
+                    "unit": "binBps",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "hidden"
+                },
+                "sort_order": 24
+            },
+            {
+                "title": "Network Saturation - Packets dropped",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 66,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_recv_bytes",
+                                "alias": "Linux Packets dropped (receive)"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(node_network_receive_drop_total{cluster=\"$cluster\", job=\"$job\"}[$__rate_interval]))",
+                        "ref_id": "Linux Packets dropped (receive)"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_sent_bytes",
+                                "alias": "Linux Packets dropped (transmit)"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "- sum(rate(node_network_transmit_drop_total{cluster=\"$cluster\", job=\"$job\"}[$__rate_interval]))",
+                        "ref_id": "Linux Packets dropped (transmit)"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Windows Packets dropped (receive)"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(windows_net_packets_received_discarded_total{cluster=\"$cluster\"}[$__rate_interval]))",
+                        "ref_id": "Windows Packets dropped (receive)"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Windows Packets dropped (transmit)"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "- sum(rate(windows_net_packets_outbound_discarded_total{cluster=\"$cluster\"}[$__rate_interval]))",
+                        "ref_id": "Windows Packets dropped (transmit)"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "hidden"
+                },
+                "sort_order": 25
+            },
+            {
+                "title": "Network Received by namespace",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 74,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_recv_bytes",
+                                "alias": "Received : {{ namespace }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(container_network_receive_bytes_total{cluster=\"$cluster\"}[$__rate_interval])) by (namespace)\n+ on (namespace)\n(sum(rate(windows_container_network_receive_bytes_total{container_id!=\"\", cluster=\"$cluster\"}[$__rate_interval]) * on (container_id) group_left (container, pod, namespace) max by ( container, container_id, pod, namespace) (kube_pod_container_info{container_id!=\"\", cluster=\"$cluster\"}) OR kube_namespace_created{cluster=\"$cluster\"} * 0) by (namespace))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_sent_bytes",
+                                "alias": "Transmitted : {{ namespace }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "- (sum(rate(container_network_transmit_bytes_total{cluster=\"$cluster\"}[$__rate_interval])) by (namespace)\n+ on (namespace)\n(sum(rate(windows_container_network_transmit_bytes_total{container_id!=\"\", cluster=\"$cluster\"}[$__rate_interval]) * on (container_id) group_left (container, pod, namespace) max by ( container, container_id, pod, namespace) (kube_pod_container_info{container_id!=\"\", cluster=\"$cluster\"}) OR kube_namespace_created{cluster=\"$cluster\"} * 0) by (namespace)))",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "binBps",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "hidden"
+                },
+                "sort_order": 26
+            },
+            {
+                "title": "Total Network Received (with all virtual devices) by instance",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 74,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_recv_bytes",
+                                "alias": "Received bytes in {{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(node_network_receive_bytes_total{cluster=\"$cluster\", job=\"$job\"}[$__rate_interval])) by (instance)",
+                        "ref_id": "Linux Received bytes"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_sent_bytes",
+                                "alias": "Transmitted bytes in {{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "- sum(rate(node_network_transmit_bytes_total{cluster=\"$cluster\", job=\"$job\"}[$__rate_interval])) by (instance)",
+                        "ref_id": "Linux Transmitted bytes"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Received bytes in {{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(windows_net_bytes_received_total{cluster=\"$cluster\"}[$__rate_interval])) by (instance)",
+                        "ref_id": "Windows Received bytes"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Transmitted bytes in {{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "- sum(rate(windows_net_bytes_sent_total{cluster=\"$cluster\"}[$__rate_interval])) by (instance)",
+                        "ref_id": "Windows Transmitted bytes"
+                    }
+                ],
+                "display_config": {
+                    "unit": "binBps",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "hidden"
+                },
+                "sort_order": 27
+            },
+            {
+                "title": "Network Received (without loopback)  by instance",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 82,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_recv_bytes",
+                                "alias": "Received bytes in {{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "device",
+                                "op": "not_like",
+                                "value": "(veth|azv|lxc|lo).*",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(node_network_receive_bytes_total{device!~\"(veth|azv|lxc|lo).*\", cluster=\"$cluster\", job=\"$job\"}[$__rate_interval])) by (instance)",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_sent_bytes",
+                                "alias": "Transmitted bytes in {{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "device",
+                                "op": "not_like",
+                                "value": "(veth|azv|lxc|lo).*",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "- sum(rate(node_network_transmit_bytes_total{device!~\"(veth|azv|lxc|lo).*\", cluster=\"$cluster\", job=\"$job\"}[$__rate_interval])) by (instance)",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Received bytes in {{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "nic",
+                                "op": "not_like",
+                                "value": ".*Virtual.*",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(windows_net_bytes_received_total{nic!~\".*Virtual.*\",cluster=\"$cluster\"}[$__rate_interval])) by (instance)",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Transmitted bytes in {{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "nic",
+                                "op": "not_like",
+                                "value": ".*Virtual.*",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "- sum(rate(windows_net_bytes_sent_total{nic!~\".*Virtual.*\",cluster=\"$cluster\"}[$__rate_interval])) by (instance)",
+                        "ref_id": "D"
+                    }
+                ],
+                "display_config": {
+                    "unit": "binBps",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "hidden"
+                },
+                "sort_order": 28
+            },
+            {
+                "title": "Network Received (loopback only) by instance",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 82,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_recv_bytes",
+                                "alias": "Received bytes in {{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "device",
+                                "op": "eq",
+                                "value": "lo",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(node_network_receive_bytes_total{device=\"lo\", cluster=\"$cluster\", job=\"$job\"}[$__rate_interval])) by (instance)",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_sent_bytes",
+                                "alias": "Transmitted bytes in {{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "device",
+                                "op": "eq",
+                                "value": "lo",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "eq",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "- sum(rate(node_network_transmit_bytes_total{device=\"lo\", cluster=\"$cluster\", job=\"$job\"}[$__rate_interval])) by (instance)",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "binBps",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "hidden"
+                },
+                "sort_order": 29
+            }
+        ]
+    }
+}

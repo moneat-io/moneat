@@ -23,6 +23,9 @@ import com.moneat.dashboards.models.FolderResponse
 import com.moneat.dashboards.models.NotificationChannels
 import com.moneat.dashboards.models.SearchResponse
 import com.moneat.dashboards.models.TestConnectionResult
+import com.moneat.dashboards.routes.DashboardCoreRouteDependencies
+import com.moneat.dashboards.routes.DashboardDataSourceRouteDependencies
+import com.moneat.dashboards.routes.DashboardRouteDependencies
 import com.moneat.dashboards.routes.DashboardTranslators
 import com.moneat.dashboards.routes.customDashboardRoutes
 import com.moneat.dashboards.services.CustomDashboardService
@@ -30,6 +33,7 @@ import com.moneat.dashboards.services.CustomDataSourceExecutor
 import com.moneat.dashboards.services.CustomDataSourceService
 import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.dashboards.services.DashboardQueryEngine
+import com.moneat.dashboards.services.DashboardTemplateCatalogService
 import com.moneat.dashboards.translation.DataDogTranslator
 import com.moneat.dashboards.translation.GrafanaTranslator
 import com.moneat.shared.models.Memberships
@@ -214,13 +218,20 @@ class DashboardRoutesTest {
         app.installAuth()
         app.routing {
             customDashboardRoutes(
-                dashboardService = mockDashboardService,
-                queryEngine = mockQueryEngine,
-                retentionPolicyService = mockRetentionService,
-                translators = DashboardTranslators(mockDDTranslator, mockGrafanaTranslator),
-                dataSourceService = mockDataSourceService,
-                dataSourceExecutor = mockDataSourceExecutor,
-                dashboardAlertService = mockAlertService,
+                DashboardRouteDependencies(
+                    core = DashboardCoreRouteDependencies(
+                        dashboardService = mockDashboardService,
+                        queryEngine = mockQueryEngine,
+                        retentionPolicyService = mockRetentionService,
+                    ),
+                    translators = DashboardTranslators(mockDDTranslator, mockGrafanaTranslator),
+                    dataSources = DashboardDataSourceRouteDependencies(
+                        dataSourceService = mockDataSourceService,
+                        dataSourceExecutor = mockDataSourceExecutor,
+                    ),
+                    dashboardAlertService = mockAlertService,
+                    templateCatalogService = DashboardTemplateCatalogService(),
+                )
             )
         }
     }
@@ -920,9 +931,6 @@ class DashboardRoutesTest {
     fun `GET dashboard templates returns 200`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every {
-                mockDashboardService.getDefaultDashboardTemplates()
-            } returns emptyList()
             application { installRoutes(this) }
 
             val r =

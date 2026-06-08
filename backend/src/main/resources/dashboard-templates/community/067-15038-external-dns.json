@@ -1,0 +1,1602 @@
+{
+    "id": "067-15038-external-dns",
+    "title": "External DNS",
+    "description": "Prebuilt Moneat dashboard for External DNS telemetry.",
+    "category": "infrastructure",
+    "tags": [
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 22,
+    "variable_count": 2,
+    "quality": "partial",
+    "warnings": [
+        "Panel 4: couldn't parse PromQL '1000 * (external_dns_controller_last_reconcile_timestamp_seconds{pod=~\".*external-dns.*\",pod=~\"$pod\"})', stored as rawQuery",
+        "Panel 5: couldn't parse PromQL '1000 * (external_dns_controller_last_sync_timestamp_seconds{pod=~\".*external-dns.*\",pod=~\"$pod\"})', stored as rawQuery"
+    ],
+    "dashboard": {
+        "title": "External DNS",
+        "description": "Prebuilt Moneat dashboard for External DNS telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "datasource",
+                "label": "Datasource",
+                "type": "custom",
+                "query": "prometheus",
+                "default_value": "default",
+                "current": "default",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "pod",
+                "label": "pod",
+                "type": "query",
+                "query": "label_values(kube_pod_info{pod=~\".*external-dns.*\"}, pod)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            }
+        ],
+        "widgets": [
+            {
+                "title": "External-dns endpoints",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "Number of Endpoints in the registry",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 1,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{pod}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "external_dns_registry_endpoints_total {pod=~\".*external-dns.*\",pod=~\"$pod\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "5",
+                    "fillOpacity": "0.18",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 1
+            },
+            {
+                "title": "Number of Endpoints in all sources",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 1,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{pod}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "external_dns_source_endpoints_total {pod=~\".*external-dns.*\",pod=~\"$pod\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "5",
+                    "fillOpacity": "0.18",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 2
+            },
+            {
+                "title": "External-dns sync",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 9,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 3
+            },
+            {
+                "title": "Timestamp of last attempted sync with the DNS provider",
+                "widget_type": "bargauge",
+                "grid_x": 0,
+                "grid_y": 10,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{pod}}"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "1000 * (external_dns_controller_last_reconcile_timestamp_seconds{pod=~\".*external-dns.*\",pod=~\"$pod\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "dateTimeAsLocal",
+                    "thresholds": "[{\"value\":0,\"color\":\"purple\"}]",
+                    "orientation": "horizontal",
+                    "displayMode": "lcd"
+                },
+                "sort_order": 4
+            },
+            {
+                "title": "Timestamp of last successful sync with the DNS provider",
+                "widget_type": "bargauge",
+                "grid_x": 6,
+                "grid_y": 10,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{pod}}"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "1000 * (external_dns_controller_last_sync_timestamp_seconds{pod=~\".*external-dns.*\",pod=~\"$pod\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "dateTimeAsLocal",
+                    "thresholds": "[{\"value\":0,\"color\":\"purple\"}]",
+                    "orientation": "horizontal",
+                    "displayMode": "lcd"
+                },
+                "sort_order": 5
+            },
+            {
+                "title": "External-dns controller no_op runs total",
+                "widget_type": "gauge",
+                "grid_x": 0,
+                "grid_y": 18,
+                "grid_w": 2,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{pod}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "external_dns_controller_no_op_runs_total {pod=~\".*external-dns.*\",pod=~\"$pod\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"purple\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 6
+            },
+            {
+                "title": "External-dns records",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 25,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 7
+            },
+            {
+                "title": "Number of A records in registry",
+                "widget_type": "gauge",
+                "grid_x": 0,
+                "grid_y": 26,
+                "grid_w": 2,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{pod}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "external_dns_registry_a_records {pod=~\".*external-dns.*\",pod=~\"$pod\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"light-blue\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 8
+            },
+            {
+                "title": "Number of AAAA records in registry",
+                "widget_type": "gauge",
+                "grid_x": 2,
+                "grid_y": 26,
+                "grid_w": 3,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{pod}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "external_dns_registry_aaaa_records {pod=~\".*external-dns.*\",pod=~\"$pod\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"light-blue\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 9
+            },
+            {
+                "title": "Number of A records in source",
+                "widget_type": "gauge",
+                "grid_x": 5,
+                "grid_y": 26,
+                "grid_w": 2,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{pod}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "external_dns_source_a_records {pod=~\".*external-dns.*\",pod=~\"$pod\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"light-blue\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 10
+            },
+            {
+                "title": "Number of AAAA records in source",
+                "widget_type": "gauge",
+                "grid_x": 0,
+                "grid_y": 33,
+                "grid_w": 2,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{pod}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "external_dns_source_aaaa_records {pod=~\".*external-dns.*\",pod=~\"$pod\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"light-blue\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 11
+            },
+            {
+                "title": "Number of DNS A-records that exists both in source and registry",
+                "widget_type": "gauge",
+                "grid_x": 2,
+                "grid_y": 33,
+                "grid_w": 3,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{pod}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "external_dns_controller_verified_a_records {pod=~\".*external-dns.*\",pod=~\"$pod\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"light-blue\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 12
+            },
+            {
+                "title": "Number of DNS AAAA-records that exists both in source and registry",
+                "widget_type": "gauge",
+                "grid_x": 5,
+                "grid_y": 33,
+                "grid_w": 2,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{pod}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "external_dns_controller_verified_aaaa_records {pod=~\".*external-dns.*\",pod=~\"$pod\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"light-blue\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 13
+            },
+            {
+                "title": "External-dns errors",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 40,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 14
+            },
+            {
+                "title": "Total external-dns registry errors",
+                "widget_type": "gauge",
+                "grid_x": 0,
+                "grid_y": 41,
+                "grid_w": 2,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{pod}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "external_dns_registry_errors_total {pod=~\".*external-dns.*\",pod=~\"$pod\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"light-red\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 15
+            },
+            {
+                "title": "Total external-dns source errors",
+                "widget_type": "gauge",
+                "grid_x": 2,
+                "grid_y": 41,
+                "grid_w": 3,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{pod}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "external_dns_source_errors_total {pod=~\".*external-dns.*\",pod=~\"$pod\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"light-red\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 16
+            },
+            {
+                "title": "External-dns pods",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 48,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 17
+            },
+            {
+                "title": "CPU Usage",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 49,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "cpu_percent",
+                                "alias": "{{pod}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": ".*external-dns.*",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(node_namespace_pod_container:container_cpu_usage_seconds_total:sum_irate{pod=~\".*external-dns.*\",pod=~\"$pod\"}) by (pod)",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "quota - requests"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": ".*external-dns.*",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "type",
+                                "op": "eq",
+                                "value": "hard",
+                                "values": null
+                            },
+                            {
+                                "field": "resource",
+                                "op": "eq",
+                                "value": "requests.cpu",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "scalar(kube_resourcequota{pod=~\".*external-dns.*\",pod=~\"$pod\", type=\"hard\",resource=\"requests.cpu\"})",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "quota - limits"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": ".*external-dns.*",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "type",
+                                "op": "eq",
+                                "value": "hard",
+                                "values": null
+                            },
+                            {
+                                "field": "resource",
+                                "op": "eq",
+                                "value": "limits.cpu",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "scalar(kube_resourcequota{pod=~\".*external-dns.*\",pod=~\"$pod\", type=\"hard\",resource=\"limits.cpu\"})",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "0",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 18
+            },
+            {
+                "title": "Memory Usage (w/o cache)",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 49,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": "{{pod}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": ".*external-dns.*",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "container",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "image",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(container_memory_working_set_bytes{pod=~\".*external-dns.*\",pod=~\"$pod\",container!=\"\", image!=\"\"}) by (pod)",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "quota - requests"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": ".*external-dns.*",
+                                "values": null
+                            },
+                            {
+                                "field": "type",
+                                "op": "eq",
+                                "value": "hard",
+                                "values": null
+                            },
+                            {
+                                "field": "resource",
+                                "op": "eq",
+                                "value": "requests.memory",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "scalar(kube_resourcequota{pod=~\".*external-dns.*\", type=\"hard\",resource=\"requests.memory\"})",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "quota - limits"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": ".*external-dns.*",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "type",
+                                "op": "eq",
+                                "value": "hard",
+                                "values": null
+                            },
+                            {
+                                "field": "resource",
+                                "op": "eq",
+                                "value": "limits.memory",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "scalar(kube_resourcequota{pod=~\".*external-dns.*\",pod=~\"$pod\",type=\"hard\",resource=\"limits.memory\"})",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {
+                    "unit": "bytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "0",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 19
+            },
+            {
+                "title": "CPU Quota",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 57,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "cpu_percent",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": ".*external-dns.*",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(node_namespace_pod_container:container_cpu_usage_seconds_total:sum_irate{pod=~\".*external-dns.*\",pod=~\"$pod\"}) by (pod)",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": ".*external-dns.*",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "resource",
+                                "op": "eq",
+                                "value": "cpu",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_pod_container_resource_requests{pod=~\".*external-dns.*\",pod=~\"$pod\",resource=\"cpu\"}) by (pod)",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "cpu_percent",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": ".*external-dns.*",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(node_namespace_pod_container:container_cpu_usage_seconds_total:sum_irate{pod=~\".*external-dns.*\",pod=~\"$pod\"}) by (pod) / sum(kube_pod_container_resource_requests{pod=~\".*external-dns.*\",pod=~\"$pod\",resource=\"cpu\"}) by (pod)",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": ".*external-dns.*",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "resource",
+                                "op": "eq",
+                                "value": "cpu",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_pod_container_resource_limits{pod=~\".*external-dns.*\",pod=~\"$pod\",resource=\"cpu\"}) by (pod)",
+                        "ref_id": "D"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "cpu_percent",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": ".*external-dns.*",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(node_namespace_pod_container:container_cpu_usage_seconds_total:sum_irate{pod=~\".*external-dns.*\",pod=~\"$pod\"}) by (pod) / sum(kube_pod_container_resource_limits{pod=~\".*external-dns.*\",pod=~\"$pod\",resource=\"cpu\"}) by (pod)",
+                        "ref_id": "E"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]"
+                },
+                "sort_order": 20
+            },
+            {
+                "title": "Memory Quota",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 64,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": ".*external-dns.*",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "container",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "image",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(container_memory_working_set_bytes{pod=~\".*external-dns.*\",pod=~\"$pod\",container!=\"\", image!=\"\"}) by (pod)",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": ".*external-dns.*",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "resource",
+                                "op": "eq",
+                                "value": "memory",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_pod_container_resource_requests{pod=~\".*external-dns.*\",pod=~\"$pod\",resource=\"memory\"}) by (pod)",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": ".*external-dns.*",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "container",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "image",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(container_memory_working_set_bytes{pod=~\".*external-dns.*\",pod=~\"$pod\",container!=\"\", image!=\"\"}) by (pod) / sum(kube_pod_container_resource_requests{pod=~\".*external-dns.*\",pod=~\"$pod\",resource=\"memory\"}) by (pod)",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": ".*external-dns.*",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "resource",
+                                "op": "eq",
+                                "value": "memory",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_pod_container_resource_limits{pod=~\".*external-dns.*\",pod=~\"$pod\", resource=\"memory\"}) by (pod)",
+                        "ref_id": "D"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": ".*external-dns.*",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "container",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "image",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(container_memory_working_set_bytes{pod=~\".*external-dns.*\",pod=~\"$pod\",container!=\"\", image!=\"\"}) by (pod) / sum(kube_pod_container_resource_limits{pod=~\".*external-dns.*\",pod=~\"$pod\",resource=\"memory\"}) by (pod)",
+                        "ref_id": "E"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": ".*external-dns.*",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "container",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(container_memory_rss{pod=~\".*external-dns.*\",pod=~\"$pod\",container!=\"\"}) by (pod)",
+                        "ref_id": "F"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": ".*external-dns.*",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "container",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(container_memory_cache{pod=~\".*external-dns.*\",pod=~\"$pod\",container!=\"\"}) by (pod)",
+                        "ref_id": "G"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": ".*external-dns.*",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "container",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(container_memory_swap{pod=~\".*external-dns.*\",pod=~\"$pod\",container!=\"\"}) by (pod)",
+                        "ref_id": "H"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]"
+                },
+                "sort_order": 21
+            }
+        ]
+    }
+}

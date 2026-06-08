@@ -1243,21 +1243,21 @@ class GrafanaTranslatorTest {
         val ds = JsonPrimitive("\${DS_REDIS}")
         val inputsMap = mapOf("DS_REDIS" to "redis-datasource")
         val result = translator.resolveDatasource(ds, 0, inputsMap)
-        assertEquals("redis-datasource", result)
+        assertEquals("__redis", result)
     }
 
     @Test
-    fun `resolveDatasource returns raw string when no inputsMap match`() {
+    fun `resolveDatasource drops unresolved Grafana datasource placeholders`() {
         val ds = JsonPrimitive("\${DS_UNKNOWN}")
         val result = translator.resolveDatasource(ds, 0, emptyMap())
-        assertEquals("\${DS_UNKNOWN}", result)
+        assertEquals(null, result)
     }
 
     @Test
-    fun `resolveDatasource returns plain string datasource as-is`() {
+    fun `resolveDatasource maps known datasource names to Moneat markers`() {
         val ds = JsonPrimitive("prometheus")
         val result = translator.resolveDatasource(ds, 0, emptyMap())
-        assertEquals("prometheus", result)
+        assertEquals("__prometheus", result)
     }
 
     @Test
@@ -1314,7 +1314,7 @@ class GrafanaTranslatorTest {
         }
         val result = translator.import(json)
         val widget = result.dashboard.widgets.first()
-        assertEquals("redis-datasource", widget.queryConfigs.first().dataSource)
+        assertEquals("__redis", widget.queryConfigs.first().dataSource)
     }
 
     @Test
@@ -2324,5 +2324,70 @@ class GrafanaTranslatorTest {
             "INFO commandstats",
             result.dashboard.widgets.first().queryConfigs.first().rawQuery
         )
+    }
+
+    @Test
+    fun `import maps legacy community panel types to Moneat widgets`() {
+        val json = buildJsonObject {
+            put("title", "Legacy Panels")
+            put(
+                "panels",
+                buildJsonArray {
+                    add(buildJsonObject { put("type", "singlestat") })
+                    add(buildJsonObject { put("type", "table-old") })
+                    add(buildJsonObject { put("type", "grafana-piechart-panel") })
+                }
+            )
+        }
+
+        val result = translator.import(json)
+
+        assertEquals(listOf("stat", "table", "donut"), result.dashboard.widgets.map { it.widgetType })
+        assertTrue(result.warnings.isEmpty())
+    }
+
+    @Test
+    fun `import keeps Prometheus queries on Moneat telemetry source marker`() {
+        val json = buildJsonObject {
+            put("title", "Datasource Test")
+            put(
+                "__inputs",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("name", "DS_PROMETHEUS")
+                            put("type", "datasource")
+                            put("pluginId", "prometheus")
+                        }
+                    )
+                }
+            )
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "timeseries")
+                            put("datasource", "\${DS_PROMETHEUS}")
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("expr", "rate(http_requests_total[5m])")
+                                            put("refId", "A")
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+
+        val result = translator.import(json)
+
+        assertEquals("__prometheus", result.dashboard.widgets.first().queryConfigs.first().dataSource)
     }
 }

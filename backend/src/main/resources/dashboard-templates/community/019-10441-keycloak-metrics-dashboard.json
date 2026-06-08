@@ -1,0 +1,1384 @@
+{
+    "id": "019-10441-keycloak-metrics-dashboard",
+    "title": "Keycloak Metrics Dashboard",
+    "description": "Prebuilt Moneat dashboard for Keycloak Metrics Dashboard telemetry.",
+    "category": "infrastructure",
+    "tags": [
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 24,
+    "variable_count": 4,
+    "quality": "ready",
+    "warnings": [],
+    "dashboard": {
+        "title": "Keycloak Metrics Dashboard",
+        "description": "Prebuilt Moneat dashboard for Keycloak Metrics Dashboard telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "Datasource",
+                "label": null,
+                "type": "custom",
+                "query": "prometheus",
+                "default_value": "Prometheus-DevTest",
+                "current": "Prometheus-DevTest",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "instance",
+                "label": "Instance",
+                "type": "query",
+                "query": "label_values(keycloak_logins,kubernetes_pod_name)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "realm",
+                "label": "Realm",
+                "type": "query",
+                "query": "label_values(keycloak_logins{provider=\"keycloak\"},realm)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "ClientId",
+                "label": "ClientId",
+                "type": "query",
+                "query": "label_values(keycloak_logins{provider=\"keycloak\",realm=\"$realm\"},client_id)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Current Memory HEAP",
+                "widget_type": "gauge",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 3,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "kubernetes_pod_name",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "area",
+                                "op": "eq",
+                                "value": "heap",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(jvm_memory_bytes_used{kubernetes_pod_name=\"$instance\", area=\"heap\"})*100/sum(jvm_memory_bytes_max{kubernetes_pod_name=\"$instance\", area=\"heap\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"#EAB839\"},{\"value\":90,\"color\":\"red\"}]"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "Current Memory nonHEAP",
+                "widget_type": "gauge",
+                "grid_x": 3,
+                "grid_y": 0,
+                "grid_w": 3,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "kubernetes_pod_name",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "area",
+                                "op": "eq",
+                                "value": "nonheap",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(jvm_memory_bytes_used{kubernetes_pod_name=\"$instance\", area=\"nonheap\"})*100/sum(jvm_memory_bytes_max{kubernetes_pod_name=\"$instance\", area=\"nonheap\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"#EAB839\"},{\"value\":90,\"color\":\"red\"}]"
+                },
+                "sort_order": 1
+            },
+            {
+                "title": "Memory Usage",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 0,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": "Max"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "kubernetes_pod_name",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(jvm_memory_bytes_max{kubernetes_pod_name=\"$instance\"})",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": "Comitted"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "kubernetes_pod_name",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(jvm_memory_bytes_committed{kubernetes_pod_name=\"$instance\"})",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": "Used"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "kubernetes_pod_name",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(jvm_memory_bytes_used{kubernetes_pod_name=\"$instance\"})",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 2
+            },
+            {
+                "title": "Logins Per REALM for past 24h",
+                "widget_type": "donut",
+                "grid_x": 0,
+                "grid_y": 7,
+                "grid_w": 3,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{realm}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (realm)(increase(keycloak_logins[24h]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 3
+            },
+            {
+                "title": "Registrations Per REALM for past 24h",
+                "widget_type": "donut",
+                "grid_x": 3,
+                "grid_y": 7,
+                "grid_w": 3,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{realm}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (realm)(increase(keycloak_registrations[24h]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 4
+            },
+            {
+                "title": "Logins Per CLIENT for past 24h",
+                "widget_type": "donut",
+                "grid_x": 6,
+                "grid_y": 7,
+                "grid_w": 3,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{client_id}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (client_id)(increase(keycloak_logins[24h]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 5
+            },
+            {
+                "title": "Registrations Per CLIENT for past 24h",
+                "widget_type": "donut",
+                "grid_x": 9,
+                "grid_y": 7,
+                "grid_w": 3,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{client_id}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (client_id)(increase(keycloak_registrations[24h]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 6
+            },
+            {
+                "title": "4xx and 5xx Responses",
+                "widget_type": "timeseries",
+                "grid_x": 3,
+                "grid_y": 14,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{code}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (code)(increase(keycloak_response_errors[30m]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 7
+            },
+            {
+                "title": "Logins per REALM",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 22,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{realm}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (realm)(increase(keycloak_logins[30m]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 8
+            },
+            {
+                "title": "Login Errors on realm $realm",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 22,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{$realm }} {{error}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "provider",
+                                "op": "eq",
+                                "value": "keycloak",
+                                "values": null
+                            },
+                            {
+                                "field": "realm",
+                                "op": "eq",
+                                "value": "$realm",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (error) (increase(keycloak_failed_login_attempts{provider=\"keycloak\",realm=\"$realm\"}[30m]))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{sum by $realm}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "provider",
+                                "op": "eq",
+                                "value": "keycloak",
+                                "values": null
+                            },
+                            {
+                                "field": "realm",
+                                "op": "eq",
+                                "value": "dialog-test",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (realm) (increase(keycloak_failed_login_attempts{provider=\"keycloak\",realm=\"dialog-test\"} [30m]))",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 9
+            },
+            {
+                "title": "Logins per CLIENT on realm $realm",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 30,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{client_id}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "realm",
+                                "op": "eq",
+                                "value": "$realm",
+                                "values": null
+                            },
+                            {
+                                "field": "provider",
+                                "op": "eq",
+                                "value": "keycloak",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (client_id)(increase(keycloak_logins{realm=\"$realm\",provider=\"keycloak\"}[30m]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 10
+            },
+            {
+                "title": "Registration Errors on realm $realm",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 30,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Sum by {{realm}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "provider",
+                                "op": "eq",
+                                "value": "keycloak",
+                                "values": null
+                            },
+                            {
+                                "field": "realm",
+                                "op": "eq",
+                                "value": "$realm",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (realm) (increase(keycloak_registrations_errors{provider=\"keycloak\",realm=\"$realm\"} [30m]))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{error}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "provider",
+                                "op": "eq",
+                                "value": "keycloak",
+                                "values": null
+                            },
+                            {
+                                "field": "realm",
+                                "op": "eq",
+                                "value": "$realm",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (error) (increase(keycloak_registrations_errors{provider=\"keycloak\",realm=\"$realm\"} [30m]))",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 11
+            },
+            {
+                "title": "Registrations per REALM",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 38,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{realm}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (realm)(increase(keycloak_registrations[30m]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 12
+            },
+            {
+                "title": "Login Errors for $ClientId",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 38,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{error}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "provider",
+                                "op": "eq",
+                                "value": "keycloak",
+                                "values": null
+                            },
+                            {
+                                "field": "realm",
+                                "op": "eq",
+                                "value": "$realm",
+                                "values": null
+                            },
+                            {
+                                "field": "client_id",
+                                "op": "eq",
+                                "value": "$ClientId",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (error) (increase(keycloak_failed_login_attempts{provider=\"keycloak\",realm=\"$realm\",client_id=\"$ClientId\"}[30m]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 13
+            },
+            {
+                "title": "Registrations per CLIENT on relm $realm",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 46,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{client_id}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "realm",
+                                "op": "eq",
+                                "value": "$realm",
+                                "values": null
+                            },
+                            {
+                                "field": "provider",
+                                "op": "eq",
+                                "value": "keycloak",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (client_id)(increase(keycloak_registrations{realm=\"$realm\",provider=\"keycloak\"}[30m]))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "Sum by {{realm}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "provider",
+                                "op": "eq",
+                                "value": "keycloak",
+                                "values": null
+                            },
+                            {
+                                "field": "realm",
+                                "op": "eq",
+                                "value": "$realm",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (realm)(increase(keycloak_registrations{provider=\"keycloak\",realm=\"$realm\"} [30m]))",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 14
+            },
+            {
+                "title": "Registration Errors for $ClientId",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 46,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{error}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "provider",
+                                "op": "eq",
+                                "value": "keycloak",
+                                "values": null
+                            },
+                            {
+                                "field": "realm",
+                                "op": "eq",
+                                "value": "$realm",
+                                "values": null
+                            },
+                            {
+                                "field": "client_id",
+                                "op": "eq",
+                                "value": "$ClientId",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (error) (increase(keycloak_registrations_errors{provider=\"keycloak\",realm=\"$realm\",client_id=\"$ClientId\"}[30m]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 15
+            },
+            {
+                "title": "Request duration method = \"GET\" Heatmap",
+                "widget_type": "heatmap",
+                "grid_x": 0,
+                "grid_y": 54,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": "{{ le }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "method",
+                                "op": "eq",
+                                "value": "GET",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(keycloak_request_duration_bucket{method=\"GET\"}[30m])) by (le)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 16
+            },
+            {
+                "title": "Percentage of requests \"GET\"  method  was served in 100ms or below",
+                "widget_type": "gauge",
+                "grid_x": 6,
+                "grid_y": 54,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "method",
+                                "op": "eq",
+                                "value": "GET",
+                                "values": null
+                            },
+                            {
+                                "field": "le",
+                                "op": "eq",
+                                "value": "100.0",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(keycloak_request_duration_bucket{method=\"GET\", le=\"100.0\"}[30m])) / sum(rate(keycloak_request_duration_count{method=\"GET\"}[30m])) * 100",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "thresholds": "[{\"value\":0,\"color\":\"red\"},{\"value\":80,\"color\":\"red\"},{\"value\":90,\"color\":\"#EAB839\"},{\"value\":98,\"color\":\"green\"}]"
+                },
+                "sort_order": 17
+            },
+            {
+                "title": "Request duration method = \"POST\" Heatmap",
+                "widget_type": "heatmap",
+                "grid_x": 0,
+                "grid_y": 62,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": "{{ le }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "method",
+                                "op": "eq",
+                                "value": "POST",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(keycloak_request_duration_bucket{method=\"POST\"}[30m])) by (le)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 18
+            },
+            {
+                "title": "Percentage of requests \"POST\"  method  was served in 100ms or below",
+                "widget_type": "gauge",
+                "grid_x": 6,
+                "grid_y": 62,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "method",
+                                "op": "eq",
+                                "value": "POST",
+                                "values": null
+                            },
+                            {
+                                "field": "le",
+                                "op": "eq",
+                                "value": "100.0",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(keycloak_request_duration_bucket{method=\"POST\", le=\"100.0\"}[30m])) / sum(rate(keycloak_request_duration_count{method=\"POST\"}[30m])) * 100",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "thresholds": "[{\"value\":0,\"color\":\"red\"},{\"value\":80,\"color\":\"red\"},{\"value\":90,\"color\":\"#EAB839\"},{\"value\":98,\"color\":\"green\"}]"
+                },
+                "sort_order": 19
+            },
+            {
+                "title": "Request duration method = \"HEAD\" Heatmap",
+                "widget_type": "heatmap",
+                "grid_x": 0,
+                "grid_y": 70,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": "{{ le }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "method",
+                                "op": "eq",
+                                "value": "HEAD",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(keycloak_request_duration_bucket{method=\"HEAD\"}[30m])) by (le)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 20
+            },
+            {
+                "title": "Percentage of requests \"HEAD\"  method  was served in 100ms or below",
+                "widget_type": "gauge",
+                "grid_x": 6,
+                "grid_y": 70,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "method",
+                                "op": "eq",
+                                "value": "HEAD",
+                                "values": null
+                            },
+                            {
+                                "field": "le",
+                                "op": "eq",
+                                "value": "100.0",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(keycloak_request_duration_bucket{method=\"HEAD\", le=\"100.0\"}[30m])) / sum(rate(keycloak_request_duration_count{method=\"HEAD\"}[30m])) * 100",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "thresholds": "[{\"value\":0,\"color\":\"red\"},{\"value\":80,\"color\":\"red\"},{\"value\":90,\"color\":\"#EAB839\"},{\"value\":98,\"color\":\"green\"}]"
+                },
+                "sort_order": 21
+            },
+            {
+                "title": "Request duration method = \"PUT\" Heatmap",
+                "widget_type": "heatmap",
+                "grid_x": 0,
+                "grid_y": 78,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": "{{ le }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "method",
+                                "op": "eq",
+                                "value": "PUT",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(keycloak_request_duration_bucket{method=\"PUT\"}[30m])) by (le)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 22
+            },
+            {
+                "title": "Percentage of requests \"PUT\"  method  was served in 100ms or below",
+                "widget_type": "gauge",
+                "grid_x": 6,
+                "grid_y": 78,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "method",
+                                "op": "eq",
+                                "value": "PUT",
+                                "values": null
+                            },
+                            {
+                                "field": "le",
+                                "op": "eq",
+                                "value": "100.0",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(keycloak_request_duration_bucket{method=\"PUT\", le=\"100.0\"}[30m])) / sum(rate(keycloak_request_duration_count{method=\"PUT\"}[30m])) * 100",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "thresholds": "[{\"value\":0,\"color\":\"red\"},{\"value\":80,\"color\":\"red\"},{\"value\":90,\"color\":\"#EAB839\"},{\"value\":98,\"color\":\"green\"}]"
+                },
+                "sort_order": 23
+            }
+        ]
+    }
+}

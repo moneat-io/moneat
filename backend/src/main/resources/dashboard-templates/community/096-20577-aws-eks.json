@@ -1,0 +1,1593 @@
+{
+    "id": "096-20577-aws-eks",
+    "title": "AWS - EKS",
+    "description": "Prebuilt Moneat dashboard for AWS - EKS telemetry.",
+    "category": "cloud",
+    "tags": [
+        "Cloud",
+        "CloudWatch"
+    ],
+    "required_sources": [
+        "CloudWatch"
+    ],
+    "widget_count": 39,
+    "variable_count": 1,
+    "quality": "ready",
+    "warnings": [],
+    "dashboard": {
+        "title": "AWS - EKS",
+        "description": "Prebuilt Moneat dashboard for AWS - EKS telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "datasource",
+                "label": "Data Source",
+                "type": "custom",
+                "query": "cloudwatch",
+                "default_value": "c178699b-12ba-4b70-a336-227e6c21c656",
+                "current": "c178699b-12ba-4b70-a336-227e6c21c656",
+                "options": [],
+                "datasource": null
+            }
+        ],
+        "widgets": [
+            {
+                "title": "EKS (Summary)",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "Current Nodes",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 1,
+                "grid_w": 1,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"ContainerInsights\",\"MetricName\":\"cluster_node_count\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"ClusterName\",\"Value\":\"ooad-eks-dev-main-ue1-all\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "decimals": "0",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 1
+            },
+            {
+                "title": "Current Pods",
+                "widget_type": "stat",
+                "grid_x": 1,
+                "grid_y": 1,
+                "grid_w": 2,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"ContainerInsights\",\"MetricName\":\"node_number_of_running_pods\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"ClusterName\",\"Value\":\"ooad-eks-dev-main-ue1-all\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "decimals": "0",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 2
+            },
+            {
+                "title": "Current Containers",
+                "widget_type": "stat",
+                "grid_x": 3,
+                "grid_y": 1,
+                "grid_w": 1,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"ContainerInsights\",\"MetricName\":\"node_number_of_running_containers\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"ClusterName\",\"Value\":\"ooad-eks-dev-main-ue1-all\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "decimals": "0",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 3
+            },
+            {
+                "title": "Nodes - Max Bytes",
+                "widget_type": "stat",
+                "grid_x": 4,
+                "grid_y": 1,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"ContainerInsights\",\"MetricName\":\"node_network_total_bytes\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"ClusterName\",\"Value\":\"ooad-eks-dev-main-ue1-all\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "decbytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 4
+            },
+            {
+                "title": "Nodes - Max Filesystem Utilization",
+                "widget_type": "stat",
+                "grid_x": 6,
+                "grid_y": 1,
+                "grid_w": 2,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"ContainerInsights\",\"MetricName\":\"node_filesystem_utilization\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"ClusterName\",\"Value\":\"ooad-eks-dev-main-ue1-all\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 5
+            },
+            {
+                "title": "Pods - Max Bytes Sent",
+                "widget_type": "stat",
+                "grid_x": 8,
+                "grid_y": 1,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"ContainerInsights\",\"MetricName\":\"pod_network_tx_bytes\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"ClusterName\",\"Value\":\"ooad-eks-dev-main-ue1-all\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "decbytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 6
+            },
+            {
+                "title": "Pods - Max Bytes Received",
+                "widget_type": "stat",
+                "grid_x": 10,
+                "grid_y": 1,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"ContainerInsights\",\"MetricName\":\"pod_network_rx_bytes\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"ClusterName\",\"Value\":\"ooad-eks-dev-main-ue1-all\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "decbytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 7
+            },
+            {
+                "title": "Container Restarts",
+                "widget_type": "stat",
+                "grid_x": 3,
+                "grid_y": 4,
+                "grid_w": 1,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"ContainerInsights\",\"MetricName\":\"pod_number_of_container_restarts\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"ClusterName\",\"Value\":\"ooad-eks-dev-main-ue1-all\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 8
+            },
+            {
+                "title": "Nodes - Total Bytes",
+                "widget_type": "stat",
+                "grid_x": 4,
+                "grid_y": 4,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"ContainerInsights\",\"MetricName\":\"node_network_total_bytes\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"ClusterName\",\"Value\":\"ooad-eks-dev-main-ue1-all\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "decbytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 9
+            },
+            {
+                "title": "Pods - Total Bytes Sent",
+                "widget_type": "stat",
+                "grid_x": 8,
+                "grid_y": 4,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"ContainerInsights\",\"MetricName\":\"pod_network_tx_bytes\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"ClusterName\",\"Value\":\"ooad-eks-dev-main-ue1-all\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "decbytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 10
+            },
+            {
+                "title": "Pods - Total Bytes Received",
+                "widget_type": "stat",
+                "grid_x": 10,
+                "grid_y": 4,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"ContainerInsights\",\"MetricName\":\"pod_network_rx_bytes\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"ClusterName\",\"Value\":\"ooad-eks-dev-main-ue1-all\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "decbytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 11
+            },
+            {
+                "title": "Current Node CPU %",
+                "widget_type": "gauge",
+                "grid_x": 0,
+                "grid_y": 7,
+                "grid_w": 3,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"ContainerInsights\",\"MetricName\":\"node_cpu_utilization\",\"Period\":\"60\",\"Dimensions\":[{\"Name\":\"ClusterName\",\"Value\":\"ooad-eks-dev-main-ue1-all\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":60,\"color\":\"yellow\"},{\"value\":80,\"color\":\"orange\"},{\"value\":90,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 12
+            },
+            {
+                "title": "Current Node Mem %",
+                "widget_type": "gauge",
+                "grid_x": 3,
+                "grid_y": 7,
+                "grid_w": 3,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"ContainerInsights\",\"MetricName\":\"node_memory_utilization\",\"Period\":\"60\",\"Dimensions\":[{\"Name\":\"ClusterName\",\"Value\":\"ooad-eks-dev-main-ue1-all\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":60,\"color\":\"yellow\"},{\"value\":80,\"color\":\"orange\"},{\"value\":90,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 13
+            },
+            {
+                "title": "Current Pod CPU %",
+                "widget_type": "gauge",
+                "grid_x": 6,
+                "grid_y": 7,
+                "grid_w": 3,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"ContainerInsights\",\"MetricName\":\"pod_cpu_utilization\",\"Period\":\"60\",\"Dimensions\":[{\"Name\":\"ClusterName\",\"Value\":\"ooad-eks-dev-main-ue1-all\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":60,\"color\":\"yellow\"},{\"value\":80,\"color\":\"orange\"},{\"value\":90,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 14
+            },
+            {
+                "title": "Current Pod Mem %",
+                "widget_type": "gauge",
+                "grid_x": 9,
+                "grid_y": 7,
+                "grid_w": 3,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"ContainerInsights\",\"MetricName\":\"pod_memory_utilization\",\"Period\":\"60\",\"Dimensions\":[{\"Name\":\"ClusterName\",\"Value\":\"ooad-eks-dev-main-ue1-all\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":60,\"color\":\"yellow\"},{\"value\":80,\"color\":\"orange\"},{\"value\":90,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 15
+            },
+            {
+                "title": "EKS (Historical)",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 12,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 16
+            },
+            {
+                "title": "Node Utilization %'s",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 13,
+                "grid_w": 4,
+                "grid_h": 10,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"ContainerInsights\",\"MetricName\":\"node_cpu_utilization\",\"Period\":\"60\",\"Dimensions\":[{\"Name\":\"ClusterName\",\"Value\":\"ooad-eks-dev-main-ue1-all\"}]}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"ContainerInsights\",\"MetricName\":\"node_memory_utilization\",\"Period\":\"60\",\"Dimensions\":[{\"Name\":\"ClusterName\",\"Value\":\"ooad-eks-dev-main-ue1-all\"}]}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.2",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table"
+                },
+                "sort_order": 17
+            },
+            {
+                "title": "Node Utilization %'s (by IP)",
+                "widget_type": "timeseries",
+                "grid_x": 4,
+                "grid_y": 13,
+                "grid_w": 8,
+                "grid_h": 10,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"ContainerInsights\",\"MetricName\":\"node_cpu_utilization\",\"Period\":\"60\",\"Dimensions\":[{\"Name\":\"ClusterName\",\"Value\":\"ooad-eks-dev-main-ue1-all\"},{\"Name\":\"NodeName\",\"Value\":\"*\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "bars",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.1",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table"
+                },
+                "sort_order": 18
+            },
+            {
+                "title": "Node Network Total Bytes",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 23,
+                "grid_w": 12,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"ContainerInsights\",\"MetricName\":\"node_network_total_bytes\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"ClusterName\",\"Value\":\"ooad-eks-dev-main-ue1-all\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "decbytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.2",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table"
+                },
+                "sort_order": 19
+            },
+            {
+                "title": "Pods - Historical",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 32,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"ContainerInsights\",\"MetricName\":\"node_number_of_running_pods\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"ClusterName\",\"Value\":\"ooad-eks-dev-main-ue1-all\"}]}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"ContainerInsights\",\"MetricName\":\"pod_number_of_container_restarts\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"ClusterName\",\"Value\":\"ooad-eks-dev-main-ue1-all\"}]}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.2",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table"
+                },
+                "sort_order": 20
+            },
+            {
+                "title": "Containers - Historical",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 40,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"ContainerInsights\",\"MetricName\":\"node_number_of_running_containers\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"ClusterName\",\"Value\":\"ooad-eks-dev-main-ue1-all\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.2",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table"
+                },
+                "sort_order": 21
+            },
+            {
+                "title": "EKS (Additional Alerts)",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 46,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 22
+            },
+            {
+                "title": "Container Restarts",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 47,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"ContainerInsights\",\"MetricName\":\"pod_number_of_container_restarts\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"ClusterName\",\"Value\":\"ooad-eks-dev-main-ue1-all\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table"
+                },
+                "sort_order": 23
+            },
+            {
+                "title": "Average Filesystem Utilization - By Node",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 53,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"ContainerInsights\",\"MetricName\":\"node_filesystem_utilization\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"ClusterName\",\"Value\":\"ooad-eks-dev-main-ue1-all\"},{\"Name\":\"NodeName\",\"Value\":\"*\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table",
+                    "gaugeMin": "0",
+                    "gaugeMax": "100"
+                },
+                "sort_order": 24
+            },
+            {
+                "title": "EKS (Logs)",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 47,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 25
+            },
+            {
+                "title": "[EKS Cluster Logs] - ${datasource}",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 47,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/AppRunner\",\"MetricName\":\"\",\"Period\":\"\",\"Dimensions\":[]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]"
+                },
+                "sort_order": 26
+            },
+            {
+                "title": "[Fluentbit Cloudwatch Logs] -  ${datasource}",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 55,
+                "grid_w": 12,
+                "grid_h": 12,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"\",\"MetricName\":\"\",\"Period\":\"\",\"Dimensions\":[]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]"
+                },
+                "sort_order": 27
+            },
+            {
+                "title": "S3",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 48,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 28
+            },
+            {
+                "title": "S3 - Error Counts",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 48,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/S3\",\"MetricName\":\"4xxErrors\",\"Period\":\"\",\"Dimensions\":[]}",
+                        "ref_id": "4xx"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/S3\",\"MetricName\":\"5xxErrors\",\"Period\":\"\",\"Dimensions\":[]}",
+                        "ref_id": "5xx"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table"
+                },
+                "sort_order": 29
+            },
+            {
+                "title": "S3 - Latency",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 48,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/S3\",\"MetricName\":\"TotalRequestLatency\",\"Period\":\"\",\"Dimensions\":[]}",
+                        "ref_id": "totalRequestLatency"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/S3\",\"MetricName\":\"ReplicationLatency\",\"Period\":\"\",\"Dimensions\":[]}",
+                        "ref_id": "replicationLatency"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/S3\",\"MetricName\":\"FirstByteLatency\",\"Period\":\"\",\"Dimensions\":[]}",
+                        "ref_id": "firstByteLatency"
+                    }
+                ],
+                "display_config": {
+                    "unit": "ms",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table"
+                },
+                "sort_order": 30
+            },
+            {
+                "title": "Cloudfront",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 49,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 31
+            },
+            {
+                "title": "CloudFront Requests",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 49,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/CloudFront\",\"MetricName\":\"Requests\",\"Period\":\"\",\"Dimensions\":[]}",
+                        "ref_id": "Requests"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table"
+                },
+                "sort_order": 32
+            },
+            {
+                "title": "CloudFront Error Rates (by Range)",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 49,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/CloudFront\",\"MetricName\":\"4xxErrorRate\",\"Period\":\"\",\"Dimensions\":[]}",
+                        "ref_id": "4xxErrorRate"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/CloudFront\",\"MetricName\":\"5xxErrorRate\",\"Period\":\"\",\"Dimensions\":[]}",
+                        "ref_id": "5xxErrorRate"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table"
+                },
+                "sort_order": 33
+            },
+            {
+                "title": "CloudFront Error Rates (by Code)",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 56,
+                "grid_w": 12,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/CloudFront\",\"MetricName\":\"401ErrorRate\",\"Period\":\"\",\"Dimensions\":[]}",
+                        "ref_id": "401"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/CloudFront\",\"MetricName\":\"403ErrorRate\",\"Period\":\"\",\"Dimensions\":[]}",
+                        "ref_id": "403"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/CloudFront\",\"MetricName\":\"404ErrorRate\",\"Period\":\"\",\"Dimensions\":[]}",
+                        "ref_id": "404"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/CloudFront\",\"MetricName\":\"502ErrorRate\",\"Period\":\"\",\"Dimensions\":[]}",
+                        "ref_id": "502"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/CloudFront\",\"MetricName\":\"503ErrorRate\",\"Period\":\"\",\"Dimensions\":[]}",
+                        "ref_id": "503"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/CloudFront\",\"MetricName\":\"504ErrorRate\",\"Period\":\"\",\"Dimensions\":[]}",
+                        "ref_id": "504"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table"
+                },
+                "sort_order": 34
+            },
+            {
+                "title": "SQS",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 50,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 35
+            },
+            {
+                "title": "SQS Messages",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 29,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/SQS\",\"MetricName\":\"NumberOfMessagesSent\",\"Period\":\"\",\"Dimensions\":[]}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/SQS\",\"MetricName\":\"NumberOfMessagesReceived\",\"Period\":\"\",\"Dimensions\":[]}",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/SQS\",\"MetricName\":\"NumberOfMessagesDeleted\",\"Period\":\"\",\"Dimensions\":[]}",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table"
+                },
+                "sort_order": 36
+            },
+            {
+                "title": "Secrets Manager",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 51,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 37
+            },
+            {
+                "title": "Panel Title",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 30,
+                "grid_w": 3,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"\",\"MetricName\":\"\",\"Period\":\"\",\"Dimensions\":[]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 38
+            }
+        ]
+    }
+}
