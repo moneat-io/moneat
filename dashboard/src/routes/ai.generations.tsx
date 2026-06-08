@@ -211,7 +211,85 @@ function GenerationsPage() {
       }
     >
       <div className="space-y-3 p-3">
-        {!hasLlmScope ? (
+        {hasLlmScope ? (
+          <SectionCard title="Generations" icon={Brain} count={data?.total} flushBody bodyClassName="overflow-x-auto">
+              <Table className="[&_th]:h-8 [&_th]:px-1.5 [&_th]:text-xs [&_td]:py-1.5 [&_td]:px-1.5">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Timestamp</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Model</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead className="text-right">Tokens</TableHead>
+                    <TableHead className="text-right">Cost</TableHead>
+                    <TableHead className="text-right">Duration</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Trace</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data?.generations.map((gen) => (
+                    <TableRow
+                      key={gen.generationId}
+                      className="cursor-pointer hover:bg-accent/50"
+                      onClick={() => setSelectedGenId(gen.generationId)}
+                    >
+                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                        {formatDateTime(gen.timestamp, timezone)}
+                      </TableCell>
+                      <TableCell className="font-medium text-sm max-w-48 truncate">
+                        {gen.name || '-'}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <ProviderLogo provider={gen.provider} showName={false} className="shrink-0" />
+                          <div>
+                            <div className="text-sm">{gen.model || '-'}</div>
+                            <div className="text-xs text-muted-foreground">{gen.provider}</div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">{gen.type}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right text-sm">
+                        {gen.totalTokens > 0 ? gen.totalTokens.toLocaleString() : '-'}
+                      </TableCell>
+                      <TableCell className="text-right text-sm">{formatCost(gen.costUsd)}</TableCell>
+                      <TableCell className="text-right text-sm">{formatDuration(gen.durationMs)}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={gen.status === 'error' ? 'destructive' : 'secondary'}
+                          className="text-xs"
+                        >
+                          {gen.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {gen.traceId && (
+                          <Link
+                            to="/ai/traces/$traceId"
+                            params={{ traceId: gen.traceId }}
+                            className="text-xs text-primary hover:underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {gen.traceId.slice(0, 8)}...
+                          </Link>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {(!data?.generations || data.generations.length === 0) && !isLoading && (
+                    <TableRow>
+                      <TableCell colSpan={9} className="text-center text-muted-foreground py-6">
+                        No generations found for the selected filters.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+          </SectionCard>
+        ) : (
           <div className="py-10">
             <EmptyState
               icon={Brain}
@@ -219,86 +297,6 @@ function GenerationsPage() {
               description="Adjust the selected services to view generations."
             />
           </div>
-        ) : (
-          <>
-            <SectionCard title="Generations" icon={Brain} count={data?.total} flushBody bodyClassName="overflow-x-auto">
-                <Table className="[&_th]:h-8 [&_th]:px-1.5 [&_th]:text-xs [&_td]:py-1.5 [&_td]:px-1.5">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Timestamp</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Model</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead className="text-right">Tokens</TableHead>
-                      <TableHead className="text-right">Cost</TableHead>
-                      <TableHead className="text-right">Duration</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Trace</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data?.generations.map((gen) => (
-                      <TableRow
-                        key={gen.generationId}
-                        className="cursor-pointer hover:bg-accent/50"
-                        onClick={() => setSelectedGenId(gen.generationId)}
-                      >
-                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                          {formatDateTime(gen.timestamp, timezone)}
-                        </TableCell>
-                        <TableCell className="font-medium text-sm max-w-48 truncate">
-                          {gen.name || '-'}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <ProviderLogo provider={gen.provider} showName={false} className="shrink-0" />
-                            <div>
-                              <div className="text-sm">{gen.model || '-'}</div>
-                              <div className="text-xs text-muted-foreground">{gen.provider}</div>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-xs">{gen.type}</Badge>
-                        </TableCell>
-                        <TableCell className="text-right text-sm">
-                          {gen.totalTokens > 0 ? gen.totalTokens.toLocaleString() : '-'}
-                        </TableCell>
-                        <TableCell className="text-right text-sm">{formatCost(gen.costUsd)}</TableCell>
-                        <TableCell className="text-right text-sm">{formatDuration(gen.durationMs)}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={gen.status === 'error' ? 'destructive' : 'secondary'}
-                            className="text-xs"
-                          >
-                            {gen.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {gen.traceId && (
-                            <Link
-                              to="/ai/traces/$traceId"
-                              params={{ traceId: gen.traceId }}
-                              className="text-xs text-primary hover:underline"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              {gen.traceId.slice(0, 8)}...
-                            </Link>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {(!data?.generations || data.generations.length === 0) && !isLoading && (
-                      <TableRow>
-                        <TableCell colSpan={9} className="text-center text-muted-foreground py-6">
-                          No generations found for the selected filters.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-            </SectionCard>
-          </>
         )}
 
         {/* Pagination */}

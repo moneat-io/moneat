@@ -116,8 +116,172 @@ type IssueUpdateTarget = {
   projectResourceId: string
 }
 
+type IssueActionStatus = 'resolved' | 'ignored' | 'resolvedInNextRelease'
+type ToastFn = ReturnType<typeof useToast>['toast']
+type QueryClient = ReturnType<typeof useQueryClient>
+
 function issueSelectionKey(issue: Pick<SafeIssue, 'id' | 'projectResourceId'>): string {
   return `${issue.projectResourceId}:${issue.id}`
+}
+
+function toggledSelection(current: ReadonlySet<string>, key: string): Set<string> {
+  const next = new Set(current)
+  if (next.has(key)) {
+    next.delete(key)
+  } else {
+    next.add(key)
+  }
+  return next
+}
+
+function toggledPageSelection(
+  current: ReadonlySet<string>,
+  issues: readonly SafeIssue[]
+): Set<string> {
+  const pageKeys = issues.map(issueSelectionKey)
+  const next = new Set(current)
+  const allPageIssuesSelected = pageKeys.every((key) => current.has(key))
+  if (allPageIssuesSelected) {
+    pageKeys.forEach((key) => next.delete(key))
+  } else {
+    pageKeys.forEach((key) => next.add(key))
+  }
+  return next
+}
+
+function issueTargetsFromSelection(
+  keys: ReadonlySet<string>,
+  byKey: ReadonlyMap<string, IssueUpdateTarget>
+): IssueUpdateTarget[] {
+  const targets: IssueUpdateTarget[] = []
+  keys.forEach((key) => {
+    const target = byKey.get(key)
+    if (target) targets.push(target)
+  })
+  return targets
+}
+
+function matchesIssueFilters(
+  issue: SafeIssue,
+  normalizedSearchQuery: string,
+  statusIncludes: readonly string[],
+  statusExcludes: readonly string[],
+  levelIncludes: readonly string[],
+  levelExcludes: readonly string[]
+): boolean {
+  const matchesSearch =
+    normalizedSearchQuery === '' ||
+    issue.title.toLowerCase().includes(normalizedSearchQuery) ||
+    issue.culprit.toLowerCase().includes(normalizedSearchQuery)
+  const matchesStatus =
+    (statusIncludes.length === 0 || statusIncludes.includes(issue.status)) &&
+    !statusExcludes.includes(issue.status)
+  const matchesLevel =
+    (levelIncludes.length === 0 || levelIncludes.includes(issue.level)) &&
+    !levelExcludes.includes(issue.level)
+  return matchesSearch && matchesStatus && matchesLevel
+}
+
+function issueActionToast({
+  submitted,
+  successCount,
+  successLabel,
+}: Readonly<{
+  submitted: number
+  successCount: number
+  successLabel: string
+}>) {
+  if (successCount === submitted) {
+    return {
+      title: 'Success',
+      description: `${submitted} issue${submitted === 1 ? '' : 's'} ${successLabel}`,
+    }
+  }
+
+  return {
+    title: 'Partial Success',
+    description: `${successCount}/${submitted} issues ${successLabel}`,
+    variant: 'destructive' as const,
+  }
+}
+
+function useIssueBulkMutation({
+  status,
+  eventName,
+  successLabel,
+  errorDescription,
+  queryClient,
+  toast,
+  clearSelection,
+}: Readonly<{
+  status: IssueActionStatus
+  eventName: string
+  successLabel: string
+  errorDescription: string
+  queryClient: QueryClient
+  toast: ToastFn
+  clearSelection: () => void
+}>) {
+  return useMutation({
+    mutationFn: async (issues: IssueUpdateTarget[]) => {
+      const results = await Promise.allSettled(
+        issues.map((issue) => api.updateIssue(issue.id, { status }, issue.projectResourceId))
+      )
+      const successCount = results.filter(r => r.status === 'fulfilled').length
+      if (successCount === 0) throw new Error('All requests failed')
+      return { submitted: issues.length, successCount }
+    },
+    onSuccess: ({ submitted, successCount }) => {
+      trackEvent(eventName, { count: String(successCount) })
+      queryClient.invalidateQueries({ queryKey: ['issues'] })
+      queryClient.invalidateQueries({ queryKey: ['stats'] })
+      toast(issueActionToast({submitted, successCount, successLabel}))
+      clearSelection()
+    },
+    onError: () => {
+      toast({ title: 'Error', description: errorDescription, variant: 'destructive' })
+    },
+  })
+}
+
+function useIssueBulkMutations({
+  queryClient,
+  toast,
+  clearSelection,
+}: Readonly<{
+  queryClient: QueryClient
+  toast: ToastFn
+  clearSelection: () => void
+}>) {
+  const resolveMutation = useIssueBulkMutation({
+    status: 'resolved',
+    eventName: 'Issue Resolve',
+    successLabel: 'resolved',
+    errorDescription: 'Failed to resolve issues',
+    queryClient,
+    toast,
+    clearSelection,
+  })
+  const ignoreMutation = useIssueBulkMutation({
+    status: 'ignored',
+    eventName: 'Issue Ignore',
+    successLabel: 'ignored',
+    errorDescription: 'Failed to ignore issues',
+    queryClient,
+    toast,
+    clearSelection,
+  })
+  const resolveNextReleaseMutation = useIssueBulkMutation({
+    status: 'resolvedInNextRelease',
+    eventName: 'Issue ResolveInNextRelease',
+    successLabel: 'marked to resolve in next release',
+    errorDescription: 'Failed to update issues',
+    queryClient,
+    toast,
+    clearSelection,
+  })
+
+  return {resolveMutation, ignoreMutation, resolveNextReleaseMutation}
 }
 
 function clampText(value: string, maxChars: number): string {
@@ -279,7 +443,11 @@ function IndexPage() {
   )
 }
 
-function DashboardPage({tabs}: {tabs?: ReactNode}) {
+type DashboardPageProps = Readonly<{
+  tabs?: ReactNode
+}>
+
+function DashboardPage({tabs}: DashboardPageProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
   const [selectedIssueKeys, setSelectedIssueKeys] = useState<Set<string>>(new Set())
@@ -343,131 +511,25 @@ function DashboardPage({tabs}: {tabs?: ReactNode}) {
     enabled: issuesQueryEnabled,
   })
 
-  const resolveMutation = useMutation({
-    mutationFn: async (issues: IssueUpdateTarget[]) => {
-      const results = await Promise.allSettled(
-        issues.map((issue) => api.updateIssue(issue.id, { status: 'resolved' }, issue.projectResourceId))
-      )
-      const successCount = results.filter(r => r.status === 'fulfilled').length
-      if (successCount === 0) throw new Error('All requests failed')
-      return { submitted: issues.length, successCount }
-    },
-    onSuccess: ({ submitted, successCount }) => {
-      trackEvent('Issue Resolve', { count: String(successCount) })
-      queryClient.invalidateQueries({ queryKey: ['issues'] })
-      queryClient.invalidateQueries({ queryKey: ['stats'] })
-      if (successCount === submitted) {
-        toast({
-          title: 'Success',
-          description: `${submitted} issue${submitted === 1 ? '' : 's'} resolved`,
-        })
-      } else {
-        toast({
-          title: 'Partial Success',
-          description: `${successCount}/${submitted} issues resolved`,
-          variant: 'destructive',
-        })
-      }
-      setSelectedIssueKeys(new Set())
-    },
-    onError: () => {
-      toast({
-        title: 'Error',
-        description: 'Failed to resolve issues',
-        variant: 'destructive',
-      })
-    },
-  })
-
-  const ignoreMutation = useMutation({
-    mutationFn: async (issues: IssueUpdateTarget[]) => {
-      const results = await Promise.allSettled(
-        issues.map((issue) => api.updateIssue(issue.id, { status: 'ignored' }, issue.projectResourceId))
-      )
-      const successCount = results.filter(r => r.status === 'fulfilled').length
-      if (successCount === 0) throw new Error('All requests failed')
-      return { submitted: issues.length, successCount }
-    },
-    onSuccess: ({ submitted, successCount }) => {
-      trackEvent('Issue Ignore', { count: String(successCount) })
-      queryClient.invalidateQueries({ queryKey: ['issues'] })
-      queryClient.invalidateQueries({ queryKey: ['stats'] })
-      if (successCount === submitted) {
-        toast({
-          title: 'Success',
-          description: `${submitted} issue${submitted === 1 ? '' : 's'} ignored`,
-        })
-      } else {
-        toast({
-          title: 'Partial Success',
-          description: `${successCount}/${submitted} issues ignored`,
-          variant: 'destructive',
-        })
-      }
-      setSelectedIssueKeys(new Set())
-    },
-    onError: () => {
-      toast({ title: 'Error', description: 'Failed to ignore issues', variant: 'destructive' })
-    },
-  })
-
-  const resolveNextReleaseMutation = useMutation({
-    mutationFn: async (issues: IssueUpdateTarget[]) => {
-      const results = await Promise.allSettled(
-        issues.map((issue) =>
-          api.updateIssue(issue.id, { status: 'resolvedInNextRelease' }, issue.projectResourceId)
-        )
-      )
-      const successCount = results.filter(r => r.status === 'fulfilled').length
-      if (successCount === 0) throw new Error('All requests failed')
-      return { submitted: issues.length, successCount }
-    },
-    onSuccess: ({ submitted, successCount }) => {
-      trackEvent('Issue ResolveInNextRelease', { count: String(successCount) })
-      queryClient.invalidateQueries({ queryKey: ['issues'] })
-      queryClient.invalidateQueries({ queryKey: ['stats'] })
-      if (successCount === submitted) {
-        toast({
-          title: 'Success',
-          description: `${submitted} issue${submitted === 1 ? '' : 's'} marked to resolve in next release`,
-        })
-      } else {
-        toast({
-          title: 'Partial Success',
-          description: `${successCount}/${submitted} issues marked to resolve in next release`,
-          variant: 'destructive',
-        })
-      }
-      setSelectedIssueKeys(new Set())
-    },
-    onError: () => {
-      toast({ title: 'Error', description: 'Failed to update issues', variant: 'destructive' })
-    },
+  const {
+    resolveMutation,
+    ignoreMutation,
+    resolveNextReleaseMutation,
+  } = useIssueBulkMutations({
+    queryClient,
+    toast,
+    clearSelection: () => setSelectedIssueKeys(new Set()),
   })
 
   const bulkPending = resolveMutation.isPending || ignoreMutation.isPending || resolveNextReleaseMutation.isPending
 
   const handleToggleIssue = (issue: SafeIssue) => {
     const key = issueSelectionKey(issue)
-    const newSelected = new Set(selectedIssueKeys)
-    if (newSelected.has(key)) {
-      newSelected.delete(key)
-    } else {
-      newSelected.add(key)
-    }
-    setSelectedIssueKeys(newSelected)
+    setSelectedIssueKeys(toggledSelection(selectedIssueKeys, key))
   }
 
   const handleToggleAll = () => {
-    const pageKeys = pagedIssues.map(issueSelectionKey)
-    const allPageIssuesSelected = pageKeys.every((key) => selectedIssueKeys.has(key))
-    const nextSelected = new Set(selectedIssueKeys)
-    if (allPageIssuesSelected) {
-      pageKeys.forEach((key) => nextSelected.delete(key))
-    } else {
-      pageKeys.forEach((key) => nextSelected.add(key))
-    }
-    setSelectedIssueKeys(nextSelected)
+    setSelectedIssueKeys(toggledPageSelection(selectedIssueKeys, pagedIssues))
   }
 
   const handleResolveSelected = () => {
@@ -503,30 +565,21 @@ function DashboardPage({tabs}: {tabs?: ReactNode}) {
     })
     return byKey
   }, [safeIssues])
-  const selectedIssueTargets: IssueUpdateTarget[] = []
-  selectedIssueKeys.forEach((key) => {
-    const target = safeIssuesByKey.get(key)
-    if (target) selectedIssueTargets.push(target)
-  })
+  const selectedIssueTargets = issueTargetsFromSelection(selectedIssueKeys, safeIssuesByKey)
 
   const normalizedSearchQuery = searchQuery.trim().toLowerCase()
 
   // Service filters are resolved by the org-wide API. Status, level, and search
   // narrow the loaded issue set client-side so include/exclude semantics remain.
   const filteredIssues = safeIssues
-    .filter((issue) => {
-      const matchesSearch =
-        normalizedSearchQuery === '' ||
-        issue.title.toLowerCase().includes(normalizedSearchQuery) ||
-        issue.culprit.toLowerCase().includes(normalizedSearchQuery)
-      const matchesStatus =
-        (statusIncludes.length === 0 || statusIncludes.includes(issue.status)) &&
-        !statusExcludes.includes(issue.status)
-      const matchesLevel =
-        (levelIncludes.length === 0 || levelIncludes.includes(issue.level)) &&
-        !levelExcludes.includes(issue.level)
-      return matchesSearch && matchesStatus && matchesLevel
-    })
+    .filter((issue) => matchesIssueFilters(
+      issue,
+      normalizedSearchQuery,
+      statusIncludes,
+      statusExcludes,
+      levelIncludes,
+      levelExcludes
+    ))
     .sort((a, b) => (b.lastSeen || '').localeCompare(a.lastSeen || ''))
 
   const totalPages = Math.max(1, Math.ceil(filteredIssues.length / pageSize))
@@ -651,210 +704,361 @@ function DashboardPage({tabs}: {tabs?: ReactNode}) {
         />
       }
       toolbar={
-        <>
-          {pagedIssues.length > 0 && (
-            <div className="flex items-center gap-2">
-              <Checkbox
-                checked={pagedIssues.length > 0 && pagedIssues.every((issue) =>
-                  selectedIssueKeys.has(issueSelectionKey(issue))
-                )}
-                onCheckedChange={handleToggleAll}
-                aria-label="Select all issues"
-              />
-              <span className="text-sm text-muted-foreground whitespace-nowrap hidden sm:inline">Select all</span>
-            </div>
-          )}
-          {selectedIssueTargets.length > 0 && (
-            <div className="flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-lg px-2 py-0.5">
-              <CheckCircle2 className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium whitespace-nowrap">{selectedIssueTargets.length} selected</span>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button disabled={bulkPending} size="sm" className="h-7 ml-1">
-                    {bulkPending ? 'Updating...' : 'Actions'}
-                    <ChevronDown className="h-3 w-3 ml-1" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={handleResolveSelected}>
-                    <CheckCircle2 className="h-4 w-4 mr-2" />
-                    Resolve
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleIgnoreSelected}>
-                    <EyeOff className="h-4 w-4 mr-2" />
-                    Ignore
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleResolveNextReleaseSelected}>
-                    <Timer className="h-4 w-4 mr-2" />
-                    Resolve in Next Release
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          )}
-          <span className="ml-auto text-sm text-muted-foreground whitespace-nowrap hidden lg:inline">
-            {filteredIssues.length} result{filteredIssues.length !== 1 ? 's' : ''}
-          </span>
-        </>
+        <IssueExplorerToolbar
+          pagedIssues={pagedIssues}
+          selectedIssueKeys={selectedIssueKeys}
+          selectedIssueCount={selectedIssueTargets.length}
+          bulkPending={bulkPending}
+          filteredIssueCount={filteredIssues.length}
+          onToggleAll={handleToggleAll}
+          onResolveSelected={handleResolveSelected}
+          onIgnoreSelected={handleIgnoreSelected}
+          onResolveNextReleaseSelected={handleResolveNextReleaseSelected}
+        />
       }
     >
-      <div className="p-4">
-        {issuesLoading ? (
-          <div className="p-6 text-muted-foreground">Loading issues...</div>
-        ) : issuesError ? (
-          <div className="p-6 text-destructive border border-destructive/30 rounded-lg bg-destructive/5">
-            Failed to load issues: {issuesErrorObj instanceof Error ? issuesErrorObj.message : 'Unknown error'}
-          </div>
-        ) : filteredIssues.length === 0 ? (
-          <Card className="p-12 text-center border-info-border/50 bg-gradient-to-b from-card to-info-bg">
-            <div className="max-w-md mx-auto space-y-4">
-              <div className="flex justify-center">
-                <div className="rounded-full bg-info-bg p-4">
-                  {hasActiveIssueFilters ? (
-                    <Search className="h-10 w-10 text-info-fg" />
-                  ) : (
-                    <AlertCircle className="h-10 w-10 text-info-fg" />
-                  )}
-                </div>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold mb-2">
-                  {hasActiveIssueFilters ? 'No issues match your filters' : 'No issues yet'}
-                </h3>
-                <p className="text-muted-foreground">
-                  {hasActiveIssueFilters
-                    ? 'Try adjusting your search or filters.'
-                    : 'Start sending errors to your services to see them tracked here.'}
-                </p>
-              </div>
-            </div>
-          </Card>
-        ) : (
-          <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
-            {/* Table header */}
-            <div className="hidden md:flex items-center gap-3 py-2 px-4 bg-muted/40 border-b border-border/40 text-[11px] font-medium text-muted-foreground uppercase tracking-wider select-none">
-              <div className="w-4 shrink-0" />
-              <div className="w-[4.5rem] shrink-0">Level</div>
-              <div className="flex-1 min-w-0">Issue</div>
-              <div className="hidden lg:block w-20 shrink-0">Platform</div>
-              <div className="hidden lg:block w-20 shrink-0 text-center">Trend</div>
-              <div className="w-[55px] shrink-0 text-right">Events</div>
-              <div className="hidden sm:block w-[45px] shrink-0 text-right">Users</div>
-              <div className="w-20 shrink-0 text-right">Last Seen</div>
-            </div>
-            {/* Issue rows */}
-            <div className="divide-y divide-border/40">
-              {pagedIssues.map((issue) => (
-                <div
-                  key={issueSelectionKey(issue)}
-                  className={`hover:bg-accent/40 transition border-l-[3px] ${levelBorderClass(issue.level)}`}
-                >
-                  <div className="flex items-center gap-2 sm:gap-3 py-2 sm:py-2.5 px-2 sm:px-4">
-                    <Checkbox
-                      checked={selectedIssueKeys.has(issueSelectionKey(issue))}
-                      onCheckedChange={() => handleToggleIssue(issue)}
-                      onClick={(e) => e.stopPropagation()}
-                      aria-label={`Select ${issue.title}`}
-                      className="shrink-0"
-                    />
-                    <Link
-                      to="/issues/$issueId"
-                      params={{ issueId: issue.id }}
-                      search={{ projectId: issue.projectResourceId }}
-                      className="flex-1 flex items-center gap-2 sm:gap-3 min-w-0"
-                    >
-                      <div className="w-12 sm:w-[4.5rem] shrink-0">
-                        <Badge variant={levelBadgeVariant(issue.level)} className="text-[10px] sm:text-[11px] px-1.5 py-0">
-                          <span className="sm:hidden">{issue.level.toUpperCase().slice(0, 3)}</span>
-                          <span className="hidden sm:inline">{issue.level.toUpperCase()}</span>
-                        </Badge>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-                          <span className="font-semibold truncate flex-1 min-w-0 text-sm sm:text-base" title={getIssueDisplayTitle(issue)}>
-                            {getIssueDisplayTitle(issue)}
-                          </span>
-                          <div className="flex items-center gap-2 shrink-0">
-                            {isNewIssue(issue.firstSeen) && (
-                              <span className="text-[10px] font-bold text-success-fg bg-success-bg px-1.5 py-0.5 rounded uppercase">
-                                New
-                              </span>
-                            )}
-                            {issue.status === 'resolved' && (
-                              <Badge variant="success" className="text-[11px] px-1.5 py-0">
-                                Resolved
-                              </Badge>
-                            )}
-                            {issue.status === 'ignored' && (
-                              <Badge variant="secondary" className="text-[11px] px-1.5 py-0">
-                                <EyeOff className="h-3 w-3" />
-                                Ignored
-                              </Badge>
-                            )}
-                            {issue.status === 'resolvedInNextRelease' && (
-                              <Badge variant="info" className="text-[11px] px-1.5 py-0">
-                                <Timer className="h-3 w-3" />
-                                Next Release
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-0.5">
-                          <Clock className="inline h-3 w-3 mr-1 -mt-0.5" />
-                          First seen {formatRelativeTime(issue.firstSeen)}
-                        </div>
-                      </div>
-                      <div className="hidden lg:block w-20 shrink-0">
-                        <Badge variant="outline" className="text-[11px] px-1.5 py-0">{issue.platform}</Badge>
-                      </div>
-                      <div className="hidden lg:flex w-20 shrink-0 justify-center">
-                        <EventSparkline eventCount={issue.eventCount} />
-                      </div>
-                      <div className="w-[55px] shrink-0 text-right">
-                        <div className="font-semibold text-foreground">{formatCount(issue.eventCount)}</div>
-                        <div className="text-xs text-muted-foreground">events</div>
-                      </div>
-                      <div className="hidden sm:block w-[45px] shrink-0 text-right">
-                        <div className="font-semibold text-foreground">{issue.userCount ?? 0}</div>
-                        <div className="text-xs text-muted-foreground">users</div>
-                      </div>
-                      <div className="hidden md:block w-20 shrink-0 text-right">
-                        <span className={`text-xs font-medium ${getLastSeenColor(issue.lastSeen)}`}>
-                          {formatRelativeTime(issue.lastSeen)}
-                        </span>
-                      </div>
-                    </Link>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {totalPages > 1 && (
-              <div className="flex justify-end gap-2 px-4 py-2 border-t border-border/40">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={currentPage <= 1}
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                >
-                  Previous
-                </Button>
-                <span className="text-sm text-muted-foreground self-center">
-                  Page {currentPage} of {totalPages}
-                </span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={currentPage >= totalPages}
-                  onClick={() => setPage(p => p + 1)}
-                >
-                  Next
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      <IssueExplorerContent
+        issuesLoading={issuesLoading}
+        issuesError={issuesError}
+        issuesErrorObj={issuesErrorObj}
+        filteredIssues={filteredIssues}
+        pagedIssues={pagedIssues}
+        selectedIssueKeys={selectedIssueKeys}
+        totalPages={totalPages}
+        currentPage={currentPage}
+        hasActiveIssueFilters={hasActiveIssueFilters}
+        onToggleIssue={handleToggleIssue}
+        onPreviousPage={() => setPage(p => Math.max(1, p - 1))}
+        onNextPage={() => setPage(p => p + 1)}
+      />
     </ExplorerShell>
+  )
+}
+
+type IssueExplorerToolbarProps = Readonly<{
+  pagedIssues: readonly SafeIssue[]
+  selectedIssueKeys: ReadonlySet<string>
+  selectedIssueCount: number
+  bulkPending: boolean
+  filteredIssueCount: number
+  onToggleAll: () => void
+  onResolveSelected: () => void
+  onIgnoreSelected: () => void
+  onResolveNextReleaseSelected: () => void
+}>
+
+function IssueExplorerToolbar({
+  pagedIssues,
+  selectedIssueKeys,
+  selectedIssueCount,
+  bulkPending,
+  filteredIssueCount,
+  onToggleAll,
+  onResolveSelected,
+  onIgnoreSelected,
+  onResolveNextReleaseSelected,
+}: IssueExplorerToolbarProps) {
+  const allPagedIssuesSelected = pagedIssues.every((issue) =>
+    selectedIssueKeys.has(issueSelectionKey(issue))
+  )
+
+  return (
+    <>
+      {pagedIssues.length > 0 && (
+        <div className="flex items-center gap-2">
+          <Checkbox
+            checked={allPagedIssuesSelected}
+            onCheckedChange={onToggleAll}
+            aria-label="Select all issues"
+          />
+          <span className="text-sm text-muted-foreground whitespace-nowrap hidden sm:inline">Select all</span>
+        </div>
+      )}
+      {selectedIssueCount > 0 && (
+        <div className="flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-lg px-2 py-0.5">
+          <CheckCircle2 className="h-4 w-4 text-primary" />
+          <span className="text-sm font-medium whitespace-nowrap">{selectedIssueCount} selected</span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button disabled={bulkPending} size="sm" className="h-7 ml-1">
+                {bulkPending ? 'Updating...' : 'Actions'}
+                <ChevronDown className="h-3 w-3 ml-1" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={onResolveSelected}>
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+                Resolve
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onIgnoreSelected}>
+                <EyeOff className="h-4 w-4 mr-2" />
+                Ignore
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onResolveNextReleaseSelected}>
+                <Timer className="h-4 w-4 mr-2" />
+                Resolve in Next Release
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
+      <span className="ml-auto text-sm text-muted-foreground whitespace-nowrap hidden lg:inline">
+        {filteredIssueCount} result{filteredIssueCount !== 1 ? 's' : ''}
+      </span>
+    </>
+  )
+}
+
+type IssueExplorerContentProps = Readonly<{
+  issuesLoading: boolean
+  issuesError: boolean
+  issuesErrorObj: unknown
+  filteredIssues: readonly SafeIssue[]
+  pagedIssues: readonly SafeIssue[]
+  selectedIssueKeys: ReadonlySet<string>
+  totalPages: number
+  currentPage: number
+  hasActiveIssueFilters: boolean
+  onToggleIssue: (issue: SafeIssue) => void
+  onPreviousPage: () => void
+  onNextPage: () => void
+}>
+
+function IssueExplorerContent({
+  issuesLoading,
+  issuesError,
+  issuesErrorObj,
+  filteredIssues,
+  pagedIssues,
+  selectedIssueKeys,
+  totalPages,
+  currentPage,
+  hasActiveIssueFilters,
+  onToggleIssue,
+  onPreviousPage,
+  onNextPage,
+}: IssueExplorerContentProps) {
+  if (issuesLoading) {
+    return <div className="p-6 text-muted-foreground">Loading issues...</div>
+  }
+
+  if (issuesError) {
+    return (
+      <div className="p-6 text-destructive border border-destructive/30 rounded-lg bg-destructive/5">
+        Failed to load issues: {issuesErrorObj instanceof Error ? issuesErrorObj.message : 'Unknown error'}
+      </div>
+    )
+  }
+
+  if (filteredIssues.length === 0) {
+    return (
+      <div className="p-4">
+        <IssueEmptyState hasActiveIssueFilters={hasActiveIssueFilters} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-4">
+      <IssueTable
+        pagedIssues={pagedIssues}
+        selectedIssueKeys={selectedIssueKeys}
+        totalPages={totalPages}
+        currentPage={currentPage}
+        onToggleIssue={onToggleIssue}
+        onPreviousPage={onPreviousPage}
+        onNextPage={onNextPage}
+      />
+    </div>
+  )
+}
+
+function IssueEmptyState({hasActiveIssueFilters}: Readonly<{hasActiveIssueFilters: boolean}>) {
+  const Icon = hasActiveIssueFilters ? Search : AlertCircle
+  const title = hasActiveIssueFilters ? 'No issues match your filters' : 'No issues yet'
+  const description = hasActiveIssueFilters
+    ? 'Try adjusting your search or filters.'
+    : 'Start sending errors to your services to see them tracked here.'
+
+  return (
+    <Card className="p-12 text-center border-info-border/50 bg-gradient-to-b from-card to-info-bg">
+      <div className="max-w-md mx-auto space-y-4">
+        <div className="flex justify-center">
+          <div className="rounded-full bg-info-bg p-4">
+            <Icon className="h-10 w-10 text-info-fg" />
+          </div>
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold mb-2">{title}</h3>
+          <p className="text-muted-foreground">{description}</p>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+type IssueTableProps = Readonly<{
+  pagedIssues: readonly SafeIssue[]
+  selectedIssueKeys: ReadonlySet<string>
+  totalPages: number
+  currentPage: number
+  onToggleIssue: (issue: SafeIssue) => void
+  onPreviousPage: () => void
+  onNextPage: () => void
+}>
+
+function IssueTable({
+  pagedIssues,
+  selectedIssueKeys,
+  totalPages,
+  currentPage,
+  onToggleIssue,
+  onPreviousPage,
+  onNextPage,
+}: IssueTableProps) {
+  return (
+    <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
+      <div className="hidden md:flex items-center gap-3 py-2 px-4 bg-muted/40 border-b border-border/40 text-[11px] font-medium text-muted-foreground uppercase tracking-wider select-none">
+        <div className="w-4 shrink-0" />
+        <div className="w-[4.5rem] shrink-0">Level</div>
+        <div className="flex-1 min-w-0">Issue</div>
+        <div className="hidden lg:block w-20 shrink-0">Platform</div>
+        <div className="hidden lg:block w-20 shrink-0 text-center">Trend</div>
+        <div className="w-[55px] shrink-0 text-right">Events</div>
+        <div className="hidden sm:block w-[45px] shrink-0 text-right">Users</div>
+        <div className="w-20 shrink-0 text-right">Last Seen</div>
+      </div>
+      <div className="divide-y divide-border/40">
+        {pagedIssues.map((issue) => (
+          <IssueRow
+            key={issueSelectionKey(issue)}
+            issue={issue}
+            selected={selectedIssueKeys.has(issueSelectionKey(issue))}
+            onToggle={onToggleIssue}
+          />
+        ))}
+      </div>
+      {totalPages > 1 && (
+        <div className="flex justify-end gap-2 px-4 py-2 border-t border-border/40">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={currentPage <= 1}
+            onClick={onPreviousPage}
+          >
+            Previous
+          </Button>
+          <span className="text-sm text-muted-foreground self-center">
+            Page {currentPage} of {totalPages}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={currentPage >= totalPages}
+            onClick={onNextPage}
+          >
+            Next
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function IssueStatusBadges({issue}: Readonly<{issue: SafeIssue}>) {
+  return (
+    <div className="flex items-center gap-2 shrink-0">
+      {isNewIssue(issue.firstSeen) && (
+        <span className="text-[10px] font-bold text-success-fg bg-success-bg px-1.5 py-0.5 rounded uppercase">
+          New
+        </span>
+      )}
+      {issue.status === 'resolved' && (
+        <Badge variant="success" className="text-[11px] px-1.5 py-0">
+          Resolved
+        </Badge>
+      )}
+      {issue.status === 'ignored' && (
+        <Badge variant="secondary" className="text-[11px] px-1.5 py-0">
+          <EyeOff className="h-3 w-3" />
+          Ignored
+        </Badge>
+      )}
+      {issue.status === 'resolvedInNextRelease' && (
+        <Badge variant="info" className="text-[11px] px-1.5 py-0">
+          <Timer className="h-3 w-3" />
+          Next Release
+        </Badge>
+      )}
+    </div>
+  )
+}
+
+type IssueRowProps = Readonly<{
+  issue: SafeIssue
+  selected: boolean
+  onToggle: (issue: SafeIssue) => void
+}>
+
+function IssueRow({issue, selected, onToggle}: IssueRowProps) {
+  const title = getIssueDisplayTitle(issue)
+
+  return (
+    <div className={`hover:bg-accent/40 transition border-l-[3px] ${levelBorderClass(issue.level)}`}>
+      <div className="flex items-center gap-2 sm:gap-3 py-2 sm:py-2.5 px-2 sm:px-4">
+        <Checkbox
+          checked={selected}
+          onCheckedChange={() => onToggle(issue)}
+          onClick={(e) => e.stopPropagation()}
+          aria-label={`Select ${issue.title}`}
+          className="shrink-0"
+        />
+        <Link
+          to="/issues/$issueId"
+          params={{ issueId: issue.id }}
+          search={{ projectId: issue.projectResourceId }}
+          className="flex-1 flex items-center gap-2 sm:gap-3 min-w-0"
+        >
+          <div className="w-12 sm:w-[4.5rem] shrink-0">
+            <Badge variant={levelBadgeVariant(issue.level)} className="text-[10px] sm:text-[11px] px-1.5 py-0">
+              <span className="sm:hidden">{issue.level.toUpperCase().slice(0, 3)}</span>
+              <span className="hidden sm:inline">{issue.level.toUpperCase()}</span>
+            </Badge>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+              <span className="font-semibold truncate flex-1 min-w-0 text-sm sm:text-base" title={title}>
+                {title}
+              </span>
+              <IssueStatusBadges issue={issue} />
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              <Clock className="inline h-3 w-3 mr-1 -mt-0.5" />
+              First seen {formatRelativeTime(issue.firstSeen)}
+            </div>
+          </div>
+          <div className="hidden lg:block w-20 shrink-0">
+            <Badge variant="outline" className="text-[11px] px-1.5 py-0">{issue.platform}</Badge>
+          </div>
+          <div className="hidden lg:flex w-20 shrink-0 justify-center">
+            <EventSparkline eventCount={issue.eventCount} />
+          </div>
+          <div className="w-[55px] shrink-0 text-right">
+            <div className="font-semibold text-foreground">{formatCount(issue.eventCount)}</div>
+            <div className="text-xs text-muted-foreground">events</div>
+          </div>
+          <div className="hidden sm:block w-[45px] shrink-0 text-right">
+            <div className="font-semibold text-foreground">{issue.userCount ?? 0}</div>
+            <div className="text-xs text-muted-foreground">users</div>
+          </div>
+          <div className="hidden md:block w-20 shrink-0 text-right">
+            <span className={`text-xs font-medium ${getLastSeenColor(issue.lastSeen)}`}>
+              {formatRelativeTime(issue.lastSeen)}
+            </span>
+          </div>
+        </Link>
+      </div>
+    </div>
   )
 }
 
@@ -868,21 +1072,35 @@ const APM_TIME_PRESETS: TimeRangePreset[] = [
   {label: '90d', value: '90d', minutes: 129600},
 ]
 
-function ApmErrorsTab({ isActive, tabs }: { isActive: boolean; tabs?: ReactNode }) {
-  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>(() => {
-    try {
-      const raw = globalThis.localStorage?.getItem('apmErrors.facetFilters')
-      const parsed = raw ? JSON.parse(raw) : null
-      return Array.isArray(parsed)
-        ? parsed.filter(
-            (f): f is FacetFilter =>
-              !!f && typeof f.key === 'string' && typeof f.value === 'string'
-          )
-        : []
-    } catch {
-      return []
-    }
-  })
+function loadApmErrorFacetFilters(): FacetFilter[] {
+  try {
+    const raw = globalThis.localStorage?.getItem('apmErrors.facetFilters')
+    const parsed = raw ? JSON.parse(raw) : null
+    return Array.isArray(parsed)
+      ? parsed.filter(
+          (filter): filter is FacetFilter =>
+            !!filter && typeof filter.key === 'string' && typeof filter.value === 'string'
+        )
+      : []
+  } catch {
+    return []
+  }
+}
+
+function visibleApmErrors(errors: readonly ApmErrorGroup[], normalizedQuery: string): readonly ApmErrorGroup[] {
+  if (!normalizedQuery) return errors
+  return errors.filter((error) =>
+    `${error.resource} ${error.errorMessage} ${error.errorType}`.toLowerCase().includes(normalizedQuery)
+  )
+}
+
+type ApmErrorsTabProps = Readonly<{
+  isActive: boolean
+  tabs?: ReactNode
+}>
+
+function ApmErrorsTab({ isActive, tabs }: ApmErrorsTabProps) {
+  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>(loadApmErrorFacetFilters)
   const [query, setQuery] = useState('')
   const [timeRange, setTimeRange] = useState<ApmTimeRange>('24h')
   const [offset, setOffset] = useState(0)
@@ -945,11 +1163,7 @@ function ApmErrorsTab({ isActive, tabs }: { isActive: boolean; tabs?: ReactNode 
 
   // Free-text narrows the loaded page client-side (the trace API has no text query).
   const normalizedQuery = query.trim().toLowerCase()
-  const visibleErrors = normalizedQuery
-    ? errors.filter((e: ApmErrorGroup) =>
-        `${e.resource} ${e.errorMessage} ${e.errorType}`.toLowerCase().includes(normalizedQuery)
-      )
-    : errors
+  const visibleErrors = visibleApmErrors(errors, normalizedQuery)
 
   const schema: FacetSchema = useMemo(
     () => [{key: 'service', suggestions: services.map((s) => s.service)}],
@@ -1008,158 +1222,287 @@ function ApmErrorsTab({ isActive, tabs }: { isActive: boolean; tabs?: ReactNode 
         ) : null
       }
     >
-      <div className="p-4">
-        {!hasServices ? (
-          isLoading ? (
-            <div className="py-16 text-center text-muted-foreground">Loading APM errors...</div>
-          ) : (
-            <Card className="p-12 text-center border-info-border/50 bg-gradient-to-b from-card to-info-bg">
-              <div className="max-w-md mx-auto space-y-4">
-                <div className="flex justify-center">
-                  <div className="rounded-full bg-info-bg p-4">
-                    <AlertTriangle className="h-10 w-10 text-info-fg" />
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold mb-2">No APM errors found</h3>
-                  <p className="text-muted-foreground">
-                    Errors from application traces will appear here when spans report errors.
-                  </p>
-                </div>
-              </div>
-            </Card>
-          )
-        ) : !hasSelection ? (
-          <Card className="p-12 text-center border-border/60">
-            <div className="max-w-md mx-auto space-y-3">
-              <div className="flex justify-center">
-                <div className="rounded-full bg-muted p-4">
-                  <Server className="h-10 w-10 text-muted-foreground" />
-                </div>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold mb-1">Select a service</h3>
-                <p className="text-muted-foreground">
-                  Pick one or more services from the search bar or the facet rail to view their errors.
-                </p>
-              </div>
-            </div>
-          </Card>
-        ) : isLoading ? (
-          <div className="py-16 text-center text-muted-foreground">Loading APM errors...</div>
-        ) : visibleErrors.length === 0 ? (
-          <Card className="p-12 text-center border-border/60">
-            <div className="max-w-md mx-auto space-y-3">
-              <div className="flex justify-center">
-                <div className="rounded-full bg-muted p-4">
-                  <AlertTriangle className="h-10 w-10 text-muted-foreground" />
-                </div>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold mb-1">
-                  {normalizedQuery ? 'No errors match your search' : 'No errors for the selected services'}
-                </h3>
-                <p className="text-muted-foreground">
-                  {normalizedQuery
-                    ? 'Try a different search or clear it.'
-                    : 'Try a different service or widen the time range.'}
-                </p>
-              </div>
-            </div>
-          </Card>
-        ) : (
-          <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
-            {totalCount > APM_ERRORS_PAGE_SIZE && !normalizedQuery && (
-              <div className="px-4 py-2 text-xs text-muted-foreground border-b border-border/40">
-                Showing {offset + 1}–{offset + errors.length} of {totalCount}
-              </div>
-            )}
-            <div className="hidden md:grid md:grid-cols-[8rem_1fr_4rem_6rem_4rem] items-center gap-3 py-2 px-4 bg-muted/40 border-b border-border/40 text-[11px] font-medium text-muted-foreground uppercase tracking-wider select-none">
-              <div>Service</div>
-              <div>Error</div>
-              <div className="text-right">Count</div>
-              <div className="text-right">Last Seen</div>
-              <div className="text-right">Trace</div>
-            </div>
-            <div className="divide-y divide-border/40">
-              {visibleErrors.map((error: ApmErrorGroup) => {
-                const traceId = normalizeApmTraceId(error.traceId)
-                const stableKey = `${error.service}|${error.resource}|${error.errorMessage}|${error.errorType}`
-                return (
-                  <div
-                    key={stableKey}
-                    className="hover:bg-accent/40 transition border-l-[3px] border-l-red-500"
-                  >
-                    <div className="grid grid-cols-[auto_1fr_auto] md:grid-cols-[8rem_1fr_4rem_6rem_4rem] items-center gap-2 sm:gap-3 py-2 sm:py-2.5 px-2 sm:px-4">
-                      <Badge
-                        variant="outline"
-                        className="shrink-0 text-[11px] px-1.5 py-0 gap-1 w-fit"
-                      >
-                        <Server className="h-3 w-3" />
-                        {error.service}
-                      </Badge>
-                      <div className="min-w-0">
-                        <div className="font-semibold truncate text-sm">
-                          {error.errorMessage || error.resource}
-                        </div>
-                        {error.errorType && (
-                          <div className="text-xs text-muted-foreground truncate">
-                            {error.errorType}
-                          </div>
-                        )}
-                        <div className="text-xs text-muted-foreground truncate mt-0.5">
-                          {error.resource}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-semibold text-foreground">
-                          {formatCount(error.count)}
-                        </div>
-                        <div className="text-xs text-muted-foreground">errors</div>
-                      </div>
-                      <div className="hidden md:block text-right text-xs text-muted-foreground">
-                        {error.lastSeen ? formatRelativeTime(error.lastSeen) : '—'}
-                      </div>
-                      <div className="hidden md:block text-right">
-                        {traceId && (
-                          <Link
-                            to="/performance/traces/$traceId"
-                            params={{ traceId }}
-                            className="text-xs text-primary hover:underline"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            View trace
-                          </Link>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-            {(canPrev || canNext) && (
-              <div className="flex justify-end gap-2 px-4 py-2 border-t border-border/40">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!canPrev}
-                  onClick={() => setOffset(Math.max(0, offset - APM_ERRORS_PAGE_SIZE))}
-                >
-                  Previous
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!canNext}
-                  onClick={() => setOffset(offset + APM_ERRORS_PAGE_SIZE)}
-                >
-                  Next
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      <ApmErrorsContent
+        hasServices={hasServices}
+        hasSelection={hasSelection}
+        isLoading={isLoading}
+        visibleErrors={visibleErrors}
+        normalizedQuery={normalizedQuery}
+        totalCount={totalCount}
+        offset={offset}
+        errorCount={errors.length}
+        canPrev={canPrev}
+        canNext={canNext}
+        onPreviousPage={() => setOffset(Math.max(0, offset - APM_ERRORS_PAGE_SIZE))}
+        onNextPage={() => setOffset(offset + APM_ERRORS_PAGE_SIZE)}
+      />
     </ExplorerShell>
+  )
+}
+
+type ApmErrorsContentProps = Readonly<{
+  hasServices: boolean
+  hasSelection: boolean
+  isLoading: boolean
+  visibleErrors: readonly ApmErrorGroup[]
+  normalizedQuery: string
+  totalCount: number
+  offset: number
+  errorCount: number
+  canPrev: boolean
+  canNext: boolean
+  onPreviousPage: () => void
+  onNextPage: () => void
+}>
+
+function ApmErrorsContent({
+  hasServices,
+  hasSelection,
+  isLoading,
+  visibleErrors,
+  normalizedQuery,
+  totalCount,
+  offset,
+  errorCount,
+  canPrev,
+  canNext,
+  onPreviousPage,
+  onNextPage,
+}: ApmErrorsContentProps) {
+  if (!hasServices) {
+    return (
+      <div className="p-4">
+        {isLoading ? <ApmErrorsLoading /> : <NoApmErrorsState />}
+      </div>
+    )
+  }
+
+  if (!hasSelection) {
+    return (
+      <div className="p-4">
+        <SelectApmServiceState />
+      </div>
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <div className="p-4">
+        <ApmErrorsLoading />
+      </div>
+    )
+  }
+
+  if (visibleErrors.length === 0) {
+    return (
+      <div className="p-4">
+        <NoVisibleApmErrorsState hasSearch={Boolean(normalizedQuery)} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-4">
+      <ApmErrorsTable
+        visibleErrors={visibleErrors}
+        totalCount={totalCount}
+        offset={offset}
+        errorCount={errorCount}
+        showRange={totalCount > APM_ERRORS_PAGE_SIZE && !normalizedQuery}
+        canPrev={canPrev}
+        canNext={canNext}
+        onPreviousPage={onPreviousPage}
+        onNextPage={onNextPage}
+      />
+    </div>
+  )
+}
+
+function ApmErrorsLoading() {
+  return <div className="py-16 text-center text-muted-foreground">Loading APM errors...</div>
+}
+
+function NoApmErrorsState() {
+  return (
+    <Card className="p-12 text-center border-info-border/50 bg-gradient-to-b from-card to-info-bg">
+      <div className="max-w-md mx-auto space-y-4">
+        <div className="flex justify-center">
+          <div className="rounded-full bg-info-bg p-4">
+            <AlertTriangle className="h-10 w-10 text-info-fg" />
+          </div>
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold mb-2">No APM errors found</h3>
+          <p className="text-muted-foreground">
+            Errors from application traces will appear here when spans report errors.
+          </p>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+function SelectApmServiceState() {
+  return (
+    <Card className="p-12 text-center border-border/60">
+      <div className="max-w-md mx-auto space-y-3">
+        <div className="flex justify-center">
+          <div className="rounded-full bg-muted p-4">
+            <Server className="h-10 w-10 text-muted-foreground" />
+          </div>
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold mb-1">Select a service</h3>
+          <p className="text-muted-foreground">
+            Pick one or more services from the search bar or the facet rail to view their errors.
+          </p>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+function NoVisibleApmErrorsState({hasSearch}: Readonly<{hasSearch: boolean}>) {
+  const title = hasSearch ? 'No errors match your search' : 'No errors for the selected services'
+  const description = hasSearch
+    ? 'Try a different search or clear it.'
+    : 'Try a different service or widen the time range.'
+
+  return (
+    <Card className="p-12 text-center border-border/60">
+      <div className="max-w-md mx-auto space-y-3">
+        <div className="flex justify-center">
+          <div className="rounded-full bg-muted p-4">
+            <AlertTriangle className="h-10 w-10 text-muted-foreground" />
+          </div>
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold mb-1">{title}</h3>
+          <p className="text-muted-foreground">{description}</p>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+type ApmErrorsTableProps = Readonly<{
+  visibleErrors: readonly ApmErrorGroup[]
+  totalCount: number
+  offset: number
+  errorCount: number
+  showRange: boolean
+  canPrev: boolean
+  canNext: boolean
+  onPreviousPage: () => void
+  onNextPage: () => void
+}>
+
+function ApmErrorsTable({
+  visibleErrors,
+  totalCount,
+  offset,
+  errorCount,
+  showRange,
+  canPrev,
+  canNext,
+  onPreviousPage,
+  onNextPage,
+}: ApmErrorsTableProps) {
+  return (
+    <div className="rounded-lg border border-border/60 bg-card overflow-hidden">
+      {showRange && (
+        <div className="px-4 py-2 text-xs text-muted-foreground border-b border-border/40">
+          Showing {offset + 1}-{offset + errorCount} of {totalCount}
+        </div>
+      )}
+      <div className="hidden md:grid md:grid-cols-[8rem_1fr_4rem_6rem_4rem] items-center gap-3 py-2 px-4 bg-muted/40 border-b border-border/40 text-[11px] font-medium text-muted-foreground uppercase tracking-wider select-none">
+        <div>Service</div>
+        <div>Error</div>
+        <div className="text-right">Count</div>
+        <div className="text-right">Last Seen</div>
+        <div className="text-right">Trace</div>
+      </div>
+      <div className="divide-y divide-border/40">
+        {visibleErrors.map((error) => (
+          <ApmErrorRow key={apmErrorRowKey(error)} error={error} />
+        ))}
+      </div>
+      {(canPrev || canNext) && (
+        <div className="flex justify-end gap-2 px-4 py-2 border-t border-border/40">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!canPrev}
+            onClick={onPreviousPage}
+          >
+            Previous
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!canNext}
+            onClick={onNextPage}
+          >
+            Next
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function apmErrorRowKey(error: ApmErrorGroup): string {
+  return `${error.service}|${error.resource}|${error.errorMessage}|${error.errorType}`
+}
+
+function ApmErrorRow({error}: Readonly<{error: ApmErrorGroup}>) {
+  const traceId = normalizeApmTraceId(error.traceId)
+
+  return (
+    <div className="hover:bg-accent/40 transition border-l-[3px] border-l-red-500">
+      <div className="grid grid-cols-[auto_1fr_auto] md:grid-cols-[8rem_1fr_4rem_6rem_4rem] items-center gap-2 sm:gap-3 py-2 sm:py-2.5 px-2 sm:px-4">
+        <Badge
+          variant="outline"
+          className="shrink-0 text-[11px] px-1.5 py-0 gap-1 w-fit"
+        >
+          <Server className="h-3 w-3" />
+          {error.service}
+        </Badge>
+        <div className="min-w-0">
+          <div className="font-semibold truncate text-sm">
+            {error.errorMessage || error.resource}
+          </div>
+          {error.errorType && (
+            <div className="text-xs text-muted-foreground truncate">
+              {error.errorType}
+            </div>
+          )}
+          <div className="text-xs text-muted-foreground truncate mt-0.5">
+            {error.resource}
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="font-semibold text-foreground">
+            {formatCount(error.count)}
+          </div>
+          <div className="text-xs text-muted-foreground">errors</div>
+        </div>
+        <div className="hidden md:block text-right text-xs text-muted-foreground">
+          {error.lastSeen ? formatRelativeTime(error.lastSeen) : '-'}
+        </div>
+        <div className="hidden md:block text-right">
+          {traceId && (
+            <Link
+              to="/performance/traces/$traceId"
+              params={{ traceId }}
+              className="text-xs text-primary hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              View trace
+            </Link>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }

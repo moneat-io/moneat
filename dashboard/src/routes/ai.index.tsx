@@ -59,6 +59,21 @@ function formatTokens(tokens: number): string {
   return String(tokens)
 }
 
+type LlmOverview = Awaited<ReturnType<typeof api.getLlmOverview>>
+
+function llmBreakdowns(overview: LlmOverview | undefined) {
+  const modelBreakdown: Record<string, number> = {}
+  const tokenBreakdown: Record<string, number> = {}
+  const costBreakdown: Record<string, number> = {}
+  overview?.topModels.forEach(m => {
+    const label = m.model || 'unknown'
+    modelBreakdown[label] = Number(m.callCount)
+    tokenBreakdown[label] = Number(m.totalTokens)
+    costBreakdown[label] = m.totalCost
+  })
+  return {modelBreakdown, tokenBreakdown, costBreakdown}
+}
+
 function AiOverviewPage() {
   const [range, setRange] = useState('24h')
   const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
@@ -125,15 +140,7 @@ function AiOverviewPage() {
     count: Number(p.count),
   })) ?? []
 
-  const modelBreakdown: Record<string, number> = {}
-  const tokenBreakdown: Record<string, number> = {}
-  const costBreakdown: Record<string, number> = {}
-  overview?.topModels.forEach(m => {
-    const label = m.model || 'unknown'
-    modelBreakdown[label] = Number(m.callCount)
-    tokenBreakdown[label] = Number(m.totalTokens)
-    costBreakdown[label] = m.totalCost
-  })
+  const {modelBreakdown, tokenBreakdown, costBreakdown} = llmBreakdowns(overview)
 
   return (
     <ExplorerShell
@@ -177,7 +184,16 @@ function AiOverviewPage() {
       }
     >
       <div className="space-y-3 p-3">
-        {!hasLlmScope ? (
+        {hasLlmScope ? (
+          <AiOverviewResults
+            overview={overview}
+            isLoading={isLoading}
+            timelineData={timelineData}
+            modelBreakdown={modelBreakdown}
+            tokenBreakdown={tokenBreakdown}
+            costBreakdown={costBreakdown}
+          />
+        ) : (
           <div className="py-10">
             <EmptyState
               icon={Brain}
@@ -185,117 +201,133 @@ function AiOverviewPage() {
               description="Adjust the selected services to view AI observability data."
             />
           </div>
-        ) : (
-          <>
-            {/* Stats Row */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-1.5">
-              <StatsCard
-                compact
-                title="Total Generations"
-                value={isLoading ? '...' : formatTokens(overview?.totalGenerations ?? 0)}
-                icon={Zap}
-                accent="blue"
-              />
-              <StatsCard
-                compact
-                title="Total Tokens"
-                value={isLoading ? '...' : formatTokens(overview?.totalTokens ?? 0)}
-                icon={Hash}
-                accent="violet"
-              />
-              <StatsCard
-                compact
-                title="Total Cost"
-                value={isLoading ? '...' : formatCost(overview?.totalCost ?? 0)}
-                icon={Coins}
-                accent="emerald"
-              />
-              <StatsCard
-                compact
-                title="Avg Latency"
-                value={isLoading ? '...' : formatDuration(overview?.avgDurationMs ?? 0)}
-                icon={Clock}
-                accent="amber"
-              />
-              <StatsCard
-                compact
-                title="Error Rate"
-                value={isLoading ? '...' : `${(overview?.errorRate ?? 0).toFixed(1)}%`}
-                icon={AlertTriangle}
-                accent="rose"
-              />
-            </div>
-
-            {/* Charts Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-              <EventsChart data={timelineData} title="LLM Calls Over Time" height={160} />
-              <BarChart data={modelBreakdown} title="Calls by Model" height={160} />
-            </div>
-
-            {/* Token Breakdown & Cost */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-              <BarChart data={tokenBreakdown} title="Tokens by Model" height={160} />
-              <BarChart data={costBreakdown} title="Cost by Model" height={160} />
-            </div>
-
-            {/* Top Models Table */}
-            <SectionCard title="Top Models" icon={TrendingUp} flushBody bodyClassName="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Model</TableHead>
-                      <TableHead className="text-right">Calls</TableHead>
-                      <TableHead className="text-right">Tokens</TableHead>
-                      <TableHead className="text-right">Cost</TableHead>
-                      <TableHead className="text-right">Avg Latency</TableHead>
-                      <TableHead className="text-right">Errors</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {overview?.topModels.map((m) => (
-                      <TableRow key={`${m.provider}-${m.model}`}>
-                        <TableCell>
-                          <div className="flex items-center gap-2.5">
-                            <ProviderLogo provider={m.provider} showName={false} className="shrink-0" />
-                            <div className="min-w-0">
-                              <div className="font-medium text-sm">{m.model || 'unknown'}</div>
-                              <div className="text-xs text-muted-foreground">{m.provider}</div>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">{m.callCount}</TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatTokens(Number(m.totalTokens))}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">{formatCost(m.totalCost)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatDuration(m.avgDurationMs)}</TableCell>
-                        <TableCell className="text-right">
-                          <Badge
-                            variant={m.errorRate > 5 ? 'destructive' : 'secondary'}
-                            className="text-xs tabular-nums"
-                          >
-                            {m.errorRate.toFixed(1)}%
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {(!overview?.topModels || overview.topModels.length === 0) && (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center text-muted-foreground py-6">
-                          No LLM data yet.{' '}
-                          <a href="/docs/ai-observability" className="text-primary hover:underline">
-                            Read the docs
-                          </a>{' '}
-                          to get started.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-            </SectionCard>
-          </>
         )}
       </div>
     </ExplorerShell>
+  )
+}
+
+type AiOverviewResultsProps = Readonly<{
+  overview: LlmOverview | undefined
+  isLoading: boolean
+  timelineData: {timestamp: string; count: number}[]
+  modelBreakdown: Record<string, number>
+  tokenBreakdown: Record<string, number>
+  costBreakdown: Record<string, number>
+}>
+
+function AiOverviewResults({
+  overview,
+  isLoading,
+  timelineData,
+  modelBreakdown,
+  tokenBreakdown,
+  costBreakdown,
+}: AiOverviewResultsProps) {
+  return (
+    <>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-1.5">
+        <StatsCard
+          compact
+          title="Total Generations"
+          value={isLoading ? '...' : formatTokens(overview?.totalGenerations ?? 0)}
+          icon={Zap}
+          accent="blue"
+        />
+        <StatsCard
+          compact
+          title="Total Tokens"
+          value={isLoading ? '...' : formatTokens(overview?.totalTokens ?? 0)}
+          icon={Hash}
+          accent="violet"
+        />
+        <StatsCard
+          compact
+          title="Total Cost"
+          value={isLoading ? '...' : formatCost(overview?.totalCost ?? 0)}
+          icon={Coins}
+          accent="emerald"
+        />
+        <StatsCard
+          compact
+          title="Avg Latency"
+          value={isLoading ? '...' : formatDuration(overview?.avgDurationMs ?? 0)}
+          icon={Clock}
+          accent="amber"
+        />
+        <StatsCard
+          compact
+          title="Error Rate"
+          value={isLoading ? '...' : `${(overview?.errorRate ?? 0).toFixed(1)}%`}
+          icon={AlertTriangle}
+          accent="rose"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+        <EventsChart data={timelineData} title="LLM Calls Over Time" height={160} />
+        <BarChart data={modelBreakdown} title="Calls by Model" height={160} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+        <BarChart data={tokenBreakdown} title="Tokens by Model" height={160} />
+        <BarChart data={costBreakdown} title="Cost by Model" height={160} />
+      </div>
+
+      <SectionCard title="Top Models" icon={TrendingUp} flushBody bodyClassName="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Model</TableHead>
+              <TableHead className="text-right">Calls</TableHead>
+              <TableHead className="text-right">Tokens</TableHead>
+              <TableHead className="text-right">Cost</TableHead>
+              <TableHead className="text-right">Avg Latency</TableHead>
+              <TableHead className="text-right">Errors</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {overview?.topModels.map((m) => (
+              <TableRow key={`${m.provider}-${m.model}`}>
+                <TableCell>
+                  <div className="flex items-center gap-2.5">
+                    <ProviderLogo provider={m.provider} showName={false} className="shrink-0" />
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm">{m.model || 'unknown'}</div>
+                      <div className="text-xs text-muted-foreground">{m.provider}</div>
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell className="text-right tabular-nums">{m.callCount}</TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {formatTokens(Number(m.totalTokens))}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">{formatCost(m.totalCost)}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatDuration(m.avgDurationMs)}</TableCell>
+                <TableCell className="text-right">
+                  <Badge
+                    variant={m.errorRate > 5 ? 'destructive' : 'secondary'}
+                    className="text-xs tabular-nums"
+                  >
+                    {m.errorRate.toFixed(1)}%
+                  </Badge>
+                </TableCell>
+              </TableRow>
+            ))}
+            {(!overview?.topModels || overview.topModels.length === 0) && (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-muted-foreground py-6">
+                  No LLM data yet.{' '}
+                  <a href="/docs/ai-observability" className="text-primary hover:underline">
+                    Read the docs
+                  </a>{' '}
+                  to get started.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </SectionCard>
+    </>
   )
 }

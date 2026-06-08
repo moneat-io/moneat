@@ -56,7 +56,7 @@ export function ExplorerShell({
   defaultRailOpen = true,
   children,
   className,
-}: ExplorerShellProps) {
+}: Readonly<ExplorerShellProps>) {
   const [railOpen, setRailOpen] = useState(defaultRailOpen)
 
   return (
