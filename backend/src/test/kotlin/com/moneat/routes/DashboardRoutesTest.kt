@@ -20,6 +20,8 @@ import com.moneat.dashboards.models.CustomDataSourceResponse
 import com.moneat.dashboards.models.CreateDashboardRequest
 import com.moneat.dashboards.models.DashboardAlertResponse
 import com.moneat.dashboards.models.DashboardResponse
+import com.moneat.dashboards.models.DashboardVariable
+import com.moneat.dashboards.models.Dashboards
 import com.moneat.dashboards.models.FolderResponse
 import com.moneat.dashboards.models.NotificationChannels
 import com.moneat.dashboards.models.SearchResponse
@@ -32,6 +34,7 @@ import com.moneat.dashboards.routes.customDashboardRoutes
 import com.moneat.dashboards.services.CustomDashboardService
 import com.moneat.dashboards.services.CustomDataSourceExecutor
 import com.moneat.dashboards.services.CustomDataSourceService
+import com.moneat.dashboards.services.DataSourceCredentials
 import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.dashboards.services.DashboardQueryEngine
 import com.moneat.dashboards.services.DashboardTemplateCatalogService
@@ -70,6 +73,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.Clock
 
 class DashboardRoutesTest {
     companion object {
@@ -151,6 +155,35 @@ class DashboardRoutesTest {
                 it[role] = "owner"
             }
         }
+    }
+
+    private fun seedDashboardScope(orgId: Long): Long = transaction {
+        exec(
+            """
+            CREATE TABLE dashboards (
+                id BIGSERIAL PRIMARY KEY,
+                org_id BIGINT NOT NULL,
+                project_id BIGINT,
+                folder_id BIGINT,
+                title VARCHAR(255) NOT NULL,
+                description TEXT,
+                layout_type VARCHAR(20) DEFAULT 'grid' NOT NULL,
+                is_default BOOLEAN DEFAULT FALSE NOT NULL,
+                variables TEXT DEFAULT '[]' NOT NULL,
+                created_by BIGINT NOT NULL,
+                created_at TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP NOT NULL
+            )
+            """.trimIndent()
+        )
+        Dashboards.insert {
+            it[Dashboards.orgId] = orgId
+            it[title] = TEST_DASHBOARD
+            it[description] = null
+            it[createdBy] = 1L
+            it[createdAt] = Clock.System.now()
+            it[updatedAt] = Clock.System.now()
+        }[Dashboards.id]
     }
 
     private fun seedUserAndOrg(): Pair<Int, Int> {
@@ -648,6 +681,77 @@ class DashboardRoutesTest {
                 setBody("{}")
             }
             assertEquals(HttpStatusCode.BadRequest, r.status)
+        }
+
+    @Test
+    fun `POST variables resolve returns label values from matching sources`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val dashboardId = seedDashboardScope(orgId.toLong())
+            val dashboard = makeDashboard(id = dashboardId, orgId = orgId.toLong()).copy(
+                variables = listOf(
+                    DashboardVariable(
+                        name = "namespace",
+                        query = "label_values(up{job=\"\$job\"}, namespace)",
+                        datasource = "__prometheus",
+                    ),
+                    DashboardVariable(
+                        name = "pod",
+                        query = "label_values({namespace=\"\$namespace\"}, pod)",
+                        datasource = "__loki",
+                    ),
+                    DashboardVariable(name = "static"),
+                    DashboardVariable(name = "ignored", query = "up"),
+                )
+            )
+            val prometheus = makeDataSource(id = 10L, orgId = orgId.toLong()).copy(
+                name = "Prometheus",
+                sourceType = "prometheus",
+                port = 9090,
+            )
+            val loki = makeDataSource(id = 11L, orgId = orgId.toLong()).copy(
+                name = "Loki",
+                sourceType = "loki",
+                port = 3100,
+            )
+            every { mockDashboardService.getDashboard(dashboardId, orgId.toLong()) } returns dashboard
+            every { mockDataSourceService.listDataSources(orgId.toLong()) } returns listOf(prometheus, loki)
+            every {
+                mockDataSourceService.getDecryptedCredentials(prometheus.id, orgId.toLong())
+            } returns DataSourceCredentials(apiKey = "prom-token")
+            every {
+                mockDataSourceService.getDecryptedCredentials(loki.id, orgId.toLong())
+            } returns DataSourceCredentials(apiKey = "loki-token")
+            coEvery {
+                mockDataSourceExecutor.executeLabelValuesQuery(
+                    any(),
+                    prometheus.host,
+                    prometheus.port,
+                    any(),
+                    "label_values(up{job=\"api\"}, namespace)",
+                )
+            } returns listOf("default")
+            coEvery {
+                mockDataSourceExecutor.executeLabelValuesQuery(
+                    any(),
+                    loki.host,
+                    loki.port,
+                    any(),
+                    "label_values({namespace=\"default\"}, pod)",
+                )
+            } returns listOf("api-0")
+            application { installRoutes(this) }
+
+            val r = client.post("/v1/dashboards/$dashboardId/variables/resolve") {
+                withAuth(token(userId, orgId))
+                contentType(ContentType.Application.Json)
+                setBody("""{"job":"api","namespace":"default"}""")
+            }
+
+            assertEquals(HttpStatusCode.OK, r.status)
+            assertTrue(r.bodyAsText().contains("namespace"))
+            assertTrue(r.bodyAsText().contains("default"))
+            assertTrue(r.bodyAsText().contains("api-0"))
         }
 
     // ──── Import / Export ────
