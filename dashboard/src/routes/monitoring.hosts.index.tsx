@@ -17,6 +17,13 @@
 import {createFileRoute, Link, redirect, useNavigate} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api, type DdHostResponse} from '@/lib/api'
+import {
+  DEFAULT_AGENT_CAPABILITIES,
+  buildAgentYaml,
+  buildDockerCompose,
+  buildDockerRun,
+  type AgentCapabilities,
+} from '@/lib/agent-config'
 import {cn, formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
@@ -67,44 +74,6 @@ import {useIsSelfHosted} from '@/hooks/useEnterpriseFeatures'
 import {useToast} from '@/hooks/useToast'
 import {Prism as SyntaxHighlighter} from 'react-syntax-highlighter'
 import {oneDark, oneLight} from 'react-syntax-highlighter/dist/esm/styles/prism'
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io'
-
-function datadogLogsEndpoint(ingestUrl: string): {address: string; noSsl: boolean} {
-  try {
-    const parsed = new URL(ingestUrl)
-    const port = parsed.port || (parsed.protocol === 'http:' ? '80' : '443')
-    return {
-      address: `${parsed.hostname}:${port}`,
-      noSsl: parsed.protocol === 'http:',
-    }
-  } catch {
-    return {
-      address: ingestUrl.replace(/^https?:\/\//, '').replace(/\/.*$/, ''),
-      noSsl: false,
-    }
-  }
-}
-
-function datadogForwarderEndpoint(backendUrl: string): string {
-  const normalized = backendUrl.replace(/\/$/, '')
-  try {
-    const parsed = new URL(normalized)
-    const port = parsed.port ? `:${parsed.port}` : ''
-    return parsed.protocol === 'https:' ? `${parsed.hostname}${port}` : normalized
-  } catch {
-    return normalized
-  }
-}
-
-function datadogProfileEndpoint(backendUrl: string, apiKey?: string | null): string {
-  const endpoint = backendUrl.replace(/\/$/, '') + '/api/v2/profile'
-  return apiKey ? endpoint + '?api_key=' + encodeURIComponent(apiKey) : endpoint
-}
-
-function datadogTelemetryEndpoint(backendUrl: string): string {
-  return backendUrl.replace(/\/$/, '') + '/dd/telemetry/proxy'
-}
 
 function MonitoringPage() {
   return <MonitoringHostsPage />
@@ -196,157 +165,8 @@ type StatusFilter = 'all' | 'online' | 'offline'
 type SortField = 'hostname' | 'cores' | 'memory' | 'lastSeen'
 type SortDir = 'asc' | 'desc'
 
-type AgentOptions = {
-  container: boolean
-  apm: boolean
-  logs: boolean
-  processes: boolean
-}
-
-function getDatadogYaml(options: AgentOptions, apiKey?: string | null): string {
-  const backendUrl = BACKEND_URL.replace(/\/$/, '')
-  const ingestUrl = backendUrl + '/dd'
-  const logsEndpoint = datadogLogsEndpoint(ingestUrl)
-  const forwarderEndpoint = datadogForwarderEndpoint(backendUrl)
-  const profileEndpoint = datadogProfileEndpoint(backendUrl, apiKey)
-  const telemetryEndpoint = datadogTelemetryEndpoint(backendUrl)
-
-  let yaml = `# Datadog Agent configuration for Moneat
-docker_query_timeout: 15`
-
-  if (options.apm) {
-    yaml += `
-
-# Continuous Profiling (agent uses this URL verbatim)
-apm_config:
-  profiling_dd_url: ${profileEndpoint}
-  telemetry:
-    dd_url: ${telemetryEndpoint}`
-  }
-
-  if (options.logs) {
-    yaml += `
-
-# Log Collection
-logs_config:
-  logs_dd_url: ${logsEndpoint.address}
-  logs_no_ssl: ${logsEndpoint.noSsl}`
-  }
-
-  yaml += `
-
-# EPForwarder tracks (cannot be set via env vars)
-container_lifecycle:
-  dd_url: ${forwarderEndpoint}
-container_image:
-  dd_url: ${forwarderEndpoint}
-sbom:
-  dd_url: ${forwarderEndpoint}
-network_devices:
-  metadata:
-    dd_url: ${forwarderEndpoint}
-  snmp_traps:
-    forwarder:
-      dd_url: ${forwarderEndpoint}
-  netflow:
-    forwarder:
-      dd_url: ${forwarderEndpoint}
-synthetics:
-  forwarder:
-    dd_url: ${forwarderEndpoint}
-database_monitoring:
-  metrics:
-    dd_url: ${forwarderEndpoint}
-  samples:
-    dd_url: ${forwarderEndpoint}
-  activity:
-    dd_url: ${forwarderEndpoint}`
-
-  return yaml
-}
-
-function getDockerRunCommand(apiKey: string, options: AgentOptions): string {
-  const ingestUrl = BACKEND_URL.replace(/\/$/, '') + '/dd'
-  const logsEndpoint = datadogLogsEndpoint(ingestUrl)
-  
-  let envs = `  -e DD_API_KEY="${apiKey}" \\\n  -e DD_DD_URL="${ingestUrl}" \\`
-  
-  if (options.apm) {
-    envs += `\n  -e DD_APM_ENABLED=true \\\n  -e DD_APM_DD_URL="${ingestUrl}" \\`
-  }
-  
-  if (options.logs) {
-    envs +=
-      `\n  -e DD_LOGS_ENABLED=true \\` +
-      `\n  -e DD_LOGS_CONFIG_LOGS_DD_URL="${logsEndpoint.address}" \\` +
-      `\n  -e DD_LOGS_CONFIG_LOGS_NO_SSL=${logsEndpoint.noSsl} \\` +
-      `\n  -e DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true \\`
-  }
-  
-  if (options.processes) {
-    envs += `\n  -e DD_PROCESS_AGENT_ENABLED=true \\\n  -e DD_PROCESS_CONFIG_PROCESS_DD_URL="${ingestUrl}" \\`
-  }
-
-  let volumes = options.container
-    ? `\n  -v /var/run/docker.sock:/var/run/docker.sock:ro \\`
-    : ''
-  if (options.logs) {
-    volumes += `\n  -v /var/lib/docker/containers:/var/lib/docker/containers:ro \\`
-  }
-    
-  return `docker run -d \\
-  --name dd-agent \\
-  --restart always \\
-  --network host \\
-${envs}
-  -v /etc/datadog-agent/datadog.yaml:/etc/datadog-agent/datadog.yaml:ro \\${volumes}
-  -v /proc/:/host/proc/:ro \\
-  -v /sys/:/host/sys/:ro \\
-  gcr.io/datadoghq/agent:7`
-}
-
-function getDockerComposeCommand(apiKey: string, options: AgentOptions): string {
-  const ingestUrl = BACKEND_URL.replace(/\/$/, '') + '/dd'
-  const logsEndpoint = datadogLogsEndpoint(ingestUrl)
-  
-  let envs = `      - DD_API_KEY=${apiKey}\n      - DD_DD_URL=${ingestUrl}`
-  
-  if (options.apm) {
-    envs += `\n      - DD_APM_ENABLED=true\n      - DD_APM_DD_URL=${ingestUrl}`
-  }
-  
-  if (options.logs) {
-    envs +=
-      `\n      - DD_LOGS_ENABLED=true` +
-      `\n      - DD_LOGS_CONFIG_LOGS_DD_URL=${logsEndpoint.address}` +
-      `\n      - DD_LOGS_CONFIG_LOGS_NO_SSL=${logsEndpoint.noSsl}` +
-      `\n      - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true`
-  }
-  
-  if (options.processes) {
-    envs += `\n      - DD_PROCESS_AGENT_ENABLED=true\n      - DD_PROCESS_CONFIG_PROCESS_DD_URL=${ingestUrl}`
-  }
-
-  let volumes = options.container
-    ? `    volumes:\n      - /etc/datadog-agent/datadog.yaml:/etc/datadog-agent/datadog.yaml:ro\n      - /proc/:/host/proc/:ro\n      - /sys/:/host/sys/:ro\n      - /var/run/docker.sock:/var/run/docker.sock:ro`
-    : `    volumes:\n      - /etc/datadog-agent/datadog.yaml:/etc/datadog-agent/datadog.yaml:ro\n      - /proc/:/host/proc/:ro\n      - /sys/:/host/sys/:ro`
-  if (options.logs) {
-    volumes += `\n      - /var/lib/docker/containers:/var/lib/docker/containers:ro`
-  }
-
-  return `cat > docker-compose.yml <<'EOF'
-services:
-  dd-agent:
-    image: gcr.io/datadoghq/agent:7
-    container_name: dd-agent
-    restart: always
-    network_mode: host
-${volumes}
-    environment:
-${envs}
-EOF
-
-docker compose up -d`
+function defaultHostAgentCapabilities(): AgentCapabilities {
+  return {...DEFAULT_AGENT_CAPABILITIES, profiling: true}
 }
 
 function AddHostDialog({
@@ -360,12 +180,7 @@ function AddHostDialog({
   const queryClient = useQueryClient()
   const [keyName, setKeyName] = useState('')
   const [createdKey, setCreatedKey] = useState<string | null>(null)
-  const [options, setOptions] = useState<AgentOptions>({
-    container: true,
-    apm: true,
-    logs: false,
-    processes: true,
-  })
+  const [options, setOptions] = useState<AgentCapabilities>(() => defaultHostAgentCapabilities())
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'))
   const [copied, setCopied] = useState(false)
   const [copiedYaml, setCopiedYaml] = useState(false)
@@ -400,12 +215,7 @@ function AddHostDialog({
     setTimeout(() => {
       setCreatedKey(null)
       setKeyName('')
-      setOptions({
-        container: true,
-        apm: true,
-        logs: false,
-        processes: true,
-      })
+      setOptions(defaultHostAgentCapabilities())
       setCopied(false)
       setCopiedYaml(false)
     }, 200)
@@ -414,14 +224,14 @@ function AddHostDialog({
   const handleCopyCommand = () => {
     if (!createdKey) return
     const command = installType === 'docker'
-      ? getDockerRunCommand(createdKey, options)
-      : getDockerComposeCommand(createdKey, options)
+      ? buildDockerRun(createdKey, options)
+      : buildDockerCompose(createdKey, options)
     copyWithToast(command, setCopied, 'Command copied to clipboard', 'Please copy the command manually', toast)
   }
 
   const handleCopyYaml = () => {
     copyWithToast(
-      getDatadogYaml(options, createdKey),
+      buildAgentYaml(options, createdKey),
       setCopiedYaml,
       'YAML config copied to clipboard',
       'Please copy the config manually',
@@ -490,8 +300,8 @@ function AddHostDialog({
                     </p>
                   </div>
                   <Switch
-                    checked={options.container}
-                    onCheckedChange={(c) => setOptions({...options, container: c})}
+                    checked={options.containers}
+                    onCheckedChange={(containers) => setOptions((current) => ({...current, containers}))}
                   />
                 </div>
                 
@@ -503,8 +313,10 @@ function AddHostDialog({
                     </p>
                   </div>
                   <Switch
-                    checked={options.apm}
-                    onCheckedChange={(c) => setOptions({...options, apm: c})}
+                    checked={options.apm && options.profiling}
+                    onCheckedChange={(enabled) =>
+                      setOptions((current) => ({...current, apm: enabled, profiling: enabled}))
+                    }
                   />
                 </div>
 
@@ -517,7 +329,7 @@ function AddHostDialog({
                   </div>
                   <Switch
                     checked={options.logs}
-                    onCheckedChange={(c) => setOptions({...options, logs: c})}
+                    onCheckedChange={(logs) => setOptions((current) => ({...current, logs}))}
                   />
                 </div>
 
@@ -530,7 +342,7 @@ function AddHostDialog({
                   </div>
                   <Switch
                     checked={options.processes}
-                    onCheckedChange={(c) => setOptions({...options, processes: c})}
+                    onCheckedChange={(processes) => setOptions((current) => ({...current, processes}))}
                   />
                 </div>
               </div>
@@ -567,7 +379,7 @@ function AddHostDialog({
                       showLineNumbers={false}
                       wrapLongLines={false}
                     >
-                      {getDatadogYaml(options, createdKey)}
+                      {buildAgentYaml(options, createdKey)}
                     </SyntaxHighlighter>
                   </div>
                   <Button
@@ -628,7 +440,7 @@ function AddHostDialog({
                           showLineNumbers={false}
                           wrapLongLines={false}
                         >
-                          {createdKey ? getDockerRunCommand(createdKey, options) : ''}
+                          {createdKey ? buildDockerRun(createdKey, options) : ''}
                         </SyntaxHighlighter>
                       </div>
                       <Button
@@ -673,7 +485,7 @@ function AddHostDialog({
                           showLineNumbers={false}
                           wrapLongLines={false}
                         >
-                          {createdKey ? getDockerComposeCommand(createdKey, options) : ''}
+                          {createdKey ? buildDockerCompose(createdKey, options) : ''}
                         </SyntaxHighlighter>
                       </div>
                       <Button

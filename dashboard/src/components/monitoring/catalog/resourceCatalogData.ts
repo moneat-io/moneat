@@ -206,8 +206,6 @@ export const CHANGE_TONE: Record<ChangeKind, StatusTone> = {
 
 // ── Pure helpers ─────────────────────────────────────────────────────────────
 
-const NOW = new Date('2026-06-06T15:00:00Z').getTime()
-
 export function hashSeed(seed: string): number {
   let h = 2166136261
   for (let i = 0; i < seed.length; i += 1) {
@@ -252,7 +250,7 @@ export function utilTone(pct: number): StatusTone {
 }
 
 export function relTime(iso: string): string {
-  const diff = NOW - new Date(iso).getTime()
+  const diff = Date.now() - new Date(iso).getTime()
   const mins = Math.round(diff / 60000)
   if (mins < 1) return 'just now'
   if (mins < 60) return `${mins}m ago`

@@ -21,7 +21,7 @@
 // split into the reusable ResourceDetailPanel. Compact density throughout.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import {useMemo, useState, type ComponentType} from 'react'
+import {useMemo, useState, type ComponentType, type KeyboardEvent} from 'react'
 import {Link} from '@tanstack/react-router'
 import {
   Activity,
@@ -319,6 +319,16 @@ function SortHeader({
   )
 }
 
+function handleResourceRowKeyDown(
+  event: KeyboardEvent<HTMLTableRowElement>,
+  resourceId: string,
+  onSelect: (id: string) => void,
+) {
+  if (event.key !== 'Enter' && event.key !== ' ') return
+  event.preventDefault()
+  onSelect(resourceId)
+}
+
 function ResourceTable({
   resources,
   sortKey,
@@ -359,7 +369,15 @@ function ResourceTable({
           {resources.map((r) => {
             const total = totalVulns(r.vulns)
             return (
-              <TableRow key={r.id} className="cursor-pointer" onClick={() => onSelect(r.id)}>
+              <TableRow
+                key={r.id}
+                className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                role="button"
+                tabIndex={0}
+                aria-label={`Open ${r.name}`}
+                onClick={() => onSelect(r.id)}
+                onKeyDown={(event) => handleResourceRowKeyDown(event, r.id, onSelect)}
+              >
                 <TableCell className="max-w-[260px]">
                   <div className="flex items-center gap-2">
                     <KindIcon kind={r.kind} className="h-4 w-4 shrink-0" />
@@ -467,7 +485,7 @@ export function ResourceCatalog() {
     [resources, query, facetFilters],
   )
   const sorted = useMemo(() => sortResources(filtered, sortKey, sortDir), [filtered, sortKey, sortDir])
-  const selected = findResource(resources, selectedId)
+  const selected = findResource(sorted, selectedId)
 
   const stats = useMemo(() => {
     const unhealthy = filtered.filter((r) => r.health === 'critical' || r.health === 'warn').length

@@ -91,6 +91,14 @@ const DETAIL_TABS: readonly {readonly id: DetailTab; readonly label: string}[] =
   {id: 'changes', label: 'Changes'},
 ]
 
+const HOST_RESOURCE_ID_PATTERN = /^host:(?:\d+:)?(\d+)$/
+
+function getMetricsHostId(resource: Resource): string | null {
+  if (resource.kind !== 'host') return null
+  const result = HOST_RESOURCE_ID_PATTERN.exec(resource.id)
+  return result?.[1] ?? null
+}
+
 function FieldRow({label, value}: {readonly label: string; readonly value: ReactNode}) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-1 text-xs">
@@ -244,13 +252,18 @@ function TelemetryChart({
 
 function TelemetryTab({resource}: {readonly resource: Resource}) {
   const t = resource.telemetry
+  const metricsHostId = getMetricsHostId(resource)
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">Last 1 hour · 1m resolution</p>
-        <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 text-xs">
-          Open in Metrics <ExternalLink className="h-3 w-3" />
-        </Button>
+        {metricsHostId && (
+          <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 text-xs" asChild>
+            <Link to="/monitoring/hosts/$hostId" params={{hostId: metricsHostId}}>
+              Open in Metrics <ExternalLink className="h-3 w-3" />
+            </Link>
+          </Button>
+        )}
       </div>
       <div className="grid grid-cols-1 gap-2">
         <TelemetryChart label="CPU utilization" suffix="%" current={t.cpuPct} tone={utilTone(t.cpuPct)} seed={`${resource.id}-cpu`} />
