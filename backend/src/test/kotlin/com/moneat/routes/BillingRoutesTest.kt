@@ -143,6 +143,9 @@ class BillingRoutesTest {
 
     private fun token(userId: Int): String = RouteTestSupport.createToken(userId)
 
+    private fun tokenWithoutOrg(userId: Int): String =
+        RouteTestSupport.createToken(userId = userId, orgId = null)
+
     private fun seedUser(): Int = transaction {
         Users.insert {
             it[email] = "billing-${System.nanoTime()}@test.com"
@@ -344,80 +347,74 @@ class BillingRoutesTest {
             assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
-    // ──── Forbidden (no org) ────
+    // ──── Invalid token (no org context) ────
 
     @Test
-    fun `GET usage returns 403 when user has no org`() =
+    fun `GET usage returns 401 when token has no org context`() =
         testApplication {
             val userId = seedUser()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns null
             application { installRoutes(this) }
             val r = client.get(BILLING_USAGE) {
-                withAuth(token(userId))
+                withAuth(tokenWithoutOrg(userId))
             }
-            assertEquals(HttpStatusCode.Forbidden, r.status)
+            assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
     @Test
-    fun `GET usage apm spans returns 403 when user has no org`() =
+    fun `GET usage apm spans returns 401 when token has no org context`() =
         testApplication {
             val userId = seedUser()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns null
             application { installRoutes(this) }
             val r = client.get(BILLING_APM_SPAN_DEBUG) {
-                withAuth(token(userId))
+                withAuth(tokenWithoutOrg(userId))
             }
-            assertEquals(HttpStatusCode.Forbidden, r.status)
+            assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
     @Test
-    fun `GET usage insights returns 403 when user has no org`() =
+    fun `GET usage insights returns 401 when token has no org context`() =
         testApplication {
             val userId = seedUser()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns null
             application { installRoutes(this) }
             val r = client.get(BILLING_USAGE_INSIGHTS) {
-                withAuth(token(userId))
+                withAuth(tokenWithoutOrg(userId))
             }
-            assertEquals(HttpStatusCode.Forbidden, r.status)
+            assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
     @Test
-    fun `POST checkout returns 403 when user has no org`() =
+    fun `POST checkout returns 401 when token has no org context`() =
         testApplication {
             val userId = seedUser()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns null
             application { installRoutes(this) }
             val r = client.post(BILLING_CHECKOUT) {
-                withAuth(token(userId))
+                withAuth(tokenWithoutOrg(userId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"tierName":"PRO","successUrl":"http://x","cancelUrl":"http://y"}""")
             }
-            assertEquals(HttpStatusCode.Forbidden, r.status)
+            assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
     @Test
-    fun `GET invoices returns 403 when user has no org`() =
+    fun `GET invoices returns 401 when token has no org context`() =
         testApplication {
             val userId = seedUser()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns null
             application { installRoutes(this) }
             val r = client.get(BILLING_INVOICES) {
-                withAuth(token(userId))
+                withAuth(tokenWithoutOrg(userId))
             }
-            assertEquals(HttpStatusCode.Forbidden, r.status)
+            assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
     @Test
-    fun `POST cancel returns 403 when user has no org`() =
+    fun `POST cancel returns 401 when token has no org context`() =
         testApplication {
             val userId = seedUser()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns null
             application { installRoutes(this) }
             val r = client.post(BILLING_CANCEL) {
-                withAuth(token(userId))
+                withAuth(tokenWithoutOrg(userId))
             }
-            assertEquals(HttpStatusCode.Forbidden, r.status)
+            assertEquals(HttpStatusCode.Unauthorized, r.status)
         }
 
     // ──── GET /billing/usage ────
@@ -426,7 +423,6 @@ class BillingRoutesTest {
     fun `GET usage returns 200 with usage data`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             every { mockQuotaService.getUsageForOrganization(orgId) } returns makeUsageResponse(orgId)
             every {
                 mockUsageTrackingService.getTotalBytesForOrg(orgId, any(), any())
@@ -450,7 +446,6 @@ class BillingRoutesTest {
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
             val usage = makeUsageResponse(orgId)
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             every { mockQuotaService.getUsageForOrganization(orgId) } returns usage
             coEvery {
                 mockQuotaService.getApmSpanUsageDebug(
@@ -505,7 +500,6 @@ class BillingRoutesTest {
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
             val response = makeUsageInsightsResponse(orgId)
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             coEvery { mockInsightsService.getUsageInsights(orgId) } returns response
             application { installRoutes(this) }
 
@@ -523,7 +517,6 @@ class BillingRoutesTest {
     fun `GET usage insights returns 503 when insights are unavailable`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             coEvery { mockInsightsService.getUsageInsights(orgId) } throws IllegalStateException("boom")
             application { installRoutes(this) }
 
@@ -540,7 +533,6 @@ class BillingRoutesTest {
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
             every { EnvConfig.SelfHost.enabled } returns true
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             application { installRoutes(this) }
 
             val r = client.get(BILLING_USAGE_INSIGHTS) {
@@ -556,7 +548,6 @@ class BillingRoutesTest {
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
             val usage = makeUsageResponse(orgId)
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             every { mockQuotaService.getUsageForOrganization(orgId) } returns usage
             stubApmSpanDebug(orgId, usage, expectedLimit = 1)
             application { installRoutes(this) }
@@ -581,7 +572,6 @@ class BillingRoutesTest {
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
             val usage = makeUsageResponse(orgId)
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             every { mockQuotaService.getUsageForOrganization(orgId) } returns usage
             stubApmSpanDebug(orgId, usage, expectedLimit = 100)
             application { installRoutes(this) }
@@ -606,7 +596,6 @@ class BillingRoutesTest {
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
             val usage = makeUsageResponse(orgId)
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             every { mockQuotaService.getUsageForOrganization(orgId) } returns usage
             stubApmSpanDebug(orgId, usage, expectedLimit = 20)
             application { installRoutes(this) }
@@ -632,7 +621,6 @@ class BillingRoutesTest {
     fun `POST checkout returns 200 on success`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             every {
                 mockStripeService.createCheckoutSession(
                     organizationId = orgId,
@@ -661,7 +649,6 @@ class BillingRoutesTest {
     fun `POST checkout returns 400 on invalid request`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             every {
                 mockStripeService.createCheckoutSession(
                     organizationId = orgId,
@@ -688,7 +675,6 @@ class BillingRoutesTest {
     fun `POST checkout returns 500 on service error`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             every {
                 mockStripeService.createCheckoutSession(
                     organizationId = orgId,
@@ -717,7 +703,6 @@ class BillingRoutesTest {
     fun `GET invoices returns 200 with list`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             every { mockStripeService.listInvoices(orgId) } returns listOf(
                 InvoiceResponse(
                     id = "inv_1",
@@ -740,7 +725,6 @@ class BillingRoutesTest {
     fun `GET invoices returns 400 on service error`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             every { mockStripeService.listInvoices(orgId) } throws RuntimeException("Stripe error")
             application { installRoutes(this) }
 
@@ -756,7 +740,6 @@ class BillingRoutesTest {
     fun `GET payment-method returns 200`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             every { mockStripeService.getPaymentMethod(orgId) } returns PaymentMethodResponse(
                 brand = "visa", last4 = "4242", expMonth = 12, expYear = 2026
             )
@@ -773,7 +756,6 @@ class BillingRoutesTest {
     fun `GET payment-method returns 400 on error`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             every { mockStripeService.getPaymentMethod(orgId) } throws RuntimeException("No customer")
             application { installRoutes(this) }
 
@@ -789,7 +771,6 @@ class BillingRoutesTest {
     fun `POST setup-intent returns 200`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             every { mockStripeService.createSetupIntent(orgId) } returns SetupIntentResponse(
                 clientSecret = "seti_secret_123"
             )
@@ -806,7 +787,6 @@ class BillingRoutesTest {
     fun `POST setup-intent returns 400 on error`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             every { mockStripeService.createSetupIntent(orgId) } throws RuntimeException("Failed")
             application { installRoutes(this) }
 
@@ -822,7 +802,6 @@ class BillingRoutesTest {
     fun `POST setup-intent confirm returns 200`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             every {
                 mockStripeService.confirmSetupIntentAndUpdatePaymentMethod(orgId, "seti_123")
             } returns Unit
@@ -840,7 +819,6 @@ class BillingRoutesTest {
     fun `POST setup-intent confirm returns 400 on error`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             every {
                 mockStripeService.confirmSetupIntentAndUpdatePaymentMethod(orgId, any())
             } throws RuntimeException("Invalid intent")
@@ -860,7 +838,6 @@ class BillingRoutesTest {
     fun `POST cancel returns 200 on success`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             every { mockStripeService.cancelSubscription(orgId) } returns CancelSubscriptionResponse(
                 status = "canceled",
                 cancelAtPeriodEnd = true,
@@ -879,7 +856,6 @@ class BillingRoutesTest {
     fun `POST cancel returns 400 when no subscription`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             every {
                 mockStripeService.cancelSubscription(orgId)
             } throws IllegalStateException("No cancelable subscription")
@@ -895,7 +871,6 @@ class BillingRoutesTest {
     fun `POST cancel returns 500 on unexpected error`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             every {
                 mockStripeService.cancelSubscription(orgId)
             } throws RuntimeException("Stripe outage")
@@ -913,7 +888,6 @@ class BillingRoutesTest {
     fun `PUT payg-budget returns 400 for negative budget`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             application { installRoutes(this) }
 
             val r = client.put(BILLING_PAYG_BUDGET) {
@@ -928,7 +902,6 @@ class BillingRoutesTest {
     fun `PUT payg-budget returns 400 for non-500 increment`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             application { installRoutes(this) }
 
             val r = client.put(BILLING_PAYG_BUDGET) {
@@ -943,7 +916,6 @@ class BillingRoutesTest {
     fun `PUT payg-budget returns 400 for free tier`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             val tierContext = mockk<EffectiveTierContext>(relaxed = true)
             every { tierContext.tier.paygEnabled } returns false
             every { tierContext.tier.tierName } returns "FREE"
@@ -963,7 +935,6 @@ class BillingRoutesTest {
     fun `PUT payg-budget returns 200 on valid update`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             val tierContext = mockk<EffectiveTierContext>(relaxed = true)
             every { tierContext.tier.paygEnabled } returns true
             every { tierContext.tier.tierName } returns "PRO"
@@ -992,7 +963,6 @@ class BillingRoutesTest {
     fun `PUT payg-budget returns 404 when no active subscription`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             val tierContext = mockk<EffectiveTierContext>(relaxed = true)
             every { tierContext.tier.paygEnabled } returns true
             every { tierContext.tier.tierName } returns "PRO"
@@ -1013,7 +983,6 @@ class BillingRoutesTest {
     fun `PUT oncall-seats returns 400 for negative seats`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             application { installRoutes(this) }
 
             val r = client.put(BILLING_ONCALL_SEATS) {
@@ -1029,7 +998,6 @@ class BillingRoutesTest {
     fun `PUT oncall-seats returns 400 for seats over 200`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             application { installRoutes(this) }
 
             val r = client.put(BILLING_ONCALL_SEATS) {
@@ -1045,7 +1013,6 @@ class BillingRoutesTest {
     fun `PUT oncall-seats returns 200 on success`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             every {
                 mockStripeService.updateOnCallSeats(orgId, 5)
             } returns UpdateOnCallSeatsResponse(seats = 5, proratedAmountCents = 1450)
@@ -1064,7 +1031,6 @@ class BillingRoutesTest {
     fun `PUT oncall-seats returns 400 on invalid argument`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             every {
                 mockStripeService.updateOnCallSeats(orgId, any())
             } throws IllegalArgumentException("No subscription")
@@ -1082,7 +1048,6 @@ class BillingRoutesTest {
     fun `PUT oncall-seats returns 500 on service error`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { mockPricingTierService.getPrimaryOrganizationIdForUser(userId) } returns orgId
             every {
                 mockStripeService.updateOnCallSeats(orgId, any())
             } throws RuntimeException("Stripe outage")

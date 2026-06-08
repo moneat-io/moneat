@@ -4,6 +4,7 @@
 
 package com.moneat.enterprise.rbac.routes
 
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.enterprise.rbac.models.AssignRoleRequest
 import com.moneat.enterprise.rbac.models.CreateRoleRequest
 import com.moneat.enterprise.rbac.models.UpdateRoleRequest
@@ -194,7 +195,7 @@ private suspend fun RoutingContext.requireRbacAdmin(member: RbacMember): Int? {
 }
 
 private fun RoutingContext.currentOrganizationId(): Int? =
-    call.principal<JWTPrincipal>()?.payload?.getClaim("orgId")?.asInt()
+    call.principal<JWTPrincipal>()?.currentOrgIdOrNull()
 
 private fun RoutingContext.currentUserId(): Int? =
     call.principal<JWTPrincipal>()?.payload?.getClaim("userId")?.asInt()

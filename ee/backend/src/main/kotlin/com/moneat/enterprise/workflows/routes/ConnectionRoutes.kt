@@ -4,6 +4,7 @@
 
 package com.moneat.enterprise.workflows.routes
 
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.enterprise.workflows.models.ConnectionGroupResponse
 import com.moneat.enterprise.workflows.models.ConnectionResponse
 import com.moneat.enterprise.workflows.models.CreateConnectionGroupRequest
@@ -235,7 +236,7 @@ private suspend fun RoutingContext.requireConnectionAdmin(member: WorkflowConnec
 }
 
 private fun RoutingContext.currentOrganizationId(): Int? =
-    call.principal<JWTPrincipal>()?.payload?.getClaim("orgId")?.asInt()
+    call.principal<JWTPrincipal>()?.currentOrgIdOrNull()
 
 private fun RoutingContext.currentUserId(): Int? =
     call.principal<JWTPrincipal>()?.payload?.getClaim("userId")?.asInt()

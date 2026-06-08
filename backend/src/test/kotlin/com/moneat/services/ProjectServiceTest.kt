@@ -42,12 +42,11 @@ class ProjectServiceTest {
             serviceName = "checkout-api"
         )
 
-        every { projectRepository.getOrganizationIdsForUser(1) } returns listOf(7)
         every { projectRepository.getProjectsForOrganizations(listOf(7)) } returns listOf(row)
         coEvery { queryHelper.getProjectRetentionDays(42L) } returns 30
         coEvery { projectRepository.getIssueCountForProject(42L, 30, 123L) } returns 4L
 
-        val projects = service.getProjects(userId = 1, demoEpochMs = 123L)
+        val projects = service.getProjects(orgId = 7, demoEpochMs = 123L)
 
         assertEquals(1, projects.size)
         assertEquals(99L, projects.single().serviceId)

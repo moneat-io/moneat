@@ -16,6 +16,7 @@
 
 package com.moneat.logs.routes
 
+import com.moneat.auth.currentOrgIdOrNull
 import kotlinx.serialization.SerializationException
 import java.io.IOException
 import java.io.Writer
@@ -563,7 +564,7 @@ private fun ApplicationCall.requiredUserId(): Int =
     principal<JWTPrincipal>()!!.payload.getClaim("userId").asInt()
 
 private fun ApplicationCall.requiredOrganizationId(): Int =
-    principal<JWTPrincipal>()!!.payload.getClaim("orgId").asInt()
+    principal<JWTPrincipal>()!!.currentOrgIdOrNull()!!
 
 private suspend fun ApplicationCall.ensureLogIndexAccess(membershipService: OrgMembershipService): Boolean {
     val allowed = hasLogAccess(
@@ -594,7 +595,7 @@ private suspend fun hasLogAccess(
 private fun ApplicationCall.resolveTailIdentity(): Pair<Int, Long>? {
     val principal = principal<JWTPrincipal>()
     val principalUserId = principal?.payload?.getClaim("userId")?.asInt()
-    val principalOrgId = principal?.payload?.getClaim("orgId")?.asInt()?.toLong()
+    val principalOrgId = principal?.currentOrgIdOrNull()?.toLong()
     return if (principalUserId != null && principalOrgId != null) {
         principalUserId to principalOrgId
     } else {
@@ -668,7 +669,7 @@ private fun authenticateTailRequest(call: ApplicationCall): Pair<Int, Long>? {
 
         val decoded = verifier.verify(token)
         val userId = decoded.getClaim("userId").asInt()
-        val orgId = decoded.getClaim("orgId").asInt().toLong()
+        val orgId = decoded.currentOrgIdOrNull()?.toLong() ?: return@suspendRunCatching null
         Pair(userId, orgId)
     }.getOrElse { _ ->
         null

@@ -4,6 +4,7 @@
 
 package com.moneat.enterprise.workflows.routes
 
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.enterprise.workflows.models.RespondApprovalRequest
 import com.moneat.enterprise.workflows.services.WorkflowApprovalService
 import com.moneat.org.services.OrgRole
@@ -100,7 +101,7 @@ private suspend fun RoutingContext.requireApprovalAdmin(member: WorkflowApproval
 }
 
 private fun RoutingContext.currentOrganizationId(): Int? =
-    call.principal<JWTPrincipal>()?.payload?.getClaim("orgId")?.asInt()
+    call.principal<JWTPrincipal>()?.currentOrgIdOrNull()
 
 private fun RoutingContext.currentUserId(): Int? =
     call.principal<JWTPrincipal>()?.payload?.getClaim("userId")?.asInt()

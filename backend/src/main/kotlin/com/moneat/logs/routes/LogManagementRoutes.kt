@@ -16,6 +16,7 @@
 
 package com.moneat.logs.routes
 
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.dashboards.models.CreateDashboardAlertRequest
 import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.enterprise.FeatureRegistry
@@ -386,7 +387,7 @@ private fun ApplicationCall.logUserId(): Int =
     principal<JWTPrincipal>()!!.payload.getClaim("userId").asInt()
 
 private fun ApplicationCall.logOrgId(): Int =
-    principal<JWTPrincipal>()!!.payload.getClaim("orgId").asInt()
+    principal<JWTPrincipal>()!!.currentOrgIdOrNull()!!
 
 private suspend fun LogService.aggregateForMetricPreview(
     organizationId: Long,

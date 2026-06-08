@@ -60,6 +60,7 @@ class McpAuthProviderTest {
         val token = AuthTokenService()
             .generateToken(
                 userId = userId,
+                orgId = orgId,
                 name = "MCP",
                 scopes = listOf("project:read"),
             )
@@ -87,10 +88,11 @@ class McpAuthProviderTest {
 
     @Test
     fun `non bearer authorization is rejected`() {
-        val (userId, _) = seedUserInOrg("primary")
+        val (userId, orgId) = seedUserInOrg("primary")
         val token = AuthTokenService()
             .generateToken(
                 userId = userId,
+                orgId = orgId,
                 name = "MCP",
                 scopes = listOf("project:read"),
             )

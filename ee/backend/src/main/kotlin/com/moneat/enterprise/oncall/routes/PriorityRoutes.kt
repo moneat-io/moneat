@@ -4,6 +4,7 @@
 
 package com.moneat.enterprise.oncall.routes
 
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.enterprise.oncall.models.BusinessHoursWindow
 import com.moneat.enterprise.oncall.services.BusinessHoursService
 import com.moneat.enterprise.oncall.services.PriorityService
@@ -67,7 +68,7 @@ fun Route.priorityRoutes() {
 }
 
 private suspend fun ApplicationCall.requireOrganizationId(): Int? {
-    val organizationId = principal<JWTPrincipal>()?.payload?.getClaim("orgId")?.asInt()
+    val organizationId = principal<JWTPrincipal>()?.currentOrgIdOrNull()
     if (organizationId == null) {
         respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
     }

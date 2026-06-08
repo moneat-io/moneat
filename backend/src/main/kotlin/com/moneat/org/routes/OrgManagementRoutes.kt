@@ -16,6 +16,7 @@
 
 package com.moneat.org.routes
 
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.events.models.AcceptInviteRequest
 import com.moneat.events.models.BulkInviteRequest
 import com.moneat.events.models.InviteMemberRequest
@@ -50,7 +51,10 @@ fun Route.orgManagementRoutes(
             get("/members") {
                 val principal = call.principal<JWTPrincipal>()!!
                 val userId = principal.payload.getClaim("userId").asInt()
-                val orgId = principal.payload.getClaim("orgId").asInt()
+                val orgId = principal.currentOrgIdOrNull() ?: return@get call.respond(
+                    HttpStatusCode.Unauthorized,
+                    ErrorResponse("Invalid token")
+                )
 
                 membershipService.requireRole(orgId, userId, OrgRole.MEMBER)
 
@@ -64,7 +68,10 @@ fun Route.orgManagementRoutes(
             put("/members/{userId}/role") {
                 val principal = call.principal<JWTPrincipal>()!!
                 val requestingUserId = principal.payload.getClaim("userId").asInt()
-                val orgId = principal.payload.getClaim("orgId").asInt()
+                val orgId = principal.currentOrgIdOrNull() ?: return@put call.respond(
+                    HttpStatusCode.Unauthorized,
+                    ErrorResponse("Invalid token")
+                )
                 val targetUserId =
                     call.parameters["userId"]?.toIntOrNull()
                         ?: return@put call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid user ID"))
@@ -79,7 +86,10 @@ fun Route.orgManagementRoutes(
             delete("/members/{userId}") {
                 val principal = call.principal<JWTPrincipal>()!!
                 val requestingUserId = principal.payload.getClaim("userId").asInt()
-                val orgId = principal.payload.getClaim("orgId").asInt()
+                val orgId = principal.currentOrgIdOrNull() ?: return@delete call.respond(
+                    HttpStatusCode.Unauthorized,
+                    ErrorResponse("Invalid token")
+                )
                 val targetUserId =
                     call.parameters["userId"]?.toIntOrNull()
                         ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid user ID"))
@@ -92,7 +102,10 @@ fun Route.orgManagementRoutes(
             post("/invitations") {
                 val principal = call.principal<JWTPrincipal>()!!
                 val userId = principal.payload.getClaim("userId").asInt()
-                val orgId = principal.payload.getClaim("orgId").asInt()
+                val orgId = principal.currentOrgIdOrNull() ?: return@post call.respond(
+                    HttpStatusCode.Unauthorized,
+                    ErrorResponse("Invalid token")
+                )
 
                 membershipService.requireRole(orgId, userId, OrgRole.ADMIN)
                 val request = call.receive<InviteMemberRequest>()
@@ -105,7 +118,10 @@ fun Route.orgManagementRoutes(
             post("/invitations/bulk") {
                 val principal = call.principal<JWTPrincipal>()!!
                 val userId = principal.payload.getClaim("userId").asInt()
-                val orgId = principal.payload.getClaim("orgId").asInt()
+                val orgId = principal.currentOrgIdOrNull() ?: return@post call.respond(
+                    HttpStatusCode.Unauthorized,
+                    ErrorResponse("Invalid token")
+                )
 
                 val request = call.receive<BulkInviteRequest>()
 
@@ -117,7 +133,10 @@ fun Route.orgManagementRoutes(
             get("/invitations") {
                 val principal = call.principal<JWTPrincipal>()!!
                 val userId = principal.payload.getClaim("userId").asInt()
-                val orgId = principal.payload.getClaim("orgId").asInt()
+                val orgId = principal.currentOrgIdOrNull() ?: return@get call.respond(
+                    HttpStatusCode.Unauthorized,
+                    ErrorResponse("Invalid token")
+                )
 
                 membershipService.requireRole(orgId, userId, OrgRole.ADMIN)
 

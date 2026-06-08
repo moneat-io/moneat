@@ -18,6 +18,7 @@ package com.moneat.auth.services
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.auth.repositories.UserRepository
 import com.moneat.config.EnvConfig
 import com.moneat.events.models.AuthResponse
@@ -589,7 +590,7 @@ class AuthService(
         val decodedJWT = jwtVerifier.verify(tokenPair.accessToken)
         val userId = decodedJWT.getClaim("userId").asInt()
         val email = decodedJWT.getClaim("email").asString()
-        val orgId = decodedJWT.getClaim("orgId").asInt()
+        val orgId = decodedJWT.currentOrgIdOrNull()
         val orgRole = decodedJWT.getClaim("orgRole").asString()
 
         val user = run {

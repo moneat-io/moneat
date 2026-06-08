@@ -16,6 +16,7 @@
 
 package com.moneat.datadog.networkdevices
 
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.isClickHouseError
 import com.moneat.utils.ClickHouseQueryUtils
@@ -253,7 +254,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListPaths() {
 
 private fun io.ktor.server.routing.RoutingContext.extractOrgId(): Int? {
     val principal = call.principal<JWTPrincipal>()
-    return principal?.payload?.getClaim("orgId")?.asInt()
+    return principal?.currentOrgIdOrNull()
 }
 
 private fun io.ktor.server.routing.RoutingContext.paramLimit(): Int =

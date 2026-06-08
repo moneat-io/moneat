@@ -16,11 +16,12 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.auth.currentOrgIdOrNull
+import com.moneat.auth.currentOrgContextOrNull
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.models.CreateDebuggerProbeRequest
 import com.moneat.datadog.models.UpdateDebuggerProbeRequest
 import com.moneat.datadog.services.DebuggerProbeService
-import com.moneat.shared.models.Memberships
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
@@ -33,9 +34,6 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
-import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.UUID
 
 fun Route.debuggerProbeRoutes() {
@@ -49,7 +47,7 @@ fun Route.debuggerProbeRoutes() {
                     return@get
                 }
 
-                val organizationIds = getOrgIdsForUser(userId)
+                val organizationIds = getOrgIdsForUser(userId, principal)
                 val probes = DebuggerProbeService.listProbes(organizationIds)
                 call.respond(HttpStatusCode.OK, mapOf("probes" to probes))
             }
@@ -57,14 +55,14 @@ fun Route.debuggerProbeRoutes() {
             post {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal?.payload?.getClaim("userId")?.asInt()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val organizationId = principal?.currentOrgIdOrNull()
 
                 if (userId == null || organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid token"))
                     return@post
                 }
 
-                val organizationIds = getOrgIdsForUser(userId)
+                val organizationIds = getOrgIdsForUser(userId, principal)
                 if (organizationId !in organizationIds) {
                     call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Access denied"))
                     return@post
@@ -93,7 +91,7 @@ fun Route.debuggerProbeRoutes() {
                     return@put
                 }
 
-                val organizationIds = getOrgIdsForUser(userId)
+                val organizationIds = getOrgIdsForUser(userId, principal)
                 try {
                     val request = call.receive<UpdateDebuggerProbeRequest>()
                     val updatedProbe = DebuggerProbeService.updateProbe(probeId, organizationIds, request)
@@ -121,7 +119,7 @@ fun Route.debuggerProbeRoutes() {
                     return@delete
                 }
 
-                val organizationIds = getOrgIdsForUser(userId)
+                val organizationIds = getOrgIdsForUser(userId, principal)
                 val deleted = DebuggerProbeService.deleteProbe(probeId, organizationIds)
                 if (!deleted) {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "Probe not found"))
@@ -144,11 +142,9 @@ fun Route.debuggerProbeRoutes() {
     }
 }
 
-private fun getOrgIdsForUser(userId: Int): List<Int> {
-    return transaction {
-        Memberships
-            .selectAll()
-            .where { Memberships.user_id eq userId }
-            .map { it[Memberships.organization_id] }
-    }
-}
+private fun getOrgIdsForUser(userId: Int, principal: JWTPrincipal?): List<Int> =
+    principal
+        ?.currentOrgContextOrNull()
+        ?.takeIf { it.userId == userId }
+        ?.let { listOf(it.orgId) }
+        .orEmpty()

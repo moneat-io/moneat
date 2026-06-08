@@ -16,19 +16,17 @@
 
 package com.moneat.monitor.routes
 
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.config.ClickHouseClient
 import com.moneat.monitor.models.InfrastructureMapSavedViewsResponse
 import com.moneat.monitor.models.SaveInfrastructureMapViewRequest
 import com.moneat.monitor.services.InfrastructureMapSavedViewService
 import com.moneat.monitor.services.InvalidInfrastructureMapSavedViewException
-import com.moneat.shared.models.Memberships
 import com.moneat.utils.ErrorResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -40,9 +38,6 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import mu.KotlinLogging
-import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
 import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
 
@@ -71,55 +66,16 @@ private data class ClickHouseListRouteConfig(
     val filters: List<ClickHouseFilter> = emptyList()
 )
 
-private sealed class OrganizationScopeResult {
-    data class Resolved(val organizationId: Int) : OrganizationScopeResult()
-    object NoAccess : OrganizationScopeResult()
-    object MissingContext : OrganizationScopeResult()
-}
-
-private fun getOrgIdsForUser(userId: Int): List<Int> {
-    return transaction {
-        Memberships
-            .selectAll()
-            .where { Memberships.user_id eq userId }
-            .map { it[Memberships.organization_id] }
-    }
-}
-
 private fun orgIdsToChCondition(orgIds: List<Int>): String {
     return orgIds.joinToString(",") { "toUInt64($it)" }
 }
 
 private suspend fun ApplicationCall.resolveSavedViewScope(): SavedViewScope? {
-    val principal = principal<JWTPrincipal>()
-    val userId = principal!!.payload.getClaim("userId").asInt()
-    val organizationIdClaim = principal.payload.getClaim("orgId").asInt()
-
-    return when (val scope = resolveOrganizationId(userId, organizationIdClaim)) {
-        is OrganizationScopeResult.Resolved -> SavedViewScope(userId, scope.organizationId)
-        OrganizationScopeResult.NoAccess -> {
-            respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
-            null
-        }
-        OrganizationScopeResult.MissingContext -> {
-            respond(HttpStatusCode.BadRequest, ErrorResponse("Organization context required"))
-            null
-        }
-    }
-}
-
-private fun resolveOrganizationId(userId: Int, organizationIdClaim: Int?): OrganizationScopeResult {
-    val organizationIds = getOrgIdsForUser(userId)
-    if (organizationIds.isEmpty()) return OrganizationScopeResult.NoAccess
-    if (organizationIdClaim != null) {
-        return if (organizationIdClaim in organizationIds) {
-            OrganizationScopeResult.Resolved(organizationIdClaim)
-        } else {
-            OrganizationScopeResult.NoAccess
-        }
-    }
-    if (organizationIds.size == 1) return OrganizationScopeResult.Resolved(organizationIds.first())
-    return OrganizationScopeResult.MissingContext
+    val context = requireCurrentOrg() ?: return null
+    return SavedViewScope(
+        userId = context.userId,
+        organizationId = context.orgId
+    )
 }
 
 private fun parseLimit(limitParam: String?): Int {
@@ -127,10 +83,9 @@ private fun parseLimit(limitParam: String?): Int {
     return limit.coerceIn(1, MAX_LIMIT)
 }
 
-private fun ApplicationCall.currentUserOrganizationIds(): List<Int> {
-    val principal = principal<JWTPrincipal>()
-    val userId = principal!!.payload.getClaim("userId").asInt()
-    return getOrgIdsForUser(userId)
+private suspend fun ApplicationCall.currentUserOrganizationIds(): List<Int>? {
+    val context = requireCurrentOrg() ?: return null
+    return listOf(context.orgId)
 }
 
 /**
@@ -267,7 +222,7 @@ private fun Route.registerClickHouseListRoute(config: ClickHouseListRouteConfig)
 }
 
 private suspend fun ApplicationCall.respondClickHouseList(config: ClickHouseListRouteConfig) {
-    val orgIds = currentUserOrganizationIds()
+    val orgIds = currentUserOrganizationIds() ?: return
     val payload = if (orgIds.isEmpty()) {
         emptyList()
     } else {

@@ -16,6 +16,7 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.config.ClickHouseClient
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
@@ -47,8 +48,7 @@ fun Route.datadogEventQueryRoutes() {
         authenticate("auth-jwt") {
             get("/events") {
                 val principal = call.principal<JWTPrincipal>()
-                val orgId = principal?.payload
-                    ?.getClaim("orgId")?.asInt()
+                val orgId = principal?.currentOrgIdOrNull()
                     ?: return@get call.respond(
                         HttpStatusCode.Unauthorized,
                         mapOf("error" to "Missing org context")
@@ -151,8 +151,7 @@ fun Route.datadogEventQueryRoutes() {
 
             get("/service-checks") {
                 val principal = call.principal<JWTPrincipal>()
-                val orgId = principal?.payload
-                    ?.getClaim("orgId")?.asInt()
+                val orgId = principal?.currentOrgIdOrNull()
                     ?: return@get call.respond(
                         HttpStatusCode.Unauthorized,
                         mapOf("error" to "Missing org context")

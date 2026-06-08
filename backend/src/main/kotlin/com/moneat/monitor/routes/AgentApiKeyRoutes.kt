@@ -16,13 +16,12 @@
 
 package com.moneat.monitor.routes
 
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.monitor.models.CreateAgentApiKeyRequest
 import com.moneat.monitor.services.AgentApiKeyService
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -38,16 +37,15 @@ fun Route.agentApiKeyRoutes(
     route("/v1") {
         authenticate("auth-jwt") {
             get("/agent-api-keys") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt()
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@get
                 val keys = agentApiKeyService.listKeys(orgId)
                 call.respond(HttpStatusCode.OK, mapOf("keys" to keys))
             }
 
             post("/agent-api-keys") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val orgId = principal.payload.getClaim("orgId").asInt()
+                val context = call.requireCurrentOrg() ?: return@post
+                val userId = context.userId
+                val orgId = context.orgId
 
                 val request = call.receive<CreateAgentApiKeyRequest>()
                 val name = request.name.trim()
@@ -65,8 +63,7 @@ fun Route.agentApiKeyRoutes(
             }
 
             delete("/agent-api-keys/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val orgId = principal!!.payload.getClaim("orgId").asInt()
+                val orgId = call.requireCurrentOrg()?.orgId ?: return@delete
 
                 val id = call.parameters["id"]?.toIntOrNull()
                 if (id == null) {

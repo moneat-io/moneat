@@ -16,6 +16,7 @@
 
 package com.moneat.security.signals
 
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
@@ -93,7 +94,7 @@ private suspend fun RoutingContext.handleTriage(service: SignalService) {
 private fun RoutingContext.signalIdFromPath(): Int? = call.parameters["signalId"]?.toIntOrNull()
 
 private fun RoutingContext.currentOrganizationId(): Int? =
-    call.principal<JWTPrincipal>()?.payload?.getClaim("orgId")?.asInt()
+    call.principal<JWTPrincipal>()?.currentOrgIdOrNull()
 
 private fun RoutingContext.currentUserId(): Int? =
     call.principal<JWTPrincipal>()?.payload?.getClaim("userId")?.asInt()
