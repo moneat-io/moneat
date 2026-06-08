@@ -12,6 +12,12 @@
 @layer base {
   /* Default (light) theme — Internal Tools style guide: cyan accent over cool neutrals. */
   :root {
+    /* App chrome geometry — single source of truth so the content header stays
+       locked to the sidebar. Consumed by Sidebar (logo + search rows),
+       ExplorerShell (header + toolbar), and MapExplorerShell. Edit here; never
+       hard-code these pixel heights in components. */
+    --app-header-h: 42px;     /* top band: sidebar logo row · explorer header */
+    --app-subheader-h: 36px;  /* second band: sidebar search row · explorer toolbar */
     --background: 220 23% 98%;
     --foreground: 225 21% 11%;
     --border: 218 16% 87%;

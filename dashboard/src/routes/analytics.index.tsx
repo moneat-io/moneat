@@ -9,7 +9,9 @@ import {AnalyticsKpiCards, AnalyticsKpiCardsSkeleton} from '@/components/analyti
 import {AnalyticsChart} from '@/components/analytics/AnalyticsChart'
 import {AnalyticsBreakdownTable} from '@/components/analytics/AnalyticsBreakdownTable'
 import {AnalyticsRetentionTable} from '@/components/analytics/AnalyticsRetentionTable'
+import {ExplorerShell} from '@/components/filters/ExplorerShell'
 import {FacetRail} from '@/components/filters/FacetRail'
+import {SegmentedTabs, type SegmentedOption} from '@/components/filters/SegmentedTabs'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {Card, CardContent} from '@/components/ui/card'
 import {CopyBlock} from '@/components/ui/copy-block'
@@ -33,6 +35,12 @@ import type {FacetFilter, FacetRailSection} from '@/lib/filters/types'
 export const Route = createFileRoute('/analytics/')({
   component: AnalyticsOverview,
 })
+
+type AnalyticsView = 'web' | 'product'
+const ANALYTICS_VIEW_TABS = [
+  {value: 'web', label: 'Web', icon: Globe},
+  {value: 'product', label: 'Product', icon: Target},
+] as const satisfies ReadonlyArray<SegmentedOption<AnalyticsView>>
 
 const PRODUCT_PRESENCE_PARAMS: AnalyticsParams = {period: '12mo'}
 const DEFAULT_PRODUCT_FUNNEL_STEPS = ['signup.completed', 'recording.started', 'export.completed']
@@ -243,16 +251,28 @@ function AnalyticsOverview() {
   }
 
   return (
-    <div className="grid gap-2 lg:grid-cols-[220px_minmax(0,1fr)]">
-      <FacetRail
-        sections={analyticsRailSections}
-        facetFilters={facetFilters}
-        onFacetFiltersChange={setFacetFilters}
-        title="Analytics"
-        className="h-auto max-h-[340px] rounded-md border lg:sticky lg:top-2 lg:h-[calc(100vh-8rem)] lg:max-h-none"
-      />
-
-      <div className="min-w-0 space-y-2">
+    <ExplorerShell
+      title="Analytics"
+      icon={<BarChart3 className="h-4 w-4 text-muted-foreground" />}
+      tabs={
+        <SegmentedTabs
+          ariaLabel="Analytics view"
+          value={activeAnalyticsTab as AnalyticsView}
+          onChange={setAnalyticsTab}
+          options={ANALYTICS_VIEW_TABS}
+        />
+      }
+      searchBar={<div />}
+      rail={
+        <FacetRail
+          sections={analyticsRailSections}
+          facetFilters={facetFilters}
+          onFacetFiltersChange={setFacetFilters}
+          title="Analytics"
+        />
+      }
+    >
+      <div className="space-y-2 p-3">
         {!hasAnalyticsScope ? (
           <div className="py-10">
             <EmptyState
@@ -261,18 +281,8 @@ function AnalyticsOverview() {
               description="Adjust the selected services to view analytics."
             />
           </div>
-        ) : (
-          <Tabs value={activeAnalyticsTab} onValueChange={setAnalyticsTab}>
-            <TabsList className="h-7">
-              <TabsTrigger value="web" className="gap-1.5 text-xs">
-                <Globe className="h-3.5 w-3.5" /> Web
-              </TabsTrigger>
-              <TabsTrigger value="product" className="gap-1.5 text-xs">
-                <Target className="h-3.5 w-3.5" /> Product
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="web" className="mt-2 space-y-2">
+        ) : activeAnalyticsTab === 'web' ? (
+          <div className="space-y-2">
               {!overviewLoading && !hasWebAnalytics ? (
                 <WebAnalyticsEmptyState service={setupService} />
               ) : (
@@ -424,24 +434,23 @@ function AnalyticsOverview() {
                   </Tabs>
                 </>
               )}
-            </TabsContent>
-
-            <TabsContent value="product" className="mt-2">
-              {productPresenceLoading ? (
-                <div className="h-[220px] w-full animate-pulse rounded bg-muted" />
-              ) : hasProductEvents ? (
-                <ProductAnalyticsTab scopeId={ORGANIZATION_ANALYTICS_SCOPE} params={productParams} />
-              ) : (
-                <ProductAnalyticsEmptyState
-                  service={setupService}
-                  serviceId={setupService?.resourceId ?? 'your-service-id'}
-                />
-              )}
-            </TabsContent>
-          </Tabs>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {productPresenceLoading ? (
+              <div className="h-[220px] w-full animate-pulse rounded bg-muted" />
+            ) : hasProductEvents ? (
+              <ProductAnalyticsTab scopeId={ORGANIZATION_ANALYTICS_SCOPE} params={productParams} />
+            ) : (
+              <ProductAnalyticsEmptyState
+                service={setupService}
+                serviceId={setupService?.resourceId ?? 'your-service-id'}
+              />
+            )}
+          </div>
         )}
       </div>
-    </div>
+    </ExplorerShell>
   )
 }
 

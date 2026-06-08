@@ -21,13 +21,14 @@ import {api} from '@/lib/api'
 import type {ApmErrorGroup, ApmTimeRange, Issue, Project} from '@/lib/api'
 import {trackEvent} from '@/lib/analytics'
 import {serviceNamesForQuery} from '@/lib/service-facet-scope'
-import {formatRelativeTime, cn} from '@/lib/utils'
+import {formatRelativeTime} from '@/lib/utils'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Card} from '@/components/ui/card'
 import {SearchFilterBar} from '@/components/filters/SearchFilterBar'
 import {FacetRail} from '@/components/filters/FacetRail'
 import {ExplorerShell} from '@/components/filters/ExplorerShell'
+import {SegmentedTabs, type SegmentedOption} from '@/components/filters/SegmentedTabs'
 import {TimeRangePicker} from '@/components/filters/TimeRangePicker'
 import type {TimeRangePreset} from '@/lib/filters/time'
 import type {FacetFilter, FacetSchema, FacetRailSection} from '@/lib/filters/types'
@@ -49,6 +50,7 @@ import {
   Timer,
 } from 'lucide-react'
 import {useEffect, useMemo, useState} from 'react'
+import type {ReactNode} from 'react'
 import {useToast} from '@/hooks/useToast'
 import {getNow} from '@/lib/demo'
 import {parseDate} from '@/lib/date-format'
@@ -247,53 +249,37 @@ export const Route = createFileRoute('/issues/')({
   component: IndexPage,
 })
 
+type IssuesView = 'issues' | 'apm-errors'
+
+const ISSUES_VIEW_TABS = [
+  {value: 'issues', label: 'Issues', icon: AlertCircle},
+  {value: 'apm-errors', label: 'APM Errors', icon: Cpu},
+] as const satisfies ReadonlyArray<SegmentedOption<IssuesView>>
+
 function IndexPage() {
-  const [activeTab, setActiveTab] = useState<'issues' | 'apm-errors'>('issues')
+  const [activeTab, setActiveTab] = useState<IssuesView>('issues')
+
+  const viewTabs = (
+    <SegmentedTabs
+      ariaLabel="Issues view"
+      value={activeTab}
+      onChange={setActiveTab}
+      options={ISSUES_VIEW_TABS}
+    />
+  )
 
   return (
-    <div className="flex h-[calc(100vh-var(--header-height,0px))] flex-col overflow-hidden">
-      <div className="shrink-0 border-b px-6">
-        <div className="flex gap-4">
-          <button
-            type="button"
-            onClick={() => setActiveTab('issues')}
-            className={cn(
-              'border-b-2 px-1 py-3 text-sm font-medium inline-flex items-center',
-              activeTab === 'issues'
-                ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <AlertCircle className="h-4 w-4 mr-1.5" />
-            Issues
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('apm-errors')}
-            className={cn(
-              'border-b-2 px-1 py-3 text-sm font-medium inline-flex items-center',
-              activeTab === 'apm-errors'
-                ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <Cpu className="h-4 w-4 mr-1.5" />
-            APM Errors
-          </button>
-        </div>
-      </div>
-      <div className="min-h-0 flex-1">
-        {activeTab === 'issues' ? (
-          <DashboardPage />
-        ) : (
-          <ApmErrorsTab isActive />
-        )}
-      </div>
+    <div className="h-[calc(100vh-var(--header-height,0px))] overflow-hidden">
+      {activeTab === 'issues' ? (
+        <DashboardPage tabs={viewTabs} />
+      ) : (
+        <ApmErrorsTab isActive tabs={viewTabs} />
+      )}
     </div>
   )
 }
 
-function DashboardPage() {
+function DashboardPage({tabs}: {tabs?: ReactNode}) {
   const [searchQuery, setSearchQuery] = useState('')
   const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
   const [selectedIssueKeys, setSelectedIssueKeys] = useState<Set<string>>(new Set())
@@ -646,6 +632,7 @@ function DashboardPage() {
 
   return (
     <ExplorerShell
+      tabs={tabs}
       searchBar={
         <SearchFilterBar
           query={searchQuery}
@@ -881,7 +868,7 @@ const APM_TIME_PRESETS: TimeRangePreset[] = [
   {label: '90d', value: '90d', minutes: 129600},
 ]
 
-function ApmErrorsTab({ isActive }: { isActive: boolean }) {
+function ApmErrorsTab({ isActive, tabs }: { isActive: boolean; tabs?: ReactNode }) {
   const [facetFilters, setFacetFilters] = useState<FacetFilter[]>(() => {
     try {
       const raw = globalThis.localStorage?.getItem('apmErrors.facetFilters')
@@ -983,6 +970,7 @@ function ApmErrorsTab({ isActive }: { isActive: boolean }) {
 
   return (
     <ExplorerShell
+      tabs={tabs}
       searchBar={
         <SearchFilterBar
           query={query}

@@ -18,6 +18,7 @@ import {createFileRoute, Link} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {useCallback, useMemo, useState} from 'react'
 import {api, type LlmGenerationsParams, type LlmScopeParams} from '@/lib/api'
+import {ExplorerShell} from '@/components/filters/ExplorerShell'
 import {FacetRail} from '@/components/filters/FacetRail'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
@@ -25,7 +26,6 @@ import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Dialog, DialogContent, DialogHeader, DialogTitle} from '@/components/ui/dialog'
 import {Input} from '@/components/ui/input'
-import {PageHeader} from '@/components/ui/page-header'
 import {SectionCard} from '@/components/ui/section-card'
 import {EmptyState} from '@/components/ui/empty-state'
 import {Brain, ChevronLeft, ChevronRight} from 'lucide-react'
@@ -145,16 +145,72 @@ function GenerationsPage() {
   const totalPages = data ? Math.ceil(data.total / data.pageSize) : 0
 
   return (
-    <div className="grid gap-2 p-3 lg:grid-cols-[220px_minmax(0,1fr)]">
-      <FacetRail
-        sections={railSections}
-        facetFilters={facetFilters}
-        onFacetFiltersChange={handleFacetFiltersChange}
-        title="AI"
-        className="h-auto max-h-[340px] rounded-md border lg:sticky lg:top-2 lg:h-[calc(100vh-8rem)] lg:max-h-none"
-      />
-
-      <div className="min-w-0 space-y-3">
+    <ExplorerShell
+      title="Generations"
+      icon={<Brain className="h-4 w-4 text-muted-foreground" />}
+      searchBar={<div />}
+      actions={
+        <div className="flex flex-wrap gap-1.5">
+          <Input
+            placeholder="Filter by model..."
+            value={modelFilter}
+            onChange={(e) => { setModelFilter(e.target.value); setPage(1) }}
+            className="w-36 h-7 text-xs"
+          />
+          <Select
+            value={typeFilter}
+            onValueChange={(v) => { setTypeFilter(v === 'all' ? '' : v); setPage(1) }}
+          >
+            <SelectTrigger className="w-24 h-7 text-xs">
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              <SelectItem value="chat">Chat</SelectItem>
+              <SelectItem value="completion">Completion</SelectItem>
+              <SelectItem value="embedding">Embedding</SelectItem>
+              <SelectItem value="tool_call">Tool Call</SelectItem>
+              <SelectItem value="agent">Agent</SelectItem>
+              <SelectItem value="chain">Chain</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={statusFilter}
+            onValueChange={(v) => { setStatusFilter(v === 'all' ? '' : v); setPage(1) }}
+          >
+            <SelectTrigger className="w-24 h-7 text-xs">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="success">Success</SelectItem>
+              <SelectItem value="error">Error</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={range} onValueChange={(v) => { setRange(v); setPage(1) }}>
+            <SelectTrigger className="w-24 h-7 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1h">Last 1h</SelectItem>
+              <SelectItem value="6h">Last 6h</SelectItem>
+              <SelectItem value="24h">Last 24h</SelectItem>
+              <SelectItem value="7d">Last 7d</SelectItem>
+              <SelectItem value="30d">Last 30d</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      }
+      rail={
+        <FacetRail
+          sections={railSections}
+          facetFilters={facetFilters}
+          onFacetFiltersChange={handleFacetFiltersChange}
+          title="AI"
+        />
+      }
+    >
+      <div className="space-y-3 p-3">
         {!hasLlmScope ? (
           <div className="py-10">
             <EmptyState
@@ -165,63 +221,6 @@ function GenerationsPage() {
           </div>
         ) : (
           <>
-            <PageHeader
-              icon={Brain}
-              title="Generations"
-              actions={
-              <div className="flex flex-wrap gap-1.5">
-                <Input
-                  placeholder="Filter by model..."
-                  value={modelFilter}
-                  onChange={(e) => { setModelFilter(e.target.value); setPage(1) }}
-                  className="w-36 h-8 text-xs"
-                />
-                <Select
-                  value={typeFilter}
-                  onValueChange={(v) => { setTypeFilter(v === 'all' ? '' : v); setPage(1) }}
-                >
-                  <SelectTrigger className="w-24 h-8 text-xs">
-                    <SelectValue placeholder="Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Types</SelectItem>
-                    <SelectItem value="chat">Chat</SelectItem>
-                    <SelectItem value="completion">Completion</SelectItem>
-                    <SelectItem value="embedding">Embedding</SelectItem>
-                    <SelectItem value="tool_call">Tool Call</SelectItem>
-                    <SelectItem value="agent">Agent</SelectItem>
-                    <SelectItem value="chain">Chain</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={statusFilter}
-                  onValueChange={(v) => { setStatusFilter(v === 'all' ? '' : v); setPage(1) }}
-                >
-                  <SelectTrigger className="w-24 h-8 text-xs">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    <SelectItem value="success">Success</SelectItem>
-                    <SelectItem value="error">Error</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={range} onValueChange={(v) => { setRange(v); setPage(1) }}>
-                  <SelectTrigger className="w-24 h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1h">Last 1h</SelectItem>
-                    <SelectItem value="6h">Last 6h</SelectItem>
-                    <SelectItem value="24h">Last 24h</SelectItem>
-                    <SelectItem value="7d">Last 7d</SelectItem>
-                    <SelectItem value="30d">Last 30d</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              }
-            />
-
             <SectionCard title="Generations" icon={Brain} count={data?.total} flushBody bodyClassName="overflow-x-auto">
                 <Table className="[&_th]:h-8 [&_th]:px-1.5 [&_th]:text-xs [&_td]:py-1.5 [&_td]:px-1.5">
                   <TableHeader>
@@ -318,48 +317,48 @@ function GenerationsPage() {
             </div>
           </div>
         )}
-
-        {/* Detail Dialog */}
-        <Dialog open={!!selectedGenId} onOpenChange={(open) => { if (!open) setSelectedGenId(null) }}>
-          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Generation Detail</DialogTitle>
-            </DialogHeader>
-            {detail && (
-              <div className="space-y-2">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                  <div><span className="text-muted-foreground">Model:</span> <span className="font-medium">{detail.model}</span></div>
-                  <div><span className="text-muted-foreground">Provider:</span> <span className="font-medium">{detail.provider}</span></div>
-                  <div><span className="text-muted-foreground">Type:</span> <Badge variant="outline">{detail.type}</Badge></div>
-                  <div><span className="text-muted-foreground">Status:</span> <Badge variant={detail.status === 'error' ? 'destructive' : 'secondary'}>{detail.status}</Badge></div>
-                  <div><span className="text-muted-foreground">Duration:</span> <span className="font-medium">{formatDuration(detail.durationMs)}</span></div>
-                  <div><span className="text-muted-foreground">Tokens:</span> <span className="font-medium">{detail.inputTokens} / {detail.outputTokens}</span></div>
-                  <div><span className="text-muted-foreground">Cost:</span> <span className="font-medium">{formatCost(detail.costUsd)}</span></div>
-                  <div><span className="text-muted-foreground">Temperature:</span> <span className="font-medium">{detail.temperature}</span></div>
-                </div>
-                {detail.errorMessage && (
-                  <div className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">
-                    <strong>Error:</strong> {detail.errorMessage}
-                  </div>
-                )}
-                <div>
-                  <h4 className="text-xs font-semibold mb-1">Input</h4>
-                  <pre className="bg-muted rounded-md p-2 text-xs overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap">
-                    {tryFormatJson(detail.input)}
-                  </pre>
-                </div>
-                <div>
-                  <h4 className="text-xs font-semibold mb-1">Output</h4>
-                  <pre className="bg-muted rounded-md p-2 text-xs overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap">
-                    {tryFormatJson(detail.output)}
-                  </pre>
-                </div>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
       </div>
-    </div>
+
+      {/* Detail Dialog */}
+      <Dialog open={!!selectedGenId} onOpenChange={(open) => { if (!open) setSelectedGenId(null) }}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Generation Detail</DialogTitle>
+          </DialogHeader>
+          {detail && (
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                <div><span className="text-muted-foreground">Model:</span> <span className="font-medium">{detail.model}</span></div>
+                <div><span className="text-muted-foreground">Provider:</span> <span className="font-medium">{detail.provider}</span></div>
+                <div><span className="text-muted-foreground">Type:</span> <Badge variant="outline">{detail.type}</Badge></div>
+                <div><span className="text-muted-foreground">Status:</span> <Badge variant={detail.status === 'error' ? 'destructive' : 'secondary'}>{detail.status}</Badge></div>
+                <div><span className="text-muted-foreground">Duration:</span> <span className="font-medium">{formatDuration(detail.durationMs)}</span></div>
+                <div><span className="text-muted-foreground">Tokens:</span> <span className="font-medium">{detail.inputTokens} / {detail.outputTokens}</span></div>
+                <div><span className="text-muted-foreground">Cost:</span> <span className="font-medium">{formatCost(detail.costUsd)}</span></div>
+                <div><span className="text-muted-foreground">Temperature:</span> <span className="font-medium">{detail.temperature}</span></div>
+              </div>
+              {detail.errorMessage && (
+                <div className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">
+                  <strong>Error:</strong> {detail.errorMessage}
+                </div>
+              )}
+              <div>
+                <h4 className="text-xs font-semibold mb-1">Input</h4>
+                <pre className="bg-muted rounded-md p-2 text-xs overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap">
+                  {tryFormatJson(detail.input)}
+                </pre>
+              </div>
+              <div>
+                <h4 className="text-xs font-semibold mb-1">Output</h4>
+                <pre className="bg-muted rounded-md p-2 text-xs overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap">
+                  {tryFormatJson(detail.output)}
+                </pre>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </ExplorerShell>
   )
 }
 

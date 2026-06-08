@@ -18,11 +18,11 @@ import {createFileRoute, Outlet, redirect, useMatches, useNavigate} from '@tanst
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {formatRelativeTime, cn} from '@/lib/utils'
+import {ExplorerShell} from '@/components/filters/ExplorerShell'
 import {FacetRail} from '@/components/filters/FacetRail'
 import {Badge, type BadgeProps} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
-import {PageHeader} from '@/components/ui/page-header'
 import {StatCard} from '@/components/ui/stat-card'
 import {EmptyState} from '@/components/ui/empty-state'
 import {StatusDot, type StatusTone} from '@/components/ui/status-dot'
@@ -722,28 +722,22 @@ function FeedbackPage() {
   )
 
   return (
-    <div className="min-h-screen">
-      <div className="container mx-auto px-4 py-4 space-y-3">
-        <PageHeader
-          icon={MessageSquare}
-          title="User Feedback"
-          description="Review and manage feedback from your users"
+    <ExplorerShell
+      title="User Feedback"
+      icon={<MessageSquare className="h-4 w-4 text-muted-foreground" />}
+      searchBar={<div />}
+      rail={
+        <FacetRail
+          sections={railSections}
+          facetFilters={facetFilters}
+          onFacetFiltersChange={handleFacetFiltersChange}
+          title="Feedback"
         />
-
-        <div className="grid gap-2 lg:grid-cols-[220px_minmax(0,1fr)]">
-          <FacetRail
-            sections={railSections}
-            facetFilters={facetFilters}
-            onFacetFiltersChange={handleFacetFiltersChange}
-            title="Feedback"
-            className="h-auto max-h-[340px] rounded-md border lg:sticky lg:top-2 lg:h-[calc(100vh-8rem)] lg:max-h-none"
-          />
-
-          <div className="min-w-0">
-            {feedbackContent}
-          </div>
-        </div>
+      }
+    >
+      <div className="space-y-3 p-3">
+        {feedbackContent}
       </div>
-    </div>
+    </ExplorerShell>
   )
 }

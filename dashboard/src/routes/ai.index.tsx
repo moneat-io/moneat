@@ -21,12 +21,12 @@ import { api, type LlmRangeParams } from '@/lib/api'
 import { StatsCard } from '@/components/charts/StatsCard'
 import { EventsChart } from '@/components/charts/EventsChart'
 import { BarChart } from '@/components/charts/BarChart'
+import { ExplorerShell } from '@/components/filters/ExplorerShell'
 import { FacetRail } from '@/components/filters/FacetRail'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { PageHeader } from '@/components/ui/page-header'
 import { SectionCard } from '@/components/ui/section-card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Brain, Coins, Clock, AlertTriangle, Hash, Zap, BookOpen, ArrowRight, TrendingUp } from 'lucide-react'
@@ -136,16 +136,47 @@ function AiOverviewPage() {
   })
 
   return (
-    <div className="grid gap-2 p-3 lg:grid-cols-[220px_minmax(0,1fr)]">
-      <FacetRail
-        sections={railSections}
-        facetFilters={facetFilters}
-        onFacetFiltersChange={setFacetFilters}
-        title="AI"
-        className="h-auto max-h-[340px] rounded-md border lg:sticky lg:top-2 lg:h-[calc(100vh-8rem)] lg:max-h-none"
-      />
-
-      <div className="min-w-0 space-y-3">
+    <ExplorerShell
+      title="AI Observability"
+      icon={<Brain className="h-4 w-4 text-muted-foreground" />}
+      searchBar={<div />}
+      actions={
+        <>
+          <Link to="/ai/generations" className="text-xs text-primary hover:underline">
+            View all generations
+          </Link>
+          <Button asChild size="sm">
+            <a href="/docs/ai-observability">
+              <BookOpen className="h-3.5 w-3.5" />
+              Get started
+              <ArrowRight className="h-3.5 w-3.5" />
+            </a>
+          </Button>
+          <Select value={range} onValueChange={setRange}>
+            <SelectTrigger className="w-full sm:w-28 h-7 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1h">Last 1h</SelectItem>
+              <SelectItem value="6h">Last 6h</SelectItem>
+              <SelectItem value="24h">Last 24h</SelectItem>
+              <SelectItem value="7d">Last 7d</SelectItem>
+              <SelectItem value="14d">Last 14d</SelectItem>
+              <SelectItem value="30d">Last 30d</SelectItem>
+            </SelectContent>
+          </Select>
+        </>
+      }
+      rail={
+        <FacetRail
+          sections={railSections}
+          facetFilters={facetFilters}
+          onFacetFiltersChange={setFacetFilters}
+          title="AI"
+        />
+      }
+    >
+      <div className="space-y-3 p-3">
         {!hasLlmScope ? (
           <div className="py-10">
             <EmptyState
@@ -156,39 +187,6 @@ function AiOverviewPage() {
           </div>
         ) : (
           <>
-            <PageHeader
-              icon={Brain}
-              title="AI Observability"
-              description="Monitor your LLM applications, trace agent executions, and track costs."
-              actions={
-                <>
-                  <Link to="/ai/generations" className="text-xs text-primary hover:underline">
-                    View all generations
-                  </Link>
-                  <Button asChild size="sm">
-                    <a href="/docs/ai-observability">
-                      <BookOpen className="h-3.5 w-3.5" />
-                      Get started
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </a>
-                  </Button>
-                  <Select value={range} onValueChange={setRange}>
-                    <SelectTrigger className="w-full sm:w-28 h-9 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1h">Last 1h</SelectItem>
-                      <SelectItem value="6h">Last 6h</SelectItem>
-                      <SelectItem value="24h">Last 24h</SelectItem>
-                      <SelectItem value="7d">Last 7d</SelectItem>
-                      <SelectItem value="14d">Last 14d</SelectItem>
-                      <SelectItem value="30d">Last 30d</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </>
-              }
-            />
-
             {/* Stats Row */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-1.5">
               <StatsCard
@@ -298,6 +296,6 @@ function AiOverviewPage() {
           </>
         )}
       </div>
-    </div>
+    </ExplorerShell>
   )
 }
