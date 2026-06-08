@@ -321,8 +321,12 @@ docker compose up -d`
 export function buildHostInstall(apiKey: string | null | undefined): string {
   const key = resolveKey(apiKey)
   return String.raw`# 1. Install the Datadog-compatible agent (v7)
+curl -fsSL https://install.datadoghq.com/scripts/install_script_agent7.sh \
+  -o /tmp/moneat-agent-install.sh
+chmod 700 /tmp/moneat-agent-install.sh
 ${API_KEY_ENV_VAR}="${key}" DD_INSTALL_ONLY=true \
-  bash -c "$(curl -L https://install.datadoghq.com/scripts/install_script_agent7.sh)"
+  sudo -E /tmp/moneat-agent-install.sh
+rm -f /tmp/moneat-agent-install.sh
 
 # 2. Save the config from the datadog.yaml tab to:
 #    /etc/datadog-agent/datadog.yaml

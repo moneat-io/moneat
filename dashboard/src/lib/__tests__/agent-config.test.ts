@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {describe, expect, it} from 'vitest'
+import {afterEach, describe, expect, it, vi} from 'vitest'
 import {
   buildAgentArtifacts,
   buildAgentYaml,
@@ -117,8 +117,36 @@ describe('buildHelmValues / buildHostInstall', () => {
   })
 
   it('embeds the key in the host install script', () => {
-    expect(buildHostInstall('key-host')).toContain('DD_API_KEY="key-host"')
-    expect(buildHostInstall('key-host')).toContain('install_script_agent7.sh')
+    const script = buildHostInstall('key-host')
+
+    expect(script).toContain('DD_API_KEY="key-host"')
+    expect(script).toContain('install_script_agent7.sh')
+    expect(script).not.toContain('bash -c "$(curl')
+  })
+})
+
+describe('backend URL fallback handling', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+
+  it('keeps generating artifacts when the backend URL is not parseable', async () => {
+    vi.resetModules()
+    vi.stubEnv('VITE_BACKEND_URL', '::::')
+
+    const {buildAgentYaml: buildYamlWithEnv} = await import('@/lib/agent-config')
+    const caps: AgentCapabilities = {
+      ...ONLY_INFRA,
+      containers: true,
+      logs: true,
+    }
+
+    const yaml = buildYamlWithEnv(caps, 'key-url')
+
+    expect(yaml).toContain('logs_dd_url: ::::')
+    expect(yaml).toContain('container_lifecycle:')
+    expect(yaml).toContain('dd_url: ::::')
   })
 })
 

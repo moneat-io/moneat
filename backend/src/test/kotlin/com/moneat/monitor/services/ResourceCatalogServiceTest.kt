@@ -22,6 +22,7 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
@@ -98,6 +99,58 @@ class ResourceCatalogServiceTest {
         assertEquals(50, resource.telemetry.memPct)
         assertTrue(resource.tags.contains("source:host-agent"))
         assertTrue(resource.metadata.any { it.label == "Agent" && it.value == "7.63.0" })
+    }
+
+    @Test
+    fun `normalizes alternate catalog health environment and cloud values`() = runBlocking {
+        val monitorService = mockk<MonitorService>()
+        val warningHost = hostData(HOST_ID, ORGANIZATION_ID, "warning-host", "degraded")
+        val criticalHost = hostData(HOST_ID + 1, ORGANIZATION_ID, "critical-host", "offline")
+        val unknownHost = hostData(HOST_ID + 2, ORGANIZATION_ID, "unknown-host", "maintenance")
+        every { monitorService.listHosts(ORGANIZATION_ID) } returns listOf(warningHost, criticalHost, unknownHost)
+        coEvery {
+            monitorService.getLatestMetricsForHosts(listOf(HOST_ID, HOST_ID + 1, HOST_ID + 2), ORGANIZATION_ID)
+        } returns emptyMap()
+
+        val queryClient = StubResourceCatalogQueryClient(
+            serviceRows = listOf(
+                serviceRow(ORGANIZATION_ID, service = "broken-api", errorRatePct = 6.0, env = "testing")
+            ),
+            containerRows = listOf(
+                containerRow(CONTAINER_ID, "restarting", mapOf("env" to "local", "cloud.provider" to "google_cloud")),
+                containerRow("dead-container", "exited", mapOf("env" to "qa", "cloud.provider" to "azure"))
+            ),
+            podRows = listOf(
+                podRow("running-pod", "Running", mapOf("env" to "development", "cloud.provider" to "google-cloud")),
+                podRow("failed-pod", "Failed", mapOf("env" to "review", "cloud.provider" to "azure"))
+            ),
+            cloudRows = listOf(
+                cloudRow("gcp:project:moneat", "google_cloud"),
+                cloudRow("azure:subscription:sub-1", "azure"),
+                cloudRow("custom:thing:one", "custom")
+            )
+        )
+        val service = ResourceCatalogService(monitorService = monitorService, queryClient = queryClient)
+
+        val byName = service.listResources(listOf(ORGANIZATION_ID)).associateBy { it.name }
+
+        assertEquals("warn", byName.getValue("warning-host").health)
+        assertEquals("critical", byName.getValue("critical-host").health)
+        assertEquals("unknown", byName.getValue("unknown-host").health)
+        assertEquals("critical", byName.getValue("broken-api").health)
+        assertEquals("dev", byName.getValue("broken-api").environment)
+        assertEquals("dev", byName.getValue(CONTAINER_ID).environment)
+        assertEquals("gcp", byName.getValue(CONTAINER_ID).cloud)
+        assertEquals("critical", byName.getValue("dead-container").health)
+        assertEquals("azure", byName.getValue("dead-container").cloud)
+        assertEquals("healthy", byName.getValue("running-pod").health)
+        assertEquals("gcp", byName.getValue("running-pod").cloud)
+        assertEquals("critical", byName.getValue("failed-pod").health)
+        assertEquals("azure", byName.getValue("failed-pod").cloud)
+        assertEquals("gcp", byName.getValue("gcp:project:moneat").cloud)
+        assertEquals("azure", byName.getValue("azure:subscription:sub-1").cloud)
+        assertEquals("on-prem", byName.getValue("custom:thing:one").cloud)
+        assertEquals("prod", byName.getValue("custom:thing:one").environment)
     }
 
     // ──── APM and containers ────
@@ -350,17 +403,79 @@ class ResourceCatalogServiceTest {
             createdAt = Instant.parse("2026-06-01T00:00:00Z")
         )
 
-    private fun serviceRow(organizationId: Int): JsonObject =
+    private fun serviceRow(
+        organizationId: Int,
+        service: String = SERVICE_NAME,
+        errorRatePct: Double = 0.0,
+        env: String = "prod",
+    ): JsonObject =
         jsonObject(
             """
             {
               "organization_id": "$organizationId",
-              "service": "$SERVICE_NAME",
-              "env": "prod",
+              "service": "$service",
+              "env": "$env",
               "span_count": 10,
               "error_count": 0,
               "latency_ms": 20,
-              "error_rate_pct": 0.0,
+              "error_rate_pct": $errorRatePct,
+              "last_seen": "$LAST_SEEN"
+            }
+            """
+        )
+
+    private fun containerRow(id: String, state: String, tags: Map<String, String>): JsonObject =
+        jsonObject(
+            """
+            {
+              "organization_id": "$ORGANIZATION_ID",
+              "id": "$id",
+              "host": "$HOSTNAME",
+              "name": "$id",
+              "image": "ghcr.io/moneat/checkout:v42",
+              "state": "$state",
+              "cpu_percent": 12.4,
+              "mem_usage": 256000000,
+              "mem_limit": 512000000,
+              "tags": ${json.encodeToString(tags)},
+              "last_seen": "$LAST_SEEN"
+            }
+            """
+        )
+
+    private fun podRow(id: String, status: String, tags: Map<String, String>): JsonObject =
+        jsonObject(
+            """
+            {
+              "organization_id": "$ORGANIZATION_ID",
+              "id": "$id",
+              "namespace": "checkout",
+              "name": "$id",
+              "cluster_name": "prod-us-east",
+              "status": "$status",
+              "tags": ${json.encodeToString(tags)},
+              "labels": {},
+              "first_seen": "$FIRST_SEEN",
+              "last_seen": "$LAST_SEEN"
+            }
+            """
+        )
+
+    private fun cloudRow(id: String, provider: String): JsonObject =
+        jsonObject(
+            """
+            {
+              "organization_id": "$ORGANIZATION_ID",
+              "id": "$id",
+              "name": "$id",
+              "resource_type": "cloud_resource",
+              "provider": "$provider",
+              "region": "global",
+              "account": "acct",
+              "health": "ok",
+              "tags": {},
+              "metadata": {},
+              "first_seen": "$FIRST_SEEN",
               "last_seen": "$LAST_SEEN"
             }
             """
