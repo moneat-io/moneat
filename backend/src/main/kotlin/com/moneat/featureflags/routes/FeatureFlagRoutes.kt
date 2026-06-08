@@ -16,6 +16,7 @@
 
 package com.moneat.featureflags.routes
 
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.featureflags.models.CreateFeatureFlagEnvironmentRequest
 import com.moneat.featureflags.models.CreateFeatureFlagRequest
 import com.moneat.featureflags.models.FeatureFlagSdkKeyRequest
@@ -410,7 +411,7 @@ private suspend fun ApplicationCall.requireFeatureFlagAdmin(
     membershipService: OrgMembershipService,
 ): FeatureFlagManagementContext? {
     val principal = principal<JWTPrincipal>()
-    val orgId = principal?.payload?.getClaim("orgId")?.asInt()
+    val orgId = principal?.currentOrgIdOrNull()
     val userId = principal?.payload?.getClaim("userId")?.asInt()
     if (orgId == null) {
         respond(HttpStatusCode.Forbidden, ErrorResponse(MISSING_ORG_MESSAGE))

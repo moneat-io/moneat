@@ -137,10 +137,11 @@ class StatusPageExtendedTest {
         }
     }
 
-    private fun token(userId: Int): String =
+    private fun token(userId: Int, orgId: Int? = null): String =
         JWT.create()
             .withIssuer("moneat").withAudience("moneat-users")
             .withClaim("userId", userId)
+            .apply { if (orgId != null) withClaim("orgId", orgId) }
             .sign(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
 
     private fun seedUser(): Int =
@@ -1001,7 +1002,7 @@ class StatusPageExtendedTest {
         val pageId = seedStatusPage(localOrgId)
 
         val response = client.post("/v1/status-pages/$pageId/domains/99999/verify") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            header(HttpHeaders.Authorization, "Bearer ${token(userId, localOrgId)}")
         }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
@@ -1027,7 +1028,7 @@ class StatusPageExtendedTest {
         )
 
         val response = client.delete("/v1/status-pages/$pageId/monitors/$monitorId") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            header(HttpHeaders.Authorization, "Bearer ${token(userId, localOrgId)}")
         }
         assertEquals(HttpStatusCode.NoContent, response.status)
     }
@@ -1042,7 +1043,7 @@ class StatusPageExtendedTest {
         val pageId = seedStatusPage(localOrgId)
 
         val response = client.delete("/v1/status-pages/$pageId/monitors/${UUID.randomUUID()}") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            header(HttpHeaders.Authorization, "Bearer ${token(userId, localOrgId)}")
         }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
@@ -1107,7 +1108,7 @@ class StatusPageExtendedTest {
         val pageId = seedStatusPage(localOrgId)
 
         val response = client.delete("/v1/status-pages/$pageId/domains/99999") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            header(HttpHeaders.Authorization, "Bearer ${token(userId, localOrgId)}")
         }
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
@@ -1192,7 +1193,7 @@ class StatusPageExtendedTest {
 
         val response =
             client.post("/v1/status-pages/$pageId/incidents/${UUID.randomUUID()}/updates") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, localOrgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"status":"resolved","message":"done"}""")
             }
@@ -1212,7 +1213,7 @@ class StatusPageExtendedTest {
         val monitorId = seedMonitor(localOrgId)
 
         val response = client.post("/v1/status-pages/$pageId/monitors") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            header(HttpHeaders.Authorization, "Bearer ${token(userId, localOrgId)}")
             contentType(ContentType.Application.Json)
             setBody("""{"monitors":[{"monitorId":"$monitorId","displayName":"API"}]}""")
         }
@@ -1233,13 +1234,13 @@ class StatusPageExtendedTest {
 
         // Create an incident first
         client.post("/v1/status-pages/$pageId/incidents") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            header(HttpHeaders.Authorization, "Bearer ${token(userId, localOrgId)}")
             contentType(ContentType.Application.Json)
             setBody("""{"title":"Test Outage","status":"investigating","message":"m"}""")
         }
 
         val response = client.get("/v1/status-pages/$pageId/incidents") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            header(HttpHeaders.Authorization, "Bearer ${token(userId, localOrgId)}")
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("Test Outage"))
@@ -1257,7 +1258,7 @@ class StatusPageExtendedTest {
         val pageId = seedStatusPage(localOrgId)
 
         val response = client.put("/v1/status-pages/$pageId") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            header(HttpHeaders.Authorization, "Bearer ${token(userId, localOrgId)}")
             contentType(ContentType.Application.Json)
             setBody("""{"slug":"INVALID SLUG!"}""")
         }
@@ -1276,7 +1277,7 @@ class StatusPageExtendedTest {
         val pageId = seedStatusPage(localOrgId)
 
         val response = client.post("/v1/status-pages/$pageId/domains") {
-            header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+            header(HttpHeaders.Authorization, "Bearer ${token(userId, localOrgId)}")
             contentType(ContentType.Application.Json)
             setBody("""{"domain":"-bad-domain"}""")
         }

@@ -397,7 +397,7 @@ class McpRoutesTest {
         """.trimIndent()
 
     private fun seedToken(scopes: List<String>, label: String = "test"): String {
-        val userId = transaction {
+        val (userId, orgId) = transaction {
             val orgId = Organizations.insert {
                 it[name] = "$label Org"
                 it[slug] = "$label-org"
@@ -412,11 +412,12 @@ class McpRoutesTest {
                 it[organization_id] = orgId
                 it[role] = "owner"
             }
-            insertedUserId
+            insertedUserId to orgId
         }
         return AuthTokenService()
             .generateToken(
                 userId = userId,
+                orgId = orgId,
                 name = "MCP test token",
                 scopes = scopes,
             )

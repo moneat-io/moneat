@@ -16,8 +16,8 @@
 
 package com.moneat.uptime.routes
 
+import com.moneat.auth.currentOrgContextOrNull
 import com.moneat.alerts.models.AlertPriority
-import com.moneat.shared.models.Memberships
 import com.moneat.uptime.models.CheckResult
 import com.moneat.uptime.models.CreateUptimeMonitorRequest
 import com.moneat.uptime.models.UpdateUptimeMonitorRequest
@@ -45,9 +45,6 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
-import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
 import java.util.UUID
 import kotlin.time.Clock
@@ -57,7 +54,6 @@ import kotlin.time.Instant
 private val logger = KotlinLogging.logger {}
 
 private const val INVALID_TOKEN_MESSAGE = "Invalid token"
-private const val NO_ORGANIZATION_MESSAGE = "No organization membership"
 private const val INVALID_MONITOR_ID_MESSAGE = "Invalid monitor ID"
 private const val MONITOR_NOT_FOUND_MESSAGE = "Monitor not found"
 private const val MIN_INTERVAL_SECONDS = 10
@@ -82,19 +78,15 @@ private suspend fun runUptimeRoute(
 
 private suspend fun ApplicationCall.requireUptimeRouteContext(): UptimeRouteContext? {
     val principal = principal<JWTPrincipal>()
-    val userId = principal?.payload?.getClaim("userId")?.asInt()
-    if (userId == null) {
+    val context = principal?.currentOrgContextOrNull()
+    if (context == null) {
         respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
         return null
     }
 
-    val orgIds = getOrganizationIdsForUser(userId)
-    if (orgIds.isEmpty()) {
-        respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORGANIZATION_MESSAGE))
-        return null
-    }
-
-    return UptimeRouteContext(orgIds.first())
+    return UptimeRouteContext(
+        organizationId = context.orgId,
+    )
 }
 
 private suspend fun ApplicationCall.requireMonitorId(): UUID? {
@@ -103,18 +95,6 @@ private suspend fun ApplicationCall.requireMonitorId(): UUID? {
     } catch (_: IllegalArgumentException) {
         respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_MONITOR_ID_MESSAGE))
         null
-    }
-}
-
-/**
- * Helper to get organization IDs for a user.
- */
-private fun getOrganizationIdsForUser(userId: Int): List<Int> {
-    return transaction {
-        Memberships
-            .selectAll()
-            .where { Memberships.user_id eq userId }
-            .map { it[Memberships.organization_id] }
     }
 }
 

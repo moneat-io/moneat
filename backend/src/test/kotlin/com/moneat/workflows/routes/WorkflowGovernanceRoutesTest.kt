@@ -125,7 +125,7 @@ class WorkflowGovernanceRoutesTest {
 
             val unauthenticated = client.get("/v1/workflows/blueprints")
             val noOrg = client.get("/v1/workflows/blueprints") {
-                withAuth(RouteTestSupport.createToken(userId = userId))
+                withAuth(RouteTestSupport.createToken(userId = userId, orgId = null))
             }
             val list = client.get("/v1/workflows/blueprints") { withAuth(token()) }
             val detail = client.get("/v1/workflows/blueprints/${sample.key}") { withAuth(token()) }
@@ -187,7 +187,7 @@ class WorkflowGovernanceRoutesTest {
             every { governanceService.usage(organizationId, any()) } returns usageResponse()
 
             val noOrg = client.get("/v1/workflows/overview") {
-                withAuth(RouteTestSupport.createToken(userId = userId))
+                withAuth(RouteTestSupport.createToken(userId = userId, orgId = null))
             }
             val overview = client.get("/v1/workflows/overview") { withAuth(token()) }
             val usage = client.get("/v1/workflows/usage") { withAuth(token()) }

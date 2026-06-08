@@ -39,13 +39,10 @@ class ProjectService(
     }
 
     suspend fun getProjects(
-        userId: Int,
+        orgId: Int,
         demoEpochMs: Long? = null
     ): List<ProjectResponse> {
-        val orgIds = projectRepository.getOrganizationIdsForUser(userId)
-        if (orgIds.isEmpty()) return emptyList()
-
-        val projects = projectRepository.getProjectsForOrganizations(orgIds)
+        val projects = projectRepository.getProjectsForOrganizations(listOf(orgId))
 
         return projects.map { row ->
             val issueCount = projectRepository.getIssueCountForProject(
@@ -90,12 +87,9 @@ class ProjectService(
     }
 
     suspend fun createProject(
-        userId: Int,
+        orgId: Int,
         request: CreateProjectRequest
     ): ProjectResponse {
-        val orgId = pricingTierService.getPrimaryOrganizationIdForUser(userId)
-            ?: throw IllegalStateException("User has no organization")
-
         if (billingQuotaService.isEnforcementEnabled()) {
             val tier = pricingTierService.getEffectiveTierForOrganization(orgId).tier
             tier.maxProjects?.let { max ->

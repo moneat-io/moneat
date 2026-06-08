@@ -117,6 +117,52 @@ class IntegrationRoutesTest {
     }
 
     @Test
+    fun `integration org helper returns unauthorized when principal is missing`() {
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                routing {
+                    route("/v1") {
+                        integrationRoutes()
+                    }
+                }
+            }
+
+            val response = client.get("/v1/integrations/slack/channels")
+
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
+            assertTrue(response.bodyAsText().contains("Unauthorized"))
+        }
+    }
+
+    @Test
+    fun `integration org helper returns not found when JWT has no org`() {
+        val userId = seedUser("no-org-claim@test.com")
+
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    authenticate("auth-jwt") {
+                        route("/v1") {
+                            integrationRoutes()
+                        }
+                    }
+                }
+            }
+
+            val response =
+                client.get("/v1/integrations/slack/channels") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                }
+
+            assertEquals(HttpStatusCode.NotFound, response.status)
+            assertTrue(response.bodyAsText().contains("No organization found"))
+        }
+    }
+
+    @Test
     fun `integrations list returns configured integration records`() {
         val orgId = seedOrganization("Integration Org")
         val userId = seedUser("member@test.com")
@@ -138,7 +184,7 @@ class IntegrationRoutesTest {
 
             val response =
                 client.get("/v1/integrations") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 }
 
             assertEquals(HttpStatusCode.OK, response.status)
@@ -197,7 +243,7 @@ class IntegrationRoutesTest {
 
             val response =
                 client.get("/v1/integrations/slack/oauth/start") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 }
 
             assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -227,7 +273,7 @@ class IntegrationRoutesTest {
 
             val response =
                 client.get("/v1/integrations/discord/oauth/start") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 }
 
             assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -357,12 +403,13 @@ class IntegrationRoutesTest {
         }
     }
 
-    private fun token(userId: Int): String {
+    private fun token(userId: Int, orgId: Int? = null): String {
         return JWT
             .create()
             .withIssuer("moneat")
             .withAudience("moneat-users")
             .withClaim("userId", userId)
+            .apply { if (orgId != null) withClaim("orgId", orgId) }
             .withClaim("email", "user$userId@test.com")
             .sign(Algorithm.HMAC256(jwtSecret))
     }

@@ -4,6 +4,7 @@
 
 package com.moneat.enterprise.oncall.routes
 
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.enterprise.oncall.services.PushNotificationService
 import com.moneat.enterprise.oncall.services.TwilioService
 import com.moneat.enterprise.oncall.services.UserNotificationPreferencesService
@@ -245,7 +246,7 @@ fun Route.notificationPreferencesRoutes(
             put("/{category}") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal?.payload?.getClaim("userId")?.asInt()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val organizationId = principal?.currentOrgIdOrNull()
                 val category = call.parameters["category"]
 
                 if (userId == null || organizationId == null) {

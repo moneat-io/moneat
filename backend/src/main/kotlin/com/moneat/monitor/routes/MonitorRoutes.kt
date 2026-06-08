@@ -16,6 +16,7 @@
 
 package com.moneat.monitor.routes
 
+import com.moneat.auth.currentOrgContextOrNull
 import com.moneat.logs.models.LogQueryRequest
 import com.moneat.logs.services.LogService
 import com.moneat.monitor.models.AllContainersResponse
@@ -29,7 +30,6 @@ import com.moneat.monitor.models.UpdateAlertRequest
 import com.moneat.monitor.models.UpdateAlertScopeRequest
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.monitor.services.MonitorService
-import com.moneat.shared.models.Memberships
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
@@ -44,9 +44,6 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
-import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.jdbc.selectAll
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
 
 private const val DEFAULT_PROJECT_ID = 0L
@@ -56,15 +53,12 @@ private const val DEFAULT_LIMIT = 100
  * Helper function to get organization IDs for a user from their memberships.
  * Returns the list of organization IDs the user belongs to.
  */
-private fun getOrganizationIdsForUser(userId: Int): List<Int> {
-    return transaction {
-        Memberships
-            .selectAll()
-            .where { Memberships.user_id eq userId }
-            .map { it[Memberships.organization_id] }
-            .distinct()
-    }
-}
+private fun getOrganizationIdsForUser(userId: Int, principal: JWTPrincipal?): List<Int> =
+    principal
+        ?.currentOrgContextOrNull()
+        ?.takeIf { it.userId == userId }
+        ?.let { listOf(it.orgId) }
+        .orEmpty()
 
 private suspend fun ensureHostAccessible(
     call: ApplicationCall,
@@ -93,7 +87,7 @@ fun Route.monitorRoutes(
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
 
-                val organizationIds = getOrganizationIdsForUser(userId)
+                val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
@@ -147,7 +141,7 @@ fun Route.monitorRoutes(
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
 
-                val organizationIds = getOrganizationIdsForUser(userId)
+                val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
@@ -163,7 +157,7 @@ fun Route.monitorRoutes(
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 val hostIdStr = call.parameters["id"]
 
-                val organizationIds = getOrganizationIdsForUser(userId)
+                val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
@@ -208,7 +202,7 @@ fun Route.monitorRoutes(
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 val hostIdStr = call.parameters["id"]
 
-                val organizationIds = getOrganizationIdsForUser(userId)
+                val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@delete
@@ -239,7 +233,7 @@ fun Route.monitorRoutes(
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 val hostIdStr = call.parameters["id"]
 
-                val organizationIds = getOrganizationIdsForUser(userId)
+                val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
@@ -274,7 +268,7 @@ fun Route.monitorRoutes(
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 val hostIdStr = call.parameters["id"]
 
-                val organizationIds = getOrganizationIdsForUser(userId)
+                val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
@@ -301,7 +295,7 @@ fun Route.monitorRoutes(
                 val hostIdStr = call.parameters["id"]
                 val containerName = call.parameters["name"]
 
-                val organizationIds = getOrganizationIdsForUser(userId)
+                val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
@@ -348,7 +342,7 @@ fun Route.monitorRoutes(
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 val hostIdStr = call.parameters["id"]
 
-                val organizationIds = getOrganizationIdsForUser(userId)
+                val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
@@ -398,7 +392,7 @@ fun Route.monitorRoutes(
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 val hostIdStr = call.parameters["id"]
 
-                val organizationIds = getOrganizationIdsForUser(userId)
+                val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
@@ -424,7 +418,7 @@ fun Route.monitorRoutes(
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 val hostIdStr = call.parameters["id"]
 
-                val organizationIds = getOrganizationIdsForUser(userId)
+                val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
@@ -450,7 +444,7 @@ fun Route.monitorRoutes(
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 val hostIdStr = call.parameters["id"]
 
-                val organizationIds = getOrganizationIdsForUser(userId)
+                val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@put
@@ -483,7 +477,7 @@ fun Route.monitorRoutes(
                 val userId = principal!!.payload.getClaim("userId").asInt()
                 val hostIdStr = call.parameters["id"]
 
-                val organizationIds = getOrganizationIdsForUser(userId)
+                val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@post
@@ -517,7 +511,7 @@ fun Route.monitorRoutes(
                 val hostIdStr = call.parameters["hostId"]
                 val alertIdStr = call.parameters["alertId"]
 
-                val organizationIds = getOrganizationIdsForUser(userId)
+                val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@put
@@ -562,7 +556,7 @@ fun Route.monitorRoutes(
                 val hostIdStr = call.parameters["hostId"]
                 val alertIdStr = call.parameters["alertId"]
 
-                val organizationIds = getOrganizationIdsForUser(userId)
+                val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@delete
@@ -605,7 +599,7 @@ fun Route.monitorRoutes(
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
 
-                val organizationIds = getOrganizationIdsForUser(userId)
+                val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@get
@@ -619,7 +613,7 @@ fun Route.monitorRoutes(
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
 
-                val organizationIds = getOrganizationIdsForUser(userId)
+                val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@post
@@ -645,7 +639,7 @@ fun Route.monitorRoutes(
                     return@delete
                 }
 
-                val organizationIds = getOrganizationIdsForUser(userId)
+                val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
                     call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
                     return@delete

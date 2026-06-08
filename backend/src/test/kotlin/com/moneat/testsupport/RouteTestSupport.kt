@@ -86,7 +86,7 @@ object RouteTestSupport {
      */
     fun createToken(
         userId: Int,
-        orgId: Int? = null,
+        orgId: Int? = 1,
         email: String = "user$userId@test.com"
     ): String = createToken(TEST_JWT_SECRET, userId, orgId, email)
 
@@ -96,7 +96,7 @@ object RouteTestSupport {
     fun createToken(
         secret: String,
         userId: Int,
-        orgId: Int? = null,
+        orgId: Int? = 1,
         email: String = "user$userId@test.com"
     ): String {
         return JWT.create()

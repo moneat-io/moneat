@@ -4,20 +4,18 @@
 
 package com.moneat.enterprise.ai.routes
 
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.enterprise.ai.models.AiAssistantConfirmRequest
 import com.moneat.enterprise.ai.models.AiAssistantStreamRequest
 import com.moneat.enterprise.ai.models.AssistantDoneEvent
 import com.moneat.enterprise.ai.models.AssistantErrorEvent
 import com.moneat.enterprise.ai.services.AiAssistantService
-import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Users
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondTextWriter
@@ -35,16 +33,16 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 private val logger = KotlinLogging.logger {}
 private val json = Json {
-    ignoreUnknownKeys = true
-    encodeDefaults = true
-}
+            ignoreUnknownKeys = true
+            encodeDefaults = true
+        }
 
 fun Route.aiAssistantRoutes(service: AiAssistantService) {
     authenticate("auth-jwt") {
         route("/v1/ai/assistant") {
             post("/stream") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
+                val context = call.requireCurrentOrg() ?: return@post
+                val userId = context.userId
 
                 val userDetails = getUserDetails(userId)
                 if (!userDetails.isAdmin) {
@@ -55,11 +53,7 @@ fun Route.aiAssistantRoutes(service: AiAssistantService) {
                     return@post
                 }
 
-                val orgId = getAssistantOrgId(userId)
-                if (orgId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "No organization found"))
-                    return@post
-                }
+                val orgId = context.orgId
 
                 val request = call.receive<AiAssistantStreamRequest>()
                 if (request.message.isBlank()) {
@@ -103,8 +97,8 @@ fun Route.aiAssistantRoutes(service: AiAssistantService) {
             }
 
             post("/confirm") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
+                val context = call.requireCurrentOrg() ?: return@post
+                val userId = context.userId
 
                 if (!getUserDetails(userId).isAdmin) {
                     call.respond(
@@ -114,11 +108,7 @@ fun Route.aiAssistantRoutes(service: AiAssistantService) {
                     return@post
                 }
 
-                val orgId = getAssistantOrgId(userId)
-                if (orgId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "No organization found"))
-                    return@post
-                }
+                val orgId = context.orgId
 
                 val request = call.receive<AiAssistantConfirmRequest>()
                 if (request.requestId.isBlank()) {
@@ -180,15 +170,5 @@ private fun getUserDetails(userId: Int): AssistantUserDetails {
             isAdmin = row?.get(Users.is_admin) ?: false,
             timezone = row?.get(Users.timezone),
         )
-    }
-}
-
-private fun getAssistantOrgId(userId: Int): Int? {
-    return transaction {
-        Memberships
-            .selectAll()
-            .where { Memberships.user_id eq userId }
-            .firstOrNull()
-            ?.get(Memberships.organization_id)
     }
 }

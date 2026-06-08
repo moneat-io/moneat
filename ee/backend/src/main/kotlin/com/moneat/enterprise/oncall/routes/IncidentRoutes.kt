@@ -4,6 +4,7 @@
 
 package com.moneat.enterprise.oncall.routes
 
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.alerts.models.IncidentSeverity
 import com.moneat.enterprise.oncall.services.OnCallAlertService
 import com.moneat.enterprise.oncall.services.OnCallIncidentService
@@ -116,7 +117,7 @@ private fun Route.registerDeclaredIncidentRoutes(
 }
 
 private suspend fun ApplicationCall.requireOrganizationId(): Int? {
-    val organizationId = principal<JWTPrincipal>()?.payload?.getClaim("orgId")?.asInt()
+    val organizationId = principal<JWTPrincipal>()?.currentOrgIdOrNull()
     if (organizationId == null) {
         respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
     }
@@ -125,7 +126,7 @@ private suspend fun ApplicationCall.requireOrganizationId(): Int? {
 
 private suspend fun ApplicationCall.requireUserContext(): OnCallUserContext? {
     val principal = principal<JWTPrincipal>()
-    val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+    val organizationId = principal?.currentOrgIdOrNull()
     val userId = principal?.payload?.getClaim("userId")?.asInt()
     if (organizationId == null || userId == null) {
         respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))

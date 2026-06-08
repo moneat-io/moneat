@@ -16,6 +16,7 @@
 
 package com.moneat.security.detection
 
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.org.services.OrgMembershipService
 import com.moneat.org.services.OrgRole
 import com.moneat.utils.ErrorResponse
@@ -301,7 +302,7 @@ private suspend fun RoutingContext.respondRuleError(error: Throwable) {
 private fun RoutingContext.ruleIdFromPath(): Int? = call.parameters["ruleId"]?.toIntOrNull()
 
 private fun RoutingContext.currentOrganizationId(): Int? =
-    call.principal<JWTPrincipal>()?.payload?.getClaim("orgId")?.asInt()
+    call.principal<JWTPrincipal>()?.currentOrgIdOrNull()
 
 private fun RoutingContext.currentUserId(): Int? =
     call.principal<JWTPrincipal>()?.payload?.getClaim("userId")?.asInt()

@@ -16,6 +16,7 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.config.ClickHouseClient
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
@@ -197,8 +198,7 @@ fun Route.datadogHostQueryRoutes() {
         authenticate("auth-jwt") {
             get("/hosts") {
                 val principal = call.principal<JWTPrincipal>()
-                val orgId = principal?.payload
-                    ?.getClaim("orgId")?.asInt()
+                val orgId = principal?.currentOrgIdOrNull()
                     ?: return@get call.respond(
                         HttpStatusCode.Unauthorized,
                         mapOf("error" to "Missing org context")
@@ -217,8 +217,7 @@ fun Route.datadogHostQueryRoutes() {
 
             get("/hosts/{hostId}") {
                 val principal = call.principal<JWTPrincipal>()
-                val orgId = principal?.payload
-                    ?.getClaim("orgId")?.asInt()
+                val orgId = principal?.currentOrgIdOrNull()
                     ?: return@get call.respond(
                         HttpStatusCode.Unauthorized,
                         mapOf("error" to "Missing org context")
@@ -239,8 +238,7 @@ fun Route.datadogHostQueryRoutes() {
 
             delete("/hosts/{hostId}") {
                 val principal = call.principal<JWTPrincipal>()
-                val orgId = principal?.payload
-                    ?.getClaim("orgId")?.asInt()
+                val orgId = principal?.currentOrgIdOrNull()
                 if (orgId == null) {
                     call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Missing org context"))
                     return@delete
@@ -261,8 +259,7 @@ fun Route.datadogHostQueryRoutes() {
 
             get("/hosts/{hostId}/metrics") {
                 val principal = call.principal<JWTPrincipal>()
-                val orgId = principal?.payload
-                    ?.getClaim("orgId")?.asInt()
+                val orgId = principal?.currentOrgIdOrNull()
                     ?: return@get call.respond(
                         HttpStatusCode.Unauthorized,
                         mapOf("error" to "Missing org context")
@@ -358,8 +355,7 @@ fun Route.datadogHostQueryRoutes() {
 
             get("/hosts/{hostId}/containers") {
                 val principal = call.principal<JWTPrincipal>()
-                val orgId = principal?.payload
-                    ?.getClaim("orgId")?.asInt()
+                val orgId = principal?.currentOrgIdOrNull()
                     ?: return@get call.respond(
                         HttpStatusCode.Unauthorized,
                         mapOf("error" to "Missing org context")
