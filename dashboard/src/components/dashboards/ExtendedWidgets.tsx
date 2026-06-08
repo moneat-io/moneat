@@ -34,7 +34,8 @@ import type {GeometryCollection, Topology} from 'topojson-specification'
 import countriesTopology from 'world-atlas/countries-110m.json'
 import type {DashboardWidget} from '@/lib/api'
 import {formatValue} from './formatValue'
-import {extendedWidgetTestId} from './extendedWidgetTypes'
+import {extendedWidgetTestId, isOverviewWidgetType} from './extendedWidgetTypes'
+import {overviewWidgetDef} from '@/components/overview/overviewWidgetTypes'
 
 const COLORS = [
   'hsl(var(--chart-1))',
@@ -136,6 +137,14 @@ export const ExtendedWidgetRenderer = memo(function ExtendedWidgetRenderer({
   data,
   displayConfig,
 }: ExtendedWidgetRendererProps) {
+  // Native overview widgets render from their own data hooks (no query).
+  if (isOverviewWidgetType(widgetType)) {
+    const def = overviewWidgetDef(widgetType)
+    if (def) {
+      const OverviewWidget = def.component
+      return <OverviewWidget displayConfig={displayConfig} />
+    }
+  }
   switch (widgetType) {
     case 'stream':
       return <StreamWidget data={data} />

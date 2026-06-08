@@ -20,6 +20,8 @@ import {type Layout, type LayoutItem, Responsive as ResponsiveGridLayout} from '
 import type {CreateWidgetRequest, DashboardWidget, TimeRangeDef} from '@/lib/api'
 import {api} from '@/lib/api'
 import {WidgetRenderer} from './WidgetRenderer'
+import {isOverviewWidgetType} from './extendedWidgetTypes'
+import {overviewWidgetDef} from '@/components/overview/overviewWidgetTypes'
 import {Bell, ChevronDown, ChevronRight, GripVertical, Trash2} from 'lucide-react'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
@@ -27,6 +29,7 @@ import 'react-resizable/css/styles.css'
 const GRID_BREAKPOINTS = {lg: 1200, md: 996, sm: 768, xs: 480}
 const GRID_COLS = {lg: 12, md: 12, sm: 12, xs: 6}
 const GRID_MARGIN: [number, number] = [12, 12]
+const LEGACY_SMALL_WIDGET_TYPES = new Set(['stat', 'gauge', 'bargauge'])
 
 interface DashboardGridProps {
   widgets: DashboardWidget[]
@@ -61,6 +64,13 @@ type WidgetCardProps = Readonly<{
   onWidgetClick: (widget: DashboardWidget) => void
   onWidgetDelete: (widgetId: number) => void
 }>
+
+function widgetMinHeight(widgetType: DashboardWidget['widget_type']): number {
+  if (widgetType === 'section') return 1
+  if (isOverviewWidgetType(widgetType)) return overviewWidgetDef(widgetType)?.minH ?? 4
+  if (LEGACY_SMALL_WIDGET_TYPES.has(widgetType)) return 4
+  return 6
+}
 
 function getSectionMembership(widgets: DashboardWidget[]): Map<number, number> {
   const sorted = [...widgets].sort((a, b) => a.grid_y - b.grid_y || a.sort_order - b.sort_order)
@@ -169,6 +179,8 @@ export function DashboardGrid({
       w.widget_type !== 'gauge' &&
       w.widget_type !== 'bargauge' &&
       w.widget_type !== 'text' &&
+      w.widget_type !== 'system_status' &&
+      w.widget_type !== 'kpi' &&
       w.grid_h <= 4
     ),
     [visibleWidgets]
@@ -192,7 +204,7 @@ export function DashboardGrid({
           isDraggable: isEditing,
           isResizable: isEditing && w.widget_type !== 'section',
           minW: w.widget_type === 'section' ? 12 : 2,
-          minH: w.widget_type === 'section' ? 1 : (['stat', 'gauge', 'bargauge'].includes(w.widget_type) ? 4 : 6),
+          minH: widgetMinHeight(w.widget_type),
           maxH: w.widget_type === 'section' ? 1 : undefined,
         }
       })
@@ -223,7 +235,7 @@ export function DashboardGrid({
         const layoutItem = newLayout.find((l) => l.i === String(widget.id))
         // Reverse the scaling transform before persisting canonical coordinates
         return {
-          ...(widget.id > 0 ? {id: widget.id} : {}),
+          id: widget.id,
           title: widget.title,
           widget_type: widget.widget_type,
           grid_x: layoutItem?.x ?? widget.grid_x,
@@ -362,6 +374,41 @@ function WidgetCard({
   onWidgetClick,
   onWidgetDelete,
 }: WidgetCardProps) {
+  // Overview widgets are full-bleed: they render their own panel chrome, so the
+  // grid card stays chromeless and only overlays drag/delete affordances in edit mode.
+  if (isOverviewWidgetType(widget.widget_type)) {
+    return (
+      <div className="relative h-full" style={{contain: 'style'}}>
+        {isEditing && (
+          <div className="absolute right-1 top-1 z-10 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+            <div className="drag-handle cursor-grab rounded border bg-background/90 p-1 shadow-sm active:cursor-grabbing">
+              <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+            </div>
+            <button
+              type="button"
+              aria-label={`Delete ${widget.title ?? 'widget'}`}
+              title={`Delete ${widget.title ?? 'widget'}`}
+              onClick={(e) => {
+                e.stopPropagation()
+                onWidgetDelete(widget.id)
+              }}
+              className="rounded border bg-background/90 p-1 text-destructive shadow-sm hover:bg-destructive/10"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </div>
+        )}
+        <WidgetRenderer
+          widget={widget}
+          dashboardId={dashboardId}
+          projectId={projectId}
+          timeRange={timeRange}
+          autoRefresh={autoRefresh}
+          variables={variableValues}
+        />
+      </div>
+    )
+  }
   return (
     <div
       className={`h-full rounded-lg border bg-card overflow-visible flex flex-col ${

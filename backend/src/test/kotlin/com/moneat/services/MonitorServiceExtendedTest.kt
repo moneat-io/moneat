@@ -235,6 +235,20 @@ class MonitorServiceExtendedTest {
     }
 
     @Test
+    fun `getLatestMetricsForHosts uses demo epoch for freshness window`() = runBlocking {
+        val queries = mutableListOf<String>()
+        coEvery { hostRepo.executeClickHouseQuery(any()) } coAnswers {
+            queries.add(firstArg())
+            ""
+        }
+
+        service.getLatestMetricsForHosts(listOf(1, 2), 10, demoEpochMs = 1_709_312_400_000L)
+
+        val query = queries.single()
+        assertTrue(query.contains("timestamp >= toDateTime64(1709312400.000, 3) - INTERVAL 6 HOUR"))
+    }
+
+    @Test
     fun `getLatestMetricsForHosts parses batch response`() = runBlocking {
         coEvery { retentionPolicyService.getRetentionDaysForOrganization(10) } returns 3
         coEvery {

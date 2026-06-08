@@ -1,5 +1,5 @@
 import React from 'react'
-import {beforeEach, describe, expect, it, vi} from 'vitest'
+import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest'
 import {fireEvent, screen, waitFor} from '@testing-library/react'
 import {clearAuthStorage, renderRoute} from '@/test/utils'
 
@@ -44,6 +44,7 @@ const {
     getOnCallIncidentTimeline: vi.fn(),
     resolveOnCallIncident: vi.fn(),
     addOnCallIncidentNote: vi.fn(),
+    getOverview: vi.fn(),
   },
   mockEnterpriseFeatures: {
     current: {enterprise: true, modules: ['oncall'], selfHost: false},
@@ -102,12 +103,30 @@ vi.mock('@/components/uptime/HeartbeatBar', () => ({
   default: () => <div data-testid="heartbeat-bar" />,
 }))
 
+vi.mock('react-grid-layout/legacy', () => ({
+  Responsive: ({children, className}: {children: React.ReactNode; className?: string}) => (
+    <div data-testid="responsive-grid-layout" className={className}>
+      {children}
+    </div>
+  ),
+}))
+
+beforeAll(() => {
+  globalThis.ResizeObserver = class {
+    disconnect() {}
+    observe() {}
+    unobserve() {}
+  }
+})
+
 import {Route as OverviewRoute} from '../index'
 import {Route as AlertDetailRoute} from '../on-call.alerts.$alertId'
 import {Route as AlertsRoute} from '../on-call.alerts'
 import {Route as IncidentDetailRoute} from '../on-call.incidents.$incidentId'
 import {Route as IncidentsRoute} from '../on-call.incidents'
 import {Route as OnCallOverviewRoute} from '../on-call.index'
+import {overviewTestData} from '../../components/overview/__tests__/overviewTestData'
+import type {OverviewResponse} from '@/lib/api/types'
 
 const project = {
   id: 1,
@@ -320,6 +339,30 @@ const feedback = {
   platform: 'javascript',
 }
 
+const emptyOverviewData: OverviewResponse = {
+  systemStatus: {
+    state: 'Healthy',
+    severity: 'good',
+    counts: {incidents: 0, alerts: 0, degraded: 0, hostsOffline: 0},
+    ai: {summary: 'No active incidents, firing alerts, degraded services, or offline hosts.'},
+  },
+  kpis: [],
+  serviceHealth: [],
+  telemetry: {
+    errors: [],
+    latency: [],
+    throughput: [],
+    logs: [],
+    deployAtPct: 0,
+    deployLabel: 'No deploys',
+  },
+  triage: {incidents: [], alerts: [], issues: [], security: []},
+  infra: {gauges: [], containers: 0, pods: 0, upLabel: '0/0 up'},
+  uptime: {monitors: [], upLabel: '0/0 up', statusPages: '0 status pages'},
+  deploys: [],
+  activity: [],
+}
+
 function clickLastText(text: string) {
   const matches = screen.getAllByText(text)
   fireEvent.click(matches[matches.length - 1])
@@ -329,29 +372,6 @@ function makeAlert(overrides: Record<string, unknown> = {}) {
   return {...alert, ...overrides}
 }
 
-function makeIssue(overrides: Record<string, unknown> = {}) {
-  return {...issue, ...overrides}
-}
-
-function makeUptimeMonitor(overrides: Record<string, unknown> = {}) {
-  return {...uptimeMonitor, ...overrides}
-}
-
-function makeHost(overrides: Record<string, unknown> = {}) {
-  return {...host, ...overrides}
-}
-
-function makeStatusPage(overrides: Record<string, unknown> = {}) {
-  return {...statusPage, ...overrides}
-}
-
-function makeReplay(overrides: Record<string, unknown> = {}) {
-  return {...replay, ...overrides}
-}
-
-function makeFeedback(overrides: Record<string, unknown> = {}) {
-  return {...feedback, ...overrides}
-}
 
 describe('overview alert and incident dashboard', () => {
   beforeEach(() => {
@@ -421,24 +441,15 @@ describe('overview alert and incident dashboard', () => {
     mockApi.getOnCallIncidentTimeline.mockResolvedValue(declaredIncidentTimeline)
     mockApi.resolveOnCallIncident.mockResolvedValue({...declaredIncident, status: 'RESOLVED'})
     mockApi.addOnCallIncidentNote.mockResolvedValue(declaredIncidentTimeline[0])
+    mockApi.getOverview.mockResolvedValue(overviewTestData)
   })
 
-  it('renders alert priority and incident overview sections', async () => {
+  it('renders the overview dashboard with widget content', async () => {
     renderRoute(OverviewRoute)
 
     expect(await screen.findByText('Overview')).toBeInTheDocument()
-    expect(await screen.findByText('On-Call')).toBeInTheDocument()
-    expect(screen.getAllByText('Payments outage').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('P0').length).toBeGreaterThan(0)
-    expect(screen.getByText('Ada Lovelace')).toBeInTheDocument()
-    expect(await screen.findByText('Checkout failed')).toBeInTheDocument()
-    expect(await screen.findByText('API availability')).toBeInTheDocument()
-    expect(await screen.findByText('api-host-1')).toBeInTheDocument()
-    expect(await screen.findByText('POST /checkout')).toBeInTheDocument()
-    expect(await screen.findByText('Public Status')).toBeInTheDocument()
-    expect((await screen.findAllByText('1.2.3')).length).toBeGreaterThan(0)
-    expect((await screen.findAllByText('user@example.com')).length).toBeGreaterThan(0)
-    expect(await screen.findByText('Checkout is confusing')).toBeInTheDocument()
+    expect(await screen.findByText('Action needed')).toBeInTheDocument()
+    expect(screen.getByRole('button', {name: /Customize overview/})).toBeInTheDocument()
   })
 
   it('renders the on-call overview with alert priorities', async () => {
@@ -454,176 +465,22 @@ describe('overview alert and incident dashboard', () => {
     expect(screen.getByText('Escalation policies')).toBeInTheDocument()
   })
 
-  it('renders empty overview states without promoting alerts to incidents', async () => {
-    mockApi.getProjectStats.mockResolvedValue({...projectStats, eventsTimeline: [], totalEvents: 0})
-    mockApi.getOrganizationIssues.mockResolvedValue([])
-    mockApi.getPerformanceStats.mockResolvedValue(null)
-    mockApi.getOrganizationReleases.mockResolvedValue([])
-    mockApi.getOrganizationReplays.mockResolvedValue([])
-    mockApi.getOrganizationFeedback.mockResolvedValue([])
-    mockApi.getUptimeMonitors.mockResolvedValue([])
-    mockApi.getMonitorHosts.mockResolvedValue([])
-    mockApi.getIncidents.mockResolvedValue([])
-    mockApi.getOnCallSchedules.mockResolvedValue([])
-    mockApi.getStatusPages.mockResolvedValue([])
+  it('renders the overview dashboard regardless of empty API state', async () => {
+    mockApi.getOverview.mockResolvedValue(emptyOverviewData)
 
     renderRoute(OverviewRoute)
 
     expect(await screen.findByText('Overview')).toBeInTheDocument()
-    expect(await screen.findByText('No alerts')).toBeInTheDocument()
-    expect(await screen.findByText('No unresolved issues')).toBeInTheDocument()
-    expect(await screen.findByText('No uptime monitors configured')).toBeInTheDocument()
-    expect(await screen.findByText('No hosts being monitored')).toBeInTheDocument()
-    expect(await screen.findByText('No performance data')).toBeInTheDocument()
-    expect(await screen.findByText('No status pages configured')).toBeInTheDocument()
-    expect(await screen.findByText('No releases')).toBeInTheDocument()
-    expect(await screen.findByText('No recent replays')).toBeInTheDocument()
-    expect(await screen.findByText('No feedback received')).toBeInTheDocument()
+    await waitFor(() => expect(mockApi.getOverview).toHaveBeenCalled())
+    expect(screen.getByText('Healthy')).toBeInTheDocument()
   })
 
-  it('renders degraded overview states and fallback labels', async () => {
-    const staleCheckAt = Date.now() - 60 * 60 * 1000
-    const downMonitor = makeUptimeMonitor({
-      id: 'uptime-down',
-      name: 'Database availability',
-      status: 'down',
-      type: 'smtp',
-      lastCheckAt: staleCheckAt,
-      uptime24h: null,
-      avgResponseTime: 0.5,
-    })
-    const degradedMonitor = makeUptimeMonitor({
-      id: 'uptime-degraded',
-      name: 'Cache availability',
-      status: 'degraded',
-      type: 'tcp',
-      active: false,
-      lastCheckAt: staleCheckAt,
-      uptime24h: 65.432,
-      avgResponseTime: 1234,
-    })
-    const privateStatusPage = makeStatusPage({
-      id: 'status-private',
-      name: 'Private Ops',
-      slug: 'private-ops',
-      description: '',
-      isPublic: false,
-    })
-    const pendingStatusPage = makeStatusPage({
-      id: 'status-pending',
-      name: 'Pending Status',
-      slug: 'pending-status',
-      description: '',
-    })
-    const emptyStatusPage = makeStatusPage({
-      id: 'status-empty',
-      name: 'Empty Status',
-      slug: 'empty-status',
-      description: '',
-    })
-
-    mockApi.getProjectStats.mockResolvedValue({
-      ...projectStats,
-      totalEvents: 123_456,
-      unresolvedIssues: 12_345,
-      affectedUsers: 1_234,
-    })
-    mockApi.getOrganizationIssues.mockResolvedValue([
-      makeIssue({id: 'issue-ios', title: 'Fatal checkout', level: 'fatal', platform: 'ios', eventCount: 123_456}),
-      makeIssue({id: 'issue-android', title: 'Android crash', level: 'error', platform: 'android', eventCount: 12_345}),
-      makeIssue({id: 'issue-python', title: '', culprit: 'Worker failed', level: 'warning', platform: 'python', eventCount: 1_234}),
-      makeIssue({id: 'issue-unknown', title: 'Unknown platform', level: 'info', platform: 'rust', lastSeen: null}),
-    ])
-    mockApi.getPerformanceStats.mockResolvedValue({
-      apdex: 0.82,
-      throughput: [],
-      slowestTransactions: [
-        {eventId: 'event-fast', name: 'GET /fast', op: 'http', duration: 0.5, timestamp: ''},
-        {eventId: 'event-slow', name: 'POST /slow', op: 'http', duration: 1234, timestamp: ''},
-      ],
-      totalTransactions: 2,
-      avgDuration: 1234,
-    })
-    mockApi.getIncidents.mockResolvedValue([
-      makeAlert({id: 102, title: 'Database acknowledged', priority: 'P1', status: 'ACKNOWLEDGED'}),
-      makeAlert({id: 103, title: 'Cache warning', priority: 'P2', status: 'TRIGGERED'}),
-      makeAlert({id: 104, title: 'Analytics delayed', priority: 'P3', status: 'TRIGGERED'}),
-      makeAlert({id: 105, title: 'Low signal alert', priority: 'P5', status: 'SUPPRESSED'}),
-    ])
-    mockApi.getOnCallSchedules.mockResolvedValue([{...schedule, id: 8, name: 'Empty Rotation', currentOnCall: null}])
-    mockApi.getOrganizationReleases.mockResolvedValue([{...release, version: '2.0.0', crashFreeRate: null}])
-    mockApi.getOrganizationReplays.mockResolvedValue([
-      makeReplay({replayId: 'replay-user', user: {username: 'anonymous-user'}, errorCount: 0, browserName: null}),
-      makeReplay({replayId: 'replay-url', user: null, urls: ['https://app.example.com/cart'], errorCount: 0}),
-      makeReplay({replayId: 'replay-session', user: null, urls: [], errorCount: 0, browserName: null}),
-    ])
-    mockApi.getOrganizationFeedback.mockResolvedValue([
-      makeFeedback({feedbackId: 'feedback-no-contact', contactEmail: null, status: 'unresolved'}),
-    ])
-    mockApi.getUptimeMonitors.mockResolvedValue([downMonitor, degradedMonitor])
-    mockApi.getUptimeHeartbeats.mockImplementation((monitorId: string) => {
-      if (monitorId === 'uptime-down') return Promise.resolve([])
-      return Promise.resolve([
-        {timestamp: Date.now() - 2_000, status: 1, responseTimeMs: 111, statusCode: 200, message: 'ok'},
-        {timestamp: Date.now() - 3_000, status: 0, responseTimeMs: 1300, statusCode: 503, message: 'older'},
-        {timestamp: Date.now(), status: 0, responseTimeMs: 1234, statusCode: 503, message: 'degraded'},
-      ])
-    })
-    mockApi.getMonitorHosts.mockResolvedValue([
-      makeHost({id: 88, name: null, hostname: 'offline-host', status: 'offline', os: null, latest_metrics: null}),
-      makeHost({
-        id: 89,
-        name: 'degraded-host',
-        hostname: 'degraded-host',
-        status: 'degraded',
-        latest_metrics: {...host.latest_metrics, cpu_percent: 90, mem_percent: 75, disk_percent: null},
-      }),
-      makeHost({id: 90, name: 'unknown-host', hostname: 'unknown-host', status: 'mystery'}),
-    ])
-    mockApi.getStatusPages.mockResolvedValue([privateStatusPage, pendingStatusPage, emptyStatusPage])
-    mockApi.getStatusPage.mockImplementation((pageId: string) => {
-      if (pageId === 'status-private') {
-        return Promise.resolve({
-          ...privateStatusPage,
-          monitors: [{id: 1, monitorId: 'uptime-down', monitorName: 'Database availability', sortOrder: 0}],
-          customDomains: [],
-        })
-      }
-      if (pageId === 'status-pending') {
-        return Promise.resolve({
-          ...pendingStatusPage,
-          monitors: [{id: 2, monitorId: 'missing-monitor', monitorName: 'Missing monitor', sortOrder: 0}],
-          customDomains: [],
-        })
-      }
-      return Promise.resolve({...emptyStatusPage, monitors: [], customDomains: []})
-    })
-
+  it('renders service health and triage content from overview API data', async () => {
     renderRoute(OverviewRoute)
 
-    expect(await screen.findByText('Database acknowledged')).toBeInTheDocument()
-    expect(await screen.findByText('ACKNOWLEDGED')).toBeInTheDocument()
-    expect(await screen.findByText('P1')).toBeInTheDocument()
-    expect(await screen.findByText('P2')).toBeInTheDocument()
-    expect(await screen.findByText('P3')).toBeInTheDocument()
-    expect(await screen.findByText('P5')).toBeInTheDocument()
-    expect(await screen.findByText('Fatal checkout')).toBeInTheDocument()
-    expect(await screen.findByText('Android')).toBeInTheDocument()
-    expect(await screen.findByText('Backend')).toBeInTheDocument()
-    expect(await screen.findByText('Database availability')).toBeInTheDocument()
-    expect(await screen.findByText('stale')).toBeInTheDocument()
-    expect(await screen.findByText('No heartbeat data')).toBeInTheDocument()
-    expect(await screen.findByText('SMTP')).toBeInTheDocument()
-    expect(await screen.findByText('offline-host')).toBeInTheDocument()
-    expect(await screen.findByText('degraded-host')).toBeInTheDocument()
-    expect((await screen.findAllByText('1 down')).length).toBeGreaterThan(0)
-    expect(await screen.findByText('1 pending')).toBeInTheDocument()
-    expect(await screen.findByText('No monitors')).toBeInTheDocument()
-    expect((await screen.findAllByText('No description provided')).length).toBeGreaterThan(0)
-    expect(await screen.findByText('Private')).toBeInTheDocument()
-    expect(await screen.findByText('anonymous-user')).toBeInTheDocument()
-    expect(await screen.findByText('https://app.example.com/cart')).toBeInTheDocument()
-    expect(await screen.findByText('Session')).toBeInTheDocument()
+    expect(await screen.findByText('Overview')).toBeInTheDocument()
+    expect(await screen.findByText('Elevated 5xx on checkout-api')).toBeInTheDocument()
+    expect(screen.getByText('Service health')).toBeInTheDocument()
   })
 
   it('renders non-page and empty on-call priority states', async () => {
@@ -676,69 +533,13 @@ describe('overview alert and incident dashboard', () => {
     expect(await screen.findByText('No schedules configured')).toBeInTheDocument()
   })
 
-  it('checks auth and renders resolved alerts without primary service data', async () => {
+  it('checks auth before rendering the overview', async () => {
     mockApi.isAuthenticated.mockReturnValueOnce(false).mockReturnValueOnce(false).mockReturnValue(true)
-    mockApi.getProjects.mockResolvedValue([])
-    mockApi.getProjectStats.mockResolvedValue(null)
-    mockApi.getOrganizationIssues.mockResolvedValue([])
-    mockApi.getPerformanceStats.mockResolvedValue(null)
-    mockApi.getOrganizationReleases.mockResolvedValue([])
-    mockApi.getOrganizationReplays.mockResolvedValue([])
-    mockApi.getOrganizationFeedback.mockResolvedValue([])
-    mockApi.getIncidents.mockResolvedValue([
-      makeAlert({id: 301, title: 'Resolved low-priority alert', priority: 'P4', status: 'RESOLVED'}),
-    ])
-    mockApi.getOnCallSchedules.mockResolvedValue([])
-    mockApi.getUptimeMonitors.mockResolvedValue([
-      makeUptimeMonitor({
-        id: 'uptime-push',
-        name: 'Push heartbeat',
-        type: 'push',
-        status: 'paused',
-        active: true,
-        lastCheckAt: undefined,
-        intervalSeconds: undefined,
-        uptime24h: undefined,
-        avgResponseTime: undefined,
-      }),
-      makeUptimeMonitor({
-        id: 'uptime-default-interval',
-        name: 'Default interval heartbeat',
-        type: 'http',
-        status: 'up',
-        active: false,
-        lastCheckAt: Date.now() - 10_000,
-        intervalSeconds: undefined,
-      }),
-    ])
-    mockApi.getUptimeHeartbeats.mockResolvedValue([])
-    mockApi.getMonitorHosts.mockResolvedValue([
-      makeHost({
-        id: 91,
-        name: undefined,
-        hostname: 'fallback-host',
-        status: undefined,
-        latest_metrics: {
-          ...host.latest_metrics,
-          cpu_percent: undefined,
-          mem_percent: undefined,
-          disk_percent: undefined,
-        },
-      }),
-    ])
-    mockApi.getStatusPages.mockResolvedValue([])
 
     renderRoute(OverviewRoute)
 
     expect(await screen.findByText('Overview')).toBeInTheDocument()
     expect(mockApi.checkAuth).toHaveBeenCalled()
-    expect(await screen.findByText('Resolved low-priority alert')).toBeInTheDocument()
-    expect(await screen.findByText('RESOLVED')).toBeInTheDocument()
-    expect(await screen.findByText('P4')).toBeInTheDocument()
-    expect(await screen.findByText('Push heartbeat')).toBeInTheDocument()
-    expect(await screen.findByText('Push')).toBeInTheDocument()
-    expect(await screen.findByText('Default interval heartbeat')).toBeInTheDocument()
-    expect(await screen.findByText('fallback-host')).toBeInTheDocument()
   })
 
   it('renders plural on-call assignments and assignee fallbacks', async () => {
@@ -776,14 +577,13 @@ describe('overview alert and incident dashboard', () => {
     expect(screen.getAllByTestId('navigate').some((element) => element.textContent === '/')).toBe(true)
   })
 
-  it('omits the on-call overview when the module is unavailable', async () => {
+  it('renders overview dashboard when enterprise modules are unavailable', async () => {
     mockEnterpriseFeatures.current = {enterprise: true, modules: [], selfHost: false}
 
     renderRoute(OverviewRoute)
 
     expect(await screen.findByText('Overview')).toBeInTheDocument()
-    expect(await screen.findByText('Checkout failed')).toBeInTheDocument()
-    expect(screen.queryByText('On-Call')).not.toBeInTheDocument()
+    expect(await screen.findByText('Action needed')).toBeInTheDocument()
   })
 
   it('renders the alert list route with P-priority alerts', async () => {
