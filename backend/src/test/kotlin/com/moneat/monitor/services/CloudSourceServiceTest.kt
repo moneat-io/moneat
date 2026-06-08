@@ -26,6 +26,7 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -46,10 +47,15 @@ class CloudSourceServiceTest {
     private companion object {
         const val DATABASE_URL = "jdbc:h2:mem:moneat_cloud_sources;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1"
         const val AWS_PROVIDER = "aws"
+        const val GCP_PROVIDER = "gcp"
+        const val AZURE_PROVIDER = "azure"
         const val AWS_ACCOUNT_ID = "123456789012"
         const val AWS_ROLE_NAME = "MoneatIntegrationRole"
         const val AWS_PRINCIPAL_ARN = "arn:aws:iam::499432741914:root"
+        const val GCP_PROJECT_ID = "moneat-prod"
         const val GCP_SERVICE_ACCOUNT = "moneat-cloud@moneat.iam.gserviceaccount.com"
+        const val AZURE_TENANT_ID = "00000000-0000-0000-0000-000000000002"
+        const val AZURE_SUBSCRIPTION_ID = "00000000-0000-0000-0000-000000000003"
         const val AZURE_APPLICATION_ID = "00000000-0000-0000-0000-000000000001"
         const val DISPLAY_NAME = "Production AWS"
         const val DISPLAY_NAME_MAX_LENGTH = 120
@@ -73,6 +79,7 @@ class CloudSourceServiceTest {
         verifier.result = CloudSourceSyncResult(resources = emptyList())
         writer.writes.clear()
         writer.deletes.clear()
+        verifier.failure = null
         service = CloudSourceService(
             verifier = verifier,
             resourceWriter = writer,
@@ -94,6 +101,86 @@ class CloudSourceServiceTest {
         assertTrue(preview.externalId.startsWith("mnt-ext-"))
         assertTrue(preview.snippet.contains("sts:ExternalId"))
         assertTrue(preview.snippet.contains(AWS_PRINCIPAL_ARN))
+    }
+
+    @Test
+    fun `setup preview supports all cloud providers and fallback principals`() {
+        val fallbackService = CloudSourceService(
+            verifier = verifier,
+            resourceWriter = writer,
+            identityConfig = CloudSourceIdentityConfig()
+        )
+
+        val gcp = fallbackService.setupPreview(organizationId = TEST_ORGANIZATION_ID, provider = " GCP ")
+        val azure = fallbackService.setupPreview(organizationId = TEST_ORGANIZATION_ID, provider = AZURE_PROVIDER)
+
+        assertEquals(GCP_PROVIDER, gcp.provider)
+        assertTrue(gcp.principal.contains("<moneat-project>"))
+        assertTrue(gcp.snippet.contains("gcloud projects add-iam-policy-binding"))
+        assertEquals(AZURE_PROVIDER, azure.provider)
+        assertEquals("<moneat-application-id>", azure.principal)
+        assertTrue(azure.snippet.contains("az role assignment create"))
+    }
+
+    @Test
+    fun `setup preview rejects unsupported providers`() {
+        val error = assertFailsWith<InvalidCloudSourceException> {
+            service.setupPreview(organizationId = TEST_ORGANIZATION_ID, provider = "oracle")
+        }
+
+        assertEquals("Unsupported cloud provider", error.message)
+    }
+
+    // ──── Managed identity verifier ────
+
+    @Test
+    fun `managed identity verifier discovers account resources for each provider`() = runBlocking {
+        val managedVerifier = ManagedIdentityCloudSourceVerifier(
+            CloudSourceIdentityConfig(
+                awsPrincipalArn = AWS_PRINCIPAL_ARN,
+                gcpServiceAccount = GCP_SERVICE_ACCOUNT,
+                azureApplicationId = AZURE_APPLICATION_ID
+            )
+        )
+
+        val aws = managedVerifier.verifyAndDiscover(verificationRequest()).resources.single()
+        val gcp = managedVerifier.verifyAndDiscover(
+            verificationRequest(
+                provider = GCP_PROVIDER,
+                config = CloudSourceProviderConfig(projectId = GCP_PROJECT_ID)
+            )
+        ).resources.single()
+        val azure = managedVerifier.verifyAndDiscover(
+            verificationRequest(
+                provider = AZURE_PROVIDER,
+                config = CloudSourceProviderConfig(
+                    tenantId = AZURE_TENANT_ID,
+                    subscriptionId = AZURE_SUBSCRIPTION_ID
+                )
+            )
+        ).resources.single()
+
+        assertEquals("aws:account:$AWS_ACCOUNT_ID", aws.resourceId)
+        assertEquals(AWS_ROLE_NAME, aws.metadata["Role"])
+        assertEquals("gcp:project:$GCP_PROJECT_ID", gcp.resourceId)
+        assertEquals(GCP_PROJECT_ID, gcp.metadata["Project"])
+        assertEquals("azure:subscription:$AZURE_SUBSCRIPTION_ID", azure.resourceId)
+        assertEquals(AZURE_TENANT_ID, azure.metadata["Tenant"])
+    }
+
+    @Test
+    fun `managed identity verifier reports missing config and connectors`() = runBlocking {
+        val missingConfig = assertFailsWith<InvalidCloudSourceException> {
+            ManagedIdentityCloudSourceVerifier().verifyAndDiscover(
+                verificationRequest(config = CloudSourceProviderConfig(roleName = AWS_ROLE_NAME))
+            )
+        }
+        val missingConnector = assertFailsWith<CloudSourceConnectorUnavailableException> {
+            ManagedIdentityCloudSourceVerifier(CloudSourceIdentityConfig()).verifyAndDiscover(verificationRequest())
+        }
+
+        assertEquals("AWS account ID is required", missingConfig.message)
+        assertEquals("Cloud connector is missing CLOUD_AWS_PRINCIPAL_ARN", missingConnector.message)
     }
 
     // ──── Validation ────
@@ -122,6 +209,30 @@ class CloudSourceServiceTest {
         }
 
         assertEquals("Display name must be at most $DISPLAY_NAME_MAX_LENGTH characters", error.message)
+    }
+
+    @Test
+    fun `create source trims names and rejects missing provider config`() = runBlocking {
+        val missingName = assertFailsWith<InvalidCloudSourceException> {
+            service.createSource(
+                organizationId = TEST_ORGANIZATION_ID,
+                userId = TEST_USER_ID,
+                request = createRequest(displayName = "   ")
+            )
+        }
+        val missingProject = assertFailsWith<InvalidCloudSourceException> {
+            service.createSource(
+                organizationId = TEST_ORGANIZATION_ID,
+                userId = TEST_USER_ID,
+                request = createRequest(
+                    provider = GCP_PROVIDER,
+                    config = CloudSourceProviderConfig()
+                )
+            )
+        }
+
+        assertEquals("Display name is required", missingName.message)
+        assertEquals("GCP project ID is required", missingProject.message)
     }
 
     // ──── Create source ────
@@ -191,21 +302,89 @@ class CloudSourceServiceTest {
         assertTrue(writer.deletes.isEmpty())
     }
 
+    // ──── Sync source ────
+
+    @Test
+    fun `sync source refreshes an existing source from stored config`() = runBlocking {
+        val orgId = seedOrg()
+        val userId = seedUser()
+        seedMembership(userId, orgId)
+        val response = service.createSource(orgId, userId, createRequest(displayName = "  Production AWS  "))
+        verifier.result = CloudSourceSyncResult(
+            resources = listOf(
+                CloudSourceSyncResource(
+                    resourceId = CATALOG_RESOURCE_ID,
+                    name = CATALOG_RESOURCE_NAME,
+                    resourceType = "ec2_instance",
+                    provider = AWS_PROVIDER,
+                    account = AWS_ACCOUNT_ID,
+                    region = "us-east-1",
+                    health = CLOUD_SOURCE_STATUS_HEALTHY
+                )
+            )
+        )
+
+        val synced = service.syncSource(orgId, response.id)
+
+        assertEquals(DISPLAY_NAME, synced.displayName)
+        assertEquals(CLOUD_SOURCE_STATUS_HEALTHY, synced.status)
+        assertEquals(CATALOG_RESOURCE_ID, writer.writes.last().resources.single().resourceId)
+    }
+
+    @Test
+    fun `sync source marks status error when verification fails`() = runBlocking {
+        val orgId = seedOrg()
+        val userId = seedUser()
+        seedMembership(userId, orgId)
+        val response = service.createSource(orgId, userId, createRequest())
+        verifier.failure = RuntimeException("provider unavailable")
+
+        val error = assertFailsWith<RuntimeException> {
+            service.syncSource(orgId, response.id)
+        }
+
+        assertEquals("provider unavailable", error.message)
+        val (status, lastError) = sourceStatusAndError(response.id)
+        assertEquals("error", status)
+        assertEquals("provider unavailable", lastError)
+    }
+
     private fun createRequest(
+        provider: String = AWS_PROVIDER,
         displayName: String = DISPLAY_NAME,
+        config: CloudSourceProviderConfig = CloudSourceProviderConfig(
+            accountId = AWS_ACCOUNT_ID,
+            roleName = AWS_ROLE_NAME
+        ),
         collectLogs: Boolean = false,
     ): CloudSourceCreateRequest =
         CloudSourceCreateRequest(
-            provider = AWS_PROVIDER,
+            provider = provider,
             displayName = displayName,
-            config = CloudSourceProviderConfig(
-                accountId = AWS_ACCOUNT_ID,
-                roleName = AWS_ROLE_NAME
-            ),
+            config = config,
             collectMetrics = true,
             collectInventory = true,
             collectCost = true,
             collectLogs = collectLogs
+        )
+
+    private fun verificationRequest(
+        provider: String = AWS_PROVIDER,
+        config: CloudSourceProviderConfig = CloudSourceProviderConfig(
+            accountId = AWS_ACCOUNT_ID,
+            roleName = AWS_ROLE_NAME
+        ),
+    ): CloudSourceVerificationRequest =
+        CloudSourceVerificationRequest(
+            organizationId = TEST_ORGANIZATION_ID,
+            sourceId = 1,
+            provider = provider,
+            displayName = DISPLAY_NAME,
+            config = config,
+            externalId = "mnt-ext-test",
+            collectMetrics = true,
+            collectInventory = true,
+            collectCost = true
         )
 
     private fun seedUser(): Int =
@@ -220,6 +399,15 @@ class CloudSourceServiceTest {
     private fun countSources(): Long =
         transaction {
             CloudSources.selectAll().count()
+        }
+
+    private fun sourceStatusAndError(sourceId: Int): Pair<String, String?> =
+        transaction {
+            val row = CloudSources
+                .selectAll()
+                .where { CloudSources.id eq sourceId }
+                .single()
+            row[CloudSources.status] to row[CloudSources.last_error]
         }
 
     private fun seedOrg(): Int =
@@ -243,8 +431,12 @@ class CloudSourceServiceTest {
 
 private class RecordingCloudSourceVerifier : CloudSourceVerifier {
     var result: CloudSourceSyncResult = CloudSourceSyncResult(resources = emptyList())
+    var failure: RuntimeException? = null
 
-    override suspend fun verifyAndDiscover(source: CloudSourceVerificationRequest): CloudSourceSyncResult = result
+    override suspend fun verifyAndDiscover(source: CloudSourceVerificationRequest): CloudSourceSyncResult {
+        failure?.let { throw it }
+        return result
+    }
 }
 
 private class RecordingCloudResourceWriter : CloudResourceWriter {

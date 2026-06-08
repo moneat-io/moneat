@@ -21,11 +21,13 @@ import com.moneat.monitor.models.CloudSourceProviderConfig
 import com.moneat.monitor.models.CloudSourceResponse
 import com.moneat.monitor.models.CloudSourceSetupPreview
 import com.moneat.monitor.routes.cloudSourceRoutes
+import com.moneat.monitor.services.CloudSourceConnectorUnavailableException
 import com.moneat.monitor.services.CloudSourceService
 import com.moneat.plugins.installErrorHandling
 import com.moneat.testsupport.RouteTestSupport
 import com.moneat.testsupport.RouteTestSupport.installJwtAuth
 import com.moneat.testsupport.RouteTestSupport.withAuth
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -91,6 +93,25 @@ class CloudSourceRoutesTest {
         assertTrue(response.bodyAsText().contains("Organization context required"))
     }
 
+    // ──── List sources ────
+
+    @Test
+    fun `list sources uses current organization context`() = testApplication {
+        every { cloudSourceService.listSources(ORGANIZATION_ID) } returns listOf(sourceResponse())
+
+        application {
+            installJwtAuth()
+            installErrorHandling()
+            routing { cloudSourceRoutes(cloudSourceService) }
+        }
+
+        val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
+        val response = client.get("/v1/cloud-sources") { withAuth(token) }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains(DISPLAY_NAME))
+    }
+
     // ──── Setup preview ────
 
     @Test
@@ -145,22 +166,9 @@ class CloudSourceRoutesTest {
             collectCost = true,
             collectLogs = false
         )
-        coEvery { cloudSourceService.createSource(ORGANIZATION_ID, USER_ID, request) } returns CloudSourceResponse(
-            id = SOURCE_ID,
-            provider = PROVIDER_AWS,
-            displayName = DISPLAY_NAME,
-            status = STATUS_HEALTHY,
-            config = request.config,
-            collectMetrics = true,
-            collectInventory = true,
-            collectCost = true,
-            collectLogs = false,
-            externalId = EXTERNAL_ID,
-            lastSyncAt = TIMESTAMP,
-            lastError = null,
-            createdAt = TIMESTAMP,
-            updatedAt = TIMESTAMP
-        )
+        coEvery {
+            cloudSourceService.createSource(ORGANIZATION_ID, USER_ID, request)
+        } returns sourceResponse(request.config)
 
         application {
             installJwtAuth()
@@ -190,4 +198,104 @@ class CloudSourceRoutesTest {
         assertEquals(HttpStatusCode.Created, response.status)
         assertTrue(response.bodyAsText().contains(DISPLAY_NAME))
     }
+
+    @Test
+    fun `create source maps connector errors to service unavailable`() = testApplication {
+        coEvery {
+            cloudSourceService.createSource(any(), any(), any())
+        } throws CloudSourceConnectorUnavailableException("Cloud connector is missing CLOUD_AWS_PRINCIPAL_ARN")
+
+        application {
+            installJwtAuth()
+            installErrorHandling()
+            routing { cloudSourceRoutes(cloudSourceService) }
+        }
+
+        val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
+        val response = client.post("/v1/cloud-sources") {
+            withAuth(token)
+            contentType(ContentType.Application.Json)
+            setBody(sourceBody())
+        }
+
+        assertEquals(HttpStatusCode.ServiceUnavailable, response.status)
+        assertTrue(response.bodyAsText().contains("CLOUD_AWS_PRINCIPAL_ARN"))
+    }
+
+    // ──── Sync and delete ────
+
+    @Test
+    fun `sync source validates id and returns refreshed source`() = testApplication {
+        coEvery { cloudSourceService.syncSource(ORGANIZATION_ID, SOURCE_ID) } returns sourceResponse()
+
+        application {
+            installJwtAuth()
+            installErrorHandling()
+            routing { cloudSourceRoutes(cloudSourceService) }
+        }
+
+        val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
+        val response = client.post("/v1/cloud-sources/$SOURCE_ID/sync") { withAuth(token) }
+        val invalid = client.post("/v1/cloud-sources/not-a-number/sync") { withAuth(token) }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains(EXTERNAL_ID))
+        assertEquals(HttpStatusCode.BadRequest, invalid.status)
+    }
+
+    @Test
+    fun `delete source returns no content or not found`() = testApplication {
+        coEvery { cloudSourceService.deleteSource(ORGANIZATION_ID, SOURCE_ID) } returns true
+        coEvery { cloudSourceService.deleteSource(ORGANIZATION_ID, SOURCE_ID + 1) } returns false
+
+        application {
+            installJwtAuth()
+            installErrorHandling()
+            routing { cloudSourceRoutes(cloudSourceService) }
+        }
+
+        val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
+        val deleted = client.delete("/v1/cloud-sources/$SOURCE_ID") { withAuth(token) }
+        val missing = client.delete("/v1/cloud-sources/${SOURCE_ID + 1}") { withAuth(token) }
+
+        assertEquals(HttpStatusCode.NoContent, deleted.status)
+        assertEquals(HttpStatusCode.NotFound, missing.status)
+        assertTrue(missing.bodyAsText().contains("Cloud source not found"))
+    }
+
+    private fun sourceResponse(
+        config: CloudSourceProviderConfig = CloudSourceProviderConfig(
+            accountId = AWS_ACCOUNT_ID,
+            roleName = AWS_ROLE_NAME,
+        ),
+    ): CloudSourceResponse =
+        CloudSourceResponse(
+            id = SOURCE_ID,
+            provider = PROVIDER_AWS,
+            displayName = DISPLAY_NAME,
+            status = STATUS_HEALTHY,
+            config = config,
+            collectMetrics = true,
+            collectInventory = true,
+            collectCost = true,
+            collectLogs = false,
+            externalId = EXTERNAL_ID,
+            lastSyncAt = TIMESTAMP,
+            lastError = null,
+            createdAt = TIMESTAMP,
+            updatedAt = TIMESTAMP
+        )
+
+    private fun sourceBody(): String =
+        """
+        {
+          "provider": "$PROVIDER_AWS",
+          "displayName": "$DISPLAY_NAME",
+          "config": {"accountId": "$AWS_ACCOUNT_ID", "roleName": "$AWS_ROLE_NAME"},
+          "collectMetrics": true,
+          "collectInventory": true,
+          "collectCost": true,
+          "collectLogs": false
+        }
+        """.trimIndent()
 }

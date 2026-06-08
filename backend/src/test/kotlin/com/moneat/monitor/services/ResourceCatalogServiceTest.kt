@@ -195,6 +195,84 @@ class ResourceCatalogServiceTest {
         )
     }
 
+    @Test
+    fun `maps kubernetes pods and network devices into catalog resources`() = runBlocking {
+        val monitorService = mockk<MonitorService>()
+        every { monitorService.listHosts(ORGANIZATION_ID) } returns emptyList()
+        val queryClient = StubResourceCatalogQueryClient(
+            podRows = listOf(
+                jsonObject(
+                    """
+                    {
+                      "organization_id": "$ORGANIZATION_ID",
+                      "id": "pod-uid-1",
+                      "namespace": "checkout",
+                      "name": "checkout-api-7f9d",
+                      "cluster_name": "prod-us-east",
+                      "status": "Pending",
+                      "tags": {"env": "prod", "cloud.provider": "aws"},
+                      "labels": {"app": "checkout"},
+                      "first_seen": "$FIRST_SEEN",
+                      "last_seen": "$LAST_SEEN"
+                    }
+                    """
+                )
+            ),
+            networkDeviceRows = listOf(
+                jsonObject(
+                    """
+                    {
+                      "organization_id": "$ORGANIZATION_ID",
+                      "id": "switch-1",
+                      "hostname": "edge-switch-01",
+                      "ip_address": "10.0.0.4",
+                      "vendor": "Arista",
+                      "model": "7050",
+                      "os_version": "4.30",
+                      "device_type": "switch",
+                      "status": "up",
+                      "reachability": "unreachable",
+                      "tags": {"env": "dev"},
+                      "last_seen": "$LAST_SEEN"
+                    }
+                    """
+                )
+            )
+        )
+
+        val service = ResourceCatalogService(monitorService = monitorService, queryClient = queryClient)
+
+        val resources = service.listResources(listOf(ORGANIZATION_ID))
+
+        val pod = resources.first { it.kind == "pod" }
+        assertEquals("pod:7:pod-uid-1", pod.id)
+        assertEquals("warn", pod.health)
+        assertEquals("prod", pod.environment)
+        assertEquals("aws", pod.cloud)
+        assertTrue(pod.tags.contains("label:app:checkout"))
+        assertTrue(pod.metadata.any { it.label == "Cluster" && it.value == "prod-us-east" })
+
+        val networkDevice = resources.first { it.kind == "network-device" }
+        assertEquals("network:7:switch-1", networkDevice.id)
+        assertEquals("edge-switch-01", networkDevice.name)
+        assertEquals("critical", networkDevice.health)
+        assertEquals("dev", networkDevice.environment)
+        assertTrue(networkDevice.metadata.any { it.label == "Vendor" && it.value == "Arista" })
+    }
+
+    @Test
+    fun `returns no resources for empty organization context and clamps result limit`() = runBlocking {
+        val monitorService = mockk<MonitorService>()
+        every { monitorService.listHosts(ORGANIZATION_ID) } returns emptyList()
+        val queryClient = StubResourceCatalogQueryClient(
+            serviceRows = listOf(serviceRow(ORGANIZATION_ID), serviceRow(OTHER_ORGANIZATION_ID))
+        )
+        val service = ResourceCatalogService(monitorService = monitorService, queryClient = queryClient)
+
+        assertTrue(service.listResources(emptyList()).isEmpty())
+        assertEquals(1, service.listResources(listOf(ORGANIZATION_ID), limit = 1).size)
+    }
+
     // ──── Cloud resources ────
 
     @Test
