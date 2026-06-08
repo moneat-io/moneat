@@ -173,3 +173,50 @@ export interface AlertLifecycleListParams {
   status?: string
   limit?: number
 }
+
+export type CloudSourceProvider = 'aws' | 'gcp' | 'azure'
+
+export interface CloudSourceProviderConfig {
+  accountId?: string | null
+  roleName?: string | null
+  projectId?: string | null
+  tenantId?: string | null
+  subscriptionId?: string | null
+  billingExportTable?: string | null
+}
+
+export interface CloudSourceCreateRequest {
+  provider: CloudSourceProvider
+  displayName: string
+  config: CloudSourceProviderConfig
+  collectMetrics: boolean
+  collectInventory: boolean
+  collectCost: boolean
+  collectLogs: boolean
+}
+
+export interface CloudSourceResponse {
+  id: number
+  provider: CloudSourceProvider
+  displayName: string
+  status: string
+  config: CloudSourceProviderConfig
+  collectMetrics: boolean
+  collectInventory: boolean
+  collectCost: boolean
+  collectLogs: boolean
+  externalId: string
+  lastSyncAt: string | null
+  lastError: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CloudSourceSetupPreview {
+  provider: CloudSourceProvider
+  externalId: string
+  principal: string
+  snippetLabel: string
+  snippetLanguage: string
+  snippet: string
+}

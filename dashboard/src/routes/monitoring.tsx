@@ -20,11 +20,10 @@ import {api} from '@/lib/api'
 import {useEnterpriseFeatures, hasEnterpriseModule} from '@/hooks/useEnterpriseFeatures'
 import {
     ArrowLeft,
-    Box,
+    Boxes,
     Bug,
     CalendarClock,
     Database,
-    HardDrive,
     HelpCircle,
     MoreHorizontal,
     Network,
@@ -250,6 +249,7 @@ export const Route = createFileRoute('/monitoring')({
 })
 
 const TAB_DOCS_URLS: Record<string, string> = {
+  catalog: '/docs/infrastructure-monitoring',
   hosts: '/docs/datadog-agent/agent-setup',
   map: '/docs/infrastructure-monitoring',
   containers: '/docs/datadog-agent/agent-setup',
@@ -265,9 +265,8 @@ const TAB_DOCS_URLS: Record<string, string> = {
 }
 
 const allTabs: MonitoringTab[] = [
-  {id: 'hosts', label: 'Hosts', href: '/monitoring', icon: HardDrive},
+  {id: 'catalog', label: 'Catalog', href: '/monitoring', icon: Boxes},
   {id: 'map', label: 'Map', href: '/monitoring/map', icon: MapIcon},
-  {id: 'containers', label: 'Containers', href: '/monitoring/containers', icon: Box},
   {id: 'processes', label: 'Processes', href: '/monitoring/processes', icon: Terminal, requiresDatadog: true},
   {id: 'network', label: 'Network', href: '/monitoring/network', icon: Network, requiresDatadog: true},
   {id: 'events', label: 'Events', href: '/monitoring/events', icon: CalendarClock, requiresDatadog: true},
@@ -308,7 +307,7 @@ function MonitoringLayout() {
             <Button variant="ghost" size="sm" asChild className="gap-2 text-muted-foreground hover:text-foreground">
               <Link to="/monitoring">
                 <ArrowLeft className="h-4 w-4" />
-                Back to Monitoring
+                Back to Infrastructure
               </Link>
             </Button>
           </div>
@@ -328,7 +327,7 @@ function MonitoringLayout() {
   return (
     <div>
       <div className="border-b bg-card/50">
-        <div className="flex h-10 items-end gap-2 px-4">
+        <div className="flex h-[42px] items-end gap-2 px-4">
           <MonitoringTabNav tabs={tabs} currentPath={currentPath} />
           <div className="flex shrink-0 items-center gap-2 self-center">
             {docsUrl ? (

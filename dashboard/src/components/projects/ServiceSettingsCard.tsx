@@ -26,8 +26,11 @@ import {
   Layers,
   Loader2,
   Monitor,
+  RadioTower,
   Save,
   Server,
+  ServerCog,
+  Settings2,
   Smartphone,
   Trash2,
 } from 'lucide-react'
@@ -37,7 +40,7 @@ import {APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
 import {getPlatformInfo, platforms, type PlatformType} from '@/routes/projects'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
-import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
+import {SectionCard} from '@/components/ui/section-card'
 import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle} from '@/components/ui/dialog'
 import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
@@ -222,256 +225,262 @@ export function ServiceSettingsCard({serviceId, sourceIds, onDeleted}: ServiceSe
   }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
-          <div className="space-y-1.5">
-            <CardTitle>General</CardTitle>
-            <CardDescription>Update your service name and platform.</CardDescription>
-          </div>
+    <div className="space-y-3">
+      <SectionCard
+        title="General"
+        icon={Settings2}
+        bodyClassName="space-y-4"
+        actions={
           <Button
+            size="sm"
+            className="h-7 gap-1.5 text-xs"
             onClick={handleSave}
             disabled={!trimmedName || (!nameChanged && !frameworkChanged) || updateServiceMutation.isPending}
           >
-            {updateServiceMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {updateServiceMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Save className="h-3.5 w-3.5" />
+            )}
             Save Changes
           </Button>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="service-name">Service name</Label>
-            <Input
-              id="service-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Checkout API"
-            />
-          </div>
+        }
+      >
+        <div className="space-y-1.5">
+          <Label htmlFor="service-name" className="text-xs">
+            Service name
+          </Label>
+          <Input
+            id="service-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Checkout API"
+            className="h-8"
+          />
+        </div>
 
-          {hasSentry && (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="service-slug">Service slug</Label>
-                <div className="flex gap-2">
-                  <Input id="service-slug" value={project.slug} readOnly className="bg-muted" />
-                  <Button type="button" variant="outline" size="icon" onClick={copySlug}>
-                    {copiedSlug ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">Used for Sentry CLI and API endpoints</p>
+        {hasSentry && (
+          <>
+            <div className="space-y-1.5">
+              <Label htmlFor="service-slug" className="text-xs">
+                Service slug
+              </Label>
+              <div className="flex gap-2">
+                <Input id="service-slug" value={project.slug} readOnly className="h-8 bg-muted" />
+                <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={copySlug}>
+                  {copiedSlug ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                </Button>
               </div>
-
-              {sentryCliConfig && (
-                <div className="space-y-2">
-                  <Label>Sentry CLI Configuration</Label>
-                  <div className="relative">
-                    <pre className="bg-muted rounded-lg p-4 text-xs overflow-x-auto pr-12">
-                      <code>{sentryCliConfig}</code>
-                    </pre>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="absolute top-2 right-2"
-                      onClick={copyConfig}
-                    >
-                      {copiedConfig ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Use this in your sentry.properties file or with sentry-cli commands
-                  </p>
-                </div>
-              )}
-            </>
-          )}
-
-          <div className="space-y-3">
-            <div>
-              <Label className="text-base">Platform / Framework</Label>
-              <p className="text-sm text-muted-foreground mt-1">
-                Changing platform does not rotate or invalidate existing DSNs.
-              </p>
+              <p className="text-[11px] text-muted-foreground">Used for Sentry CLI and API endpoints</p>
             </div>
 
-            <div className="flex flex-wrap gap-1">
-              {platformFilterTabs.map((tab) => {
-                const Icon = tab.icon
-                return (
+            {sentryCliConfig && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Sentry CLI Configuration</Label>
+                <div className="relative">
+                  <pre className="overflow-x-auto rounded-md bg-muted p-3 pr-12 text-xs">
+                    <code>{sentryCliConfig}</code>
+                  </pre>
                   <Button
-                    key={tab.id}
-                    variant={platformFilter === tab.id ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setPlatformFilter(tab.id)}
-                    className="gap-2"
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1.5 top-1.5 h-7 w-7"
+                    onClick={copyConfig}
                   >
-                    <Icon className="h-4 w-4" />
-                    {tab.label}
+                    {copiedConfig ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                   </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Use this in your sentry.properties file or with sentry-cli commands
+                </p>
+              </div>
+            )}
+          </>
+        )}
+
+        <div className="space-y-2">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Platform / Framework</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Changing platform does not rotate or invalidate existing DSNs.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-1">
+            {platformFilterTabs.map((tab) => {
+              const Icon = tab.icon
+              return (
+                <Button
+                  key={tab.id}
+                  variant={platformFilter === tab.id ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setPlatformFilter(tab.id)}
+                  className="h-7 gap-1.5 text-xs"
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {tab.label}
+                </Button>
+              )
+            })}
+          </div>
+
+          <div className="max-h-64 overflow-y-auto rounded-md border border-border p-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+              {filteredPlatforms.map((platform) => {
+                const Icon = platform.icon
+                return (
+                  <button
+                    key={platform.id}
+                    type="button"
+                    onClick={() => setFramework(platform.id)}
+                    className={cn(
+                      'rounded-md border p-2 text-left transition-colors',
+                      framework === platform.id
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border hover:border-primary/50'
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded"
+                        style={{backgroundColor: platform.color}}
+                      >
+                        <Icon className="h-3 w-3 text-white" />
+                      </div>
+                      <span className="text-xs font-medium">{platform.name}</span>
+                    </div>
+                    <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{platform.description}</p>
+                  </button>
                 )
               })}
             </div>
-
-            <div className="max-h-96 overflow-y-auto rounded-lg border border-border p-2 pr-1">
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                {filteredPlatforms.map((platform) => {
-                  const Icon = platform.icon
-                  return (
-                    <button
-                      key={platform.id}
-                      type="button"
-                      onClick={() => setFramework(platform.id)}
-                      className={cn(
-                        'border-2 rounded-lg p-3 text-left transition-colors',
-                        framework === platform.id
-                          ? 'border-primary bg-primary/10'
-                          : 'border-border hover:border-primary/50'
-                      )}
-                    >
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
-                          style={{backgroundColor: platform.color}}
-                        >
-                          <Icon className="h-4 w-4 text-white" />
-                        </div>
-                        <span className="text-sm font-medium">{platform.name}</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-2">{platform.description}</p>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
           </div>
+        </div>
 
-          {hasSentry && isMultiplatformFramework && (
-            <div className="space-y-3">
-              <div>
-                <Label className="text-base">Target Platforms</Label>
-                <p className="text-sm text-muted-foreground mt-1">Multiplatform frameworks use one DSN per target.</p>
-              </div>
-
-              {frameworkChanged ? (
-                <div className="rounded-lg border border-dashed border-border p-3 text-sm text-muted-foreground">
-                  Save framework changes first, then add target platforms here.
-                </div>
-              ) : (
-                <>
-                  <div className="flex flex-wrap gap-2">
-                    {currentTargets.length > 0 ? (
-                      currentTargets.map((target) => {
-                        const targetInfo = getPlatformInfo(target)
-                        const TargetIcon = targetInfo?.icon
-                        return (
-                          <Badge key={target} variant="secondary" className="flex items-center gap-1.5 px-2.5 py-1">
-                            {TargetIcon && (
-                              <div
-                                className="w-4 h-4 rounded flex items-center justify-center"
-                                style={{backgroundColor: targetInfo?.color}}
-                              >
-                                <TargetIcon className="w-3 h-3 text-white" />
-                              </div>
-                            )}
-                            <span>{targetInfo?.name ?? target}</span>
-                          </Badge>
-                        )
-                      })
-                    ) : (
-                      <p className="text-sm text-muted-foreground">No targets added yet.</p>
-                    )}
-                  </div>
-
-                  {availableTargets.length > 0 && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                      {availableTargets.map((target) => {
-                        const targetInfo = getPlatformInfo(target.id)
-                        const TargetIcon = targetInfo?.icon
-                        return (
-                          <Button
-                            key={target.id}
-                            type="button"
-                            variant="outline"
-                            className="justify-start h-auto py-2.5"
-                            onClick={() => addTargetMutation.mutate(target.id)}
-                            disabled={addTargetMutation.isPending}
-                          >
-                            {TargetIcon && (
-                              <div
-                                className="w-5 h-5 rounded flex items-center justify-center"
-                                style={{backgroundColor: targetInfo?.color}}
-                              >
-                                <TargetIcon className="w-3.5 h-3.5 text-white" />
-                              </div>
-                            )}
-                            <span>Add {target.name}</span>
-                          </Button>
-                        )
-                      })}
-                    </div>
-                  )}
-                </>
-              )}
+        {hasSentry && isMultiplatformFramework && (
+          <div className="space-y-2">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Target Platforms</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Multiplatform frameworks use one DSN per target.
+              </p>
             </div>
-          )}
-        </CardContent>
-      </Card>
+
+            {frameworkChanged ? (
+              <div className="rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
+                Save framework changes first, then add target platforms here.
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  {currentTargets.length > 0 ? (
+                    currentTargets.map((target) => {
+                      const targetInfo = getPlatformInfo(target)
+                      const TargetIcon = targetInfo?.icon
+                      return (
+                        <Badge key={target} variant="secondary" className="flex items-center gap-1.5 px-2 py-0.5">
+                          {TargetIcon && (
+                            <div
+                              className="flex h-4 w-4 items-center justify-center rounded"
+                              style={{backgroundColor: targetInfo?.color}}
+                            >
+                              <TargetIcon className="h-3 w-3 text-white" />
+                            </div>
+                          )}
+                          <span>{targetInfo?.name ?? target}</span>
+                        </Badge>
+                      )
+                    })
+                  ) : (
+                    <p className="text-xs text-muted-foreground">No targets added yet.</p>
+                  )}
+                </div>
+
+                {availableTargets.length > 0 && (
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
+                    {availableTargets.map((target) => {
+                      const targetInfo = getPlatformInfo(target.id)
+                      const TargetIcon = targetInfo?.icon
+                      return (
+                        <Button
+                          key={target.id}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-auto justify-start gap-2 py-2"
+                          onClick={() => addTargetMutation.mutate(target.id)}
+                          disabled={addTargetMutation.isPending}
+                        >
+                          {TargetIcon && (
+                            <div
+                              className="flex h-4 w-4 items-center justify-center rounded"
+                              style={{backgroundColor: targetInfo?.color}}
+                            >
+                              <TargetIcon className="h-3 w-3 text-white" />
+                            </div>
+                          )}
+                          <span>Add {target.name}</span>
+                        </Button>
+                      )
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </SectionCard>
 
       {hasOtel && (
-        <Card>
-          <CardHeader>
-            <CardTitle>OpenTelemetry</CardTitle>
-            <CardDescription>
-              Send telemetry with the resource attribute <code className="font-mono text-xs">service.name</code> set to
-              this service.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link to="/projects/$projectId" params={{projectId: serviceId}}>
-              <Button variant="outline" size="sm">
-                <ExternalLink className="h-4 w-4" />
-                View ingestion setup
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+        <SectionCard title="OpenTelemetry" icon={RadioTower} bodyClassName="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Send telemetry with the resource attribute <code className="font-mono text-[11px]">service.name</code> set
+            to this service.
+          </p>
+          <Link to="/projects/$projectId" params={{projectId: serviceId}}>
+            <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
+              <ExternalLink className="h-3.5 w-3.5" />
+              View ingestion setup
+            </Button>
+          </Link>
+        </SectionCard>
       )}
 
       {hasDatadog && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Datadog Agent</CardTitle>
-            <CardDescription>Point a compatible agent at Moneat and tag it with this service.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link to="/projects/$projectId" params={{projectId: serviceId}}>
-              <Button variant="outline" size="sm">
-                <ExternalLink className="h-4 w-4" />
-                View ingestion setup
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+        <SectionCard title="Datadog Agent" icon={ServerCog} bodyClassName="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Point a compatible agent at Moneat and tag it with this service.
+          </p>
+          <Link to="/projects/$projectId" params={{projectId: serviceId}}>
+            <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
+              <ExternalLink className="h-3.5 w-3.5" />
+              View ingestion setup
+            </Button>
+          </Link>
+        </SectionCard>
       )}
 
-      <Card className="border-destructive/40">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-destructive">
-            <AlertTriangle className="h-5 w-5" />
-            Danger Zone
-          </CardTitle>
-          <CardDescription>Delete this service and all related data permanently.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <p className="text-sm text-muted-foreground">
-            This action cannot be undone. Events, issues, releases, and DSNs for this service will be removed.
-          </p>
-          <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
-            <Trash2 className="h-4 w-4" />
-            Delete Service
-          </Button>
-        </CardContent>
-      </Card>
+      <SectionCard
+        title="Danger Zone"
+        icon={AlertTriangle}
+        iconTone="danger"
+        className="border-destructive/40"
+        bodyClassName="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <p className="text-xs text-muted-foreground">
+          This action cannot be undone. Events, issues, releases, and DSNs for this service will be removed.
+        </p>
+        <Button
+          variant="destructive"
+          size="sm"
+          className="h-7 shrink-0 gap-1.5 text-xs"
+          onClick={() => setDeleteDialogOpen(true)}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Delete Service
+        </Button>
+      </SectionCard>
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
