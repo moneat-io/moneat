@@ -433,7 +433,7 @@ function IndexPage() {
   )
 
   return (
-    <div className="h-[calc(100vh-var(--header-height,0px))] overflow-hidden">
+    <div className="h-[calc(100vh-var(--app-header-h,0px))] overflow-hidden">
       {activeTab === 'issues' ? (
         <DashboardPage tabs={viewTabs} />
       ) : (
@@ -525,11 +525,11 @@ function DashboardPage({tabs}: DashboardPageProps) {
 
   const handleToggleIssue = (issue: SafeIssue) => {
     const key = issueSelectionKey(issue)
-    setSelectedIssueKeys(toggledSelection(selectedIssueKeys, key))
+    setSelectedIssueKeys((prev) => toggledSelection(prev, key))
   }
 
   const handleToggleAll = () => {
-    setSelectedIssueKeys(toggledPageSelection(selectedIssueKeys, pagedIssues))
+    setSelectedIssueKeys((prev) => toggledPageSelection(prev, pagedIssues))
   }
 
   const handleResolveSelected = () => {
