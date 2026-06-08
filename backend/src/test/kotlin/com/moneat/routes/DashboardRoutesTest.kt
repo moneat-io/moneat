@@ -17,6 +17,7 @@
 package com.moneat.routes
 
 import com.moneat.dashboards.models.CustomDataSourceResponse
+import com.moneat.dashboards.models.CreateDashboardRequest
 import com.moneat.dashboards.models.DashboardAlertResponse
 import com.moneat.dashboards.models.DashboardResponse
 import com.moneat.dashboards.models.FolderResponse
@@ -60,6 +61,7 @@ import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
@@ -938,6 +940,75 @@ class DashboardRoutesTest {
                     withAuth(token(userId, orgId))
                 }
             assertEquals(HttpStatusCode.OK, r.status)
+        }
+
+    @Test
+    fun `GET dashboard template detail returns 200`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            application { installRoutes(this) }
+
+            val r =
+                client.get("/v1/dashboards/templates/001-1860-node-exporter-full") {
+                    withAuth(token(userId, orgId))
+                }
+            assertEquals(HttpStatusCode.OK, r.status)
+            assertTrue(r.bodyAsText().contains("Node Exporter Full"))
+        }
+
+    @Test
+    fun `GET dashboard template detail returns 404 when missing`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            application { installRoutes(this) }
+
+            val r =
+                client.get("/v1/dashboards/templates/does-not-exist") {
+                    withAuth(token(userId, orgId))
+                }
+            assertEquals(HttpStatusCode.NotFound, r.status)
+        }
+
+    @Test
+    fun `POST dashboard template creates dashboard with overrides`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val dash = makeDashboard(orgId = orgId.toLong())
+            val requestSlot = slot<CreateDashboardRequest>()
+            every {
+                mockDashboardService.createDashboard(
+                    orgId.toLong(), userId.toLong(), capture(requestSlot)
+                )
+            } returns dash
+            application { installRoutes(this) }
+
+            val r =
+                client.post("/v1/dashboards/templates/001-1860-node-exporter-full") {
+                    withAuth(token(userId, orgId))
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"project_id":77,"folder_id":88}""")
+                }
+
+            assertEquals(HttpStatusCode.Created, r.status)
+            assertEquals(77L, requestSlot.captured.projectId)
+            assertEquals(88L, requestSlot.captured.folderId)
+            assertEquals("Node Exporter Full", requestSlot.captured.title)
+            assertTrue(requestSlot.captured.widgets.isNotEmpty())
+        }
+
+    @Test
+    fun `POST dashboard template returns 400 for malformed payload`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            application { installRoutes(this) }
+
+            val r =
+                client.post("/v1/dashboards/templates/001-1860-node-exporter-full") {
+                    withAuth(token(userId, orgId))
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"project_id":""")
+                }
+            assertEquals(HttpStatusCode.BadRequest, r.status)
         }
 
     // ──── Search ────

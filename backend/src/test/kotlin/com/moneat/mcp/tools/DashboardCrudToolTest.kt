@@ -172,6 +172,22 @@ class DashboardCrudToolTest {
     // ──── Tests ────
 
     @Test
+    fun `get dashboard templates returns generated catalog`() = runBlocking {
+        val result = GetDashboardTemplatesTool().execute(JsonObject(emptyMap()), context)
+
+        assertFalse(result.isError, result.content.first().text.orEmpty())
+        val templates = json.parseToJsonElement(result.content.first().text.orEmpty()).jsonArray
+        assertTrue(templates.size >= 100)
+        assertTrue(
+            templates.any {
+                val template = it.jsonObject
+                template["id"]?.jsonPrimitive?.content == "001-1860-node-exporter-full" &&
+                    template["title"]?.jsonPrimitive?.content == "Node Exporter Full"
+            }
+        )
+    }
+
+    @Test
     fun `create dashboard alert accepts MCP condition and priority aliases`() = runBlocking {
         val dashboardId = seedDashboard()
         val widgetId = seedWidget(dashboardId)
