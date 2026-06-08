@@ -18,6 +18,7 @@ package com.moneat.routes
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.moneat.events.models.AlertNotificationPreference
 import com.moneat.events.models.FeedbackDetailResponse
 import com.moneat.events.models.FeedbackListItem
 import com.moneat.events.models.ProjectKeyResponse
@@ -1178,6 +1179,37 @@ class EventRoutesExtendedTest {
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("preferences"))
+    }
+
+    @Test
+    fun `PUT alert-notification-preferences uses JWT org`() = testApplication {
+        val seeded = seedUserProject()
+        every {
+            mockAlertPrefsService.updatePreference(
+                userId = seeded.userId,
+                organizationId = seeded.orgId,
+                alertSource = "uptime",
+                emailEnabled = false,
+                slackEnabled = true,
+                discordEnabled = false
+            )
+        } returns AlertNotificationPreference(
+            alertSource = "uptime",
+            emailEnabled = false,
+            slackEnabled = true,
+            discordEnabled = false
+        )
+
+        application { installTestApp() }
+        val response =
+            client.put("/v1/alert-notification-preferences/uptime") {
+                withAuth(token(seeded.userId, seeded.orgId))
+                contentType(ContentType.Application.Json)
+                setBody("""{"emailEnabled":false,"slackEnabled":true,"discordEnabled":false}""")
+            }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("uptime"))
     }
 
     // ──── Demo user access ────

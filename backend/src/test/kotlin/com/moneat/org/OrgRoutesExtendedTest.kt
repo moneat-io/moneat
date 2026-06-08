@@ -88,6 +88,42 @@ class OrgRoutesExtendedTest {
         assertEquals(HttpStatusCode.OK, resp.status)
     }
 
+    @Test
+    fun `org routes return 401 when jwt has no current org claim`() = testApplication {
+        installRoutes()()
+        val token = RouteTestSupport.createToken(userId = 1, orgId = null)
+
+        assertEquals(HttpStatusCode.Unauthorized, client.get("/v1/org/members") { withAuth(token) }.status)
+
+        val roleResponse =
+            client.put("/v1/org/members/2/role") {
+                withAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody("""{"role":"admin"}""")
+            }
+        assertEquals(HttpStatusCode.Unauthorized, roleResponse.status)
+
+        assertEquals(HttpStatusCode.Unauthorized, client.delete("/v1/org/members/2") { withAuth(token) }.status)
+
+        val inviteResponse =
+            client.post("/v1/org/invitations") {
+                withAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody("""{"email":"test@example.com","role":"member"}""")
+            }
+        assertEquals(HttpStatusCode.Unauthorized, inviteResponse.status)
+
+        val bulkInviteResponse =
+            client.post("/v1/org/invitations/bulk") {
+                withAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody("""{"emails":["a@test.com"],"role":"member"}""")
+            }
+        assertEquals(HttpStatusCode.Unauthorized, bulkInviteResponse.status)
+
+        assertEquals(HttpStatusCode.Unauthorized, client.get("/v1/org/invitations") { withAuth(token) }.status)
+    }
+
     // ──── PUT /v1/org/members/{userId}/role ────
 
     @Test

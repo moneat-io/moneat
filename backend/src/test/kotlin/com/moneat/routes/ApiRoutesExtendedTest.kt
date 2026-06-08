@@ -279,6 +279,47 @@ class ApiRoutesExtendedTest {
     }
 
     @Test
+    fun `PUT user sidebar-preferences uses JWT org membership`() = testApplication {
+        val (userId, orgId) =
+            transaction {
+                val insertedUserId =
+                    Users.insert {
+                        it[email] = "sidebar-scope@test.com"
+                        it[password_hash] = "hash"
+                        it[email_verified] = true
+                    } get Users.id
+                val insertedOrgId =
+                    Organizations.insert {
+                        it[name] = "Sidebar Org"
+                        it[slug] = "sidebar-org"
+                    } get Organizations.id
+                Memberships.insert {
+                    it[user_id] = insertedUserId
+                    it[organization_id] = insertedOrgId
+                    it[role] = "owner"
+                }
+                insertedUserId to insertedOrgId
+            }
+
+        application {
+            installJwtAuth()
+            installApiRouteRateLimits("api-routes-extended")
+            routing { apiRoutes(includePublicContactRoutes = false) }
+        }
+
+        val token = RouteTestSupport.createToken(userId = userId, orgId = orgId)
+        val response =
+            client.put("/v1/user/sidebar-preferences") {
+                withAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody("""{"hiddenItems":[]}""")
+            }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("hiddenItems"))
+    }
+
+    @Test
     fun `GET projects requires auth`() = testApplication {
         application {
             installJwtAuth()
