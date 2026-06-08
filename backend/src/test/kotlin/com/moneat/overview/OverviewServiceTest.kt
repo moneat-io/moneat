@@ -17,6 +17,7 @@
 package com.moneat.overview
 
 import com.moneat.alerts.models.AlertEpisodes
+import com.moneat.config.ClickHouseClient
 import com.moneat.overview.services.OverviewService
 import com.moneat.shared.models.HostAlerts
 import com.moneat.shared.models.Hosts
@@ -27,6 +28,10 @@ import com.moneat.shared.models.Users
 import com.moneat.statuspage.models.StatusPages
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.uptime.models.UptimeMonitors
+import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -90,6 +95,55 @@ class OverviewServiceTest {
     }
 
     @Test
+    fun `overview maps analytics rows into service health telemetry and triage`() = runBlocking {
+        val orgId = seedOverviewData()
+        stubOverviewClickHouse()
+
+        try {
+            val overview = OverviewService().getOverview(orgId, demoEpochMs = DEMO_EPOCH_MS)
+
+            assertEquals(3, overview.serviceHealth.size)
+            assertEquals(listOf("bad", "warn", "good"), overview.serviceHealth.map { service -> service.status })
+            assertEquals("prod", overview.serviceHealth.first().env)
+            assertEquals(800, overview.serviceHealth.first().p95Ms)
+            assertEquals(40, overview.serviceHealth.first().issues)
+
+            assertEquals("1.4k", overview.kpis.first { kpi -> kpi.id == "errors" }.value)
+            assertEquals("bad", overview.kpis.first { kpi -> kpi.id == "latency" }.status)
+            assertEquals("2", overview.kpis.first { kpi -> kpi.id == "throughput" }.value)
+            assertEquals("bad", overview.kpis.first { kpi -> kpi.id == "apdex" }.status)
+
+            assertEquals("Checkout failed", overview.triage.issues.first().title)
+            assertEquals("warn", overview.triage.issues.first().level)
+            assertEquals("fatal", overview.triage.issues.last().level)
+
+            assertEquals(5, overview.infra.containers)
+            assertEquals(2, overview.infra.pods)
+            assertEquals("checkout synthetic", overview.uptime.syntheticFailing)
+            assertTrue(overview.telemetry.latency.any { value -> value > 0 })
+            assertTrue(overview.telemetry.throughput.any { value -> value > 0 })
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
+    fun `overview with no relational data reports healthy empty state`() = runBlocking {
+        val orgId = seedEmptyOrganization()
+
+        val overview = OverviewService().getOverview(orgId, demoEpochMs = DEMO_EPOCH_MS)
+
+        assertEquals("Healthy", overview.systemStatus.state)
+        assertEquals("good", overview.systemStatus.severity)
+        assertEquals("0/0 up", overview.infra.upLabel)
+        assertEquals(null, overview.infra.offlineNode)
+        assertEquals("No deploys", overview.telemetry.deployLabel)
+        assertEquals(0, overview.telemetry.deployAtPct)
+        assertEquals("0/0 up", overview.uptime.upLabel)
+        assertTrue(overview.activity.isEmpty())
+    }
+
+    @Test
     fun `trace summary subquery reads finalized and live trace rollups`() {
         val query = OverviewService().traceSummarySubquery(
             organizationId = -1,
@@ -123,7 +177,29 @@ class OverviewServiceTest {
     private companion object {
         private const val DEMO_EPOCH_MS = 1_709_312_400_000L
         private const val ORGANIZATION_ID = 101
+        private const val EMPTY_ORGANIZATION_ID = 202
         private const val HOUR_MILLIS = 3_600_000L
+        private const val TRACE_CURRENT_ROW =
+            """{"currentTraces":2880,"currentErrors":40,"p95Ms":800,"satisfied":1000,"tolerated":2000}"""
+        private const val TRACE_PREVIOUS_ROW =
+            """{"previousTraces":1440,"previousP95Ms":350,"previousSatisfied":1300,"previousTolerated":1440}"""
+        private const val EVENT_COUNT_ROW = """{"currentErrors":1200,"previousErrors":600}"""
+        private const val ISSUE_COUNT_ROW = """{"openIssues":3,"newIssues":1}"""
+        private const val LOG_COUNT_ROW = """{"currentErrors":200,"previousErrors":100}"""
+        private const val CONTAINER_COUNT_ROW = """{"containers":5,"pods":2}"""
+        private const val SYNTHETIC_FAILING_ROW = """{"name":"checkout synthetic"}"""
+        private val SERVICE_ROWS = listOf(
+            """{"service":"checkout-api","env":"","traces":1440,"errors":40,"p95Ms":800,""" +
+                """"satisfied":200,"tolerated":400}""",
+            """{"service":"search-api","env":"staging","traces":1440,"errors":15,"p95Ms":450,""" +
+                """"satisfied":1300,"tolerated":1400}""",
+            """{"service":"worker","env":"prod","traces":1440,"errors":0,"p95Ms":100,""" +
+                """"satisfied":1440,"tolerated":1440}""",
+        ).joinToString("\n")
+        private val ISSUE_ROWS = listOf(
+            """{"title":"Checkout failed","level":"warning","eventCount":7,"ageSeconds":120}""",
+            """{"title":"Worker crash","level":"fatal","eventCount":2,"ageSeconds":3600}""",
+        ).joinToString("\n")
     }
 
     private fun seedOverviewData(): Int {
@@ -214,6 +290,34 @@ class OverviewServiceTest {
         return ORGANIZATION_ID
     }
 
+    private fun seedEmptyOrganization(): Int {
+        Database.connect(
+            url = "jdbc:h2:mem:overview_empty_${System.nanoTime()};DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+            driver = "org.h2.Driver",
+        ).also { database -> TransactionManager.defaultDatabase = database }
+
+        TestDatabaseHelper.resetSchema(
+            Users,
+            Organizations,
+            Projects,
+            Hosts,
+            HostAlerts,
+            Releases,
+            AlertEpisodes,
+            StatusPages,
+            UptimeMonitors,
+        )
+
+        transaction {
+            Organizations.insert {
+                it[id] = EMPTY_ORGANIZATION_ID
+                it[name] = "Empty Org"
+                it[slug] = "empty-org"
+            }
+        }
+        return EMPTY_ORGANIZATION_ID
+    }
+
     private fun seedMonitor(name: String, status: String) {
         UptimeMonitors.insert {
             it[id] = UUID.randomUUID()
@@ -231,4 +335,85 @@ class OverviewServiceTest {
             it[updatedAt] = Clock.System.now()
         }
     }
+
+    private fun stubOverviewClickHouse() {
+        mockkObject(ClickHouseClient)
+        every { ClickHouseClient.isInitialized() } returns true
+        every { ClickHouseClient.getDatabase() } returns "moneat_test"
+        coEvery { ClickHouseClient.execute(any()) } throws IllegalStateException(
+            "ClickHouse metrics unavailable",
+        )
+        coEvery { ClickHouseClient.execute(any(), any()) } throws IllegalStateException(
+            "ClickHouse metrics unavailable",
+        )
+        coEvery { ClickHouseClient.executeWithFormat(any(), "JSONEachRow") } coAnswers {
+            overviewClickHouseRows(firstArg())
+        }
+    }
+
+    private fun overviewClickHouseRows(query: String): String =
+        overviewQueryStubs().firstOrNull { stub -> stub.matches(query) }?.body.orEmpty()
+
+    private fun overviewQueryStubs(): List<QueryStub> =
+        listOf(
+            QueryStub({ query -> query.contains("count() AS currentTraces") }, TRACE_CURRENT_ROW),
+            QueryStub({ query -> query.contains("count() AS previousTraces") }, TRACE_PREVIOUS_ROW),
+            QueryStub({ query -> query.contains("GROUP BY root_service") }, SERVICE_ROWS),
+            QueryStub({ query -> query.contains("round(100 * countIf") }, seriesRows(80, 88)),
+            QueryStub(::isTraceLatencySeriesQuery, seriesRows(420, 800)),
+            QueryStub(::isTraceThroughputSeriesQuery, seriesRows(1, 2)),
+            QueryStub(::isEventCountQuery, EVENT_COUNT_ROW),
+            QueryStub(::isIssueCountQuery, ISSUE_COUNT_ROW),
+            QueryStub(::isIssueRowsQuery, ISSUE_ROWS),
+            QueryStub(::isEventSeriesQuery, seriesRows(4, 12)),
+            QueryStub(::isIssueSeriesQuery, seriesRows(1, 2)),
+            QueryStub(::isLogCountQuery, LOG_COUNT_ROW),
+            QueryStub(::isLogErrorSeriesQuery, seriesRows(5, 7)),
+            QueryStub(::isLogVolumeSeriesQuery, seriesRows(300, 450)),
+            QueryStub({ query -> query.contains("FROM containers_latest_by_host") }, CONTAINER_COUNT_ROW),
+            QueryStub({ query -> query.contains("FROM synthetic_results") }, SYNTHETIC_FAILING_ROW),
+        )
+
+    private fun isTraceLatencySeriesQuery(query: String): Boolean =
+        query.contains("quantileExact(0.95)(duration_ns") && query.contains("GROUP BY bucket")
+
+    private fun isTraceThroughputSeriesQuery(query: String): Boolean =
+        query.contains("count() AS value") && query.contains("FROM (")
+
+    private fun isEventCountQuery(query: String): Boolean =
+        query.contains("FROM events") && query.contains("currentErrors")
+
+    private fun isIssueCountQuery(query: String): Boolean =
+        query.contains("FROM issues FINAL") && query.contains("openIssues")
+
+    private fun isIssueRowsQuery(query: String): Boolean =
+        query.contains("FROM issues FINAL") && query.contains("eventCount")
+
+    private fun isEventSeriesQuery(query: String): Boolean =
+        query.contains("FROM events") && query.contains("GROUP BY bucket")
+
+    private fun isIssueSeriesQuery(query: String): Boolean =
+        query.contains("FROM issues FINAL") && query.contains("GROUP BY bucket")
+
+    private fun isLogCountQuery(query: String): Boolean =
+        query.contains("FROM logs") && query.contains("currentErrors")
+
+    private fun isLogErrorSeriesQuery(query: String): Boolean =
+        query.contains("FROM logs") && query.contains("countIf(level IN")
+
+    private fun isLogVolumeSeriesQuery(query: String): Boolean =
+        query.contains("FROM logs") && query.contains("count() AS value")
+
+    private fun seriesRows(first: Int, last: Int): String =
+        """
+        {"bucket":0,"value":$first}
+        {"bucket":23,"value":$last}
+        {"bucket":24,"value":999}
+        not-json
+        """.trimIndent()
+
+    private data class QueryStub(
+        val matches: (String) -> Boolean,
+        val body: String,
+    )
 }
