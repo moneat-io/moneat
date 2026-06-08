@@ -138,7 +138,7 @@ class IntegrationRoutesTest {
 
             val response =
                 client.get("/v1/integrations") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 }
 
             assertEquals(HttpStatusCode.OK, response.status)
@@ -197,7 +197,7 @@ class IntegrationRoutesTest {
 
             val response =
                 client.get("/v1/integrations/slack/oauth/start") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 }
 
             assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -227,7 +227,7 @@ class IntegrationRoutesTest {
 
             val response =
                 client.get("/v1/integrations/discord/oauth/start") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 }
 
             assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -357,12 +357,13 @@ class IntegrationRoutesTest {
         }
     }
 
-    private fun token(userId: Int): String {
+    private fun token(userId: Int, orgId: Int? = null): String {
         return JWT
             .create()
             .withIssuer("moneat")
             .withAudience("moneat-users")
             .withClaim("userId", userId)
+            .apply { if (orgId != null) withClaim("orgId", orgId) }
             .withClaim("email", "user$userId@test.com")
             .sign(Algorithm.HMAC256(jwtSecret))
     }

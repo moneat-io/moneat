@@ -118,7 +118,7 @@ class ApmServiceRoutesTest {
             routing { apmServiceDashboardRoutes() }
         }
 
-        val credential = RouteTestSupport.createToken(userId = 1)
+        val credential = RouteTestSupport.createToken(userId = 1, orgId = null)
         val response = client.get("/v1/services") {
             withAuth(credential)
         }

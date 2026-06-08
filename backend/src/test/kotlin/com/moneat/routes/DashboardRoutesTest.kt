@@ -119,8 +119,8 @@ class DashboardRoutesTest {
         installJwtAuth()
     }
 
-    private fun token(userId: Int): String =
-        RouteTestSupport.createToken(userId)
+    private fun token(userId: Int, orgId: Int? = null): String =
+        RouteTestSupport.createToken(userId, orgId)
 
     private fun seedUser(): Int = transaction {
         Users.insert {
@@ -261,7 +261,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.get(DASHBOARDS_PATH) {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(r.bodyAsText().contains(TEST_DASHBOARD))
@@ -280,7 +280,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.post(DASHBOARDS_PATH) {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"title":"New Dash"}""")
             }
@@ -299,7 +299,7 @@ class DashboardRoutesTest {
         application { installRoutes(this) }
 
         val r = client.get(DASHBOARDS_1) {
-            withAuth(token(userId))
+            withAuth(token(userId, orgId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
         assertTrue(r.bodyAsText().contains(TEST_DASHBOARD))
@@ -308,11 +308,11 @@ class DashboardRoutesTest {
     @Test
     fun `GET dashboard by invalid id returns 400`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             application { installRoutes(this) }
 
             val r = client.get("/v1/dashboards/abc") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.BadRequest, r.status)
         }
@@ -329,7 +329,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.get(DASHBOARDS_99) {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
@@ -347,7 +347,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.put(DASHBOARDS_1) {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"title":"Updated"}""")
             }
@@ -366,7 +366,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.put(DASHBOARDS_99) {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"title":"X"}""")
             }
@@ -385,7 +385,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.delete("/v1/dashboards/1") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.NoContent, r.status)
         }
@@ -402,7 +402,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.delete(DASHBOARDS_99) {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
@@ -420,7 +420,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.get("/v1/dashboards/folders") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(r.bodyAsText().contains("Test Folder"))
@@ -439,7 +439,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.post("/v1/dashboards/folders") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"New Folder"}""")
             }
@@ -459,7 +459,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.put("/v1/dashboards/folders/1") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"Renamed"}""")
             }
@@ -478,7 +478,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.put("/v1/dashboards/folders/99") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody(BODY_NAME_X)
             }
@@ -488,11 +488,11 @@ class DashboardRoutesTest {
     @Test
     fun `PUT folder returns 400 for invalid id`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             application { installRoutes(this) }
 
             val r = client.put("/v1/dashboards/folders/abc") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody(BODY_NAME_X)
             }
@@ -511,7 +511,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.delete("/v1/dashboards/folders/1") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.NoContent, r.status)
         }
@@ -528,7 +528,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.delete("/v1/dashboards/folders/99") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
@@ -546,7 +546,7 @@ class DashboardRoutesTest {
         application { installRoutes(this) }
 
         val r = client.post("/v1/dashboards/1/favorite") {
-            withAuth(token(userId))
+            withAuth(token(userId, orgId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
         assertTrue(r.bodyAsText().contains("is_favorited"))
@@ -564,7 +564,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.put("/v1/dashboards/1/folder") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"folder_id":2}""")
             }
@@ -583,7 +583,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.put("/v1/dashboards/99/folder") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"folder_id":2}""")
             }
@@ -595,11 +595,11 @@ class DashboardRoutesTest {
     @Test
     fun `POST query returns 400 for invalid dashboard id`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             application { installRoutes(this) }
 
             val r = client.post("/v1/dashboards/abc/query") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"queryConfig":{}}""")
             }
@@ -609,12 +609,12 @@ class DashboardRoutesTest {
     @Test
     fun `POST batch query returns 400 for invalid id`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             application { installRoutes(this) }
 
             val r =
                 client.post("/v1/dashboards/abc/query/batch") {
-                    withAuth(token(userId))
+                    withAuth(token(userId, orgId))
                     contentType(ContentType.Application.Json)
                     setBody("""{"queries":[]}""")
                 }
@@ -624,13 +624,13 @@ class DashboardRoutesTest {
     @Test
     fun `POST variables resolve returns 400 for invalid id`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             application { installRoutes(this) }
 
             val r = client.post(
                 "/v1/dashboards/abc/variables/resolve"
             ) {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody("{}")
             }
@@ -642,11 +642,11 @@ class DashboardRoutesTest {
     @Test
     fun `POST import returns 400 for invalid JSON`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             application { installRoutes(this) }
 
             val r = client.post("/v1/dashboards/import") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody(
                     """{"format":"datadog","json":"not-json"}"""
@@ -658,11 +658,11 @@ class DashboardRoutesTest {
     @Test
     fun `POST import returns 400 for unsupported format`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             application { installRoutes(this) }
 
             val r = client.post("/v1/dashboards/import") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody(
                     """{"format":"unknown","json":"{}"}"""
@@ -686,7 +686,7 @@ class DashboardRoutesTest {
             val r = client.get(
                 "/v1/dashboards/1/export/moneat"
             ) {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, r.status)
         }
@@ -705,7 +705,7 @@ class DashboardRoutesTest {
             val r = client.get(
                 "/v1/dashboards/99/export/moneat"
             ) {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
@@ -725,7 +725,7 @@ class DashboardRoutesTest {
             val r = client.get(
                 "/v1/dashboards/1/export/xml"
             ) {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.BadRequest, r.status)
         }
@@ -733,13 +733,13 @@ class DashboardRoutesTest {
     @Test
     fun `GET export returns 400 for invalid dashboard id`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             application { installRoutes(this) }
 
             val r = client.get(
                 "/v1/dashboards/abc/export/moneat"
             ) {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.BadRequest, r.status)
         }
@@ -757,7 +757,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.get("/v1/dashboards/1/alerts") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(r.bodyAsText().contains("Test Alert"))
@@ -781,7 +781,7 @@ class DashboardRoutesTest {
                  "duration_seconds":60}
             """.trimIndent()
             val r = client.post("/v1/dashboards/1/alerts") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody(body)
             }
@@ -802,7 +802,7 @@ class DashboardRoutesTest {
 
             val r =
                 client.put("/v1/dashboards/1/alerts/1") {
-                    withAuth(token(userId))
+                    withAuth(token(userId, orgId))
                     contentType(ContentType.Application.Json)
                     setBody("""{"enabled":false}""")
                 }
@@ -812,12 +812,12 @@ class DashboardRoutesTest {
     @Test
     fun `PUT dashboard alert returns 400 for malformed JSON`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             application { installRoutes(this) }
 
             val r =
                 client.put("/v1/dashboards/1/alerts/1") {
-                    withAuth(token(userId))
+                    withAuth(token(userId, orgId))
                     contentType(ContentType.Application.Json)
                     setBody("""{"enabled":""")
                 }
@@ -837,7 +837,7 @@ class DashboardRoutesTest {
 
             val r =
                 client.put("/v1/dashboards/1/alerts/99") {
-                    withAuth(token(userId))
+                    withAuth(token(userId, orgId))
                     contentType(ContentType.Application.Json)
                     setBody("""{"enabled":false}""")
                 }
@@ -857,7 +857,7 @@ class DashboardRoutesTest {
 
             val r =
                 client.delete("/v1/dashboards/1/alerts/1") {
-                    withAuth(token(userId))
+                    withAuth(token(userId, orgId))
                 }
             assertEquals(HttpStatusCode.NoContent, r.status)
         }
@@ -875,7 +875,7 @@ class DashboardRoutesTest {
 
             val r =
                 client.delete("/v1/dashboards/1/alerts/99") {
-                    withAuth(token(userId))
+                    withAuth(token(userId, orgId))
                 }
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
@@ -883,12 +883,12 @@ class DashboardRoutesTest {
     @Test
     fun `GET dashboard alerts returns 400 for bad id`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             application { installRoutes(this) }
 
             val r =
                 client.get("/v1/dashboards/abc/alerts") {
-                    withAuth(token(userId))
+                    withAuth(token(userId, orgId))
                 }
             assertEquals(HttpStatusCode.BadRequest, r.status)
         }
@@ -911,7 +911,7 @@ class DashboardRoutesTest {
 
             val r =
                 client.get("/v1/dashboards/datasources") {
-                    withAuth(token(userId))
+                    withAuth(token(userId, orgId))
                 }
             assertEquals(HttpStatusCode.OK, r.status)
         }
@@ -919,7 +919,7 @@ class DashboardRoutesTest {
     @Test
     fun `GET dashboard templates returns 200`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             every {
                 mockDashboardService.getDefaultDashboardTemplates()
             } returns emptyList()
@@ -927,7 +927,7 @@ class DashboardRoutesTest {
 
             val r =
                 client.get("/v1/dashboards/templates") {
-                    withAuth(token(userId))
+                    withAuth(token(userId, orgId))
                 }
             assertEquals(HttpStatusCode.OK, r.status)
         }
@@ -950,7 +950,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.get("/v1/search?q=test") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, r.status)
         }
@@ -970,7 +970,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.get("/v1/datasources") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(r.bodyAsText().contains(TEST_DS))
@@ -993,7 +993,7 @@ class DashboardRoutesTest {
                  "host":"localhost","port":5432}
             """.trimIndent()
             val r = client.post("/v1/datasources") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody(body)
             }
@@ -1003,7 +1003,7 @@ class DashboardRoutesTest {
     @Test
     fun `POST test connection returns 200`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             val result = TestConnectionResult(
                 success = true,
                 message = "OK"
@@ -1019,7 +1019,7 @@ class DashboardRoutesTest {
                  "username":"u","password":"p"}
             """.trimIndent()
             val r = client.post("/v1/datasources/test") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody(body)
             }
@@ -1040,7 +1040,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.get(DATASOURCES_1) {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(r.bodyAsText().contains(TEST_DS))
@@ -1058,7 +1058,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.get(DATASOURCES_99) {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
@@ -1076,7 +1076,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.put(DATASOURCES_1) {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"Updated DS"}""")
             }
@@ -1095,7 +1095,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.put(DATASOURCES_99) {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody(BODY_NAME_X)
             }
@@ -1114,7 +1114,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.delete("/v1/datasources/1") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.NoContent, r.status)
         }
@@ -1131,7 +1131,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.delete(DATASOURCES_99) {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
@@ -1139,11 +1139,11 @@ class DashboardRoutesTest {
     @Test
     fun `GET custom datasource returns 400 for bad id`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             application { installRoutes(this) }
 
             val r = client.get("/v1/datasources/abc") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.BadRequest, r.status)
         }

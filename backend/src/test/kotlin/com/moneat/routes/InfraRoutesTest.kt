@@ -192,12 +192,12 @@ class InfraRoutesTest {
         assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
 
-    // ──── No membership (empty org list) ────
+    // ──── Current org with no matching data ────
 
     @Test
-    fun `GET infra events with no membership returns empty list`() =
+    fun `GET infra events with no data returns empty list`() =
         testApplication {
-            val userId = seedUser()
+            val (userId, orgId) = seedUserAndOrg()
 
             application {
                 installAuth()
@@ -205,7 +205,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get(INFRA_EVENTS_PATH) {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("\"events\":[]"))
@@ -300,29 +300,19 @@ class InfraRoutesTest {
         }
 
     @Test
-    fun `saved map views reject inaccessible or ambiguous organization context`() =
+    fun `saved map views require current organization claim`() =
         testApplication {
             val userId = seedUser()
-            val firstOrgId = seedOrg()
-            val secondOrgId = seedOrg()
-            val inaccessibleOrgId = seedOrg()
-            seedMembership(userId, firstOrgId)
-            seedMembership(userId, secondOrgId)
 
             application {
                 installAuth()
                 routing { infraRoutes() }
             }
 
-            val inaccessibleResponse = client.get(SAVED_VIEWS_PATH) {
-                withAuth(token(userId, inaccessibleOrgId))
-            }
-            assertEquals(HttpStatusCode.Forbidden, inaccessibleResponse.status)
-
-            val ambiguousResponse = client.get(SAVED_VIEWS_PATH) {
+            val response = client.get(SAVED_VIEWS_PATH) {
                 withAuth(token(userId))
             }
-            assertEquals(HttpStatusCode.BadRequest, ambiguousResponse.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
@@ -403,7 +393,7 @@ class InfraRoutesTest {
 
     @Test
     fun `GET infra events returns 200 with data`() = testApplication {
-        val (userId, _) = seedUserAndOrg()
+        val (userId, orgId) = seedUserAndOrg()
         stubClickHouseOk("""{"host":"web-01","alert_type":"cpu_high"}""")
 
         application {
@@ -412,7 +402,7 @@ class InfraRoutesTest {
         }
 
         val response = client.get(INFRA_EVENTS_PATH) {
-            withAuth(token(userId))
+            withAuth(token(userId, orgId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("web-01"))
@@ -421,7 +411,7 @@ class InfraRoutesTest {
     @Test
     fun `GET infra events returns empty when CH errors`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             stubClickHouseError()
 
             application {
@@ -430,7 +420,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get(INFRA_EVENTS_PATH) {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("\"events\":[]"))
@@ -441,7 +431,7 @@ class InfraRoutesTest {
     @Test
     fun `GET infra service-checks returns 200 with data`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             stubClickHouseOk(
                 """{"check_name":"http_check","status":"ok"}"""
             )
@@ -452,16 +442,16 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/service-checks") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("http_check"))
         }
 
     @Test
-    fun `GET service-checks with no membership returns empty`() =
+    fun `GET service-checks with no data returns empty`() =
         testApplication {
-            val userId = seedUser()
+            val (userId, orgId) = seedUserAndOrg()
 
             application {
                 installAuth()
@@ -469,7 +459,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/service-checks") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(
@@ -482,7 +472,7 @@ class InfraRoutesTest {
     @Test
     fun `GET infra processes returns 200 with data`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             stubClickHouseOk("""{"process_name":"nginx","pid":"1234"}""")
 
             application {
@@ -491,16 +481,16 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/processes") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("nginx"))
         }
 
     @Test
-    fun `GET processes with no membership returns empty`() =
+    fun `GET processes with no data returns empty`() =
         testApplication {
-            val userId = seedUser()
+            val (userId, orgId) = seedUserAndOrg()
 
             application {
                 installAuth()
@@ -508,7 +498,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/processes") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("\"processes\":[]"))
@@ -519,7 +509,7 @@ class InfraRoutesTest {
     @Test
     fun `GET infra containers returns 200 with data`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             stubClickHouseOk(
                 """{"container_name":"redis","status":"running"}"""
             )
@@ -530,16 +520,16 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/containers") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("redis"))
         }
 
     @Test
-    fun `GET containers with no membership returns empty`() =
+    fun `GET containers with no data returns empty`() =
         testApplication {
-            val userId = seedUser()
+            val (userId, orgId) = seedUserAndOrg()
 
             application {
                 installAuth()
@@ -547,7 +537,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/containers") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("\"containers\":[]"))
@@ -558,7 +548,7 @@ class InfraRoutesTest {
     @Test
     fun `GET infra connections returns 200 with data`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             stubClickHouseOk(
                 """{"source_host":"web-01","dest_host":"db-01"}"""
             )
@@ -569,16 +559,16 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/connections") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("web-01"))
         }
 
     @Test
-    fun `GET connections with no membership returns empty`() =
+    fun `GET connections with no data returns empty`() =
         testApplication {
-            val userId = seedUser()
+            val (userId, orgId) = seedUserAndOrg()
 
             application {
                 installAuth()
@@ -586,7 +576,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/connections") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(
@@ -599,7 +589,7 @@ class InfraRoutesTest {
     @Test
     fun `GET infra k8s-resources returns 200 with data`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             stubClickHouseOk(
                 """{"resource_type":"pod","name":"api-server"}"""
             )
@@ -610,16 +600,16 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/k8s-resources") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("api-server"))
         }
 
     @Test
-    fun `GET k8s-resources with no membership returns empty`() =
+    fun `GET k8s-resources with no data returns empty`() =
         testApplication {
-            val userId = seedUser()
+            val (userId, orgId) = seedUserAndOrg()
 
             application {
                 installAuth()
@@ -627,7 +617,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/k8s-resources") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(
@@ -640,7 +630,7 @@ class InfraRoutesTest {
     @Test
     fun `GET infra dbm queries returns 200 with data`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             stubClickHouseOk(
                 """{"query_text":"SELECT 1","duration_ms":"42"}"""
             )
@@ -651,16 +641,16 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/dbm/queries") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("SELECT 1"))
         }
 
     @Test
-    fun `GET dbm queries with no membership returns empty`() =
+    fun `GET dbm queries with no data returns empty`() =
         testApplication {
-            val userId = seedUser()
+            val (userId, orgId) = seedUserAndOrg()
 
             application {
                 installAuth()
@@ -668,7 +658,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/dbm/queries") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("\"queries\":[]"))
@@ -679,7 +669,7 @@ class InfraRoutesTest {
     @Test
     fun `GET infra debugger logs returns 200 with data`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             stubClickHouseOk(
                 """{"probe_id":"probe-1","message":"breakpoint hit"}"""
             )
@@ -690,16 +680,16 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/debugger/logs") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("probe-1"))
         }
 
     @Test
-    fun `GET debugger logs with no membership returns empty`() =
+    fun `GET debugger logs with no data returns empty`() =
         testApplication {
-            val userId = seedUser()
+            val (userId, orgId) = seedUserAndOrg()
 
             application {
                 installAuth()
@@ -707,7 +697,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/debugger/logs") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("\"logs\":[]"))
@@ -718,7 +708,7 @@ class InfraRoutesTest {
     @Test
     fun `GET infra debugger diagnostics returns 200 with data`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             stubClickHouseOk(
                 """{"probe_id":"diag-1","status":"ok"}"""
             )
@@ -732,7 +722,7 @@ class InfraRoutesTest {
                 client.get("/v1/infra/debugger/diagnostics") {
                     header(
                         HttpHeaders.Authorization,
-                        "Bearer ${token(userId)}"
+                        "Bearer ${token(userId, orgId)}"
                     )
                 }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -740,9 +730,9 @@ class InfraRoutesTest {
         }
 
     @Test
-    fun `GET debugger diagnostics with no membership returns empty`() =
+    fun `GET debugger diagnostics with no data returns empty`() =
         testApplication {
-            val userId = seedUser()
+            val (userId, orgId) = seedUserAndOrg()
 
             application {
                 installAuth()
@@ -753,7 +743,7 @@ class InfraRoutesTest {
                 client.get("/v1/infra/debugger/diagnostics") {
                     header(
                         HttpHeaders.Authorization,
-                        "Bearer ${token(userId)}"
+                        "Bearer ${token(userId, orgId)}"
                     )
                 }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -766,7 +756,7 @@ class InfraRoutesTest {
 
     @Test
     fun `GET infra sbom returns 200 with data`() = testApplication {
-        val (userId, _) = seedUserAndOrg()
+        val (userId, orgId) = seedUserAndOrg()
         stubClickHouseOk(
             """{"package_name":"openssl","version":"3.0.1"}"""
         )
@@ -777,16 +767,16 @@ class InfraRoutesTest {
         }
 
         val response = client.get("/v1/infra/sbom") {
-            withAuth(token(userId))
+            withAuth(token(userId, orgId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("openssl"))
     }
 
     @Test
-    fun `GET sbom with no membership returns empty`() =
+    fun `GET sbom with no data returns empty`() =
         testApplication {
-            val userId = seedUser()
+            val (userId, orgId) = seedUserAndOrg()
 
             application {
                 installAuth()
@@ -794,7 +784,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/infra/sbom") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(
@@ -807,7 +797,7 @@ class InfraRoutesTest {
     @Test
     fun `GET network-devices returns 200 with data`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             stubClickHouseOk(
                 """{"device_ip":"${TestIpConstants.IP_1}","vendor":"cisco"}"""
             )
@@ -818,16 +808,16 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/network-devices") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains(TestIpConstants.IP_1))
         }
 
     @Test
-    fun `GET network-devices with no membership returns empty`() =
+    fun `GET network-devices with no data returns empty`() =
         testApplication {
-            val userId = seedUser()
+            val (userId, orgId) = seedUserAndOrg()
 
             application {
                 installAuth()
@@ -835,7 +825,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/network-devices") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("\"devices\":[]"))
@@ -846,7 +836,7 @@ class InfraRoutesTest {
     @Test
     fun `GET network-devices flows returns 200 with data`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             stubClickHouseOk(
                 """{"source_ip":"${TestIpConstants.IP_1}","dest_ip":"${TestIpConstants.IP_2}"}"""
             )
@@ -857,16 +847,16 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/network-devices/flows") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains(TestIpConstants.IP_1))
         }
 
     @Test
-    fun `GET network-devices flows with no membership returns empty`() =
+    fun `GET network-devices flows with no data returns empty`() =
         testApplication {
-            val userId = seedUser()
+            val (userId, orgId) = seedUserAndOrg()
 
             application {
                 installAuth()
@@ -874,7 +864,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/network-devices/flows") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("\"flows\":[]"))
@@ -885,7 +875,7 @@ class InfraRoutesTest {
     @Test
     fun `GET network-devices traps returns 200 with data`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             stubClickHouseOk(
                 """{"trap_oid":"${TestOidConstants.OID_TRAP_TEST}","source_ip":"${TestIpConstants.IP_5}"}"""
             )
@@ -896,16 +886,16 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/network-devices/traps") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains(TestIpConstants.IP_5))
         }
 
     @Test
-    fun `GET network-devices traps with no membership returns empty`() =
+    fun `GET network-devices traps with no data returns empty`() =
         testApplication {
-            val userId = seedUser()
+            val (userId, orgId) = seedUserAndOrg()
 
             application {
                 installAuth()
@@ -913,7 +903,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/network-devices/traps") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("\"traps\":[]"))
@@ -924,7 +914,7 @@ class InfraRoutesTest {
     @Test
     fun `GET network-devices paths returns 200 with data`() =
         testApplication {
-            val (userId, _) = seedUserAndOrg()
+            val (userId, orgId) = seedUserAndOrg()
             stubClickHouseOk(
                 """{"destination":"${TestIpConstants.IP_PATH_DEST}","hop_count":"5"}"""
             )
@@ -935,16 +925,16 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/network-devices/paths") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains(TestIpConstants.IP_PATH_DEST))
         }
 
     @Test
-    fun `GET network-devices paths with no membership returns empty`() =
+    fun `GET network-devices paths with no data returns empty`() =
         testApplication {
-            val userId = seedUser()
+            val (userId, orgId) = seedUserAndOrg()
 
             application {
                 installAuth()
@@ -952,7 +942,7 @@ class InfraRoutesTest {
             }
 
             val response = client.get("/v1/network-devices/paths") {
-                withAuth(token(userId))
+                withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("\"paths\":[]"))

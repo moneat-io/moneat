@@ -118,7 +118,7 @@ class LlmRoutesExtendedTest {
     fun `generations returns 404 when organization access is missing`() =
         testApplication {
             setupApp()
-            val token = RouteTestSupport.createToken(userId = 1)
+            val token = RouteTestSupport.createToken(userId = 1, orgId = null)
             val response = client.get("/v1/llm/generations") {
                 withAuth(token)
             }
@@ -130,7 +130,7 @@ class LlmRoutesExtendedTest {
     fun `models returns 404 when organization access is missing`() =
         testApplication {
             setupApp()
-            val token = RouteTestSupport.createToken(userId = 1)
+            val token = RouteTestSupport.createToken(userId = 1, orgId = null)
             val response = client.get("/v1/llm/models") {
                 withAuth(token)
             }
@@ -142,7 +142,7 @@ class LlmRoutesExtendedTest {
     fun `costs returns 404 when organization access is missing`() =
         testApplication {
             setupApp()
-            val token = RouteTestSupport.createToken(userId = 1)
+            val token = RouteTestSupport.createToken(userId = 1, orgId = null)
             val response = client.get("/v1/llm/costs") {
                 withAuth(token)
             }
@@ -154,7 +154,7 @@ class LlmRoutesExtendedTest {
     fun `generation detail returns 404 when organization access is missing`() =
         testApplication {
             setupApp()
-            val token = RouteTestSupport.createToken(userId = 1)
+            val token = RouteTestSupport.createToken(userId = 1, orgId = null)
             val response = client.get("/v1/llm/generations/abc-123") {
                 withAuth(token)
             }
@@ -166,7 +166,7 @@ class LlmRoutesExtendedTest {
     fun `traces returns 404 when organization access is missing`() =
         testApplication {
             setupApp()
-            val token = RouteTestSupport.createToken(userId = 1)
+            val token = RouteTestSupport.createToken(userId = 1, orgId = null)
             val response = client.get("/v1/llm/traces/some-trace-id") {
                 withAuth(token)
             }

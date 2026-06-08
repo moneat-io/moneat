@@ -96,12 +96,13 @@ class UptimeRoutesTest {
         }
     }
 
-    private fun token(userId: Int): String =
+    private fun token(userId: Int, orgId: Int? = null): String =
         JWT
             .create()
             .withIssuer("moneat")
             .withAudience("moneat-users")
             .withClaim("userId", userId)
+            .apply { if (orgId != null) withClaim("orgId", orgId) }
             .sign(Algorithm.HMAC256("test-secret"))
 
     private fun seedUser(): Int =
@@ -211,10 +212,10 @@ class UptimeRoutesTest {
             assertEquals("down", status)
         }
 
-    // ──── Authenticated endpoints: no org membership → 403 ────
+    // ──── Authenticated endpoints: no current org claim -> 401 ────
 
     @Test
-    fun `list monitors returns 403 when user has no organization`() =
+    fun `list monitors returns 401 without current org`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -227,11 +228,11 @@ class UptimeRoutesTest {
                 client.get("/v1/uptime/monitors") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
-    fun `create monitor returns 403 when user has no organization`() =
+    fun `create monitor returns 401 without current org`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -249,11 +250,11 @@ class UptimeRoutesTest {
                             """"intervalSeconds":60,"timeoutSeconds":30}"""
                     )
                 }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
-    fun `get monitor returns 403 when user has no organization`() =
+    fun `get monitor returns 401 without current org`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -266,11 +267,11 @@ class UptimeRoutesTest {
                 client.get("/v1/uptime/monitors/${UUID.randomUUID()}") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
-    fun `update monitor returns 403 when user has no organization`() =
+    fun `update monitor returns 401 without current org`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -285,11 +286,11 @@ class UptimeRoutesTest {
                     contentType(ContentType.Application.Json)
                     setBody("""{"name":"updated"}""")
                 }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
-    fun `delete monitor returns 403 when user has no organization`() =
+    fun `delete monitor returns 401 without current org`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -302,11 +303,11 @@ class UptimeRoutesTest {
                 client.delete("/v1/uptime/monitors/${UUID.randomUUID()}") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
-    fun `pause monitor returns 403 when user has no organization`() =
+    fun `pause monitor returns 401 without current org`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -319,11 +320,11 @@ class UptimeRoutesTest {
                 client.post("/v1/uptime/monitors/${UUID.randomUUID()}/pause") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
-    fun `resume monitor returns 403 when user has no organization`() =
+    fun `resume monitor returns 401 without current org`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -336,11 +337,11 @@ class UptimeRoutesTest {
                 client.post("/v1/uptime/monitors/${UUID.randomUUID()}/resume") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     @Test
-    fun `heartbeats returns 403 when user has no organization`() =
+    fun `heartbeats returns 401 without current org`() =
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -353,7 +354,7 @@ class UptimeRoutesTest {
                 client.get("/v1/uptime/monitors/${UUID.randomUUID()}/heartbeats") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 }
-            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertEquals(HttpStatusCode.Unauthorized, response.status)
         }
 
     // ──── Authenticated endpoints: invalid UUID → 400 ────
@@ -368,10 +369,10 @@ class UptimeRoutesTest {
             }
 
             val userId = seedUser()
-            seedOrgWithMembership(userId)
+            val orgId = seedOrgWithMembership(userId)
             val response =
                 client.get("/v1/uptime/monitors/not-a-uuid") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 }
             assertEquals(HttpStatusCode.BadRequest, response.status)
         }
@@ -386,10 +387,10 @@ class UptimeRoutesTest {
             }
 
             val userId = seedUser()
-            seedOrgWithMembership(userId)
+            val orgId = seedOrgWithMembership(userId)
             val response =
                 client.put("/v1/uptime/monitors/not-a-uuid") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                     contentType(ContentType.Application.Json)
                     setBody("""{"name":"updated"}""")
                 }
@@ -406,10 +407,10 @@ class UptimeRoutesTest {
             }
 
             val userId = seedUser()
-            seedOrgWithMembership(userId)
+            val orgId = seedOrgWithMembership(userId)
             val response =
                 client.delete("/v1/uptime/monitors/not-a-uuid") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 }
             assertEquals(HttpStatusCode.BadRequest, response.status)
         }
@@ -424,10 +425,10 @@ class UptimeRoutesTest {
             }
 
             val userId = seedUser()
-            seedOrgWithMembership(userId)
+            val orgId = seedOrgWithMembership(userId)
             val response =
                 client.post("/v1/uptime/monitors/not-a-uuid/pause") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 }
             assertEquals(HttpStatusCode.BadRequest, response.status)
         }
@@ -442,10 +443,10 @@ class UptimeRoutesTest {
             }
 
             val userId = seedUser()
-            seedOrgWithMembership(userId)
+            val orgId = seedOrgWithMembership(userId)
             val response =
                 client.post("/v1/uptime/monitors/not-a-uuid/resume") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 }
             assertEquals(HttpStatusCode.BadRequest, response.status)
         }
@@ -460,10 +461,10 @@ class UptimeRoutesTest {
             }
 
             val userId = seedUser()
-            seedOrgWithMembership(userId)
+            val orgId = seedOrgWithMembership(userId)
             val response =
                 client.get("/v1/uptime/monitors/not-a-uuid/heartbeats") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 }
             assertEquals(HttpStatusCode.BadRequest, response.status)
         }
@@ -480,10 +481,10 @@ class UptimeRoutesTest {
             }
 
             val userId = seedUser()
-            seedOrgWithMembership(userId)
+            val orgId = seedOrgWithMembership(userId)
             val response =
                 client.post("/v1/uptime/monitors") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                     contentType(ContentType.Application.Json)
                     setBody(
                         """{"name":"","type":"http","url":"https://example.com",""" +
@@ -504,10 +505,10 @@ class UptimeRoutesTest {
             }
 
             val userId = seedUser()
-            seedOrgWithMembership(userId)
+            val orgId = seedOrgWithMembership(userId)
             val response =
                 client.post("/v1/uptime/monitors") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                     contentType(ContentType.Application.Json)
                     setBody("""{"name":"my-monitor","type":"http","intervalSeconds":60,"timeoutSeconds":30}""")
                 }
@@ -525,10 +526,10 @@ class UptimeRoutesTest {
             }
 
             val userId = seedUser()
-            seedOrgWithMembership(userId)
+            val orgId = seedOrgWithMembership(userId)
             val response =
                 client.post("/v1/uptime/monitors") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                     contentType(ContentType.Application.Json)
                     setBody(
                         """{"name":"my-monitor","type":"websocket","url":"not a valid url ::::",""" +
@@ -549,10 +550,10 @@ class UptimeRoutesTest {
             }
 
             val userId = seedUser()
-            seedOrgWithMembership(userId)
+            val orgId = seedOrgWithMembership(userId)
             val response =
                 client.post("/v1/uptime/monitors") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                     contentType(ContentType.Application.Json)
                     setBody(
                         """{"name":"my-monitor","type":"tcp","port":443,"intervalSeconds":60,"timeoutSeconds":30}"""
@@ -572,11 +573,11 @@ class UptimeRoutesTest {
             }
 
             val userId = seedUser()
-            seedOrgWithMembership(userId)
+            val orgId = seedOrgWithMembership(userId)
             withSelfHosted("false") {
                 val response =
                     client.post("/v1/uptime/monitors") {
-                        header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                        header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                         contentType(ContentType.Application.Json)
                         setBody(
                             """{"name":"my-monitor","type":"tcp","hostname":"127.0.0.1","port":443,""" +
@@ -598,10 +599,10 @@ class UptimeRoutesTest {
             }
 
             val userId = seedUser()
-            seedOrgWithMembership(userId)
+            val orgId = seedOrgWithMembership(userId)
             val response =
                 client.put("/v1/uptime/monitors/${UUID.randomUUID()}") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                     contentType(ContentType.Application.Json)
                     setBody("""{"url":"wss://93.184.216.34/socket"}""")
                 }
@@ -618,10 +619,10 @@ class UptimeRoutesTest {
             }
 
             val userId = seedUser()
-            seedOrgWithMembership(userId)
+            val orgId = seedOrgWithMembership(userId)
             val response =
                 client.post("/v1/uptime/monitors") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                     contentType(ContentType.Application.Json)
                     setBody(
                         """{"name":"my-monitor","type":"http","url":"https://example.com",""" +
@@ -642,10 +643,10 @@ class UptimeRoutesTest {
             }
 
             val userId = seedUser()
-            seedOrgWithMembership(userId)
+            val orgId = seedOrgWithMembership(userId)
             val response =
                 client.post("/v1/uptime/monitors") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                     contentType(ContentType.Application.Json)
                     setBody("""{"name":"my-monitor","type":"unknown-type","intervalSeconds":60,"timeoutSeconds":30}""")
                 }
@@ -665,10 +666,10 @@ class UptimeRoutesTest {
             }
 
             val userId = seedUser()
-            seedOrgWithMembership(userId)
+            val orgId = seedOrgWithMembership(userId)
             val response =
                 client.get("/v1/uptime/monitors/${UUID.randomUUID()}") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 }
             assertEquals(HttpStatusCode.NotFound, response.status)
         }
@@ -683,10 +684,10 @@ class UptimeRoutesTest {
             }
 
             val userId = seedUser()
-            seedOrgWithMembership(userId)
+            val orgId = seedOrgWithMembership(userId)
             val response =
                 client.delete("/v1/uptime/monitors/${UUID.randomUUID()}") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 }
             assertEquals(HttpStatusCode.NotFound, response.status)
         }
@@ -701,10 +702,10 @@ class UptimeRoutesTest {
             }
 
             val userId = seedUser()
-            seedOrgWithMembership(userId)
+            val orgId = seedOrgWithMembership(userId)
             val response =
                 client.get("/v1/uptime/monitors") {
-                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 }
             assertEquals(HttpStatusCode.OK, response.status)
         }

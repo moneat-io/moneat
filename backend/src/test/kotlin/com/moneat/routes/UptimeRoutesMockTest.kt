@@ -92,9 +92,11 @@ class UptimeRoutesMockTest {
         }
     }
 
-    private fun token(userId: Int): String =
+    private fun token(userId: Int, orgId: Int? = null): String =
         JWT.create().withIssuer("moneat").withAudience("moneat-users")
-            .withClaim("userId", userId).sign(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
+            .withClaim("userId", userId)
+            .apply { if (orgId != null) withClaim("orgId", orgId) }
+            .sign(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
 
     private fun seedUser(): Int =
         transaction {
@@ -160,7 +162,7 @@ class UptimeRoutesMockTest {
             }
 
             val response = client.get("/v1/uptime/monitors") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("test-monitor"))
@@ -184,7 +186,7 @@ class UptimeRoutesMockTest {
             }
 
             val response = client.post("/v1/uptime/monitors") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody(
                     """{"name":"test-monitor","type":"http","url":"https://example.com",""" +
@@ -214,7 +216,7 @@ class UptimeRoutesMockTest {
             }
 
             val response = client.get("/v1/uptime/monitors/$monitorId") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("test-monitor"))
@@ -236,7 +238,7 @@ class UptimeRoutesMockTest {
             }
 
             val response = client.get("/v1/uptime/monitors/$monitorId") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.NotFound, response.status)
         }
@@ -260,7 +262,7 @@ class UptimeRoutesMockTest {
             }
 
             val response = client.put("/v1/uptime/monitors/$monitorId") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"updated-monitor"}""")
             }
@@ -283,7 +285,7 @@ class UptimeRoutesMockTest {
             }
 
             val response = client.put("/v1/uptime/monitors/$monitorId") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"updated-monitor"}""")
             }
@@ -308,7 +310,7 @@ class UptimeRoutesMockTest {
             }
 
             val response = client.delete("/v1/uptime/monitors/$monitorId") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
         }
@@ -329,7 +331,7 @@ class UptimeRoutesMockTest {
             }
 
             val response = client.delete("/v1/uptime/monitors/$monitorId") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.NotFound, response.status)
         }
@@ -352,7 +354,7 @@ class UptimeRoutesMockTest {
             }
 
             val response = client.post("/v1/uptime/monitors/$monitorId/pause") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
         }
@@ -375,7 +377,7 @@ class UptimeRoutesMockTest {
             }
 
             val response = client.post("/v1/uptime/monitors/$monitorId/resume") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
         }
@@ -400,7 +402,7 @@ class UptimeRoutesMockTest {
             }
 
             val response = client.get("/v1/uptime/monitors/$monitorId/heartbeats") {
-                header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
         }
