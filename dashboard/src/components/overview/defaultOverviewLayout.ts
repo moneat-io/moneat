@@ -61,7 +61,7 @@ export function buildDefaultOverviewWidgets(): DashboardWidget[] {
     grid_w: spec.w,
     grid_h: spec.h,
     query_configs: [],
-    display_config: spec.kpiId ? {kpiId: spec.kpiId} : {},
+    display_config: spec.kpiId ? {kpiId: spec.kpiId} : ({} as Record<string, string>),
     sort_order: index,
   }))
 }

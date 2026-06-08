@@ -113,15 +113,15 @@ export function OverviewDashboard() {
         return {
           id: existing?.id ?? nextNegativeId(widgets),
           dashboard_id: OVERVIEW_DASHBOARD_ID,
-          title: req.title,
+          title: req.title ?? existing?.title ?? '',
           widget_type: req.widget_type,
           grid_x: req.grid_x,
           grid_y: req.grid_y,
           grid_w: req.grid_w,
           grid_h: req.grid_h,
           query_configs: req.query_configs,
-          display_config: req.display_config,
-          sort_order: req.sort_order,
+          display_config: req.display_config ?? existing?.display_config ?? {},
+          sort_order: req.sort_order ?? existing?.sort_order ?? 0,
         }
       })
       setWidgets(next)
