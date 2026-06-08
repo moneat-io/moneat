@@ -21,12 +21,13 @@ import {OverviewHeader} from './OverviewHeader'
 import {AddOverviewWidgetDialog} from './AddOverviewWidgetDialog'
 import {buildDefaultOverviewWidgets, OVERVIEW_DASHBOARD_ID} from './defaultOverviewLayout'
 import {OVERVIEW_WIDGETS} from './overviewWidgetTypes'
+import {OverviewDataProvider} from './OverviewDataProvider'
 
-const STORAGE_KEY = 'moneat.overview.layout.v1'
+const STORAGE_KEY = 'moneat.overview.layout.v2'
 
 function loadWidgets(): DashboardWidget[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = globalThis.localStorage.getItem(STORAGE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as DashboardWidget[]
       if (Array.isArray(parsed) && parsed.length > 0) return parsed
@@ -39,7 +40,7 @@ function loadWidgets(): DashboardWidget[] {
 
 function saveWidgets(widgets: DashboardWidget[]) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(widgets))
+    globalThis.localStorage.setItem(STORAGE_KEY, JSON.stringify(widgets))
   } catch {
     // storage full — silently drop
   }
@@ -134,26 +135,28 @@ export function OverviewDashboard() {
   const noop = useCallback(() => {}, [])
 
   return (
-    <div className="min-h-screen">
-      <div className="px-6 py-3">
-        <OverviewHeader
-          isEditing={isEditing}
-          onToggleEdit={handleToggleEdit}
-          onAddWidget={() => setAddDialogOpen(true)}
-          onReset={handleReset}
-        />
-        <DashboardGrid
-          widgets={widgets}
-          isEditing={isEditing}
-          dashboardId={OVERVIEW_DASHBOARD_ID}
-          timeRange={timeRange}
-          autoRefresh={false}
-          onLayoutChange={handleLayoutChange}
-          onWidgetClick={noop}
-          onWidgetDelete={handleDeleteWidget}
-        />
+    <OverviewDataProvider>
+      <div className="min-h-screen">
+        <div className="px-6 py-3">
+          <OverviewHeader
+            isEditing={isEditing}
+            onToggleEdit={handleToggleEdit}
+            onAddWidget={() => setAddDialogOpen(true)}
+            onReset={handleReset}
+          />
+          <DashboardGrid
+            widgets={widgets}
+            isEditing={isEditing}
+            dashboardId={OVERVIEW_DASHBOARD_ID}
+            timeRange={timeRange}
+            autoRefresh={false}
+            onLayoutChange={handleLayoutChange}
+            onWidgetClick={noop}
+            onWidgetDelete={handleDeleteWidget}
+          />
+        </div>
+        <AddOverviewWidgetDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} onAdd={handleAddWidget} />
       </div>
-      <AddOverviewWidgetDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} onAdd={handleAddWidget} />
-    </div>
+    </OverviewDataProvider>
   )
 }
