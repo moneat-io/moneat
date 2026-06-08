@@ -26,6 +26,8 @@ export interface ExplorerShellProps {
   /** Optional left-of-search label (icon badge + title), the log-viewer style. */
   title?: string
   icon?: ReactNode
+  /** Section tabs / mode switch (a <SegmentedTabs/>), rendered left of the search. */
+  tabs?: ReactNode
   /** Header right side — page actions (e.g. New Project). */
   actions?: ReactNode
   /** The collapsible facet rail (typically a <FacetRail/>). Omit for no rail. */
@@ -47,25 +49,27 @@ export function ExplorerShell({
   searchBar,
   title,
   icon,
+  tabs,
   actions,
   rail,
   toolbar,
   defaultRailOpen = true,
   children,
   className,
-}: ExplorerShellProps) {
+}: Readonly<ExplorerShellProps>) {
   const [railOpen, setRailOpen] = useState(defaultRailOpen)
 
   return (
     <div className={cn('flex h-full flex-col', className)}>
       {/* Header bar */}
-      <div className="@container/header flex min-h-[42px] items-center gap-2 border-b px-2 py-1 sm:px-3">
+      <div className="@container/header flex min-h-[var(--app-header-h)] items-center gap-2 border-b px-2 py-1 sm:px-3">
         {(icon || title) && (
           <div className="flex shrink-0 items-center gap-2">
             {icon}
             {title && <h2 className="hidden text-xs font-semibold leading-tight sm:block">{title}</h2>}
           </div>
         )}
+        {tabs && <div className="flex shrink-0 items-center">{tabs}</div>}
         <div className="min-w-0 flex-1">{searchBar}</div>
         {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
       </div>
@@ -75,7 +79,7 @@ export function ExplorerShell({
         {rail && (
           <div
             className={cn(
-              'shrink-0 border-r transition-all duration-200',
+              'shrink-0 self-stretch overflow-y-auto border-r transition-all duration-200',
               railOpen ? 'w-[220px]' : 'w-0 overflow-hidden border-r-0'
             )}
           >
@@ -85,7 +89,7 @@ export function ExplorerShell({
 
         <div className="flex min-w-0 flex-1 flex-col">
           {(rail || toolbar) && (
-            <div className="flex h-9 shrink-0 items-center gap-1.5 border-b bg-card/30 px-2">
+            <div className="flex h-[var(--app-subheader-h)] shrink-0 items-center gap-1.5 border-b bg-card/30 px-2">
               {rail && (
                 <button
                   type="button"

@@ -82,4 +82,17 @@ describe('ExplorerShell', () => {
     expect(screen.getByLabelText('Plain search')).toBeTruthy()
     expect(screen.getByText('Plain rows')).toBeTruthy()
   })
+
+  it('renders section tabs in the header', () => {
+    render(
+      <ExplorerShell
+        tabs={<button type="button">APM Errors</button>}
+        searchBar={<input aria-label="Search" />}
+      >
+        <div>Rows</div>
+      </ExplorerShell>
+    )
+
+    expect(screen.getByRole('button', {name: 'APM Errors'})).toBeTruthy()
+  })
 })

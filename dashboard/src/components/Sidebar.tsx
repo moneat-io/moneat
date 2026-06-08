@@ -302,7 +302,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
   const renderSidebarContent = () => (
     <>
       {/* Logo at top */}
-      <div className={cn('shrink-0 border-b flex items-center justify-center h-[42px]', isExpanded ? 'px-2.5' : 'px-1.5')}>
+      <div className={cn('shrink-0 border-b flex items-center justify-center h-[var(--app-header-h)]', isExpanded ? 'px-2.5' : 'px-1.5')}>
         <Link
           to="/"
           search={APP_OVERVIEW_SEARCH}
@@ -312,7 +312,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
         </Link>
       </div>
       {/* Search bar */}
-      <div className="shrink-0 border-b flex items-center h-9 px-1.5">
+      <div className="shrink-0 border-b flex items-center h-[var(--app-subheader-h)] px-1.5">
         {isExpanded ? (
           <button
             type="button"

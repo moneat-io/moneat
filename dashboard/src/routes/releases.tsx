@@ -18,13 +18,13 @@ import {createFileRoute, Link, Outlet, redirect, useMatches} from '@tanstack/rea
 import {useQuery} from '@tanstack/react-query'
 import {api, formatErrorForLogging} from '@/lib/api'
 import {type ReactNode, useMemo, useState} from 'react'
+import {ExplorerShell} from '@/components/filters/ExplorerShell'
 import {FacetRail} from '@/components/filters/FacetRail'
 import {Card, CardContent} from '@/components/ui/card'
 import {Input} from '@/components/ui/input'
 import {Badge} from '@/components/ui/badge'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from '@/components/ui/select'
 import {StatsCard} from '@/components/charts/StatsCard'
-import {PageHeader} from '@/components/ui/page-header'
 import {EmptyState} from '@/components/ui/empty-state'
 import {StatusDot} from '@/components/ui/status-dot'
 import {Activity, AlertCircle, Flame, Package, Search, ShieldCheck, Users} from 'lucide-react'
@@ -371,26 +371,22 @@ function ReleasesPage() {
   }
 
   return (
-    <div className="grid gap-2 p-3 lg:grid-cols-[220px_minmax(0,1fr)]">
-      <FacetRail
-        sections={railSections}
-        facetFilters={facetFilters}
-        onFacetFiltersChange={setFacetFilters}
-        title="Releases"
-        className="h-auto max-h-[340px] rounded-md border lg:sticky lg:top-2 lg:h-[calc(100vh-8rem)] lg:max-h-none"
-      />
-
-      <div className="min-w-0">
-        <div className="container mx-auto px-4 py-4 space-y-3">
-          <PageHeader
-            icon={Package}
-            title="Releases"
-            description="Track release health, new issues, and telemetry by version"
-          />
-
-          {releasesContent}
-        </div>
+    <ExplorerShell
+      title="Releases"
+      icon={<Package className="h-4 w-4 text-muted-foreground" />}
+      searchBar={<div />}
+      rail={
+        <FacetRail
+          sections={railSections}
+          facetFilters={facetFilters}
+          onFacetFiltersChange={setFacetFilters}
+          title="Releases"
+        />
+      }
+    >
+      <div className="space-y-3 p-3">
+        {releasesContent}
       </div>
-    </div>
+    </ExplorerShell>
   )
 }

@@ -21,10 +21,10 @@ import {formatRelativeTime} from '@/lib/utils'
 import {useTimezone} from '@/hooks/useTimezone'
 import {formatDate as formatDateUtil, parseDate} from '@/lib/date-format'
 import {useMemo, useState} from 'react'
+import {ExplorerShell} from '@/components/filters/ExplorerShell'
 import {FacetRail} from '@/components/filters/FacetRail'
 import {Badge} from '@/components/ui/badge'
 import {Input} from '@/components/ui/input'
-import {PageHeader} from '@/components/ui/page-header'
 import {StatCard} from '@/components/ui/stat-card'
 import {EmptyState} from '@/components/ui/empty-state'
 import {Avatar, AvatarFallback} from '@/components/ui/avatar'
@@ -264,46 +264,24 @@ function ReplaysPage() {
   }
 
   return (
-    <div className="grid min-h-screen gap-2 p-3 lg:grid-cols-[220px_minmax(0,1fr)]">
-      <FacetRail
-        sections={railSections}
-        facetFilters={facetFilters}
-        onFacetFiltersChange={handleFacetFiltersChange}
-        title="Replays"
-        className="h-auto max-h-[340px] rounded-md border lg:sticky lg:top-2 lg:h-[calc(100vh-8rem)] lg:max-h-none"
-      />
-
-      <div className="min-w-0">
-        <div className="container mx-auto px-4 py-4 space-y-4">
-          <PageHeader
-            icon={Video}
-            title="Session Replays"
-            description="Watch real user sessions to understand behavior and debug issues"
+    <ExplorerShell
+      title="Session Replays"
+      icon={<Video className="h-4 w-4 text-muted-foreground" />}
+      searchBar={
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Search by user, URL, or browser..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-7 pl-8 text-xs"
           />
-
-          {/* Stats Cards */}
-          {replays.length > 0 && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <StatCard label="Sessions" value={stats.total} icon={Play} tone="info" />
-              <StatCard label="Errors" value={stats.totalErrors} icon={AlertCircle} tone="danger" />
-              <StatCard label="Avg Duration" value={formatDuration(stats.avgDuration)} icon={Timer} tone="success" />
-              <StatCard label="Unique Users" value={stats.uniqueUsers} icon={User} tone="accent" />
-            </div>
-          )}
-
-          {/* Toolbar */}
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by user, URL, or browser..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-          </div>
+        </div>
+      }
+      actions={
+        <>
           <Select value={effectivePeriod} onValueChange={(value) => { setPeriod(value as '24h' | '7d' | '30d' | '90d'); setPage(1) }}>
-            <SelectTrigger className="w-[140px]">
+            <SelectTrigger className="w-[140px] h-7 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -315,7 +293,7 @@ function ReplaysPage() {
             </SelectContent>
           </Select>
           <Select value={environment} onValueChange={(v) => { setEnvironment(v); setPage(1) }}>
-            <SelectTrigger className="w-[160px]">
+            <SelectTrigger className="w-[140px] h-7 text-xs">
               <SelectValue placeholder="Environment" />
             </SelectTrigger>
             <SelectContent>
@@ -325,10 +303,30 @@ function ReplaysPage() {
               <SelectItem value="development">Development</SelectItem>
             </SelectContent>
           </Select>
+        </>
+      }
+      rail={
+        <FacetRail
+          sections={railSections}
+          facetFilters={facetFilters}
+          onFacetFiltersChange={handleFacetFiltersChange}
+          title="Replays"
+        />
+      }
+    >
+      <div className="space-y-3 p-3">
+        {/* Stats Cards */}
+        {replays.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <StatCard label="Sessions" value={stats.total} icon={Play} tone="info" />
+            <StatCard label="Errors" value={stats.totalErrors} icon={AlertCircle} tone="danger" />
+            <StatCard label="Avg Duration" value={formatDuration(stats.avgDuration)} icon={Timer} tone="success" />
+            <StatCard label="Unique Users" value={stats.uniqueUsers} icon={User} tone="accent" />
           </div>
+        )}
 
-          {/* Content */}
-          {!hasReplayScope ? (
+        {/* Content */}
+        {!hasReplayScope ? (
           <EmptyState
             icon={Play}
             title="No services match filters"
@@ -382,16 +380,13 @@ function ReplaysPage() {
                     }`}
                   >
                     <div className="flex items-center gap-3 p-3">
-                      {/* Avatar */}
                       <Avatar className="h-8 w-8 shrink-0">
                         <AvatarFallback className={`text-xs font-semibold ${avatarColor}`}>
                           {initials}
                         </AvatarFallback>
                       </Avatar>
 
-                      {/* Main Content */}
                       <div className="flex-1 min-w-0">
-                        {/* Top row: user + time */}
                         <div className="flex items-center gap-2 mb-1">
                           <span className="font-semibold text-sm truncate">{displayName}</span>
                           <Tooltip>
@@ -405,9 +400,7 @@ function ReplaysPage() {
                           </Tooltip>
                         </div>
 
-                        {/* Bottom row: badges */}
                         <div className="flex flex-wrap items-center gap-2">
-                          {/* Duration */}
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Badge variant="outline" className={`text-xs font-medium gap-1 ${durationColor}`}>
@@ -418,7 +411,6 @@ function ReplaysPage() {
                             <TooltipContent>Session duration</TooltipContent>
                           </Tooltip>
 
-                          {/* Activity */}
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Badge variant="outline" className={`text-xs font-medium gap-1.5 ${activityLevel.bgColor} ${activityLevel.color}`}>
@@ -435,7 +427,6 @@ function ReplaysPage() {
                             <TooltipContent>Activity: {replay.activity}%</TooltipContent>
                           </Tooltip>
 
-                          {/* Errors */}
                           {hasErrors && (
                             <Badge variant="danger" className="text-xs font-medium gap-1">
                               <AlertCircle className="h-3 w-3" />
@@ -443,7 +434,6 @@ function ReplaysPage() {
                             </Badge>
                           )}
 
-                          {/* URLs */}
                           {replay.urls?.length > 0 && (
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -467,7 +457,6 @@ function ReplaysPage() {
                             </Tooltip>
                           )}
 
-                          {/* Browser / OS */}
                           {(replay.browserName || replay.osName) && (
                             <Badge variant="outline" className="text-xs font-normal gap-1 text-muted-foreground">
                               <Monitor className="h-3 w-3" />
@@ -477,7 +466,6 @@ function ReplaysPage() {
                         </div>
                       </div>
 
-                      {/* Play button hint */}
                       <div className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                         <div className="rounded-full bg-[hsl(var(--primary)/0.12)] p-2 ring-1 ring-[hsl(var(--primary)/0.3)]">
                           <Play className="h-4 w-4 text-primary" />
@@ -489,11 +477,11 @@ function ReplaysPage() {
               })}
             </div>
           </TooltipProvider>
-          )}
+        )}
 
-          {/* Pagination */}
-          {filteredReplays.length > 0 && (
-          <div className="mt-4 flex items-center justify-between">
+        {/* Pagination */}
+        {filteredReplays.length > 0 && (
+          <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">
               Showing {filteredReplays.length} replay{filteredReplays.length === 1 ? '' : 's'}
               {searchQuery && ' matching your search'}
@@ -525,9 +513,8 @@ function ReplaysPage() {
               </Button>
             </div>
           </div>
-          )}
-        </div>
+        )}
       </div>
-    </div>
+    </ExplorerShell>
   )
 }
