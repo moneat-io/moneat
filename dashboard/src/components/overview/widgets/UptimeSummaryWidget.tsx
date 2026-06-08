@@ -20,7 +20,14 @@ import {Badge} from '@/components/ui/badge'
 import {useUptimeSummary} from '../overviewData'
 import {OverviewPanel, PanelLink} from '../OverviewPanel'
 
-function barClass(state: 'up' | 'warn' | 'down'): string {
+type HeartbeatState = 'up' | 'warn' | 'down'
+
+type KeyedHeartbeatState = {
+  key: string
+  state: HeartbeatState
+}
+
+function barClass(state: HeartbeatState): string {
   switch (state) {
     case 'down':
       return 'bg-danger-solid'
@@ -29,6 +36,18 @@ function barClass(state: 'up' | 'warn' | 'down'): string {
     default:
       return 'bg-success-solid/80'
   }
+}
+
+function keyedHeartbeatBars(name: string, bars: HeartbeatState[]): KeyedHeartbeatState[] {
+  const counts: Record<HeartbeatState, number> = {up: 0, warn: 0, down: 0}
+  return bars.map((state) => {
+    const ordinal = counts[state]
+    counts[state] += 1
+    return {
+      key: `${name}:${state}:${ordinal}`,
+      state,
+    }
+  })
 }
 
 /** Uptime monitor heartbeats + synthetics summary. */
@@ -47,8 +66,8 @@ export function UptimeSummaryWidget() {
           <div key={m.name} className="flex items-center gap-1.5">
             <span className="w-20 shrink-0 truncate text-[11px] text-foreground">{m.name}</span>
             <span className="flex flex-1 gap-px">
-              {m.bars.map((b, i) => (
-                <span key={i} className={cn('h-3 flex-1 rounded-[1px]', barClass(b))} />
+              {keyedHeartbeatBars(m.name, m.bars).map((bar) => (
+                <span key={bar.key} className={cn('h-3 flex-1 rounded-[1px]', barClass(bar.state))} />
               ))}
             </span>
             <span

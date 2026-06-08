@@ -21,7 +21,7 @@ import {cn} from '@/lib/utils'
 import type {Tone} from './overviewData'
 import {toneBgSolid} from './overviewTone'
 
-interface OverviewPanelProps {
+type OverviewPanelProps = Readonly<{
   title: string
   icon?: LucideIcon | ComponentType<{className?: string}>
   count?: ReactNode
@@ -31,7 +31,26 @@ interface OverviewPanelProps {
   flush?: boolean
   bodyClassName?: string
   children: ReactNode
-}
+}>
+
+type PanelLinkProps = Readonly<{
+  to: string
+  children: ReactNode
+  className?: string
+}>
+
+type SparklineProps = Readonly<{
+  data: number[]
+  className?: string
+  height?: number
+  strokeWidth?: number
+}>
+
+type MiniBarProps = Readonly<{
+  pct: number
+  tone: Tone
+  className?: string
+}>
 
 /** Shared panel chrome for overview widgets — mirrors SectionCard at compact density. */
 export function OverviewPanel({
@@ -71,7 +90,7 @@ export function OverviewPanel({
 }
 
 /** A compact "View all" style text link used in panel headers. */
-export function PanelLink({to, children, className}: {to: string; children: ReactNode; className?: string}) {
+export function PanelLink({to, children, className}: PanelLinkProps) {
   return (
     <Link
       to={to}
@@ -91,12 +110,7 @@ export function Sparkline({
   className,
   height = 24,
   strokeWidth = 1.6,
-}: {
-  data: number[]
-  className?: string
-  height?: number
-  strokeWidth?: number
-}) {
+}: SparklineProps) {
   if (data.length === 0) return null
   const w = 100
   const h = 30
@@ -133,11 +147,7 @@ export function MiniBar({
   pct,
   tone,
   className,
-}: {
-  pct: number
-  tone: Tone
-  className?: string
-}) {
+}: MiniBarProps) {
   const clamped = Math.min(100, Math.max(0, pct))
   return (
     <span className={cn('relative block h-1.5 overflow-hidden rounded-full bg-muted', className)}>

@@ -111,7 +111,7 @@ export function OverviewDashboard() {
     (updated: CreateWidgetRequest[]) => {
       const next: DashboardWidget[] = updated.map((req) => {
         const reqId = req.id
-        const existing = reqId != null ? widgets.find((w) => w.id === reqId) : undefined
+        const existing = widgets.find((w) => w.id === reqId)
         return {
           id: reqId ?? existing?.id ?? nextNegativeId(widgets),
           dashboard_id: OVERVIEW_DASHBOARD_ID,

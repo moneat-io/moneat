@@ -46,8 +46,11 @@ export function DeploysWidget() {
       actions={<PanelLink to="/releases">Releases</PanelLink>}
     >
       <div>
-        {rows.map((r, i) => (
-          <div key={i} className="flex items-center gap-1.5 border-b border-border/40 py-1 text-[11px] last:border-0">
+        {rows.map((r) => (
+          <div
+            key={`${r.version}:${r.service}:${r.ageLabel}`}
+            className="flex items-center gap-1.5 border-b border-border/40 py-1 text-[11px] last:border-0"
+          >
             <StatusDot tone={toneDot[r.status]} size="sm" />
             <span className="font-mono font-medium text-foreground">{r.version}</span>
             <span className="min-w-0 flex-1 truncate text-muted-foreground">{r.service}</span>

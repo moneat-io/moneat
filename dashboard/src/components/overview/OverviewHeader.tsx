@@ -18,12 +18,12 @@ import {Button} from '@/components/ui/button'
 import {PageHeader} from '@/components/ui/page-header'
 import {Check, Pencil, Plus, RotateCcw} from 'lucide-react'
 
-interface OverviewHeaderProps {
+type OverviewHeaderProps = Readonly<{
   isEditing: boolean
   onToggleEdit: () => void
   onAddWidget: () => void
   onReset: () => void
-}
+}>
 
 export function OverviewHeader({isEditing, onToggleEdit, onAddWidget, onReset}: OverviewHeaderProps) {
   return (

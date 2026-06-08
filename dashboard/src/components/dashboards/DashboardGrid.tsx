@@ -29,6 +29,7 @@ import 'react-resizable/css/styles.css'
 const GRID_BREAKPOINTS = {lg: 1200, md: 996, sm: 768, xs: 480}
 const GRID_COLS = {lg: 12, md: 12, sm: 12, xs: 6}
 const GRID_MARGIN: [number, number] = [12, 12]
+const LEGACY_SMALL_WIDGET_TYPES = new Set(['stat', 'gauge', 'bargauge'])
 
 interface DashboardGridProps {
   widgets: DashboardWidget[]
@@ -63,6 +64,13 @@ type WidgetCardProps = Readonly<{
   onWidgetClick: (widget: DashboardWidget) => void
   onWidgetDelete: (widgetId: number) => void
 }>
+
+function widgetMinHeight(widgetType: DashboardWidget['widget_type']): number {
+  if (widgetType === 'section') return 1
+  if (isOverviewWidgetType(widgetType)) return overviewWidgetDef(widgetType)?.minH ?? 4
+  if (LEGACY_SMALL_WIDGET_TYPES.has(widgetType)) return 4
+  return 6
+}
 
 function getSectionMembership(widgets: DashboardWidget[]): Map<number, number> {
   const sorted = [...widgets].sort((a, b) => a.grid_y - b.grid_y || a.sort_order - b.sort_order)
@@ -196,11 +204,7 @@ export function DashboardGrid({
           isDraggable: isEditing,
           isResizable: isEditing && w.widget_type !== 'section',
           minW: w.widget_type === 'section' ? 12 : 2,
-          minH: w.widget_type === 'section'
-            ? 1
-            : isOverviewWidgetType(w.widget_type)
-              ? (overviewWidgetDef(w.widget_type)?.minH ?? 4)
-              : (['stat', 'gauge', 'bargauge'].includes(w.widget_type) ? 4 : 6),
+          minH: widgetMinHeight(w.widget_type),
           maxH: w.widget_type === 'section' ? 1 : undefined,
         }
       })

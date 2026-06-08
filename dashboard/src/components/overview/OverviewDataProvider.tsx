@@ -20,13 +20,12 @@ import {api} from '@/lib/api'
 import type {OverviewResponse} from '@/lib/api/types'
 import {EMPTY_OVERVIEW, OverviewDataContext, type OverviewDataState} from './overviewData'
 
-export function OverviewDataProvider({
-  children,
-  data,
-}: {
+type OverviewDataProviderProps = Readonly<{
   children: ReactNode
   data?: OverviewResponse
-}) {
+}>
+
+export function OverviewDataProvider({children, data}: OverviewDataProviderProps) {
   const query = useQuery({
     queryKey: ['overview'],
     queryFn: api.getOverview,

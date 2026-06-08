@@ -43,7 +43,41 @@ function apdexTone(a: number): Tone {
   return 'neutral'
 }
 
-function ServiceHealthRow({row}: {row: ServiceRow}) {
+function p95Class(ms: number | null): string | undefined {
+  if (ms === null) return undefined
+  return toneText[p95Tone(ms)]
+}
+
+function p95Content(ms: number | null) {
+  if (ms === null) return <span className="text-muted-foreground">—</span>
+  return `${ms}ms`
+}
+
+function apdexClass(apdex: number | null): string | undefined {
+  if (apdex === null) return undefined
+  return toneText[apdexTone(apdex)]
+}
+
+function apdexContent(row: ServiceRow) {
+  if (row.apdex === null) {
+    const lag = row.lag
+    if (lag) {
+      return (
+        <Badge variant="warning" className="px-1 py-0 text-[9px]">
+          {lag}
+        </Badge>
+      )
+    }
+    return <span className="text-muted-foreground">—</span>
+  }
+  return row.apdex
+}
+
+type ServiceHealthRowProps = Readonly<{
+  row: ServiceRow
+}>
+
+function ServiceHealthRow({row}: ServiceHealthRowProps) {
   const errTone = errorTone(row.errorPct)
   return (
     <tr className="border-b last:border-0 hover:bg-muted/40">
@@ -65,19 +99,11 @@ function ServiceHealthRow({row}: {row: ServiceRow}) {
           </span>
         </div>
       </td>
-      <td className={cn(TDR, 'text-[11px]', row.p95Ms != null && toneText[p95Tone(row.p95Ms)])}>
-        {row.p95Ms != null ? `${row.p95Ms}ms` : <span className="text-muted-foreground">—</span>}
+      <td className={cn(TDR, 'text-[11px]', p95Class(row.p95Ms))}>
+        {p95Content(row.p95Ms)}
       </td>
-      <td className={cn(TDR, 'text-[11px]', row.apdex != null && toneText[apdexTone(row.apdex)])}>
-        {row.apdex != null ? (
-          row.apdex
-        ) : row.lag ? (
-          <Badge variant="warning" className="px-1 py-0 text-[9px]">
-            {row.lag}
-          </Badge>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        )}
+      <td className={cn(TDR, 'text-[11px]', apdexClass(row.apdex))}>
+        {apdexContent(row)}
       </td>
       <td className={cn(TD, 'w-[72px]')}>
         <Sparkline data={row.trend} className={toneText[row.status]} height={18} />

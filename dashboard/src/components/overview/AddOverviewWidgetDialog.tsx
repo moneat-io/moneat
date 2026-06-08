@@ -23,11 +23,11 @@ import {
 } from '@/components/ui/dialog'
 import {OVERVIEW_WIDGETS} from './overviewWidgetTypes'
 
-interface AddOverviewWidgetDialogProps {
+type AddOverviewWidgetDialogProps = Readonly<{
   open: boolean
   onOpenChange: (open: boolean) => void
   onAdd: (widgetType: string) => void
-}
+}>
 
 export function AddOverviewWidgetDialog({open, onOpenChange, onAdd}: AddOverviewWidgetDialogProps) {
   return (

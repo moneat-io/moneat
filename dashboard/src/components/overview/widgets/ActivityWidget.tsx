@@ -40,10 +40,11 @@ export function ActivityWidget() {
       actions={<PanelLink to="/events">View log</PanelLink>}
     >
       <div>
-        {items.map((it, i) => {
+        {items.map((it) => {
           const {icon: Icon, cls} = KIND[it.kind]
+          const itemKey = `${it.kind}:${it.text}:${it.meta}`
           return (
-            <div key={i} className="flex gap-1.5 border-b border-border/40 py-1 last:border-0">
+            <div key={itemKey} className="flex gap-1.5 border-b border-border/40 py-1 last:border-0">
               <span className={cn('grid h-5 w-5 shrink-0 place-items-center rounded', cls)}>
                 <Icon className="h-2.5 w-2.5" />
               </span>

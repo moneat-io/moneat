@@ -23,7 +23,23 @@ import {levelBadgeVariant} from '@/lib/severity'
 import {useTriage} from '../overviewData'
 import {OverviewPanel, PanelLink} from '../OverviewPanel'
 
-function borderForLevel(level: 'fatal' | 'error' | 'warn' | 'info'): string {
+type TriageLevel = 'fatal' | 'error' | 'warn' | 'info'
+
+type TriageSectionProps = Readonly<{
+  icon: typeof Bell
+  label: string
+  count: ReactNode
+  children: ReactNode
+}>
+
+type TriageRowProps = Readonly<{
+  level: TriageLevel
+  title: ReactNode
+  detail: string
+  ageLabel: string
+}>
+
+function borderForLevel(level: TriageLevel): string {
   switch (level) {
     case 'fatal':
     case 'error':
@@ -40,12 +56,7 @@ function TriageSection({
   label,
   count,
   children,
-}: {
-  icon: typeof Bell
-  label: string
-  count: ReactNode
-  children: ReactNode
-}) {
+}: TriageSectionProps) {
   return (
     <div className="border-b border-border/40 px-2.5 py-1.5 last:border-0">
       <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -63,12 +74,7 @@ function TriageRow({
   title,
   detail,
   ageLabel,
-}: {
-  level: 'fatal' | 'error' | 'warn' | 'info'
-  title: ReactNode
-  detail: string
-  ageLabel: string
-}) {
+}: TriageRowProps) {
   return (
     <div
       className={cn(
@@ -126,9 +132,9 @@ export function TriageWidget() {
       </TriageSection>
 
       <TriageSection icon={Bell} label="Alerts firing" count={t.alerts.length}>
-        {t.alerts.map((a, i) => (
+        {t.alerts.map((a) => (
           <TriageRow
-            key={i}
+            key={`${a.level}:${a.title}:${a.detail}:${a.ageLabel}`}
             level={a.level === 'error' ? 'error' : 'warn'}
             title={<span className="font-semibold">{a.title}</span>}
             detail={a.detail}
@@ -138,9 +144,9 @@ export function TriageWidget() {
       </TriageSection>
 
       <TriageSection icon={CircleAlert} label="New issues" count={t.issues.length}>
-        {t.issues.map((iss, i) => (
+        {t.issues.map((iss) => (
           <TriageRow
-            key={i}
+            key={`${iss.level}:${iss.title}:${iss.detail}:${iss.ageLabel}`}
             level={iss.level}
             title={
               <span className="flex items-center gap-1.5">
@@ -157,9 +163,9 @@ export function TriageWidget() {
       </TriageSection>
 
       <TriageSection icon={Shield} label="Security signals" count={t.security.length}>
-        {t.security.map((sec, i) => (
+        {t.security.map((sec) => (
           <TriageRow
-            key={i}
+            key={`${sec.level}:${sec.title}:${sec.detail}:${sec.ageLabel}`}
             level={sec.level === 'error' ? 'error' : 'warn'}
             title={<span className="font-semibold">{sec.title}</span>}
             detail={sec.detail}

@@ -21,8 +21,12 @@ import {useKpis} from '../overviewData'
 import {Sparkline} from '../OverviewPanel'
 import {toneDot, toneText} from '../overviewTone'
 
+type KpiWidgetProps = Readonly<{
+  displayConfig?: Record<string, string>
+}>
+
 /** A single KPI tile. The metric is chosen via display_config.kpiId. */
-export function KpiWidget({displayConfig}: {displayConfig?: Record<string, string>}) {
+export function KpiWidget({displayConfig}: KpiWidgetProps) {
   const kpis = useKpis()
   const kpi = kpis.find((k) => k.id === displayConfig?.kpiId) ?? kpis[0]
   if (!kpi) return null
