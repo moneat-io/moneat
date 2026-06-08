@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {AlertTriangle, Sparkles} from 'lucide-react'
+import {AlertTriangle} from 'lucide-react'
 import {cn} from '@/lib/utils'
 import {Button} from '@/components/ui/button'
 import {useSystemStatus} from '../overviewMockData'
@@ -62,19 +62,9 @@ export function SystemStatusWidget() {
               </span>
             </span>
           </div>
-          <div className="flex min-w-0 items-center gap-1.5 text-xs">
-            <Sparkles className="h-3 w-3 shrink-0 text-primary" />
-            <span className="truncate text-foreground">
-              <em className="not-italic text-muted-foreground">AI — </em>
-              {s.ai.summary}
-            </span>
-          </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <Button size="sm" variant="outline" className="h-7 text-xs">
-            Ask AI
-          </Button>
-          <Button size="sm" className="h-7 text-xs">View incident</Button>
+          <Button size="sm" className="h-6 px-2 text-[11px]">View incident</Button>
         </div>
       </div>
     </div>

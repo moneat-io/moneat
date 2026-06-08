@@ -34,22 +34,22 @@ export function OverviewHeader({isEditing, onToggleEdit, onAddWidget, onReset}: 
       actions={
         isEditing ? (
           <>
-            <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={onReset}>
-              <RotateCcw className="h-3 w-3" />
+            <Button variant="outline" size="sm" className="h-6 gap-1 px-2 text-[11px]" onClick={onReset}>
+              <RotateCcw className="h-2.5 w-2.5" />
               Reset
             </Button>
-            <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={onAddWidget}>
-              <Plus className="h-3 w-3" />
+            <Button variant="outline" size="sm" className="h-6 gap-1 px-2 text-[11px]" onClick={onAddWidget}>
+              <Plus className="h-2.5 w-2.5" />
               Add widget
             </Button>
-            <Button size="sm" className="h-7 gap-1.5 text-xs" onClick={onToggleEdit}>
-              <Check className="h-3 w-3" />
+            <Button size="sm" className="h-6 gap-1 px-2 text-[11px]" onClick={onToggleEdit}>
+              <Check className="h-2.5 w-2.5" />
               Done
             </Button>
           </>
         ) : (
-          <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={onToggleEdit}>
-            <Pencil className="h-3 w-3" />
+          <Button variant="outline" size="sm" className="h-6 gap-1 px-2 text-[11px]" onClick={onToggleEdit}>
+            <Pencil className="h-2.5 w-2.5" />
             Customize
           </Button>
         )

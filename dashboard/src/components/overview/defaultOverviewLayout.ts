@@ -33,20 +33,20 @@ interface WidgetSpec {
 // hero status bar, KPI strip, service health + triage rail, telemetry, then the
 // infrastructure / uptime / deploys / activity band.
 const DEFAULT_SPECS: WidgetSpec[] = [
-  {type: 'system_status', x: 0, y: 0, w: 12, h: 3},
-  {type: 'kpi', x: 0, y: 3, w: 2, h: 3, kpiId: 'errors'},
-  {type: 'kpi', x: 2, y: 3, w: 2, h: 3, kpiId: 'latency'},
-  {type: 'kpi', x: 4, y: 3, w: 2, h: 3, kpiId: 'throughput'},
-  {type: 'kpi', x: 6, y: 3, w: 2, h: 3, kpiId: 'apdex'},
-  {type: 'kpi', x: 8, y: 3, w: 2, h: 3, kpiId: 'issues'},
-  {type: 'kpi', x: 10, y: 3, w: 2, h: 3, kpiId: 'uptime'},
-  {type: 'service_health', x: 0, y: 6, w: 8, h: 10},
-  {type: 'triage', x: 8, y: 6, w: 4, h: 17},
-  {type: 'telemetry', x: 0, y: 16, w: 8, h: 7},
-  {type: 'infra_summary', x: 0, y: 23, w: 3, h: 7},
-  {type: 'uptime_summary', x: 3, y: 23, w: 3, h: 7},
-  {type: 'deploys', x: 6, y: 23, w: 3, h: 7},
-  {type: 'activity', x: 9, y: 23, w: 3, h: 7},
+  {type: 'system_status', x: 0, y: 0, w: 12, h: 2},
+  {type: 'kpi', x: 0, y: 2, w: 2, h: 2, kpiId: 'errors'},
+  {type: 'kpi', x: 2, y: 2, w: 2, h: 2, kpiId: 'latency'},
+  {type: 'kpi', x: 4, y: 2, w: 2, h: 2, kpiId: 'throughput'},
+  {type: 'kpi', x: 6, y: 2, w: 2, h: 2, kpiId: 'apdex'},
+  {type: 'kpi', x: 8, y: 2, w: 2, h: 2, kpiId: 'issues'},
+  {type: 'kpi', x: 10, y: 2, w: 2, h: 2, kpiId: 'uptime'},
+  {type: 'service_health', x: 0, y: 4, w: 8, h: 10},
+  {type: 'triage', x: 8, y: 4, w: 4, h: 17},
+  {type: 'telemetry', x: 0, y: 14, w: 8, h: 7},
+  {type: 'infra_summary', x: 0, y: 21, w: 3, h: 7},
+  {type: 'uptime_summary', x: 3, y: 21, w: 3, h: 7},
+  {type: 'deploys', x: 6, y: 21, w: 3, h: 7},
+  {type: 'activity', x: 9, y: 21, w: 3, h: 7},
 ]
 
 export function buildDefaultOverviewWidgets(): DashboardWidget[] {

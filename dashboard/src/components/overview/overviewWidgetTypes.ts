@@ -50,9 +50,9 @@ export interface OverviewWidgetDef {
 export const OVERVIEW_WIDGETS: Record<string, OverviewWidgetDef> = {
   system_status: {
     label: 'System status',
-    description: 'Hero triage line with the AI incident summary',
+    description: 'Hero triage line with incident counts',
     icon: AlertTriangle,
-    defaultSize: {w: 12, h: 3},
+    defaultSize: {w: 12, h: 2},
     minH: 2,
     component: SystemStatusWidget,
   },
@@ -60,8 +60,8 @@ export const OVERVIEW_WIDGETS: Record<string, OverviewWidgetDef> = {
     label: 'KPI',
     description: 'A single key metric with trend and sparkline',
     icon: Gauge,
-    defaultSize: {w: 2, h: 3},
-    minH: 2,
+    defaultSize: {w: 2, h: 2},
+    minH: 1,
     component: KpiWidget,
   },
   service_health: {
