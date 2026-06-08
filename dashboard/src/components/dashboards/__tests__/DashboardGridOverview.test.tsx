@@ -20,6 +20,8 @@ import {beforeAll, describe, expect, it, vi} from 'vitest'
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
 import {DashboardGrid} from '../DashboardGrid'
 import type {DashboardWidget} from '@/lib/api'
+import {OverviewDataProvider} from '@/components/overview/OverviewDataProvider'
+import {overviewTestData} from '@/components/overview/__tests__/overviewTestData'
 
 vi.mock('react-grid-layout/legacy', () => ({
   Responsive: ({children, className}: {children: ReactNode; className?: string}) => (
@@ -27,6 +29,10 @@ vi.mock('react-grid-layout/legacy', () => ({
       {children}
     </div>
   ),
+}))
+
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({children, to}: {children: ReactNode; to?: string}) => <a href={to}>{children}</a>,
 }))
 
 beforeAll(() => {
@@ -65,7 +71,13 @@ const baseProps = {
 
 function renderGrid(ui: ReactElement) {
   const queryClient = new QueryClient({defaultOptions: {queries: {retry: false}}})
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <OverviewDataProvider data={overviewTestData}>
+        {ui}
+      </OverviewDataProvider>
+    </QueryClientProvider>,
+  )
 }
 
 describe('DashboardGrid overview widgets', () => {

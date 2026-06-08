@@ -14,11 +14,18 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {describe, expect, it} from 'vitest'
+import type {ReactElement, ReactNode} from 'react'
+import {describe, expect, it, vi} from 'vitest'
 import {screen} from '@testing-library/react'
 import {renderWithQueryClient} from '@/test/utils'
 import type {DashboardWidget} from '@/lib/api'
+import {OverviewDataProvider} from '@/components/overview/OverviewDataProvider'
+import {overviewTestData} from '@/components/overview/__tests__/overviewTestData'
 import {WidgetRenderer} from '../WidgetRenderer'
+
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({children, to}: {children: ReactNode; to?: string}) => <a href={to}>{children}</a>,
+}))
 
 function overviewWidget(widgetType: string): DashboardWidget {
   return {
@@ -36,9 +43,17 @@ function overviewWidget(widgetType: string): DashboardWidget {
   }
 }
 
+function renderOverviewWidget(ui: ReactElement) {
+  return renderWithQueryClient(
+    <OverviewDataProvider data={overviewTestData}>
+      {ui}
+    </OverviewDataProvider>,
+  )
+}
+
 describe('WidgetRenderer overview dispatch', () => {
   it('renders a native overview widget without running a query', () => {
-    renderWithQueryClient(
+    renderOverviewWidget(
       <WidgetRenderer
         widget={overviewWidget('service_health')}
         dashboardId={0}
@@ -52,7 +67,7 @@ describe('WidgetRenderer overview dispatch', () => {
 
   it('renders the KPI overview widget using display_config', () => {
     const widget = {...overviewWidget('kpi'), display_config: {kpiId: 'uptime'}}
-    renderWithQueryClient(
+    renderOverviewWidget(
       <WidgetRenderer
         widget={widget}
         dashboardId={0}

@@ -44,6 +44,15 @@ export const overviewTestData: OverviewResponse = {
       status: 'warn',
       spark: [9, 8, 10, 9, 11, 10, 12, 14, 17, 21, 23],
     },
+    {
+      id: 'uptime',
+      label: 'Uptime · 24h',
+      value: '99.2',
+      unit: '%',
+      delta: {value: '0.4%', direction: 'down', tone: 'warn'},
+      status: 'warn',
+      spark: [100, 100, 99, 100, 99, 99, 98, 99, 99, 99, 99],
+    },
   ],
   serviceHealth: [
     {
