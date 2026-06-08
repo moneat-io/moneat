@@ -16,7 +16,6 @@
 
 package com.moneat.datadog.routes
 
-import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.auth.currentOrgContextOrNull
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.models.CreateDebuggerProbeRequest
@@ -43,39 +42,21 @@ fun Route.debuggerProbeRoutes() {
     route("/v1/infra/debugger/probes") {
         authenticate("auth-jwt") {
             get {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal?.payload?.getClaim("userId")?.asInt()
-                if (userId == null) {
-                    call.respondInvalidToken()
-                    return@get
-                }
-
-                val organizationIds = getOrgIdsForUser(userId, principal)
-                    ?: return@get call.respondInvalidToken()
-                val probes = DebuggerProbeService.listProbes(organizationIds)
+                val context =
+                    call.principal<JWTPrincipal>()?.currentOrgContextOrNull()
+                        ?: return@get call.respondInvalidToken()
+                val probes = DebuggerProbeService.listProbes(listOf(context.orgId))
                 call.respond(HttpStatusCode.OK, mapOf("probes" to probes))
             }
 
             post {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal?.payload?.getClaim("userId")?.asInt()
-                val organizationId = principal?.currentOrgIdOrNull()
-
-                if (userId == null || organizationId == null) {
-                    call.respondInvalidToken()
-                    return@post
-                }
-
-                val organizationIds = getOrgIdsForUser(userId, principal)
-                    ?: return@post call.respondInvalidToken()
-                if (organizationId !in organizationIds) {
-                    call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Access denied"))
-                    return@post
-                }
+                val context =
+                    call.principal<JWTPrincipal>()?.currentOrgContextOrNull()
+                        ?: return@post call.respondInvalidToken()
 
                 try {
                     val request = call.receive<CreateDebuggerProbeRequest>()
-                    val createdProbe = DebuggerProbeService.createProbe(organizationId, userId, request)
+                    val createdProbe = DebuggerProbeService.createProbe(context.orgId, context.userId, request)
                     call.respond(HttpStatusCode.Created, createdProbe)
                 } catch (e: IllegalArgumentException) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to (e.message ?: "Invalid request")))
@@ -83,12 +64,9 @@ fun Route.debuggerProbeRoutes() {
             }
 
             put("/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal?.payload?.getClaim("userId")?.asInt()
-                if (userId == null) {
-                    call.respondInvalidToken()
-                    return@put
-                }
+                val context =
+                    call.principal<JWTPrincipal>()?.currentOrgContextOrNull()
+                        ?: return@put call.respondInvalidToken()
 
                 val probeId = call.parameters["id"]?.let { runCatching { UUID.fromString(it) }.getOrNull() }
                 if (probeId == null) {
@@ -96,11 +74,9 @@ fun Route.debuggerProbeRoutes() {
                     return@put
                 }
 
-                val organizationIds = getOrgIdsForUser(userId, principal)
-                    ?: return@put call.respondInvalidToken()
                 try {
                     val request = call.receive<UpdateDebuggerProbeRequest>()
-                    val updatedProbe = DebuggerProbeService.updateProbe(probeId, organizationIds, request)
+                    val updatedProbe = DebuggerProbeService.updateProbe(probeId, listOf(context.orgId), request)
                     if (updatedProbe == null) {
                         call.respond(HttpStatusCode.NotFound, mapOf("error" to "Probe not found"))
                         return@put
@@ -112,12 +88,9 @@ fun Route.debuggerProbeRoutes() {
             }
 
             delete("/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal?.payload?.getClaim("userId")?.asInt()
-                if (userId == null) {
-                    call.respondInvalidToken()
-                    return@delete
-                }
+                val context =
+                    call.principal<JWTPrincipal>()?.currentOrgContextOrNull()
+                        ?: return@delete call.respondInvalidToken()
 
                 val probeId = call.parameters["id"]?.let { runCatching { UUID.fromString(it) }.getOrNull() }
                 if (probeId == null) {
@@ -125,9 +98,7 @@ fun Route.debuggerProbeRoutes() {
                     return@delete
                 }
 
-                val organizationIds = getOrgIdsForUser(userId, principal)
-                    ?: return@delete call.respondInvalidToken()
-                val deleted = DebuggerProbeService.deleteProbe(probeId, organizationIds)
+                val deleted = DebuggerProbeService.deleteProbe(probeId, listOf(context.orgId))
                 if (!deleted) {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "Probe not found"))
                     return@delete
@@ -148,12 +119,6 @@ fun Route.debuggerProbeRoutes() {
         }
     }
 }
-
-private fun getOrgIdsForUser(userId: Int, principal: JWTPrincipal?): List<Int>? =
-    principal
-        ?.currentOrgContextOrNull()
-        ?.takeIf { it.userId == userId }
-        ?.let { listOf(it.orgId) }
 
 private suspend fun ApplicationCall.respondInvalidToken() {
     respond(HttpStatusCode.Unauthorized, mapOf("error" to INVALID_TOKEN_ERROR))
