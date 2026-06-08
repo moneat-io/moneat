@@ -48,9 +48,8 @@ export function OverviewHeader({isEditing, onToggleEdit, onAddWidget, onReset}: 
             </Button>
           </>
         ) : (
-          <Button variant="outline" size="sm" className="h-6 gap-1 px-2 text-[11px]" onClick={onToggleEdit}>
-            <Pencil className="h-2.5 w-2.5" />
-            Customize
+          <Button variant="outline" size="icon" className="h-6 w-6" onClick={onToggleEdit}>
+            <Pencil className="h-3 w-3" />
           </Button>
         )
       }
