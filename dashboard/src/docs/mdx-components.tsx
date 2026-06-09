@@ -67,7 +67,7 @@ export function DocsLink({children, className, href, ...props}: DocsLinkProps) {
   return (
     <a
       {...props}
-      href={href}
+      {...(href === undefined ? {} : {href})}
       className={className ?? 'text-indigo-300 underline underline-offset-2 hover:text-indigo-200'}
     >
       {content}

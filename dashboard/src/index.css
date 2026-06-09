@@ -693,7 +693,7 @@
 }
 
 /* Motion: one orchestrated load reveal + the signature EKG pulse draw. */
-@keyframes docsRise {
+@keyframes docs-rise {
   from {
     opacity: 0;
     transform: translateY(12px);
@@ -703,12 +703,12 @@
     transform: none;
   }
 }
-@keyframes docsDraw {
+@keyframes docs-draw {
   to {
     stroke-dashoffset: 0;
   }
 }
-@keyframes docsBeat {
+@keyframes docs-beat {
   0%,
   100% {
     opacity: 1;
@@ -719,7 +719,7 @@
 }
 .docs-surface .rise {
   opacity: 0;
-  animation: docsRise 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: docs-rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 .docs-surface .d1 {
   animation-delay: 0.05s;
@@ -742,15 +742,15 @@
 .docs-surface .pulse-path {
   stroke-dasharray: 560;
   stroke-dashoffset: 560;
-  animation: docsDraw 2.1s cubic-bezier(0.16, 1, 0.3, 1) 0.25s forwards;
+  animation: docs-draw 2.1s cubic-bezier(0.16, 1, 0.3, 1) 0.25s forwards;
 }
 .docs-surface .pulse-line {
   stroke-dasharray: 1100;
   stroke-dashoffset: 1100;
-  animation: docsDraw 2.4s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
+  animation: docs-draw 2.4s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
 }
 .docs-surface .beat {
-  animation: docsBeat 3.2s ease-in-out infinite;
+  animation: docs-beat 3.2s ease-in-out infinite;
 }
 .docs-surface .card-hover {
   transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
