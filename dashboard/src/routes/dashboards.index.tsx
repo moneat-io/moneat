@@ -36,10 +36,6 @@ import {
   FolderPlus,
   ChevronRight,
   Pencil,
-  BarChart3,
-  LineChart,
-  PieChart,
-  Sparkles,
   ArrowRight,
 } from 'lucide-react'
 import {Button} from '@/components/ui/button'
@@ -48,6 +44,7 @@ import {PageHeader} from '@/components/ui/page-header'
 import {EmptyState} from '@/components/ui/empty-state'
 import {useState, memo, useMemo} from 'react'
 import {ImportExportModal} from '@/components/dashboards/ImportExportModal'
+import {DashboardsGetStarted} from '@/components/dashboards/DashboardsGetStarted'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -84,6 +81,16 @@ function DashboardListPage() {
     queryFn: () => api.getDashboardFolders(),
   })
 
+  // First run: no dashboards at all -> show the full-width template gallery
+  // (no folder rail to organize an empty set).
+  const isFirstRun = !isLoading && (dashboards?.length ?? 0) === 0
+
+  const {data: dashboardTemplates = [], isLoading: isTemplatesLoading} = useQuery({
+    queryKey: ['dashboard-templates'],
+    queryFn: () => api.getDashboardTemplates(),
+    enabled: isFirstRun,
+  })
+
   const filteredDashboards = useMemo(() => {
     if (!dashboards) return []
     if (selectedFolder === 'all') return dashboards
@@ -94,6 +101,17 @@ function DashboardListPage() {
 
   const createMutation = useMutation({
     mutationFn: (data: CreateDashboardRequest) => api.createDashboard(data),
+    onSuccess: (dashboard) => {
+      queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
+      navigate({to: '/dashboards/$dashboardId', params: {dashboardId: String(dashboard.id)}, search: {edit: true}})
+    },
+  })
+
+  const createFromTemplateMutation = useMutation({
+    mutationFn: (templateId: string) =>
+      api.createDashboardFromTemplate(templateId, {
+        folder_id: typeof selectedFolder === 'number' ? selectedFolder : undefined,
+      }),
     onSuccess: (dashboard) => {
       queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
       navigate({to: '/dashboards/$dashboardId', params: {dashboardId: String(dashboard.id)}, search: {edit: true}})
@@ -131,18 +149,8 @@ function DashboardListPage() {
     })
   }
 
-  const handleCreateFromTemplate = async () => {
-    try {
-      const templates = await api.getDashboardTemplates()
-      if (templates.length > 0) {
-        createMutation.mutate({
-          ...templates[0],
-          folder_id: typeof selectedFolder === 'number' ? selectedFolder : undefined,
-        })
-      }
-    } catch {
-      handleCreateBlank()
-    }
+  const handleUseTemplate = (templateId: string) => {
+    createFromTemplateMutation.mutate(templateId)
   }
 
   const favoritesCount = dashboards?.filter((d) => d.is_favorited).length ?? 0
@@ -163,8 +171,23 @@ function DashboardListPage() {
       <div className="border-b bg-card/50 px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
         <PageHeader
           icon={LayoutDashboard}
-          title="Dashboards"
-          description="Build custom dashboards with drag-and-drop widgets"
+          title={
+            isFirstRun ? (
+              <span className="inline-flex items-baseline gap-2">
+                Dashboards
+                <span className="rounded-full border border-border bg-muted px-2 py-0.5 align-middle text-[10px] font-medium tabular-nums text-muted-foreground">
+                  0 dashboards
+                </span>
+              </span>
+            ) : (
+              'Dashboards'
+            )
+          }
+          description={
+            isFirstRun
+              ? 'Compose charts, tables, gauges and KPIs across your telemetry.'
+              : 'Build custom dashboards with drag-and-drop widgets'
+          }
           actions={
             <>
               <Button asChild variant="outline" size="sm" className="gap-1 text-xs h-8">
@@ -188,8 +211,19 @@ function DashboardListPage() {
       </div>
 
       <div className="px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
-        <div className="flex flex-col md:flex-row gap-4">
-          {/* Mobile: horizontal folder pills */}
+        {isLoading ? (
+          <DashboardGridSkeleton />
+        ) : isFirstRun ? (
+          <DashboardsGetStarted
+            templates={dashboardTemplates}
+            isLoadingTemplates={isTemplatesLoading}
+            onCreateBlank={handleCreateBlank}
+            onUseTemplate={handleUseTemplate}
+            onImport={() => setShowImport(true)}
+          />
+        ) : (
+          <div className="flex flex-col md:flex-row gap-4">
+            {/* Mobile: horizontal folder pills */}
           <div className="flex md:hidden overflow-x-auto gap-1.5 pb-1 -mx-1">
             <button
               onClick={() => setSelectedFolder('all')}
@@ -314,23 +348,7 @@ function DashboardListPage() {
 
           {/* Main content */}
           <div className="flex-1 min-w-0">
-            {isLoading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="rounded-lg border bg-card overflow-hidden">
-                    <div className="h-1.5 bg-muted animate-pulse" />
-                    <div className="p-4 space-y-3">
-                      <div className="h-5 w-3/4 bg-muted rounded animate-pulse" />
-                      <div className="h-4 w-1/2 bg-muted rounded animate-pulse" />
-                      <div className="flex gap-2 pt-2">
-                        <div className="h-5 w-16 bg-muted rounded-full animate-pulse" />
-                        <div className="h-5 w-24 bg-muted rounded-full animate-pulse" />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : filteredDashboards.length > 0 ? (
+            {filteredDashboards.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                 {filteredDashboards.map((dashboard) => (
                   <DashboardCard
@@ -375,12 +393,11 @@ function DashboardListPage() {
                 selectedFolder={selectedFolder}
                 folderLabel={folderLabel}
                 onCreateBlank={handleCreateBlank}
-                onCreateFromTemplate={handleCreateFromTemplate}
-                onImport={() => setShowImport(true)}
               />
             )}
           </div>
-        </div>
+          </div>
+        )}
       </div>
 
       <ImportExportModal open={showImport} onOpenChange={setShowImport} mode="import" />
@@ -438,14 +455,10 @@ function DashboardsEmptyState({
   selectedFolder,
   folderLabel,
   onCreateBlank,
-  onCreateFromTemplate,
-  onImport,
 }: {
   selectedFolder: FolderFilter
   folderLabel: string
   onCreateBlank: () => void
-  onCreateFromTemplate: () => void
-  onImport: () => void
 }) {
   if (selectedFolder === 'favorites') {
     return (
@@ -492,49 +505,36 @@ function DashboardsEmptyState({
   return (
     <EmptyState
       icon={LayoutDashboard}
-      title="Create your first dashboard"
-      description="Visualize your data with custom charts, tables, and metrics. Start from scratch, use a template, or import from Grafana and other tools."
+      title="No dashboards here"
+      description="Create a dashboard to start visualizing your telemetry."
       action={
-        <>
-          <Button variant="outline" onClick={onCreateFromTemplate}>
-            <Sparkles className="h-4 w-4 mr-2" />
-            Start from Template
-          </Button>
-          <Button variant="outline" onClick={onImport}>
-            <Import className="h-4 w-4 mr-2" />
-            Import Dashboard
-          </Button>
-          <Button onClick={onCreateBlank}>
-            <Plus className="h-4 w-4 mr-2" />
-            Blank Dashboard
-          </Button>
-        </>
+        <Button onClick={onCreateBlank}>
+          <Plus className="h-4 w-4 mr-1.5" />
+          Create Dashboard
+        </Button>
       }
-    >
-      <div className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-2xl w-full">
-        <div className="flex flex-col items-center text-center gap-2 p-4">
-          <div className="h-10 w-10 rounded-lg bg-chart-1/15 flex items-center justify-center">
-            <BarChart3 className="h-5 w-5 text-chart-1" />
+    />
+  )
+}
+
+/** Compact loading placeholder for the dashboard grid. */
+function DashboardGridSkeleton() {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="rounded-lg border bg-card overflow-hidden">
+          <div className="h-1.5 bg-muted animate-pulse" />
+          <div className="p-4 space-y-3">
+            <div className="h-5 w-3/4 bg-muted rounded animate-pulse" />
+            <div className="h-4 w-1/2 bg-muted rounded animate-pulse" />
+            <div className="flex gap-2 pt-2">
+              <div className="h-5 w-16 bg-muted rounded-full animate-pulse" />
+              <div className="h-5 w-24 bg-muted rounded-full animate-pulse" />
+            </div>
           </div>
-          <span className="text-sm font-medium">Rich Visualizations</span>
-          <span className="text-xs text-muted-foreground">Charts, tables & stats</span>
         </div>
-        <div className="flex flex-col items-center text-center gap-2 p-4">
-          <div className="h-10 w-10 rounded-lg bg-chart-3/15 flex items-center justify-center">
-            <LineChart className="h-5 w-5 text-chart-3" />
-          </div>
-          <span className="text-sm font-medium">Drag & Drop</span>
-          <span className="text-xs text-muted-foreground">Flexible grid layout</span>
-        </div>
-        <div className="flex flex-col items-center text-center gap-2 p-4">
-          <div className="h-10 w-10 rounded-lg bg-chart-2/15 flex items-center justify-center">
-            <PieChart className="h-5 w-5 text-chart-2" />
-          </div>
-          <span className="text-sm font-medium">Multiple Sources</span>
-          <span className="text-xs text-muted-foreground">ClickHouse, Postgres & more</span>
-        </div>
-      </div>
-    </EmptyState>
+      ))}
+    </div>
   )
 }
 
