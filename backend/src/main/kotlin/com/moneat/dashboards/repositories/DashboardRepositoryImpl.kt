@@ -177,6 +177,26 @@ class DashboardRepositoryImpl : DashboardRepository {
             updated > 0
         }
 
+    override fun setDefault(id: Long, orgId: Long): Boolean =
+        transaction {
+            val exists = Dashboards.selectAll().where {
+                (Dashboards.id eq id) and (Dashboards.orgId eq orgId)
+            }.any()
+            if (!exists) return@transaction false
+
+            val now = Clock.System.now()
+            // Only one dashboard per org is the default — clear the others first.
+            Dashboards.update({ (Dashboards.orgId eq orgId) and (Dashboards.isDefault eq true) }) {
+                it[Dashboards.isDefault] = false
+                it[Dashboards.updatedAt] = now
+            }
+            Dashboards.update({ (Dashboards.id eq id) and (Dashboards.orgId eq orgId) }) {
+                it[Dashboards.isDefault] = true
+                it[Dashboards.updatedAt] = now
+            }
+            true
+        }
+
     override fun delete(id: Long, orgId: Long): Boolean =
         transaction {
             val deleted = Dashboards.deleteWhere {

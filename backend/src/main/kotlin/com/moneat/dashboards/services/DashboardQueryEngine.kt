@@ -79,6 +79,12 @@ class DashboardQueryEngine {
         private val TIME_RANGE_REGEX = Regex("""^now-(\d+)([smhdwMy])$""")
         private val ORG_SCOPED_TABLES = setOf("logs", "metrics", "containers")
 
+        /** Multi-select variable values arrive comma-joined (e.g. "pod-a,pod-b"). */
+        private const val MULTI_VALUE_SEPARATOR = ","
+
+        /** Filter operators a multi-value selection can be expanded into an IN / NOT IN list. */
+        private val MULTI_EXPANDABLE_OPS = setOf(FilterOp.EQ, FilterOp.IN, FilterOp.NEQ, FilterOp.NOT_IN)
+
         private const val MILLIS_PER_MINUTE = 60_000L
         private const val MILLIS_PER_WEEK = 604_800_000L
         private const val MILLIS_PER_MONTH = 2_592_000_000L
@@ -147,39 +153,73 @@ class DashboardQueryEngine {
      */
     fun applyVariables(dsl: QueryDsl, variables: Map<String, String>): QueryDsl {
         if (variables.isEmpty()) return dsl
-
-        // Sort by name length descending to prevent greedy matching
-        // (e.g., $instance matching inside $instance_id)
+        // Sort by name length descending to prevent greedy matching ($instance vs $instance_id).
         val sortedVars = variables.entries.sortedByDescending { it.key.length }
-
-        fun substituteVars(input: String?): String? {
-            if (input == null) return null
-            var result: String = input
-            for ((name, value) in sortedVars) {
-                // Grafana's $__all means "match all" — use regex wildcard in PromQL
-                val substitution = if (value == "\$__all") ".*" else ClickHouseSqlUtils.escapeSql(value)
-                result = result
-                    .replace("\${$name}", substitution)
-                // Use word-boundary-aware replacement for bare $name
-                result = Regex("""\$${Regex.escape(name)}(?![a-zA-Z0-9_])""")
-                    .replace(result, Regex.escapeReplacement(substitution))
-            }
-            // When $__all produced .*, upgrade exact match to regex match in PromQL label selectors
-            if (result.contains("=\".*\"")) {
-                result = result.replace("=\".*\"", "=~\".*\"")
-            }
-            return result
-        }
-
         return dsl.copy(
-            filters = dsl.filters.map { f ->
-                f.copy(
-                    value = substituteVars(f.value),
-                    values = f.values?.map { substituteVars(it) ?: it }
-                )
-            },
-            rawQuery = substituteVars(dsl.rawQuery)
+            filters = dsl.filters.flatMap { expandFilterVariables(it, variables, sortedVars) },
+            rawQuery = substituteVariables(dsl.rawQuery, sortedVars)
         )
+    }
+
+    /** Name of the variable a value references outright ("$name" / "${name}"), if any. */
+    private fun referencedVariable(input: String?, sortedVars: List<Map.Entry<String, String>>): String? {
+        val trimmed = input?.trim() ?: return null
+        return sortedVars.firstOrNull { (name, _) -> trimmed == "\$$name" || trimmed == "\${$name}" }?.key
+    }
+
+    private fun multiValues(raw: String): List<String> =
+        raw.split(MULTI_VALUE_SEPARATOR).map { it.trim() }.filter { it.isNotEmpty() }
+
+    private fun variableSubstitution(value: String): String = when {
+        value == "\$__all" -> ".*"
+        value.contains(MULTI_VALUE_SEPARATOR) ->
+            "(" + multiValues(value).joinToString("|") { ClickHouseSqlUtils.escapeSql(it) } + ")"
+        else -> ClickHouseSqlUtils.escapeSql(value)
+    }
+
+    /** Inline substitution for embedded references and raw queries. */
+    private fun substituteVariables(input: String?, sortedVars: List<Map.Entry<String, String>>): String? {
+        if (input == null) return null
+        var result: String = input
+        for ((name, value) in sortedVars) {
+            val substitution = variableSubstitution(value)
+            result = result.replace("\${$name}", substitution)
+            // Word-boundary-aware replacement for bare $name.
+            result = Regex("""\$${Regex.escape(name)}(?![a-zA-Z0-9_])""")
+                .replace(result, Regex.escapeReplacement(substitution))
+        }
+        // When a wildcard was produced, upgrade exact match to regex match in PromQL selectors.
+        if (result.contains("=\".*\"")) {
+            result = result.replace("=\".*\"", "=~\".*\"")
+        }
+        return result
+    }
+
+    private fun multiSelectOp(op: FilterOp): FilterOp =
+        if (op == FilterOp.NEQ || op == FilterOp.NOT_IN) FilterOp.NOT_IN else FilterOp.IN
+
+    /** Expands a pure variable-reference filter for multi-value / "All" selections. */
+    private fun expandFilterVariables(
+        filter: FilterDef,
+        variables: Map<String, String>,
+        sortedVars: List<Map.Entry<String, String>>,
+    ): List<FilterDef> {
+        val varName = referencedVariable(filter.value, sortedVars)
+        val rawValue = varName?.let { variables[it] }
+        return when {
+            // "All" selected on a pure reference: drop the constraint (match everything).
+            rawValue == "\$__all" -> emptyList()
+            // Several values selected: turn equality/membership into an IN / NOT IN list.
+            rawValue != null && filter.op in MULTI_EXPANDABLE_OPS && multiValues(rawValue).size > 1 ->
+                listOf(filter.copy(op = multiSelectOp(filter.op), value = null, values = multiValues(rawValue)))
+            else ->
+                listOf(
+                    filter.copy(
+                        value = substituteVariables(filter.value, sortedVars),
+                        values = filter.values?.map { substituteVariables(it, sortedVars) ?: it },
+                    )
+                )
+        }
     }
 
     fun resolveTemplateDataSource(

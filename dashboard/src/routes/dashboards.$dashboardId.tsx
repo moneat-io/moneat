@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute} from '@tanstack/react-router'
+import {createFileRoute, useNavigate} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api, type CreateWidgetRequest, type DashboardVariable, type DashboardWidget} from '@/lib/api'
 import {DashboardGrid} from '@/components/dashboards/DashboardGrid'
@@ -23,36 +23,56 @@ import {WidgetConfigPanel} from '@/components/dashboards/WidgetConfigPanel'
 import {ImportExportModal} from '@/components/dashboards/ImportExportModal'
 import {DataSourceMapperModal} from '@/components/dashboards/DataSourceMapperModal'
 import {VariableSettingsDialog} from '@/components/dashboards/VariableSettingsDialog'
+import {parseDashboardLink} from '@/components/dashboards/dashboardShareLink'
 import {useWidgetClipboard} from '@/components/dashboards/useWidgetClipboard'
 import {useCallback, useEffect, useRef, useState} from 'react'
 import {isDemo} from '@/lib/demo'
 import {EmptyState} from '@/components/ui/empty-state'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import {LayoutDashboard} from 'lucide-react'
 import {primaryServiceResourceId} from '@/lib/service-facet-scope'
 
 interface DashboardSearch {
   edit?: boolean
+  from?: string
+  to?: string
+  vars?: string
 }
 
 export const Route = createFileRoute('/dashboards/$dashboardId')({
   component: DashboardViewPage,
   validateSearch: (search: Record<string, unknown>): DashboardSearch => ({
     edit: search.edit === true || search.edit === 'true',
+    from: typeof search.from === 'string' ? search.from : undefined,
+    to: typeof search.to === 'string' ? search.to : undefined,
+    vars: typeof search.vars === 'string' ? search.vars : undefined,
   }),
 })
 
 function DashboardViewPage() {
   const {dashboardId} = Route.useParams()
-  const {edit} = Route.useSearch()
+  const {edit, from, to, vars} = Route.useSearch()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+
+  // Restore time range + variable selections from a shared deep link, if present.
+  const linked = parseDashboardLink({from, to, vars})
 
   const [isEditing, setIsEditing] = useState(edit ?? false)
   const [selectedWidget, setSelectedWidget] = useState<DashboardWidget | null>(null)
   const [selectedWidgetId, setSelectedWidgetId] = useState<number | null>(null)
   const [showExport, setShowExport] = useState(false)
-  const [timeRange, setTimeRange] = useState({from: isDemo() ? 'now-7d' : 'now-24h', to: 'now'})
-  const [autoRefresh, setAutoRefresh] = useState(false)
-  const [variableValues, setVariableValues] = useState<Record<string, string>>({})
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [timeRange, setTimeRange] = useState(
+    linked.timeRange ?? {from: isDemo() ? 'now-7d' : 'now-24h', to: 'now'},
+  )
+  const [refreshMs, setRefreshMs] = useState(0)
+  const [variableValues, setVariableValues] = useState<Record<string, string>>(
+    linked.variableValues ?? {},
+  )
   const [resolvedOptions, setResolvedOptions] = useState<Record<string, string[]>>({})
   const [showVariableSettings, setShowVariableSettings] = useState(false)
   const [mapperState, setMapperState] = useState<{
@@ -138,6 +158,51 @@ function DashboardViewPage() {
       queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
     },
   })
+
+  const favoriteMutation = useMutation({
+    mutationFn: () => api.toggleDashboardFavorite(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({queryKey: ['custom-dashboard', id]})
+      queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
+    },
+  })
+
+  const duplicateMutation = useMutation({
+    mutationFn: () => api.duplicateDashboard(id),
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
+      navigate({to: '/dashboards/$dashboardId', params: {dashboardId: String(created.id)}, search: {edit: true}})
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: () => api.deleteDashboard(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
+      navigate({to: '/dashboards'})
+    },
+  })
+
+  const setDefaultMutation = useMutation({
+    mutationFn: () => api.setDefaultDashboard(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({queryKey: ['custom-dashboard', id]})
+      queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
+    },
+  })
+
+  // Manual + interval refresh re-run every mounted widget query.
+  const handleRefreshNow = useCallback(() => {
+    queryClient.invalidateQueries({queryKey: ['widget-data']})
+  }, [queryClient])
+
+  useEffect(() => {
+    if (refreshMs <= 0) return
+    const timer = window.setInterval(() => {
+      queryClient.invalidateQueries({queryKey: ['widget-data']})
+    }, refreshMs)
+    return () => window.clearInterval(timer)
+  }, [refreshMs, queryClient])
 
   const {data: availableDataSources} = useQuery({
     queryKey: ['datasources'],
@@ -319,16 +384,24 @@ function DashboardViewPage() {
     <div className="p-4 space-y-4">
       <DashboardToolbar
         title={dashboard.title}
+        updatedAt={dashboard.updated_at}
         isEditing={isEditing}
+        isFavorited={dashboard.is_favorited}
+        isDefault={dashboard.is_default}
         onToggleEdit={() => setIsEditing(!isEditing)}
         onSave={handleSave}
         onTitleChange={handleTitleChange}
         onAddWidget={handleAddWidget}
         onExport={() => setShowExport(true)}
+        onDuplicate={() => duplicateMutation.mutate()}
+        onDelete={() => setShowDeleteConfirm(true)}
+        onToggleFavorite={() => favoriteMutation.mutate()}
+        onSetDefault={() => setDefaultMutation.mutate()}
         timeRange={timeRange}
         onTimeRangeChange={setTimeRange}
-        autoRefresh={autoRefresh}
-        onAutoRefreshChange={setAutoRefresh}
+        refreshMs={refreshMs}
+        onRefreshMsChange={setRefreshMs}
+        onRefreshNow={handleRefreshNow}
         variables={dashboard.variables?.map(v => ({
           ...v,
           options: resolvedOptions[v.name]?.length ? resolvedOptions[v.name] : v.options,
@@ -347,7 +420,7 @@ function DashboardViewPage() {
         dashboardId={id}
         projectId={primaryServiceId}
         timeRange={timeRange}
-        autoRefresh={autoRefresh}
+        autoRefresh={false}
         variableValues={variableValues}
         onLayoutChange={handleLayoutChange}
         onWidgetClick={handleWidgetClick}
@@ -389,6 +462,26 @@ function DashboardViewPage() {
         variables={dashboard.variables ?? []}
         onSave={handleVariablesSave}
       />
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this dashboard?</AlertDialogTitle>
+            <AlertDialogDescription>
+              &ldquo;{dashboard.title}&rdquo; and its widgets will be permanently removed. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteMutation.mutate()}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

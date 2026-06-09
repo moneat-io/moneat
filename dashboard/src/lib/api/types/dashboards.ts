@@ -23,6 +23,10 @@ export interface DashboardVariable {
   current?: string | null
   options: string[]
   datasource?: string | null
+  /** Accepts several values at once; the selected value is stored comma-joined. */
+  multi?: boolean
+  /** Offers an "All" choice (selected value `$__all`). */
+  include_all?: boolean
 }
 
 export interface MetricDef {

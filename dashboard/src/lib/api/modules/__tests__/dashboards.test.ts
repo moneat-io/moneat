@@ -131,6 +131,32 @@ describe('dashboardsMethods', () => {
     })
   })
 
+  describe('duplicateDashboard', () => {
+    it('duplicates a dashboard', async () => {
+      const mock = { id: 2, title: 'Dashboard (Copy)' }
+      server.use(
+        http.post(`${API_BASE}/v1/dashboards/1/duplicate`, () => {
+          return HttpResponse.json(mock, { status: 201 })
+        })
+      )
+      const result = await api.duplicateDashboard(1)
+      expect(result).toEqual(mock)
+    })
+  })
+
+  describe('setDefaultDashboard', () => {
+    it('marks a dashboard as default', async () => {
+      const mock = { is_default: true }
+      server.use(
+        http.post(`${API_BASE}/v1/dashboards/1/default`, () => {
+          return HttpResponse.json(mock)
+        })
+      )
+      const result = await api.setDefaultDashboard(1)
+      expect(result).toEqual(mock)
+    })
+  })
+
   describe('moveDashboardToFolder', () => {
     it('moves dashboard to a folder', async () => {
       const mock = { folder_id: 7 }

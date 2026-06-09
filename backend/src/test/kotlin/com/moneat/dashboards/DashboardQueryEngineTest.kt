@@ -604,6 +604,61 @@ class DashboardQueryEngineTest {
         assertFalse(value.startsWith("';"), "Value should not start with unescaped quote")
     }
 
+    @Test
+    fun `applyVariables expands a multi-value selection into an IN list`() {
+        val dsl = QueryDsl(
+            dataSource = "events",
+            filters = listOf(FilterDef(field = "pod", op = FilterOp.EQ, value = "\$pod"))
+        )
+        val result = engine.applyVariables(dsl, mapOf("pod" to "pod-a,pod-b,pod-c"))
+        assertEquals(1, result.filters.size)
+        assertEquals(FilterOp.IN, result.filters[0].op)
+        assertEquals(listOf("pod-a", "pod-b", "pod-c"), result.filters[0].values)
+        assertNull(result.filters[0].value)
+    }
+
+    @Test
+    fun `applyVariables expands a multi-value NEQ into a NOT IN list`() {
+        val dsl = QueryDsl(
+            dataSource = "events",
+            filters = listOf(FilterDef(field = "pod", op = FilterOp.NEQ, value = "\$pod"))
+        )
+        val result = engine.applyVariables(dsl, mapOf("pod" to "a,b"))
+        assertEquals(FilterOp.NOT_IN, result.filters[0].op)
+        assertEquals(listOf("a", "b"), result.filters[0].values)
+    }
+
+    @Test
+    fun `applyVariables drops a pure-reference filter when All is selected`() {
+        val dsl = QueryDsl(
+            dataSource = "events",
+            filters = listOf(FilterDef(field = "env", op = FilterOp.EQ, value = "\$env"))
+        )
+        val result = engine.applyVariables(dsl, mapOf("env" to "\$__all"))
+        assertTrue(result.filters.isEmpty())
+    }
+
+    @Test
+    fun `applyVariables renders multi-value as a regex alternation in rawQuery`() {
+        val dsl = QueryDsl(
+            dataSource = "events",
+            rawQuery = "pod=~\"\$pod\""
+        )
+        val result = engine.applyVariables(dsl, mapOf("pod" to "a,b"))
+        assertEquals("pod=~\"(a|b)\"", result.rawQuery)
+    }
+
+    @Test
+    fun `applyVariables keeps a single value as equality`() {
+        val dsl = QueryDsl(
+            dataSource = "events",
+            filters = listOf(FilterDef(field = "pod", op = FilterOp.EQ, value = "\$pod"))
+        )
+        val result = engine.applyVariables(dsl, mapOf("pod" to "only-one"))
+        assertEquals(FilterOp.EQ, result.filters[0].op)
+        assertEquals("only-one", result.filters[0].value)
+    }
+
     private fun customDataSource(
         id: Long,
         sourceType: String,

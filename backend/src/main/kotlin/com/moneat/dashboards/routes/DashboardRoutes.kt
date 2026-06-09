@@ -278,6 +278,36 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteDashboard(
     }
 }
 
+private suspend fun io.ktor.server.routing.RoutingContext.handleDuplicateDashboard(
+    dashboardService: CustomDashboardService,
+) {
+    val principal = call.principal<JWTPrincipal>()
+    val userId = principal!!.payload.getClaim("userId").asInt()
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
+    val id = call.parameters["id"]?.toLongOrNull()
+        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
+    val duplicate = dashboardService.duplicateDashboard(id, orgId, userId.toLong())
+        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DASHBOARD_NOT_FOUND))
+    call.respond(HttpStatusCode.Created, duplicate)
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleSetDefaultDashboard(
+    dashboardService: CustomDashboardService,
+) {
+    val principal = call.principal<JWTPrincipal>()
+    val userId = principal!!.payload.getClaim("userId").asInt()
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
+    val id = call.parameters["id"]?.toLongOrNull()
+        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
+    if (dashboardService.setDefaultDashboard(id, orgId)) {
+        call.respond(HttpStatusCode.OK, mapOf("is_default" to true))
+    } else {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DASHBOARD_NOT_FOUND))
+    }
+}
+
 private suspend fun io.ktor.server.routing.RoutingContext.handleDashboardQuery(
     queryEngine: DashboardQueryEngine,
     retentionPolicyService: RetentionPolicyService,
@@ -981,6 +1011,8 @@ fun Route.customDashboardRoutes(
             }
             get("/{id}") { handleGetDashboard(dashboardService) }
             post("/{id}/favorite") { handleToggleFavorite(dashboardService) }
+            post("/{id}/duplicate") { handleDuplicateDashboard(dashboardService) }
+            post("/{id}/default") { handleSetDefaultDashboard(dashboardService) }
             put("/{id}/folder") { handleMoveDashboardToFolder(dashboardService) }
             put("/{id}") { handleUpdateDashboard(dashboardService) }
             delete("/{id}") { handleDeleteDashboard(dashboardService) }
