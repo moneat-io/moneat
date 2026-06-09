@@ -624,3 +624,155 @@
 .workflow-editor-dialog :is(.shadow, .shadow-sm, .shadow-md, .shadow-lg) {
   box-shadow: none;
 }
+
+/* =========================================================================
+   Public docs surface — scoped atmosphere, motion, and brand details.
+   Everything here is namespaced under .docs-surface / .docs-atmos so it
+   never leaks into the app or other marketing pages. Accent: indigo → cyan.
+   ========================================================================= */
+
+/* Fixed atmosphere: top accent glow + faint masked grid behind the panes. */
+.docs-atmos {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.docs-atmos::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(58% 40% at 50% -6%, rgba(99, 102, 241, 0.16), transparent 70%),
+    radial-gradient(40% 30% at 88% 2%, rgba(34, 211, 238, 0.08), transparent 70%);
+}
+.docs-atmos::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.5;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 64px 64px;
+  -webkit-mask-image: radial-gradient(80% 55% at 50% 0%, #000 30%, transparent 100%);
+  mask-image: radial-gradient(80% 55% at 50% 0%, #000 30%, transparent 100%);
+}
+
+/* Keyboard hint chips (⌘K). */
+.docs-surface kbd {
+  font-family: var(--font-brandmono);
+  font-size: 11px;
+  line-height: 1;
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom-color: rgba(0, 0, 0, 0.4);
+  border-radius: 5px;
+  padding: 3px 5px;
+}
+
+/* Thin, unobtrusive scrollbars for the nav / rail / code panels. */
+.docs-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+.docs-scroll::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+.docs-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+}
+.docs-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+.docs-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Motion: one orchestrated load reveal + the signature EKG pulse draw. */
+@keyframes docsRise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes docsDraw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes docsBeat {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.docs-surface .rise {
+  opacity: 0;
+  animation: docsRise 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.docs-surface .d1 {
+  animation-delay: 0.05s;
+}
+.docs-surface .d2 {
+  animation-delay: 0.12s;
+}
+.docs-surface .d3 {
+  animation-delay: 0.19s;
+}
+.docs-surface .d4 {
+  animation-delay: 0.26s;
+}
+.docs-surface .d5 {
+  animation-delay: 0.33s;
+}
+.docs-surface .d6 {
+  animation-delay: 0.4s;
+}
+.docs-surface .pulse-path {
+  stroke-dasharray: 560;
+  stroke-dashoffset: 560;
+  animation: docsDraw 2.1s cubic-bezier(0.16, 1, 0.3, 1) 0.25s forwards;
+}
+.docs-surface .pulse-line {
+  stroke-dasharray: 1100;
+  stroke-dashoffset: 1100;
+  animation: docsDraw 2.4s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
+}
+.docs-surface .beat {
+  animation: docsBeat 3.2s ease-in-out infinite;
+}
+.docs-surface .card-hover {
+  transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
+}
+.docs-surface .card-hover:hover {
+  transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docs-surface .rise {
+    opacity: 1;
+    animation: none;
+  }
+  .docs-surface .pulse-path,
+  .docs-surface .pulse-line {
+    stroke-dashoffset: 0;
+    animation: none;
+  }
+  .docs-surface .beat {
+    animation: none;
+  }
+  .docs-surface .card-hover:hover {
+    transform: none;
+  }
+}

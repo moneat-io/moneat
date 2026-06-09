@@ -78,8 +78,9 @@ The endpoint also accepts OTLP protobuf with `Content-Type: application/x-protob
 whose `eventName` is `moneat.user_feedback`; when `eventName` is absent, it falls back to the `event.name`
 attribute.
 
-This release does not include a Datadog feedback parser. A later integration can map Datadog browser custom
-actions to the same feedback model.
+Datadog browser custom actions are not automatically mapped to feedback entries today. Use the
+Sentry-compatible SDK path or the OTLP feedback endpoint when you need user-submitted feedback in
+the feedback inbox.
 
 ## Viewing Feedback
 

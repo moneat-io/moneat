@@ -9,15 +9,16 @@ description: Track slow queries and database performance across your infrastruct
 
 Database Monitoring (DBM) surfaces slow and resource-intensive queries from your databases. The Datadog Agent collects query samples and execution metrics, and Moneat displays them in a single view so you can quickly identify performance bottlenecks.
 
-:::info[Enterprise feature]
-Database Monitoring requires the Datadog Agent integration, available on Enterprise plans.
+:::info[Availability]
+Database Monitoring is included on standard plans. For self-hosted builds that use module licensing,
+enable the `datadog` module to expose the database monitoring dashboard.
 :::
 
 ## Prerequisites
 
 - A supported database (PostgreSQL, MySQL, SQL Server, or Oracle)
 - The Datadog Agent deployed on a host with network access to the database (see [Agent Setup](/docs/datadog-agent/agent-setup))
-- The Enterprise `datadog` module enabled
+- For self-hosted module-licensed builds, the `datadog` module enabled
 
 ## Enable Database Monitoring
 

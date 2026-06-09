@@ -47,7 +47,7 @@ User: "Tell me more about the P1 incident"
 
 Agent calls: get_incident(incident_id=42)
 Agent calls: query_logs(query="connection pool", levels=["error"], limit=10)
-Agent calls: get_host_status(system_id="db-primary-01-uuid")
+Agent calls: get_host_status(host_id=123)
 
 Agent: "The P1 incident was triggered by the 'Database CPU > 90%' alert on 
 host db-primary-01. The host is currently at 94% CPU utilization. 

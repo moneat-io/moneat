@@ -60,7 +60,7 @@ export function MdxPre(props: ComponentPropsWithoutRef<'pre'>) {
 }
 
 export function DocsLink(props: ComponentPropsWithoutRef<'a'>) {
-  return <a {...props} className={props.className ?? 'text-sky-700 underline hover:text-sky-900'} />
+  return <a {...props} className={props.className ?? 'text-indigo-300 underline underline-offset-2 hover:text-indigo-200'} />
 }
 
 // eslint-disable-next-line react-refresh/only-export-components -- intentional shared utility module
