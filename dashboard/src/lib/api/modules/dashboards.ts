@@ -79,6 +79,16 @@ export function dashboardsMethods(core: ApiClientCore) {
         method: 'POST',
       }),
 
+    duplicateDashboard: (id: number) =>
+      core.request<CustomDashboard>(`${base}/dashboards/${id}/duplicate`, {
+        method: 'POST',
+      }),
+
+    setDefaultDashboard: (id: number) =>
+      core.request<{ is_default: boolean }>(`${base}/dashboards/${id}/default`, {
+        method: 'POST',
+      }),
+
     moveDashboardToFolder: (id: number, folderId: number | null) =>
       core.request<{ folder_id: number | null }>(`${base}/dashboards/${id}/folder`, {
         method: 'PUT',

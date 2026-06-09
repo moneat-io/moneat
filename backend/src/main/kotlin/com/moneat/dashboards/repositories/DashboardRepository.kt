@@ -29,6 +29,12 @@ interface DashboardRepository {
     fun update(id: Long, orgId: Long, request: UpdateDashboardRequest): Boolean
     fun moveToFolder(id: Long, orgId: Long, folderId: Long?): Boolean
     fun delete(id: Long, orgId: Long): Boolean
+
+    /**
+     * Marks [id] as the org's single default ("home") dashboard, clearing the flag on
+     * every other dashboard in the org. Returns false when [id] is not in the org.
+     */
+    fun setDefault(id: Long, orgId: Long): Boolean
     fun toggleFavorite(userId: Int, dashboardId: Long, orgId: Long): Boolean
     fun search(orgId: Long, userId: Int?, pattern: String): List<DashboardWithFavoriteFlag>
 }

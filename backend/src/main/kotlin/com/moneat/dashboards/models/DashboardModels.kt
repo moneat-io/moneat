@@ -56,7 +56,11 @@ data class DashboardVariable(
     @SerialName("default_value") val defaultValue: String? = null,
     val current: String? = null,
     val options: List<String> = emptyList(),
-    val datasource: String? = null
+    val datasource: String? = null,
+    /** When true, the variable accepts several values at once (stored as a comma-joined string). */
+    val multi: Boolean = false,
+    /** When true, an "All" choice is offered (selected value `${'$'}__all`). */
+    @SerialName("include_all") val includeAll: Boolean = false
 )
 
 // Exposed table definitions

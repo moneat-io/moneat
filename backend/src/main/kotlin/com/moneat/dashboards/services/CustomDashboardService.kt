@@ -174,6 +174,38 @@ class CustomDashboardService(
     fun deleteDashboard(id: Long, orgId: Long): Boolean =
         dashboardRepository.delete(id, orgId)
 
+    /** Deep-copies a dashboard (title suffixed " (Copy)") and all of its widgets. */
+    fun duplicateDashboard(id: Long, orgId: Long, userId: Long): DashboardResponse? {
+        val source = getDashboard(id, orgId, userId.toInt()) ?: return null
+        val request = CreateDashboardRequest(
+            title = "${source.title} (Copy)",
+            description = source.description,
+            projectId = source.projectId,
+            folderId = source.folderId,
+            layoutType = source.layoutType,
+            isDefault = false,
+            variables = source.variables,
+            widgets = source.widgets.map { w ->
+                CreateWidgetRequest(
+                    title = w.title,
+                    widgetType = w.widgetType,
+                    gridX = w.gridX,
+                    gridY = w.gridY,
+                    gridW = w.gridW,
+                    gridH = w.gridH,
+                    queryConfigs = w.queryConfigs,
+                    displayConfig = w.displayConfig,
+                    sortOrder = w.sortOrder
+                )
+            }
+        )
+        return createDashboard(orgId, userId, request)
+    }
+
+    /** Marks a dashboard as the org's single default ("home") dashboard. */
+    fun setDefaultDashboard(id: Long, orgId: Long): Boolean =
+        dashboardRepository.setDefault(id, orgId)
+
     fun listFolders(orgId: Long): List<FolderResponse> =
         folderRepository.listByOrgId(orgId).map { row ->
             FolderResponse(

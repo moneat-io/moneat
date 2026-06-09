@@ -362,6 +362,26 @@ class DashboardRepositoryTest {
         assertEquals("free", found?.layoutType)
     }
 
+    // ──── setDefault ────
+
+    @Test
+    fun `setDefault marks one dashboard and clears the others`() {
+        val first = createDashboard(title = "First")
+        val second = createDashboard(title = "Second")
+
+        assertTrue(repository.setDefault(first.id, ORG_ID))
+        assertTrue(repository.getById(first.id, ORG_ID)!!.isDefault)
+
+        assertTrue(repository.setDefault(second.id, ORG_ID))
+        assertTrue(repository.getById(second.id, ORG_ID)!!.isDefault)
+        assertFalse(repository.getById(first.id, ORG_ID)!!.isDefault)
+    }
+
+    @Test
+    fun `setDefault returns false for a non-existent dashboard`() {
+        assertFalse(repository.setDefault(999_999L, ORG_ID))
+    }
+
     // ──── Dashboard Delete ────
 
     @Test
