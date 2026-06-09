@@ -21,7 +21,7 @@ import {ExplorerShell} from '@/components/filters/ExplorerShell'
 
 describe('ExplorerShell', () => {
   it('renders title, icon, actions, toolbar, rail, and content', () => {
-    render(
+    const {container} = render(
       <ExplorerShell
         title="Issues"
         icon={<span data-testid="icon">I</span>}
@@ -34,6 +34,8 @@ describe('ExplorerShell', () => {
       </ExplorerShell>
     )
 
+    const shell = container.firstElementChild as HTMLElement
+    expect(shell.className).toContain('min-h-[calc(100dvh-var(--header-height,0px))]')
     expect(screen.getByText('Issues')).toBeTruthy()
     expect(screen.getByTestId('icon')).toBeTruthy()
     expect(screen.getByRole('button', {name: 'Refresh'})).toBeTruthy()
