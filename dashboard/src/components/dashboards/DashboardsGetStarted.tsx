@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useId, useMemo, useRef, useState} from 'react'
+import {useId, useMemo, useRef, useState, type ReactNode} from 'react'
 import {
   ArrowRight,
   FileJson,
@@ -55,6 +55,96 @@ interface TemplateCardModel {
   readonly category: TemplateCategory | null
   readonly thumb: ThumbKind
 }
+
+type TemplateGalleryProps = Readonly<{
+  templates: readonly TemplateCardModel[]
+  isLoading: boolean
+  onUseTemplate: (templateId: string) => void
+}>
+
+type BlockHeadProps = Readonly<{
+  title: string
+  hint: string
+  tools?: ReactNode
+}>
+
+type StartTileProps = Readonly<{
+  icon: LucideIcon
+  title: string
+  description: string
+  onClick: () => void
+  primary?: boolean
+}>
+
+type TemplateCardProps = Readonly<{
+  model: TemplateCardModel
+  onUse: () => void
+}>
+
+type TemplateThumbProps = Readonly<{
+  kind: ThumbKind
+}>
+
+type ChildrenProps = Readonly<{
+  children: ReactNode
+}>
+
+type RowProps = Readonly<{
+  children: ReactNode
+  fixed?: boolean
+}>
+
+type TileProps = Readonly<{
+  label: string
+  value: string
+  unit?: string
+  color?: string
+}>
+
+type PanelProps = Readonly<{
+  caption: string
+  children: ReactNode
+  fixed?: boolean
+}>
+
+type SparkSpec = Readonly<{
+  stroke: string
+  line: string
+  area: string
+}>
+
+type SparkProps = Readonly<{
+  spec: SparkSpec
+  gid: string
+}>
+
+type BarProps = Readonly<{
+  name: string
+  pct: number
+  color: string
+}>
+
+type SegmentProps = Readonly<{
+  h: number
+  color: string
+}>
+
+type LegendChipProps = Readonly<{
+  color: string
+  label: string
+}>
+
+type HeatCell = Readonly<{
+  id: string
+  colorIndex: number
+}>
+
+type LogColumn = Readonly<{
+  id: string
+  info: number
+  warn: number
+  error: number
+}>
 
 // The dark viz canvas is intentionally theme-independent (dense viz reads as a
 // field in either app theme — style guide), so these decorative thumbnail
@@ -165,8 +255,7 @@ export function DashboardsGetStarted({
           title="Recommended templates"
           hint="Curated, fully editable starting points."
           tools={
-            <div
-              role="group"
+            <fieldset
               aria-label="Filter templates by category"
               className="inline-flex items-center gap-0.5 rounded-md border bg-muted/40 p-0.5"
             >
@@ -189,26 +278,14 @@ export function DashboardsGetStarted({
                   </button>
                 )
               })}
-            </div>
+            </fieldset>
           }
         />
-        {isLoadingTemplates ? (
-          <TemplateGallerySkeleton />
-        ) : visible.length > 0 ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {visible.map((t) => (
-              <TemplateCard
-                key={t.template.id}
-                model={t}
-                onUse={() => onUseTemplate(t.template.id)}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
-            No templates match this category.
-          </div>
-        )}
+        <TemplateGallery
+          templates={visible}
+          isLoading={isLoadingTemplates}
+          onUseTemplate={onUseTemplate}
+        />
       </section>
     </div>
   )
@@ -236,23 +313,45 @@ function getTemplateThumb(template: DashboardTemplateSummary): ThumbKind {
   if (category === 'logs') return 'logs'
   if (category === 'applications') return 'service'
 
-  const tags = template.tags.map((tag) => tag.toLowerCase())
-  if (tags.includes('kubernetes')) return 'k8s'
-  if (tags.includes('database') || tags.includes('databases')) return 'db'
-  if (tags.includes('logs')) return 'logs'
-  if (tags.includes('browser') || tags.includes('rum')) return 'vitals'
+  const tags = new Set(template.tags.map((tag) => tag.toLowerCase()))
+  if (tags.has('kubernetes')) return 'k8s'
+  if (tags.has('database') || tags.has('databases')) return 'db'
+  if (tags.has('logs')) return 'logs'
+  if (tags.has('browser') || tags.has('rum')) return 'vitals'
   return 'host'
+}
+
+function TemplateGallery({templates, isLoading, onUseTemplate}: TemplateGalleryProps) {
+  if (isLoading) {
+    return <TemplateGallerySkeleton />
+  }
+
+  if (templates.length === 0) {
+    return (
+      <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
+        No templates match this category.
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {templates.map((template) => (
+        <TemplateCard
+          key={template.template.id}
+          model={template}
+          onUse={() => onUseTemplate(template.template.id)}
+        />
+      ))}
+    </div>
+  )
 }
 
 function BlockHead({
   title,
   hint,
   tools,
-}: {
-  title: string
-  hint: string
-  tools?: React.ReactNode
-}) {
+}: BlockHeadProps) {
   return (
     <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
       <h2 className="text-sm font-semibold text-foreground">{title}</h2>
@@ -268,13 +367,7 @@ function StartTile({
   description,
   onClick,
   primary = false,
-}: {
-  icon: LucideIcon
-  title: string
-  description: string
-  onClick: () => void
-  primary?: boolean
-}) {
+}: StartTileProps) {
   return (
     <button
       type="button"
@@ -303,7 +396,7 @@ function StartTile({
   )
 }
 
-function TemplateCard({model, onUse}: {model: TemplateCardModel; onUse: () => void}) {
+function TemplateCard({model, onUse}: TemplateCardProps) {
   const {template, thumb} = model
   const sources = template.required_sources.slice(0, SOURCE_BADGE_LIMIT)
   const extraSourceCount = template.required_sources.length - sources.length
@@ -395,10 +488,7 @@ function TemplateGallerySkeleton() {
 
 // ---- Mini-viz thumbnails (dark canvas) ------------------------------------
 
-const SPARKS: Record<
-  'service' | 'hostNet' | 'db' | 'vitals',
-  {stroke: string; line: string; area: string}
-> = {
+const SPARKS: Record<'service' | 'hostNet' | 'db' | 'vitals', SparkSpec> = {
   service: {
     stroke: 'hsl(var(--chart-1))',
     line: '0,30 20,27 40,29 60,20 80,24 100,15 120,19 140,11 160,16 180,9 200,13 220,7 240,10',
@@ -423,39 +513,39 @@ const SPARKS: Record<
 
 // Pod-saturation heat strip: 16 cols × 4 rows, column-major, biased hotter
 // toward the top-right to read like creeping saturation.
-const HEAT_CELLS: number[] = (() => {
+const HEAT_CELLS: readonly HeatCell[] = (() => {
   const cols = 16
   const rows = 4
-  const out: number[] = []
+  const out: HeatCell[] = []
   for (let c = 0; c < cols; c++) {
     for (let r = 0; r < rows; r++) {
       const bias = (c / cols) * 4 + (rows - r) * 0.6
       const idx = Math.max(0, Math.min(6, Math.round(bias - 1 + (Math.sin(c * 1.7 + r) + 1))))
-      out.push(idx)
+      out.push({id: `${c}-${r}`, colorIndex: idx})
     }
   }
   return out
 })()
 
 // Stacked log volume: [info, warn, error] pixel heights per column.
-const LOG_COLUMNS: ReadonlyArray<{info: number; warn: number; error: number}> = [
-  [16, 4, 0],
-  [22, 6, 2],
-  [15, 3, 0],
-  [26, 5, 1],
-  [20, 7, 0],
-  [30, 6, 3],
-  [24, 5, 1],
-  [28, 9, 5],
-  [21, 6, 2],
-  [18, 4, 1],
-  [14, 3, 0],
-  [23, 5, 1],
-].map(([info, warn, error]) => ({info, warn, error}))
+const LOG_COLUMNS: readonly LogColumn[] = [
+  {id: 'log-01', info: 16, warn: 4, error: 0},
+  {id: 'log-02', info: 22, warn: 6, error: 2},
+  {id: 'log-03', info: 15, warn: 3, error: 0},
+  {id: 'log-04', info: 26, warn: 5, error: 1},
+  {id: 'log-05', info: 20, warn: 7, error: 0},
+  {id: 'log-06', info: 30, warn: 6, error: 3},
+  {id: 'log-07', info: 24, warn: 5, error: 1},
+  {id: 'log-08', info: 28, warn: 9, error: 5},
+  {id: 'log-09', info: 21, warn: 6, error: 2},
+  {id: 'log-10', info: 18, warn: 4, error: 1},
+  {id: 'log-11', info: 14, warn: 3, error: 0},
+  {id: 'log-12', info: 23, warn: 5, error: 1},
+]
 
-function TemplateThumb({kind}: {kind: ThumbKind}) {
+function TemplateThumb({kind}: TemplateThumbProps) {
   const rawId = useId()
-  const gid = `sp-${rawId.replace(/:/g, '')}`
+  const gid = `sp-${rawId.replaceAll(':', '')}`
 
   switch (kind) {
     case 'service':
@@ -499,11 +589,11 @@ function TemplateThumb({kind}: {kind: ThumbKind}) {
               className="grid min-h-0 flex-1 gap-[2px]"
               style={{gridAutoFlow: 'column', gridTemplateRows: 'repeat(4, 1fr)'}}
             >
-              {HEAT_CELLS.map((idx, i) => (
+              {HEAT_CELLS.map((cell) => (
                 <span
-                  key={i}
+                  key={cell.id}
                   className="rounded-[1px]"
-                  style={{background: VIZ.heat[idx]}}
+                  style={{background: VIZ.heat[cell.colorIndex]}}
                 />
               ))}
             </div>
@@ -529,8 +619,8 @@ function TemplateThumb({kind}: {kind: ThumbKind}) {
         <Mini>
           <Panel caption="log volume by level">
             <div className="flex min-h-0 flex-1 items-end gap-[3px]">
-              {LOG_COLUMNS.map((col, i) => (
-                <span key={i} className="flex flex-1 flex-col justify-end gap-px">
+              {LOG_COLUMNS.map((col) => (
+                <span key={col.id} className="flex flex-1 flex-col justify-end gap-px">
                   <Seg h={col.info} color={VIZ.levelInfo} />
                   {col.warn > 0 && <Seg h={col.warn} color={VIZ.levelWarn} />}
                   {col.error > 0 && <Seg h={col.error} color={VIZ.levelError} />}
@@ -561,11 +651,11 @@ function TemplateThumb({kind}: {kind: ThumbKind}) {
   }
 }
 
-function Mini({children}: {children: React.ReactNode}) {
+function Mini({children}: ChildrenProps) {
   return <div className="flex h-full flex-col gap-[5px]">{children}</div>
 }
 
-function Row({children, fixed}: {children: React.ReactNode; fixed?: boolean}) {
+function Row({children, fixed}: RowProps) {
   return <div className={cn('flex min-h-0 gap-[5px]', fixed && 'shrink-0')}>{children}</div>
 }
 
@@ -574,12 +664,7 @@ function Tile({
   value,
   unit,
   color,
-}: {
-  label: string
-  value: string
-  unit?: string
-  color?: string
-}) {
+}: TileProps) {
   return (
     <div
       className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 rounded-sm border px-1.5 py-1"
@@ -610,11 +695,7 @@ function Panel({
   caption,
   children,
   fixed,
-}: {
-  caption: string
-  children: React.ReactNode
-  fixed?: boolean
-}) {
+}: PanelProps) {
   return (
     <div
       className={cn(
@@ -631,7 +712,7 @@ function Panel({
   )
 }
 
-function Spark({spec, gid}: {spec: {stroke: string; line: string; area: string}; gid: string}) {
+function Spark({spec, gid}: SparkProps) {
   return (
     <svg
       viewBox="0 0 240 40"
@@ -651,11 +732,11 @@ function Spark({spec, gid}: {spec: {stroke: string; line: string; area: string};
   )
 }
 
-function Bars({children}: {children: React.ReactNode}) {
+function Bars({children}: ChildrenProps) {
   return <div className="flex flex-1 flex-col justify-center gap-1">{children}</div>
 }
 
-function Bar({name, pct, color}: {name: string; pct: number; color: string}) {
+function Bar({name, pct, color}: BarProps) {
   return (
     <div className="grid grid-cols-[38px_1fr] items-center gap-[5px]">
       <span className="truncate font-mono text-[8px]" style={{color: VIZ.fgMuted}}>
@@ -674,11 +755,11 @@ function Bar({name, pct, color}: {name: string; pct: number; color: string}) {
   )
 }
 
-function Seg({h, color}: {h: number; color: string}) {
+function Seg({h, color}: SegmentProps) {
   return <span className="w-full rounded-[1px]" style={{height: `${h}px`, background: color}} />
 }
 
-function LegendChip({color, label}: {color: string; label: string}) {
+function LegendChip({color, label}: LegendChipProps) {
   return (
     <span className="inline-flex items-center gap-1 text-[8px]" style={{color: VIZ.fgMuted}}>
       <span className="h-1.5 w-1.5 rounded-[2px]" style={{background: color}} />

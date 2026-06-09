@@ -22,6 +22,7 @@ import {
   type CreateDashboardRequest,
   type DashboardFolder,
   type CreateFolderRequest,
+  type DashboardTemplateSummary,
 } from '@/lib/api'
 import {
   Plus,
@@ -42,7 +43,7 @@ import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
 import {PageHeader} from '@/components/ui/page-header'
 import {EmptyState} from '@/components/ui/empty-state'
-import {useState, memo, useMemo} from 'react'
+import {useState, memo, useMemo, type MouseEvent, type ReactNode} from 'react'
 import {ImportExportModal} from '@/components/dashboards/ImportExportModal'
 import {DashboardsGetStarted} from '@/components/dashboards/DashboardsGetStarted'
 import {
@@ -61,6 +62,116 @@ export const Route = createFileRoute('/dashboards/')({
 })
 
 type FolderFilter = 'all' | 'favorites' | 'uncategorized' | number
+
+type DashboardPageTitleProps = Readonly<{
+  isFirstRun: boolean
+}>
+
+type DashboardHeaderActionsProps = Readonly<{
+  onImport: () => void
+  onCreateBlank: () => void
+}>
+
+type DashboardPageContentProps = Readonly<{
+  isLoading: boolean
+  isFirstRun: boolean
+  templates: readonly DashboardTemplateSummary[]
+  isTemplatesLoading: boolean
+  onCreateBlank: () => void
+  onUseTemplate: (templateId: string) => void
+  onImport: () => void
+  workspace: ReactNode
+}>
+
+type DashboardWorkspaceProps = Readonly<{
+  dashboards: readonly CustomDashboard[]
+  folders: readonly DashboardFolder[]
+  filteredDashboards: readonly CustomDashboard[]
+  favoritesCount: number
+  uncategorizedCount: number
+  selectedFolder: FolderFilter
+  folderLabel: string
+  isCreatingFolder: boolean
+  newFolderName: string
+  now: number
+  onSelectFolder: (folder: FolderFilter) => void
+  onStartCreatingFolder: () => void
+  onCancelCreatingFolder: () => void
+  onNewFolderNameChange: (name: string) => void
+  onCreateFolder: (name: string) => void
+  onDeleteFolder: (folderId: number) => void
+  onCreateBlank: () => void
+  onDeleteDashboard: (dashboardId: number) => void
+  onDuplicateDashboard: (dashboardId: number) => void
+  onFavoriteToggle: (dashboardId: number) => void
+  onMoveToFolder: (dashboardId: number, folderId: number | null) => void
+}>
+
+type MobileFolderPillsProps = Readonly<{
+  dashboards: readonly CustomDashboard[]
+  folders: readonly DashboardFolder[]
+  favoritesCount: number
+  uncategorizedCount: number
+  selectedFolder: FolderFilter
+  onSelectFolder: (folder: FolderFilter) => void
+}>
+
+type FolderSidebarProps = Readonly<{
+  dashboards: readonly CustomDashboard[]
+  folders: readonly DashboardFolder[]
+  favoritesCount: number
+  uncategorizedCount: number
+  selectedFolder: FolderFilter
+  isCreatingFolder: boolean
+  newFolderName: string
+  onSelectFolder: (folder: FolderFilter) => void
+  onDeleteFolder: (folderId: number) => void
+  onStartCreatingFolder: () => void
+  onCancelCreatingFolder: () => void
+  onNewFolderNameChange: (name: string) => void
+  onCreateFolder: (name: string) => void
+}>
+
+type CreateFolderControlProps = Readonly<{
+  isCreating: boolean
+  folderName: string
+  onStart: () => void
+  onCancel: () => void
+  onNameChange: (name: string) => void
+  onCreate: (name: string) => void
+}>
+
+type SidebarButtonProps = Readonly<{
+  icon: ReactNode
+  label: string
+  count: number
+  isSelected: boolean
+  onClick: () => void
+}>
+
+type DashboardsEmptyStateProps = Readonly<{
+  selectedFolder: FolderFilter
+  folderLabel: string
+  onCreateBlank: () => void
+}>
+
+type FolderSidebarItemProps = Readonly<{
+  folder: DashboardFolder
+  count: number
+  isSelected: boolean
+  onSelect: () => void
+  onDelete: () => void
+}>
+
+type DashboardCardProps = Readonly<{
+  dashboard: CustomDashboard
+  folders: readonly DashboardFolder[]
+  now: number
+  onDelete: () => void
+  onDuplicate: () => void
+  onFavoriteToggle: () => void
+  onMoveToFolder: (folderId: number | null) => void
+}>
 
 function DashboardListPage() {
   const navigate = useNavigate()
@@ -81,9 +192,12 @@ function DashboardListPage() {
     queryFn: () => api.getDashboardFolders(),
   })
 
+  const dashboardList = dashboards ?? []
+  const folderList = folders ?? []
+
   // First run: no dashboards at all -> show the full-width template gallery
   // (no folder rail to organize an empty set).
-  const isFirstRun = !isLoading && (dashboards?.length ?? 0) === 0
+  const isFirstRun = !isLoading && dashboardList.length === 0
 
   const {data: dashboardTemplates = [], isLoading: isTemplatesLoading} = useQuery({
     queryKey: ['dashboard-templates'],
@@ -92,12 +206,8 @@ function DashboardListPage() {
   })
 
   const filteredDashboards = useMemo(() => {
-    if (!dashboards) return []
-    if (selectedFolder === 'all') return dashboards
-    if (selectedFolder === 'favorites') return dashboards.filter((d) => d.is_favorited)
-    if (selectedFolder === 'uncategorized') return dashboards.filter((d) => !d.folder_id)
-    return dashboards.filter((d) => d.folder_id === selectedFolder)
-  }, [dashboards, selectedFolder])
+    return filterDashboards(dashboardList, selectedFolder)
+  }, [dashboardList, selectedFolder])
 
   const createMutation = useMutation({
     mutationFn: (data: CreateDashboardRequest) => api.createDashboard(data),
@@ -153,17 +263,44 @@ function DashboardListPage() {
     createFromTemplateMutation.mutate(templateId)
   }
 
-  const favoritesCount = dashboards?.filter((d) => d.is_favorited).length ?? 0
-  const uncategorizedCount = dashboards?.filter((d) => !d.folder_id).length ?? 0
+  const handleCreateFolder = (name: string) => {
+    createFolderMutation.mutate({name})
+  }
 
-  const folderLabel =
-    selectedFolder === 'all'
-      ? 'All'
-      : selectedFolder === 'favorites'
-        ? 'Favorites'
-        : selectedFolder === 'uncategorized'
-          ? 'Uncategorized'
-          : folders?.find((f) => f.id === selectedFolder)?.name ?? 'Folder'
+  const handleDuplicateDashboard = (dashboardId: number) => {
+    api.getDashboard(dashboardId).then((full) => {
+      createMutation.mutate({
+        title: `${full.title} (Copy)`,
+        description: full.description,
+        folder_id: full.folder_id,
+        widgets: full.widgets.map((w) => ({
+          title: w.title,
+          widget_type: w.widget_type,
+          grid_x: w.grid_x,
+          grid_y: w.grid_y,
+          grid_w: w.grid_w,
+          grid_h: w.grid_h,
+          query_configs: w.query_configs,
+          display_config: w.display_config,
+          sort_order: w.sort_order,
+        })),
+      })
+    })
+  }
+
+  const handleFavoriteToggle = async (dashboardId: number) => {
+    await api.toggleDashboardFavorite(dashboardId)
+    queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
+  }
+
+  const handleMoveToFolder = async (dashboardId: number, folderId: number | null) => {
+    await api.moveDashboardToFolder(dashboardId, folderId)
+    queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
+  }
+
+  const favoritesCount = countFavorites(dashboardList)
+  const uncategorizedCount = countUncategorized(dashboardList)
+  const folderLabel = getFolderLabel(selectedFolder, folderList)
 
   return (
     <div>
@@ -171,236 +308,396 @@ function DashboardListPage() {
       <div className="border-b bg-card/50 px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
         <PageHeader
           icon={LayoutDashboard}
-          title={
-            isFirstRun ? (
-              <span className="inline-flex items-baseline gap-2">
-                Dashboards
-                <span className="rounded-full border border-border bg-muted px-2 py-0.5 align-middle text-[10px] font-medium tabular-nums text-muted-foreground">
-                  0 dashboards
-                </span>
-              </span>
-            ) : (
-              'Dashboards'
-            )
-          }
-          description={
-            isFirstRun
-              ? 'Compose charts, tables, gauges and KPIs across your telemetry.'
-              : 'Build custom dashboards with drag-and-drop widgets'
-          }
+          title={<DashboardPageTitle isFirstRun={isFirstRun} />}
+          description={getDashboardPageDescription(isFirstRun)}
           actions={
-            <>
-              <Button asChild variant="outline" size="sm" className="gap-1 text-xs h-8">
-                <Link to="/dashboards/datasources" title="Data Sources">
-                  <Database className="h-3 w-3 shrink-0" />
-                  <span className="hidden sm:inline">Data Sources</span>
-                </Link>
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setShowImport(true)} className="gap-1 text-xs h-8">
-                <Import className="h-3 w-3 shrink-0" />
-                Import
-              </Button>
-              <Button size="sm" onClick={handleCreateBlank} className="gap-1 text-xs h-8">
-                <Plus className="h-3 w-3 shrink-0" />
-                <span className="hidden sm:inline">New Dashboard</span>
-                <span className="sm:hidden">New</span>
-              </Button>
-            </>
+            <DashboardHeaderActions
+              onImport={() => setShowImport(true)}
+              onCreateBlank={handleCreateBlank}
+            />
           }
         />
       </div>
 
       <div className="px-3 sm:px-6 lg:px-8 py-3 sm:py-4">
-        {isLoading ? (
-          <DashboardGridSkeleton />
-        ) : isFirstRun ? (
-          <DashboardsGetStarted
-            templates={dashboardTemplates}
-            isLoadingTemplates={isTemplatesLoading}
-            onCreateBlank={handleCreateBlank}
-            onUseTemplate={handleUseTemplate}
-            onImport={() => setShowImport(true)}
-          />
-        ) : (
-          <div className="flex flex-col md:flex-row gap-4">
-            {/* Mobile: horizontal folder pills */}
-          <div className="flex md:hidden overflow-x-auto gap-1.5 pb-1 -mx-1">
-            <button
-              onClick={() => setSelectedFolder('all')}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                selectedFolder === 'all' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
-              }`}
-            >
-              All ({dashboards?.length ?? 0})
-            </button>
-            <button
-              onClick={() => setSelectedFolder('favorites')}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1 ${
-                selectedFolder === 'favorites' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
-              }`}
-            >
-              <Star className="h-3 w-3" /> {favoritesCount}
-            </button>
-            {folders?.map((folder) => {
-              const count = dashboards?.filter((d) => d.folder_id === folder.id).length ?? 0
-              return (
-                <button
-                  key={folder.id}
-                  onClick={() => setSelectedFolder(folder.id)}
-                  className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors truncate max-w-32 ${
-                    selectedFolder === folder.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
-                  }`}
-                >
-                  {folder.name} ({count})
-                </button>
-              )
-            })}
-            <button
-              onClick={() => setSelectedFolder('uncategorized')}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                selectedFolder === 'uncategorized' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
-              }`}
-            >
-              Uncategorized ({uncategorizedCount})
-            </button>
-          </div>
-
-          {/* Desktop: folder sidebar */}
-          <aside className="hidden md:block w-52 shrink-0 space-y-0.5">
-            <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest px-2.5 pb-2">
-              Folders
-            </div>
-            <SidebarButton
-              icon={<LayoutDashboard className="h-4 w-4 shrink-0" />}
-              label="All"
-              count={dashboards?.length ?? 0}
-              isSelected={selectedFolder === 'all'}
-              onClick={() => setSelectedFolder('all')}
+        <DashboardPageContent
+          isLoading={isLoading}
+          isFirstRun={isFirstRun}
+          templates={dashboardTemplates}
+          isTemplatesLoading={isTemplatesLoading}
+          onCreateBlank={handleCreateBlank}
+          onUseTemplate={handleUseTemplate}
+          onImport={() => setShowImport(true)}
+          workspace={
+            <DashboardWorkspace
+              dashboards={dashboardList}
+              folders={folderList}
+              filteredDashboards={filteredDashboards}
+              favoritesCount={favoritesCount}
+              uncategorizedCount={uncategorizedCount}
+              selectedFolder={selectedFolder}
+              folderLabel={folderLabel}
+              isCreatingFolder={isCreatingFolder}
+              newFolderName={newFolderName}
+              now={now}
+              onSelectFolder={setSelectedFolder}
+              onStartCreatingFolder={() => setIsCreatingFolder(true)}
+              onCancelCreatingFolder={() => {
+                setIsCreatingFolder(false)
+                setNewFolderName('')
+              }}
+              onNewFolderNameChange={setNewFolderName}
+              onCreateFolder={handleCreateFolder}
+              onDeleteFolder={(folderId) => deleteFolderMutation.mutate(folderId)}
+              onCreateBlank={handleCreateBlank}
+              onDeleteDashboard={(dashboardId) => deleteMutation.mutate(dashboardId)}
+              onDuplicateDashboard={handleDuplicateDashboard}
+              onFavoriteToggle={handleFavoriteToggle}
+              onMoveToFolder={handleMoveToFolder}
             />
-            <SidebarButton
-              icon={<Star className="h-4 w-4 shrink-0" />}
-              label="Favorites"
-              count={favoritesCount}
-              isSelected={selectedFolder === 'favorites'}
-              onClick={() => setSelectedFolder('favorites')}
-            />
-            {folders?.map((folder) => {
-              const count = dashboards?.filter((d) => d.folder_id === folder.id).length ?? 0
-              return (
-                <FolderSidebarItem
-                  key={folder.id}
-                  folder={folder}
-                  count={count}
-                  isSelected={selectedFolder === folder.id}
-                  onSelect={() => setSelectedFolder(folder.id)}
-                  onDelete={() => deleteFolderMutation.mutate(folder.id)}
-                />
-              )
-            })}
-            <SidebarButton
-              icon={<Folder className="h-4 w-4 shrink-0" />}
-              label="Uncategorized"
-              count={uncategorizedCount}
-              isSelected={selectedFolder === 'uncategorized'}
-              onClick={() => setSelectedFolder('uncategorized')}
-            />
-            <div className="pt-1">
-              {isCreatingFolder ? (
-                <div className="flex items-center gap-1 px-2 py-1">
-                  <Input
-                    placeholder="Folder name"
-                    value={newFolderName}
-                    onChange={(e) => setNewFolderName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        if (newFolderName.trim()) createFolderMutation.mutate({name: newFolderName.trim()})
-                      }
-                      if (e.key === 'Escape') {
-                        setIsCreatingFolder(false)
-                        setNewFolderName('')
-                      }
-                    }}
-                    className="h-7 text-sm"
-                    autoFocus
-                  />
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2"
-                    onClick={() => {
-                      if (newFolderName.trim()) createFolderMutation.mutate({name: newFolderName.trim()})
-                    }}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setIsCreatingFolder(true)}
-                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                >
-                  <FolderPlus className="h-4 w-4" />
-                  New folder
-                </button>
-              )}
-            </div>
-          </aside>
-
-          {/* Main content */}
-          <div className="flex-1 min-w-0">
-            {filteredDashboards.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                {filteredDashboards.map((dashboard) => (
-                  <DashboardCard
-                    key={dashboard.id}
-                    dashboard={dashboard}
-                    folders={folders ?? []}
-                    now={now}
-                    onDelete={() => deleteMutation.mutate(dashboard.id)}
-                    onDuplicate={() => {
-                      api.getDashboard(dashboard.id).then((full) => {
-                        createMutation.mutate({
-                          title: `${full.title} (Copy)`,
-                          description: full.description,
-                          folder_id: full.folder_id,
-                          widgets: full.widgets.map((w) => ({
-                            title: w.title,
-                            widget_type: w.widget_type,
-                            grid_x: w.grid_x,
-                            grid_y: w.grid_y,
-                            grid_w: w.grid_w,
-                            grid_h: w.grid_h,
-                            query_configs: w.query_configs,
-                            display_config: w.display_config,
-                            sort_order: w.sort_order,
-                          })),
-                        })
-                      })
-                    }}
-                    onFavoriteToggle={async () => {
-                      await api.toggleDashboardFavorite(dashboard.id)
-                      queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
-                    }}
-                    onMoveToFolder={async (folderId) => {
-                      await api.moveDashboardToFolder(dashboard.id, folderId)
-                      queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
-                    }}
-                  />
-                ))}
-              </div>
-            ) : (
-              <DashboardsEmptyState
-                selectedFolder={selectedFolder}
-                folderLabel={folderLabel}
-                onCreateBlank={handleCreateBlank}
-              />
-            )}
-          </div>
-          </div>
-        )}
+          }
+        />
       </div>
 
       <ImportExportModal open={showImport} onOpenChange={setShowImport} mode="import" />
+    </div>
+  )
+}
+
+function filterDashboards(
+  dashboards: readonly CustomDashboard[],
+  selectedFolder: FolderFilter,
+): readonly CustomDashboard[] {
+  if (selectedFolder === 'all') return dashboards
+  if (selectedFolder === 'favorites') return dashboards.filter((dashboard) => dashboard.is_favorited)
+  if (selectedFolder === 'uncategorized') return dashboards.filter((dashboard) => !dashboard.folder_id)
+  return dashboards.filter((dashboard) => dashboard.folder_id === selectedFolder)
+}
+
+function countFavorites(dashboards: readonly CustomDashboard[]) {
+  return dashboards.filter((dashboard) => dashboard.is_favorited).length
+}
+
+function countUncategorized(dashboards: readonly CustomDashboard[]) {
+  return dashboards.filter((dashboard) => !dashboard.folder_id).length
+}
+
+function countDashboardsInFolder(dashboards: readonly CustomDashboard[], folderId: number) {
+  return dashboards.filter((dashboard) => dashboard.folder_id === folderId).length
+}
+
+function getFolderLabel(selectedFolder: FolderFilter, folders: readonly DashboardFolder[]) {
+  if (selectedFolder === 'all') return 'All'
+  if (selectedFolder === 'favorites') return 'Favorites'
+  if (selectedFolder === 'uncategorized') return 'Uncategorized'
+  return folders.find((folder) => folder.id === selectedFolder)?.name ?? 'Folder'
+}
+
+function getDashboardPageDescription(isFirstRun: boolean) {
+  if (isFirstRun) {
+    return 'Compose charts, tables, gauges and KPIs across your telemetry.'
+  }
+  return 'Build custom dashboards with drag-and-drop widgets'
+}
+
+function DashboardPageTitle({isFirstRun}: DashboardPageTitleProps) {
+  if (!isFirstRun) return 'Dashboards'
+
+  return (
+    <span className="inline-flex items-baseline gap-2">
+      <span>Dashboards</span>
+      <span className="rounded-full border border-border bg-muted px-2 py-0.5 align-middle text-[10px] font-medium tabular-nums text-muted-foreground">
+        0 dashboards
+      </span>
+    </span>
+  )
+}
+
+function DashboardHeaderActions({onImport, onCreateBlank}: DashboardHeaderActionsProps) {
+  return (
+    <>
+      <Button asChild variant="outline" size="sm" className="gap-1 text-xs h-8">
+        <Link to="/dashboards/datasources" title="Data Sources">
+          <Database className="h-3 w-3 shrink-0" />
+          <span className="hidden sm:inline">Data Sources</span>
+        </Link>
+      </Button>
+      <Button variant="outline" size="sm" onClick={onImport} className="gap-1 text-xs h-8">
+        <Import className="h-3 w-3 shrink-0" />
+        Import
+      </Button>
+      <Button size="sm" onClick={onCreateBlank} className="gap-1 text-xs h-8">
+        <Plus className="h-3 w-3 shrink-0" />
+        <span className="hidden sm:inline">New Dashboard</span>
+        <span className="sm:hidden">New</span>
+      </Button>
+    </>
+  )
+}
+
+function DashboardPageContent({
+  isLoading,
+  isFirstRun,
+  templates,
+  isTemplatesLoading,
+  onCreateBlank,
+  onUseTemplate,
+  onImport,
+  workspace,
+}: DashboardPageContentProps) {
+  if (isLoading) {
+    return <DashboardGridSkeleton />
+  }
+
+  if (isFirstRun) {
+    return (
+      <DashboardsGetStarted
+        templates={templates}
+        isLoadingTemplates={isTemplatesLoading}
+        onCreateBlank={onCreateBlank}
+        onUseTemplate={onUseTemplate}
+        onImport={onImport}
+      />
+    )
+  }
+
+  return workspace
+}
+
+function DashboardWorkspace({
+  dashboards,
+  folders,
+  filteredDashboards,
+  favoritesCount,
+  uncategorizedCount,
+  selectedFolder,
+  folderLabel,
+  isCreatingFolder,
+  newFolderName,
+  now,
+  onSelectFolder,
+  onStartCreatingFolder,
+  onCancelCreatingFolder,
+  onNewFolderNameChange,
+  onCreateFolder,
+  onDeleteFolder,
+  onCreateBlank,
+  onDeleteDashboard,
+  onDuplicateDashboard,
+  onFavoriteToggle,
+  onMoveToFolder,
+}: DashboardWorkspaceProps) {
+  return (
+    <div className="flex flex-col md:flex-row gap-4">
+      <MobileFolderPills
+        dashboards={dashboards}
+        folders={folders}
+        favoritesCount={favoritesCount}
+        uncategorizedCount={uncategorizedCount}
+        selectedFolder={selectedFolder}
+        onSelectFolder={onSelectFolder}
+      />
+
+      <FolderSidebar
+        dashboards={dashboards}
+        folders={folders}
+        favoritesCount={favoritesCount}
+        uncategorizedCount={uncategorizedCount}
+        selectedFolder={selectedFolder}
+        isCreatingFolder={isCreatingFolder}
+        newFolderName={newFolderName}
+        onSelectFolder={onSelectFolder}
+        onDeleteFolder={onDeleteFolder}
+        onStartCreatingFolder={onStartCreatingFolder}
+        onCancelCreatingFolder={onCancelCreatingFolder}
+        onNewFolderNameChange={onNewFolderNameChange}
+        onCreateFolder={onCreateFolder}
+      />
+
+      <div className="flex-1 min-w-0">
+        {filteredDashboards.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {filteredDashboards.map((dashboard) => (
+              <DashboardCard
+                key={dashboard.id}
+                dashboard={dashboard}
+                folders={folders}
+                now={now}
+                onDelete={() => onDeleteDashboard(dashboard.id)}
+                onDuplicate={() => onDuplicateDashboard(dashboard.id)}
+                onFavoriteToggle={() => onFavoriteToggle(dashboard.id)}
+                onMoveToFolder={(folderId) => onMoveToFolder(dashboard.id, folderId)}
+              />
+            ))}
+          </div>
+        ) : (
+          <DashboardsEmptyState
+            selectedFolder={selectedFolder}
+            folderLabel={folderLabel}
+            onCreateBlank={onCreateBlank}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+function MobileFolderPills({
+  dashboards,
+  folders,
+  favoritesCount,
+  uncategorizedCount,
+  selectedFolder,
+  onSelectFolder,
+}: MobileFolderPillsProps) {
+  return (
+    <div className="flex md:hidden overflow-x-auto gap-1.5 pb-1 -mx-1">
+      <button
+        onClick={() => onSelectFolder('all')}
+        className={getFolderPillClassName(selectedFolder === 'all')}
+      >
+        All ({dashboards.length})
+      </button>
+      <button
+        onClick={() => onSelectFolder('favorites')}
+        className={getFolderPillClassName(selectedFolder === 'favorites', 'flex items-center gap-1')}
+      >
+        <Star className="h-3 w-3" /> {favoritesCount}
+      </button>
+      {folders.map((folder) => {
+        const count = countDashboardsInFolder(dashboards, folder.id)
+        return (
+          <button
+            key={folder.id}
+            onClick={() => onSelectFolder(folder.id)}
+            className={getFolderPillClassName(selectedFolder === folder.id, 'truncate max-w-32')}
+          >
+            {folder.name} ({count})
+          </button>
+        )
+      })}
+      <button
+        onClick={() => onSelectFolder('uncategorized')}
+        className={getFolderPillClassName(selectedFolder === 'uncategorized')}
+      >
+        Uncategorized ({uncategorizedCount})
+      </button>
+    </div>
+  )
+}
+
+function getFolderPillClassName(isSelected: boolean, extraClassName = '') {
+  const base = 'shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors'
+  const color = isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+  return [base, color, extraClassName].filter(Boolean).join(' ')
+}
+
+function FolderSidebar({
+  dashboards,
+  folders,
+  favoritesCount,
+  uncategorizedCount,
+  selectedFolder,
+  isCreatingFolder,
+  newFolderName,
+  onSelectFolder,
+  onDeleteFolder,
+  onStartCreatingFolder,
+  onCancelCreatingFolder,
+  onNewFolderNameChange,
+  onCreateFolder,
+}: FolderSidebarProps) {
+  return (
+    <aside className="hidden md:block w-52 shrink-0 space-y-0.5">
+      <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest px-2.5 pb-2">
+        Folders
+      </div>
+      <SidebarButton
+        icon={<LayoutDashboard className="h-4 w-4 shrink-0" />}
+        label="All"
+        count={dashboards.length}
+        isSelected={selectedFolder === 'all'}
+        onClick={() => onSelectFolder('all')}
+      />
+      <SidebarButton
+        icon={<Star className="h-4 w-4 shrink-0" />}
+        label="Favorites"
+        count={favoritesCount}
+        isSelected={selectedFolder === 'favorites'}
+        onClick={() => onSelectFolder('favorites')}
+      />
+      {folders.map((folder) => (
+        <FolderSidebarItem
+          key={folder.id}
+          folder={folder}
+          count={countDashboardsInFolder(dashboards, folder.id)}
+          isSelected={selectedFolder === folder.id}
+          onSelect={() => onSelectFolder(folder.id)}
+          onDelete={() => onDeleteFolder(folder.id)}
+        />
+      ))}
+      <SidebarButton
+        icon={<Folder className="h-4 w-4 shrink-0" />}
+        label="Uncategorized"
+        count={uncategorizedCount}
+        isSelected={selectedFolder === 'uncategorized'}
+        onClick={() => onSelectFolder('uncategorized')}
+      />
+      <CreateFolderControl
+        isCreating={isCreatingFolder}
+        folderName={newFolderName}
+        onStart={onStartCreatingFolder}
+        onCancel={onCancelCreatingFolder}
+        onNameChange={onNewFolderNameChange}
+        onCreate={onCreateFolder}
+      />
+    </aside>
+  )
+}
+
+function CreateFolderControl({
+  isCreating,
+  folderName,
+  onStart,
+  onCancel,
+  onNameChange,
+  onCreate,
+}: CreateFolderControlProps) {
+  const createTrimmedFolder = () => {
+    const trimmed = folderName.trim()
+    if (trimmed) onCreate(trimmed)
+  }
+
+  if (!isCreating) {
+    return (
+      <div className="pt-1">
+        <button
+          onClick={onStart}
+          className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+        >
+          <FolderPlus className="h-4 w-4" />
+          New folder
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-1 px-2 py-1 pt-1">
+      <Input
+        placeholder="Folder name"
+        value={folderName}
+        onChange={(event) => onNameChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') createTrimmedFolder()
+          if (event.key === 'Escape') onCancel()
+        }}
+        className="h-7 text-sm"
+        autoFocus
+      />
+      <Button size="sm" variant="ghost" className="h-7 px-2" onClick={createTrimmedFolder}>
+        <ChevronRight className="h-4 w-4" />
+      </Button>
     </div>
   )
 }
@@ -411,13 +708,7 @@ function SidebarButton({
   count,
   isSelected,
   onClick,
-}: {
-  icon: React.ReactNode
-  label: string
-  count: number
-  isSelected: boolean
-  onClick: () => void
-}) {
+}: SidebarButtonProps) {
   return (
     <button
       onClick={onClick}
@@ -455,11 +746,7 @@ function DashboardsEmptyState({
   selectedFolder,
   folderLabel,
   onCreateBlank,
-}: {
-  selectedFolder: FolderFilter
-  folderLabel: string
-  onCreateBlank: () => void
-}) {
+}: DashboardsEmptyStateProps) {
   if (selectedFolder === 'favorites') {
     return (
       <EmptyState
@@ -544,13 +831,7 @@ const FolderSidebarItem = memo(function FolderSidebarItem({
   isSelected,
   onSelect,
   onDelete,
-}: {
-  folder: DashboardFolder
-  count: number
-  isSelected: boolean
-  onSelect: () => void
-  onDelete: () => void
-}) {
+}: FolderSidebarItemProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editName, setEditName] = useState(folder.name)
   const queryClient = useQueryClient()
@@ -628,16 +909,8 @@ const DashboardCard = memo(function DashboardCard({
   onDuplicate,
   onFavoriteToggle,
   onMoveToFolder,
-}: {
-  dashboard: CustomDashboard
-  folders: DashboardFolder[]
-  now: number
-  onDelete: () => void
-  onDuplicate: () => void
-  onFavoriteToggle: () => void
-  onMoveToFolder: (folderId: number | null) => void
-}) {
-  const handleFavorite = (e: React.MouseEvent) => {
+}: DashboardCardProps) {
+  const handleFavorite = (e: MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     onFavoriteToggle()
