@@ -21,11 +21,15 @@ interface SearchGroup {
   entries: SearchEntry[]
 }
 
+type DocsSearchProviderProps = Readonly<{
+  children: ReactNode
+}>
+
 function titleFor(slug: string): string {
   const doc = getDoc(slug)
   if (doc?.title) return doc.title
   const last = slug.split('/').pop() ?? slug
-  return last.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+  return last.replaceAll('-', ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 // Flatten the real sidebar tree into search groups so results mirror the nav.
@@ -54,7 +58,7 @@ export function useDocsSearch() {
   return useContext(DocsSearchContext)
 }
 
-export function DocsSearchProvider({children}: {children: ReactNode}) {
+export function DocsSearchProvider({children}: DocsSearchProviderProps) {
   const [open, setOpen] = useState(false)
   const navigate = useNavigate()
 

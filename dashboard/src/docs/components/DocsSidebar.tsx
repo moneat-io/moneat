@@ -5,12 +5,35 @@ import {docsSidebar, type SidebarCategory, type SidebarItem} from '../sidebar'
 import {getDoc} from '../loader'
 import {useDocsSearch} from './DocsSearch'
 
+type LeafLinkProps = Readonly<{
+  slug: string
+  currentSlug: string
+  depth: number
+}>
+
+type NestedCategoryProps = Readonly<{
+  category: SidebarCategory
+  currentSlug: string
+  depth: number
+}>
+
+type SidebarItemViewProps = Readonly<{
+  item: SidebarItem
+  currentSlug: string
+  depth: number
+}>
+
+type TopCategoryProps = Readonly<{
+  category: SidebarCategory
+  currentSlug: string
+}>
+
 function getTitle(slug: string): string {
   const doc = getDoc(slug)
   if (doc?.title) return doc.title
   const last = slug.split('/').pop() ?? slug
   return last
-    .replace(/-/g, ' ')
+    .replaceAll('-', ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
@@ -20,7 +43,12 @@ function isActiveOrAncestor(currentSlug: string, item: SidebarItem): boolean {
   return item.items.some((child) => isActiveOrAncestor(currentSlug, child))
 }
 
-function LeafLink({slug, currentSlug, depth}: {slug: string; currentSlug: string; depth: number}) {
+function sidebarItemKey(item: SidebarItem, parentKey: string): string {
+  if (typeof item === 'string') return `${parentKey}:doc:${item}`
+  return `${parentKey}:section:${item.label}:${item.link ?? 'none'}`
+}
+
+function LeafLink({slug, currentSlug, depth}: LeafLinkProps) {
   const isActive = currentSlug === slug
   const paddingLeft = `${12 + depth * 12}px`
   const linkProps =
@@ -54,7 +82,7 @@ function LeafLink({slug, currentSlug, depth}: {slug: string; currentSlug: string
   )
 }
 
-function NestedCategory({category, currentSlug, depth}: {category: SidebarCategory; currentSlug: string; depth: number}) {
+function NestedCategory({category, currentSlug, depth}: NestedCategoryProps) {
   const hasActive = isActiveOrAncestor(currentSlug, category)
   const [userOpen, setUserOpen] = useState(!category.collapsed)
   const open = hasActive || userOpen
@@ -94,8 +122,13 @@ function NestedCategory({category, currentSlug, depth}: {category: SidebarCatego
       </div>
       {open && (
         <div id={panelId} className="mt-0.5">
-          {category.items.map((child, i) => (
-            <SidebarItemView key={i} item={child} currentSlug={currentSlug} depth={depth + 1} />
+          {category.items.map((child) => (
+            <SidebarItemView
+              key={sidebarItemKey(child, category.label)}
+              item={child}
+              currentSlug={currentSlug}
+              depth={depth + 1}
+            />
           ))}
         </div>
       )}
@@ -103,13 +136,13 @@ function NestedCategory({category, currentSlug, depth}: {category: SidebarCatego
   )
 }
 
-function SidebarItemView({item, currentSlug, depth}: {item: SidebarItem; currentSlug: string; depth: number}) {
+function SidebarItemView({item, currentSlug, depth}: SidebarItemViewProps) {
   if (typeof item === 'string') return <LeafLink slug={item} currentSlug={currentSlug} depth={depth} />
   return <NestedCategory category={item} currentSlug={currentSlug} depth={depth} />
 }
 
 // Top-level sections render as mono uppercase headers with their items below.
-function TopCategory({category, currentSlug}: {category: SidebarCategory; currentSlug: string}) {
+function TopCategory({category, currentSlug}: TopCategoryProps) {
   const hasActive = isActiveOrAncestor(currentSlug, category)
   const [userOpen, setUserOpen] = useState(!category.collapsed)
   const open = hasActive || userOpen
@@ -129,8 +162,13 @@ function TopCategory({category, currentSlug}: {category: SidebarCategory; curren
       </button>
       {open && (
         <div id={panelId} className="mt-0.5">
-          {category.items.map((item, i) => (
-            <SidebarItemView key={i} item={item} currentSlug={currentSlug} depth={1} />
+          {category.items.map((item) => (
+            <SidebarItemView
+              key={sidebarItemKey(item, category.label)}
+              item={item}
+              currentSlug={currentSlug}
+              depth={1}
+            />
           ))}
         </div>
       )}
@@ -160,8 +198,8 @@ export default function DocsSidebar() {
         </button>
       </div>
       <nav className="docs-scroll min-h-0 flex-1 overflow-y-auto px-2.5 pb-10 text-[13px]">
-        {docsSidebar.map((category, i) => (
-          <TopCategory key={i} category={category} currentSlug={currentSlug} />
+        {docsSidebar.map((category) => (
+          <TopCategory key={category.label} category={category} currentSlug={currentSlug} />
         ))}
       </nav>
     </aside>

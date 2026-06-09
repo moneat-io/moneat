@@ -11,7 +11,7 @@ import {
   Copy,
   Filter,
   Flag,
-  Github,
+  GithubIcon,
   GitBranch,
   Globe,
   HardDrive,
@@ -124,7 +124,22 @@ const configLinks = [
 
 const gradText = 'bg-gradient-to-r from-indigo-300 via-indigo-400 to-cyan-400 bg-clip-text text-transparent'
 
-function DocLink({slug, className, children}: {slug: string; className?: string; children: ReactNode}) {
+type DocLinkProps = Readonly<{
+  slug: string
+  className?: string
+  children: ReactNode
+}>
+
+type CodeLineProps = Readonly<{
+  line: string
+}>
+
+type CodeLineEntry = Readonly<{
+  key: string
+  line: string
+}>
+
+function DocLink({slug, className, children}: DocLinkProps) {
   return (
     <Link to="/docs/$" params={{_splat: slug}} className={className}>
       {children}
@@ -161,7 +176,16 @@ SENTRY_DSN=https://mnt_live_••••••@api.moneat.io/1
   },
 ] as const
 
-function CodeLine({line}: {line: string}) {
+function buildCodeLineEntries(tabId: string, code: string): CodeLineEntry[] {
+  const occurrences = new Map<string, number>()
+  return code.split('\n').map((line) => {
+    const occurrence = (occurrences.get(line) ?? 0) + 1
+    occurrences.set(line, occurrence)
+    return {key: `${tabId}:${line}:${occurrence}`, line}
+  })
+}
+
+function CodeLine({line}: CodeLineProps) {
   if (line.trim().startsWith('#')) return <span className="text-slate-600">{line}</span>
   const eq = line.indexOf('=')
   if (eq > -1) {
@@ -180,11 +204,12 @@ function ConnectPanel() {
   const [tab, setTab] = useState<(typeof connectTabs)[number]['id']>('otel')
   const [copied, setCopied] = useState(false)
   const active = connectTabs.find((t) => t.id === tab) ?? connectTabs[0]
+  const codeLines = buildCodeLineEntries(active.id, active.code)
 
   const copy = () => {
-    void navigator.clipboard?.writeText(active.code)
+    void globalThis.navigator.clipboard?.writeText(active.code)
     setCopied(true)
-    setTimeout(() => setCopied(false), 1600)
+    globalThis.setTimeout(() => setCopied(false), 1600)
   }
 
   return (
@@ -220,10 +245,9 @@ function ConnectPanel() {
           {copied ? <Check className="size-3.5 text-emerald-300" /> : <Copy className="size-3.5" />}
         </button>
         <pre className="overflow-x-auto font-brandmono text-[12.5px] leading-7">
-          {active.code.split('\n').map((line, i) => (
-            <span key={i}>
-              {i > 0 ? '\n' : ''}
-              <CodeLine line={line} />
+          {codeLines.map((entry) => (
+            <span key={entry.key} className="block">
+              <CodeLine line={entry.line} />
             </span>
           ))}
         </pre>
@@ -533,7 +557,7 @@ function DocsIndex() {
                 rel="noopener noreferrer"
                 className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-slate-300 transition-colors hover:bg-white/[0.04]"
               >
-                <Github className="size-4 text-slate-500" /> GitHub
+                <GithubIcon className="size-4 text-slate-500" /> GitHub
                 <ArrowUpRight className="ml-auto size-3 text-slate-600" />
               </a>
             </li>

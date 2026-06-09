@@ -6,14 +6,14 @@ interface Step {
 }
 
 interface StepListProps {
-  steps: Step[]
+  steps: readonly Step[]
 }
 
-export default function StepList({steps}: StepListProps) {
+export default function StepList({steps}: Readonly<StepListProps>) {
   return (
     <ol className="mb-4 mt-4 list-none pl-0">
       {steps.map((step, index) => (
-        <li key={index} className="mb-6 flex gap-4">
+        <li key={step.title} className="mb-6 flex gap-4">
           <div className="flex size-7 flex-shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/[0.04] text-sm font-semibold text-slate-200">
             {index + 1}
           </div>

@@ -3,7 +3,11 @@ import * as Sentry from '@sentry/react'
 
 type FeedbackState = 'idle' | 'thumbs-up' | 'thumbs-down' | 'submitted'
 
-export function DocsFeedback({slug}: {slug: string}) {
+type DocsFeedbackProps = Readonly<{
+  slug: string
+}>
+
+export function DocsFeedback({slug}: DocsFeedbackProps) {
   const [state, setState] = useState<FeedbackState>('idle')
   const [comment, setComment] = useState('')
 
@@ -11,7 +15,7 @@ export function DocsFeedback({slug}: {slug: string}) {
     Sentry.captureFeedback({
       message: comment || 'Thumbs down (no comment)',
       tags: {slug, type: 'docs-feedback', rating: 'negative'},
-      url: window.location.origin + window.location.pathname,
+      url: globalThis.window.location.origin + globalThis.window.location.pathname,
     })
     setState('submitted')
   }
