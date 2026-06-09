@@ -60,7 +60,7 @@ export function ExplorerShell({
   const [railOpen, setRailOpen] = useState(defaultRailOpen)
 
   return (
-    <div className={cn('flex h-full flex-col', className)}>
+    <div className={cn('flex min-h-[calc(100dvh-var(--header-height,0px))] flex-col', className)}>
       {/* Header bar */}
       <div className="@container/header flex min-h-[var(--app-header-h)] items-center gap-2 border-b px-2 py-1 sm:px-3">
         {(icon || title) && (
